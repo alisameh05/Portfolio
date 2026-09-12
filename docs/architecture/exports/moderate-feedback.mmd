@@ -1,0 +1,51 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Dynamic View: ShipWithAli - Next.js Application"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    1["<div style='font-weight: bold'>Visitor</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>Explores public work, reads<br />Case studies, accesses the<br />Current CV, interacts with<br />Projects, and uses Contact<br />channels without an account.</div>"]
+    style 1 fill:#999999,stroke:#6b6b6b,color:#ffffff
+    2["<div style='font-weight: bold'>Owner</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>The single authenticated<br />operator who publishes<br />content, manages<br />configuration, moderates<br />Feedback, activates CV<br />versions, reviews analytics,<br />and produces Owner exports.</div>"]
+    style 2 fill:#999999,stroke:#6b6b6b,color:#ffffff
+
+    subgraph 3 ["ShipWithAli"]
+      style 3 fill:#ffffff,stroke:#0b4884,color:#0b4884
+
+      subgraph 4 ["Next.js Application"]
+        style 4 fill:#ffffff,stroke:#2e6295,color:#2e6295
+
+        12["<div style='font-weight: bold'>Interaction and Moderation</div><div style='font-size: 70%; margin-top: 0px'>[Component: TypeScript domain module]</div><div style='font-size: 80%; margin-top:10px'>Owns Reactions, Ratings,<br />private Feedback, immutable<br />Moderation decisions, current<br />choices, and public<br />aggregates.</div>"]
+        style 12 fill:#85bbf0,stroke:#9c1c1c,color:#0b2540
+        14["<div style='font-weight: bold'>Identity and Access</div><div style='font-size: 70%; margin-top: 0px'>[Component: TypeScript domain module]</div><div style='font-size: 80%; margin-top:10px'>Authorizes the allowlisted<br />Owner, scheduled jobs,<br />short-lived abuse signals,<br />consent state, and separate<br />functional and analytics<br />identities.</div>"]
+        style 14 fill:#85bbf0,stroke:#9c1c1c,color:#0b2540
+        16["<div style='font-weight: bold'>Provider Adapters</div><div style='font-size: 70%; margin-top: 0px'>[Component: TypeScript adapters and provider SDKs]</div><div style='font-size: 80%; margin-top:10px'>Implements seams for<br />PostgreSQL transactions and<br />repositories, Supabase<br />Storage and Auth, GitHub<br />OAuth, Vercel cache and<br />scheduling, Resend, Sentry,<br />clocks, and backup artifacts.</div>"]
+        style 16 fill:#6c757d,stroke:#9c1c1c,color:#ffffff
+        5["<div style='font-weight: bold'>Public Experience</div><div style='font-size: 70%; margin-top: 0px'>[Component: Next.js Server Components and narrow Route Handlers]</div><div style='font-size: 80%; margin-top:10px'>Resolves locale and durable<br />routes, renders the landing<br />page, discovery, Timeline,<br />Case studies, Current CV<br />access, interactions, and<br />graceful fallbacks.</div>"]
+        style 5 fill:#85bbf0,stroke:#5d82a8,color:#0b2540
+        6["<div style='font-weight: bold'>Owner Workspace</div><div style='font-size: 70%; margin-top: 0px'>[Component: Next.js Server Actions and private Route Handlers]</div><div style='font-size: 80%; margin-top:10px'>Maps authenticated forms to<br />conceptual Owner commands and<br />displays drafts, Moderation,<br />analytics, exports, and<br />operational state.</div>"]
+        style 6 fill:#85bbf0,stroke:#5d82a8,color:#0b2540
+      end
+
+      17[("<div style='font-weight: bold'>Portfolio Database</div><div style='font-size: 70%; margin-top: 0px'>[Container: Supabase PostgreSQL with connection pooling]</div><div style='font-size: 80%; margin-top:10px'>Stores module-owned<br />relational records, public<br />read projections, immutable<br />histories, idempotency<br />records, outbox entries, and<br />job leases under Row Level<br />Security.</div>")]
+      style 17 fill:#2e7d32,stroke:#9c1c1c,color:#ffffff
+    end
+
+    1["<div style='font-weight: bold'>Visitor</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>Explores public work, reads<br />Case studies, accesses the<br />Current CV, interacts with<br />Projects, and uses Contact<br />channels without an account.</div>"]
+    style 1 fill:#999999,stroke:#6b6b6b,color:#ffffff
+    2["<div style='font-weight: bold'>Owner</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>The single authenticated<br />operator who publishes<br />content, manages<br />configuration, moderates<br />Feedback, activates CV<br />versions, reviews analytics,<br />and produces Owner exports.</div>"]
+    style 2 fill:#999999,stroke:#6b6b6b,color:#ffffff
+    17[("<div style='font-weight: bold'>Portfolio Database</div><div style='font-size: 70%; margin-top: 0px'>[Container: Supabase PostgreSQL with connection pooling]</div><div style='font-size: 80%; margin-top:10px'>Stores module-owned<br />relational records, public<br />read projections, immutable<br />histories, idempotency<br />records, outbox entries, and<br />job leases under Row Level<br />Security.</div>")]
+    style 17 fill:#2e7d32,stroke:#9c1c1c,color:#ffffff
+
+    1-. "<div>1. Submits Feedback with an<br />idempotency key</div><div style='font-size: 70%'>[HTTPS]</div>" .->5
+    5-. "<div>2. Validates and submits<br />Feedback</div><div style='font-size: 70%'>[In-process TypeScript interface]</div>" .->12
+    12-. "<div>3. Applies purpose and abuse<br />policy</div><div style='font-size: 70%'>[In-process TypeScript interface]</div>" .->14
+    12-. "<div>4. Stores private pending<br />Feedback and an outbox record</div><div style='font-size: 70%'>[Transaction, repository, and rate-limit ports]</div>" .->16
+    16-. "<div>5. Commits the submission</div><div style='font-size: 70%'>[PostgreSQL over TLS]</div>" .->17
+    2-. "<div>6. Approves, rejects, or<br />suppresses Feedback</div><div style='font-size: 70%'>[HTTPS]</div>" .->6
+    6-. "<div>7. Requires the allowlisted<br />Owner</div><div style='font-size: 70%'>[In-process TypeScript interface]</div>" .->14
+    6-. "<div>8. Records the Moderation<br />decision</div><div style='font-size: 70%'>[In-process TypeScript interface]</div>" .->12
+    12-. "<div>9. Atomically persists<br />immutable history and public<br />eligibility</div><div style='font-size: 70%'>[Transaction, repository, and rate-limit ports]</div>" .->16
+
+  end

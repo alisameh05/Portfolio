@@ -1,0 +1,62 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Dynamic View: ShipWithAli - Next.js Application"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    2["<div style='font-weight: bold'>Owner</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>The single authenticated<br />operator who publishes<br />content, manages<br />configuration, moderates<br />Feedback, activates CV<br />versions, reviews analytics,<br />and produces Owner exports.</div>"]
+    style 2 fill:#999999,stroke:#6b6b6b,color:#ffffff
+
+    19["<div style='font-weight: bold'>Supabase Auth</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Creates application sessions<br />and delegates the Owner<br />identity challenge to GitHub<br />OAuth.</div>"]
+    style 19 fill:#999999,stroke:#9c1c1c,color:#ffffff
+    21["<div style='font-weight: bold'>Vercel Platform</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Provides CDN delivery,<br />serverless execution, cache<br />tags, preview promotion,<br />rollback, and scheduled<br />invocation.</div>"]
+    style 21 fill:#999999,stroke:#6b6b6b,color:#ffffff
+
+    subgraph 3 ["ShipWithAli"]
+      style 3 fill:#ffffff,stroke:#0b4884,color:#0b4884
+
+      subgraph 4 ["Next.js Application"]
+        style 4 fill:#ffffff,stroke:#2e6295,color:#2e6295
+
+        10["<div style='font-weight: bold'>Media</div><div style='font-size: 70%; margin-top: 0px'>[Component: TypeScript domain module]</div><div style='font-size: 80%; margin-top:10px'>Owns private upload<br />candidates, safety and<br />suitability checks,<br />accessibility metadata,<br />accepted Media assets,<br />provider-independent object<br />references, and variants.</div>"]
+        style 10 fill:#85bbf0,stroke:#9c1c1c,color:#0b2540
+        14["<div style='font-weight: bold'>Identity and Access</div><div style='font-size: 70%; margin-top: 0px'>[Component: TypeScript domain module]</div><div style='font-size: 80%; margin-top:10px'>Authorizes the allowlisted<br />Owner, scheduled jobs,<br />short-lived abuse signals,<br />consent state, and separate<br />functional and analytics<br />identities.</div>"]
+        style 14 fill:#85bbf0,stroke:#9c1c1c,color:#0b2540
+        15["<div style='font-weight: bold'>Portability and Operations</div><div style='font-size: 70%; margin-top: 0px'>[Component: TypeScript domain module and PostgreSQL-backed job runner]</div><div style='font-size: 80%; margin-top:10px'>Owns Owner export schemas and<br />integrity, outbox records,<br />job leases, retries, backup<br />evidence, recovery state, and<br />actionable Operational<br />alerts.</div>"]
+        style 15 fill:#85bbf0,stroke:#9c1c1c,color:#0b2540
+        16["<div style='font-weight: bold'>Provider Adapters</div><div style='font-size: 70%; margin-top: 0px'>[Component: TypeScript adapters and provider SDKs]</div><div style='font-size: 80%; margin-top:10px'>Implements seams for<br />PostgreSQL transactions and<br />repositories, Supabase<br />Storage and Auth, GitHub<br />OAuth, Vercel cache and<br />scheduling, Resend, Sentry,<br />clocks, and backup artifacts.</div>"]
+        style 16 fill:#6c757d,stroke:#9c1c1c,color:#ffffff
+        6["<div style='font-weight: bold'>Owner Workspace</div><div style='font-size: 70%; margin-top: 0px'>[Component: Next.js Server Actions and private Route Handlers]</div><div style='font-size: 80%; margin-top:10px'>Maps authenticated forms to<br />conceptual Owner commands and<br />displays drafts, Moderation,<br />analytics, exports, and<br />operational state.</div>"]
+        style 6 fill:#85bbf0,stroke:#5d82a8,color:#0b2540
+        8["<div style='font-weight: bold'>Content and Publishing</div><div style='font-size: 70%; margin-top: 0px'>[Component: TypeScript domain module]</div><div style='font-size: 80%; margin-top:10px'>Owns Projects, Achievements,<br />Testimonials, immutable<br />Revisions, evidence,<br />lifecycle, language<br />publications, Project<br />relationships, External<br />links, routes, and redirects.</div>"]
+        style 8 fill:#85bbf0,stroke:#9c1c1c,color:#0b2540
+        9["<div style='font-weight: bold'>Taxonomy and Discovery</div><div style='font-size: 70%; margin-top: 0px'>[Component: TypeScript domain module and PostgreSQL full-text/trigram search]</div><div style='font-size: 80%; margin-top:10px'>Owns controlled Taxonomies,<br />value evolution, searchable<br />public Project projections,<br />filters, and newest-published<br />ordering.</div>"]
+        style 9 fill:#85bbf0,stroke:#5d82a8,color:#0b2540
+      end
+
+      17[("<div style='font-weight: bold'>Portfolio Database</div><div style='font-size: 70%; margin-top: 0px'>[Container: Supabase PostgreSQL with connection pooling]</div><div style='font-size: 80%; margin-top:10px'>Stores module-owned<br />relational records, public<br />read projections, immutable<br />histories, idempotency<br />records, outbox entries, and<br />job leases under Row Level<br />Security.</div>")]
+      style 17 fill:#2e7d32,stroke:#9c1c1c,color:#ffffff
+    end
+
+    2["<div style='font-weight: bold'>Owner</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>The single authenticated<br />operator who publishes<br />content, manages<br />configuration, moderates<br />Feedback, activates CV<br />versions, reviews analytics,<br />and produces Owner exports.</div>"]
+    style 2 fill:#999999,stroke:#6b6b6b,color:#ffffff
+    17[("<div style='font-weight: bold'>Portfolio Database</div><div style='font-size: 70%; margin-top: 0px'>[Container: Supabase PostgreSQL with connection pooling]</div><div style='font-size: 80%; margin-top:10px'>Stores module-owned<br />relational records, public<br />read projections, immutable<br />histories, idempotency<br />records, outbox entries, and<br />job leases under Row Level<br />Security.</div>")]
+    style 17 fill:#2e7d32,stroke:#9c1c1c,color:#ffffff
+    19["<div style='font-weight: bold'>Supabase Auth</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Creates application sessions<br />and delegates the Owner<br />identity challenge to GitHub<br />OAuth.</div>"]
+    style 19 fill:#999999,stroke:#9c1c1c,color:#ffffff
+    21["<div style='font-weight: bold'>Vercel Platform</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Provides CDN delivery,<br />serverless execution, cache<br />tags, preview promotion,<br />rollback, and scheduled<br />invocation.</div>"]
+    style 21 fill:#999999,stroke:#6b6b6b,color:#ffffff
+
+    2-. "<div>1. Requests publication of<br />one reviewed Language version</div><div style='font-size: 70%'>[HTTPS]</div>" .->6
+    6-. "<div>2. Requires the allowlisted<br />Owner</div><div style='font-size: 70%'>[In-process TypeScript interface]</div>" .->14
+    14-. "<div>3. Verifies the session</div><div style='font-size: 70%'>[Authentication, clock, and cryptography ports]</div>" .->16
+    16-. "<div>4. Validates the<br />GitHub-backed session</div><div style='font-size: 70%'>[Supabase Auth over HTTPS]</div>" .->19
+    6-. "<div>5. Executes<br />PublishLanguageVersion</div><div style='font-size: 70%'>[In-process TypeScript interface]</div>" .->8
+    8-. "<div>6. Validates accepted Media<br />references and accessibility<br />metadata</div><div style='font-size: 70%'>[In-process TypeScript interface]</div>" .->10
+    8-. "<div>7. Validates controlled<br />classifications and stages<br />the public projection</div><div style='font-size: 70%'>[In-process TypeScript interface]</div>" .->9
+    8-. "<div>8. Atomically commits<br />publication, route,<br />projection, and outbox<br />records</div><div style='font-size: 70%'>[Transaction and repository port]</div>" .->16
+    16-. "<div>9. Commits the transaction</div><div style='font-size: 70%'>[PostgreSQL over TLS]</div>" .->17
+    15-. "<div>10. Leases the<br />cache-invalidation job</div><div style='font-size: 70%'>[Repository, storage, cache, email, monitoring, and clock ports]</div>" .->16
+    16-. "<div>11. Invalidates stable<br />identity and locale cache<br />tags</div><div style='font-size: 70%'>[Vercel runtime interface]</div>" .->21
+
+  end

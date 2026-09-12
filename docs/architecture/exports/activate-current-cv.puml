@@ -1,0 +1,54 @@
+@startuml
+title <size:24>Dynamic View: ShipWithAli - Next.js Application</size>\n<size:24>Accepted-file validation and atomic Current CV replacement.</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+Person(Visitor, "Visitor", $descr="Explores public work, reads Case studies, accesses the Current CV, interacts with Projects, and uses Contact channels without an account.", $tags="", $link="")
+Person(Owner, "Owner", $descr="The single authenticated operator who publishes content, manages configuration, moderates Feedback, activates CV versions, reviews analytics, and produces Owner exports.", $tags="", $link="")
+
+System_Boundary("ShipWithAli_boundary", "ShipWithAli", $tags="") {
+  Container_Boundary("ShipWithAli.NextjsApplication_boundary", "Next.js Application", $tags="") {
+    Component(ShipWithAli.NextjsApplication.Media, "Media", $techn="TypeScript domain module", $descr="Owns private upload candidates, safety and suitability checks, accessibility metadata, accepted Media assets, provider-independent object references, and variants.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.CVPortfolio, "CV Portfolio", $techn="TypeScript domain module", $descr="Owns accepted CV versions and atomically maintains the single English Current CV designation.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.IdentityandAccess, "Identity and Access", $techn="TypeScript domain module", $descr="Authorizes the allowlisted Owner, scheduled jobs, short-lived abuse signals, consent state, and separate functional and analytics identities.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.ProviderAdapters, "Provider Adapters", $techn="TypeScript adapters and provider SDKs", $descr="Implements seams for PostgreSQL transactions and repositories, Supabase Storage and Auth, GitHub OAuth, Vercel cache and scheduling, Resend, Sentry, clocks, and backup artifacts.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.PublicExperience, "Public Experience", $techn="Next.js Server Components and narrow Route Handlers", $descr="Resolves locale and durable routes, renders the landing page, discovery, Timeline, Case studies, Current CV access, interactions, and graceful fallbacks.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.OwnerWorkspace, "Owner Workspace", $techn="Next.js Server Actions and private Route Handlers", $descr="Maps authenticated forms to conceptual Owner commands and displays drafts, Moderation, analytics, exports, and operational state.", $tags="", $link="")
+  }
+
+  ContainerDb(ShipWithAli.PortfolioDatabase, "Portfolio Database", $techn="Supabase PostgreSQL with connection pooling", $descr="Stores module-owned relational records, public read projections, immutable histories, idempotency records, outbox entries, and job leases under Row Level Security.", $tags="", $link="")
+  Container(ShipWithAli.ObjectStorage, "Object Storage", $techn="Supabase Storage through an object-storage adapter", $descr="Keeps private upload candidates, accepted public media variants, Current CV objects, encrypted exports, and recovery artifacts behind stable Media asset identities.", $tags="", $link="")
+}
+
+Person(Visitor, "Visitor", $descr="Explores public work, reads Case studies, accesses the Current CV, interacts with Projects, and uses Contact channels without an account.", $tags="", $link="")
+Person(Owner, "Owner", $descr="The single authenticated operator who publishes content, manages configuration, moderates Feedback, activates CV versions, reviews analytics, and produces Owner exports.", $tags="", $link="")
+ContainerDb(ShipWithAli.PortfolioDatabase, "Portfolio Database", $techn="Supabase PostgreSQL with connection pooling", $descr="Stores module-owned relational records, public read projections, immutable histories, idempotency records, outbox entries, and job leases under Row Level Security.", $tags="", $link="")
+Container(ShipWithAli.ObjectStorage, "Object Storage", $techn="Supabase Storage through an object-storage adapter", $descr="Keeps private upload candidates, accepted public media variants, Current CV objects, encrypted exports, and recovery artifacts behind stable Media asset identities.", $tags="", $link="")
+
+Rel(Owner, ShipWithAli.NextjsApplication.OwnerWorkspace, "1: Requests activation of an accepted English CV version", $techn="HTTPS", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.IdentityandAccess, "2: Requires the allowlisted Owner", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.CVPortfolio, "3: Executes ActivateCvVersion", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.CVPortfolio, ShipWithAli.NextjsApplication.Media, "4: Confirms the file is an accepted English CV asset", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.CVPortfolio, ShipWithAli.NextjsApplication.ProviderAdapters, "5: Atomically replaces the Current CV designation and appends outbox work", $techn="Transaction and repository port", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ProviderAdapters, ShipWithAli.PortfolioDatabase, "6: Commits exactly one Current CV", $techn="PostgreSQL over TLS", $tags="", $link="")
+Rel(Visitor, ShipWithAli.NextjsApplication.PublicExperience, "7: Requests Current CV access", $techn="HTTPS", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PublicExperience, ShipWithAli.NextjsApplication.CVPortfolio, "8: Resolves the locale-appropriate result", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.CVPortfolio, ShipWithAli.NextjsApplication.ProviderAdapters, "9: Creates a short-lived signed download for the current asset", $techn="Transaction and repository port", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ProviderAdapters, ShipWithAli.ObjectStorage, "10: Reads the accepted Current CV object", $techn="Supabase Storage HTTPS API", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

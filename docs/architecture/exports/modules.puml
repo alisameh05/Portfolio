@@ -1,0 +1,97 @@
+@startuml
+title <size:24>Component View: ShipWithAli - Next.js Application</size>\n<size:24>The nine deep domain modules, delivery surfaces, Provider Adapters, stores, and external integrations.</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+Person(Visitor, "Visitor", $descr="Explores public work, reads Case studies, accesses the Current CV, interacts with Projects, and uses Contact channels without an account.", $tags="", $link="")
+Person(Owner, "Owner", $descr="The single authenticated operator who publishes content, manages configuration, moderates Feedback, activates CV versions, reviews analytics, and produces Owner exports.", $tags="", $link="")
+
+System(SupabaseAuth, "Supabase Auth", $descr="Creates application sessions and delegates the Owner identity challenge to GitHub OAuth.", $tags="", $link="")
+System(VercelPlatform, "Vercel Platform", $descr="Provides CDN delivery, serverless execution, cache tags, preview promotion, rollback, and scheduled invocation.", $tags="", $link="")
+System(Resend, "Resend", $descr="Delivers best-effort actionable Owner notifications without participating in publication transactions.", $tags="", $link="")
+System(Sentry, "Sentry", $descr="Receives scrubbed exceptions and sampled traces for actionable operational diagnosis.", $tags="", $link="")
+System(ExternalDestinations, "External Destinations", $descr="Hosts GitHub repositories, live demos, professional profiles, social channels, and other truthfully labeled Project or Contact destinations.", $tags="", $link="")
+
+System_Boundary("ShipWithAli_boundary", "ShipWithAli", $tags="") {
+  Container_Boundary("ShipWithAli.NextjsApplication_boundary", "Next.js Application", $tags="") {
+    Component(ShipWithAli.NextjsApplication.Media, "Media", $techn="TypeScript domain module", $descr="Owns private upload candidates, safety and suitability checks, accessibility metadata, accepted Media assets, provider-independent object references, and variants.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.CVPortfolio, "CV Portfolio", $techn="TypeScript domain module", $descr="Owns accepted CV versions and atomically maintains the single English Current CV designation.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.InteractionandModeration, "Interaction and Moderation", $techn="TypeScript domain module", $descr="Owns Reactions, Ratings, private Feedback, immutable Moderation decisions, current choices, and public aggregates.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.Measurement, "Measurement", $techn="TypeScript domain module", $descr="Owns consented Public event data, Analytics goal versions, Journey context, daily aggregates, retention, and Low-sample reporting.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.IdentityandAccess, "Identity and Access", $techn="TypeScript domain module", $descr="Authorizes the allowlisted Owner, scheduled jobs, short-lived abuse signals, consent state, and separate functional and analytics identities.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.PortabilityandOperations, "Portability and Operations", $techn="TypeScript domain module and PostgreSQL-backed job runner", $descr="Owns Owner export schemas and integrity, outbox records, job leases, retries, backup evidence, recovery state, and actionable Operational alerts.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.ProviderAdapters, "Provider Adapters", $techn="TypeScript adapters and provider SDKs", $descr="Implements seams for PostgreSQL transactions and repositories, Supabase Storage and Auth, GitHub OAuth, Vercel cache and scheduling, Resend, Sentry, clocks, and backup artifacts.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.PublicExperience, "Public Experience", $techn="Next.js Server Components and narrow Route Handlers", $descr="Resolves locale and durable routes, renders the landing page, discovery, Timeline, Case studies, Current CV access, interactions, and graceful fallbacks.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.OwnerWorkspace, "Owner Workspace", $techn="Next.js Server Actions and private Route Handlers", $descr="Maps authenticated forms to conceptual Owner commands and displays drafts, Moderation, analytics, exports, and operational state.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.PortfolioConfiguration, "Portfolio Configuration", $techn="TypeScript domain module", $descr="Owns the public profile, Contact channels, Global project CTA, safe destination availability, and their histories.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.ContentandPublishing, "Content and Publishing", $techn="TypeScript domain module", $descr="Owns Projects, Achievements, Testimonials, immutable Revisions, evidence, lifecycle, language publications, Project relationships, External links, routes, and redirects.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.TaxonomyandDiscovery, "Taxonomy and Discovery", $techn="TypeScript domain module and PostgreSQL full-text/trigram search", $descr="Owns controlled Taxonomies, value evolution, searchable public Project projections, filters, and newest-published ordering.", $tags="", $link="")
+  }
+
+  ContainerDb(ShipWithAli.PortfolioDatabase, "Portfolio Database", $techn="Supabase PostgreSQL with connection pooling", $descr="Stores module-owned relational records, public read projections, immutable histories, idempotency records, outbox entries, and job leases under Row Level Security.", $tags="", $link="")
+  Container(ShipWithAli.ObjectStorage, "Object Storage", $techn="Supabase Storage through an object-storage adapter", $descr="Keeps private upload candidates, accepted public media variants, Current CV objects, encrypted exports, and recovery artifacts behind stable Media asset identities.", $tags="", $link="")
+}
+
+Rel(ShipWithAli.NextjsApplication.PortabilityandOperations, ShipWithAli.NextjsApplication.Measurement, "Runs aggregation and retention jobs", $techn="In-process idempotent job handler", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PortabilityandOperations, ShipWithAli.NextjsApplication.InteractionandModeration, "Runs Feedback retention and aggregate repair jobs", $techn="In-process idempotent job handler", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PortabilityandOperations, ShipWithAli.NextjsApplication.Media, "Runs media validation and recovery jobs", $techn="In-process idempotent job handler", $tags="", $link="")
+Rel(Visitor, ExternalDestinations, "Follows truthfully labeled Project and Contact destinations", $techn="HTTPS or explicitly allowed contact scheme", $tags="", $link="")
+Rel(Visitor, ShipWithAli.NextjsApplication.PublicExperience, "Requests public pages and permitted mutations", $techn="HTTPS", $tags="", $link="")
+Rel(Owner, ShipWithAli.NextjsApplication.OwnerWorkspace, "Submits authenticated Owner commands", $techn="HTTPS", $tags="", $link="")
+Rel(VercelPlatform, ShipWithAli.NextjsApplication.PublicExperience, "Delivers cached requests to the application", $techn="Vercel CDN and HTTPS", $tags="", $link="")
+Rel(VercelPlatform, ShipWithAli.NextjsApplication.PortabilityandOperations, "Invokes scheduled job batches", $techn="Authenticated HTTPS", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PublicExperience, ShipWithAli.NextjsApplication.PortfolioConfiguration, "Reads public profile, Contact channels, and Global project CTA", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PublicExperience, ShipWithAli.NextjsApplication.ContentandPublishing, "Resolves durable routes and published Language versions", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PublicExperience, ShipWithAli.NextjsApplication.TaxonomyandDiscovery, "Searches and filters Published Projects", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PublicExperience, ShipWithAli.NextjsApplication.CVPortfolio, "Resolves the locale-appropriate Current CV result", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PublicExperience, ShipWithAli.NextjsApplication.InteractionandModeration, "Submits interactions and reads public aggregates", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PublicExperience, ShipWithAli.NextjsApplication.Measurement, "Records consented allowlisted events", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PublicExperience, ExternalDestinations, "Renders truthfully labeled outbound destinations", $techn="HTTPS links", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.IdentityandAccess, "Requires the allowlisted Owner for every command", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.PortfolioConfiguration, "Manages public configuration", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.ContentandPublishing, "Executes publishing commands", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.TaxonomyandDiscovery, "Executes Taxonomy commands", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.Media, "Prepares and accepts Media assets", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.CVPortfolio, "Accepts and activates CV versions", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.InteractionandModeration, "Reviews and moderates Feedback", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.Measurement, "Manages Analytics goals and reads reports", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.PortabilityandOperations, "Requests exports and reads operational state", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ContentandPublishing, ShipWithAli.NextjsApplication.Media, "Validates accepted public Media references", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ContentandPublishing, ShipWithAli.NextjsApplication.TaxonomyandDiscovery, "Validates controlled classifications and updates the public search projection", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ContentandPublishing, ShipWithAli.NextjsApplication.PortfolioConfiguration, "Reads the Global project CTA and destination availability", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.CVPortfolio, ShipWithAli.NextjsApplication.Media, "Validates that a candidate CV file is accepted", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.InteractionandModeration, ShipWithAli.NextjsApplication.IdentityandAccess, "Obtains purpose-limited functional identity and abuse policy", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.Measurement, ShipWithAli.NextjsApplication.IdentityandAccess, "Validates consent and purpose-limited analytics identity", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PortfolioConfiguration, ShipWithAli.NextjsApplication.ProviderAdapters, "Persists configuration through its owned repository", $techn="Transaction and repository port", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ContentandPublishing, ShipWithAli.NextjsApplication.ProviderAdapters, "Commits domain state, route projections, and outbox records atomically", $techn="Transaction and repository port", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.TaxonomyandDiscovery, ShipWithAli.NextjsApplication.ProviderAdapters, "Persists Taxonomy history and queries indexed public projections", $techn="Repository and search port", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.Media, ShipWithAli.NextjsApplication.ProviderAdapters, "Stores candidates and variants and persists acceptance state", $techn="Object storage and repository ports", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.CVPortfolio, ShipWithAli.NextjsApplication.ProviderAdapters, "Persists versions and Current CV replacement atomically", $techn="Transaction and repository port", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.InteractionandModeration, ShipWithAli.NextjsApplication.ProviderAdapters, "Persists idempotent interactions, Feedback, decisions, aggregates, and outbox entries", $techn="Transaction, repository, and rate-limit ports", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.Measurement, ShipWithAli.NextjsApplication.ProviderAdapters, "Persists allowlisted events, goals, aggregates, retention work, and outbox entries", $techn="Transaction and repository port", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.IdentityandAccess, ShipWithAli.NextjsApplication.ProviderAdapters, "Verifies OAuth sessions, schedules, signed identities, and short-lived abuse signals", $techn="Authentication, clock, and cryptography ports", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PortabilityandOperations, ShipWithAli.NextjsApplication.ProviderAdapters, "Leases jobs, creates exports and backups, invalidates caches, sends alerts, and records recovery evidence", $techn="Repository, storage, cache, email, monitoring, and clock ports", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ProviderAdapters, ShipWithAli.PortfolioDatabase, "Executes module-owned queries, transactions, RLS policies, outbox claims, and job leases", $techn="PostgreSQL over TLS", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ProviderAdapters, ShipWithAli.ObjectStorage, "Uses private uploads, accepted public objects, signed downloads, exports, and backup artifacts", $techn="Supabase Storage HTTPS API", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ProviderAdapters, SupabaseAuth, "Verifies and refreshes application sessions", $techn="Supabase Auth over HTTPS", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ProviderAdapters, VercelPlatform, "Invalidates cache tags and uses runtime and schedule metadata", $techn="Vercel runtime interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ProviderAdapters, Resend, "Sends minimal actionable Owner notifications", $techn="Resend HTTPS API", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ProviderAdapters, Sentry, "Sends scrubbed exceptions and sampled traces", $techn="Sentry HTTPS ingestion", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PortabilityandOperations, ShipWithAli.NextjsApplication.ContentandPublishing, "Processes cache invalidation and export-projection work without changing domain decisions", $techn="In-process idempotent job handler", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

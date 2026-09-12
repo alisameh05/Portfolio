@@ -1,0 +1,53 @@
+@startuml
+title <size:24>Dynamic View: ShipWithAli - Next.js Application</size>\n<size:24>Portable export construction, integrity recording, storage, and recovery evidence.</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+Person(Owner, "Owner", $descr="The single authenticated operator who publishes content, manages configuration, moderates Feedback, activates CV versions, reviews analytics, and produces Owner exports.", $tags="", $link="")
+
+System(GitHubActions, "GitHub Actions", $descr="Runs tests, architecture checks, expand-contract migration gates, deployment promotion, encrypted backups, and restore rehearsals.", $tags="", $link="")
+
+System_Boundary("ShipWithAli_boundary", "ShipWithAli", $tags="") {
+  Container_Boundary("ShipWithAli.NextjsApplication_boundary", "Next.js Application", $tags="") {
+    Component(ShipWithAli.NextjsApplication.IdentityandAccess, "Identity and Access", $techn="TypeScript domain module", $descr="Authorizes the allowlisted Owner, scheduled jobs, short-lived abuse signals, consent state, and separate functional and analytics identities.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.PortabilityandOperations, "Portability and Operations", $techn="TypeScript domain module and PostgreSQL-backed job runner", $descr="Owns Owner export schemas and integrity, outbox records, job leases, retries, backup evidence, recovery state, and actionable Operational alerts.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.ProviderAdapters, "Provider Adapters", $techn="TypeScript adapters and provider SDKs", $descr="Implements seams for PostgreSQL transactions and repositories, Supabase Storage and Auth, GitHub OAuth, Vercel cache and scheduling, Resend, Sentry, clocks, and backup artifacts.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.OwnerWorkspace, "Owner Workspace", $techn="Next.js Server Actions and private Route Handlers", $descr="Maps authenticated forms to conceptual Owner commands and displays drafts, Moderation, analytics, exports, and operational state.", $tags="", $link="")
+  }
+
+  ContainerDb(ShipWithAli.PortfolioDatabase, "Portfolio Database", $techn="Supabase PostgreSQL with connection pooling", $descr="Stores module-owned relational records, public read projections, immutable histories, idempotency records, outbox entries, and job leases under Row Level Security.", $tags="", $link="")
+  Container(ShipWithAli.ObjectStorage, "Object Storage", $techn="Supabase Storage through an object-storage adapter", $descr="Keeps private upload candidates, accepted public media variants, Current CV objects, encrypted exports, and recovery artifacts behind stable Media asset identities.", $tags="", $link="")
+}
+
+Person(Owner, "Owner", $descr="The single authenticated operator who publishes content, manages configuration, moderates Feedback, activates CV versions, reviews analytics, and produces Owner exports.", $tags="", $link="")
+ContainerDb(ShipWithAli.PortfolioDatabase, "Portfolio Database", $techn="Supabase PostgreSQL with connection pooling", $descr="Stores module-owned relational records, public read projections, immutable histories, idempotency records, outbox entries, and job leases under Row Level Security.", $tags="", $link="")
+Container(ShipWithAli.ObjectStorage, "Object Storage", $techn="Supabase Storage through an object-storage adapter", $descr="Keeps private upload candidates, accepted public media variants, Current CV objects, encrypted exports, and recovery artifacts behind stable Media asset identities.", $tags="", $link="")
+System(GitHubActions, "GitHub Actions", $descr="Runs tests, architecture checks, expand-contract migration gates, deployment promotion, encrypted backups, and restore rehearsals.", $tags="", $link="")
+
+Rel(Owner, ShipWithAli.NextjsApplication.OwnerWorkspace, "1: Requests a versioned Owner export", $techn="HTTPS", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.IdentityandAccess, "2: Requires the allowlisted Owner", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.PortabilityandOperations, "3: Creates an idempotent export request", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PortabilityandOperations, ShipWithAli.NextjsApplication.ProviderAdapters, "4: Leases the export job and reads module-owned export projections", $techn="Repository, storage, cache, email, monitoring, and clock ports", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ProviderAdapters, ShipWithAli.PortfolioDatabase, "5: Reads eligible records under retention and privacy policy", $techn="PostgreSQL over TLS", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ProviderAdapters, ShipWithAli.ObjectStorage, "6: Reads eligible media and CV objects", $techn="Supabase Storage HTTPS API", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PortabilityandOperations, ShipWithAli.NextjsApplication.ProviderAdapters, "7: Writes the schema-versioned package, manifest, and checksums", $techn="Repository, storage, cache, email, monitoring, and clock ports", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ProviderAdapters, ShipWithAli.ObjectStorage, "8: Stores the encrypted export artifact", $techn="Supabase Storage HTTPS API", $tags="", $link="")
+Rel(GitHubActions, ShipWithAli.PortfolioDatabase, "9: Creates the nightly encrypted logical backup", $techn="PostgreSQL over TLS", $tags="", $link="")
+Rel(GitHubActions, ShipWithAli.ObjectStorage, "10: Creates the weekly encrypted storage artifact", $techn="Supabase Storage HTTPS API", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

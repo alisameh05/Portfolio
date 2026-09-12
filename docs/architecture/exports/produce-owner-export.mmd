@@ -1,0 +1,55 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Dynamic View: ShipWithAli - Next.js Application"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    2["<div style='font-weight: bold'>Owner</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>The single authenticated<br />operator who publishes<br />content, manages<br />configuration, moderates<br />Feedback, activates CV<br />versions, reviews analytics,<br />and produces Owner exports.</div>"]
+    style 2 fill:#999999,stroke:#6b6b6b,color:#ffffff
+
+    24["<div style='font-weight: bold'>GitHub Actions</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Runs tests, architecture<br />checks, expand-contract<br />migration gates, deployment<br />promotion, encrypted backups,<br />and restore rehearsals.</div>"]
+    style 24 fill:#999999,stroke:#9c1c1c,color:#ffffff
+
+    subgraph 3 ["ShipWithAli"]
+      style 3 fill:#ffffff,stroke:#0b4884,color:#0b4884
+
+      subgraph 4 ["Next.js Application"]
+        style 4 fill:#ffffff,stroke:#2e6295,color:#2e6295
+
+        14["<div style='font-weight: bold'>Identity and Access</div><div style='font-size: 70%; margin-top: 0px'>[Component: TypeScript domain module]</div><div style='font-size: 80%; margin-top:10px'>Authorizes the allowlisted<br />Owner, scheduled jobs,<br />short-lived abuse signals,<br />consent state, and separate<br />functional and analytics<br />identities.</div>"]
+        style 14 fill:#85bbf0,stroke:#9c1c1c,color:#0b2540
+        15["<div style='font-weight: bold'>Portability and Operations</div><div style='font-size: 70%; margin-top: 0px'>[Component: TypeScript domain module and PostgreSQL-backed job runner]</div><div style='font-size: 80%; margin-top:10px'>Owns Owner export schemas and<br />integrity, outbox records,<br />job leases, retries, backup<br />evidence, recovery state, and<br />actionable Operational<br />alerts.</div>"]
+        style 15 fill:#85bbf0,stroke:#9c1c1c,color:#0b2540
+        16["<div style='font-weight: bold'>Provider Adapters</div><div style='font-size: 70%; margin-top: 0px'>[Component: TypeScript adapters and provider SDKs]</div><div style='font-size: 80%; margin-top:10px'>Implements seams for<br />PostgreSQL transactions and<br />repositories, Supabase<br />Storage and Auth, GitHub<br />OAuth, Vercel cache and<br />scheduling, Resend, Sentry,<br />clocks, and backup artifacts.</div>"]
+        style 16 fill:#6c757d,stroke:#9c1c1c,color:#ffffff
+        6["<div style='font-weight: bold'>Owner Workspace</div><div style='font-size: 70%; margin-top: 0px'>[Component: Next.js Server Actions and private Route Handlers]</div><div style='font-size: 80%; margin-top:10px'>Maps authenticated forms to<br />conceptual Owner commands and<br />displays drafts, Moderation,<br />analytics, exports, and<br />operational state.</div>"]
+        style 6 fill:#85bbf0,stroke:#5d82a8,color:#0b2540
+      end
+
+      17[("<div style='font-weight: bold'>Portfolio Database</div><div style='font-size: 70%; margin-top: 0px'>[Container: Supabase PostgreSQL with connection pooling]</div><div style='font-size: 80%; margin-top:10px'>Stores module-owned<br />relational records, public<br />read projections, immutable<br />histories, idempotency<br />records, outbox entries, and<br />job leases under Row Level<br />Security.</div>")]
+      style 17 fill:#2e7d32,stroke:#9c1c1c,color:#ffffff
+      18["<div style='font-weight: bold'>Object Storage</div><div style='font-size: 70%; margin-top: 0px'>[Container: Supabase Storage through an object-storage adapter]</div><div style='font-size: 80%; margin-top:10px'>Keeps private upload<br />candidates, accepted public<br />media variants, Current CV<br />objects, encrypted exports,<br />and recovery artifacts behind<br />stable Media asset<br />identities.</div>"]
+      style 18 fill:#2e7d32,stroke:#9c1c1c,color:#ffffff
+    end
+
+    2["<div style='font-weight: bold'>Owner</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>The single authenticated<br />operator who publishes<br />content, manages<br />configuration, moderates<br />Feedback, activates CV<br />versions, reviews analytics,<br />and produces Owner exports.</div>"]
+    style 2 fill:#999999,stroke:#6b6b6b,color:#ffffff
+    17[("<div style='font-weight: bold'>Portfolio Database</div><div style='font-size: 70%; margin-top: 0px'>[Container: Supabase PostgreSQL with connection pooling]</div><div style='font-size: 80%; margin-top:10px'>Stores module-owned<br />relational records, public<br />read projections, immutable<br />histories, idempotency<br />records, outbox entries, and<br />job leases under Row Level<br />Security.</div>")]
+    style 17 fill:#2e7d32,stroke:#9c1c1c,color:#ffffff
+    18["<div style='font-weight: bold'>Object Storage</div><div style='font-size: 70%; margin-top: 0px'>[Container: Supabase Storage through an object-storage adapter]</div><div style='font-size: 80%; margin-top:10px'>Keeps private upload<br />candidates, accepted public<br />media variants, Current CV<br />objects, encrypted exports,<br />and recovery artifacts behind<br />stable Media asset<br />identities.</div>"]
+    style 18 fill:#2e7d32,stroke:#9c1c1c,color:#ffffff
+    24["<div style='font-weight: bold'>GitHub Actions</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Runs tests, architecture<br />checks, expand-contract<br />migration gates, deployment<br />promotion, encrypted backups,<br />and restore rehearsals.</div>"]
+    style 24 fill:#999999,stroke:#9c1c1c,color:#ffffff
+
+    2-. "<div>1. Requests a versioned Owner<br />export</div><div style='font-size: 70%'>[HTTPS]</div>" .->6
+    6-. "<div>2. Requires the allowlisted<br />Owner</div><div style='font-size: 70%'>[In-process TypeScript interface]</div>" .->14
+    6-. "<div>3. Creates an idempotent<br />export request</div><div style='font-size: 70%'>[In-process TypeScript interface]</div>" .->15
+    15-. "<div>4. Leases the export job and<br />reads module-owned export<br />projections</div><div style='font-size: 70%'>[Repository, storage, cache, email, monitoring, and clock ports]</div>" .->16
+    16-. "<div>5. Reads eligible records<br />under retention and privacy<br />policy</div><div style='font-size: 70%'>[PostgreSQL over TLS]</div>" .->17
+    16-. "<div>6. Reads eligible media and<br />CV objects</div><div style='font-size: 70%'>[Supabase Storage HTTPS API]</div>" .->18
+    15-. "<div>7. Writes the<br />schema-versioned package,<br />manifest, and checksums</div><div style='font-size: 70%'>[Repository, storage, cache, email, monitoring, and clock ports]</div>" .->16
+    16-. "<div>8. Stores the encrypted<br />export artifact</div><div style='font-size: 70%'>[Supabase Storage HTTPS API]</div>" .->18
+    24-. "<div>9. Creates the nightly<br />encrypted logical backup</div><div style='font-size: 70%'>[PostgreSQL over TLS]</div>" .->17
+    24-. "<div>10. Creates the weekly<br />encrypted storage artifact</div><div style='font-size: 70%'>[Supabase Storage HTTPS API]</div>" .->18
+
+  end

@@ -1,0 +1,48 @@
+@startuml
+title <size:24>Dynamic View: ShipWithAli - Next.js Application</size>\n<size:24>Private upload preparation, object validation, metadata acceptance, and background work.</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+Person(Owner, "Owner", $descr="The single authenticated operator who publishes content, manages configuration, moderates Feedback, activates CV versions, reviews analytics, and produces Owner exports.", $tags="", $link="")
+
+System_Boundary("ShipWithAli_boundary", "ShipWithAli", $tags="") {
+  Container_Boundary("ShipWithAli.NextjsApplication_boundary", "Next.js Application", $tags="") {
+    Component(ShipWithAli.NextjsApplication.Media, "Media", $techn="TypeScript domain module", $descr="Owns private upload candidates, safety and suitability checks, accessibility metadata, accepted Media assets, provider-independent object references, and variants.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.IdentityandAccess, "Identity and Access", $techn="TypeScript domain module", $descr="Authorizes the allowlisted Owner, scheduled jobs, short-lived abuse signals, consent state, and separate functional and analytics identities.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.PortabilityandOperations, "Portability and Operations", $techn="TypeScript domain module and PostgreSQL-backed job runner", $descr="Owns Owner export schemas and integrity, outbox records, job leases, retries, backup evidence, recovery state, and actionable Operational alerts.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.ProviderAdapters, "Provider Adapters", $techn="TypeScript adapters and provider SDKs", $descr="Implements seams for PostgreSQL transactions and repositories, Supabase Storage and Auth, GitHub OAuth, Vercel cache and scheduling, Resend, Sentry, clocks, and backup artifacts.", $tags="", $link="")
+    Component(ShipWithAli.NextjsApplication.OwnerWorkspace, "Owner Workspace", $techn="Next.js Server Actions and private Route Handlers", $descr="Maps authenticated forms to conceptual Owner commands and displays drafts, Moderation, analytics, exports, and operational state.", $tags="", $link="")
+  }
+
+  Container(ShipWithAli.ObjectStorage, "Object Storage", $techn="Supabase Storage through an object-storage adapter", $descr="Keeps private upload candidates, accepted public media variants, Current CV objects, encrypted exports, and recovery artifacts behind stable Media asset identities.", $tags="", $link="")
+}
+
+Person(Owner, "Owner", $descr="The single authenticated operator who publishes content, manages configuration, moderates Feedback, activates CV versions, reviews analytics, and produces Owner exports.", $tags="", $link="")
+Container(ShipWithAli.ObjectStorage, "Object Storage", $techn="Supabase Storage through an object-storage adapter", $descr="Keeps private upload candidates, accepted public media variants, Current CV objects, encrypted exports, and recovery artifacts behind stable Media asset identities.", $tags="", $link="")
+
+Rel(Owner, ShipWithAli.NextjsApplication.OwnerWorkspace, "1: Requests a private upload grant", $techn="HTTPS", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.IdentityandAccess, "2: Requires the allowlisted Owner", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.Media, "3: Prepares a size-limited candidate upload", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.Media, ShipWithAli.NextjsApplication.ProviderAdapters, "4: Creates the private object grant and candidate record", $techn="Object storage and repository ports", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.ProviderAdapters, ShipWithAli.ObjectStorage, "5: Stores the private candidate", $techn="Supabase Storage HTTPS API", $tags="", $link="")
+Rel(Owner, ShipWithAli.NextjsApplication.OwnerWorkspace, "6: Supplies required accessibility metadata and requests acceptance", $techn="HTTPS", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.OwnerWorkspace, ShipWithAli.NextjsApplication.Media, "7: Executes AcceptMediaAsset", $techn="In-process TypeScript interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.Media, ShipWithAli.NextjsApplication.ProviderAdapters, "8: Commits safety, ownership, suitability, accessibility, and outbox state", $techn="Object storage and repository ports", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication.PortabilityandOperations, ShipWithAli.NextjsApplication.Media, "9: Runs retry-safe validation or variant work", $techn="In-process idempotent job handler", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

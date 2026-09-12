@@ -1,0 +1,304 @@
+# ShipWithAli Domain Model
+
+## Purpose and authority
+
+This document is the implementation-neutral behavioral model for ShipWithAli. It translates the shared language in [`CONTEXT.md`](../CONTEXT.md) and the accepted records in [`docs/adr/`](./adr/) into identities, relationships, invariants, state transitions, commands, and observable domain events.
+
+When documents disagree, accepted ADRs take precedence over the product brief. `CONTEXT.md` remains the authority for vocabulary; this document defines how those concepts relate and behave. It deliberately does not prescribe database tables, framework types, hosting providers, or API wire formats.
+
+## Release boundary
+
+The long-term model contains Projects, Lab entries, Achievements, Testimonials, portfolio settings, publishing, visitor interactions, measurement, and portability.
+
+The first release includes:
+
+- the English and Arabic public experiences;
+- Projects, case studies, taxonomy-driven discovery, and owner-curated Project relationships;
+- the Achievement Timeline, Testimonials, the Current CV, Contact channels, and the Global project CTA;
+- owner-managed publishing, evidence checks, media acceptance, moderation, analytics, and export;
+- durable public routes and resilient delivery of the Core public journey.
+
+The first release excludes every Lab entry capability: no public route, navigation, publication workflow, visitor interaction, or owner-management surface may expose a Lab entry. Lab entry remains in the model so later work can activate it only after revisiting ADR-0007.
+
+## Domain at a glance
+
+```mermaid
+flowchart LR
+    Owner[Owner] --> Settings[Portfolio settings]
+    Owner --> Content[Publishable content]
+    Owner --> Taxonomy[Taxonomies]
+    Owner --> Media[Media library]
+    Owner --> CV[CV portfolio]
+    Owner --> Goals[Analytics goals]
+    Owner --> Exports[Owner exports]
+
+    Content --> Project[Project]
+    Content --> Achievement[Achievement]
+    Content --> Testimonial[Testimonial]
+    Content -. deferred after v1 .-> Lab[Lab entry]
+
+    Project --> CaseStudy[Localized case-study revisions]
+    Project --> Evidence[Evidence package]
+    Project --> Links[External links]
+    Project --> Relations[Project relationships]
+    Project --> Classification[Taxonomy assignments]
+    CaseStudy --> Publication[Language publication]
+    Publication --> Route[Public route identity]
+    CaseStudy --> Media
+    Evidence --> Media
+
+    Visitor[Visitor] --> Reaction[Reaction]
+    Visitor --> Rating[Rating]
+    Visitor --> Feedback[Feedback]
+    Visitor --> Events[Public event data]
+    Reaction --> Project
+    Rating --> Project
+    Feedback --> Project
+    Feedback --> Moderation[Moderation decisions]
+    Events --> Reports[Aggregate reports]
+    Goals --> Reports
+
+    Settings --> Contact[Contact channels]
+    Settings --> CTA[Global project CTA]
+    Exports --> Content
+    Exports --> Taxonomy
+    Exports --> Media
+    Exports --> CV
+    Exports --> Moderation
+    Exports --> Reports
+```
+
+Arrows show ownership or a domain reference, not a storage dependency. Cross-group references use stable identities and do not transfer ownership of the referenced concept.
+
+## Identities and aggregate groups
+
+An identity remains stable while names, labels, slugs, revisions, states, or providers change. A public URL is not the identity of its content.
+
+| Aggregate group | Stable root identity | Owns | References | First release |
+| --- | --- | --- | --- | --- |
+| Portfolio settings | Portfolio identity | public profile, Contact channels, Global project CTA | accepted Media assets | Yes |
+| Project | Project identity | Public lifecycle, Project status, Featured flag, Localized revision streams, Evidence package, External links, taxonomy assignments | Media assets, Taxonomy values, other Projects | Yes |
+| Achievement | Achievement identity | Public lifecycle, Localized revision streams, Evidence package, Timeline date | Media assets | Yes |
+| Testimonial | Testimonial identity | name, quote, association, Public lifecycle, Localized revision streams, publication history | zero or one Project | Yes |
+| Lab entry | Lab entry identity | Public lifecycle, Localized revision streams, evidence, links, media references | Media assets, Taxonomy values | No; model only |
+| Taxonomy | Taxonomy identity | name, purpose, Taxonomy values, evolution history | nothing outside the aggregate | Yes |
+| Media library | Media asset identity | safety assessment, accessibility metadata, acceptance and publication history | owning portfolio identity | Yes |
+| Feedback | Feedback identity | submitted name and paragraph, current presentation eligibility, Moderation decisions | one Project, Visitor measurement identity when permitted | Yes |
+| CV portfolio | CV portfolio identity | CV versions and the Current CV designation | accepted file assets | Yes |
+| Analytics goal | Analytics goal identity | ordered goal versions and current active version | known public actions, pages, and Project identities | Yes |
+| Measurement | Public event identity while detail is retained | privacy-minimized event facts, Journey context, aggregates | Visitor measurement identity, public content identities | Yes |
+| Owner export | Export identity | export scope, schema version, creation record, integrity manifest | portable snapshots of included domain records | Yes |
+
+### Relationship rules
+
+- One Project has one stream for each supported language it has begun authoring. In the first release, supported languages are English and Arabic.
+- One Localized revision stream has one or more Revisions and zero or one current published Revision.
+- A Revision belongs to exactly one stream and never moves to another Project, content type, or language.
+- A Project may have many Taxonomy values. Every assignment points to a value in the appropriate Taxonomy.
+- A Project relationship joins two distinct Projects. It makes them eligible for related-project presentation only while both have a public Language version for the visitor's locale.
+- A Testimonial belongs either to the general profile or to exactly one Project.
+- An External link belongs to one Project. A Contact channel belongs to portfolio settings; the two concepts are not interchangeable.
+- A Reaction and a Rating each belong to one Project and one permitted Visitor measurement identity. Only one current value of each kind may exist for that pair.
+- Feedback belongs to one Project. Public display additionally depends on both Feedback approval and Project visibility.
+- A CV version belongs to the single CV portfolio. Exactly one accepted English CV version is Current CV once CV access is launched.
+
+## Publishing model
+
+### Content-wide lifecycle
+
+Public lifecycle is content-wide. It controls whether any language route can be publicly discovered.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> Published: publish first reviewed language
+    Draft --> Archived: archive unused work
+    Published --> Hidden: hide
+    Published --> Archived: archive
+    Hidden --> Published: restore
+    Hidden --> Archived: archive
+    Archived --> Published: restore through publication validation
+```
+
+- Saving a Revision never changes Public lifecycle.
+- Draft has no publicly reachable Language version.
+- Published is the only discoverable state. It still exposes only locales with a current published Revision.
+- Hidden is a reversible removal from public discovery. Its current published Revision pointers, route history, interaction history, and measurements remain retained.
+- Archived marks retained historical content. It is removed from public discovery and normal public presentation without erasing its revisions, evidence, interactions, or measurements.
+- Restoring Hidden or Archived content must pass current publication validation before it returns to Published.
+- Featured and Project status never change Public lifecycle. Featuring non-Published content has no public effect.
+
+### Language publication
+
+- English and Arabic use independent Localized revision streams.
+- Publishing a Revision affects only its own language. It never publishes, modifies, or exposes another stream.
+- Public localized text never falls back to text from another language. A locale without a current published Revision has no public content route for that item.
+- The Arabic experience may reference an accepted English Media asset, because media reuse is not text publication.
+- In the first release, CV access and External links remain English-only. Arabic presentation must state unavailability truthfully instead of labeling an English destination as localized.
+- Publishing a newer Revision moves that stream's current-public designation atomically. The former Revision remains in history.
+- While a new Revision is being prepared, the stream's last valid published Revision remains public.
+
+### Publication validation
+
+A publication or restoration succeeds only when all applicable rules pass:
+
+- the target Revision exists, belongs to the requested content and language, and has been explicitly reviewed;
+- required case-study content is present for a Project;
+- the Evidence package passes its content-type rules and contains no unsupported metric or fabricated placeholder;
+- every referenced public Media asset is safe, accepted, and has the required Media accessibility metadata;
+- public labels and External links truthfully represent destination availability;
+- a new or changed slug can be attached to the existing Public route identity without conflicting with another identity;
+- the requested operation does not expose a Lab entry during the first release.
+
+Failure leaves the existing Public lifecycle, current published Revision, canonical route, and public read state unchanged. Notifications and analytics are never prerequisites for successful publication.
+
+### Evidence rules by content type
+
+| Content type | Publication evidence rule |
+| --- | --- |
+| Project | Requires a complete minimum case study and an accepted Evidence package containing Supporting artifacts for its material claims and outcomes. |
+| Achievement | Requires Supporting artifacts or a recorded internal owner verification when public proof is inappropriate or unavailable. |
+| Testimonial | Requires a stored name and quote only; no permission or relationship-verification record is required. Public presentation must not imply stronger provenance. |
+| Lab entry | May present incomplete work when honestly labeled, but is excluded from first-release publication. |
+| Media asset | Requires safe processing, acceptance, and appropriate accessibility metadata before public use. |
+
+Evidence state is internal editorial information. It must not be rendered as an external certification or verification badge.
+
+### Durable routes and ordering
+
+- A page receives one Public route identity on first successful publication.
+- Changing a title or slug never creates a new content identity. The former route becomes a Public route redirect to the current canonical route.
+- Draft previews are private and non-indexable and do not establish a public redirect contract.
+- Public Project discovery is ordered by publication time, newest first. Manual ranking is not part of the domain.
+- Featured may provide a separate editorial presentation, but it must not silently redefine the canonical newest-published ordering.
+
+## Classification and relationships
+
+- Taxonomies are controlled vocabularies; Projects cannot introduce private free-form substitutes for managed values.
+- An active Taxonomy value may be assigned to new or existing Projects.
+- Renaming changes its public label without replacing its stable identity or historical assignments.
+- Retiring prevents new assignments while preserving existing ones.
+- Merging explicitly migrates affected assignments to the surviving value and retains an auditable mapping from the retired value.
+- Project status is a maturity or work-state classification, not Public lifecycle. `Archived` is therefore forbidden as a Project status.
+- Project relationships are owner-curated associations, not automatically inferred recommendations. A relationship never makes an unpublished Project visible.
+
+## Media and CV
+
+### Media
+
+- Uploading creates no public entitlement. A Media asset remains private until its type, safety, ownership, and public suitability are accepted.
+- Meaningful images require an approved non-visual description; decorative images require an explicit decorative classification.
+- Meaningful video requires the approved caption or summary appropriate to its public use.
+- A Revision may reference a Media asset only by stable identity. Moving storage providers or regenerating variants does not change that identity.
+- A public page must remain useful when rich media cannot load; media failure cannot block its core message or navigation.
+
+### CV portfolio
+
+- A file upload is only a candidate for a CV version; validation and acceptance precede activation.
+- Activating a CV version atomically removes the Current CV designation from the previous version and assigns it to the replacement.
+- The domain must never expose two Current CV versions or a partially accepted upload.
+- Previous versions remain in owner history unless a governing Retention policy requires removal.
+- The first release exposes exactly one English Current CV. Localized CV versions require a later domain decision.
+
+## Visitor interaction and moderation
+
+- Visitors do not require accounts. Visitor measurement identity is used only when needed to deduplicate or measure permitted behavior.
+- Submitting a new Reaction or Rating for an existing Visitor-and-Project pair replaces the current value where feasible; it does not add another current vote.
+- Reactions, Ratings, Feedback submissions, and their aggregates are Project-wide rather than duplicated by language.
+- New Feedback is private and pending. It cannot appear publicly until an approval is recorded.
+- An approval makes Feedback eligible for display only while its Project and requested locale are publicly visible.
+- Rejection keeps Feedback private. Later suppression removes previously approved Feedback from display while retaining Moderation decision history.
+- Hiding or archiving a Project stops new public interactions and removes its interaction summaries and approved Feedback from public presentation. Stored history remains subject to Retention policy.
+- Testimonial suppression uses its Public lifecycle and retained publication history; it does not add a permission-verification requirement.
+
+## Measurement, resilience, and operations
+
+- Public event data contains only the minimum facts needed for portfolio decisions. Names, Feedback text, CV contents, access secrets, and raw direct identifiers are not measurement dimensions.
+- Visitor measurement identity is pseudonymous and does not become a Visitor account or reusable public profile.
+- Geography, device, and language dimensions are coarse; aggregates expose a Low-sample state or suppress detail when observation counts are too small.
+- Engagement estimate is always presented as approximate active attention, never exact reading time.
+- Journey context records sequence without asserting that a page or Project caused a conversion.
+- Each Analytics goal version is immutable after activation. Editing a goal creates a new version so reports can identify the rule used at measurement time.
+- Retention policy governs deletion or anonymization of eligible Feedback and Public event data. Aggregate reporting is preferred when detailed events are no longer needed.
+- In the first release, raw Public event data is retained for 14 days and daily aggregates for 13 months; rejected or unresolved Feedback is retained for 90 days and suppressed Feedback history for 12 months, unless a governing deletion requirement shortens those periods.
+- Failure of analytics intake, alerts, contact delivery, a rich-media dependency, or an External link must not block the Core public journey or replace the last valid published state.
+- An Operational alert is raised only for actionable security, publication, recovery, integration, or analytics-pipeline failures; healthy routine activity is not an alert.
+
+## Portability contract
+
+An Owner export is a domain artifact rather than a provider backup. Each export identifies its schema version, creation time, included scope, and integrity information so a future importer can reconstruct the meaning and relationships of its records.
+
+The export covers, subject to Retention policy and privacy rules:
+
+- Projects, Achievements, Testimonials, and any future Lab entries, including revisions, language publication state, evidence, relationships, and route history;
+- Taxonomies, values, assignments, retirement records, and merge mappings;
+- Media metadata, accessibility metadata, publication state, and portable references to included media;
+- CV metadata, version history, and the Current CV designation;
+- Feedback and Moderation decision history that remains eligible for retention;
+- Analytics goal versions and portable aggregate reports, plus detailed Public event data only when policy permits;
+- portfolio settings, Contact channels, and the Global project CTA.
+
+An export is meaningful when its documented format preserves stable identities, relationships, language boundaries, lifecycle states, and history across future schema changes. A one-click restore is not required by this model, but the export must contain enough documented information for a compatible importer to restore those meanings.
+
+## Conceptual commands and events
+
+Commands express owner or Visitor intent. Events describe successful domain outcomes; they do not mandate a message bus, event store, or integration technology.
+
+| Command | Successful domain event | Principal rejection conditions |
+| --- | --- | --- |
+| `SaveRevision` | `RevisionSaved` | unsupported language, wrong content identity, mutation of an existing Revision |
+| `PublishLanguageVersion` | `LanguageVersionPublished` | failed review, evidence, media, route, locale, or release-boundary validation |
+| `HideContent` | `ContentHidden` | unknown content |
+| `ArchiveContent` | `ContentArchived` | unknown content |
+| `RestoreContent` | `ContentRestored` | current publication validation fails |
+| `ChangeProjectStatus` | `ProjectStatusChanged` | inactive or forbidden status such as `Archived` |
+| `SetProjectFeatured` | `ProjectFeaturedChanged` | unknown Project |
+| `ChangePublicSlug` | `PublicRouteChanged` | identity conflict or no established Public route identity |
+| `AssignTaxonomyValue` | `TaxonomyValueAssigned` | retired value or wrong Taxonomy |
+| `RenameTaxonomyValue` | `TaxonomyValueRenamed` | label conflict within the Taxonomy |
+| `RetireTaxonomyValue` | `TaxonomyValueRetired` | unknown value |
+| `MergeTaxonomyValue` | `TaxonomyValueMerged` | values belong to different Taxonomies or target is retired |
+| `AcceptMediaAsset` | `MediaAssetAccepted` | failed safety, suitability, ownership, or accessibility validation |
+| `ActivateCvVersion` | `CurrentCvChanged` | file is unaccepted or not an English CV version in v1 |
+| `SubmitReaction` | `ReactionChanged` | Project is not Published or visitor signal is not permitted |
+| `SubmitRating` | `RatingChanged` | invalid star value, Project is not Published, or visitor signal is not permitted |
+| `SubmitFeedback` | `FeedbackSubmitted` | invalid content, unavailable Project, abuse protection, or privacy validation failure |
+| `ModerateFeedback` | `FeedbackApproved`, `FeedbackRejected`, or `FeedbackSuppressed` | invalid transition or unknown Feedback |
+| `ActivateAnalyticsGoalVersion` | `AnalyticsGoalVersionActivated` | rule references an unknown action or invalid scope |
+| `ProduceOwnerExport` | `OwnerExportProduced` | privacy, retention, completeness, or integrity validation fails |
+
+## Acceptance scenarios
+
+1. **Independent languages:** Given an English Project Revision is reviewed and its Arabic stream is still Draft, publishing English exposes only the English route.
+2. **No text fallback:** Given no Arabic Revision is published, opening the Arabic identity does not render English case-study text as Arabic content.
+3. **Last valid publication:** Given a Project has a published Revision, saving a new Draft leaves the previous Revision public.
+4. **Durable identity:** Given a published Project changes slug, its old route redirects to the new canonical route without changing Project identity.
+5. **Lifecycle retention:** Given a Project is Hidden or Archived, public discovery, interaction controls, aggregates, and approved Feedback disappear while retained history remains available to the Owner.
+6. **Orthogonal featuring:** Given a Draft or Hidden Project is Featured, it gains no public visibility.
+7. **Newest-first discovery:** Given several Published Projects, the normal gallery orders them by publication time descending without an owner-defined rank.
+8. **Controlled taxonomy:** Given a value has historical assignments, retiring it blocks new assignments without deleting the old ones; merging it explicitly migrates those assignments and retains the mapping.
+9. **Atomic CV replacement:** Given one accepted Current CV, activating another accepted English version exposes exactly the replacement and retains the former version in history.
+10. **Interaction deduplication:** Given the same permitted Visitor signal reacts or rates again on a Project, the current value changes and the aggregate does not count two current submissions.
+11. **Moderation privacy:** Given new Feedback, no public query may display it before approval; rejection or later suppression remains visible in owner history.
+12. **Publication gates:** Given unsafe media, missing accessibility metadata, unsupported claims, fabricated placeholders, or an unreviewed locale, publication fails without changing the last valid public state.
+13. **Arabic boundary:** Given an Arabic case study shares accepted English media, it may render that media while truthfully withholding English-only CV and External link capabilities.
+14. **Deferred Lab:** Given a valid Lab entry model, first-release navigation, owner workflows, and public queries still cannot expose it.
+15. **Degraded dependencies:** Given analytics, alerts, rich media, or an External link fails, the landing-to-contact Core public journey remains usable from the last valid published content.
+16. **Portable meaning:** Given an Owner export, a compatible importer can distinguish identities, locales, revisions, current publications, lifecycle states, taxonomy history, and moderation history without provider-specific knowledge.
+
+## ADR traceability
+
+| ADR | Model consequence |
+| --- | --- |
+| [ADR-0001: Evidence-led public publication](./adr/0001-evidence-led-publication.md) | Explicit publication, content-specific evidence rules, unsupported-claim rejection, and retained last-valid public revisions. |
+| [ADR-0002: Accessible immersive hero](./adr/0002-accessible-immersive-hero.md) | Core public journey and navigation survive animation, rich-media, accessibility, or device limitations. |
+| [ADR-0003: Newest published projects first](./adr/0003-newest-published-project-order.md) | Publication-time ordering replaces manual rank; Featured remains independent. |
+| [ADR-0004: Privacy-preserving analytics](./adr/0004-privacy-preserving-analytics.md) | Pseudonymous aggregate-first measurement, coarse dimensions, Low-sample state, non-causal Journey context, and retention controls. |
+| [ADR-0005: Controlled taxonomy evolution](./adr/0005-controlled-taxonomy-evolution.md) | Controlled values support rename, retirement, merge, migration, and preserved historical meaning. |
+| [ADR-0006: Minimal testimonial publication](./adr/0006-minimal-testimonial-publication.md) | Name-and-quote publication without permission or relationship verification; restrained public claims and retained suppression history. |
+| [ADR-0007: Defer Lab launch](./adr/0007-defer-lab-launch.md) | Lab entry remains conceptual but is excluded from every first-release surface and workflow. |
+| [ADR-0008: Measurable public quality gates](./adr/0008-measurable-public-quality-gates.md) | Publication validation, resilient last-valid content, accessible media, performance-aware delivery, and actionable-only alerts. |
+| [ADR-0009: Bilingual launch boundary](./adr/0009-bilingual-launch-boundary.md) | Independent English and Arabic revision streams, explicit per-language publication, RTL Arabic, shared media, and truthful English-only destinations. |
+| [ADR-0010: Durable public identity and safe media](./adr/0010-durable-public-identity.md) | Stable Public route identity, redirects, private previews, upload distrust, media processing, accessibility metadata, and explicit acceptance. |
+| [ADR-0011: Owner data portability](./adr/0011-owner-portability.md) | Versioned, documented Owner exports preserve required records, relationships, history, and a future migration path. |
+| [ADR-0015: Consent-first measurement and conservative retention](./adr/0015-consent-first-measurement-retention.md) | Non-essential measurement requires consent, functional and analytics identities remain purpose-separated, and first-release retention periods are explicit. |

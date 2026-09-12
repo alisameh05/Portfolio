@@ -1,0 +1,50 @@
+@startuml
+title <size:24>Container View: ShipWithAli</size>\n<size:24>The one application deployment, owned data stores, people, and external dependencies.</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+Person(Visitor, "Visitor", $descr="Explores public work, reads Case studies, accesses the Current CV, interacts with Projects, and uses Contact channels without an account.", $tags="", $link="")
+Person(Owner, "Owner", $descr="The single authenticated operator who publishes content, manages configuration, moderates Feedback, activates CV versions, reviews analytics, and produces Owner exports.", $tags="", $link="")
+System(SupabaseAuth, "Supabase Auth", $descr="Creates application sessions and delegates the Owner identity challenge to GitHub OAuth.", $tags="", $link="")
+System(VercelPlatform, "Vercel Platform", $descr="Provides CDN delivery, serverless execution, cache tags, preview promotion, rollback, and scheduled invocation.", $tags="", $link="")
+System(Resend, "Resend", $descr="Delivers best-effort actionable Owner notifications without participating in publication transactions.", $tags="", $link="")
+System(Sentry, "Sentry", $descr="Receives scrubbed exceptions and sampled traces for actionable operational diagnosis.", $tags="", $link="")
+System(GitHubActions, "GitHub Actions", $descr="Runs tests, architecture checks, expand-contract migration gates, deployment promotion, encrypted backups, and restore rehearsals.", $tags="", $link="")
+System(ExternalDestinations, "External Destinations", $descr="Hosts GitHub repositories, live demos, professional profiles, social channels, and other truthfully labeled Project or Contact destinations.", $tags="", $link="")
+
+System_Boundary("ShipWithAli_boundary", "ShipWithAli", $tags="") {
+  ContainerDb(ShipWithAli.PortfolioDatabase, "Portfolio Database", $techn="Supabase PostgreSQL with connection pooling", $descr="Stores module-owned relational records, public read projections, immutable histories, idempotency records, outbox entries, and job leases under Row Level Security.", $tags="", $link="")
+  Container(ShipWithAli.ObjectStorage, "Object Storage", $techn="Supabase Storage through an object-storage adapter", $descr="Keeps private upload candidates, accepted public media variants, Current CV objects, encrypted exports, and recovery artifacts behind stable Media asset identities.", $tags="", $link="")
+  Container(ShipWithAli.NextjsApplication, "Next.js Application", $techn="Next.js App Router, React, TypeScript, Vercel Functions", $descr="Server-renders public routes, hosts the Owner workspace and narrow mutation routes, executes domain modules, and dispatches scheduled work as one deployment.", $tags="", $link="")
+}
+
+Rel(Visitor, ExternalDestinations, "Follows truthfully labeled Project and Contact destinations", $techn="HTTPS or explicitly allowed contact scheme", $tags="", $link="")
+Rel(Visitor, ShipWithAli.NextjsApplication, "Requests public pages and permitted mutations", $techn="HTTPS", $tags="", $link="")
+Rel(Owner, ShipWithAli.NextjsApplication, "Submits authenticated Owner commands", $techn="HTTPS", $tags="", $link="")
+Rel(VercelPlatform, ShipWithAli.NextjsApplication, "Delivers cached requests to the application", $techn="Vercel CDN and HTTPS", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication, ShipWithAli.PortfolioDatabase, "Reads and writes module-owned records through pooled connections", $techn="PostgreSQL over TLS", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication, ShipWithAli.ObjectStorage, "Reads and writes private and accepted objects through signed operations", $techn="Supabase Storage HTTPS API", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication, SupabaseAuth, "Establishes and refreshes Owner sessions", $techn="Supabase Auth over HTTPS", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication, VercelPlatform, "Invalidates tagged caches and reports runtime health", $techn="Vercel runtime interface", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication, Resend, "Sends best-effort notifications", $techn="Resend HTTPS API", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication, Sentry, "Reports scrubbed failures and traces", $techn="Sentry HTTPS ingestion", $tags="", $link="")
+Rel(ShipWithAli.NextjsApplication, ExternalDestinations, "Renders truthfully labeled outbound destinations", $techn="HTTPS links", $tags="", $link="")
+Rel(GitHubActions, ShipWithAli.PortfolioDatabase, "Applies gated migrations and creates encrypted logical backups", $techn="PostgreSQL over TLS", $tags="", $link="")
+Rel(GitHubActions, ShipWithAli.ObjectStorage, "Creates encrypted weekly storage and Owner-export artifacts", $techn="Supabase Storage HTTPS API", $tags="", $link="")
+Rel(GitHubActions, VercelPlatform, "Promotes verified previews and selects prior deployments for rollback", $techn="Vercel HTTPS API", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml
