@@ -1,6 +1,6 @@
 # Triage Labels
 
-The repository uses these canonical triage roles in the `Status:` line of local Markdown issue files.
+The repository uses these canonical GitHub issue labels for triage. Apply exactly one triage label to each specification or implementation ticket.
 
 | Canonical role | Meaning |
 | --- | --- |
@@ -10,4 +10,4 @@ The repository uses these canonical triage roles in the `Status:` line of local 
 | `ready-for-human` | Requires human implementation or decision. |
 | `wontfix` | Will not be actioned. |
 
-For Wayfinding tickets, use `claimed` and `resolved` as the execution states described in `docs/agents/issue-tracker.md`.
+For Wayfinding tickets, use `claimed` and `resolved` as execution labels described in `docs/agents/issue-tracker.md`. These execution labels may coexist with one canonical triage label while work is active.
