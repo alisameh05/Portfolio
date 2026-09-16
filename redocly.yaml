@@ -1,0 +1,11 @@
+apis:
+  shipwithali@v1:
+    root: ./openapi/public-v1/openapi.yaml
+
+extends:
+  - recommended-strict
+
+rules:
+  no-server-example.com: off
+  # Current CV resolution intentionally succeeds with a 307 signed redirect.
+  operation-2xx-response: off
