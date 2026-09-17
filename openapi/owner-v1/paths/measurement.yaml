@@ -1,0 +1,99 @@
+analyticsGoal:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/GoalId }
+  get:
+    operationId: getOwnerAnalyticsGoal
+    summary: Inspect an Analytics goal and its version history
+    description: Returns immutable goal definitions and the explicit active-version pointer.
+    tags: [Measurement]
+    responses:
+      '200':
+        description: Analytics goal aggregate view.
+        content:
+          application/json:
+            schema: { $ref: ../components/measurement.yaml#/schemas/AnalyticsGoalAggregateView }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+createVersion:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/GoalId }
+  post:
+    operationId: createOwnerAnalyticsGoalVersion
+    summary: Create an Analytics goal version
+    description: Adds a new immutable definition without changing the currently active version.
+    tags: [Measurement]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/measurement.yaml#/schemas/CreateAnalyticsGoalVersionRequest }
+          examples:
+            projectContactJourney:
+              value:
+                definition:
+                  name: Project view to contact
+                  steps:
+                    - action: project-viewed
+                    - action: contact-channel-opened
+    responses:
+      '201':
+        description: Immutable Analytics goal version created but not activated.
+        content:
+          application/json:
+            schema: { $ref: ../components/measurement.yaml#/schemas/CreateAnalyticsGoalVersionReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+activateVersion:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/GoalId }
+  post:
+    operationId: activateOwnerAnalyticsGoalVersion
+    summary: Activate an Analytics goal version
+    description: Changes the active pointer while preserving every immutable goal-version definition.
+    tags: [Measurement]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/measurement.yaml#/schemas/ActivateAnalyticsGoalVersionCommand }
+          examples:
+            activateVersion:
+              value:
+                versionId: 01890f3e-7b2f-7cc0-98cf-5a2890378ef1
+    responses:
+      '200':
+        description: Analytics goal version activated.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

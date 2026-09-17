@@ -1,0 +1,94 @@
+exports:
+  post:
+    operationId: requestOwnerExport
+    summary: Request a versioned Owner export
+    description: Requests a documented domain package subject to privacy and Retention policy rules.
+    tags: [Portability]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/portability.yaml#/schemas/RequestOwnerExportRequest }
+          examples:
+            portablePortfolio:
+              value:
+                includedScopes:
+                  - portfolio-content
+                  - taxonomy
+                  - media-metadata
+                  - cv-metadata
+                  - moderation-history
+                  - analytics-reports
+                  - portfolio-configuration
+    responses:
+      '202':
+        description: Owner export request accepted for asynchronous preparation.
+        content:
+          application/json:
+            schema: { $ref: ../components/portability.yaml#/schemas/RequestOwnerExportReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+export:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ExportId }
+  get:
+    operationId: getOwnerExport
+    summary: Inspect an Owner export
+    description: Returns version, scope, state, and integrity metadata without provider or database details.
+    tags: [Portability]
+    responses:
+      '200':
+        description: Owner export domain-artifact view.
+        content:
+          application/json:
+            schema: { $ref: ../components/portability.yaml#/schemas/OwnerExportView }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+downloadExport:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ExportId }
+  get:
+    operationId: downloadOwnerExport
+    summary: Download a ready Owner export
+    description: >-
+      Downloads a ZIP whose manifest.json conforms to OwnerExportPackageManifest.
+      Each entry uses the manifest's portable recordSchema and mediaType so a
+      compatible importer can reconstruct domain meaning without provider knowledge.
+    tags: [Portability]
+    responses:
+      '200':
+        description: Versioned Owner export package.
+        headers:
+          Content-Disposition:
+            description: Attachment filename for the versioned export package.
+            schema: { type: string }
+          X-ShipWithAli-Export-Schema-Version:
+            description: Version of the documented Owner export package schema.
+            required: true
+            schema: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+$' }
+        content:
+          application/vnd.shipwithali.owner-export+zip:
+            schema: { type: string, format: binary }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

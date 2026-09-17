@@ -1,0 +1,100 @@
+schemas:
+  AnalyticsEventAction:
+    type: string
+    enum:
+      - page-viewed
+      - project-viewed
+      - active-engagement-sampled
+      - media-engaged
+      - related-project-opened
+      - contact-channel-opened
+      - external-project-link-opened
+      - testimonial-engaged
+      - global-project-cta-opened
+  AnalyticsGoalStep:
+    type: object
+    additionalProperties: false
+    required: [action]
+    properties:
+      action: { $ref: '#/schemas/AnalyticsEventAction' }
+      publicRouteIds:
+        type: array
+        maxItems: 100
+        uniqueItems: true
+        items: { $ref: ./common.yaml#/schemas/StableId }
+      projectIds:
+        type: array
+        maxItems: 100
+        uniqueItems: true
+        items: { $ref: ./common.yaml#/schemas/StableId }
+  AnalyticsGoalDefinition:
+    type: object
+    additionalProperties: false
+    required: [name, steps]
+    properties:
+      name: { type: string, minLength: 1, maxLength: 120 }
+      steps:
+        type: array
+        description: Ordered Public event actions that define the measured outcome without asserting causation.
+        minItems: 1
+        maxItems: 10
+        items: { $ref: '#/schemas/AnalyticsGoalStep' }
+  CreateAnalyticsGoalVersionRequest:
+    type: object
+    additionalProperties: false
+    required: [definition]
+    properties:
+      definition: { $ref: '#/schemas/AnalyticsGoalDefinition' }
+  CreateAnalyticsGoalVersionReceipt:
+    type: object
+    additionalProperties: false
+    required: [goalId, versionId, aggregateVersion, outcome]
+    properties:
+      goalId: { $ref: ./common.yaml#/schemas/StableId }
+      versionId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, minimum: 1 }
+      outcome: { type: string, const: analytics-goal-version-created }
+  ActivateAnalyticsGoalVersionCommand:
+    type: object
+    additionalProperties: false
+    required: [versionId]
+    properties:
+      versionId: { $ref: ./common.yaml#/schemas/StableId }
+  AnalyticsGoalVersionView:
+    type: object
+    description: Immutable definition snapshot; activation is recorded separately and never edits this version.
+    additionalProperties: false
+    required: [versionId, versionNumber, definition, createdAt]
+    properties:
+      versionId: { $ref: ./common.yaml#/schemas/StableId }
+      versionNumber: { type: integer, minimum: 1 }
+      definition: { $ref: '#/schemas/AnalyticsGoalDefinition' }
+      createdAt: { type: string, format: date-time }
+  AnalyticsGoalActivationView:
+    type: object
+    additionalProperties: false
+    required: [versionId, activatedAt]
+    properties:
+      versionId: { $ref: ./common.yaml#/schemas/StableId }
+      activatedAt: { type: string, format: date-time }
+  AnalyticsGoalAggregateView:
+    type: object
+    additionalProperties: false
+    required: [goalId, aggregateVersion, activeVersionId, versions, activationHistory]
+    properties:
+      goalId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, minimum: 1 }
+      activeVersionId:
+        description: The sole current-activity pointer; version snapshots carry no mutable state.
+        oneOf:
+          - { $ref: ./common.yaml#/schemas/StableId }
+          - { type: 'null' }
+      versions:
+        type: array
+        description: Ordered version history retained so reports identify the definition used at measurement time.
+        minItems: 1
+        items: { $ref: '#/schemas/AnalyticsGoalVersionView' }
+      activationHistory:
+        type: array
+        description: Ordered activation facts retained without mutating Analytics goal versions.
+        items: { $ref: '#/schemas/AnalyticsGoalActivationView' }

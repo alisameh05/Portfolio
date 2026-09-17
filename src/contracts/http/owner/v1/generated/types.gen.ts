@@ -4,6 +4,22 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type OwnerExportRecord = ({
+    scope: 'portfolio-content';
+} & PortfolioContentExportRecord) | ({
+    scope: 'taxonomy';
+} & TaxonomyExportRecord) | ({
+    scope: 'media-metadata';
+} & MediaMetadataExportRecord) | ({
+    scope: 'cv-metadata';
+} & CvMetadataExportRecord) | ({
+    scope: 'moderation-history';
+} & ModerationHistoryExportRecord) | ({
+    scope: 'analytics-reports';
+} & AnalyticsReportExportRecord) | ({
+    scope: 'portfolio-configuration';
+} & PortfolioConfigurationExportRecord);
+
 export type ProfileUpdate = {
     displayName: string;
     headline: string;
@@ -18,7 +34,7 @@ export type StableId = string;
 export type CommandReceipt = {
     aggregateId: StableId;
     aggregateVersion: number;
-    outcome: 'configuration-updated' | 'revision-saved' | 'language-published' | 'content-hidden' | 'content-archived' | 'content-restored' | 'project-status-changed' | 'project-featured-changed' | 'public-slug-changed' | 'project-related' | 'taxonomy-value-created' | 'taxonomy-value-renamed' | 'taxonomy-value-retired' | 'taxonomy-value-merged' | 'taxonomy-value-assigned' | 'media-processing-recorded' | 'media-accepted' | 'media-rejected' | 'cv-version-accepted' | 'current-cv-activated' | 'feedback-approved' | 'feedback-rejected' | 'feedback-suppressed';
+    outcome: 'configuration-updated' | 'revision-saved' | 'language-published' | 'content-hidden' | 'content-archived' | 'content-restored' | 'project-status-changed' | 'project-featured-changed' | 'public-slug-changed' | 'project-related' | 'taxonomy-value-created' | 'taxonomy-value-renamed' | 'taxonomy-value-retired' | 'taxonomy-value-merged' | 'taxonomy-value-assigned' | 'media-processing-recorded' | 'media-accepted' | 'media-rejected' | 'cv-version-accepted' | 'current-cv-activated' | 'feedback-approved' | 'feedback-rejected' | 'feedback-suppressed' | 'analytics-goal-version-activated';
 };
 
 export type FieldError = {
@@ -372,6 +388,310 @@ export type ModerationDecisionCommand = {
     reason: string;
 };
 
+export type AnalyticsEventAction = 'page-viewed' | 'project-viewed' | 'active-engagement-sampled' | 'media-engaged' | 'related-project-opened' | 'contact-channel-opened' | 'external-project-link-opened' | 'testimonial-engaged' | 'global-project-cta-opened';
+
+export type AnalyticsGoalStep = {
+    action: AnalyticsEventAction;
+    publicRouteIds?: Array<StableId>;
+    projectIds?: Array<StableId>;
+};
+
+export type AnalyticsGoalDefinition = {
+    name: string;
+    /**
+     * Ordered Public event actions that define the measured outcome without asserting causation.
+     */
+    steps: Array<AnalyticsGoalStep>;
+};
+
+/**
+ * Immutable definition snapshot; activation is recorded separately and never edits this version.
+ */
+export type AnalyticsGoalVersionView = {
+    versionId: StableId;
+    versionNumber: number;
+    definition: AnalyticsGoalDefinition;
+    createdAt: string;
+};
+
+export type AnalyticsGoalActivationView = {
+    versionId: StableId;
+    activatedAt: string;
+};
+
+export type AnalyticsGoalAggregateView = {
+    goalId: StableId;
+    aggregateVersion: number;
+    /**
+     * The sole current-activity pointer; version snapshots carry no mutable state.
+     */
+    activeVersionId: StableId | null;
+    /**
+     * Ordered version history retained so reports identify the definition used at measurement time.
+     */
+    versions: Array<AnalyticsGoalVersionView>;
+    /**
+     * Ordered activation facts retained without mutating Analytics goal versions.
+     */
+    activationHistory: Array<AnalyticsGoalActivationView>;
+};
+
+export type CreateAnalyticsGoalVersionRequest = {
+    definition: AnalyticsGoalDefinition;
+};
+
+export type CreateAnalyticsGoalVersionReceipt = {
+    goalId: StableId;
+    versionId: StableId;
+    aggregateVersion: number;
+    outcome: 'analytics-goal-version-created';
+};
+
+export type ActivateAnalyticsGoalVersionCommand = {
+    versionId: StableId;
+};
+
+export type OwnerExportScope = 'portfolio-content' | 'taxonomy' | 'media-metadata' | 'cv-metadata' | 'moderation-history' | 'analytics-reports' | 'portfolio-configuration';
+
+export type RequestOwnerExportRequest = {
+    includedScopes: Array<OwnerExportScope>;
+};
+
+export type RequestOwnerExportReceipt = {
+    exportId: StableId;
+    outcome: 'owner-export-requested';
+    state: 'requested';
+};
+
+/**
+ * Detailed Public event data is excluded; portable aggregate Analytics reports remain available.
+ */
+export type PublicEventDataCoverage = {
+    mode: 'excluded';
+};
+
+export type RequestedOwnerExportView = {
+    exportId: StableId;
+    state: 'requested';
+    schemaVersion: string;
+    requestedAt: string;
+    includedScopes: Array<OwnerExportScope>;
+    publicEventDataCoverage: PublicEventDataCoverage;
+    downloadAvailable: false;
+};
+
+export type BuildingOwnerExportView = {
+    exportId: StableId;
+    state: 'building';
+    schemaVersion: string;
+    requestedAt: string;
+    includedScopes: Array<OwnerExportScope>;
+    publicEventDataCoverage: PublicEventDataCoverage;
+    downloadAvailable: false;
+};
+
+/**
+ * Portable record-set entry identified independently of storage or database providers.
+ */
+export type OwnerExportEntryDescriptor = {
+    /**
+     * Relative path inside the export package.
+     */
+    path: string;
+    scope: OwnerExportScope;
+    mediaType: 'application/x-ndjson' | 'application/json';
+    /**
+     * Stable identifier for the corresponding OwnerExportRecord variant.
+     */
+    recordSchema: 'urn:shipwithali:owner-export-schema:portfolio-content:1.0' | 'urn:shipwithali:owner-export-schema:taxonomy:1.0' | 'urn:shipwithali:owner-export-schema:media-metadata:1.0' | 'urn:shipwithali:owner-export-schema:cv-metadata:1.0' | 'urn:shipwithali:owner-export-schema:moderation-history:1.0' | 'urn:shipwithali:owner-export-schema:analytics-reports:1.0' | 'urn:shipwithali:owner-export-schema:portfolio-configuration:1.0';
+    /**
+     * Packaged JSON Schema file for offline compatible importers.
+     */
+    schemaPath: string;
+    schemaVersion: string;
+    digest: string;
+    recordCount: number;
+};
+
+/**
+ * Versioned manifest.json for the documented ShipWithAli Owner export package.
+ */
+export type OwnerExportPackageManifest = {
+    packageFormat: 'shipwithali-owner-export';
+    schemaVersion: string;
+    createdAt: string;
+    algorithm: 'sha-256';
+    digest: string;
+    includedScopes: Array<OwnerExportScope>;
+    publicEventDataCoverage: PublicEventDataCoverage;
+    /**
+     * Data entries whose packaged schemaPath files define the versioned OwnerExportRecord shapes.
+     */
+    entries: Array<OwnerExportEntryDescriptor>;
+};
+
+/**
+ * A completed versioned domain artifact, never a database dump or provider backup.
+ */
+export type ReadyOwnerExportView = {
+    exportId: StableId;
+    state: 'ready';
+    schemaVersion: string;
+    requestedAt: string;
+    completedAt: string;
+    includedScopes: Array<OwnerExportScope>;
+    publicEventDataCoverage: PublicEventDataCoverage;
+    integrityManifest: OwnerExportPackageManifest;
+    downloadAvailable: true;
+};
+
+export type FailedOwnerExportView = {
+    exportId: StableId;
+    state: 'failed';
+    schemaVersion: string;
+    requestedAt: string;
+    failedAt: string;
+    failureCode: string;
+    includedScopes: Array<OwnerExportScope>;
+    publicEventDataCoverage: PublicEventDataCoverage;
+    downloadAvailable: false;
+};
+
+export type ExpiredOwnerExportView = {
+    exportId: StableId;
+    state: 'expired';
+    schemaVersion: string;
+    requestedAt: string;
+    completedAt: string;
+    expiredAt: string;
+    includedScopes: Array<OwnerExportScope>;
+    publicEventDataCoverage: PublicEventDataCoverage;
+    integrityManifest: OwnerExportPackageManifest;
+    downloadAvailable: false;
+};
+
+export type OwnerExportView = ({
+    state: 'requested';
+} & RequestedOwnerExportView) | ({
+    state: 'building';
+} & BuildingOwnerExportView) | ({
+    state: 'ready';
+} & ReadyOwnerExportView) | ({
+    state: 'failed';
+} & FailedOwnerExportView) | ({
+    state: 'expired';
+} & ExpiredOwnerExportView);
+
+export type PortableContentRevision = {
+    revisionId: StableId;
+    locale: Locale;
+    sequence: number;
+    title: string;
+    summary: string;
+    body: string;
+    reviewed: boolean;
+    currentlyPublished: boolean;
+};
+
+export type PortableEvidenceItem = {
+    claim: string;
+    state: 'unreviewed' | 'supported' | 'unsupported';
+    supportingArtifactIds: Array<StableId>;
+};
+
+export type PortfolioContentExportRecord = {
+    scope: 'portfolio-content';
+    contentId: StableId;
+    contentType: 'project' | 'achievement' | 'testimonial';
+    lifecycle: 'draft' | 'published' | 'hidden' | 'archived';
+    revisions: Array<PortableContentRevision>;
+    publicRouteIdentity: StableId | null;
+    routeHistory: Array<PublicRouteRedirectView>;
+    relatedProjectIds: Array<StableId>;
+    taxonomyValueIds: Array<StableId>;
+    mediaAssetIds: Array<StableId>;
+    evidenceItems: Array<PortableEvidenceItem>;
+};
+
+export type PortableTaxonomyRename = {
+    valueId: StableId;
+    previousName: string;
+    newName: string;
+    renamedAt: string;
+};
+
+export type PortableTaxonomyAssignment = {
+    projectId: StableId;
+    valueId: StableId;
+};
+
+export type TaxonomyExportRecord = {
+    scope: 'taxonomy';
+    taxonomyId: StableId;
+    aggregateVersion: number;
+    kind: 'category' | 'ai-ml-domain' | 'technology' | 'project-type';
+    values: Array<TaxonomyValueView>;
+    renameHistory: Array<PortableTaxonomyRename>;
+    assignments: Array<PortableTaxonomyAssignment>;
+};
+
+export type MediaMetadataExportRecord = {
+    scope: 'media-metadata';
+    mediaId: StableId;
+    kind: MediaKind;
+    state: 'upload-pending' | 'processing' | 'processed' | 'accepted' | 'rejected';
+    accessibilityMetadata: MediaAccessibilityMetadata | null;
+    processingHistory: Array<MediaProcessingView>;
+    decisionHistory: Array<MediaDecisionView>;
+    publicationState: 'private' | 'accepted' | 'published' | 'withdrawn';
+    /**
+     * Provider-neutral path or URI for media included with the export package.
+     */
+    portableReference: string;
+};
+
+export type CvMetadataExportRecord = {
+    scope: 'cv-metadata';
+    aggregateVersion: number;
+    currentVersionId: StableId | null;
+    versions: Array<CvVersionView>;
+    activationHistory: Array<CvActivationView>;
+};
+
+export type ModerationHistoryExportRecord = {
+    scope: 'moderation-history';
+    feedbackId: StableId;
+    projectId: StableId;
+    locale: Locale;
+    aggregateVersion: number;
+    state: 'pending' | 'approved' | 'rejected' | 'suppressed';
+    authorName: string;
+    paragraph: string;
+    submittedAt: string;
+    decisionHistory: Array<ModerationDecisionView>;
+};
+
+export type PortableAnalyticsAggregate = {
+    goalVersionId: StableId;
+    periodStart: string;
+    periodEnd: string;
+    sampleState: 'sufficient' | 'low-sample' | 'suppressed';
+    aggregateCount: number;
+};
+
+export type AnalyticsReportExportRecord = {
+    scope: 'analytics-reports';
+    goal: AnalyticsGoalAggregateView;
+    reports: Array<PortableAnalyticsAggregate>;
+};
+
+export type PortfolioConfigurationExportRecord = {
+    scope: 'portfolio-configuration';
+    profile: ProfileUpdate;
+    contactChannels: ContactChannelsUpdate;
+    projectCta: ProjectCtaUpdate;
+};
+
 /**
  * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
  */
@@ -395,6 +715,10 @@ export type MediaId = StableId;
 export type VersionId = StableId;
 
 export type FeedbackId = StableId;
+
+export type GoalId = StableId;
+
+export type ExportId = StableId;
 
 export type UpdateOwnerProfileConfigurationData = {
     body: ProfileUpdate;
@@ -2648,3 +2972,365 @@ export type SuppressOwnerFeedbackResponses = {
 };
 
 export type SuppressOwnerFeedbackResponse = SuppressOwnerFeedbackResponses[keyof SuppressOwnerFeedbackResponses];
+
+export type GetOwnerAnalyticsGoalData = {
+    body?: never;
+    path: {
+        goalId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/analytics-goals/{goalId}';
+};
+
+export type GetOwnerAnalyticsGoalErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type GetOwnerAnalyticsGoalError = GetOwnerAnalyticsGoalErrors[keyof GetOwnerAnalyticsGoalErrors];
+
+export type GetOwnerAnalyticsGoalResponses = {
+    /**
+     * Analytics goal aggregate view.
+     */
+    200: AnalyticsGoalAggregateView;
+};
+
+export type GetOwnerAnalyticsGoalResponse = GetOwnerAnalyticsGoalResponses[keyof GetOwnerAnalyticsGoalResponses];
+
+export type CreateOwnerAnalyticsGoalVersionData = {
+    body: CreateAnalyticsGoalVersionRequest;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        goalId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/analytics-goals/{goalId}/versions';
+};
+
+export type CreateOwnerAnalyticsGoalVersionErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type CreateOwnerAnalyticsGoalVersionError = CreateOwnerAnalyticsGoalVersionErrors[keyof CreateOwnerAnalyticsGoalVersionErrors];
+
+export type CreateOwnerAnalyticsGoalVersionResponses = {
+    /**
+     * Immutable Analytics goal version created but not activated.
+     */
+    201: CreateAnalyticsGoalVersionReceipt;
+};
+
+export type CreateOwnerAnalyticsGoalVersionResponse = CreateOwnerAnalyticsGoalVersionResponses[keyof CreateOwnerAnalyticsGoalVersionResponses];
+
+export type ActivateOwnerAnalyticsGoalVersionData = {
+    body: ActivateAnalyticsGoalVersionCommand;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        goalId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/analytics-goals/{goalId}/commands/activate-version';
+};
+
+export type ActivateOwnerAnalyticsGoalVersionErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type ActivateOwnerAnalyticsGoalVersionError = ActivateOwnerAnalyticsGoalVersionErrors[keyof ActivateOwnerAnalyticsGoalVersionErrors];
+
+export type ActivateOwnerAnalyticsGoalVersionResponses = {
+    /**
+     * Analytics goal version activated.
+     */
+    200: CommandReceipt;
+};
+
+export type ActivateOwnerAnalyticsGoalVersionResponse = ActivateOwnerAnalyticsGoalVersionResponses[keyof ActivateOwnerAnalyticsGoalVersionResponses];
+
+export type RequestOwnerExportData = {
+    body: RequestOwnerExportRequest;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/owner/v1/exports';
+};
+
+export type RequestOwnerExportErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type RequestOwnerExportError = RequestOwnerExportErrors[keyof RequestOwnerExportErrors];
+
+export type RequestOwnerExportResponses = {
+    /**
+     * Owner export request accepted for asynchronous preparation.
+     */
+    202: RequestOwnerExportReceipt;
+};
+
+export type RequestOwnerExportResponse = RequestOwnerExportResponses[keyof RequestOwnerExportResponses];
+
+export type GetOwnerExportData = {
+    body?: never;
+    path: {
+        exportId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/exports/{exportId}';
+};
+
+export type GetOwnerExportErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type GetOwnerExportError = GetOwnerExportErrors[keyof GetOwnerExportErrors];
+
+export type GetOwnerExportResponses = {
+    /**
+     * Owner export domain-artifact view.
+     */
+    200: OwnerExportView;
+};
+
+export type GetOwnerExportResponse = GetOwnerExportResponses[keyof GetOwnerExportResponses];
+
+export type DownloadOwnerExportData = {
+    body?: never;
+    path: {
+        exportId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/exports/{exportId}/download';
+};
+
+export type DownloadOwnerExportErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type DownloadOwnerExportError = DownloadOwnerExportErrors[keyof DownloadOwnerExportErrors];
+
+export type DownloadOwnerExportResponses = {
+    /**
+     * Versioned Owner export package.
+     */
+    200: Blob | File;
+};
+
+export type DownloadOwnerExportResponse = DownloadOwnerExportResponses[keyof DownloadOwnerExportResponses];
