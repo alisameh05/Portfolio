@@ -1,0 +1,58 @@
+schemas:
+  RegisterCvVersionRequest:
+    type: object
+    additionalProperties: false
+    required: [mediaId, locale, label]
+    properties:
+      mediaId:
+        $ref: ./common.yaml#/schemas/StableId
+        description: Accepted document Media asset used by this retained CV version.
+      locale:
+        type: string
+        const: en
+        description: Public Current CV is English-only in v1.
+      label: { type: string, minLength: 1, maxLength: 120 }
+  RegisterCvVersionReceipt:
+    type: object
+    additionalProperties: false
+    required: [versionId, aggregateVersion, outcome]
+    properties:
+      versionId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, minimum: 1 }
+      outcome: { type: string, const: cv-version-registered }
+  CvVersionView:
+    type: object
+    additionalProperties: false
+    required: [versionId, mediaId, locale, label, state, isCurrent]
+    properties:
+      versionId: { $ref: ./common.yaml#/schemas/StableId }
+      mediaId: { $ref: ./common.yaml#/schemas/StableId }
+      locale: { type: string, const: en }
+      label: { type: string, minLength: 1, maxLength: 120 }
+      state: { type: string, enum: [registered, accepted] }
+      isCurrent: { type: boolean }
+  CvActivationView:
+    type: object
+    additionalProperties: false
+    required: [versionId, activatedAt]
+    properties:
+      versionId: { $ref: ./common.yaml#/schemas/StableId }
+      activatedAt: { type: string, format: date-time }
+  CvPortfolioView:
+    type: object
+    additionalProperties: false
+    required: [aggregateVersion, currentVersionId, versions, activationHistory]
+    properties:
+      aggregateVersion: { type: integer, minimum: 1 }
+      currentVersionId:
+        oneOf:
+          - { $ref: ./common.yaml#/schemas/StableId }
+          - { type: 'null' }
+      versions:
+        type: array
+        description: Retained registration and acceptance history, including prior Current CV versions.
+        items: { $ref: '#/schemas/CvVersionView' }
+      activationHistory:
+        type: array
+        description: Retained Current CV activations in recorded order.
+        items: { $ref: '#/schemas/CvActivationView' }

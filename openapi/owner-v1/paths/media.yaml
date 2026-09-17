@@ -1,0 +1,162 @@
+media:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/MediaId }
+  get:
+    operationId: getOwnerMediaAggregate
+    summary: Inspect a Media asset and its acceptance history
+    description: Returns a provider-neutral application view, never storage credentials or provider objects.
+    tags: [Media]
+    responses:
+      '200':
+        description: Media aggregate view.
+        content:
+          application/json:
+            schema: { $ref: ../components/media.yaml#/schemas/MediaAggregateView }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+uploadIntents:
+  post:
+    operationId: createOwnerMediaUploadIntent
+    summary: Create a private Media upload intent
+    description: Creates a new Media identity and an opaque short-lived target; upload is not acceptance.
+    tags: [Media]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/media.yaml#/schemas/CreateMediaUploadIntentRequest }
+          examples:
+            projectImage:
+              value:
+                kind: image
+                originalFileName: portfolio-result.png
+                declaredMediaType: image/png
+                byteLength: 204800
+                sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    responses:
+      '201':
+        description: Private upload intent created; the Media asset is not accepted.
+        content:
+          application/json:
+            schema: { $ref: ../components/media.yaml#/schemas/MediaUploadIntentReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+recordProcessing:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/MediaId }
+  post:
+    operationId: recordOwnerMediaProcessing
+    summary: Record Media processing and safety results
+    description: Records provider-neutral detected properties and safety outcome before acceptance.
+    tags: [Media]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/media.yaml#/schemas/RecordMediaProcessingCommand }
+    responses:
+      '200':
+        description: Processing result recorded.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+acceptMedia:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/MediaId }
+  post:
+    operationId: acceptOwnerMediaAsset
+    summary: Accept a processed Media asset
+    description: Accepts a safe processed asset only after its accessibility metadata is approved.
+    tags: [Media]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/media.yaml#/schemas/AcceptMediaAssetCommand }
+          examples:
+            describedImage:
+              value:
+                accessibilityMetadata:
+                  kind: described-image
+                  altText: Dashboard showing the validated portfolio result.
+    responses:
+      '200':
+        description: Media asset accepted for eligible use.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+rejectMedia:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/MediaId }
+  post:
+    operationId: rejectOwnerMediaAsset
+    summary: Reject a Media asset
+    description: Records the rejection while retaining the Media acceptance history.
+    tags: [Media]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/media.yaml#/schemas/RejectMediaAssetCommand }
+    responses:
+      '200':
+        description: Media asset rejected.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

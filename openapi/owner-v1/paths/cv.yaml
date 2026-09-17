@@ -1,0 +1,112 @@
+cvPortfolio:
+  get:
+    operationId: getOwnerCvPortfolio
+    summary: Inspect CV Portfolio history
+    description: Returns retained versions and the explicit single Current CV pointer.
+    tags: [CV Portfolio]
+    responses:
+      '200':
+        description: CV Portfolio aggregate view.
+        content:
+          application/json:
+            schema: { $ref: ../components/cv.yaml#/schemas/CvPortfolioView }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+registerVersion:
+  post:
+    operationId: registerOwnerCvVersion
+    summary: Register an English CV version
+    description: Registers a retained version from an accepted document Media asset without accepting or activating it.
+    tags: [CV Portfolio]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/cv.yaml#/schemas/RegisterCvVersionRequest }
+          examples:
+            englishCv:
+              value:
+                mediaId: 01890f3e-7b2f-7cc0-98cf-5a2890378ef1
+                locale: en
+                label: CV September 2026
+    responses:
+      '201':
+        description: CV version registered but not yet accepted or Current.
+        content:
+          application/json:
+            schema: { $ref: ../components/cv.yaml#/schemas/RegisterCvVersionReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+acceptVersion:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/VersionId }
+  post:
+    operationId: acceptOwnerCvVersion
+    summary: Accept a registered CV version
+    description: Accepts the version for possible Current CV activation without activating it.
+    tags: [CV Portfolio]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    responses:
+      '200':
+        description: CV version accepted.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+activateVersion:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/VersionId }
+  post:
+    operationId: activateOwnerCvVersion
+    summary: Activate the Current CV
+    description: Atomically makes one accepted English version Current while retaining all prior versions.
+    tags: [CV Portfolio]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    responses:
+      '200':
+        description: Current CV pointer activated.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

@@ -6,9 +6,11 @@ info:
     name: All rights reserved
     identifier: LicenseRef-All-Rights-Reserved
   description: >-
-    Authenticated, command-oriented Owner transport contract. This first slice
-    covers Portfolio Configuration, content Publication, Project intent, and
-    controlled Taxonomy evolution without exposing raw tables or runtime code.
+    Authenticated, command-oriented Owner transport contract. The implemented
+    slices cover Portfolio Configuration, content Publication, Project intent,
+    controlled Taxonomy evolution, private Media acceptance, CV Portfolio
+    history, and Feedback Moderation without exposing raw tables, provider
+    objects, or runtime code.
 servers:
   - url: /
     description: Same-origin ShipWithAli deployment
@@ -23,6 +25,12 @@ tags:
     description: Project maturity, editorial emphasis, durable routes, and curated relationships.
   - name: Taxonomy
     description: Controlled vocabulary creation, assignment, rename, retirement, and merge.
+  - name: Media
+    description: Private upload intent, processing evidence, acceptance, rejection, and history.
+  - name: CV Portfolio
+    description: English CV registration, acceptance, explicit Current CV activation, and history.
+  - name: Interaction and Moderation
+    description: Feedback approval, rejection, later suppression, and preserved decision history.
 paths:
   /api/owner/v1/configuration/profile:
     $ref: ./paths/configuration.yaml#/profile
@@ -64,6 +72,32 @@ paths:
     $ref: ./paths/taxonomy.yaml#/mergeValue
   /api/owner/v1/projects/{projectId}/commands/assign-taxonomy-value:
     $ref: ./paths/taxonomy.yaml#/assignValue
+  /api/owner/v1/media/{mediaId}:
+    $ref: ./paths/media.yaml#/media
+  /api/owner/v1/media/upload-intents:
+    $ref: ./paths/media.yaml#/uploadIntents
+  /api/owner/v1/media/{mediaId}/commands/record-processing:
+    $ref: ./paths/media.yaml#/recordProcessing
+  /api/owner/v1/media/{mediaId}/commands/accept:
+    $ref: ./paths/media.yaml#/acceptMedia
+  /api/owner/v1/media/{mediaId}/commands/reject:
+    $ref: ./paths/media.yaml#/rejectMedia
+  /api/owner/v1/cv:
+    $ref: ./paths/cv.yaml#/cvPortfolio
+  /api/owner/v1/cv/versions:
+    $ref: ./paths/cv.yaml#/registerVersion
+  /api/owner/v1/cv/versions/{versionId}/commands/accept:
+    $ref: ./paths/cv.yaml#/acceptVersion
+  /api/owner/v1/cv/versions/{versionId}/commands/activate:
+    $ref: ./paths/cv.yaml#/activateVersion
+  /api/owner/v1/feedback/{feedbackId}:
+    $ref: ./paths/moderation.yaml#/feedback
+  /api/owner/v1/feedback/{feedbackId}/commands/approve:
+    $ref: ./paths/moderation.yaml#/approveFeedback
+  /api/owner/v1/feedback/{feedbackId}/commands/reject:
+    $ref: ./paths/moderation.yaml#/rejectFeedback
+  /api/owner/v1/feedback/{feedbackId}/commands/suppress:
+    $ref: ./paths/moderation.yaml#/suppressFeedback
 components:
   securitySchemes:
     OwnerSession:

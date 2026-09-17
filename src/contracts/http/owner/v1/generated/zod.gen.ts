@@ -31,7 +31,15 @@ export const zCommandReceipt = z.strictObject({
         'taxonomy-value-renamed',
         'taxonomy-value-retired',
         'taxonomy-value-merged',
-        'taxonomy-value-assigned'
+        'taxonomy-value-assigned',
+        'media-processing-recorded',
+        'media-accepted',
+        'media-rejected',
+        'cv-version-accepted',
+        'current-cv-activated',
+        'feedback-approved',
+        'feedback-rejected',
+        'feedback-suppressed'
     ])
 });
 
@@ -250,6 +258,166 @@ export const zAssignTaxonomyValueCommand = z.strictObject({
     valueId: zStableId
 });
 
+export const zMediaKind = z.enum([
+    'image',
+    'video',
+    'document'
+]);
+
+export const zMediaProcessingView = z.strictObject({
+    result: z.enum(['passed', 'failed']),
+    detectedMediaType: z.string(),
+    detectedByteLength: z.number().int().gte(1),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    findings: z.array(z.string().min(1).max(200)).max(50),
+    recordedAt: z.string().datetime()
+});
+
+export const zMediaDecisionView = z.strictObject({
+    decision: z.enum(['accepted', 'rejected']),
+    decidedAt: z.string().datetime(),
+    reason: z.string().min(1).max(500).optional()
+});
+
+export const zMediaAggregateView = z.strictObject({
+    mediaId: zStableId,
+    aggregateVersion: z.number().int().gte(1),
+    kind: zMediaKind,
+    originalFileName: z.string().min(1).max(255),
+    declaredMediaType: z.string(),
+    byteLength: z.number().int().gte(1),
+    state: z.enum([
+        'upload-pending',
+        'processing',
+        'processed',
+        'accepted',
+        'rejected'
+    ]),
+    processingHistory: z.array(zMediaProcessingView),
+    decisionHistory: z.array(zMediaDecisionView)
+});
+
+export const zCreateMediaUploadIntentRequest = z.strictObject({
+    kind: zMediaKind,
+    originalFileName: z.string().min(1).max(255),
+    declaredMediaType: z.string().regex(/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/),
+    byteLength: z.number().int().gte(1).lte(1073741824),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/)
+});
+
+export const zMediaUploadIntentReceipt = z.strictObject({
+    mediaId: zStableId,
+    aggregateVersion: z.literal(1),
+    outcome: z.literal('media-upload-intent-created'),
+    uploadIntentId: zStableId,
+    uploadTarget: z.string().url(),
+    expiresAt: z.string().datetime()
+});
+
+export const zRecordMediaProcessingCommand = z.strictObject({
+    result: z.enum(['passed', 'failed']),
+    detectedMediaType: z.string().regex(/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/),
+    detectedByteLength: z.number().int().gte(1).lte(1073741824),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    findings: z.array(z.string().min(1).max(200)).max(50).optional()
+});
+
+export const zDescribedImageAccessibility = z.strictObject({
+    kind: z.literal('described-image'),
+    altText: z.string().min(1).max(500)
+});
+
+export const zDecorativeImageAccessibility = z.strictObject({
+    kind: z.literal('decorative-image')
+});
+
+export const zVideoAccessibility = z.strictObject({
+    kind: z.literal('video'),
+    summary: z.string().min(1).max(2000)
+});
+
+export const zDocumentAccessibility = z.strictObject({
+    kind: z.literal('document'),
+    summary: z.string().min(1).max(2000)
+});
+
+export const zMediaAccessibilityMetadata = z.discriminatedUnion('kind', [
+    zDescribedImageAccessibility,
+    zDecorativeImageAccessibility,
+    zVideoAccessibility,
+    zDocumentAccessibility
+]);
+
+export const zAcceptMediaAssetCommand = z.strictObject({
+    accessibilityMetadata: zMediaAccessibilityMetadata
+});
+
+export const zRejectMediaAssetCommand = z.strictObject({
+    reason: z.string().min(1).max(500)
+});
+
+export const zCvVersionView = z.strictObject({
+    versionId: zStableId,
+    mediaId: zStableId,
+    locale: z.literal('en'),
+    label: z.string().min(1).max(120),
+    state: z.enum(['registered', 'accepted']),
+    isCurrent: z.boolean()
+});
+
+export const zCvActivationView = z.strictObject({
+    versionId: zStableId,
+    activatedAt: z.string().datetime()
+});
+
+export const zCvPortfolioView = z.strictObject({
+    aggregateVersion: z.number().int().gte(1),
+    currentVersionId: zStableId.nullable(),
+    versions: z.array(zCvVersionView),
+    activationHistory: z.array(zCvActivationView)
+});
+
+export const zRegisterCvVersionRequest = z.strictObject({
+    mediaId: zStableId,
+    locale: z.literal('en'),
+    label: z.string().min(1).max(120)
+});
+
+export const zRegisterCvVersionReceipt = z.strictObject({
+    versionId: zStableId,
+    aggregateVersion: z.number().int().gte(1),
+    outcome: z.literal('cv-version-registered')
+});
+
+export const zModerationDecisionView = z.strictObject({
+    decision: z.enum([
+        'approved',
+        'rejected',
+        'suppressed'
+    ]),
+    reason: z.string().min(1).max(500),
+    decidedAt: z.string().datetime()
+});
+
+export const zFeedbackModerationView = z.strictObject({
+    feedbackId: zStableId,
+    aggregateVersion: z.number().int().gte(1),
+    state: z.enum([
+        'pending',
+        'approved',
+        'rejected',
+        'suppressed'
+    ]),
+    authorName: z.string().min(1).max(100),
+    paragraph: z.string().min(1).max(4000),
+    submittedAt: z.string().datetime(),
+    decisionHistory: z.array(zModerationDecisionView)
+});
+
+export const zModerationDecisionCommand = z.strictObject({
+    reason: z.string().min(1).max(500)
+});
+
 /**
  * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
  */
@@ -267,6 +435,12 @@ export const zProjectId = zStableId;
 export const zTaxonomyId = zStableId;
 
 export const zValueId = zStableId;
+
+export const zMediaId = zStableId;
+
+export const zVersionId = zStableId;
+
+export const zFeedbackId = zStableId;
 
 export const zUpdateOwnerProfileConfigurationBody = zProfileUpdate;
 
@@ -554,3 +728,173 @@ export const zAssignOwnerProjectTaxonomyValuePath = z.strictObject({
  * Taxonomy value assigned to the Project.
  */
 export const zAssignOwnerProjectTaxonomyValueResponse = zCommandReceipt;
+
+export const zGetOwnerMediaAggregatePath = z.strictObject({
+    mediaId: zStableId
+});
+
+/**
+ * Media aggregate view.
+ */
+export const zGetOwnerMediaAggregateResponse = zMediaAggregateView;
+
+export const zCreateOwnerMediaUploadIntentBody = zCreateMediaUploadIntentRequest;
+
+export const zCreateOwnerMediaUploadIntentHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/)
+});
+
+/**
+ * Private upload intent created; the Media asset is not accepted.
+ */
+export const zCreateOwnerMediaUploadIntentResponse = zMediaUploadIntentReceipt;
+
+export const zRecordOwnerMediaProcessingBody = zRecordMediaProcessingCommand;
+
+export const zRecordOwnerMediaProcessingHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zRecordOwnerMediaProcessingPath = z.strictObject({
+    mediaId: zStableId
+});
+
+/**
+ * Processing result recorded.
+ */
+export const zRecordOwnerMediaProcessingResponse = zCommandReceipt;
+
+export const zAcceptOwnerMediaAssetBody = zAcceptMediaAssetCommand;
+
+export const zAcceptOwnerMediaAssetHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zAcceptOwnerMediaAssetPath = z.strictObject({
+    mediaId: zStableId
+});
+
+/**
+ * Media asset accepted for eligible use.
+ */
+export const zAcceptOwnerMediaAssetResponse = zCommandReceipt;
+
+export const zRejectOwnerMediaAssetBody = zRejectMediaAssetCommand;
+
+export const zRejectOwnerMediaAssetHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zRejectOwnerMediaAssetPath = z.strictObject({
+    mediaId: zStableId
+});
+
+/**
+ * Media asset rejected.
+ */
+export const zRejectOwnerMediaAssetResponse = zCommandReceipt;
+
+/**
+ * CV Portfolio aggregate view.
+ */
+export const zGetOwnerCvPortfolioResponse = zCvPortfolioView;
+
+export const zRegisterOwnerCvVersionBody = zRegisterCvVersionRequest;
+
+export const zRegisterOwnerCvVersionHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+/**
+ * CV version registered but not yet accepted or Current.
+ */
+export const zRegisterOwnerCvVersionResponse = zRegisterCvVersionReceipt;
+
+export const zAcceptOwnerCvVersionHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zAcceptOwnerCvVersionPath = z.strictObject({
+    versionId: zStableId
+});
+
+/**
+ * CV version accepted.
+ */
+export const zAcceptOwnerCvVersionResponse = zCommandReceipt;
+
+export const zActivateOwnerCvVersionHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zActivateOwnerCvVersionPath = z.strictObject({
+    versionId: zStableId
+});
+
+/**
+ * Current CV pointer activated.
+ */
+export const zActivateOwnerCvVersionResponse = zCommandReceipt;
+
+export const zGetOwnerFeedbackModerationPath = z.strictObject({
+    feedbackId: zStableId
+});
+
+/**
+ * Feedback Moderation view.
+ */
+export const zGetOwnerFeedbackModerationResponse = zFeedbackModerationView;
+
+export const zApproveOwnerFeedbackBody = zModerationDecisionCommand;
+
+export const zApproveOwnerFeedbackHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zApproveOwnerFeedbackPath = z.strictObject({
+    feedbackId: zStableId
+});
+
+/**
+ * Feedback approved.
+ */
+export const zApproveOwnerFeedbackResponse = zCommandReceipt;
+
+export const zRejectOwnerFeedbackBody = zModerationDecisionCommand;
+
+export const zRejectOwnerFeedbackHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zRejectOwnerFeedbackPath = z.strictObject({
+    feedbackId: zStableId
+});
+
+/**
+ * Feedback rejected.
+ */
+export const zRejectOwnerFeedbackResponse = zCommandReceipt;
+
+export const zSuppressOwnerFeedbackBody = zModerationDecisionCommand;
+
+export const zSuppressOwnerFeedbackHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zSuppressOwnerFeedbackPath = z.strictObject({
+    feedbackId: zStableId
+});
+
+/**
+ * Feedback suppressed with history retained.
+ */
+export const zSuppressOwnerFeedbackResponse = zCommandReceipt;

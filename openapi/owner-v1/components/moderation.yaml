@@ -1,0 +1,41 @@
+schemas:
+  ModerationDecisionCommand:
+    type: object
+    additionalProperties: false
+    required: [reason]
+    properties:
+      reason: { type: string, minLength: 1, maxLength: 500 }
+  ModerationDecisionView:
+    type: object
+    additionalProperties: false
+    required: [decision, reason, decidedAt]
+    properties:
+      decision:
+        type: string
+        enum: [approved, rejected, suppressed]
+      reason: { type: string, minLength: 1, maxLength: 500 }
+      decidedAt: { type: string, format: date-time }
+  FeedbackModerationView:
+    type: object
+    additionalProperties: false
+    required:
+      - feedbackId
+      - aggregateVersion
+      - state
+      - authorName
+      - paragraph
+      - submittedAt
+      - decisionHistory
+    properties:
+      feedbackId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, minimum: 1 }
+      state:
+        type: string
+        enum: [pending, approved, rejected, suppressed]
+      authorName: { type: string, minLength: 1, maxLength: 100 }
+      paragraph: { type: string, minLength: 1, maxLength: 4000 }
+      submittedAt: { type: string, format: date-time }
+      decisionHistory:
+        type: array
+        description: Append-only approval, rejection, and suppression decisions in recorded order.
+        items: { $ref: '#/schemas/ModerationDecisionView' }

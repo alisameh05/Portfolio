@@ -7,7 +7,7 @@
       "name": "All rights reserved",
       "identifier": "LicenseRef-All-Rights-Reserved"
     },
-    "description": "Authenticated, command-oriented Owner transport contract. This first slice covers Portfolio Configuration, content Publication, Project intent, and controlled Taxonomy evolution without exposing raw tables or runtime code."
+    "description": "Authenticated, command-oriented Owner transport contract. The implemented slices cover Portfolio Configuration, content Publication, Project intent, controlled Taxonomy evolution, private Media acceptance, CV Portfolio history, and Feedback Moderation without exposing raw tables, provider objects, or runtime code."
   },
   "servers": [
     {
@@ -36,6 +36,18 @@
     {
       "name": "Taxonomy",
       "description": "Controlled vocabulary creation, assignment, rename, retirement, and merge."
+    },
+    {
+      "name": "Media",
+      "description": "Private upload intent, processing evidence, acceptance, rejection, and history."
+    },
+    {
+      "name": "CV Portfolio",
+      "description": "English CV registration, acceptance, explicit Current CV activation, and history."
+    },
+    {
+      "name": "Interaction and Moderation",
+      "description": "Feedback approval, rejection, later suppression, and preserved decision history."
     }
   ],
   "paths": {
@@ -1509,6 +1521,886 @@
           }
         }
       }
+    },
+    "/api/owner/v1/media/{mediaId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MediaId"
+        }
+      ],
+      "get": {
+        "operationId": "getOwnerMediaAggregate",
+        "summary": "Inspect a Media asset and its acceptance history",
+        "description": "Returns a provider-neutral application view, never storage credentials or provider objects.",
+        "tags": [
+          "Media"
+        ],
+        "responses": {
+          "200": {
+            "description": "Media aggregate view.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaAggregateView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/media/upload-intents": {
+      "post": {
+        "operationId": "createOwnerMediaUploadIntent",
+        "summary": "Create a private Media upload intent",
+        "description": "Creates a new Media identity and an opaque short-lived target; upload is not acceptance.",
+        "tags": [
+          "Media"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMediaUploadIntentRequest"
+              },
+              "examples": {
+                "projectImage": {
+                  "value": {
+                    "kind": "image",
+                    "originalFileName": "portfolio-result.png",
+                    "declaredMediaType": "image/png",
+                    "byteLength": 204800,
+                    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Private upload intent created; the Media asset is not accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaUploadIntentReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/media/{mediaId}/commands/record-processing": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MediaId"
+        }
+      ],
+      "post": {
+        "operationId": "recordOwnerMediaProcessing",
+        "summary": "Record Media processing and safety results",
+        "description": "Records provider-neutral detected properties and safety outcome before acceptance.",
+        "tags": [
+          "Media"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordMediaProcessingCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Processing result recorded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/media/{mediaId}/commands/accept": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MediaId"
+        }
+      ],
+      "post": {
+        "operationId": "acceptOwnerMediaAsset",
+        "summary": "Accept a processed Media asset",
+        "description": "Accepts a safe processed asset only after its accessibility metadata is approved.",
+        "tags": [
+          "Media"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptMediaAssetCommand"
+              },
+              "examples": {
+                "describedImage": {
+                  "value": {
+                    "accessibilityMetadata": {
+                      "kind": "described-image",
+                      "altText": "Dashboard showing the validated portfolio result."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Media asset accepted for eligible use.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/media/{mediaId}/commands/reject": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MediaId"
+        }
+      ],
+      "post": {
+        "operationId": "rejectOwnerMediaAsset",
+        "summary": "Reject a Media asset",
+        "description": "Records the rejection while retaining the Media acceptance history.",
+        "tags": [
+          "Media"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectMediaAssetCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Media asset rejected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/cv": {
+      "get": {
+        "operationId": "getOwnerCvPortfolio",
+        "summary": "Inspect CV Portfolio history",
+        "description": "Returns retained versions and the explicit single Current CV pointer.",
+        "tags": [
+          "CV Portfolio"
+        ],
+        "responses": {
+          "200": {
+            "description": "CV Portfolio aggregate view.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvPortfolioView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/cv/versions": {
+      "post": {
+        "operationId": "registerOwnerCvVersion",
+        "summary": "Register an English CV version",
+        "description": "Registers a retained version from an accepted document Media asset without accepting or activating it.",
+        "tags": [
+          "CV Portfolio"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterCvVersionRequest"
+              },
+              "examples": {
+                "englishCv": {
+                  "value": {
+                    "mediaId": "01890f3e-7b2f-7cc0-98cf-5a2890378ef1",
+                    "locale": "en",
+                    "label": "CV September 2026"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "CV version registered but not yet accepted or Current.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterCvVersionReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/cv/versions/{versionId}/commands/accept": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/VersionId"
+        }
+      ],
+      "post": {
+        "operationId": "acceptOwnerCvVersion",
+        "summary": "Accept a registered CV version",
+        "description": "Accepts the version for possible Current CV activation without activating it.",
+        "tags": [
+          "CV Portfolio"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CV version accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/cv/versions/{versionId}/commands/activate": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/VersionId"
+        }
+      ],
+      "post": {
+        "operationId": "activateOwnerCvVersion",
+        "summary": "Activate the Current CV",
+        "description": "Atomically makes one accepted English version Current while retaining all prior versions.",
+        "tags": [
+          "CV Portfolio"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current CV pointer activated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/feedback/{feedbackId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/FeedbackId"
+        }
+      ],
+      "get": {
+        "operationId": "getOwnerFeedbackModeration",
+        "summary": "Inspect private Feedback and Moderation history",
+        "description": "Returns the Feedback aggregate and retained decisions, not a raw table mirror.",
+        "tags": [
+          "Interaction and Moderation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Feedback Moderation view.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackModerationView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/feedback/{feedbackId}/commands/approve": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/FeedbackId"
+        }
+      ],
+      "post": {
+        "operationId": "approveOwnerFeedback",
+        "summary": "Approve Feedback for eligible public display",
+        "description": "Records approval while preserving the private submission and decision history.",
+        "tags": [
+          "Interaction and Moderation"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModerationDecisionCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Feedback approved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/feedback/{feedbackId}/commands/reject": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/FeedbackId"
+        }
+      ],
+      "post": {
+        "operationId": "rejectOwnerFeedback",
+        "summary": "Reject Feedback",
+        "description": "Records rejection without deleting the private Feedback or prior decisions.",
+        "tags": [
+          "Interaction and Moderation"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModerationDecisionCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Feedback rejected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/feedback/{feedbackId}/commands/suppress": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/FeedbackId"
+        }
+      ],
+      "post": {
+        "operationId": "suppressOwnerFeedback",
+        "summary": "Suppress previously approved Feedback",
+        "description": "Removes public-display eligibility while retaining the Moderation decision history.",
+        "tags": [
+          "Interaction and Moderation"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModerationDecisionCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Feedback suppressed with history retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1569,6 +2461,30 @@
       },
       "ValueId": {
         "name": "valueId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "MediaId": {
+        "name": "mediaId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "VersionId": {
+        "name": "versionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "FeedbackId": {
+        "name": "feedbackId",
         "in": "path",
         "required": true,
         "schema": {
@@ -1642,7 +2558,15 @@
               "taxonomy-value-renamed",
               "taxonomy-value-retired",
               "taxonomy-value-merged",
-              "taxonomy-value-assigned"
+              "taxonomy-value-assigned",
+              "media-processing-recorded",
+              "media-accepted",
+              "media-rejected",
+              "cv-version-accepted",
+              "current-cv-activated",
+              "feedback-approved",
+              "feedback-rejected",
+              "feedback-suppressed"
             ]
           }
         }
@@ -2383,6 +3307,617 @@
         "properties": {
           "valueId": {
             "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "MediaKind": {
+        "type": "string",
+        "enum": [
+          "image",
+          "video",
+          "document"
+        ]
+      },
+      "MediaProcessingView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "result",
+          "detectedMediaType",
+          "detectedByteLength",
+          "sha256",
+          "findings",
+          "recordedAt"
+        ],
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "failed"
+            ]
+          },
+          "detectedMediaType": {
+            "type": "string"
+          },
+          "detectedByteLength": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "findings": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MediaDecisionView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision",
+          "decidedAt"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "rejected"
+            ]
+          },
+          "decidedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "MediaAggregateView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mediaId",
+          "aggregateVersion",
+          "kind",
+          "originalFileName",
+          "declaredMediaType",
+          "byteLength",
+          "state",
+          "processingHistory",
+          "decisionHistory"
+        ],
+        "properties": {
+          "mediaId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MediaKind"
+          },
+          "originalFileName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "declaredMediaType": {
+            "type": "string"
+          },
+          "byteLength": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "upload-pending",
+              "processing",
+              "processed",
+              "accepted",
+              "rejected"
+            ]
+          },
+          "processingHistory": {
+            "type": "array",
+            "description": "Retained processing attempts and findings in recorded order.",
+            "items": {
+              "$ref": "#/components/schemas/MediaProcessingView"
+            }
+          },
+          "decisionHistory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaDecisionView"
+            }
+          }
+        }
+      },
+      "CreateMediaUploadIntentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "originalFileName",
+          "declaredMediaType",
+          "byteLength",
+          "sha256"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/MediaKind"
+          },
+          "originalFileName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "declaredMediaType": {
+            "type": "string",
+            "pattern": "^[a-z0-9.+-]+/[a-z0-9.+-]+$"
+          },
+          "byteLength": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1073741824
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "MediaUploadIntentReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mediaId",
+          "aggregateVersion",
+          "outcome",
+          "uploadIntentId",
+          "uploadTarget",
+          "expiresAt"
+        ],
+        "properties": {
+          "mediaId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "outcome": {
+            "type": "string",
+            "const": "media-upload-intent-created"
+          },
+          "uploadIntentId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "uploadTarget": {
+            "type": "string",
+            "format": "uri",
+            "description": "Opaque, short-lived private upload target with no provider contract."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RecordMediaProcessingCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "result",
+          "detectedMediaType",
+          "detectedByteLength",
+          "sha256"
+        ],
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "failed"
+            ]
+          },
+          "detectedMediaType": {
+            "type": "string",
+            "pattern": "^[a-z0-9.+-]+/[a-z0-9.+-]+$"
+          },
+          "detectedByteLength": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1073741824
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "findings": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        }
+      },
+      "DescribedImageAccessibility": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "altText"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "described-image"
+          },
+          "altText": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "DecorativeImageAccessibility": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "decorative-image"
+          }
+        }
+      },
+      "VideoAccessibility": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "summary"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "video"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "DocumentAccessibility": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "summary"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "document"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "MediaAccessibilityMetadata": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DescribedImageAccessibility"
+          },
+          {
+            "$ref": "#/components/schemas/DecorativeImageAccessibility"
+          },
+          {
+            "$ref": "#/components/schemas/VideoAccessibility"
+          },
+          {
+            "$ref": "#/components/schemas/DocumentAccessibility"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "described-image": "#/components/schemas/DescribedImageAccessibility",
+            "decorative-image": "#/components/schemas/DecorativeImageAccessibility",
+            "video": "#/components/schemas/VideoAccessibility",
+            "document": "#/components/schemas/DocumentAccessibility"
+          }
+        }
+      },
+      "AcceptMediaAssetCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accessibilityMetadata"
+        ],
+        "properties": {
+          "accessibilityMetadata": {
+            "$ref": "#/components/schemas/MediaAccessibilityMetadata"
+          }
+        }
+      },
+      "RejectMediaAssetCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "CvVersionView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "versionId",
+          "mediaId",
+          "locale",
+          "label",
+          "state",
+          "isCurrent"
+        ],
+        "properties": {
+          "versionId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "mediaId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "locale": {
+            "type": "string",
+            "const": "en"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "registered",
+              "accepted"
+            ]
+          },
+          "isCurrent": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CvActivationView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "versionId",
+          "activatedAt"
+        ],
+        "properties": {
+          "versionId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "activatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CvPortfolioView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "aggregateVersion",
+          "currentVersionId",
+          "versions",
+          "activationHistory"
+        ],
+        "properties": {
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "currentVersionId": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "versions": {
+            "type": "array",
+            "description": "Retained registration and acceptance history, including prior Current CV versions.",
+            "items": {
+              "$ref": "#/components/schemas/CvVersionView"
+            }
+          },
+          "activationHistory": {
+            "type": "array",
+            "description": "Retained Current CV activations in recorded order.",
+            "items": {
+              "$ref": "#/components/schemas/CvActivationView"
+            }
+          }
+        }
+      },
+      "RegisterCvVersionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mediaId",
+          "locale",
+          "label"
+        ],
+        "properties": {
+          "mediaId": {
+            "$ref": "#/components/schemas/StableId",
+            "description": "Accepted document Media asset used by this retained CV version."
+          },
+          "locale": {
+            "type": "string",
+            "const": "en",
+            "description": "Public Current CV is English-only in v1."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        }
+      },
+      "RegisterCvVersionReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "versionId",
+          "aggregateVersion",
+          "outcome"
+        ],
+        "properties": {
+          "versionId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "outcome": {
+            "type": "string",
+            "const": "cv-version-registered"
+          }
+        }
+      },
+      "ModerationDecisionView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision",
+          "reason",
+          "decidedAt"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "rejected",
+              "suppressed"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "decidedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "FeedbackModerationView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "feedbackId",
+          "aggregateVersion",
+          "state",
+          "authorName",
+          "paragraph",
+          "submittedAt",
+          "decisionHistory"
+        ],
+        "properties": {
+          "feedbackId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "suppressed"
+            ]
+          },
+          "authorName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "paragraph": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decisionHistory": {
+            "type": "array",
+            "description": "Append-only approval, rejection, and suppression decisions in recorded order.",
+            "items": {
+              "$ref": "#/components/schemas/ModerationDecisionView"
+            }
+          }
+        }
+      },
+      "ModerationDecisionCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
           }
         }
       }
