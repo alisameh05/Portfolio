@@ -1,0 +1,74 @@
+schemas:
+  SaveRevisionRequest:
+    type: object
+    additionalProperties: false
+    required: [locale, title, summary, body]
+    properties:
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      title: { type: string, minLength: 1, maxLength: 160 }
+      summary: { type: string, minLength: 1, maxLength: 500 }
+      body: { type: string, minLength: 1, maxLength: 50000 }
+  PublishLanguageCommand:
+    type: object
+    additionalProperties: false
+    required: [locale, revisionId]
+    properties:
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      revisionId: { $ref: ./common.yaml#/schemas/StableId }
+  SaveRevisionReceipt:
+    type: object
+    additionalProperties: false
+    required: [aggregateId, aggregateVersion, outcome, revisionId]
+    properties:
+      aggregateId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, minimum: 1 }
+      outcome: { type: string, const: revision-saved }
+      revisionId: { $ref: ./common.yaml#/schemas/StableId }
+  LifecycleReasonCommand:
+    type: object
+    additionalProperties: false
+    properties:
+      reason: { type: string, minLength: 1, maxLength: 500 }
+  LocalizedRevisionStreamView:
+    type: object
+    additionalProperties: false
+    required: [revisionCount, currentPublishedRevisionId]
+    properties:
+      revisionCount: { type: integer, minimum: 0 }
+      currentPublishedRevisionId:
+        oneOf:
+          - { $ref: ./common.yaml#/schemas/StableId }
+          - { type: 'null' }
+  RevisionHistoryEntry:
+    type: object
+    additionalProperties: false
+    required: [revisionId, locale, sequence, reviewed]
+    properties:
+      revisionId: { $ref: ./common.yaml#/schemas/StableId }
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      sequence: { type: integer, minimum: 1 }
+      reviewed: { type: boolean }
+  ContentAggregateView:
+    type: object
+    additionalProperties: false
+    required: [contentId, aggregateVersion, contentType, lifecycle, localizedStreams, revisions]
+    properties:
+      contentId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, minimum: 1 }
+      contentType:
+        type: string
+        enum: [project, achievement, testimonial]
+      lifecycle:
+        type: string
+        enum: [draft, published, hidden, archived]
+      localizedStreams:
+        type: object
+        additionalProperties: false
+        minProperties: 1
+        properties:
+          en: { $ref: '#/schemas/LocalizedRevisionStreamView' }
+          ar: { $ref: '#/schemas/LocalizedRevisionStreamView' }
+      revisions:
+        type: array
+        description: Immutable Revision history ordered by sequence within each locale.
+        items: { $ref: '#/schemas/RevisionHistoryEntry' }

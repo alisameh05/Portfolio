@@ -1,0 +1,189 @@
+taxonomy:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/TaxonomyId }
+  get:
+    operationId: getOwnerTaxonomyAggregate
+    summary: Inspect a Taxonomy and its value history
+    description: Returns active, retired, and merged value state as an aggregate view.
+    tags: [Taxonomy]
+    responses:
+      '200':
+        description: Taxonomy aggregate view.
+        content:
+          application/json:
+            schema: { $ref: ../components/taxonomy.yaml#/schemas/TaxonomyAggregateView }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+createValue:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/TaxonomyId }
+  post:
+    operationId: createOwnerTaxonomyValue
+    summary: Create a controlled Taxonomy value
+    description: Creates a reusable value within one controlled Taxonomy.
+    tags: [Taxonomy]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/taxonomy.yaml#/schemas/CreateTaxonomyValueRequest }
+          examples:
+            technology:
+              value: { name: TypeScript }
+    responses:
+      '201':
+        description: Taxonomy value created.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+renameValue:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ValueId }
+  post:
+    operationId: renameOwnerTaxonomyValue
+    summary: Rename a Taxonomy value
+    description: Changes the display name while preserving stable identity and history.
+    tags: [Taxonomy]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/taxonomy.yaml#/schemas/RenameTaxonomyValueCommand }
+    responses:
+      '200':
+        description: Taxonomy value renamed.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+retireValue:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ValueId }
+  post:
+    operationId: retireOwnerTaxonomyValue
+    summary: Retire a Taxonomy value
+    description: Blocks new assignments while preserving historical assignments.
+    tags: [Taxonomy]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/taxonomy.yaml#/schemas/RetireTaxonomyValueCommand }
+    responses:
+      '200':
+        description: Taxonomy value retired.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+mergeValue:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ValueId }
+  post:
+    operationId: mergeOwnerTaxonomyValue
+    summary: Merge a Taxonomy value
+    description: Migrates assignments to an active target and retains the historical mapping.
+    tags: [Taxonomy]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/taxonomy.yaml#/schemas/MergeTaxonomyValueCommand }
+    responses:
+      '200':
+        description: Taxonomy value merged and assignments migrated.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+assignValue:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ProjectId }
+  post:
+    operationId: assignOwnerProjectTaxonomyValue
+    summary: Assign an active Taxonomy value to a Project
+    description: Rejects retired values and values from an incompatible Taxonomy.
+    tags: [Taxonomy]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/taxonomy.yaml#/schemas/AssignTaxonomyValueCommand }
+    responses:
+      '200':
+        description: Taxonomy value assigned to the Project.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

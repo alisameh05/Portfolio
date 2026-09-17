@@ -1,6 +1,8 @@
 apis:
-  shipwithali@v1:
+  public@v1:
     root: ./openapi/public-v1/openapi.yaml
+  owner@v1:
+    root: ./openapi/owner-v1/openapi.yaml
 
 extends:
   - recommended-strict

@@ -1,0 +1,200 @@
+content:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ContentId }
+  get:
+    operationId: getOwnerContentAggregate
+    summary: Inspect content and Localized revision streams
+    description: Returns a narrow aggregate view, including independent EN and AR publication state.
+    tags: [Publication]
+    responses:
+      '200':
+        description: Content aggregate view.
+        content:
+          application/json:
+            schema: { $ref: ../components/content.yaml#/schemas/ContentAggregateView }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+revisions:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ContentId }
+  post:
+    operationId: saveOwnerContentRevision
+    summary: Save an immutable Revision
+    description: Saves one locale-specific Revision without changing public visibility.
+    tags: [Publication]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/content.yaml#/schemas/SaveRevisionRequest }
+          examples:
+            english:
+              value:
+                locale: en
+                title: Evidence-led portfolio
+                summary: A contract-first portfolio case study.
+                body: The work and its supporting evidence are described here.
+    responses:
+      '201':
+        description: Immutable Revision saved; publication state is unchanged.
+        content:
+          application/json:
+            schema: { $ref: ../components/content.yaml#/schemas/SaveRevisionReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+publishLanguage:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ContentId }
+  post:
+    operationId: publishOwnerContentLanguage
+    summary: Publish one Language version
+    description: >-
+      Makes one reviewed Revision current for its own locale only. It never
+      publishes or supplies fallback text for the other locale.
+    tags: [Publication]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/content.yaml#/schemas/PublishLanguageCommand }
+          examples:
+            publishEnglish:
+              value:
+                locale: en
+                revisionId: 01890f3e-7b2f-7cc0-98cf-5a2890378ef2
+    responses:
+      '200':
+        description: Language version published after current validation.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+hide:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ContentId }
+  post:
+    operationId: hideOwnerContent
+    summary: Hide Published content
+    description: Removes content from normal public discovery while retaining publication history.
+    tags: [Publication]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/content.yaml#/schemas/LifecycleReasonCommand }
+    responses:
+      '200':
+        description: Content hidden with retained history.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+archive:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ContentId }
+  post:
+    operationId: archiveOwnerContent
+    summary: Archive content
+    description: Retains content as historical while excluding it from public presentation.
+    tags: [Publication]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/content.yaml#/schemas/LifecycleReasonCommand }
+    responses:
+      '200':
+        description: Content archived with retained history.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+restore:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ContentId }
+  post:
+    operationId: restoreOwnerContent
+    summary: Restore retained content
+    description: Restores content only after all current publication validation succeeds.
+    tags: [Publication]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/content.yaml#/schemas/LifecycleReasonCommand }
+    responses:
+      '200':
+        description: Content restored to Published after current validation.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

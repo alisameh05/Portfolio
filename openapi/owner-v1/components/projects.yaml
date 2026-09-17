@@ -1,0 +1,87 @@
+schemas:
+  ChangeProjectStatusCommand:
+    type: object
+    additionalProperties: false
+    required: [statusValueId]
+    properties:
+      statusValueId: { $ref: ./common.yaml#/schemas/StableId }
+  SetFeaturedCommand:
+    type: object
+    additionalProperties: false
+    required: [featured]
+    properties:
+      featured: { type: boolean }
+  ChangeSlugCommand:
+    type: object
+    additionalProperties: false
+    required: [slug]
+    properties:
+      slug:
+        type: string
+        minLength: 1
+        maxLength: 120
+        pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+  RelateProjectCommand:
+    type: object
+    additionalProperties: false
+    required: [relatedProjectId]
+    properties:
+      relatedProjectId: { $ref: ./common.yaml#/schemas/StableId }
+  ProjectTaxonomyAssignmentView:
+    type: object
+    additionalProperties: false
+    required: [taxonomyId, taxonomyKind, valueId]
+    properties:
+      taxonomyId: { $ref: ./common.yaml#/schemas/StableId }
+      taxonomyKind:
+        type: string
+        enum: [category, ai-ml-domain, technology, project-type]
+      valueId: { $ref: ./common.yaml#/schemas/StableId }
+  PublicRouteRedirectView:
+    type: object
+    additionalProperties: false
+    required: [fromSlug, toSlug]
+    properties:
+      fromSlug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+      toSlug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+  PublicRouteView:
+    type: object
+    additionalProperties: false
+    required: [identity, canonicalSlug, redirects]
+    properties:
+      identity: { $ref: ./common.yaml#/schemas/StableId }
+      canonicalSlug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+      redirects:
+        type: array
+        description: Retained former slugs and their current canonical target.
+        items: { $ref: '#/schemas/PublicRouteRedirectView' }
+  ProjectAggregateView:
+    type: object
+    additionalProperties: false
+    required:
+      - projectId
+      - aggregateVersion
+      - statusValueId
+      - featured
+      - relatedProjectIds
+      - taxonomyAssignments
+      - publicRoute
+    properties:
+      projectId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, minimum: 1 }
+      statusValueId:
+        oneOf:
+          - { $ref: ./common.yaml#/schemas/StableId }
+          - { type: 'null' }
+      featured: { type: boolean }
+      publicRoute:
+        oneOf:
+          - { $ref: '#/schemas/PublicRouteView' }
+          - { type: 'null' }
+      relatedProjectIds:
+        type: array
+        uniqueItems: true
+        items: { $ref: ./common.yaml#/schemas/StableId }
+      taxonomyAssignments:
+        type: array
+        items: { $ref: '#/schemas/ProjectTaxonomyAssignmentView' }
