@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    /* Language and environment */
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    /* Strict correctness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+
+    /* Output */
+    "outDir": "dist",
+    "rootDir": ".",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+
+    /* Paths */
+    "paths": {
+      "@shared/domain": ["./src/shared/domain/index.ts"],
+      "@shared/domain/*": ["./src/shared/domain/*"],
+      "@shared/application": ["./src/shared/application/index.ts"],
+      "@shared/application/*": ["./src/shared/application/*"]
+    },
+
+    /* Safety */
+    "skipLibCheck": false,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true
+  },
+  "include": ["src", "tests", "scripts"],
+  "exclude": ["node_modules", "dist"]
+}
