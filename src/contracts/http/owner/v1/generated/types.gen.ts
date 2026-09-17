@@ -18,7 +18,7 @@ export type StableId = string;
 export type CommandReceipt = {
     aggregateId: StableId;
     aggregateVersion: number;
-    outcome: 'configuration-updated' | 'revision-saved' | 'language-published' | 'content-hidden' | 'content-archived' | 'content-restored' | 'project-status-changed' | 'project-featured-changed' | 'public-slug-changed' | 'project-related' | 'taxonomy-value-created' | 'taxonomy-value-renamed' | 'taxonomy-value-retired' | 'taxonomy-value-merged' | 'taxonomy-value-assigned';
+    outcome: 'configuration-updated' | 'revision-saved' | 'language-published' | 'content-hidden' | 'content-archived' | 'content-restored' | 'project-status-changed' | 'project-featured-changed' | 'public-slug-changed' | 'project-related' | 'taxonomy-value-created' | 'taxonomy-value-renamed' | 'taxonomy-value-retired' | 'taxonomy-value-merged' | 'taxonomy-value-assigned' | 'media-processing-recorded' | 'media-accepted' | 'media-rejected' | 'cv-version-accepted' | 'current-cv-activated' | 'feedback-approved' | 'feedback-rejected' | 'feedback-suppressed';
 };
 
 export type FieldError = {
@@ -207,6 +207,171 @@ export type AssignTaxonomyValueCommand = {
     valueId: StableId;
 };
 
+export type MediaKind = 'image' | 'video' | 'document';
+
+export type MediaProcessingView = {
+    result: 'passed' | 'failed';
+    detectedMediaType: string;
+    detectedByteLength: number;
+    sha256: string;
+    findings: Array<string>;
+    recordedAt: string;
+};
+
+export type MediaDecisionView = {
+    decision: 'accepted' | 'rejected';
+    decidedAt: string;
+    reason?: string;
+};
+
+export type MediaAggregateView = {
+    mediaId: StableId;
+    aggregateVersion: number;
+    kind: MediaKind;
+    originalFileName: string;
+    declaredMediaType: string;
+    byteLength: number;
+    state: 'upload-pending' | 'processing' | 'processed' | 'accepted' | 'rejected';
+    /**
+     * Retained processing attempts and findings in recorded order.
+     */
+    processingHistory: Array<MediaProcessingView>;
+    decisionHistory: Array<MediaDecisionView>;
+};
+
+export type CreateMediaUploadIntentRequest = {
+    kind: MediaKind;
+    originalFileName: string;
+    declaredMediaType: string;
+    byteLength: number;
+    sha256: string;
+};
+
+export type MediaUploadIntentReceipt = {
+    mediaId: StableId;
+    aggregateVersion: 1;
+    outcome: 'media-upload-intent-created';
+    uploadIntentId: StableId;
+    /**
+     * Opaque, short-lived private upload target with no provider contract.
+     */
+    uploadTarget: string;
+    expiresAt: string;
+};
+
+export type RecordMediaProcessingCommand = {
+    result: 'passed' | 'failed';
+    detectedMediaType: string;
+    detectedByteLength: number;
+    sha256: string;
+    findings?: Array<string>;
+};
+
+export type DescribedImageAccessibility = {
+    kind: 'described-image';
+    altText: string;
+};
+
+export type DecorativeImageAccessibility = {
+    kind: 'decorative-image';
+};
+
+export type VideoAccessibility = {
+    kind: 'video';
+    summary: string;
+};
+
+export type DocumentAccessibility = {
+    kind: 'document';
+    summary: string;
+};
+
+export type MediaAccessibilityMetadata = ({
+    kind: 'described-image';
+} & DescribedImageAccessibility) | ({
+    kind: 'decorative-image';
+} & DecorativeImageAccessibility) | ({
+    kind: 'video';
+} & VideoAccessibility) | ({
+    kind: 'document';
+} & DocumentAccessibility);
+
+export type AcceptMediaAssetCommand = {
+    accessibilityMetadata: MediaAccessibilityMetadata;
+};
+
+export type RejectMediaAssetCommand = {
+    reason: string;
+};
+
+export type CvVersionView = {
+    versionId: StableId;
+    mediaId: StableId;
+    locale: 'en';
+    label: string;
+    state: 'registered' | 'accepted';
+    isCurrent: boolean;
+};
+
+export type CvActivationView = {
+    versionId: StableId;
+    activatedAt: string;
+};
+
+export type CvPortfolioView = {
+    aggregateVersion: number;
+    currentVersionId: StableId | null;
+    /**
+     * Retained registration and acceptance history, including prior Current CV versions.
+     */
+    versions: Array<CvVersionView>;
+    /**
+     * Retained Current CV activations in recorded order.
+     */
+    activationHistory: Array<CvActivationView>;
+};
+
+export type RegisterCvVersionRequest = {
+    /**
+     * Accepted document Media asset used by this retained CV version.
+     */
+    mediaId: StableId;
+    /**
+     * Public Current CV is English-only in v1.
+     */
+    locale: 'en';
+    label: string;
+};
+
+export type RegisterCvVersionReceipt = {
+    versionId: StableId;
+    aggregateVersion: number;
+    outcome: 'cv-version-registered';
+};
+
+export type ModerationDecisionView = {
+    decision: 'approved' | 'rejected' | 'suppressed';
+    reason: string;
+    decidedAt: string;
+};
+
+export type FeedbackModerationView = {
+    feedbackId: StableId;
+    aggregateVersion: number;
+    state: 'pending' | 'approved' | 'rejected' | 'suppressed';
+    authorName: string;
+    paragraph: string;
+    submittedAt: string;
+    /**
+     * Append-only approval, rejection, and suppression decisions in recorded order.
+     */
+    decisionHistory: Array<ModerationDecisionView>;
+};
+
+export type ModerationDecisionCommand = {
+    reason: string;
+};
+
 /**
  * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
  */
@@ -224,6 +389,12 @@ export type ProjectId = StableId;
 export type TaxonomyId = StableId;
 
 export type ValueId = StableId;
+
+export type MediaId = StableId;
+
+export type VersionId = StableId;
+
+export type FeedbackId = StableId;
 
 export type UpdateOwnerProfileConfigurationData = {
     body: ProfileUpdate;
@@ -1612,3 +1783,868 @@ export type AssignOwnerProjectTaxonomyValueResponses = {
 };
 
 export type AssignOwnerProjectTaxonomyValueResponse = AssignOwnerProjectTaxonomyValueResponses[keyof AssignOwnerProjectTaxonomyValueResponses];
+
+export type GetOwnerMediaAggregateData = {
+    body?: never;
+    path: {
+        mediaId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/media/{mediaId}';
+};
+
+export type GetOwnerMediaAggregateErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type GetOwnerMediaAggregateError = GetOwnerMediaAggregateErrors[keyof GetOwnerMediaAggregateErrors];
+
+export type GetOwnerMediaAggregateResponses = {
+    /**
+     * Media aggregate view.
+     */
+    200: MediaAggregateView;
+};
+
+export type GetOwnerMediaAggregateResponse = GetOwnerMediaAggregateResponses[keyof GetOwnerMediaAggregateResponses];
+
+export type CreateOwnerMediaUploadIntentData = {
+    body: CreateMediaUploadIntentRequest;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/owner/v1/media/upload-intents';
+};
+
+export type CreateOwnerMediaUploadIntentErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type CreateOwnerMediaUploadIntentError = CreateOwnerMediaUploadIntentErrors[keyof CreateOwnerMediaUploadIntentErrors];
+
+export type CreateOwnerMediaUploadIntentResponses = {
+    /**
+     * Private upload intent created; the Media asset is not accepted.
+     */
+    201: MediaUploadIntentReceipt;
+};
+
+export type CreateOwnerMediaUploadIntentResponse = CreateOwnerMediaUploadIntentResponses[keyof CreateOwnerMediaUploadIntentResponses];
+
+export type RecordOwnerMediaProcessingData = {
+    body: RecordMediaProcessingCommand;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        mediaId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/media/{mediaId}/commands/record-processing';
+};
+
+export type RecordOwnerMediaProcessingErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type RecordOwnerMediaProcessingError = RecordOwnerMediaProcessingErrors[keyof RecordOwnerMediaProcessingErrors];
+
+export type RecordOwnerMediaProcessingResponses = {
+    /**
+     * Processing result recorded.
+     */
+    200: CommandReceipt;
+};
+
+export type RecordOwnerMediaProcessingResponse = RecordOwnerMediaProcessingResponses[keyof RecordOwnerMediaProcessingResponses];
+
+export type AcceptOwnerMediaAssetData = {
+    body: AcceptMediaAssetCommand;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        mediaId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/media/{mediaId}/commands/accept';
+};
+
+export type AcceptOwnerMediaAssetErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type AcceptOwnerMediaAssetError = AcceptOwnerMediaAssetErrors[keyof AcceptOwnerMediaAssetErrors];
+
+export type AcceptOwnerMediaAssetResponses = {
+    /**
+     * Media asset accepted for eligible use.
+     */
+    200: CommandReceipt;
+};
+
+export type AcceptOwnerMediaAssetResponse = AcceptOwnerMediaAssetResponses[keyof AcceptOwnerMediaAssetResponses];
+
+export type RejectOwnerMediaAssetData = {
+    body: RejectMediaAssetCommand;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        mediaId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/media/{mediaId}/commands/reject';
+};
+
+export type RejectOwnerMediaAssetErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type RejectOwnerMediaAssetError = RejectOwnerMediaAssetErrors[keyof RejectOwnerMediaAssetErrors];
+
+export type RejectOwnerMediaAssetResponses = {
+    /**
+     * Media asset rejected.
+     */
+    200: CommandReceipt;
+};
+
+export type RejectOwnerMediaAssetResponse = RejectOwnerMediaAssetResponses[keyof RejectOwnerMediaAssetResponses];
+
+export type GetOwnerCvPortfolioData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/owner/v1/cv';
+};
+
+export type GetOwnerCvPortfolioErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type GetOwnerCvPortfolioError = GetOwnerCvPortfolioErrors[keyof GetOwnerCvPortfolioErrors];
+
+export type GetOwnerCvPortfolioResponses = {
+    /**
+     * CV Portfolio aggregate view.
+     */
+    200: CvPortfolioView;
+};
+
+export type GetOwnerCvPortfolioResponse = GetOwnerCvPortfolioResponses[keyof GetOwnerCvPortfolioResponses];
+
+export type RegisterOwnerCvVersionData = {
+    body: RegisterCvVersionRequest;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/owner/v1/cv/versions';
+};
+
+export type RegisterOwnerCvVersionErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type RegisterOwnerCvVersionError = RegisterOwnerCvVersionErrors[keyof RegisterOwnerCvVersionErrors];
+
+export type RegisterOwnerCvVersionResponses = {
+    /**
+     * CV version registered but not yet accepted or Current.
+     */
+    201: RegisterCvVersionReceipt;
+};
+
+export type RegisterOwnerCvVersionResponse = RegisterOwnerCvVersionResponses[keyof RegisterOwnerCvVersionResponses];
+
+export type AcceptOwnerCvVersionData = {
+    body?: never;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        versionId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/cv/versions/{versionId}/commands/accept';
+};
+
+export type AcceptOwnerCvVersionErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type AcceptOwnerCvVersionError = AcceptOwnerCvVersionErrors[keyof AcceptOwnerCvVersionErrors];
+
+export type AcceptOwnerCvVersionResponses = {
+    /**
+     * CV version accepted.
+     */
+    200: CommandReceipt;
+};
+
+export type AcceptOwnerCvVersionResponse = AcceptOwnerCvVersionResponses[keyof AcceptOwnerCvVersionResponses];
+
+export type ActivateOwnerCvVersionData = {
+    body?: never;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        versionId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/cv/versions/{versionId}/commands/activate';
+};
+
+export type ActivateOwnerCvVersionErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type ActivateOwnerCvVersionError = ActivateOwnerCvVersionErrors[keyof ActivateOwnerCvVersionErrors];
+
+export type ActivateOwnerCvVersionResponses = {
+    /**
+     * Current CV pointer activated.
+     */
+    200: CommandReceipt;
+};
+
+export type ActivateOwnerCvVersionResponse = ActivateOwnerCvVersionResponses[keyof ActivateOwnerCvVersionResponses];
+
+export type GetOwnerFeedbackModerationData = {
+    body?: never;
+    path: {
+        feedbackId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/feedback/{feedbackId}';
+};
+
+export type GetOwnerFeedbackModerationErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type GetOwnerFeedbackModerationError = GetOwnerFeedbackModerationErrors[keyof GetOwnerFeedbackModerationErrors];
+
+export type GetOwnerFeedbackModerationResponses = {
+    /**
+     * Feedback Moderation view.
+     */
+    200: FeedbackModerationView;
+};
+
+export type GetOwnerFeedbackModerationResponse = GetOwnerFeedbackModerationResponses[keyof GetOwnerFeedbackModerationResponses];
+
+export type ApproveOwnerFeedbackData = {
+    body: ModerationDecisionCommand;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        feedbackId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/feedback/{feedbackId}/commands/approve';
+};
+
+export type ApproveOwnerFeedbackErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type ApproveOwnerFeedbackError = ApproveOwnerFeedbackErrors[keyof ApproveOwnerFeedbackErrors];
+
+export type ApproveOwnerFeedbackResponses = {
+    /**
+     * Feedback approved.
+     */
+    200: CommandReceipt;
+};
+
+export type ApproveOwnerFeedbackResponse = ApproveOwnerFeedbackResponses[keyof ApproveOwnerFeedbackResponses];
+
+export type RejectOwnerFeedbackData = {
+    body: ModerationDecisionCommand;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        feedbackId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/feedback/{feedbackId}/commands/reject';
+};
+
+export type RejectOwnerFeedbackErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type RejectOwnerFeedbackError = RejectOwnerFeedbackErrors[keyof RejectOwnerFeedbackErrors];
+
+export type RejectOwnerFeedbackResponses = {
+    /**
+     * Feedback rejected.
+     */
+    200: CommandReceipt;
+};
+
+export type RejectOwnerFeedbackResponse = RejectOwnerFeedbackResponses[keyof RejectOwnerFeedbackResponses];
+
+export type SuppressOwnerFeedbackData = {
+    body: ModerationDecisionCommand;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        feedbackId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/feedback/{feedbackId}/commands/suppress';
+};
+
+export type SuppressOwnerFeedbackErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type SuppressOwnerFeedbackError = SuppressOwnerFeedbackErrors[keyof SuppressOwnerFeedbackErrors];
+
+export type SuppressOwnerFeedbackResponses = {
+    /**
+     * Feedback suppressed with history retained.
+     */
+    200: CommandReceipt;
+};
+
+export type SuppressOwnerFeedbackResponse = SuppressOwnerFeedbackResponses[keyof SuppressOwnerFeedbackResponses];

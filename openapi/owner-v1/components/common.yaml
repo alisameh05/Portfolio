@@ -71,6 +71,14 @@ schemas:
           - taxonomy-value-retired
           - taxonomy-value-merged
           - taxonomy-value-assigned
+          - media-processing-recorded
+          - media-accepted
+          - media-rejected
+          - cv-version-accepted
+          - current-cv-activated
+          - feedback-approved
+          - feedback-rejected
+          - feedback-suppressed
 
 parameters:
   IdempotencyKey:
@@ -110,6 +118,21 @@ parameters:
     schema: { $ref: '#/schemas/StableId' }
   ValueId:
     name: valueId
+    in: path
+    required: true
+    schema: { $ref: '#/schemas/StableId' }
+  MediaId:
+    name: mediaId
+    in: path
+    required: true
+    schema: { $ref: '#/schemas/StableId' }
+  VersionId:
+    name: versionId
+    in: path
+    required: true
+    schema: { $ref: '#/schemas/StableId' }
+  FeedbackId:
+    name: feedbackId
     in: path
     required: true
     schema: { $ref: '#/schemas/StableId' }

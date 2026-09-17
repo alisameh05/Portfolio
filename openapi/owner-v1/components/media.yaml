@@ -1,0 +1,153 @@
+schemas:
+  MediaKind:
+    type: string
+    enum: [image, video, document]
+  CreateMediaUploadIntentRequest:
+    type: object
+    additionalProperties: false
+    required: [kind, originalFileName, declaredMediaType, byteLength, sha256]
+    properties:
+      kind: { $ref: '#/schemas/MediaKind' }
+      originalFileName: { type: string, minLength: 1, maxLength: 255 }
+      declaredMediaType: { type: string, pattern: '^[a-z0-9.+-]+/[a-z0-9.+-]+$' }
+      byteLength: { type: integer, minimum: 1, maximum: 1073741824 }
+      sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+  MediaUploadIntentReceipt:
+    type: object
+    additionalProperties: false
+    required:
+      - mediaId
+      - aggregateVersion
+      - outcome
+      - uploadIntentId
+      - uploadTarget
+      - expiresAt
+    properties:
+      mediaId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, const: 1 }
+      outcome: { type: string, const: media-upload-intent-created }
+      uploadIntentId: { $ref: ./common.yaml#/schemas/StableId }
+      uploadTarget:
+        type: string
+        format: uri
+        description: Opaque, short-lived private upload target with no provider contract.
+      expiresAt: { type: string, format: date-time }
+  RecordMediaProcessingCommand:
+    type: object
+    additionalProperties: false
+    required: [result, detectedMediaType, detectedByteLength, sha256]
+    properties:
+      result:
+        type: string
+        enum: [passed, failed]
+      detectedMediaType: { type: string, pattern: '^[a-z0-9.+-]+/[a-z0-9.+-]+$' }
+      detectedByteLength: { type: integer, minimum: 1, maximum: 1073741824 }
+      sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+      findings:
+        type: array
+        maxItems: 50
+        items: { type: string, minLength: 1, maxLength: 200 }
+  DescribedImageAccessibility:
+    type: object
+    additionalProperties: false
+    required: [kind, altText]
+    properties:
+      kind: { type: string, const: described-image }
+      altText: { type: string, minLength: 1, maxLength: 500 }
+  DecorativeImageAccessibility:
+    type: object
+    additionalProperties: false
+    required: [kind]
+    properties:
+      kind: { type: string, const: decorative-image }
+  VideoAccessibility:
+    type: object
+    additionalProperties: false
+    required: [kind, summary]
+    properties:
+      kind: { type: string, const: video }
+      summary: { type: string, minLength: 1, maxLength: 2000 }
+  DocumentAccessibility:
+    type: object
+    additionalProperties: false
+    required: [kind, summary]
+    properties:
+      kind: { type: string, const: document }
+      summary: { type: string, minLength: 1, maxLength: 2000 }
+  MediaAccessibilityMetadata:
+    oneOf:
+      - { $ref: '#/schemas/DescribedImageAccessibility' }
+      - { $ref: '#/schemas/DecorativeImageAccessibility' }
+      - { $ref: '#/schemas/VideoAccessibility' }
+      - { $ref: '#/schemas/DocumentAccessibility' }
+    discriminator:
+      propertyName: kind
+      mapping:
+        described-image: '#/schemas/DescribedImageAccessibility'
+        decorative-image: '#/schemas/DecorativeImageAccessibility'
+        video: '#/schemas/VideoAccessibility'
+        document: '#/schemas/DocumentAccessibility'
+  AcceptMediaAssetCommand:
+    type: object
+    additionalProperties: false
+    required: [accessibilityMetadata]
+    properties:
+      accessibilityMetadata: { $ref: '#/schemas/MediaAccessibilityMetadata' }
+  RejectMediaAssetCommand:
+    type: object
+    additionalProperties: false
+    required: [reason]
+    properties:
+      reason: { type: string, minLength: 1, maxLength: 500 }
+  MediaProcessingView:
+    type: object
+    additionalProperties: false
+    required: [result, detectedMediaType, detectedByteLength, sha256, findings, recordedAt]
+    properties:
+      result: { type: string, enum: [passed, failed] }
+      detectedMediaType: { type: string }
+      detectedByteLength: { type: integer, minimum: 1 }
+      sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+      findings:
+        type: array
+        maxItems: 50
+        items: { type: string, minLength: 1, maxLength: 200 }
+      recordedAt: { type: string, format: date-time }
+  MediaDecisionView:
+    type: object
+    additionalProperties: false
+    required: [decision, decidedAt]
+    properties:
+      decision: { type: string, enum: [accepted, rejected] }
+      decidedAt: { type: string, format: date-time }
+      reason: { type: string, minLength: 1, maxLength: 500 }
+  MediaAggregateView:
+    type: object
+    additionalProperties: false
+    required:
+      - mediaId
+      - aggregateVersion
+      - kind
+      - originalFileName
+      - declaredMediaType
+      - byteLength
+      - state
+      - processingHistory
+      - decisionHistory
+    properties:
+      mediaId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, minimum: 1 }
+      kind: { $ref: '#/schemas/MediaKind' }
+      originalFileName: { type: string, minLength: 1, maxLength: 255 }
+      declaredMediaType: { type: string }
+      byteLength: { type: integer, minimum: 1 }
+      state:
+        type: string
+        enum: [upload-pending, processing, processed, accepted, rejected]
+      processingHistory:
+        type: array
+        description: Retained processing attempts and findings in recorded order.
+        items: { $ref: '#/schemas/MediaProcessingView' }
+      decisionHistory:
+        type: array
+        items: { $ref: '#/schemas/MediaDecisionView' }

@@ -54,7 +54,24 @@ const expectedOperations = [
   ["/api/owner/v1/taxonomy-values/{valueId}/commands/retire", "post"],
   ["/api/owner/v1/taxonomy-values/{valueId}/commands/merge", "post"],
   ["/api/owner/v1/projects/{projectId}/commands/assign-taxonomy-value", "post"],
+  ["/api/owner/v1/media/{mediaId}", "get"],
+  ["/api/owner/v1/media/upload-intents", "post"],
+  ["/api/owner/v1/media/{mediaId}/commands/record-processing", "post"],
+  ["/api/owner/v1/media/{mediaId}/commands/accept", "post"],
+  ["/api/owner/v1/media/{mediaId}/commands/reject", "post"],
+  ["/api/owner/v1/cv", "get"],
+  ["/api/owner/v1/cv/versions", "post"],
+  ["/api/owner/v1/cv/versions/{versionId}/commands/accept", "post"],
+  ["/api/owner/v1/cv/versions/{versionId}/commands/activate", "post"],
+  ["/api/owner/v1/feedback/{feedbackId}", "get"],
+  ["/api/owner/v1/feedback/{feedbackId}/commands/approve", "post"],
+  ["/api/owner/v1/feedback/{feedbackId}/commands/reject", "post"],
+  ["/api/owner/v1/feedback/{feedbackId}/commands/suppress", "post"],
 ] as const;
+
+const aggregateCreationOperations = new Set([
+  "createOwnerMediaUploadIntent",
+]);
 
 const resolveParameter = (parameter: Parameter) => {
   if (!("$ref" in parameter)) return parameter;
@@ -68,8 +85,8 @@ const resolveResponse = (response: Response) => {
   return name ? document.components.responses[name] : undefined;
 };
 
-describe("Owner v1 configuration, publication, Project, and Taxonomy contract", () => {
-  it("contains exactly the issue #6 command and narrow-query surface", () => {
+describe("Owner v1 contract", () => {
+  it("contains exactly the implemented command and narrow-query surface", () => {
     const actual = Object.entries(document.paths).flatMap(([path, pathItem]) =>
       Object.keys(pathItem)
         .filter((method) => httpMethods.has(method))
@@ -100,9 +117,10 @@ describe("Owner v1 configuration, publication, Project, and Taxonomy contract", 
     }
   });
 
-  it("requires idempotency and optimistic concurrency on every issue #6 mutation", () => {
+  it("requires idempotency on creations and optimistic concurrency on aggregate mutations", () => {
     for (const [path, method] of expectedOperations.filter(([, verb]) => verb !== "get")) {
-      const parameters = document.paths[path]![method]!.parameters ?? [];
+      const operation = document.paths[path]![method]!;
+      const parameters = operation.parameters ?? [];
       const resolved = parameters.map(resolveParameter);
 
       expect(resolved.find((parameter) => parameter?.name === "Idempotency-Key")).toMatchObject({
@@ -110,11 +128,16 @@ describe("Owner v1 configuration, publication, Project, and Taxonomy contract", 
         required: true,
         schema: { minLength: 1, maxLength: 128, pattern: "^[\\x21-\\x7E]+$" },
       });
-      expect(resolved.find((parameter) => parameter?.name === "If-Match")).toMatchObject({
-        in: "header",
-        required: true,
-        schema: { pattern: '^"[1-9][0-9]*"$' },
-      });
+      const concurrencyHeader = resolved.find((parameter) => parameter?.name === "If-Match");
+      if (aggregateCreationOperations.has(operation.operationId)) {
+        expect(concurrencyHeader).toBeUndefined();
+      } else {
+        expect(concurrencyHeader).toMatchObject({
+          in: "header",
+          required: true,
+          schema: { pattern: '^"[1-9][0-9]*"$' },
+        });
+      }
     }
   });
 
@@ -150,6 +173,52 @@ describe("Owner v1 configuration, publication, Project, and Taxonomy contract", 
     });
     expect(document.components.schemas["SaveRevisionReceipt"]).toMatchObject({
       required: ["aggregateId", "aggregateVersion", "outcome", "revisionId"],
+      additionalProperties: false,
+    });
+    expect(document.components.schemas["CvPortfolioView"]).toMatchObject({
+      required: ["aggregateVersion", "currentVersionId", "versions", "activationHistory"],
+      additionalProperties: false,
+      properties: {
+        currentVersionId: expect.any(Object),
+        versions: expect.any(Object),
+        activationHistory: expect.any(Object),
+      },
+    });
+    expect(document.components.schemas["RegisterCvVersionRequest"]).toMatchObject({
+      required: ["mediaId", "locale", "label"],
+      additionalProperties: false,
+      properties: { locale: { type: "string", const: "en" } },
+    });
+    expect(document.components.schemas["FeedbackModerationView"]).toMatchObject({
+      required: [
+        "feedbackId",
+        "aggregateVersion",
+        "state",
+        "authorName",
+        "paragraph",
+        "submittedAt",
+        "decisionHistory",
+      ],
+      additionalProperties: false,
+      properties: {
+        state: { enum: ["pending", "approved", "rejected", "suppressed"] },
+        decisionHistory: expect.any(Object),
+      },
+    });
+    expect(document.components.schemas["ModerationDecisionCommand"]).toMatchObject({
+      required: ["reason"],
+      additionalProperties: false,
+    });
+    expect(document.components.schemas["MediaAggregateView"]).toMatchObject({
+      required: expect.arrayContaining(["processingHistory", "decisionHistory"]),
+      additionalProperties: false,
+      properties: {
+        processingHistory: expect.any(Object),
+        decisionHistory: expect.any(Object),
+      },
+    });
+    expect(document.components.schemas["MediaProcessingView"]).toMatchObject({
+      required: expect.arrayContaining(["result", "findings", "recordedAt"]),
       additionalProperties: false,
     });
   });
