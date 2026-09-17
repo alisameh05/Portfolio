@@ -5,16 +5,15 @@ module.exports = {
      * Rule: no-provider-in-domain
      *
      * Domain areas may only import their own domain and shared domain contracts.
-     * Provider SDKs (Next.js, Supabase, Kysely, Vercel, generated OpenAPI code)
-     * are forbidden in domain/ and application/ areas.
+     * Provider SDKs (Next.js, Supabase, Kysely, Vercel) are forbidden.
      */
     {
       name: "no-provider-in-domain",
       severity: "error",
       comment:
-        "Domain areas must not import provider, framework, or generated-transport packages.",
+        "Domain areas must not import provider, framework, or database packages.",
       from: {
-        path: "^src/modules/[^/]+/domain/",
+        path: "(?:^src/modules/|^tests/fixtures/invalid-deps/[^/]+/modules/)([^/]+)/domain/",
       },
       to: {
         path: [
@@ -23,7 +22,6 @@ module.exports = {
           "^kysely(/|$)",
           "^@vercel/",
           "^vercel(/|$)",
-          "^src/contracts/http/",
         ],
       },
     },
@@ -32,15 +30,15 @@ module.exports = {
      * Rule: no-provider-in-application
      *
      * Application areas may import their own domain, shared contracts, and
-     * other modules' public interfaces. They may NOT import providers.
+     * other modules' public interfaces. They may NOT import provider SDKs.
      */
     {
       name: "no-provider-in-application",
       severity: "error",
       comment:
-        "Application areas must not import provider, framework, or generated-transport packages.",
+        "Application areas must not import provider, framework, or database packages.",
       from: {
-        path: "^src/modules/[^/]+/application/",
+        path: "(?:^src/modules/|^tests/fixtures/invalid-deps/[^/]+/modules/)([^/]+)/application/",
       },
       to: {
         path: [
@@ -49,7 +47,31 @@ module.exports = {
           "^kysely(/|$)",
           "^@vercel/",
           "^vercel(/|$)",
+        ],
+      },
+    },
+
+    /**
+     * Rule: no-generated-code-leakage
+     *
+     * Domain and application areas must not import generated transport types
+     * or OpenAPI tooling outside adapter or future composition concerns.
+     */
+    {
+      name: "no-generated-code-leakage",
+      severity: "error",
+      comment:
+        "Generated transport types and tooling must not leak into domain or application layers.",
+      from: {
+        path: "(?:^src/modules/|^tests/fixtures/invalid-deps/[^/]+/modules/)([^/]+)/(domain|application)/",
+      },
+      to: {
+        path: [
           "^src/contracts/http/",
+          "^tests/fixtures/invalid-deps/[^/]+/contracts/http/",
+          "^@redocly/",
+          "^openapi-typescript",
+          "^@hey-api/openapi-ts",
         ],
       },
     },
@@ -67,12 +89,53 @@ module.exports = {
       comment:
         "Cross-module imports must go through the module barrel (index.ts), not into sub-folders.",
       from: {
-        path: "^src/modules/([^/]+)/",
-        // capture the current module name
-        pathNot: "^src/modules/$1/",
+        path: "(?:^src/modules/|^tests/fixtures/invalid-deps/[^/]+/modules/)([^/]+)/",
       },
       to: {
-        path: "^src/modules/([^/]+)/(domain|application|ports|adapters)/",
+        path: "(?:^src/modules/|^tests/fixtures/invalid-deps/[^/]+/modules/)[^/]+/(domain|application|ports|adapters)/",
+        pathNot:
+          "(?:^src/modules/|^tests/fixtures/invalid-deps/[^/]+/modules/)$1/",
+      },
+    },
+
+    /**
+     * Rule: domain-isolation
+     *
+     * Domain areas can import only their own domain and shared domain contracts.
+     */
+    {
+      name: "domain-isolation",
+      severity: "error",
+      comment:
+        "Domain areas can import only their own domain and shared domain contracts.",
+      from: {
+        path: "^src/modules/([^/]+)/domain/",
+      },
+      to: {
+        pathNot: [
+          "^src/modules/$1/domain/",
+          "^src/shared/domain/",
+          "^@shared/domain",
+        ],
+      },
+    },
+
+    /**
+     * Rule: no-foreign-adapters
+     *
+     * Application areas cannot import foreign repositories or adapters.
+     */
+    {
+      name: "no-foreign-adapters",
+      severity: "error",
+      comment:
+        "Application areas cannot import foreign repositories or adapters.",
+      from: {
+        path: "^src/modules/([^/]+)/application/",
+      },
+      to: {
+        path: "^src/modules/[^/]+/adapters/",
+        pathNot: "^src/modules/$1/adapters/",
       },
     },
 

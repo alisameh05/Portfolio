@@ -1,0 +1,37 @@
+/**
+ * interaction-moderation module public interface.
+ *
+ * This barrel is the single public import surface for the Interaction and Moderation module.
+ * Other modules must never deep-import internal paths.
+ */
+
+export type {
+  ReactionKind,
+  Reaction,
+  RatingValue,
+  Rating,
+  ModerationState,
+  Feedback,
+  ProjectAggregate,
+  ReactionChangedEvent,
+  RatingChangedEvent,
+  FeedbackSubmittedEvent,
+  FeedbackApprovedEvent,
+  FeedbackRejectedEvent,
+  FeedbackSuppressedEvent,
+} from "./domain/index.js";
+
+export type {
+  SubmitReactionCommand,
+  SubmitRatingCommand,
+  SubmitFeedbackCommand,
+  ModerateFeedbackCommand,
+  GetProjectAggregateQuery,
+  GetApprovedFeedbackQuery,
+  InteractionModerationService,
+} from "./application/index.js";
+
+export type {
+  InteractionRepositoryPort,
+  FeedbackRepositoryPort,
+} from "./ports/index.js";
