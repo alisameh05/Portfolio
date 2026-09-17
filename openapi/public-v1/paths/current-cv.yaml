@@ -1,0 +1,35 @@
+get:
+  operationId: getCurrentCv
+  summary: Access the Current CV
+  description: >-
+    Returns or temporarily redirects to the single accepted English Current CV.
+    Recording Public event data never blocks access and no unavailable
+    localization is implied.
+  tags: [CV]
+  security: []
+  parameters:
+    - $ref: ../components/cv.yaml#/parameters/Locale
+    - $ref: ../components/cv.yaml#/parameters/Disposition
+  responses:
+    "200":
+      description: The accepted English Current CV stream.
+      headers:
+        Cache-Control:
+          $ref: ../components/cv.yaml#/headers/NoStore
+      content:
+        application/pdf:
+          schema:
+            type: string
+            format: binary
+    "307":
+      description: Temporary redirect to a short-lived signed Current CV location.
+      headers:
+        Location:
+          $ref: ../components/cv.yaml#/headers/SignedLocation
+        Cache-Control:
+          $ref: ../components/cv.yaml#/headers/NoStore
+    "400": { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+    "404": { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+    "429": { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+    "500": { $ref: ../components/common.yaml#/responses/InternalProblem }
+    "503": { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

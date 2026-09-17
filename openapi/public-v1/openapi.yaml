@@ -1,0 +1,40 @@
+openapi: 3.1.0
+info:
+  title: ShipWithAli Public API
+  version: 1.0.0
+  license:
+    name: All rights reserved
+    identifier: LicenseRef-All-Rights-Reserved
+  description: >-
+    Public transport contracts for portfolio interactions, consented measurement,
+    and Current CV access. Owner operations and internal module interfaces are excluded.
+servers:
+  - url: /
+    description: Same-origin ShipWithAli deployment
+tags:
+  - name: Interactions
+    description: Visitor interactions with Published Projects.
+  - name: Measurement
+    description: Consented, privacy-minimized Public event data.
+  - name: CV
+    description: Access to the accepted English Current CV.
+paths:
+  /api/v1/projects/{projectId}/reaction:
+    $ref: ./paths/project-reaction.yaml
+  /api/v1/projects/{projectId}/rating:
+    $ref: ./paths/project-rating.yaml
+  /api/v1/projects/{projectId}/feedback:
+    $ref: ./paths/project-feedback.yaml
+  /api/v1/events:
+    $ref: ./paths/events.yaml
+  /api/v1/cv/current:
+    $ref: ./paths/current-cv.yaml
+components:
+  securitySchemes:
+    AnalyticsConsent:
+      type: apiKey
+      in: cookie
+      name: sw_analytics_consent
+      description: >-
+        Signed consent evidence for non-essential Public event data. It is not
+        an Owner credential or a Visitor account.

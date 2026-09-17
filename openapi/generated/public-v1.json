@@ -1,0 +1,1195 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ShipWithAli Public API",
+    "version": "1.0.0",
+    "license": {
+      "name": "All rights reserved",
+      "identifier": "LicenseRef-All-Rights-Reserved"
+    },
+    "description": "Public transport contracts for portfolio interactions, consented measurement, and Current CV access. Owner operations and internal module interfaces are excluded."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Same-origin ShipWithAli deployment"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Interactions",
+      "description": "Visitor interactions with Published Projects."
+    },
+    {
+      "name": "Measurement",
+      "description": "Consented, privacy-minimized Public event data."
+    },
+    {
+      "name": "CV",
+      "description": "Access to the accepted English Current CV."
+    }
+  ],
+  "paths": {
+    "/api/v1/projects/{projectId}/reaction": {
+      "put": {
+        "operationId": "putProjectReaction",
+        "summary": "Set the current Reaction",
+        "description": "Creates or replaces this Visitor's current like or dislike for a Published Project. The operation may establish a purpose-limited functional identity.",
+        "tags": [
+          "Interactions"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactionUpdate"
+              },
+              "examples": {
+                "like": {
+                  "value": {
+                    "reaction": "like"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The Visitor's current Reaction.",
+            "headers": {
+              "Set-Cookie": {
+                "$ref": "#/components/headers/FunctionalIdentityCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReactionState"
+                },
+                "examples": {
+                  "current": {
+                    "value": {
+                      "projectId": "01890f3e-7b2f-7cc0-98cf-5a2890378ef1",
+                      "reaction": "like"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{projectId}/rating": {
+      "put": {
+        "operationId": "putProjectRating",
+        "summary": "Set the current Rating",
+        "description": "Creates or replaces this Visitor's current one-to-five-star Rating for a Published Project. The operation may establish a purpose-limited functional identity.",
+        "tags": [
+          "Interactions"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RatingUpdate"
+              },
+              "examples": {
+                "five-stars": {
+                  "value": {
+                    "rating": 5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The Visitor's current Rating.",
+            "headers": {
+              "Set-Cookie": {
+                "$ref": "#/components/headers/FunctionalIdentityCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RatingState"
+                },
+                "examples": {
+                  "current": {
+                    "value": {
+                      "projectId": "01890f3e-7b2f-7cc0-98cf-5a2890378ef1",
+                      "rating": 5
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{projectId}/feedback": {
+      "post": {
+        "operationId": "postProjectFeedback",
+        "summary": "Submit private Feedback",
+        "description": "Stores private pending Feedback for Owner Moderation. The response never implies approval, public eligibility, or public display.",
+        "tags": [
+          "Interactions"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackSubmission"
+              },
+              "examples": {
+                "english": {
+                  "value": {
+                    "name": "Ada",
+                    "paragraph": "Clear explanation of the engineering tradeoffs.",
+                    "locale": "en"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Private pending Feedback was stored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackReceipt"
+                },
+                "examples": {
+                  "pending": {
+                    "value": {
+                      "feedbackId": "01890f3e-7b2f-7cc0-98cf-5a2890378ef2",
+                      "projectId": "01890f3e-7b2f-7cc0-98cf-5a2890378ef1",
+                      "status": "pending"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "post": {
+        "operationId": "postPublicEvent",
+        "summary": "Record consented Public event data",
+        "description": "Accepts one privacy-minimized allowlisted event after consent. Reaction, Rating, Feedback, and Current CV actions are excluded to avoid double-counting.",
+        "tags": [
+          "Measurement"
+        ],
+        "security": [
+          {
+            "AnalyticsConsent": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicMeasurementEvent"
+              },
+              "examples": {
+                "project-viewed": {
+                  "value": {
+                    "action": "project-viewed",
+                    "projectId": "01890f3e-7b2f-7cc0-98cf-5a2890378ef1",
+                    "context": {
+                      "occurredAt": "2026-09-17T12:00:00Z",
+                      "locale": "en",
+                      "consentVersion": "2026-09",
+                      "pageRouteIdentity": "01890f3e-7b2f-7cc0-98cf-5a2890378ef3",
+                      "referrerClass": "professional",
+                      "deviceClass": "desktop",
+                      "countryCode": "EG"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "The event was accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventReceipt"
+                },
+                "examples": {
+                  "accepted": {
+                    "value": {
+                      "eventId": "01890f3e-7b2f-7cc0-98cf-5a2890378ef4",
+                      "acceptedAt": "2026-09-17T12:00:01Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/v1/cv/current": {
+      "get": {
+        "operationId": "getCurrentCv",
+        "summary": "Access the Current CV",
+        "description": "Returns or temporarily redirects to the single accepted English Current CV. Recording Public event data never blocks access and no unavailable localization is implied.",
+        "tags": [
+          "CV"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Locale"
+          },
+          {
+            "$ref": "#/components/parameters/Disposition"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The accepted English Current CV stream.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "307": {
+            "description": "Temporary redirect to a short-lived signed Current CV location.",
+            "headers": {
+              "Location": {
+                "$ref": "#/components/headers/SignedLocation"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "AnalyticsConsent": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sw_analytics_consent",
+        "description": "Signed consent evidence for non-essential Public event data. It is not an Owner credential or a Visitor account."
+      }
+    },
+    "schemas": {
+      "StableId": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        "description": "Immutable UUIDv7 identity, independent of labels, routes, and providers."
+      },
+      "ReactionUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reaction"
+        ],
+        "properties": {
+          "reaction": {
+            "type": "string",
+            "enum": [
+              "like",
+              "dislike"
+            ]
+          }
+        }
+      },
+      "ReactionState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "projectId",
+          "reaction"
+        ],
+        "properties": {
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "reaction": {
+            "type": "string",
+            "enum": [
+              "like",
+              "dislike"
+            ]
+          }
+        }
+      },
+      "FieldError": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "code",
+          "traceId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^urn:shipwithali:problem:[a-z0-9-]+$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "validation",
+              "forbidden",
+              "not_found",
+              "conflict",
+              "unprocessable",
+              "rate_limited",
+              "temporarily_unavailable",
+              "internal_error"
+            ]
+          },
+          "traceId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+          },
+          "fieldErrors": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
+          }
+        }
+      },
+      "RatingUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rating"
+        ],
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          }
+        }
+      },
+      "RatingState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "projectId",
+          "rating"
+        ],
+        "properties": {
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          }
+        }
+      },
+      "Locale": {
+        "type": "string",
+        "enum": [
+          "en",
+          "ar"
+        ]
+      },
+      "FeedbackSubmission": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "paragraph",
+          "locale"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "paragraph": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "locale": {
+            "$ref": "#/components/schemas/Locale"
+          }
+        }
+      },
+      "FeedbackReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "feedbackId",
+          "projectId",
+          "status"
+        ],
+        "properties": {
+          "feedbackId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "status": {
+            "type": "string",
+            "const": "pending"
+          }
+        }
+      },
+      "JourneyContext": {
+        "type": "array",
+        "maxItems": 10,
+        "uniqueItems": true,
+        "items": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "EventContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "occurredAt",
+          "locale",
+          "consentVersion",
+          "pageRouteIdentity"
+        ],
+        "properties": {
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "consentVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "pageRouteIdentity": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "journeyContext": {
+            "$ref": "#/components/schemas/JourneyContext"
+          },
+          "referrerClass": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "search",
+              "social",
+              "professional",
+              "referral",
+              "unknown"
+            ]
+          },
+          "deviceClass": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile",
+              "tablet",
+              "other",
+              "unknown"
+            ]
+          },
+          "countryCode": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          }
+        }
+      },
+      "PageViewedEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "context"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "page-viewed"
+          },
+          "context": {
+            "$ref": "#/components/schemas/EventContext"
+          }
+        }
+      },
+      "ProjectViewedEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "context",
+          "projectId"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "project-viewed"
+          },
+          "context": {
+            "$ref": "#/components/schemas/EventContext"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "ActiveEngagementSampledEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "context",
+          "activeMilliseconds"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "active-engagement-sampled"
+          },
+          "context": {
+            "$ref": "#/components/schemas/EventContext"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "activeMilliseconds": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 60000
+          }
+        }
+      },
+      "MediaEngagedEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "context",
+          "mediaAssetId",
+          "engagement"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "media-engaged"
+          },
+          "context": {
+            "$ref": "#/components/schemas/EventContext"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "mediaAssetId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "engagement": {
+            "type": "string",
+            "enum": [
+              "opened",
+              "played",
+              "paused",
+              "completed"
+            ]
+          }
+        }
+      },
+      "RelatedProjectOpenedEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "context",
+          "sourceProjectId",
+          "targetProjectId"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "related-project-opened"
+          },
+          "context": {
+            "$ref": "#/components/schemas/EventContext"
+          },
+          "sourceProjectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "targetProjectId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "ContactChannelOpenedEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "context",
+          "channel"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "contact-channel-opened"
+          },
+          "context": {
+            "$ref": "#/components/schemas/EventContext"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "linkedin",
+              "whatsapp",
+              "instagram",
+              "phone"
+            ]
+          }
+        }
+      },
+      "ExternalProjectLinkOpenedEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "context",
+          "projectId",
+          "destination"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "external-project-link-opened"
+          },
+          "context": {
+            "$ref": "#/components/schemas/EventContext"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "destination": {
+            "type": "string",
+            "enum": [
+              "github-repository",
+              "live-demo"
+            ]
+          }
+        }
+      },
+      "TestimonialEngagedEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "context",
+          "testimonialId"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "testimonial-engaged"
+          },
+          "context": {
+            "$ref": "#/components/schemas/EventContext"
+          },
+          "testimonialId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "GlobalProjectCtaOpenedEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "context",
+          "projectId"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "global-project-cta-opened"
+          },
+          "context": {
+            "$ref": "#/components/schemas/EventContext"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "PublicMeasurementEvent": {
+        "discriminator": {
+          "propertyName": "action",
+          "mapping": {
+            "page-viewed": "#/components/schemas/PageViewedEvent",
+            "project-viewed": "#/components/schemas/ProjectViewedEvent",
+            "active-engagement-sampled": "#/components/schemas/ActiveEngagementSampledEvent",
+            "media-engaged": "#/components/schemas/MediaEngagedEvent",
+            "related-project-opened": "#/components/schemas/RelatedProjectOpenedEvent",
+            "contact-channel-opened": "#/components/schemas/ContactChannelOpenedEvent",
+            "external-project-link-opened": "#/components/schemas/ExternalProjectLinkOpenedEvent",
+            "testimonial-engaged": "#/components/schemas/TestimonialEngagedEvent",
+            "global-project-cta-opened": "#/components/schemas/GlobalProjectCtaOpenedEvent"
+          }
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PageViewedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectViewedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ActiveEngagementSampledEvent"
+          },
+          {
+            "$ref": "#/components/schemas/MediaEngagedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/RelatedProjectOpenedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ContactChannelOpenedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ExternalProjectLinkOpenedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/TestimonialEngagedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/GlobalProjectCtaOpenedEvent"
+          }
+        ]
+      },
+      "EventReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "acceptedAt"
+        ],
+        "properties": {
+          "eventId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "acceptedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CvLocale": {
+        "type": "string",
+        "enum": [
+          "en"
+        ]
+      },
+      "CvDisposition": {
+        "type": "string",
+        "enum": [
+          "inline",
+          "attachment"
+        ]
+      }
+    },
+    "parameters": {
+      "ProjectId": {
+        "name": "projectId",
+        "in": "path",
+        "required": true,
+        "description": "Stable Project identity.",
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "A visible-ASCII client value scoped by operation and actor. Exact request replay returns the original safe result; conflicting reuse returns 409.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[\\x21-\\x7E]+$"
+        }
+      },
+      "Locale": {
+        "name": "locale",
+        "in": "query",
+        "required": true,
+        "description": "The Current CV is intentionally available in English only.",
+        "schema": {
+          "$ref": "#/components/schemas/CvLocale"
+        }
+      },
+      "Disposition": {
+        "name": "disposition",
+        "in": "query",
+        "required": false,
+        "description": "Whether the client intends to display or download the Current CV.",
+        "schema": {
+          "$ref": "#/components/schemas/CvDisposition",
+          "default": "inline"
+        }
+      }
+    },
+    "headers": {
+      "FunctionalIdentityCookie": {
+        "description": "A Secure, HttpOnly, SameSite=Lax cookie used only to preserve one current Reaction or Rating per Visitor and Project.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "RetryAfter": {
+        "description": "Whole seconds before another attempt.",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "NoStore": {
+        "description": "Prevents caching of the Current CV response or signed location.",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "const": "no-store"
+        }
+      },
+      "SignedLocation": {
+        "description": "Short-lived signed location for the accepted Current CV asset.",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "responses": {
+      "BadRequestProblem": {
+        "description": "The transport input is malformed or violates its declared shape.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ForbiddenProblem": {
+        "description": "The Visitor signal, consent, or requested public action is forbidden.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "NotFoundProblem": {
+        "description": "The requested Published Project or Current CV is unavailable.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ConflictProblem": {
+        "description": "The request conflicts with current state or idempotency history.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "UnprocessableProblem": {
+        "description": "Valid transport input was rejected by a domain rule.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "RateLimitedProblem": {
+        "description": "The public action exceeded its rate limit.",
+        "headers": {
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "InternalProblem": {
+        "description": "An unexpected failure occurred without exposing internal detail.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "TemporarilyUnavailableProblem": {
+        "description": "A required dependency is temporarily unavailable.",
+        "headers": {
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    }
+  }
+}

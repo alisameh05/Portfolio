@@ -1,0 +1,44 @@
+post:
+  operationId: postProjectFeedback
+  summary: Submit private Feedback
+  description: >-
+    Stores private pending Feedback for Owner Moderation. The response never
+    implies approval, public eligibility, or public display.
+  tags: [Interactions]
+  security: []
+  parameters:
+    - $ref: ../components/common.yaml#/parameters/ProjectId
+    - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../components/interactions.yaml#/schemas/FeedbackSubmission
+        examples:
+          english:
+            value:
+              name: Ada
+              paragraph: Clear explanation of the engineering tradeoffs.
+              locale: en
+  responses:
+    "201":
+      description: Private pending Feedback was stored.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/interactions.yaml#/schemas/FeedbackReceipt
+          examples:
+            pending:
+              value:
+                feedbackId: 01890f3e-7b2f-7cc0-98cf-5a2890378ef2
+                projectId: 01890f3e-7b2f-7cc0-98cf-5a2890378ef1
+                status: pending
+    "400": { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+    "403": { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+    "404": { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+    "409": { $ref: ../components/common.yaml#/responses/ConflictProblem }
+    "422": { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+    "429": { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+    "500": { $ref: ../components/common.yaml#/responses/InternalProblem }
+    "503": { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

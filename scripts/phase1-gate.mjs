@@ -12,7 +12,7 @@
  *   1. TypeScript typecheck (tsc --noEmit)
  *   2. Architecture check (dependency rules + invalid fixture)
  *   3. Shared-contract tests (vitest run tests/shared-domain/)
- *   4. Contract checks (lint/bundle — wired in later Phase 1 tickets)
+ *   4. Available public and Owner contract checks
  *   5. Frontend/Lab exclusion scan
  *   6. Dependency/version manifest presence
  */
@@ -66,8 +66,7 @@ check("Shared-contract tests (vitest)", () => {
 });
 
 // ── 4. Contract lint and bundle ──────────────────────────────────────────────
-check("Contract lint and bundle (Phase 1 later tickets)", () => {
-  // OpenAPI contracts are created in later Phase 1 tickets (#4+).
+check("Available OpenAPI contract checks", () => {
   // This stub passes if openapi/ source trees do not yet exist.
   const publicSrc = join(ROOT, "openapi", "public-v1");
   const ownerSrc = join(ROOT, "openapi", "owner-v1");

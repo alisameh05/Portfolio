@@ -1,0 +1,43 @@
+put:
+  operationId: putProjectRating
+  summary: Set the current Rating
+  description: >-
+    Creates or replaces this Visitor's current one-to-five-star Rating for a
+    Published Project. The operation may establish a purpose-limited functional identity.
+  tags: [Interactions]
+  security: []
+  parameters:
+    - $ref: ../components/common.yaml#/parameters/ProjectId
+    - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../components/interactions.yaml#/schemas/RatingUpdate
+        examples:
+          five-stars:
+            value: { rating: 5 }
+  responses:
+    "200":
+      description: The Visitor's current Rating.
+      headers:
+        Set-Cookie:
+          $ref: ../components/common.yaml#/headers/FunctionalIdentityCookie
+      content:
+        application/json:
+          schema:
+            $ref: ../components/interactions.yaml#/schemas/RatingState
+          examples:
+            current:
+              value:
+                projectId: 01890f3e-7b2f-7cc0-98cf-5a2890378ef1
+                rating: 5
+    "400": { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+    "403": { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+    "404": { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+    "409": { $ref: ../components/common.yaml#/responses/ConflictProblem }
+    "422": { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+    "429": { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+    "500": { $ref: ../components/common.yaml#/responses/InternalProblem }
+    "503": { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

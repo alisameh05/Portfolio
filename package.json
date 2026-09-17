@@ -2,6 +2,7 @@
   "name": "shipwithali-portfolio",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "description": "ShipWithAli backend — Phase 1 architecture alignment and contracts",
   "packageManager": "npm@11.19.0",
   "engines": {
@@ -9,10 +10,13 @@
     "npm": "11.19.0"
   },
   "scripts": {
+    "contract:lint": "redocly check-config && redocly lint shipwithali@v1",
+    "contract:bundle": "redocly bundle shipwithali@v1 --output openapi/generated/public-v1.json --ext json",
+    "contract:generate": "npm run contract:lint && npm run contract:bundle && openapi-ts && node scripts/strictify-generated-zod.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:arch": "node scripts/architecture-check.mjs",
-    "test:contracts": "echo 'Contract checks not yet wired (Phase 1 later tickets)'",
+    "test:contracts": "npm run contract:generate && vitest run tests/contracts",
     "phase1:gate": "node scripts/phase1-gate.mjs"
   },
   "devDependencies": {
