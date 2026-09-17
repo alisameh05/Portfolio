@@ -1,0 +1,79 @@
+schemas:
+  CreateTaxonomyValueRequest:
+    type: object
+    additionalProperties: false
+    required: [name]
+    properties:
+      name: { type: string, minLength: 1, maxLength: 100 }
+  RenameTaxonomyValueCommand:
+    type: object
+    additionalProperties: false
+    required: [name]
+    properties:
+      name: { type: string, minLength: 1, maxLength: 100 }
+  RetireTaxonomyValueCommand:
+    type: object
+    additionalProperties: false
+    properties:
+      reason: { type: string, minLength: 1, maxLength: 500 }
+  MergeTaxonomyValueCommand:
+    type: object
+    additionalProperties: false
+    required: [targetValueId]
+    properties:
+      targetValueId: { $ref: ./common.yaml#/schemas/StableId }
+  AssignTaxonomyValueCommand:
+    type: object
+    additionalProperties: false
+    required: [valueId]
+    properties:
+      valueId: { $ref: ./common.yaml#/schemas/StableId }
+  ActiveTaxonomyValueView:
+    type: object
+    additionalProperties: false
+    required: [valueId, name, state]
+    properties:
+      valueId: { $ref: ./common.yaml#/schemas/StableId }
+      name: { type: string, minLength: 1, maxLength: 100 }
+      state: { type: string, const: active }
+  RetiredTaxonomyValueView:
+    type: object
+    additionalProperties: false
+    required: [valueId, name, state]
+    properties:
+      valueId: { $ref: ./common.yaml#/schemas/StableId }
+      name: { type: string, minLength: 1, maxLength: 100 }
+      state: { type: string, const: retired }
+  MergedTaxonomyValueView:
+    type: object
+    additionalProperties: false
+    required: [valueId, name, state, mergedIntoValueId]
+    properties:
+      valueId: { $ref: ./common.yaml#/schemas/StableId }
+      name: { type: string, minLength: 1, maxLength: 100 }
+      state: { type: string, const: merged }
+      mergedIntoValueId: { $ref: ./common.yaml#/schemas/StableId }
+  TaxonomyValueView:
+    oneOf:
+      - { $ref: '#/schemas/ActiveTaxonomyValueView' }
+      - { $ref: '#/schemas/RetiredTaxonomyValueView' }
+      - { $ref: '#/schemas/MergedTaxonomyValueView' }
+    discriminator:
+      propertyName: state
+      mapping:
+        active: '#/schemas/ActiveTaxonomyValueView'
+        retired: '#/schemas/RetiredTaxonomyValueView'
+        merged: '#/schemas/MergedTaxonomyValueView'
+  TaxonomyAggregateView:
+    type: object
+    additionalProperties: false
+    required: [taxonomyId, aggregateVersion, kind, values]
+    properties:
+      taxonomyId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, minimum: 1 }
+      kind:
+        type: string
+        enum: [category, ai-ml-domain, technology, project-type]
+      values:
+        type: array
+        items: { $ref: '#/schemas/TaxonomyValueView' }

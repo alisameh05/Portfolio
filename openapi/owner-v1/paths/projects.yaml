@@ -1,0 +1,156 @@
+project:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ProjectId }
+  get:
+    operationId: getOwnerProjectAggregate
+    summary: Inspect a Project aggregate
+    description: Returns Project intent and durable route identity, not a raw table mirror.
+    tags: [Projects]
+    responses:
+      '200':
+        description: Project aggregate view.
+        content:
+          application/json:
+            schema: { $ref: ../components/projects.yaml#/schemas/ProjectAggregateView }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+changeStatus:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ProjectId }
+  post:
+    operationId: changeOwnerProjectStatus
+    summary: Change Project status
+    description: Changes the Owner-defined work-state label without changing Public lifecycle.
+    tags: [Projects]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/projects.yaml#/schemas/ChangeProjectStatusCommand }
+    responses:
+      '200':
+        description: Project status changed.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+setFeatured:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ProjectId }
+  post:
+    operationId: setOwnerProjectFeatured
+    summary: Set editorial Featured state
+    description: Changes editorial emphasis without changing visibility or newest-published ordering.
+    tags: [Projects]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/projects.yaml#/schemas/SetFeaturedCommand }
+    responses:
+      '200':
+        description: Featured state changed.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+changeSlug:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ProjectId }
+  post:
+    operationId: changeOwnerProjectPublicSlug
+    summary: Change the canonical public slug
+    description: Preserves Public route identity and retains the former route as a redirect.
+    tags: [Projects]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/projects.yaml#/schemas/ChangeSlugCommand }
+          examples:
+            canonical:
+              value: { slug: evidence-led-portfolio }
+    responses:
+      '200':
+        description: Canonical slug changed without changing route identity.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+relateProject:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ProjectId }
+  post:
+    operationId: relateOwnerProjects
+    summary: Create an owner-curated Project relationship
+    description: Relates two distinct Projects without inferring an automatic recommendation.
+    tags: [Projects]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/projects.yaml#/schemas/RelateProjectCommand }
+    responses:
+      '200':
+        description: Project relationship created.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

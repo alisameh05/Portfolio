@@ -1,0 +1,76 @@
+openapi: 3.1.0
+info:
+  title: ShipWithAli Owner API
+  version: 1.0.0
+  license:
+    name: All rights reserved
+    identifier: LicenseRef-All-Rights-Reserved
+  description: >-
+    Authenticated, command-oriented Owner transport contract. This first slice
+    covers Portfolio Configuration, content Publication, Project intent, and
+    controlled Taxonomy evolution without exposing raw tables or runtime code.
+servers:
+  - url: /
+    description: Same-origin ShipWithAli deployment
+security:
+  - OwnerSession: []
+tags:
+  - name: Configuration
+    description: Owner intent for public profile, Contact channels, and Global project CTA.
+  - name: Publication
+    description: Immutable Revisions and explicit per-language Public lifecycle commands.
+  - name: Projects
+    description: Project maturity, editorial emphasis, durable routes, and curated relationships.
+  - name: Taxonomy
+    description: Controlled vocabulary creation, assignment, rename, retirement, and merge.
+paths:
+  /api/owner/v1/configuration/profile:
+    $ref: ./paths/configuration.yaml#/profile
+  /api/owner/v1/configuration/contact-channels:
+    $ref: ./paths/configuration.yaml#/contactChannels
+  /api/owner/v1/configuration/project-cta:
+    $ref: ./paths/configuration.yaml#/projectCta
+  /api/owner/v1/content/{contentId}:
+    $ref: ./paths/content.yaml#/content
+  /api/owner/v1/content/{contentId}/revisions:
+    $ref: ./paths/content.yaml#/revisions
+  /api/owner/v1/content/{contentId}/commands/publish-language:
+    $ref: ./paths/content.yaml#/publishLanguage
+  /api/owner/v1/content/{contentId}/commands/hide:
+    $ref: ./paths/content.yaml#/hide
+  /api/owner/v1/content/{contentId}/commands/archive:
+    $ref: ./paths/content.yaml#/archive
+  /api/owner/v1/content/{contentId}/commands/restore:
+    $ref: ./paths/content.yaml#/restore
+  /api/owner/v1/projects/{projectId}:
+    $ref: ./paths/projects.yaml#/project
+  /api/owner/v1/projects/{projectId}/commands/change-status:
+    $ref: ./paths/projects.yaml#/changeStatus
+  /api/owner/v1/projects/{projectId}/commands/set-featured:
+    $ref: ./paths/projects.yaml#/setFeatured
+  /api/owner/v1/projects/{projectId}/commands/change-slug:
+    $ref: ./paths/projects.yaml#/changeSlug
+  /api/owner/v1/projects/{projectId}/commands/relate-project:
+    $ref: ./paths/projects.yaml#/relateProject
+  /api/owner/v1/taxonomies/{taxonomyId}:
+    $ref: ./paths/taxonomy.yaml#/taxonomy
+  /api/owner/v1/taxonomies/{taxonomyId}/values:
+    $ref: ./paths/taxonomy.yaml#/createValue
+  /api/owner/v1/taxonomy-values/{valueId}/commands/rename:
+    $ref: ./paths/taxonomy.yaml#/renameValue
+  /api/owner/v1/taxonomy-values/{valueId}/commands/retire:
+    $ref: ./paths/taxonomy.yaml#/retireValue
+  /api/owner/v1/taxonomy-values/{valueId}/commands/merge:
+    $ref: ./paths/taxonomy.yaml#/mergeValue
+  /api/owner/v1/projects/{projectId}/commands/assign-taxonomy-value:
+    $ref: ./paths/taxonomy.yaml#/assignValue
+components:
+  securitySchemes:
+    OwnerSession:
+      type: apiKey
+      in: cookie
+      name: sw_owner_session
+      description: >-
+        A server-verified Supabase session originating from GitHub OAuth. The
+        authenticated actor must also match the configured Owner allowlist;
+        authentication alone never grants Owner authorization.

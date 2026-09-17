@@ -1,0 +1,2513 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ShipWithAli Owner API",
+    "version": "1.0.0",
+    "license": {
+      "name": "All rights reserved",
+      "identifier": "LicenseRef-All-Rights-Reserved"
+    },
+    "description": "Authenticated, command-oriented Owner transport contract. This first slice covers Portfolio Configuration, content Publication, Project intent, and controlled Taxonomy evolution without exposing raw tables or runtime code."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Same-origin ShipWithAli deployment"
+    }
+  ],
+  "security": [
+    {
+      "OwnerSession": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Configuration",
+      "description": "Owner intent for public profile, Contact channels, and Global project CTA."
+    },
+    {
+      "name": "Publication",
+      "description": "Immutable Revisions and explicit per-language Public lifecycle commands."
+    },
+    {
+      "name": "Projects",
+      "description": "Project maturity, editorial emphasis, durable routes, and curated relationships."
+    },
+    {
+      "name": "Taxonomy",
+      "description": "Controlled vocabulary creation, assignment, rename, retirement, and merge."
+    }
+  ],
+  "paths": {
+    "/api/owner/v1/configuration/profile": {
+      "put": {
+        "operationId": "updateOwnerProfileConfiguration",
+        "summary": "Update the public profile configuration",
+        "description": "Replaces the Owner-managed public profile fields without publishing content.",
+        "tags": [
+          "Configuration"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdate"
+              },
+              "examples": {
+                "profile": {
+                  "value": {
+                    "displayName": "Ali Sameh",
+                    "headline": "AI and ML product engineer",
+                    "bio": "I build evidence-led AI products."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile configuration updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/configuration/contact-channels": {
+      "put": {
+        "operationId": "updateOwnerContactChannels",
+        "summary": "Replace Contact channels",
+        "description": "Replaces the ordered Owner-managed Contact channel configuration.",
+        "tags": [
+          "Configuration"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactChannelsUpdate"
+              },
+              "examples": {
+                "linkedin": {
+                  "value": {
+                    "channels": [
+                      {
+                        "channel": "linkedin",
+                        "label": "LinkedIn",
+                        "destination": "https://www.linkedin.com/in/example",
+                        "availableLocales": [
+                          "en",
+                          "ar"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contact channels updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/configuration/project-cta": {
+      "put": {
+        "operationId": "updateOwnerGlobalProjectCta",
+        "summary": "Update the Global project CTA",
+        "description": "Updates the single CTA shared by Project case studies and its safe fallback.",
+        "tags": [
+          "Configuration"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectCtaUpdate"
+              },
+              "examples": {
+                "discuss": {
+                  "value": {
+                    "label": "Discuss this project",
+                    "destination": "https://example.com/contact",
+                    "unavailableFallback": "Use another Contact channel."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Global project CTA updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/content/{contentId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ContentId"
+        }
+      ],
+      "get": {
+        "operationId": "getOwnerContentAggregate",
+        "summary": "Inspect content and Localized revision streams",
+        "description": "Returns a narrow aggregate view, including independent EN and AR publication state.",
+        "tags": [
+          "Publication"
+        ],
+        "responses": {
+          "200": {
+            "description": "Content aggregate view.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentAggregateView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/content/{contentId}/revisions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ContentId"
+        }
+      ],
+      "post": {
+        "operationId": "saveOwnerContentRevision",
+        "summary": "Save an immutable Revision",
+        "description": "Saves one locale-specific Revision without changing public visibility.",
+        "tags": [
+          "Publication"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveRevisionRequest"
+              },
+              "examples": {
+                "english": {
+                  "value": {
+                    "locale": "en",
+                    "title": "Evidence-led portfolio",
+                    "summary": "A contract-first portfolio case study.",
+                    "body": "The work and its supporting evidence are described here."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable Revision saved; publication state is unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveRevisionReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/content/{contentId}/commands/publish-language": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ContentId"
+        }
+      ],
+      "post": {
+        "operationId": "publishOwnerContentLanguage",
+        "summary": "Publish one Language version",
+        "description": "Makes one reviewed Revision current for its own locale only. It never publishes or supplies fallback text for the other locale.",
+        "tags": [
+          "Publication"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishLanguageCommand"
+              },
+              "examples": {
+                "publishEnglish": {
+                  "value": {
+                    "locale": "en",
+                    "revisionId": "01890f3e-7b2f-7cc0-98cf-5a2890378ef2"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Language version published after current validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/content/{contentId}/commands/hide": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ContentId"
+        }
+      ],
+      "post": {
+        "operationId": "hideOwnerContent",
+        "summary": "Hide Published content",
+        "description": "Removes content from normal public discovery while retaining publication history.",
+        "tags": [
+          "Publication"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecycleReasonCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Content hidden with retained history.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/content/{contentId}/commands/archive": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ContentId"
+        }
+      ],
+      "post": {
+        "operationId": "archiveOwnerContent",
+        "summary": "Archive content",
+        "description": "Retains content as historical while excluding it from public presentation.",
+        "tags": [
+          "Publication"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecycleReasonCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Content archived with retained history.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/content/{contentId}/commands/restore": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ContentId"
+        }
+      ],
+      "post": {
+        "operationId": "restoreOwnerContent",
+        "summary": "Restore retained content",
+        "description": "Restores content only after all current publication validation succeeds.",
+        "tags": [
+          "Publication"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecycleReasonCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Content restored to Published after current validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/projects/{projectId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProjectId"
+        }
+      ],
+      "get": {
+        "operationId": "getOwnerProjectAggregate",
+        "summary": "Inspect a Project aggregate",
+        "description": "Returns Project intent and durable route identity, not a raw table mirror.",
+        "tags": [
+          "Projects"
+        ],
+        "responses": {
+          "200": {
+            "description": "Project aggregate view.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectAggregateView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/projects/{projectId}/commands/change-status": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProjectId"
+        }
+      ],
+      "post": {
+        "operationId": "changeOwnerProjectStatus",
+        "summary": "Change Project status",
+        "description": "Changes the Owner-defined work-state label without changing Public lifecycle.",
+        "tags": [
+          "Projects"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeProjectStatusCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Project status changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/projects/{projectId}/commands/set-featured": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProjectId"
+        }
+      ],
+      "post": {
+        "operationId": "setOwnerProjectFeatured",
+        "summary": "Set editorial Featured state",
+        "description": "Changes editorial emphasis without changing visibility or newest-published ordering.",
+        "tags": [
+          "Projects"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetFeaturedCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Featured state changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/projects/{projectId}/commands/change-slug": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProjectId"
+        }
+      ],
+      "post": {
+        "operationId": "changeOwnerProjectPublicSlug",
+        "summary": "Change the canonical public slug",
+        "description": "Preserves Public route identity and retains the former route as a redirect.",
+        "tags": [
+          "Projects"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSlugCommand"
+              },
+              "examples": {
+                "canonical": {
+                  "value": {
+                    "slug": "evidence-led-portfolio"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical slug changed without changing route identity.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/projects/{projectId}/commands/relate-project": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProjectId"
+        }
+      ],
+      "post": {
+        "operationId": "relateOwnerProjects",
+        "summary": "Create an owner-curated Project relationship",
+        "description": "Relates two distinct Projects without inferring an automatic recommendation.",
+        "tags": [
+          "Projects"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelateProjectCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Project relationship created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/taxonomies/{taxonomyId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaxonomyId"
+        }
+      ],
+      "get": {
+        "operationId": "getOwnerTaxonomyAggregate",
+        "summary": "Inspect a Taxonomy and its value history",
+        "description": "Returns active, retired, and merged value state as an aggregate view.",
+        "tags": [
+          "Taxonomy"
+        ],
+        "responses": {
+          "200": {
+            "description": "Taxonomy aggregate view.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyAggregateView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/taxonomies/{taxonomyId}/values": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaxonomyId"
+        }
+      ],
+      "post": {
+        "operationId": "createOwnerTaxonomyValue",
+        "summary": "Create a controlled Taxonomy value",
+        "description": "Creates a reusable value within one controlled Taxonomy.",
+        "tags": [
+          "Taxonomy"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaxonomyValueRequest"
+              },
+              "examples": {
+                "technology": {
+                  "value": {
+                    "name": "TypeScript"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Taxonomy value created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/taxonomy-values/{valueId}/commands/rename": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ValueId"
+        }
+      ],
+      "post": {
+        "operationId": "renameOwnerTaxonomyValue",
+        "summary": "Rename a Taxonomy value",
+        "description": "Changes the display name while preserving stable identity and history.",
+        "tags": [
+          "Taxonomy"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameTaxonomyValueCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Taxonomy value renamed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/taxonomy-values/{valueId}/commands/retire": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ValueId"
+        }
+      ],
+      "post": {
+        "operationId": "retireOwnerTaxonomyValue",
+        "summary": "Retire a Taxonomy value",
+        "description": "Blocks new assignments while preserving historical assignments.",
+        "tags": [
+          "Taxonomy"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetireTaxonomyValueCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Taxonomy value retired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/taxonomy-values/{valueId}/commands/merge": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ValueId"
+        }
+      ],
+      "post": {
+        "operationId": "mergeOwnerTaxonomyValue",
+        "summary": "Merge a Taxonomy value",
+        "description": "Migrates assignments to an active target and retains the historical mapping.",
+        "tags": [
+          "Taxonomy"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeTaxonomyValueCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Taxonomy value merged and assignments migrated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/projects/{projectId}/commands/assign-taxonomy-value": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProjectId"
+        }
+      ],
+      "post": {
+        "operationId": "assignOwnerProjectTaxonomyValue",
+        "summary": "Assign an active Taxonomy value to a Project",
+        "description": "Rejects retired values and values from an incompatible Taxonomy.",
+        "tags": [
+          "Taxonomy"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignTaxonomyValueCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Taxonomy value assigned to the Project.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "OwnerSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sw_owner_session",
+        "description": "A server-verified Supabase session originating from GitHub OAuth. The authenticated actor must also match the configured Owner allowlist; authentication alone never grants Owner authorization."
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[\\x21-\\x7E]+$"
+        }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "description": "Quoted expected aggregate version used for optimistic concurrency.",
+        "schema": {
+          "type": "string",
+          "pattern": "^\"[1-9][0-9]*\"$"
+        }
+      },
+      "ContentId": {
+        "name": "contentId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "ProjectId": {
+        "name": "projectId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "TaxonomyId": {
+        "name": "taxonomyId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "ValueId": {
+        "name": "valueId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      }
+    },
+    "schemas": {
+      "ProfileUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "displayName",
+          "headline",
+          "bio"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "headline": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "bio": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        }
+      },
+      "StableId": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        "description": "Immutable UUIDv7 identity, independent of routes, labels, and providers."
+      },
+      "CommandReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "aggregateId",
+          "aggregateVersion",
+          "outcome"
+        ],
+        "properties": {
+          "aggregateId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "configuration-updated",
+              "revision-saved",
+              "language-published",
+              "content-hidden",
+              "content-archived",
+              "content-restored",
+              "project-status-changed",
+              "project-featured-changed",
+              "public-slug-changed",
+              "project-related",
+              "taxonomy-value-created",
+              "taxonomy-value-renamed",
+              "taxonomy-value-retired",
+              "taxonomy-value-merged",
+              "taxonomy-value-assigned"
+            ]
+          }
+        }
+      },
+      "FieldError": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "code",
+          "traceId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^urn:shipwithali:problem:[a-z0-9-]+$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "validation",
+              "unauthenticated",
+              "forbidden",
+              "not_found",
+              "conflict",
+              "failed_precondition",
+              "unprocessable",
+              "rate_limited",
+              "temporarily_unavailable",
+              "internal_error"
+            ]
+          },
+          "traceId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+          },
+          "fieldErrors": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
+          }
+        }
+      },
+      "Locale": {
+        "type": "string",
+        "enum": [
+          "en",
+          "ar"
+        ]
+      },
+      "ContactChannel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "channel",
+          "label",
+          "destination",
+          "availableLocales"
+        ],
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "linkedin",
+              "whatsapp",
+              "instagram",
+              "phone",
+              "email",
+              "other"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "destination": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "availableLocales": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Locale"
+            }
+          }
+        }
+      },
+      "ContactChannelsUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "channels"
+        ],
+        "properties": {
+          "channels": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/ContactChannel"
+            }
+          }
+        }
+      },
+      "ProjectCtaUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "destination",
+          "unavailableFallback"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "destination": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "unavailableFallback": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        }
+      },
+      "LocalizedRevisionStreamView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionCount",
+          "currentPublishedRevisionId"
+        ],
+        "properties": {
+          "revisionCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "currentPublishedRevisionId": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "RevisionHistoryEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "locale",
+          "sequence",
+          "reviewed"
+        ],
+        "properties": {
+          "revisionId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reviewed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ContentAggregateView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contentId",
+          "aggregateVersion",
+          "contentType",
+          "lifecycle",
+          "localizedStreams",
+          "revisions"
+        ],
+        "properties": {
+          "contentId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "project",
+              "achievement",
+              "testimonial"
+            ]
+          },
+          "lifecycle": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "hidden",
+              "archived"
+            ]
+          },
+          "localizedStreams": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "en": {
+                "$ref": "#/components/schemas/LocalizedRevisionStreamView"
+              },
+              "ar": {
+                "$ref": "#/components/schemas/LocalizedRevisionStreamView"
+              }
+            }
+          },
+          "revisions": {
+            "type": "array",
+            "description": "Immutable Revision history ordered by sequence within each locale.",
+            "items": {
+              "$ref": "#/components/schemas/RevisionHistoryEntry"
+            }
+          }
+        }
+      },
+      "SaveRevisionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "locale",
+          "title",
+          "summary",
+          "body"
+        ],
+        "properties": {
+          "locale": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          }
+        }
+      },
+      "SaveRevisionReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "aggregateId",
+          "aggregateVersion",
+          "outcome",
+          "revisionId"
+        ],
+        "properties": {
+          "aggregateId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "outcome": {
+            "type": "string",
+            "const": "revision-saved"
+          },
+          "revisionId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "PublishLanguageCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "locale",
+          "revisionId"
+        ],
+        "properties": {
+          "locale": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "revisionId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "LifecycleReasonCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "PublicRouteRedirectView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fromSlug",
+          "toSlug"
+        ],
+        "properties": {
+          "fromSlug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "toSlug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        }
+      },
+      "PublicRouteView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identity",
+          "canonicalSlug",
+          "redirects"
+        ],
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "canonicalSlug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "redirects": {
+            "type": "array",
+            "description": "Retained former slugs and their current canonical target.",
+            "items": {
+              "$ref": "#/components/schemas/PublicRouteRedirectView"
+            }
+          }
+        }
+      },
+      "ProjectTaxonomyAssignmentView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "taxonomyId",
+          "taxonomyKind",
+          "valueId"
+        ],
+        "properties": {
+          "taxonomyId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "taxonomyKind": {
+            "type": "string",
+            "enum": [
+              "category",
+              "ai-ml-domain",
+              "technology",
+              "project-type"
+            ]
+          },
+          "valueId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "ProjectAggregateView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "projectId",
+          "aggregateVersion",
+          "statusValueId",
+          "featured",
+          "relatedProjectIds",
+          "taxonomyAssignments",
+          "publicRoute"
+        ],
+        "properties": {
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "statusValueId": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "publicRoute": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PublicRouteView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relatedProjectIds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/StableId"
+            }
+          },
+          "taxonomyAssignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectTaxonomyAssignmentView"
+            }
+          }
+        }
+      },
+      "ChangeProjectStatusCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "statusValueId"
+        ],
+        "properties": {
+          "statusValueId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "SetFeaturedCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "featured"
+        ],
+        "properties": {
+          "featured": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ChangeSlugCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slug"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        }
+      },
+      "RelateProjectCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "relatedProjectId"
+        ],
+        "properties": {
+          "relatedProjectId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "ActiveTaxonomyValueView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "valueId",
+          "name",
+          "state"
+        ],
+        "properties": {
+          "valueId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "state": {
+            "type": "string",
+            "const": "active"
+          }
+        }
+      },
+      "RetiredTaxonomyValueView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "valueId",
+          "name",
+          "state"
+        ],
+        "properties": {
+          "valueId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "state": {
+            "type": "string",
+            "const": "retired"
+          }
+        }
+      },
+      "MergedTaxonomyValueView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "valueId",
+          "name",
+          "state",
+          "mergedIntoValueId"
+        ],
+        "properties": {
+          "valueId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "state": {
+            "type": "string",
+            "const": "merged"
+          },
+          "mergedIntoValueId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "TaxonomyValueView": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ActiveTaxonomyValueView"
+          },
+          {
+            "$ref": "#/components/schemas/RetiredTaxonomyValueView"
+          },
+          {
+            "$ref": "#/components/schemas/MergedTaxonomyValueView"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "state",
+          "mapping": {
+            "active": "#/components/schemas/ActiveTaxonomyValueView",
+            "retired": "#/components/schemas/RetiredTaxonomyValueView",
+            "merged": "#/components/schemas/MergedTaxonomyValueView"
+          }
+        }
+      },
+      "TaxonomyAggregateView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "taxonomyId",
+          "aggregateVersion",
+          "kind",
+          "values"
+        ],
+        "properties": {
+          "taxonomyId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "category",
+              "ai-ml-domain",
+              "technology",
+              "project-type"
+            ]
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaxonomyValueView"
+            }
+          }
+        }
+      },
+      "CreateTaxonomyValueRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "RenameTaxonomyValueCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "RetireTaxonomyValueCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "MergeTaxonomyValueCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "targetValueId"
+        ],
+        "properties": {
+          "targetValueId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "AssignTaxonomyValueCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "valueId"
+        ],
+        "properties": {
+          "valueId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequestProblem": {
+        "description": "The transport input is malformed or violates its declared shape.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "UnauthenticatedProblem": {
+        "description": "The Owner session is missing, invalid, or expired.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ForbiddenProblem": {
+        "description": "The authenticated actor is not in the configured Owner allowlist.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "NotFoundProblem": {
+        "description": "The requested aggregate does not exist.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ConflictProblem": {
+        "description": "The intent conflicts with identity, state, or idempotency history.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "FailedPreconditionProblem": {
+        "description": "If-Match does not match the current aggregate version.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "UnprocessableProblem": {
+        "description": "Valid transport input failed a publication, evidence, or domain rule.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "RateLimitedProblem": {
+        "description": "The Owner operation exceeded its rate limit.",
+        "headers": {
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "InternalProblem": {
+        "description": "An unexpected failure occurred without exposing internal detail.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "TemporarilyUnavailableProblem": {
+        "description": "A required dependency is temporarily unavailable.",
+        "headers": {
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    },
+    "headers": {
+      "RetryAfter": {
+        "description": "Whole seconds before another attempt.",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

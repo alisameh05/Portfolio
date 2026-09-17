@@ -1,0 +1,112 @@
+profile:
+  put:
+    operationId: updateOwnerProfileConfiguration
+    summary: Update the public profile configuration
+    description: Replaces the Owner-managed public profile fields without publishing content.
+    tags: [Configuration]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/configuration.yaml#/schemas/ProfileUpdate }
+          examples:
+            profile:
+              value:
+                displayName: Ali Sameh
+                headline: AI and ML product engineer
+                bio: I build evidence-led AI products.
+    responses:
+      '200':
+        description: Profile configuration updated.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+contactChannels:
+  put:
+    operationId: updateOwnerContactChannels
+    summary: Replace Contact channels
+    description: Replaces the ordered Owner-managed Contact channel configuration.
+    tags: [Configuration]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/configuration.yaml#/schemas/ContactChannelsUpdate }
+          examples:
+            linkedin:
+              value:
+                channels:
+                  - channel: linkedin
+                    label: LinkedIn
+                    destination: https://www.linkedin.com/in/example
+                    availableLocales: [en, ar]
+    responses:
+      '200':
+        description: Contact channels updated.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+projectCta:
+  put:
+    operationId: updateOwnerGlobalProjectCta
+    summary: Update the Global project CTA
+    description: Updates the single CTA shared by Project case studies and its safe fallback.
+    tags: [Configuration]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/configuration.yaml#/schemas/ProjectCtaUpdate }
+          examples:
+            discuss:
+              value:
+                label: Discuss this project
+                destination: https://example.com/contact
+                unavailableFallback: Use another Contact channel.
+    responses:
+      '200':
+        description: Global project CTA updated.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

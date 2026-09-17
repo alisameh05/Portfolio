@@ -1,0 +1,41 @@
+schemas:
+  ProfileUpdate:
+    type: object
+    additionalProperties: false
+    required: [displayName, headline, bio]
+    properties:
+      displayName: { type: string, minLength: 1, maxLength: 100 }
+      headline: { type: string, minLength: 1, maxLength: 160 }
+      bio: { type: string, minLength: 1, maxLength: 4000 }
+  ContactChannel:
+    type: object
+    additionalProperties: false
+    required: [channel, label, destination, availableLocales]
+    properties:
+      channel:
+        type: string
+        enum: [linkedin, whatsapp, instagram, phone, email, other]
+      label: { type: string, minLength: 1, maxLength: 80 }
+      destination: { type: string, format: uri, maxLength: 2048 }
+      availableLocales:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: { $ref: ./common.yaml#/schemas/Locale }
+  ContactChannelsUpdate:
+    type: object
+    additionalProperties: false
+    required: [channels]
+    properties:
+      channels:
+        type: array
+        maxItems: 20
+        items: { $ref: '#/schemas/ContactChannel' }
+  ProjectCtaUpdate:
+    type: object
+    additionalProperties: false
+    required: [label, destination, unavailableFallback]
+    properties:
+      label: { type: string, minLength: 1, maxLength: 80 }
+      destination: { type: string, format: uri, maxLength: 2048 }
+      unavailableFallback: { type: string, minLength: 1, maxLength: 160 }
