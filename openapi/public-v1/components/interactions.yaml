@@ -1,0 +1,66 @@
+schemas:
+  ReactionUpdate:
+    type: object
+    additionalProperties: false
+    required: [reaction]
+    properties:
+      reaction:
+        type: string
+        enum: [like, dislike]
+  ReactionState:
+    type: object
+    additionalProperties: false
+    required: [projectId, reaction]
+    properties:
+      projectId:
+        $ref: ./common.yaml#/schemas/StableId
+      reaction:
+        type: string
+        enum: [like, dislike]
+  RatingUpdate:
+    type: object
+    additionalProperties: false
+    required: [rating]
+    properties:
+      rating:
+        type: integer
+        minimum: 1
+        maximum: 5
+  RatingState:
+    type: object
+    additionalProperties: false
+    required: [projectId, rating]
+    properties:
+      projectId:
+        $ref: ./common.yaml#/schemas/StableId
+      rating:
+        type: integer
+        minimum: 1
+        maximum: 5
+  FeedbackSubmission:
+    type: object
+    additionalProperties: false
+    required: [name, paragraph, locale]
+    properties:
+      name:
+        type: string
+        minLength: 1
+        maxLength: 100
+      paragraph:
+        type: string
+        minLength: 1
+        maxLength: 2000
+      locale:
+        $ref: ./common.yaml#/schemas/Locale
+  FeedbackReceipt:
+    type: object
+    additionalProperties: false
+    required: [feedbackId, projectId, status]
+    properties:
+      feedbackId:
+        $ref: ./common.yaml#/schemas/StableId
+      projectId:
+        $ref: ./common.yaml#/schemas/StableId
+      status:
+        type: string
+        const: pending

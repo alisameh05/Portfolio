@@ -1,0 +1,153 @@
+schemas:
+  JourneyContext:
+    type: array
+    maxItems: 10
+    uniqueItems: true
+    items:
+      $ref: ./common.yaml#/schemas/StableId
+  EventContext:
+    type: object
+    additionalProperties: false
+    required: [occurredAt, locale, consentVersion, pageRouteIdentity]
+    properties:
+      occurredAt:
+        type: string
+        format: date-time
+      locale:
+        $ref: ./common.yaml#/schemas/Locale
+      consentVersion:
+        type: string
+        minLength: 1
+        maxLength: 40
+      pageRouteIdentity:
+        $ref: ./common.yaml#/schemas/StableId
+      journeyContext:
+        $ref: '#/schemas/JourneyContext'
+      referrerClass:
+        type: string
+        enum: [direct, search, social, professional, referral, unknown]
+      deviceClass:
+        type: string
+        enum: [desktop, mobile, tablet, other, unknown]
+      countryCode:
+        type: string
+        pattern: '^[A-Z]{2}$'
+  PageViewedEvent:
+    type: object
+    additionalProperties: false
+    required: [action, context]
+    properties:
+      action: { type: string, const: page-viewed }
+      context: { $ref: '#/schemas/EventContext' }
+  ProjectViewedEvent:
+    type: object
+    additionalProperties: false
+    required: [action, context, projectId]
+    properties:
+      action: { type: string, const: project-viewed }
+      context: { $ref: '#/schemas/EventContext' }
+      projectId: { $ref: ./common.yaml#/schemas/StableId }
+  ActiveEngagementSampledEvent:
+    type: object
+    additionalProperties: false
+    required: [action, context, activeMilliseconds]
+    properties:
+      action: { type: string, const: active-engagement-sampled }
+      context: { $ref: '#/schemas/EventContext' }
+      projectId: { $ref: ./common.yaml#/schemas/StableId }
+      activeMilliseconds:
+        type: integer
+        minimum: 1000
+        maximum: 60000
+  MediaEngagedEvent:
+    type: object
+    additionalProperties: false
+    required: [action, context, mediaAssetId, engagement]
+    properties:
+      action: { type: string, const: media-engaged }
+      context: { $ref: '#/schemas/EventContext' }
+      projectId: { $ref: ./common.yaml#/schemas/StableId }
+      mediaAssetId: { $ref: ./common.yaml#/schemas/StableId }
+      engagement:
+        type: string
+        enum: [opened, played, paused, completed]
+  RelatedProjectOpenedEvent:
+    type: object
+    additionalProperties: false
+    required: [action, context, sourceProjectId, targetProjectId]
+    properties:
+      action: { type: string, const: related-project-opened }
+      context: { $ref: '#/schemas/EventContext' }
+      sourceProjectId: { $ref: ./common.yaml#/schemas/StableId }
+      targetProjectId: { $ref: ./common.yaml#/schemas/StableId }
+  ContactChannelOpenedEvent:
+    type: object
+    additionalProperties: false
+    required: [action, context, channel]
+    properties:
+      action: { type: string, const: contact-channel-opened }
+      context: { $ref: '#/schemas/EventContext' }
+      projectId: { $ref: ./common.yaml#/schemas/StableId }
+      channel:
+        type: string
+        enum: [linkedin, whatsapp, instagram, phone]
+  ExternalProjectLinkOpenedEvent:
+    type: object
+    additionalProperties: false
+    required: [action, context, projectId, destination]
+    properties:
+      action: { type: string, const: external-project-link-opened }
+      context: { $ref: '#/schemas/EventContext' }
+      projectId: { $ref: ./common.yaml#/schemas/StableId }
+      destination:
+        type: string
+        enum: [github-repository, live-demo]
+  TestimonialEngagedEvent:
+    type: object
+    additionalProperties: false
+    required: [action, context, testimonialId]
+    properties:
+      action: { type: string, const: testimonial-engaged }
+      context: { $ref: '#/schemas/EventContext' }
+      testimonialId: { $ref: ./common.yaml#/schemas/StableId }
+      projectId: { $ref: ./common.yaml#/schemas/StableId }
+  GlobalProjectCtaOpenedEvent:
+    type: object
+    additionalProperties: false
+    required: [action, context, projectId]
+    properties:
+      action: { type: string, const: global-project-cta-opened }
+      context: { $ref: '#/schemas/EventContext' }
+      # Optional journey attribution would be too weak for a CTA identity; this
+      # stable Project identity records only the page context where it was opened.
+      projectId: { $ref: ./common.yaml#/schemas/StableId }
+  PublicMeasurementEvent:
+    discriminator:
+      propertyName: action
+      mapping:
+        page-viewed: '#/schemas/PageViewedEvent'
+        project-viewed: '#/schemas/ProjectViewedEvent'
+        active-engagement-sampled: '#/schemas/ActiveEngagementSampledEvent'
+        media-engaged: '#/schemas/MediaEngagedEvent'
+        related-project-opened: '#/schemas/RelatedProjectOpenedEvent'
+        contact-channel-opened: '#/schemas/ContactChannelOpenedEvent'
+        external-project-link-opened: '#/schemas/ExternalProjectLinkOpenedEvent'
+        testimonial-engaged: '#/schemas/TestimonialEngagedEvent'
+        global-project-cta-opened: '#/schemas/GlobalProjectCtaOpenedEvent'
+    oneOf:
+      - $ref: '#/schemas/PageViewedEvent'
+      - $ref: '#/schemas/ProjectViewedEvent'
+      - $ref: '#/schemas/ActiveEngagementSampledEvent'
+      - $ref: '#/schemas/MediaEngagedEvent'
+      - $ref: '#/schemas/RelatedProjectOpenedEvent'
+      - $ref: '#/schemas/ContactChannelOpenedEvent'
+      - $ref: '#/schemas/ExternalProjectLinkOpenedEvent'
+      - $ref: '#/schemas/TestimonialEngagedEvent'
+      - $ref: '#/schemas/GlobalProjectCtaOpenedEvent'
+  EventReceipt:
+    type: object
+    additionalProperties: false
+    required: [eventId, acceptedAt]
+    properties:
+      eventId: { $ref: ./common.yaml#/schemas/StableId }
+      acceptedAt: { type: string, format: date-time }

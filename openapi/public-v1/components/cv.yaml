@@ -1,0 +1,36 @@
+schemas:
+  CvLocale:
+    type: string
+    enum: [en]
+  CvDisposition:
+    type: string
+    enum: [inline, attachment]
+parameters:
+  Locale:
+    name: locale
+    in: query
+    required: true
+    description: The Current CV is intentionally available in English only.
+    schema:
+      $ref: '#/schemas/CvLocale'
+  Disposition:
+    name: disposition
+    in: query
+    required: false
+    description: Whether the client intends to display or download the Current CV.
+    schema:
+      $ref: '#/schemas/CvDisposition'
+      default: inline
+headers:
+  SignedLocation:
+    description: Short-lived signed location for the accepted Current CV asset.
+    required: true
+    schema:
+      type: string
+      format: uri
+  NoStore:
+    description: Prevents caching of the Current CV response or signed location.
+    required: true
+    schema:
+      type: string
+      const: no-store

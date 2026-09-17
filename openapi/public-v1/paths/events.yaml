@@ -1,0 +1,49 @@
+post:
+  operationId: postPublicEvent
+  summary: Record consented Public event data
+  description: >-
+    Accepts one privacy-minimized allowlisted event after consent. Reaction,
+    Rating, Feedback, and Current CV actions are excluded to avoid double-counting.
+  tags: [Measurement]
+  security:
+    - AnalyticsConsent: []
+  parameters:
+    - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../components/measurement.yaml#/schemas/PublicMeasurementEvent
+        examples:
+          project-viewed:
+            value:
+              action: project-viewed
+              projectId: 01890f3e-7b2f-7cc0-98cf-5a2890378ef1
+              context:
+                occurredAt: "2026-09-17T12:00:00Z"
+                locale: en
+                consentVersion: "2026-09"
+                pageRouteIdentity: 01890f3e-7b2f-7cc0-98cf-5a2890378ef3
+                referrerClass: professional
+                deviceClass: desktop
+                countryCode: EG
+  responses:
+    "202":
+      description: The event was accepted.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/measurement.yaml#/schemas/EventReceipt
+          examples:
+            accepted:
+              value:
+                eventId: 01890f3e-7b2f-7cc0-98cf-5a2890378ef4
+                acceptedAt: "2026-09-17T12:00:01Z"
+    "400": { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+    "403": { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+    "409": { $ref: ../components/common.yaml#/responses/ConflictProblem }
+    "422": { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+    "429": { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+    "500": { $ref: ../components/common.yaml#/responses/InternalProblem }
+    "503": { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

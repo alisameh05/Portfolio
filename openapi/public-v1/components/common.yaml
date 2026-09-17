@@ -1,0 +1,156 @@
+schemas:
+  StableId:
+    type: string
+    format: uuid
+    pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    description: Immutable UUIDv7 identity, independent of labels, routes, and providers.
+  Locale:
+    type: string
+    enum: [en, ar]
+  FieldError:
+    type: object
+    additionalProperties: false
+    required: [path, code, message]
+    properties:
+      path:
+        type: string
+        minLength: 1
+        maxLength: 256
+      code:
+        type: string
+        pattern: '^[a-z0-9_]+$'
+      message:
+        type: string
+        minLength: 1
+        maxLength: 500
+  Problem:
+    type: object
+    additionalProperties: false
+    required: [type, title, status, detail, instance, code, traceId]
+    properties:
+      type:
+        type: string
+        format: uri
+        pattern: '^urn:shipwithali:problem:[a-z0-9-]+$'
+      title:
+        type: string
+        minLength: 1
+        maxLength: 120
+      status:
+        type: integer
+        minimum: 400
+        maximum: 599
+      detail:
+        type: string
+        minLength: 1
+        maxLength: 1000
+      instance:
+        type: string
+        format: uri-reference
+      code:
+        type: string
+        enum:
+          - validation
+          - forbidden
+          - not_found
+          - conflict
+          - unprocessable
+          - rate_limited
+          - temporarily_unavailable
+          - internal_error
+      traceId:
+        type: string
+        pattern: '^[A-Za-z0-9._:-]{1,128}$'
+      fieldErrors:
+        type: array
+        maxItems: 50
+        items:
+          $ref: '#/schemas/FieldError'
+parameters:
+  ProjectId:
+    name: projectId
+    in: path
+    required: true
+    description: Stable Project identity.
+    schema:
+      $ref: '#/schemas/StableId'
+  IdempotencyKey:
+    name: Idempotency-Key
+    in: header
+    required: true
+    description: >-
+      A visible-ASCII client value scoped by operation and actor. Exact request
+      replay returns the original safe result; conflicting reuse returns 409.
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 128
+      pattern: '^[\x21-\x7E]+$'
+headers:
+  FunctionalIdentityCookie:
+    description: >-
+      A Secure, HttpOnly, SameSite=Lax cookie used only to preserve one current
+      Reaction or Rating per Visitor and Project.
+    schema:
+      type: string
+  RetryAfter:
+    description: Whole seconds before another attempt.
+    required: true
+    schema:
+      type: integer
+      minimum: 1
+responses:
+  BadRequestProblem:
+    description: The transport input is malformed or violates its declared shape.
+    content:
+      application/problem+json:
+        schema:
+          $ref: '#/schemas/Problem'
+  ForbiddenProblem:
+    description: The Visitor signal, consent, or requested public action is forbidden.
+    content:
+      application/problem+json:
+        schema:
+          $ref: '#/schemas/Problem'
+  NotFoundProblem:
+    description: The requested Published Project or Current CV is unavailable.
+    content:
+      application/problem+json:
+        schema:
+          $ref: '#/schemas/Problem'
+  ConflictProblem:
+    description: The request conflicts with current state or idempotency history.
+    content:
+      application/problem+json:
+        schema:
+          $ref: '#/schemas/Problem'
+  UnprocessableProblem:
+    description: Valid transport input was rejected by a domain rule.
+    content:
+      application/problem+json:
+        schema:
+          $ref: '#/schemas/Problem'
+  RateLimitedProblem:
+    description: The public action exceeded its rate limit.
+    headers:
+      Retry-After:
+        $ref: '#/headers/RetryAfter'
+    content:
+      application/problem+json:
+        schema:
+          $ref: '#/schemas/Problem'
+  TemporarilyUnavailableProblem:
+    description: A required dependency is temporarily unavailable.
+    headers:
+      Retry-After:
+        $ref: '#/headers/RetryAfter'
+    content:
+      application/problem+json:
+        schema:
+          $ref: '#/schemas/Problem'
+  InternalProblem:
+    description: An unexpected failure occurred without exposing internal detail.
+    content:
+      application/problem+json:
+        schema:
+          $ref: '#/schemas/Problem'

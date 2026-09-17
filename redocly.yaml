@@ -1,0 +1,11 @@
+apis:
+  shipwithali@v1:
+    root: ./openapi/public-v1/openapi.yaml
+
+extends:
+  - recommended-strict
+
+rules:
+  no-server-example.com: off
+  # Current CV can succeed with either a stream or a temporary redirect.
+  operation-2xx-response: off
