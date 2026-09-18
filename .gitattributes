@@ -1,0 +1,4 @@
+# Contract artifacts are compared byte-for-byte across Windows and CI.
+openapi/generated/*.json text eol=lf
+openapi/baseline/master/*.json text eol=lf
+src/contracts/http/**/generated/*.ts text eol=lf
