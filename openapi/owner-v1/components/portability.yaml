@@ -1,0 +1,413 @@
+schemas:
+  OwnerExportScope:
+    type: string
+    enum:
+      - portfolio-content
+      - taxonomy
+      - media-metadata
+      - cv-metadata
+      - moderation-history
+      - analytics-reports
+      - portfolio-configuration
+  PublicEventDataCoverage:
+    type: object
+    description: Detailed Public event data is excluded; portable aggregate Analytics reports remain available.
+    additionalProperties: false
+    required: [mode]
+    properties:
+      mode: { type: string, const: excluded }
+  RequestOwnerExportRequest:
+    type: object
+    additionalProperties: false
+    required: [includedScopes]
+    properties:
+      includedScopes:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: { $ref: '#/schemas/OwnerExportScope' }
+  RequestOwnerExportReceipt:
+    type: object
+    additionalProperties: false
+    required: [exportId, outcome, state]
+    properties:
+      exportId: { $ref: ./common.yaml#/schemas/StableId }
+      outcome: { type: string, const: owner-export-requested }
+      state: { type: string, const: requested }
+  PortableContentRevision:
+    type: object
+    additionalProperties: false
+    required: [revisionId, locale, sequence, title, summary, body, reviewed, currentlyPublished]
+    properties:
+      revisionId: { $ref: ./common.yaml#/schemas/StableId }
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      sequence: { type: integer, minimum: 1 }
+      title: { type: string, minLength: 1, maxLength: 160 }
+      summary: { type: string, minLength: 1, maxLength: 500 }
+      body: { type: string, minLength: 1, maxLength: 50000 }
+      reviewed: { type: boolean }
+      currentlyPublished: { type: boolean }
+  PortfolioContentExportRecord:
+    type: object
+    additionalProperties: false
+    required:
+      - scope
+      - contentId
+      - contentType
+      - lifecycle
+      - revisions
+      - publicRouteIdentity
+      - routeHistory
+      - relatedProjectIds
+      - taxonomyValueIds
+      - mediaAssetIds
+      - evidenceItems
+    properties:
+      scope: { type: string, const: portfolio-content }
+      contentId: { $ref: ./common.yaml#/schemas/StableId }
+      contentType: { type: string, enum: [project, achievement, testimonial] }
+      lifecycle: { type: string, enum: [draft, published, hidden, archived] }
+      revisions:
+        type: array
+        minItems: 1
+        items: { $ref: '#/schemas/PortableContentRevision' }
+      publicRouteIdentity:
+        oneOf:
+          - { $ref: ./common.yaml#/schemas/StableId }
+          - { type: 'null' }
+      routeHistory:
+        type: array
+        items: { $ref: ./projects.yaml#/schemas/PublicRouteRedirectView }
+      relatedProjectIds:
+        type: array
+        uniqueItems: true
+        items: { $ref: ./common.yaml#/schemas/StableId }
+      taxonomyValueIds:
+        type: array
+        uniqueItems: true
+        items: { $ref: ./common.yaml#/schemas/StableId }
+      mediaAssetIds:
+        type: array
+        uniqueItems: true
+        items: { $ref: ./common.yaml#/schemas/StableId }
+      evidenceItems:
+        type: array
+        items: { $ref: '#/schemas/PortableEvidenceItem' }
+  PortableEvidenceItem:
+    type: object
+    additionalProperties: false
+    required: [claim, state, supportingArtifactIds]
+    properties:
+      claim: { type: string, minLength: 1, maxLength: 1000 }
+      state: { type: string, enum: [unreviewed, supported, unsupported] }
+      supportingArtifactIds:
+        type: array
+        uniqueItems: true
+        items: { $ref: ./common.yaml#/schemas/StableId }
+  PortableTaxonomyRename:
+    type: object
+    additionalProperties: false
+    required: [valueId, previousName, newName, renamedAt]
+    properties:
+      valueId: { $ref: ./common.yaml#/schemas/StableId }
+      previousName: { type: string, minLength: 1, maxLength: 100 }
+      newName: { type: string, minLength: 1, maxLength: 100 }
+      renamedAt: { type: string, format: date-time }
+  PortableTaxonomyAssignment:
+    type: object
+    additionalProperties: false
+    required: [projectId, valueId]
+    properties:
+      projectId: { $ref: ./common.yaml#/schemas/StableId }
+      valueId: { $ref: ./common.yaml#/schemas/StableId }
+  TaxonomyExportRecord:
+    type: object
+    additionalProperties: false
+    required: [scope, taxonomyId, aggregateVersion, kind, values, renameHistory, assignments]
+    properties:
+      scope: { type: string, const: taxonomy }
+      taxonomyId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, minimum: 1 }
+      kind: { type: string, enum: [category, ai-ml-domain, technology, project-type] }
+      values:
+        type: array
+        items: { $ref: ./taxonomy.yaml#/schemas/TaxonomyValueView }
+      renameHistory:
+        type: array
+        items: { $ref: '#/schemas/PortableTaxonomyRename' }
+      assignments:
+        type: array
+        items: { $ref: '#/schemas/PortableTaxonomyAssignment' }
+  MediaMetadataExportRecord:
+    type: object
+    additionalProperties: false
+    required:
+      - scope
+      - mediaId
+      - kind
+      - state
+      - accessibilityMetadata
+      - processingHistory
+      - decisionHistory
+      - publicationState
+      - portableReference
+    properties:
+      scope: { type: string, const: media-metadata }
+      mediaId: { $ref: ./common.yaml#/schemas/StableId }
+      kind: { $ref: ./media.yaml#/schemas/MediaKind }
+      state: { type: string, enum: [upload-pending, processing, processed, accepted, rejected] }
+      accessibilityMetadata:
+        oneOf:
+          - { $ref: ./media.yaml#/schemas/MediaAccessibilityMetadata }
+          - { type: 'null' }
+      processingHistory:
+        type: array
+        items: { $ref: ./media.yaml#/schemas/MediaProcessingView }
+      decisionHistory:
+        type: array
+        items: { $ref: ./media.yaml#/schemas/MediaDecisionView }
+      publicationState: { type: string, enum: [private, accepted, published, withdrawn] }
+      portableReference:
+        type: string
+        format: uri-reference
+        description: Provider-neutral path or URI for media included with the export package.
+  CvMetadataExportRecord:
+    type: object
+    additionalProperties: false
+    required: [scope, aggregateVersion, currentVersionId, versions, activationHistory]
+    properties:
+      scope: { type: string, const: cv-metadata }
+      aggregateVersion: { type: integer, minimum: 1 }
+      currentVersionId:
+        oneOf:
+          - { $ref: ./common.yaml#/schemas/StableId }
+          - { type: 'null' }
+      versions:
+        type: array
+        items: { $ref: ./cv.yaml#/schemas/CvVersionView }
+      activationHistory:
+        type: array
+        items: { $ref: ./cv.yaml#/schemas/CvActivationView }
+  ModerationHistoryExportRecord:
+    type: object
+    additionalProperties: false
+    required: [scope, feedbackId, projectId, locale, aggregateVersion, state, authorName, paragraph, submittedAt, decisionHistory]
+    properties:
+      scope: { type: string, const: moderation-history }
+      feedbackId: { $ref: ./common.yaml#/schemas/StableId }
+      projectId: { $ref: ./common.yaml#/schemas/StableId }
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      aggregateVersion: { type: integer, minimum: 1 }
+      state: { type: string, enum: [pending, approved, rejected, suppressed] }
+      authorName: { type: string, minLength: 1, maxLength: 120 }
+      paragraph: { type: string, minLength: 1, maxLength: 5000 }
+      submittedAt: { type: string, format: date-time }
+      decisionHistory:
+        type: array
+        items: { $ref: ./moderation.yaml#/schemas/ModerationDecisionView }
+  PortableAnalyticsAggregate:
+    type: object
+    additionalProperties: false
+    required: [goalVersionId, periodStart, periodEnd, sampleState, aggregateCount]
+    properties:
+      goalVersionId: { $ref: ./common.yaml#/schemas/StableId }
+      periodStart: { type: string, format: date-time }
+      periodEnd: { type: string, format: date-time }
+      sampleState: { type: string, enum: [sufficient, low-sample, suppressed] }
+      aggregateCount: { type: integer, minimum: 0 }
+  AnalyticsReportExportRecord:
+    type: object
+    additionalProperties: false
+    required: [scope, goal, reports]
+    properties:
+      scope: { type: string, const: analytics-reports }
+      goal: { $ref: ./measurement.yaml#/schemas/AnalyticsGoalAggregateView }
+      reports:
+        type: array
+        items: { $ref: '#/schemas/PortableAnalyticsAggregate' }
+  PortfolioConfigurationExportRecord:
+    type: object
+    additionalProperties: false
+    required: [scope, profile, contactChannels, projectCta]
+    properties:
+      scope: { type: string, const: portfolio-configuration }
+      profile: { $ref: ./configuration.yaml#/schemas/ProfileUpdate }
+      contactChannels: { $ref: ./configuration.yaml#/schemas/ContactChannelsUpdate }
+      projectCta: { $ref: ./configuration.yaml#/schemas/ProjectCtaUpdate }
+  OwnerExportRecord:
+    oneOf:
+      - { $ref: '#/schemas/PortfolioContentExportRecord' }
+      - { $ref: '#/schemas/TaxonomyExportRecord' }
+      - { $ref: '#/schemas/MediaMetadataExportRecord' }
+      - { $ref: '#/schemas/CvMetadataExportRecord' }
+      - { $ref: '#/schemas/ModerationHistoryExportRecord' }
+      - { $ref: '#/schemas/AnalyticsReportExportRecord' }
+      - { $ref: '#/schemas/PortfolioConfigurationExportRecord' }
+    discriminator:
+      propertyName: scope
+      mapping:
+        portfolio-content: '#/schemas/PortfolioContentExportRecord'
+        taxonomy: '#/schemas/TaxonomyExportRecord'
+        media-metadata: '#/schemas/MediaMetadataExportRecord'
+        cv-metadata: '#/schemas/CvMetadataExportRecord'
+        moderation-history: '#/schemas/ModerationHistoryExportRecord'
+        analytics-reports: '#/schemas/AnalyticsReportExportRecord'
+        portfolio-configuration: '#/schemas/PortfolioConfigurationExportRecord'
+  OwnerExportEntryDescriptor:
+    type: object
+    description: Portable record-set entry identified independently of storage or database providers.
+    additionalProperties: false
+    required: [path, scope, mediaType, recordSchema, schemaPath, schemaVersion, digest, recordCount]
+    properties:
+      path:
+        type: string
+        pattern: '^[a-z0-9][a-z0-9._/-]*$'
+        description: Relative path inside the export package.
+      scope: { $ref: '#/schemas/OwnerExportScope' }
+      mediaType:
+        type: string
+        enum: [application/x-ndjson, application/json]
+      recordSchema:
+        type: string
+        format: uri
+        enum:
+          - urn:shipwithali:owner-export-schema:portfolio-content:1.0
+          - urn:shipwithali:owner-export-schema:taxonomy:1.0
+          - urn:shipwithali:owner-export-schema:media-metadata:1.0
+          - urn:shipwithali:owner-export-schema:cv-metadata:1.0
+          - urn:shipwithali:owner-export-schema:moderation-history:1.0
+          - urn:shipwithali:owner-export-schema:analytics-reports:1.0
+          - urn:shipwithali:owner-export-schema:portfolio-configuration:1.0
+        description: Stable identifier for the corresponding OwnerExportRecord variant.
+      schemaPath:
+        type: string
+        pattern: '^schemas/[a-z0-9-]+\.schema\.json$'
+        description: Packaged JSON Schema file for offline compatible importers.
+      schemaVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+$' }
+      digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+      recordCount: { type: integer, minimum: 0 }
+  OwnerExportPackageManifest:
+    type: object
+    description: Versioned manifest.json for the documented ShipWithAli Owner export package.
+    additionalProperties: false
+    required: [packageFormat, schemaVersion, createdAt, algorithm, digest, includedScopes, publicEventDataCoverage, entries]
+    properties:
+      packageFormat: { type: string, const: shipwithali-owner-export }
+      schemaVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+$' }
+      createdAt: { type: string, format: date-time }
+      algorithm: { type: string, const: sha-256 }
+      digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+      includedScopes:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: { $ref: '#/schemas/OwnerExportScope' }
+      publicEventDataCoverage: { $ref: '#/schemas/PublicEventDataCoverage' }
+      entries:
+        type: array
+        minItems: 1
+        description: Data entries whose packaged schemaPath files define the versioned OwnerExportRecord shapes.
+        items: { $ref: '#/schemas/OwnerExportEntryDescriptor' }
+  RequestedOwnerExportView:
+    type: object
+    additionalProperties: false
+    required: [exportId, state, schemaVersion, requestedAt, includedScopes, publicEventDataCoverage, downloadAvailable]
+    properties:
+      exportId: { $ref: ./common.yaml#/schemas/StableId }
+      state: { type: string, const: requested }
+      schemaVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+$' }
+      requestedAt: { type: string, format: date-time }
+      includedScopes:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: { $ref: '#/schemas/OwnerExportScope' }
+      publicEventDataCoverage: { $ref: '#/schemas/PublicEventDataCoverage' }
+      downloadAvailable: { type: boolean, const: false }
+  BuildingOwnerExportView:
+    type: object
+    additionalProperties: false
+    required: [exportId, state, schemaVersion, requestedAt, includedScopes, publicEventDataCoverage, downloadAvailable]
+    properties:
+      exportId: { $ref: ./common.yaml#/schemas/StableId }
+      state: { type: string, const: building }
+      schemaVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+$' }
+      requestedAt: { type: string, format: date-time }
+      includedScopes:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: { $ref: '#/schemas/OwnerExportScope' }
+      publicEventDataCoverage: { $ref: '#/schemas/PublicEventDataCoverage' }
+      downloadAvailable: { type: boolean, const: false }
+  ReadyOwnerExportView:
+    type: object
+    description: A completed versioned domain artifact, never a database dump or provider backup.
+    additionalProperties: false
+    required: [exportId, state, schemaVersion, requestedAt, completedAt, includedScopes, publicEventDataCoverage, integrityManifest, downloadAvailable]
+    properties:
+      exportId: { $ref: ./common.yaml#/schemas/StableId }
+      state: { type: string, const: ready }
+      schemaVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+$' }
+      requestedAt: { type: string, format: date-time }
+      completedAt: { type: string, format: date-time }
+      includedScopes:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: { $ref: '#/schemas/OwnerExportScope' }
+      publicEventDataCoverage: { $ref: '#/schemas/PublicEventDataCoverage' }
+      integrityManifest: { $ref: '#/schemas/OwnerExportPackageManifest' }
+      downloadAvailable: { type: boolean, const: true }
+  FailedOwnerExportView:
+    type: object
+    additionalProperties: false
+    required: [exportId, state, schemaVersion, requestedAt, failedAt, failureCode, includedScopes, publicEventDataCoverage, downloadAvailable]
+    properties:
+      exportId: { $ref: ./common.yaml#/schemas/StableId }
+      state: { type: string, const: failed }
+      schemaVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+$' }
+      requestedAt: { type: string, format: date-time }
+      failedAt: { type: string, format: date-time }
+      failureCode: { type: string, pattern: '^[a-z0-9_]+$' }
+      includedScopes:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: { $ref: '#/schemas/OwnerExportScope' }
+      publicEventDataCoverage: { $ref: '#/schemas/PublicEventDataCoverage' }
+      downloadAvailable: { type: boolean, const: false }
+  ExpiredOwnerExportView:
+    type: object
+    additionalProperties: false
+    required: [exportId, state, schemaVersion, requestedAt, completedAt, expiredAt, includedScopes, publicEventDataCoverage, integrityManifest, downloadAvailable]
+    properties:
+      exportId: { $ref: ./common.yaml#/schemas/StableId }
+      state: { type: string, const: expired }
+      schemaVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+$' }
+      requestedAt: { type: string, format: date-time }
+      completedAt: { type: string, format: date-time }
+      expiredAt: { type: string, format: date-time }
+      includedScopes:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: { $ref: '#/schemas/OwnerExportScope' }
+      publicEventDataCoverage: { $ref: '#/schemas/PublicEventDataCoverage' }
+      integrityManifest: { $ref: '#/schemas/OwnerExportPackageManifest' }
+      downloadAvailable: { type: boolean, const: false }
+  OwnerExportView:
+    oneOf:
+      - { $ref: '#/schemas/RequestedOwnerExportView' }
+      - { $ref: '#/schemas/BuildingOwnerExportView' }
+      - { $ref: '#/schemas/ReadyOwnerExportView' }
+      - { $ref: '#/schemas/FailedOwnerExportView' }
+      - { $ref: '#/schemas/ExpiredOwnerExportView' }
+    discriminator:
+      propertyName: state
+      mapping:
+        requested: '#/schemas/RequestedOwnerExportView'
+        building: '#/schemas/BuildingOwnerExportView'
+        ready: '#/schemas/ReadyOwnerExportView'
+        failed: '#/schemas/FailedOwnerExportView'
+        expired: '#/schemas/ExpiredOwnerExportView'

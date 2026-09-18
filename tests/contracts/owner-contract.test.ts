@@ -67,10 +67,17 @@ const expectedOperations = [
   ["/api/owner/v1/feedback/{feedbackId}/commands/approve", "post"],
   ["/api/owner/v1/feedback/{feedbackId}/commands/reject", "post"],
   ["/api/owner/v1/feedback/{feedbackId}/commands/suppress", "post"],
+  ["/api/owner/v1/analytics-goals/{goalId}", "get"],
+  ["/api/owner/v1/analytics-goals/{goalId}/versions", "post"],
+  ["/api/owner/v1/analytics-goals/{goalId}/commands/activate-version", "post"],
+  ["/api/owner/v1/exports", "post"],
+  ["/api/owner/v1/exports/{exportId}", "get"],
+  ["/api/owner/v1/exports/{exportId}/download", "get"],
 ] as const;
 
 const aggregateCreationOperations = new Set([
   "createOwnerMediaUploadIntent",
+  "requestOwnerExport",
 ]);
 
 const resolveParameter = (parameter: Parameter) => {
@@ -219,6 +226,44 @@ describe("Owner v1 contract", () => {
     });
     expect(document.components.schemas["MediaProcessingView"]).toMatchObject({
       required: expect.arrayContaining(["result", "findings", "recordedAt"]),
+      additionalProperties: false,
+    });
+    expect(document.components.schemas["AnalyticsGoalAggregateView"]).toMatchObject({
+      required: ["goalId", "aggregateVersion", "activeVersionId", "versions", "activationHistory"],
+      additionalProperties: false,
+      properties: {
+        activeVersionId: expect.any(Object),
+        versions: expect.any(Object),
+        activationHistory: expect.any(Object),
+      },
+    });
+    expect(document.components.schemas["AnalyticsGoalVersionView"]).toMatchObject({
+      required: ["versionId", "versionNumber", "definition", "createdAt"],
+      additionalProperties: false,
+    });
+    expect(document.components.schemas["OwnerExportView"]).toMatchObject({
+      oneOf: expect.any(Array),
+      discriminator: { propertyName: "state" },
+    });
+    expect(document.components.schemas["ReadyOwnerExportView"]).toMatchObject({
+      required: expect.arrayContaining([
+        "exportId",
+        "state",
+        "schemaVersion",
+        "requestedAt",
+        "includedScopes",
+        "publicEventDataCoverage",
+        "integrityManifest",
+        "downloadAvailable",
+      ]),
+      additionalProperties: false,
+    });
+    expect(document.components.schemas["OwnerExportRecord"]).toMatchObject({
+      oneOf: expect.any(Array),
+      discriminator: { propertyName: "scope" },
+    });
+    expect(document.components.schemas["OwnerExportPackageManifest"]).toMatchObject({
+      required: expect.arrayContaining(["includedScopes", "publicEventDataCoverage", "entries"]),
       additionalProperties: false,
     });
   });

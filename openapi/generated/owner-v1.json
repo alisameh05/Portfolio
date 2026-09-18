@@ -7,7 +7,7 @@
       "name": "All rights reserved",
       "identifier": "LicenseRef-All-Rights-Reserved"
     },
-    "description": "Authenticated, command-oriented Owner transport contract. The implemented slices cover Portfolio Configuration, content Publication, Project intent, controlled Taxonomy evolution, private Media acceptance, CV Portfolio history, and Feedback Moderation without exposing raw tables, provider objects, or runtime code."
+    "description": "Authenticated, command-oriented Owner transport contract. The implemented slices cover Portfolio Configuration, content Publication, Project intent, controlled Taxonomy evolution, private Media acceptance, CV Portfolio history, Feedback Moderation, immutable Analytics goal versions, and versioned Owner exports without exposing raw tables, provider objects, or runtime code."
   },
   "servers": [
     {
@@ -48,6 +48,14 @@
     {
       "name": "Interaction and Moderation",
       "description": "Feedback approval, rejection, later suppression, and preserved decision history."
+    },
+    {
+      "name": "Measurement",
+      "description": "Immutable Analytics goal versions, explicit activation, and retained history."
+    },
+    {
+      "name": "Portability",
+      "description": "Versioned Owner export requests, integrity inspection, and provider-neutral download."
     }
   ],
   "paths": {
@@ -2401,98 +2409,461 @@
           }
         }
       }
+    },
+    "/api/owner/v1/analytics-goals/{goalId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/GoalId"
+        }
+      ],
+      "get": {
+        "operationId": "getOwnerAnalyticsGoal",
+        "summary": "Inspect an Analytics goal and its version history",
+        "description": "Returns immutable goal definitions and the explicit active-version pointer.",
+        "tags": [
+          "Measurement"
+        ],
+        "responses": {
+          "200": {
+            "description": "Analytics goal aggregate view.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsGoalAggregateView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/analytics-goals/{goalId}/versions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/GoalId"
+        }
+      ],
+      "post": {
+        "operationId": "createOwnerAnalyticsGoalVersion",
+        "summary": "Create an Analytics goal version",
+        "description": "Adds a new immutable definition without changing the currently active version.",
+        "tags": [
+          "Measurement"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAnalyticsGoalVersionRequest"
+              },
+              "examples": {
+                "projectContactJourney": {
+                  "value": {
+                    "definition": {
+                      "name": "Project view to contact",
+                      "steps": [
+                        {
+                          "action": "project-viewed"
+                        },
+                        {
+                          "action": "contact-channel-opened"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable Analytics goal version created but not activated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAnalyticsGoalVersionReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/analytics-goals/{goalId}/commands/activate-version": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/GoalId"
+        }
+      ],
+      "post": {
+        "operationId": "activateOwnerAnalyticsGoalVersion",
+        "summary": "Activate an Analytics goal version",
+        "description": "Changes the active pointer while preserving every immutable goal-version definition.",
+        "tags": [
+          "Measurement"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateAnalyticsGoalVersionCommand"
+              },
+              "examples": {
+                "activateVersion": {
+                  "value": {
+                    "versionId": "01890f3e-7b2f-7cc0-98cf-5a2890378ef1"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Analytics goal version activated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "412": {
+            "$ref": "#/components/responses/FailedPreconditionProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/exports": {
+      "post": {
+        "operationId": "requestOwnerExport",
+        "summary": "Request a versioned Owner export",
+        "description": "Requests a documented domain package subject to privacy and Retention policy rules.",
+        "tags": [
+          "Portability"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestOwnerExportRequest"
+              },
+              "examples": {
+                "portablePortfolio": {
+                  "value": {
+                    "includedScopes": [
+                      "portfolio-content",
+                      "taxonomy",
+                      "media-metadata",
+                      "cv-metadata",
+                      "moderation-history",
+                      "analytics-reports",
+                      "portfolio-configuration"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Owner export request accepted for asynchronous preparation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOwnerExportReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/exports/{exportId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ExportId"
+        }
+      ],
+      "get": {
+        "operationId": "getOwnerExport",
+        "summary": "Inspect an Owner export",
+        "description": "Returns version, scope, state, and integrity metadata without provider or database details.",
+        "tags": [
+          "Portability"
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner export domain-artifact view.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerExportView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
+    },
+    "/api/owner/v1/exports/{exportId}/download": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ExportId"
+        }
+      ],
+      "get": {
+        "operationId": "downloadOwnerExport",
+        "summary": "Download a ready Owner export",
+        "description": "Downloads a ZIP whose manifest.json conforms to OwnerExportPackageManifest. Each entry uses the manifest's portable recordSchema and mediaType so a compatible importer can reconstruct domain meaning without provider knowledge.",
+        "tags": [
+          "Portability"
+        ],
+        "responses": {
+          "200": {
+            "description": "Versioned Owner export package.",
+            "headers": {
+              "Content-Disposition": {
+                "description": "Attachment filename for the versioned export package.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-ShipWithAli-Export-Schema-Version": {
+                "description": "Version of the documented Owner export package schema.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+                }
+              }
+            },
+            "content": {
+              "application/vnd.shipwithali.owner-export+zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitedProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "503": {
+            "$ref": "#/components/responses/TemporarilyUnavailableProblem"
+          }
+        }
+      }
     }
   },
   "components": {
-    "securitySchemes": {
-      "OwnerSession": {
-        "type": "apiKey",
-        "in": "cookie",
-        "name": "sw_owner_session",
-        "description": "A server-verified Supabase session originating from GitHub OAuth. The authenticated actor must also match the configured Owner allowlist; authentication alone never grants Owner authorization."
-      }
-    },
-    "parameters": {
-      "IdempotencyKey": {
-        "name": "Idempotency-Key",
-        "in": "header",
-        "required": true,
-        "description": "Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.",
-        "schema": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[\\x21-\\x7E]+$"
-        }
-      },
-      "IfMatch": {
-        "name": "If-Match",
-        "in": "header",
-        "required": true,
-        "description": "Quoted expected aggregate version used for optimistic concurrency.",
-        "schema": {
-          "type": "string",
-          "pattern": "^\"[1-9][0-9]*\"$"
-        }
-      },
-      "ContentId": {
-        "name": "contentId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/StableId"
-        }
-      },
-      "ProjectId": {
-        "name": "projectId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/StableId"
-        }
-      },
-      "TaxonomyId": {
-        "name": "taxonomyId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/StableId"
-        }
-      },
-      "ValueId": {
-        "name": "valueId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/StableId"
-        }
-      },
-      "MediaId": {
-        "name": "mediaId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/StableId"
-        }
-      },
-      "VersionId": {
-        "name": "versionId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/StableId"
-        }
-      },
-      "FeedbackId": {
-        "name": "feedbackId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/StableId"
-        }
-      }
-    },
     "schemas": {
+      "OwnerExportRecord": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PortfolioContentExportRecord"
+          },
+          {
+            "$ref": "#/components/schemas/TaxonomyExportRecord"
+          },
+          {
+            "$ref": "#/components/schemas/MediaMetadataExportRecord"
+          },
+          {
+            "$ref": "#/components/schemas/CvMetadataExportRecord"
+          },
+          {
+            "$ref": "#/components/schemas/ModerationHistoryExportRecord"
+          },
+          {
+            "$ref": "#/components/schemas/AnalyticsReportExportRecord"
+          },
+          {
+            "$ref": "#/components/schemas/PortfolioConfigurationExportRecord"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "scope",
+          "mapping": {
+            "portfolio-content": "#/components/schemas/PortfolioContentExportRecord",
+            "taxonomy": "#/components/schemas/TaxonomyExportRecord",
+            "media-metadata": "#/components/schemas/MediaMetadataExportRecord",
+            "cv-metadata": "#/components/schemas/CvMetadataExportRecord",
+            "moderation-history": "#/components/schemas/ModerationHistoryExportRecord",
+            "analytics-reports": "#/components/schemas/AnalyticsReportExportRecord",
+            "portfolio-configuration": "#/components/schemas/PortfolioConfigurationExportRecord"
+          }
+        }
+      },
       "ProfileUpdate": {
         "type": "object",
         "additionalProperties": false,
@@ -2566,7 +2937,8 @@
               "current-cv-activated",
               "feedback-approved",
               "feedback-rejected",
-              "feedback-suppressed"
+              "feedback-suppressed",
+              "analytics-goal-version-activated"
             ]
           }
         }
@@ -3919,6 +4291,1322 @@
             "minLength": 1,
             "maxLength": 500
           }
+        }
+      },
+      "AnalyticsEventAction": {
+        "type": "string",
+        "enum": [
+          "page-viewed",
+          "project-viewed",
+          "active-engagement-sampled",
+          "media-engaged",
+          "related-project-opened",
+          "contact-channel-opened",
+          "external-project-link-opened",
+          "testimonial-engaged",
+          "global-project-cta-opened"
+        ]
+      },
+      "AnalyticsGoalStep": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/AnalyticsEventAction"
+          },
+          "publicRouteIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/StableId"
+            }
+          },
+          "projectIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/StableId"
+            }
+          }
+        }
+      },
+      "AnalyticsGoalDefinition": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "steps"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "steps": {
+            "type": "array",
+            "description": "Ordered Public event actions that define the measured outcome without asserting causation.",
+            "minItems": 1,
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsGoalStep"
+            }
+          }
+        }
+      },
+      "AnalyticsGoalVersionView": {
+        "type": "object",
+        "description": "Immutable definition snapshot; activation is recorded separately and never edits this version.",
+        "additionalProperties": false,
+        "required": [
+          "versionId",
+          "versionNumber",
+          "definition",
+          "createdAt"
+        ],
+        "properties": {
+          "versionId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "versionNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "definition": {
+            "$ref": "#/components/schemas/AnalyticsGoalDefinition"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AnalyticsGoalActivationView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "versionId",
+          "activatedAt"
+        ],
+        "properties": {
+          "versionId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "activatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AnalyticsGoalAggregateView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "goalId",
+          "aggregateVersion",
+          "activeVersionId",
+          "versions",
+          "activationHistory"
+        ],
+        "properties": {
+          "goalId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "activeVersionId": {
+            "description": "The sole current-activity pointer; version snapshots carry no mutable state.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "versions": {
+            "type": "array",
+            "description": "Ordered version history retained so reports identify the definition used at measurement time.",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsGoalVersionView"
+            }
+          },
+          "activationHistory": {
+            "type": "array",
+            "description": "Ordered activation facts retained without mutating Analytics goal versions.",
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsGoalActivationView"
+            }
+          }
+        }
+      },
+      "CreateAnalyticsGoalVersionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "definition"
+        ],
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/AnalyticsGoalDefinition"
+          }
+        }
+      },
+      "CreateAnalyticsGoalVersionReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "goalId",
+          "versionId",
+          "aggregateVersion",
+          "outcome"
+        ],
+        "properties": {
+          "goalId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "versionId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "outcome": {
+            "type": "string",
+            "const": "analytics-goal-version-created"
+          }
+        }
+      },
+      "ActivateAnalyticsGoalVersionCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "versionId"
+        ],
+        "properties": {
+          "versionId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "OwnerExportScope": {
+        "type": "string",
+        "enum": [
+          "portfolio-content",
+          "taxonomy",
+          "media-metadata",
+          "cv-metadata",
+          "moderation-history",
+          "analytics-reports",
+          "portfolio-configuration"
+        ]
+      },
+      "RequestOwnerExportRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "includedScopes"
+        ],
+        "properties": {
+          "includedScopes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportScope"
+            }
+          }
+        }
+      },
+      "RequestOwnerExportReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exportId",
+          "outcome",
+          "state"
+        ],
+        "properties": {
+          "exportId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "outcome": {
+            "type": "string",
+            "const": "owner-export-requested"
+          },
+          "state": {
+            "type": "string",
+            "const": "requested"
+          }
+        }
+      },
+      "PublicEventDataCoverage": {
+        "type": "object",
+        "description": "Detailed Public event data is excluded; portable aggregate Analytics reports remain available.",
+        "additionalProperties": false,
+        "required": [
+          "mode"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "excluded"
+          }
+        }
+      },
+      "RequestedOwnerExportView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exportId",
+          "state",
+          "schemaVersion",
+          "requestedAt",
+          "includedScopes",
+          "publicEventDataCoverage",
+          "downloadAvailable"
+        ],
+        "properties": {
+          "exportId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "state": {
+            "type": "string",
+            "const": "requested"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "includedScopes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportScope"
+            }
+          },
+          "publicEventDataCoverage": {
+            "$ref": "#/components/schemas/PublicEventDataCoverage"
+          },
+          "downloadAvailable": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "BuildingOwnerExportView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exportId",
+          "state",
+          "schemaVersion",
+          "requestedAt",
+          "includedScopes",
+          "publicEventDataCoverage",
+          "downloadAvailable"
+        ],
+        "properties": {
+          "exportId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "state": {
+            "type": "string",
+            "const": "building"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "includedScopes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportScope"
+            }
+          },
+          "publicEventDataCoverage": {
+            "$ref": "#/components/schemas/PublicEventDataCoverage"
+          },
+          "downloadAvailable": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "OwnerExportEntryDescriptor": {
+        "type": "object",
+        "description": "Portable record-set entry identified independently of storage or database providers.",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "scope",
+          "mediaType",
+          "recordSchema",
+          "schemaPath",
+          "schemaVersion",
+          "digest",
+          "recordCount"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._/-]*$",
+            "description": "Relative path inside the export package."
+          },
+          "scope": {
+            "$ref": "#/components/schemas/OwnerExportScope"
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "application/x-ndjson",
+              "application/json"
+            ]
+          },
+          "recordSchema": {
+            "type": "string",
+            "format": "uri",
+            "enum": [
+              "urn:shipwithali:owner-export-schema:portfolio-content:1.0",
+              "urn:shipwithali:owner-export-schema:taxonomy:1.0",
+              "urn:shipwithali:owner-export-schema:media-metadata:1.0",
+              "urn:shipwithali:owner-export-schema:cv-metadata:1.0",
+              "urn:shipwithali:owner-export-schema:moderation-history:1.0",
+              "urn:shipwithali:owner-export-schema:analytics-reports:1.0",
+              "urn:shipwithali:owner-export-schema:portfolio-configuration:1.0"
+            ],
+            "description": "Stable identifier for the corresponding OwnerExportRecord variant."
+          },
+          "schemaPath": {
+            "type": "string",
+            "pattern": "^schemas/[a-z0-9-]+\\.schema\\.json$",
+            "description": "Packaged JSON Schema file for offline compatible importers."
+          },
+          "schemaVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "recordCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "OwnerExportPackageManifest": {
+        "type": "object",
+        "description": "Versioned manifest.json for the documented ShipWithAli Owner export package.",
+        "additionalProperties": false,
+        "required": [
+          "packageFormat",
+          "schemaVersion",
+          "createdAt",
+          "algorithm",
+          "digest",
+          "includedScopes",
+          "publicEventDataCoverage",
+          "entries"
+        ],
+        "properties": {
+          "packageFormat": {
+            "type": "string",
+            "const": "shipwithali-owner-export"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "algorithm": {
+            "type": "string",
+            "const": "sha-256"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "includedScopes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportScope"
+            }
+          },
+          "publicEventDataCoverage": {
+            "$ref": "#/components/schemas/PublicEventDataCoverage"
+          },
+          "entries": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Data entries whose packaged schemaPath files define the versioned OwnerExportRecord shapes.",
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportEntryDescriptor"
+            }
+          }
+        }
+      },
+      "ReadyOwnerExportView": {
+        "type": "object",
+        "description": "A completed versioned domain artifact, never a database dump or provider backup.",
+        "additionalProperties": false,
+        "required": [
+          "exportId",
+          "state",
+          "schemaVersion",
+          "requestedAt",
+          "completedAt",
+          "includedScopes",
+          "publicEventDataCoverage",
+          "integrityManifest",
+          "downloadAvailable"
+        ],
+        "properties": {
+          "exportId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "state": {
+            "type": "string",
+            "const": "ready"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "includedScopes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportScope"
+            }
+          },
+          "publicEventDataCoverage": {
+            "$ref": "#/components/schemas/PublicEventDataCoverage"
+          },
+          "integrityManifest": {
+            "$ref": "#/components/schemas/OwnerExportPackageManifest"
+          },
+          "downloadAvailable": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "FailedOwnerExportView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exportId",
+          "state",
+          "schemaVersion",
+          "requestedAt",
+          "failedAt",
+          "failureCode",
+          "includedScopes",
+          "publicEventDataCoverage",
+          "downloadAvailable"
+        ],
+        "properties": {
+          "exportId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "state": {
+            "type": "string",
+            "const": "failed"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "failedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "failureCode": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "includedScopes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportScope"
+            }
+          },
+          "publicEventDataCoverage": {
+            "$ref": "#/components/schemas/PublicEventDataCoverage"
+          },
+          "downloadAvailable": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "ExpiredOwnerExportView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exportId",
+          "state",
+          "schemaVersion",
+          "requestedAt",
+          "completedAt",
+          "expiredAt",
+          "includedScopes",
+          "publicEventDataCoverage",
+          "integrityManifest",
+          "downloadAvailable"
+        ],
+        "properties": {
+          "exportId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "state": {
+            "type": "string",
+            "const": "expired"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "includedScopes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportScope"
+            }
+          },
+          "publicEventDataCoverage": {
+            "$ref": "#/components/schemas/PublicEventDataCoverage"
+          },
+          "integrityManifest": {
+            "$ref": "#/components/schemas/OwnerExportPackageManifest"
+          },
+          "downloadAvailable": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "OwnerExportView": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RequestedOwnerExportView"
+          },
+          {
+            "$ref": "#/components/schemas/BuildingOwnerExportView"
+          },
+          {
+            "$ref": "#/components/schemas/ReadyOwnerExportView"
+          },
+          {
+            "$ref": "#/components/schemas/FailedOwnerExportView"
+          },
+          {
+            "$ref": "#/components/schemas/ExpiredOwnerExportView"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "state",
+          "mapping": {
+            "requested": "#/components/schemas/RequestedOwnerExportView",
+            "building": "#/components/schemas/BuildingOwnerExportView",
+            "ready": "#/components/schemas/ReadyOwnerExportView",
+            "failed": "#/components/schemas/FailedOwnerExportView",
+            "expired": "#/components/schemas/ExpiredOwnerExportView"
+          }
+        }
+      },
+      "PortableContentRevision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "locale",
+          "sequence",
+          "title",
+          "summary",
+          "body",
+          "reviewed",
+          "currentlyPublished"
+        ],
+        "properties": {
+          "revisionId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          },
+          "reviewed": {
+            "type": "boolean"
+          },
+          "currentlyPublished": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PortableEvidenceItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim",
+          "state",
+          "supportingArtifactIds"
+        ],
+        "properties": {
+          "claim": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unreviewed",
+              "supported",
+              "unsupported"
+            ]
+          },
+          "supportingArtifactIds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/StableId"
+            }
+          }
+        }
+      },
+      "PortfolioContentExportRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "contentId",
+          "contentType",
+          "lifecycle",
+          "revisions",
+          "publicRouteIdentity",
+          "routeHistory",
+          "relatedProjectIds",
+          "taxonomyValueIds",
+          "mediaAssetIds",
+          "evidenceItems"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "const": "portfolio-content"
+          },
+          "contentId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "project",
+              "achievement",
+              "testimonial"
+            ]
+          },
+          "lifecycle": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "hidden",
+              "archived"
+            ]
+          },
+          "revisions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/PortableContentRevision"
+            }
+          },
+          "publicRouteIdentity": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "routeHistory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicRouteRedirectView"
+            }
+          },
+          "relatedProjectIds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/StableId"
+            }
+          },
+          "taxonomyValueIds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/StableId"
+            }
+          },
+          "mediaAssetIds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/StableId"
+            }
+          },
+          "evidenceItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortableEvidenceItem"
+            }
+          }
+        }
+      },
+      "PortableTaxonomyRename": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "valueId",
+          "previousName",
+          "newName",
+          "renamedAt"
+        ],
+        "properties": {
+          "valueId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "previousName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "newName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "renamedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PortableTaxonomyAssignment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "projectId",
+          "valueId"
+        ],
+        "properties": {
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "valueId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "TaxonomyExportRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "taxonomyId",
+          "aggregateVersion",
+          "kind",
+          "values",
+          "renameHistory",
+          "assignments"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "const": "taxonomy"
+          },
+          "taxonomyId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "category",
+              "ai-ml-domain",
+              "technology",
+              "project-type"
+            ]
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaxonomyValueView"
+            }
+          },
+          "renameHistory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortableTaxonomyRename"
+            }
+          },
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortableTaxonomyAssignment"
+            }
+          }
+        }
+      },
+      "MediaMetadataExportRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "mediaId",
+          "kind",
+          "state",
+          "accessibilityMetadata",
+          "processingHistory",
+          "decisionHistory",
+          "publicationState",
+          "portableReference"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "const": "media-metadata"
+          },
+          "mediaId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MediaKind"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "upload-pending",
+              "processing",
+              "processed",
+              "accepted",
+              "rejected"
+            ]
+          },
+          "accessibilityMetadata": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MediaAccessibilityMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "processingHistory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaProcessingView"
+            }
+          },
+          "decisionHistory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaDecisionView"
+            }
+          },
+          "publicationState": {
+            "type": "string",
+            "enum": [
+              "private",
+              "accepted",
+              "published",
+              "withdrawn"
+            ]
+          },
+          "portableReference": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "Provider-neutral path or URI for media included with the export package."
+          }
+        }
+      },
+      "CvMetadataExportRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "aggregateVersion",
+          "currentVersionId",
+          "versions",
+          "activationHistory"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "const": "cv-metadata"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "currentVersionId": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CvVersionView"
+            }
+          },
+          "activationHistory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CvActivationView"
+            }
+          }
+        }
+      },
+      "ModerationHistoryExportRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "feedbackId",
+          "projectId",
+          "locale",
+          "aggregateVersion",
+          "state",
+          "authorName",
+          "paragraph",
+          "submittedAt",
+          "decisionHistory"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "const": "moderation-history"
+          },
+          "feedbackId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "suppressed"
+            ]
+          },
+          "authorName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "paragraph": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decisionHistory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModerationDecisionView"
+            }
+          }
+        }
+      },
+      "PortableAnalyticsAggregate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "goalVersionId",
+          "periodStart",
+          "periodEnd",
+          "sampleState",
+          "aggregateCount"
+        ],
+        "properties": {
+          "goalVersionId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sampleState": {
+            "type": "string",
+            "enum": [
+              "sufficient",
+              "low-sample",
+              "suppressed"
+            ]
+          },
+          "aggregateCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AnalyticsReportExportRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "goal",
+          "reports"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "const": "analytics-reports"
+          },
+          "goal": {
+            "$ref": "#/components/schemas/AnalyticsGoalAggregateView"
+          },
+          "reports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortableAnalyticsAggregate"
+            }
+          }
+        }
+      },
+      "PortfolioConfigurationExportRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "profile",
+          "contactChannels",
+          "projectCta"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "const": "portfolio-configuration"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileUpdate"
+          },
+          "contactChannels": {
+            "$ref": "#/components/schemas/ContactChannelsUpdate"
+          },
+          "projectCta": {
+            "$ref": "#/components/schemas/ProjectCtaUpdate"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "OwnerSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sw_owner_session",
+        "description": "A server-verified Supabase session originating from GitHub OAuth. The authenticated actor must also match the configured Owner allowlist; authentication alone never grants Owner authorization."
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[\\x21-\\x7E]+$"
+        }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "description": "Quoted expected aggregate version used for optimistic concurrency.",
+        "schema": {
+          "type": "string",
+          "pattern": "^\"[1-9][0-9]*\"$"
+        }
+      },
+      "ContentId": {
+        "name": "contentId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "ProjectId": {
+        "name": "projectId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "TaxonomyId": {
+        "name": "taxonomyId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "ValueId": {
+        "name": "valueId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "MediaId": {
+        "name": "mediaId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "VersionId": {
+        "name": "versionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "FeedbackId": {
+        "name": "feedbackId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "GoalId": {
+        "name": "goalId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
+        }
+      },
+      "ExportId": {
+        "name": "exportId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/StableId"
         }
       }
     },

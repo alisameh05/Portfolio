@@ -9,8 +9,9 @@ info:
     Authenticated, command-oriented Owner transport contract. The implemented
     slices cover Portfolio Configuration, content Publication, Project intent,
     controlled Taxonomy evolution, private Media acceptance, CV Portfolio
-    history, and Feedback Moderation without exposing raw tables, provider
-    objects, or runtime code.
+    history, Feedback Moderation, immutable Analytics goal versions, and
+    versioned Owner exports without exposing raw tables, provider objects, or
+    runtime code.
 servers:
   - url: /
     description: Same-origin ShipWithAli deployment
@@ -31,6 +32,10 @@ tags:
     description: English CV registration, acceptance, explicit Current CV activation, and history.
   - name: Interaction and Moderation
     description: Feedback approval, rejection, later suppression, and preserved decision history.
+  - name: Measurement
+    description: Immutable Analytics goal versions, explicit activation, and retained history.
+  - name: Portability
+    description: Versioned Owner export requests, integrity inspection, and provider-neutral download.
 paths:
   /api/owner/v1/configuration/profile:
     $ref: ./paths/configuration.yaml#/profile
@@ -98,7 +103,22 @@ paths:
     $ref: ./paths/moderation.yaml#/rejectFeedback
   /api/owner/v1/feedback/{feedbackId}/commands/suppress:
     $ref: ./paths/moderation.yaml#/suppressFeedback
+  /api/owner/v1/analytics-goals/{goalId}:
+    $ref: ./paths/measurement.yaml#/analyticsGoal
+  /api/owner/v1/analytics-goals/{goalId}/versions:
+    $ref: ./paths/measurement.yaml#/createVersion
+  /api/owner/v1/analytics-goals/{goalId}/commands/activate-version:
+    $ref: ./paths/measurement.yaml#/activateVersion
+  /api/owner/v1/exports:
+    $ref: ./paths/portability.yaml#/exports
+  /api/owner/v1/exports/{exportId}:
+    $ref: ./paths/portability.yaml#/export
+  /api/owner/v1/exports/{exportId}/download:
+    $ref: ./paths/portability.yaml#/downloadExport
 components:
+  schemas:
+    OwnerExportRecord:
+      $ref: ./components/portability.yaml#/schemas/OwnerExportRecord
   securitySchemes:
     OwnerSession:
       type: apiKey

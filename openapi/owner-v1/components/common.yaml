@@ -79,6 +79,7 @@ schemas:
           - feedback-approved
           - feedback-rejected
           - feedback-suppressed
+          - analytics-goal-version-activated
 
 parameters:
   IdempotencyKey:
@@ -133,6 +134,16 @@ parameters:
     schema: { $ref: '#/schemas/StableId' }
   FeedbackId:
     name: feedbackId
+    in: path
+    required: true
+    schema: { $ref: '#/schemas/StableId' }
+  GoalId:
+    name: goalId
+    in: path
+    required: true
+    schema: { $ref: '#/schemas/StableId' }
+  ExportId:
+    name: exportId
     in: path
     required: true
     schema: { $ref: '#/schemas/StableId' }

@@ -39,7 +39,8 @@ export const zCommandReceipt = z.strictObject({
         'current-cv-activated',
         'feedback-approved',
         'feedback-rejected',
-        'feedback-suppressed'
+        'feedback-suppressed',
+        'analytics-goal-version-activated'
     ])
 });
 
@@ -418,6 +419,353 @@ export const zModerationDecisionCommand = z.strictObject({
     reason: z.string().min(1).max(500)
 });
 
+export const zAnalyticsEventAction = z.enum([
+    'page-viewed',
+    'project-viewed',
+    'active-engagement-sampled',
+    'media-engaged',
+    'related-project-opened',
+    'contact-channel-opened',
+    'external-project-link-opened',
+    'testimonial-engaged',
+    'global-project-cta-opened'
+]);
+
+export const zAnalyticsGoalStep = z.strictObject({
+    action: zAnalyticsEventAction,
+    publicRouteIds: z.array(zStableId).max(100).optional(),
+    projectIds: z.array(zStableId).max(100).optional()
+});
+
+export const zAnalyticsGoalDefinition = z.strictObject({
+    name: z.string().min(1).max(120),
+    steps: z.array(zAnalyticsGoalStep).min(1).max(10)
+});
+
+/**
+ * Immutable definition snapshot; activation is recorded separately and never edits this version.
+ */
+export const zAnalyticsGoalVersionView = z.strictObject({
+    versionId: zStableId,
+    versionNumber: z.number().int().gte(1),
+    definition: zAnalyticsGoalDefinition,
+    createdAt: z.string().datetime()
+});
+
+export const zAnalyticsGoalActivationView = z.strictObject({
+    versionId: zStableId,
+    activatedAt: z.string().datetime()
+});
+
+export const zAnalyticsGoalAggregateView = z.strictObject({
+    goalId: zStableId,
+    aggregateVersion: z.number().int().gte(1),
+    activeVersionId: zStableId.nullable(),
+    versions: z.array(zAnalyticsGoalVersionView).min(1),
+    activationHistory: z.array(zAnalyticsGoalActivationView)
+});
+
+export const zCreateAnalyticsGoalVersionRequest = z.strictObject({
+    definition: zAnalyticsGoalDefinition
+});
+
+export const zCreateAnalyticsGoalVersionReceipt = z.strictObject({
+    goalId: zStableId,
+    versionId: zStableId,
+    aggregateVersion: z.number().int().gte(1),
+    outcome: z.literal('analytics-goal-version-created')
+});
+
+export const zActivateAnalyticsGoalVersionCommand = z.strictObject({
+    versionId: zStableId
+});
+
+export const zOwnerExportScope = z.enum([
+    'portfolio-content',
+    'taxonomy',
+    'media-metadata',
+    'cv-metadata',
+    'moderation-history',
+    'analytics-reports',
+    'portfolio-configuration'
+]);
+
+export const zRequestOwnerExportRequest = z.strictObject({
+    includedScopes: z.array(zOwnerExportScope).min(1)
+});
+
+export const zRequestOwnerExportReceipt = z.strictObject({
+    exportId: zStableId,
+    outcome: z.literal('owner-export-requested'),
+    state: z.literal('requested')
+});
+
+/**
+ * Detailed Public event data is excluded; portable aggregate Analytics reports remain available.
+ */
+export const zPublicEventDataCoverage = z.strictObject({
+    mode: z.literal('excluded')
+});
+
+export const zRequestedOwnerExportView = z.strictObject({
+    exportId: zStableId,
+    state: z.literal('requested'),
+    schemaVersion: z.string().regex(/^[1-9][0-9]*\.[0-9]+$/),
+    requestedAt: z.string().datetime(),
+    includedScopes: z.array(zOwnerExportScope).min(1),
+    publicEventDataCoverage: zPublicEventDataCoverage,
+    downloadAvailable: z.literal(false)
+});
+
+export const zBuildingOwnerExportView = z.strictObject({
+    exportId: zStableId,
+    state: z.literal('building'),
+    schemaVersion: z.string().regex(/^[1-9][0-9]*\.[0-9]+$/),
+    requestedAt: z.string().datetime(),
+    includedScopes: z.array(zOwnerExportScope).min(1),
+    publicEventDataCoverage: zPublicEventDataCoverage,
+    downloadAvailable: z.literal(false)
+});
+
+/**
+ * Portable record-set entry identified independently of storage or database providers.
+ */
+export const zOwnerExportEntryDescriptor = z.strictObject({
+    path: z.string().regex(/^[a-z0-9][a-z0-9._\/-]*$/),
+    scope: zOwnerExportScope,
+    mediaType: z.enum(['application/x-ndjson', 'application/json']),
+    recordSchema: z.enum([
+        'urn:shipwithali:owner-export-schema:portfolio-content:1.0',
+        'urn:shipwithali:owner-export-schema:taxonomy:1.0',
+        'urn:shipwithali:owner-export-schema:media-metadata:1.0',
+        'urn:shipwithali:owner-export-schema:cv-metadata:1.0',
+        'urn:shipwithali:owner-export-schema:moderation-history:1.0',
+        'urn:shipwithali:owner-export-schema:analytics-reports:1.0',
+        'urn:shipwithali:owner-export-schema:portfolio-configuration:1.0'
+    ]),
+    schemaPath: z.string().regex(/^schemas\/[a-z0-9-]+\.schema\.json$/),
+    schemaVersion: z.string().regex(/^[1-9][0-9]*\.[0-9]+$/),
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    recordCount: z.number().int().gte(0)
+});
+
+/**
+ * Versioned manifest.json for the documented ShipWithAli Owner export package.
+ */
+export const zOwnerExportPackageManifest = z.strictObject({
+    packageFormat: z.literal('shipwithali-owner-export'),
+    schemaVersion: z.string().regex(/^[1-9][0-9]*\.[0-9]+$/),
+    createdAt: z.string().datetime(),
+    algorithm: z.literal('sha-256'),
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    includedScopes: z.array(zOwnerExportScope).min(1),
+    publicEventDataCoverage: zPublicEventDataCoverage,
+    entries: z.array(zOwnerExportEntryDescriptor).min(1)
+});
+
+/**
+ * A completed versioned domain artifact, never a database dump or provider backup.
+ */
+export const zReadyOwnerExportView = z.strictObject({
+    exportId: zStableId,
+    state: z.literal('ready'),
+    schemaVersion: z.string().regex(/^[1-9][0-9]*\.[0-9]+$/),
+    requestedAt: z.string().datetime(),
+    completedAt: z.string().datetime(),
+    includedScopes: z.array(zOwnerExportScope).min(1),
+    publicEventDataCoverage: zPublicEventDataCoverage,
+    integrityManifest: zOwnerExportPackageManifest,
+    downloadAvailable: z.literal(true)
+});
+
+export const zFailedOwnerExportView = z.strictObject({
+    exportId: zStableId,
+    state: z.literal('failed'),
+    schemaVersion: z.string().regex(/^[1-9][0-9]*\.[0-9]+$/),
+    requestedAt: z.string().datetime(),
+    failedAt: z.string().datetime(),
+    failureCode: z.string().regex(/^[a-z0-9_]+$/),
+    includedScopes: z.array(zOwnerExportScope).min(1),
+    publicEventDataCoverage: zPublicEventDataCoverage,
+    downloadAvailable: z.literal(false)
+});
+
+export const zExpiredOwnerExportView = z.strictObject({
+    exportId: zStableId,
+    state: z.literal('expired'),
+    schemaVersion: z.string().regex(/^[1-9][0-9]*\.[0-9]+$/),
+    requestedAt: z.string().datetime(),
+    completedAt: z.string().datetime(),
+    expiredAt: z.string().datetime(),
+    includedScopes: z.array(zOwnerExportScope).min(1),
+    publicEventDataCoverage: zPublicEventDataCoverage,
+    integrityManifest: zOwnerExportPackageManifest,
+    downloadAvailable: z.literal(false)
+});
+
+export const zOwnerExportView = z.discriminatedUnion('state', [
+    zRequestedOwnerExportView,
+    zBuildingOwnerExportView,
+    zReadyOwnerExportView,
+    zFailedOwnerExportView,
+    zExpiredOwnerExportView
+]);
+
+export const zPortableContentRevision = z.strictObject({
+    revisionId: zStableId,
+    locale: zLocale,
+    sequence: z.number().int().gte(1),
+    title: z.string().min(1).max(160),
+    summary: z.string().min(1).max(500),
+    body: z.string().min(1).max(50000),
+    reviewed: z.boolean(),
+    currentlyPublished: z.boolean()
+});
+
+export const zPortableEvidenceItem = z.strictObject({
+    claim: z.string().min(1).max(1000),
+    state: z.enum([
+        'unreviewed',
+        'supported',
+        'unsupported'
+    ]),
+    supportingArtifactIds: z.array(zStableId)
+});
+
+export const zPortfolioContentExportRecord = z.strictObject({
+    scope: z.literal('portfolio-content'),
+    contentId: zStableId,
+    contentType: z.enum([
+        'project',
+        'achievement',
+        'testimonial'
+    ]),
+    lifecycle: z.enum([
+        'draft',
+        'published',
+        'hidden',
+        'archived'
+    ]),
+    revisions: z.array(zPortableContentRevision).min(1),
+    publicRouteIdentity: zStableId.nullable(),
+    routeHistory: z.array(zPublicRouteRedirectView),
+    relatedProjectIds: z.array(zStableId),
+    taxonomyValueIds: z.array(zStableId),
+    mediaAssetIds: z.array(zStableId),
+    evidenceItems: z.array(zPortableEvidenceItem)
+});
+
+export const zPortableTaxonomyRename = z.strictObject({
+    valueId: zStableId,
+    previousName: z.string().min(1).max(100),
+    newName: z.string().min(1).max(100),
+    renamedAt: z.string().datetime()
+});
+
+export const zPortableTaxonomyAssignment = z.strictObject({
+    projectId: zStableId,
+    valueId: zStableId
+});
+
+export const zTaxonomyExportRecord = z.strictObject({
+    scope: z.literal('taxonomy'),
+    taxonomyId: zStableId,
+    aggregateVersion: z.number().int().gte(1),
+    kind: z.enum([
+        'category',
+        'ai-ml-domain',
+        'technology',
+        'project-type'
+    ]),
+    values: z.array(zTaxonomyValueView),
+    renameHistory: z.array(zPortableTaxonomyRename),
+    assignments: z.array(zPortableTaxonomyAssignment)
+});
+
+export const zMediaMetadataExportRecord = z.strictObject({
+    scope: z.literal('media-metadata'),
+    mediaId: zStableId,
+    kind: zMediaKind,
+    state: z.enum([
+        'upload-pending',
+        'processing',
+        'processed',
+        'accepted',
+        'rejected'
+    ]),
+    accessibilityMetadata: zMediaAccessibilityMetadata.nullable(),
+    processingHistory: z.array(zMediaProcessingView),
+    decisionHistory: z.array(zMediaDecisionView),
+    publicationState: z.enum([
+        'private',
+        'accepted',
+        'published',
+        'withdrawn'
+    ]),
+    portableReference: z.string()
+});
+
+export const zCvMetadataExportRecord = z.strictObject({
+    scope: z.literal('cv-metadata'),
+    aggregateVersion: z.number().int().gte(1),
+    currentVersionId: zStableId.nullable(),
+    versions: z.array(zCvVersionView),
+    activationHistory: z.array(zCvActivationView)
+});
+
+export const zModerationHistoryExportRecord = z.strictObject({
+    scope: z.literal('moderation-history'),
+    feedbackId: zStableId,
+    projectId: zStableId,
+    locale: zLocale,
+    aggregateVersion: z.number().int().gte(1),
+    state: z.enum([
+        'pending',
+        'approved',
+        'rejected',
+        'suppressed'
+    ]),
+    authorName: z.string().min(1).max(120),
+    paragraph: z.string().min(1).max(5000),
+    submittedAt: z.string().datetime(),
+    decisionHistory: z.array(zModerationDecisionView)
+});
+
+export const zPortableAnalyticsAggregate = z.strictObject({
+    goalVersionId: zStableId,
+    periodStart: z.string().datetime(),
+    periodEnd: z.string().datetime(),
+    sampleState: z.enum([
+        'sufficient',
+        'low-sample',
+        'suppressed'
+    ]),
+    aggregateCount: z.number().int().gte(0)
+});
+
+export const zAnalyticsReportExportRecord = z.strictObject({
+    scope: z.literal('analytics-reports'),
+    goal: zAnalyticsGoalAggregateView,
+    reports: z.array(zPortableAnalyticsAggregate)
+});
+
+export const zPortfolioConfigurationExportRecord = z.strictObject({
+    scope: z.literal('portfolio-configuration'),
+    profile: zProfileUpdate,
+    contactChannels: zContactChannelsUpdate,
+    projectCta: zProjectCtaUpdate
+});
+
+export const zOwnerExportRecord = z.discriminatedUnion('scope', [
+    zPortfolioContentExportRecord,
+    zTaxonomyExportRecord,
+    zMediaMetadataExportRecord,
+    zCvMetadataExportRecord,
+    zModerationHistoryExportRecord,
+    zAnalyticsReportExportRecord,
+    zPortfolioConfigurationExportRecord
+]);
+
 /**
  * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
  */
@@ -441,6 +789,10 @@ export const zMediaId = zStableId;
 export const zVersionId = zStableId;
 
 export const zFeedbackId = zStableId;
+
+export const zGoalId = zStableId;
+
+export const zExportId = zStableId;
 
 export const zUpdateOwnerProfileConfigurationBody = zProfileUpdate;
 
@@ -898,3 +1250,73 @@ export const zSuppressOwnerFeedbackPath = z.strictObject({
  * Feedback suppressed with history retained.
  */
 export const zSuppressOwnerFeedbackResponse = zCommandReceipt;
+
+export const zGetOwnerAnalyticsGoalPath = z.strictObject({
+    goalId: zStableId
+});
+
+/**
+ * Analytics goal aggregate view.
+ */
+export const zGetOwnerAnalyticsGoalResponse = zAnalyticsGoalAggregateView;
+
+export const zCreateOwnerAnalyticsGoalVersionBody = zCreateAnalyticsGoalVersionRequest;
+
+export const zCreateOwnerAnalyticsGoalVersionHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zCreateOwnerAnalyticsGoalVersionPath = z.strictObject({
+    goalId: zStableId
+});
+
+/**
+ * Immutable Analytics goal version created but not activated.
+ */
+export const zCreateOwnerAnalyticsGoalVersionResponse = zCreateAnalyticsGoalVersionReceipt;
+
+export const zActivateOwnerAnalyticsGoalVersionBody = zActivateAnalyticsGoalVersionCommand;
+
+export const zActivateOwnerAnalyticsGoalVersionHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zActivateOwnerAnalyticsGoalVersionPath = z.strictObject({
+    goalId: zStableId
+});
+
+/**
+ * Analytics goal version activated.
+ */
+export const zActivateOwnerAnalyticsGoalVersionResponse = zCommandReceipt;
+
+export const zRequestOwnerExportBody = zRequestOwnerExportRequest;
+
+export const zRequestOwnerExportHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/)
+});
+
+/**
+ * Owner export request accepted for asynchronous preparation.
+ */
+export const zRequestOwnerExportResponse = zRequestOwnerExportReceipt;
+
+export const zGetOwnerExportPath = z.strictObject({
+    exportId: zStableId
+});
+
+/**
+ * Owner export domain-artifact view.
+ */
+export const zGetOwnerExportResponse = zOwnerExportView;
+
+export const zDownloadOwnerExportPath = z.strictObject({
+    exportId: zStableId
+});
+
+/**
+ * Versioned Owner export package.
+ */
+export const zDownloadOwnerExportResponse = z.string();
