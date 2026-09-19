@@ -1,9 +1,19 @@
-import { describe, it, expect } from "vitest";
-import { execSync } from "node:child_process";
+import { describe, it, expect, beforeAll } from "vitest";
+import { execSync, execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = process.cwd();
+
+beforeAll(() => {
+  // Deterministic seam: ensure dependency-cruiser parses TS 6.0.x before
+  // cruising. Without this, `npx depcruise <dir>` reports 0 modules and
+  // invalid fixtures pass vacuously. Shared with scripts/architecture-check.mjs.
+  execFileSync(process.execPath, ["scripts/ensure-depcruise-support.mjs"], {
+    cwd: ROOT,
+    stdio: "pipe",
+  });
+});
 
 const NINE_MODULES = [
   "portfolio-configuration",

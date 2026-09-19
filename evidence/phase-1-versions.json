@@ -1,0 +1,32 @@
+{
+  "ticket": 12,
+  "parent": 1,
+  "pinned": {
+    "node": "24.21.0",
+    "npm": "11.19.0",
+    "packageManager": "npm@11.19.0",
+    "typescript": "6.0.3",
+    "@redocly/cli": "1.34.3",
+    "@hey-api/openapi-ts": "0.99.0",
+    "vitest": "3.2.4",
+    "dependency-cruiser": "16.10.3",
+    "zod": "3.25.51",
+    "valibot": "1.1.0",
+    "uuidv7": "1.0.2"
+  },
+  "effective": {
+    "node": "v22.23.2",
+    "npm": "11.19.0",
+    "typescript": "6.0.3",
+    "@redocly/cli": "1.34.3",
+    "@hey-api/openapi-ts": "0.99.0",
+    "vitest": "3.2.4",
+    "dependency-cruiser": "16.10.3",
+    "zod": "3.25.51",
+    "valibot": "1.1.0",
+    "uuidv7": "1.0.2"
+  },
+  "warnings": [
+    "runtime v22.23.2 differs from pinned Node 24.21.0; CI uses 24.21.0"
+  ]
+}
