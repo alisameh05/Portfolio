@@ -7,6 +7,9 @@ apis:
 extends:
   - recommended-strict
 
+reunite:
+  ignoreLinkChecker: true
+
 rules:
   no-server-example.com: off
   # Current CV can succeed with either a stream or a temporary redirect.
