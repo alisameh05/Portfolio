@@ -33,6 +33,7 @@ function runNode(script, arguments_, environment = {}) {
 }
 
 console.log(`Building public-v1 artifacts in ${outputRoot}`);
+runNode(redoclyCli, ["lint", "public@v1"]);
 runNode(redoclyCli, ["bundle", "public@v1", "--output", publicBundle, "--ext", "json"]);
 runNode(openapiTsCli, [], {
   CONTRACT_PUBLIC_INPUT: publicBundle,
@@ -40,6 +41,7 @@ runNode(openapiTsCli, [], {
 });
 
 console.log(`Building owner-v1 artifacts in ${outputRoot}`);
+runNode(redoclyCli, ["lint", "owner@v1"]);
 runNode(redoclyCli, ["bundle", "owner@v1", "--output", ownerBundle, "--ext", "json"]);
 runNode(openapiTsCli, ["--file", "openapi-owner-ts.config.ts"], {
   CONTRACT_OWNER_INPUT: ownerBundle,
