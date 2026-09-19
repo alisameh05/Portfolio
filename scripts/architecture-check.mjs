@@ -9,31 +9,16 @@
  */
 
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ensureDependencyCruiserTsSupport } from "./ensure-depcruise-support.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\\/]$/, "");
 
-// Ensure dependency-cruiser supports TypeScript 6.0.x in this environment
-function ensureDependencyCruiserTsSupport() {
-  const metaPath = join(ROOT, "node_modules", "dependency-cruiser", "src", "meta.cjs");
-  if (existsSync(metaPath)) {
-    try {
-      let content = readFileSync(metaPath, "utf8");
-      if (content.includes('typescript: ">=2.0.0 <6.0.0"')) {
-        content = content.replace(
-          'typescript: ">=2.0.0 <6.0.0"',
-          'typescript: ">=2.0.0 <=6.0.3"',
-        );
-        writeFileSync(metaPath, content, "utf8");
-      }
-    } catch {
-      // Ignore if unwriteable
-    }
-  }
-}
-ensureDependencyCruiserTsSupport();
+// Shared deterministic seam: dependency-cruiser 16.10.3 must parse TS 6.0.x.
+// See scripts/ensure-depcruise-support.mjs (also used by arch tests + gate).
+ensureDependencyCruiserTsSupport(ROOT);
 
 function run(label, cmd, opts = {}) {
   console.log(`\n── ${label} ──`);

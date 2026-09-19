@@ -1,0 +1,36 @@
+
+── Architecture check: src/ ──
+[32m✔[39m no dependency violations found (89 modules, 158 dependencies cruised)
+✓ Architecture check passed: no forbidden dependencies in src/
+
+── Validating Invalid Architecture Fixtures ──
+
+── Testing fixture rejection: Provider leakage fixture ──
+✓ Provider leakage fixture correctly rejected with rule: no-provider-in-domain
+
+── Testing fixture rejection: Generated-code leakage fixture ──
+✓ Generated-code leakage fixture correctly rejected with rule: no-generated-code-leakage
+
+── Testing fixture rejection: Deep cross-module import fixture ──
+✓ Deep cross-module import fixture correctly rejected with rule: no-deep-cross-module-import
+
+── Testing fixture rejection: Cycle fixture ──
+✓ Cycle fixture correctly rejected with rule: no-cycles
+
+── Validating Module Skeletons and Invariants ──
+✓ All nine module skeletons exist with required subdirectories and index.ts barrels
+✓ Module skeletons contain no persistence, provider calls, Route Handlers, UI, or Lab entry implementation
+
+═════════════════════════════════════════════════════════════════
+             ARCHITECTURE CONFORMANCE REPORT                    
+═════════════════════════════════════════════════════════════════
+[✓ PASS] Clean dependency graph for src/        : 82 modules cruised, 0 violations
+[✓ PASS] Provider leakage fixture               : Correctly rejected with rule no-provider-in-domain
+[✓ PASS] Generated-code leakage fixture         : Correctly rejected with rule no-generated-code-leakage
+[✓ PASS] Deep cross-module import fixture       : Correctly rejected with rule no-deep-cross-module-import
+[✓ PASS] Cycle fixture                          : Correctly rejected with rule no-cycles
+[✓ PASS] Nine module skeletons structure        : All 9 modules have domain/, application/, ports/, adapters/, and index.ts
+[✓ PASS] Module skeleton purity                 : No persistence, provider calls, Route Handlers, UI, or Lab entry implementation
+═════════════════════════════════════════════════════════════════
+
+✓ architecture-check: ALL CHECKS PASSED
