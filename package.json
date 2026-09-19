@@ -14,11 +14,15 @@
     "contract:bundle": "npm run contract:bundle:public && npm run contract:bundle:owner",
     "contract:bundle:public": "redocly bundle public@v1 --output openapi/generated/public-v1.json --ext json",
     "contract:bundle:owner": "redocly bundle owner@v1 --output openapi/generated/owner-v1.json --ext json",
-    "contract:generate": "npm run contract:lint && npm run contract:bundle && openapi-ts && openapi-ts --file openapi-owner-ts.config.ts && node scripts/strictify-generated-zod.mjs",
+    "contract:generate": "npm run contract:lint && node scripts/generate-contract-artifacts.mjs",
+    "contract:drift": "node scripts/check-contract-drift.mjs",
+    "contract:compatibility": "node scripts/check-contract-compatibility.mjs",
+    "contract:verify": "npm run contract:generate && npm run contract:drift && npm run contract:compatibility",
+    "contract:docs": "node scripts/build-contract-reference.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:arch": "node scripts/architecture-check.mjs",
-    "test:contracts": "npm run contract:generate && vitest run tests/contracts",
+    "test:contracts": "npm run contract:verify && vitest run tests/contracts",
     "phase1:gate": "node scripts/phase1-gate.mjs"
   },
   "devDependencies": {
