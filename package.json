@@ -19,6 +19,7 @@
     "contract:compatibility": "node scripts/check-contract-compatibility.mjs",
     "contract:verify": "npm run contract:generate && npm run contract:drift && npm run contract:compatibility",
     "contract:docs": "node scripts/build-contract-reference.mjs",
+    "route:inventory": "node scripts/check-route-inventory.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:arch": "node scripts/architecture-check.mjs",
