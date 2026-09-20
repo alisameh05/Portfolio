@@ -96,6 +96,12 @@
     "/api/v1/projects/{projectId}/rating",
     "/api/v1/projects/{projectId}/reaction"
   ],
+  "operationalRoutes": [
+    {
+      "file": "src/app/livez/route.ts",
+      "reason": "operational-probe"
+    }
+  ],
   "runtimeRoutes": [],
   "declaredContractReferences": [],
   "undeclaredHttpSurface": [],
@@ -124,7 +130,12 @@
     {
       "name": "no-undeclared-runtime-http-surface",
       "passed": true,
-      "detail": "allowed OpenAPI paths only; no implemented runtime routes"
+      "detail": "allowed OpenAPI paths only; 1 operational probe(s), 0 product runtime routes"
+    },
+    {
+      "name": "operational-probes-allowlisted",
+      "passed": true,
+      "detail": "1 operational probe(s) within allowlist"
     },
     {
       "name": "no-forbidden-source-surface",
