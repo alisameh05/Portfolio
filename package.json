@@ -26,10 +26,16 @@
     "test:contracts": "npm run contract:verify && vitest run tests/contracts",
     "phase1:gate": "node scripts/phase1-gate.mjs"
   },
+  "dependencies": {
+    "next": "15.5.25",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
   "devDependencies": {
-    "@redocly/cli": "1.34.3",
-    "dependency-cruiser": "16.10.3",
     "@hey-api/openapi-ts": "0.99.0",
+    "@redocly/cli": "1.34.3",
+    "@types/react": "19.3.0",
+    "dependency-cruiser": "16.10.3",
     "typescript": "6.0.3",
     "uuidv7": "1.0.2",
     "valibot": "1.1.0",

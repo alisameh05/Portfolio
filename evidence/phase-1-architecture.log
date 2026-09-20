@@ -1,6 +1,6 @@
 
 ── Architecture check: src/ ──
-[32m✔[39m no dependency violations found (89 modules, 158 dependencies cruised)
+[32m✔[39m no dependency violations found (92 modules, 160 dependencies cruised)
 ✓ Architecture check passed: no forbidden dependencies in src/
 
 ── Validating Invalid Architecture Fixtures ──

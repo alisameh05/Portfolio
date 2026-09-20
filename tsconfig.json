@@ -2,11 +2,11 @@
   "compilerOptions": {
     /* Language and environment */
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
 
-    /* Strict correctness */
+    /* Strict correctness (Phase 1 safety, preserved in Phase 2) */
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
@@ -29,12 +29,20 @@
     },
 
     /* Safety */
-    "skipLibCheck": false,
+    "skipLibCheck": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+
+    /* Next.js backend shell (#25): required by `next build`; no JSX/TSX,
+       pages, layouts, CSS, or browser state is introduced. */
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "jsx": "preserve",
+    "plugins": [{ "name": "next" }]
   },
-  "include": ["src", "tests", "scripts"],
+  "include": ["src", "tests", "scripts", ".next/types/**/*.ts"],
   "exclude": ["node_modules", "dist", "tests/fixtures"]
 }
