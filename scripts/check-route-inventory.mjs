@@ -185,10 +185,13 @@ export function buildInventory() {
   const undeclaredHttpSurface = [];
   const forbiddenFindings = [];
 
-  // Phase 2 #25: operational probes outside both OpenAPI product surfaces.
-  // /livez is the only allowed runtime route in this ticket (/readyz arrives
-  // in #27; product adapters arrive later). Product operation counts stay exact.
-  const ALLOWED_OPERATIONAL_ROUTE_FILES = new Set(["src/app/livez/route.ts"]);
+  // Phase 2 #27: operational probes outside both OpenAPI product surfaces.
+  // /livez and /readyz are the only allowed runtime routes; product adapters
+  // arrive later. Product operation counts stay exact.
+  const ALLOWED_OPERATIONAL_ROUTE_FILES = new Set([
+    "src/app/livez/route.ts",
+    "src/app/readyz/route.ts",
+  ]);
 
   const allowedContractPaths = new Set([
     ...Object.keys(publicBundle.paths ?? {}),

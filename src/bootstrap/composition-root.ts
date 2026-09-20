@@ -12,6 +12,10 @@
  */
 
 import {
+  getLifecycleCoordinator,
+  resetLifecycleForTests,
+} from "../runtime/lifecycle.js";
+import {
   createRuntimeConfig,
   type RuntimeConfig,
   type RuntimeConfigEnv,
@@ -22,9 +26,15 @@ export type { RuntimeConfig } from "./configuration.js";
 let current: RuntimeConfig | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
-  const config = createRuntimeConfig(env);
-  current = config;
-  return config;
+  try {
+    const config = createRuntimeConfig(env);
+    current = config;
+    getLifecycleCoordinator().markReady();
+    return config;
+  } catch (error) {
+    getLifecycleCoordinator().markFailed();
+    throw error;
+  }
 }
 
 /** Default bootstrap seam: forwards the ambient environment exactly once. */
@@ -46,4 +56,5 @@ export function isRuntimeInitialized(): boolean {
 /** Test-only seam to isolate focused suites. */
 export function resetRuntimeForTests(): void {
   current = undefined;
+  resetLifecycleForTests();
 }
