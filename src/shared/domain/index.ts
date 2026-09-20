@@ -10,7 +10,8 @@
  *   - IdempotencyKey type, parseIdempotencyKey, constants
  *   - ActorContext union (OwnerActor, VisitorActor, SystemActor), guards
  *   - Result<T, E>, ok(), err(), isOk(), isErr()
- *   - Rejection union (all 8 kinds), individual types, rejectionToHttpStatus
+ *   - Rejection union (all 8 kinds) and individual types (transport-neutral;
+ *     HTTP mapping lives in the runtime HTTP boundary)
  *   - DomainEvent<TType, TPayload>, WithExpectedVersion, isDomainEvent
  *
  * WHAT IS NOT EXPORTED:
@@ -60,7 +61,6 @@ export type {
   RateLimitedRejection,
   TemporarilyUnavailableRejection,
 } from "./rejection.js";
-export { rejectionToHttpStatus } from "./rejection.js";
 
 // Domain events
 export type {
