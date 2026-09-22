@@ -1,0 +1,27 @@
+
+ RUN  v3.2.4 D:/Personal/Personal_Projects/Portfolio
+
+ ✓ tests/runtime/owner-media.test.ts (68 tests) 45ms
+ ✓ tests/runtime/owner-publication.test.ts (36 tests) 16ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 26ms
+ ✓ tests/runtime/owner-configuration.test.ts (31 tests) 13ms
+ ✓ tests/runtime/owner-cv.test.ts (55 tests) 19ms
+ ✓ tests/runtime/owner-project.test.ts (35 tests) 15ms
+ ✓ tests/runtime/owner-moderation.test.ts (32 tests) 16ms
+ ✓ tests/runtime/owner-analytics.test.ts (32 tests) 13ms
+ ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 12ms
+ ✓ tests/runtime/owner-export.test.ts (35 tests) 11ms
+ ✓ tests/runtime/rating.test.ts (21 tests) 10ms
+ ✓ tests/runtime/reaction.test.ts (19 tests) 9ms
+ ✓ tests/runtime/public-event.test.ts (19 tests) 9ms
+ ✓ tests/runtime/feedback.test.ts (20 tests) 8ms
+ ✓ tests/runtime/current-cv.test.ts (13 tests) 8ms
+ ✓ tests/runtime/configuration.test.ts (17 tests) 6ms
+ ✓ tests/runtime/runtime-ports.test.ts (6 tests) 3ms
+ ✓ tests/runtime/problem.test.ts (11 tests) 5ms
+ ✓ tests/runtime/livez.test.ts (4 tests) 2ms
+
+ Test Files  19 passed (19)
+      Tests  501 passed (501)
+   Start at  15:41:17
+   Duration  1.20s (transform 439ms, setup 0ms, collect 647ms, tests 248ms, environment 0ms, prepare 95ms)

@@ -1,0 +1,798 @@
+{
+  "ticket": 33,
+  "parent": 24,
+  "scope": "phase-2-runtime-boundary",
+  "verdict": "pass",
+  "checks": [
+    {
+      "name": "public-operation-count",
+      "passed": true,
+      "detail": "exactly five public operations"
+    },
+    {
+      "name": "owner-operation-count",
+      "passed": true,
+      "detail": "exactly thirty-nine Owner operations"
+    },
+    {
+      "name": "unique-operation-identifiers",
+      "passed": true,
+      "detail": "44 unique operation identifiers"
+    },
+    {
+      "name": "one-adapter-per-operation",
+      "passed": true,
+      "detail": "44/44 resolved exactly once"
+    },
+    {
+      "name": "no-undeclared-product-adapters",
+      "passed": true,
+      "detail": "44 adapter exports declared by a contract"
+    },
+    {
+      "name": "only-operational-routes",
+      "passed": true,
+      "detail": "/livez and /readyz are the only Route Handlers"
+    }
+  ],
+  "matrix": [
+    {
+      "surface": "public",
+      "method": "GET",
+      "path": "/api/v1/cv/current",
+      "operationId": "getCurrentCv",
+      "expectedExport": "handleGetCurrentCv",
+      "matches": [
+        {
+          "exportName": "handleGetCurrentCv",
+          "file": "src/runtime/http/current-cv.ts"
+        }
+      ]
+    },
+    {
+      "surface": "public",
+      "method": "POST",
+      "path": "/api/v1/projects/{projectId}/feedback",
+      "operationId": "postProjectFeedback",
+      "expectedExport": "handlePostProjectFeedback",
+      "matches": [
+        {
+          "exportName": "handlePostProjectFeedback",
+          "file": "src/runtime/http/feedback.ts"
+        }
+      ]
+    },
+    {
+      "surface": "public",
+      "method": "POST",
+      "path": "/api/v1/events",
+      "operationId": "postPublicEvent",
+      "expectedExport": "handlePostPublicEvent",
+      "matches": [
+        {
+          "exportName": "handlePostPublicEvent",
+          "file": "src/runtime/http/public-event.ts"
+        }
+      ]
+    },
+    {
+      "surface": "public",
+      "method": "PUT",
+      "path": "/api/v1/projects/{projectId}/rating",
+      "operationId": "putProjectRating",
+      "expectedExport": "handlePutProjectRating",
+      "matches": [
+        {
+          "exportName": "handlePutProjectRating",
+          "file": "src/runtime/http/rating.ts"
+        }
+      ]
+    },
+    {
+      "surface": "public",
+      "method": "PUT",
+      "path": "/api/v1/projects/{projectId}/reaction",
+      "operationId": "putProjectReaction",
+      "expectedExport": "handlePutProjectReaction",
+      "matches": [
+        {
+          "exportName": "handlePutProjectReaction",
+          "file": "src/runtime/http/reaction.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/cv/versions/{versionId}/commands/accept",
+      "operationId": "acceptOwnerCvVersion",
+      "expectedExport": "handleAcceptOwnerCvVersion",
+      "matches": [
+        {
+          "exportName": "handleAcceptOwnerCvVersion",
+          "file": "src/runtime/http/owner-cv.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/media/{mediaId}/commands/accept",
+      "operationId": "acceptOwnerMediaAsset",
+      "expectedExport": "handleAcceptOwnerMediaAsset",
+      "matches": [
+        {
+          "exportName": "handleAcceptOwnerMediaAsset",
+          "file": "src/runtime/http/owner-media.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/analytics-goals/{goalId}/commands/activate-version",
+      "operationId": "activateOwnerAnalyticsGoalVersion",
+      "expectedExport": "handleActivateOwnerAnalyticsGoalVersion",
+      "matches": [
+        {
+          "exportName": "handleActivateOwnerAnalyticsGoalVersion",
+          "file": "src/runtime/http/owner-analytics.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/cv/versions/{versionId}/commands/activate",
+      "operationId": "activateOwnerCvVersion",
+      "expectedExport": "handleActivateOwnerCvVersion",
+      "matches": [
+        {
+          "exportName": "handleActivateOwnerCvVersion",
+          "file": "src/runtime/http/owner-cv.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/feedback/{feedbackId}/commands/approve",
+      "operationId": "approveOwnerFeedback",
+      "expectedExport": "handleApproveOwnerFeedback",
+      "matches": [
+        {
+          "exportName": "handleApproveOwnerFeedback",
+          "file": "src/runtime/http/owner-moderation.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/commands/archive",
+      "operationId": "archiveOwnerContent",
+      "expectedExport": "handleArchiveOwnerContent",
+      "matches": [
+        {
+          "exportName": "handleArchiveOwnerContent",
+          "file": "src/runtime/http/owner-publication.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/assign-taxonomy-value",
+      "operationId": "assignOwnerProjectTaxonomyValue",
+      "expectedExport": "handleAssignOwnerProjectTaxonomyValue",
+      "matches": [
+        {
+          "exportName": "handleAssignOwnerProjectTaxonomyValue",
+          "file": "src/runtime/http/owner-project.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/change-slug",
+      "operationId": "changeOwnerProjectPublicSlug",
+      "expectedExport": "handleChangeOwnerProjectPublicSlug",
+      "matches": [
+        {
+          "exportName": "handleChangeOwnerProjectPublicSlug",
+          "file": "src/runtime/http/owner-project.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/change-status",
+      "operationId": "changeOwnerProjectStatus",
+      "expectedExport": "handleChangeOwnerProjectStatus",
+      "matches": [
+        {
+          "exportName": "handleChangeOwnerProjectStatus",
+          "file": "src/runtime/http/owner-project.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/analytics-goals/{goalId}/versions",
+      "operationId": "createOwnerAnalyticsGoalVersion",
+      "expectedExport": "handleCreateOwnerAnalyticsGoalVersion",
+      "matches": [
+        {
+          "exportName": "handleCreateOwnerAnalyticsGoalVersion",
+          "file": "src/runtime/http/owner-analytics.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/media/upload-intents",
+      "operationId": "createOwnerMediaUploadIntent",
+      "expectedExport": "handleCreateOwnerMediaUploadIntent",
+      "matches": [
+        {
+          "exportName": "handleCreateOwnerMediaUploadIntent",
+          "file": "src/runtime/http/owner-media.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/taxonomies/{taxonomyId}/values",
+      "operationId": "createOwnerTaxonomyValue",
+      "expectedExport": "handleCreateOwnerTaxonomyValue",
+      "matches": [
+        {
+          "exportName": "handleCreateOwnerTaxonomyValue",
+          "file": "src/runtime/http/owner-taxonomy.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/exports/{exportId}/download",
+      "operationId": "downloadOwnerExport",
+      "expectedExport": "handleDownloadOwnerExport",
+      "matches": [
+        {
+          "exportName": "handleDownloadOwnerExport",
+          "file": "src/runtime/http/owner-export.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/analytics-goals/{goalId}",
+      "operationId": "getOwnerAnalyticsGoal",
+      "expectedExport": "handleGetOwnerAnalyticsGoal",
+      "matches": [
+        {
+          "exportName": "handleGetOwnerAnalyticsGoal",
+          "file": "src/runtime/http/owner-analytics.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/content/{contentId}",
+      "operationId": "getOwnerContentAggregate",
+      "expectedExport": "handleGetOwnerContentAggregate",
+      "matches": [
+        {
+          "exportName": "handleGetOwnerContentAggregate",
+          "file": "src/runtime/http/owner-publication.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/cv",
+      "operationId": "getOwnerCvPortfolio",
+      "expectedExport": "handleGetOwnerCvPortfolio",
+      "matches": [
+        {
+          "exportName": "handleGetOwnerCvPortfolio",
+          "file": "src/runtime/http/owner-cv.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/exports/{exportId}",
+      "operationId": "getOwnerExport",
+      "expectedExport": "handleGetOwnerExport",
+      "matches": [
+        {
+          "exportName": "handleGetOwnerExport",
+          "file": "src/runtime/http/owner-export.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/feedback/{feedbackId}",
+      "operationId": "getOwnerFeedbackModeration",
+      "expectedExport": "handleGetOwnerFeedbackModeration",
+      "matches": [
+        {
+          "exportName": "handleGetOwnerFeedbackModeration",
+          "file": "src/runtime/http/owner-moderation.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/media/{mediaId}",
+      "operationId": "getOwnerMediaAggregate",
+      "expectedExport": "handleGetOwnerMediaAggregate",
+      "matches": [
+        {
+          "exportName": "handleGetOwnerMediaAggregate",
+          "file": "src/runtime/http/owner-media.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/projects/{projectId}",
+      "operationId": "getOwnerProjectAggregate",
+      "expectedExport": "handleGetOwnerProjectAggregate",
+      "matches": [
+        {
+          "exportName": "handleGetOwnerProjectAggregate",
+          "file": "src/runtime/http/owner-project.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/taxonomies/{taxonomyId}",
+      "operationId": "getOwnerTaxonomyAggregate",
+      "expectedExport": "handleGetOwnerTaxonomyAggregate",
+      "matches": [
+        {
+          "exportName": "handleGetOwnerTaxonomyAggregate",
+          "file": "src/runtime/http/owner-taxonomy.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/commands/hide",
+      "operationId": "hideOwnerContent",
+      "expectedExport": "handleHideOwnerContent",
+      "matches": [
+        {
+          "exportName": "handleHideOwnerContent",
+          "file": "src/runtime/http/owner-publication.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/taxonomy-values/{valueId}/commands/merge",
+      "operationId": "mergeOwnerTaxonomyValue",
+      "expectedExport": "handleMergeOwnerTaxonomyValue",
+      "matches": [
+        {
+          "exportName": "handleMergeOwnerTaxonomyValue",
+          "file": "src/runtime/http/owner-taxonomy.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/commands/publish-language",
+      "operationId": "publishOwnerContentLanguage",
+      "expectedExport": "handlePublishOwnerContentLanguage",
+      "matches": [
+        {
+          "exportName": "handlePublishOwnerContentLanguage",
+          "file": "src/runtime/http/owner-publication.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/media/{mediaId}/commands/record-processing",
+      "operationId": "recordOwnerMediaProcessing",
+      "expectedExport": "handleRecordOwnerMediaProcessing",
+      "matches": [
+        {
+          "exportName": "handleRecordOwnerMediaProcessing",
+          "file": "src/runtime/http/owner-media.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/cv/versions",
+      "operationId": "registerOwnerCvVersion",
+      "expectedExport": "handleRegisterOwnerCvVersion",
+      "matches": [
+        {
+          "exportName": "handleRegisterOwnerCvVersion",
+          "file": "src/runtime/http/owner-cv.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/feedback/{feedbackId}/commands/reject",
+      "operationId": "rejectOwnerFeedback",
+      "expectedExport": "handleRejectOwnerFeedback",
+      "matches": [
+        {
+          "exportName": "handleRejectOwnerFeedback",
+          "file": "src/runtime/http/owner-moderation.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/media/{mediaId}/commands/reject",
+      "operationId": "rejectOwnerMediaAsset",
+      "expectedExport": "handleRejectOwnerMediaAsset",
+      "matches": [
+        {
+          "exportName": "handleRejectOwnerMediaAsset",
+          "file": "src/runtime/http/owner-media.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/relate-project",
+      "operationId": "relateOwnerProjects",
+      "expectedExport": "handleRelateOwnerProjects",
+      "matches": [
+        {
+          "exportName": "handleRelateOwnerProjects",
+          "file": "src/runtime/http/owner-project.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/taxonomy-values/{valueId}/commands/rename",
+      "operationId": "renameOwnerTaxonomyValue",
+      "expectedExport": "handleRenameOwnerTaxonomyValue",
+      "matches": [
+        {
+          "exportName": "handleRenameOwnerTaxonomyValue",
+          "file": "src/runtime/http/owner-taxonomy.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/exports",
+      "operationId": "requestOwnerExport",
+      "expectedExport": "handleRequestOwnerExport",
+      "matches": [
+        {
+          "exportName": "handleRequestOwnerExport",
+          "file": "src/runtime/http/owner-export.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/commands/restore",
+      "operationId": "restoreOwnerContent",
+      "expectedExport": "handleRestoreOwnerContent",
+      "matches": [
+        {
+          "exportName": "handleRestoreOwnerContent",
+          "file": "src/runtime/http/owner-publication.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/taxonomy-values/{valueId}/commands/retire",
+      "operationId": "retireOwnerTaxonomyValue",
+      "expectedExport": "handleRetireOwnerTaxonomyValue",
+      "matches": [
+        {
+          "exportName": "handleRetireOwnerTaxonomyValue",
+          "file": "src/runtime/http/owner-taxonomy.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/revisions",
+      "operationId": "saveOwnerContentRevision",
+      "expectedExport": "handleSaveOwnerContentRevision",
+      "matches": [
+        {
+          "exportName": "handleSaveOwnerContentRevision",
+          "file": "src/runtime/http/owner-publication.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/set-featured",
+      "operationId": "setOwnerProjectFeatured",
+      "expectedExport": "handleSetOwnerProjectFeatured",
+      "matches": [
+        {
+          "exportName": "handleSetOwnerProjectFeatured",
+          "file": "src/runtime/http/owner-project.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
+      "path": "/api/owner/v1/feedback/{feedbackId}/commands/suppress",
+      "operationId": "suppressOwnerFeedback",
+      "expectedExport": "handleSuppressOwnerFeedback",
+      "matches": [
+        {
+          "exportName": "handleSuppressOwnerFeedback",
+          "file": "src/runtime/http/owner-moderation.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "PUT",
+      "path": "/api/owner/v1/configuration/contact-channels",
+      "operationId": "updateOwnerContactChannels",
+      "expectedExport": "handleUpdateOwnerContactChannels",
+      "matches": [
+        {
+          "exportName": "handleUpdateOwnerContactChannels",
+          "file": "src/runtime/http/owner-configuration.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "PUT",
+      "path": "/api/owner/v1/configuration/project-cta",
+      "operationId": "updateOwnerGlobalProjectCta",
+      "expectedExport": "handleUpdateOwnerGlobalProjectCta",
+      "matches": [
+        {
+          "exportName": "handleUpdateOwnerGlobalProjectCta",
+          "file": "src/runtime/http/owner-configuration.ts"
+        }
+      ]
+    },
+    {
+      "surface": "owner",
+      "method": "PUT",
+      "path": "/api/owner/v1/configuration/profile",
+      "operationId": "updateOwnerProfileConfiguration",
+      "expectedExport": "handleUpdateOwnerProfileConfiguration",
+      "matches": [
+        {
+          "exportName": "handleUpdateOwnerProfileConfiguration",
+          "file": "src/runtime/http/owner-configuration.ts"
+        }
+      ]
+    }
+  ],
+  "adapters": [
+    {
+      "exportName": "handleAcceptOwnerCvVersion",
+      "file": "src/runtime/http/owner-cv.ts"
+    },
+    {
+      "exportName": "handleAcceptOwnerMediaAsset",
+      "file": "src/runtime/http/owner-media.ts"
+    },
+    {
+      "exportName": "handleActivateOwnerAnalyticsGoalVersion",
+      "file": "src/runtime/http/owner-analytics.ts"
+    },
+    {
+      "exportName": "handleActivateOwnerCvVersion",
+      "file": "src/runtime/http/owner-cv.ts"
+    },
+    {
+      "exportName": "handleApproveOwnerFeedback",
+      "file": "src/runtime/http/owner-moderation.ts"
+    },
+    {
+      "exportName": "handleArchiveOwnerContent",
+      "file": "src/runtime/http/owner-publication.ts"
+    },
+    {
+      "exportName": "handleAssignOwnerProjectTaxonomyValue",
+      "file": "src/runtime/http/owner-project.ts"
+    },
+    {
+      "exportName": "handleChangeOwnerProjectPublicSlug",
+      "file": "src/runtime/http/owner-project.ts"
+    },
+    {
+      "exportName": "handleChangeOwnerProjectStatus",
+      "file": "src/runtime/http/owner-project.ts"
+    },
+    {
+      "exportName": "handleCreateOwnerAnalyticsGoalVersion",
+      "file": "src/runtime/http/owner-analytics.ts"
+    },
+    {
+      "exportName": "handleCreateOwnerMediaUploadIntent",
+      "file": "src/runtime/http/owner-media.ts"
+    },
+    {
+      "exportName": "handleCreateOwnerTaxonomyValue",
+      "file": "src/runtime/http/owner-taxonomy.ts"
+    },
+    {
+      "exportName": "handleDownloadOwnerExport",
+      "file": "src/runtime/http/owner-export.ts"
+    },
+    {
+      "exportName": "handleGetCurrentCv",
+      "file": "src/runtime/http/current-cv.ts"
+    },
+    {
+      "exportName": "handleGetOwnerAnalyticsGoal",
+      "file": "src/runtime/http/owner-analytics.ts"
+    },
+    {
+      "exportName": "handleGetOwnerContentAggregate",
+      "file": "src/runtime/http/owner-publication.ts"
+    },
+    {
+      "exportName": "handleGetOwnerCvPortfolio",
+      "file": "src/runtime/http/owner-cv.ts"
+    },
+    {
+      "exportName": "handleGetOwnerExport",
+      "file": "src/runtime/http/owner-export.ts"
+    },
+    {
+      "exportName": "handleGetOwnerFeedbackModeration",
+      "file": "src/runtime/http/owner-moderation.ts"
+    },
+    {
+      "exportName": "handleGetOwnerMediaAggregate",
+      "file": "src/runtime/http/owner-media.ts"
+    },
+    {
+      "exportName": "handleGetOwnerProjectAggregate",
+      "file": "src/runtime/http/owner-project.ts"
+    },
+    {
+      "exportName": "handleGetOwnerTaxonomyAggregate",
+      "file": "src/runtime/http/owner-taxonomy.ts"
+    },
+    {
+      "exportName": "handleHideOwnerContent",
+      "file": "src/runtime/http/owner-publication.ts"
+    },
+    {
+      "exportName": "handleMergeOwnerTaxonomyValue",
+      "file": "src/runtime/http/owner-taxonomy.ts"
+    },
+    {
+      "exportName": "handlePostProjectFeedback",
+      "file": "src/runtime/http/feedback.ts"
+    },
+    {
+      "exportName": "handlePostPublicEvent",
+      "file": "src/runtime/http/public-event.ts"
+    },
+    {
+      "exportName": "handlePublishOwnerContentLanguage",
+      "file": "src/runtime/http/owner-publication.ts"
+    },
+    {
+      "exportName": "handlePutProjectRating",
+      "file": "src/runtime/http/rating.ts"
+    },
+    {
+      "exportName": "handlePutProjectReaction",
+      "file": "src/runtime/http/reaction.ts"
+    },
+    {
+      "exportName": "handleRecordOwnerMediaProcessing",
+      "file": "src/runtime/http/owner-media.ts"
+    },
+    {
+      "exportName": "handleRegisterOwnerCvVersion",
+      "file": "src/runtime/http/owner-cv.ts"
+    },
+    {
+      "exportName": "handleRejectOwnerFeedback",
+      "file": "src/runtime/http/owner-moderation.ts"
+    },
+    {
+      "exportName": "handleRejectOwnerMediaAsset",
+      "file": "src/runtime/http/owner-media.ts"
+    },
+    {
+      "exportName": "handleRelateOwnerProjects",
+      "file": "src/runtime/http/owner-project.ts"
+    },
+    {
+      "exportName": "handleRenameOwnerTaxonomyValue",
+      "file": "src/runtime/http/owner-taxonomy.ts"
+    },
+    {
+      "exportName": "handleRequestOwnerExport",
+      "file": "src/runtime/http/owner-export.ts"
+    },
+    {
+      "exportName": "handleRestoreOwnerContent",
+      "file": "src/runtime/http/owner-publication.ts"
+    },
+    {
+      "exportName": "handleRetireOwnerTaxonomyValue",
+      "file": "src/runtime/http/owner-taxonomy.ts"
+    },
+    {
+      "exportName": "handleSaveOwnerContentRevision",
+      "file": "src/runtime/http/owner-publication.ts"
+    },
+    {
+      "exportName": "handleSetOwnerProjectFeatured",
+      "file": "src/runtime/http/owner-project.ts"
+    },
+    {
+      "exportName": "handleSuppressOwnerFeedback",
+      "file": "src/runtime/http/owner-moderation.ts"
+    },
+    {
+      "exportName": "handleUpdateOwnerContactChannels",
+      "file": "src/runtime/http/owner-configuration.ts"
+    },
+    {
+      "exportName": "handleUpdateOwnerGlobalProjectCta",
+      "file": "src/runtime/http/owner-configuration.ts"
+    },
+    {
+      "exportName": "handleUpdateOwnerProfileConfiguration",
+      "file": "src/runtime/http/owner-configuration.ts"
+    }
+  ],
+  "duplicateOperationIds": [],
+  "undeclaredAdapters": [],
+  "operationalRoutes": [
+    "src/app/livez/route.ts",
+    "src/app/readyz/route.ts"
+  ],
+  "unexpectedRouteFiles": [],
+  "missingOperationalRoutes": []
+}

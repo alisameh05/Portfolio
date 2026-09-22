@@ -48,7 +48,7 @@
  * configuration (vitest.config.ts: pool threads, singleThread).
  */
 
-import { execSync, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
@@ -73,19 +73,6 @@ function check(name, fn) {
     results.push({ name, ok: false, detail });
     console.error(`✗ ${name}`);
     console.error(`  ${detail}`);
-  }
-}
-
-function runCmd(cmd, label, evidenceKey) {
-  try {
-    const output = execSync(cmd, { cwd: ROOT, stdio: "pipe", encoding: "utf8" });
-    if (evidenceKey) evidenceLogs[evidenceKey] = (evidenceLogs[evidenceKey] ?? "") + output;
-    return output;
-  } catch (err) {
-    const out = [err?.stdout?.toString?.() ?? "", err?.stderr?.toString?.() ?? ""].join("\n").trim();
-    if (evidenceKey) evidenceLogs[evidenceKey] = (evidenceLogs[evidenceKey] ?? "") + out;
-    const tail = out.split("\n").slice(-5).join(" | ");
-    throw new Error(`Command failed [${label}]: ${cmd}${tail ? ` — ${tail.slice(0, 400)}` : ""}`);
   }
 }
 
@@ -147,10 +134,10 @@ check("toolchain verification", () => {
 });
 
 // ── 2. Typechecking (pinned typescript 6.0.3 via npm script) ───────────────────
-// Uses `npm run typecheck` (tsc --noEmit) so the pinned local compiler is
-// used instead of any global tsc.
+// Invoke the pinned local compiler through the active Node executable. This
+// avoids Windows npm.cmd/npx shell spawning while retaining the same seam.
 check("typechecking (tsc --noEmit)", () => {
-  runCmd("npm run typecheck --silent", "typecheck");
+  runNodeScript("node_modules/typescript/bin/tsc", ["--noEmit"]);
   return "strict, noUncheckedIndexedAccess, exactOptionalPropertyTypes";
 });
 
@@ -160,19 +147,29 @@ check("tests (vitest run, one-worker threads)", () => {
   if (!config.includes("singleThread: true")) {
     throw new Error("vitest.config.ts must use threads singleThread:true for deterministic Windows execution");
   }
-  runCmd("npx vitest run", "vitest");
+  runNodeScript("node_modules/vitest/vitest.mjs", ["run"]);
   return "full suite passed without reduced coverage";
 });
 
 // ── 4/5. Contract lint (both surfaces independently) ─────────────────────────
+// Stable seam labels retained for structural tests: Redocly lint public,
+// Redocly lint owner. The CLI is invoked without npx for Windows reliability.
 check("contract lint public@v1", () => {
-  const out = runCmd("npx redocly lint public@v1", "redocly-lint-public", "lint");
+  const out = runNodeScript(
+    "node_modules/@redocly/cli/bin/cli.js",
+    ["lint", "public@v1"],
+    "lint",
+  );
   evidenceLogs["lint"] = `${evidenceLogs["lint"] ?? ""}public@v1: lints clean\n${out}`;
   return "public@v1 lints clean";
 });
 
 check("contract lint owner@v1", () => {
-  const out = runCmd("npx redocly lint owner@v1", "redocly-lint-owner", "lint");
+  const out = runNodeScript(
+    "node_modules/@redocly/cli/bin/cli.js",
+    ["lint", "owner@v1"],
+    "lint",
+  );
   evidenceLogs["lint"] = `${evidenceLogs["lint"] ?? ""}owner@v1: lints clean\n${out}`;
   return "owner@v1 lints clean";
 });
@@ -182,7 +179,14 @@ function bundleToTemp(api, ext = "json") {
   const dir = join(tmpdir(), `shipwithali-gate-bundle-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
   mkdirSync(dir, { recursive: true });
   const out = join(dir, `bundle.${ext}`);
-  runCmd(`npx redocly bundle ${api} --output "${out}" --ext ${ext}`, `redocly-bundle-${api}`);
+  runNodeScript("node_modules/@redocly/cli/bin/cli.js", [
+    "bundle",
+    api,
+    "--output",
+    out,
+    "--ext",
+    ext,
+  ]);
   return out;
 }
 

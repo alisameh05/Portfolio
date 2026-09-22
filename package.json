@@ -10,6 +10,8 @@
     "npm": "11.19.0"
   },
   "scripts": {
+    "build": "next build",
+    "lint": "eslint .",
     "contract:lint": "redocly check-config && redocly lint public@v1 owner@v1",
     "contract:bundle": "npm run contract:bundle:public && npm run contract:bundle:owner",
     "contract:bundle:public": "redocly bundle public@v1 --output openapi/generated/public-v1.json --ext json",
@@ -20,11 +22,18 @@
     "contract:verify": "npm run contract:generate && npm run contract:drift && npm run contract:compatibility",
     "contract:docs": "node scripts/build-contract-reference.mjs",
     "route:inventory": "node scripts/check-route-inventory.mjs",
+    "runtime:boundary": "node scripts/check-runtime-boundary.mjs",
+    "runtime:architecture": "node scripts/check-runtime-architecture.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:arch": "node scripts/architecture-check.mjs",
     "test:contracts": "npm run contract:verify && vitest run tests/contracts",
-    "phase1:gate": "node scripts/phase1-gate.mjs"
+    "test:runtime:configuration": "vitest run tests/runtime/configuration.test.ts",
+    "test:runtime:http": "vitest run tests/runtime",
+    "test:runtime:problem": "vitest run tests/runtime/problem.test.ts",
+    "test:runtime:health": "vitest run tests/runtime/livez.test.ts tests/runtime/readiness-lifecycle.test.ts",
+    "phase1:gate": "node scripts/phase1-gate.mjs",
+    "phase2:gate": "node scripts/phase2-gate.mjs"
   },
   "dependencies": {
     "next": "15.5.25",
@@ -36,7 +45,9 @@
     "@redocly/cli": "1.34.3",
     "@types/react": "19.3.0",
     "dependency-cruiser": "16.10.3",
+    "eslint": "10.11.0",
     "typescript": "6.0.3",
+    "typescript-eslint": "8.70.1",
     "uuidv7": "1.0.2",
     "valibot": "1.1.0",
     "vitest": "3.2.4",

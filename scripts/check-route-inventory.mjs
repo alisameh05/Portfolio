@@ -150,6 +150,7 @@ const LAB_PATH = /\/lab(?:\/|$)/i;
 const REACT_IMPORT = /from\s+["']react["']/;
 const BROWSER_STATE = /\b(?:localStorage|sessionStorage|indexedDB)\b|document\s*\.\s*cookie/;
 const SERVER_STUB_HINT = /generated[\s_-]*server[\s_-]*stub|server[\s_-]*stub|openapi-generator/i;
+const FRONTEND_STYLE_FILE = /\.(?:css|scss|sass|less|styl)$/i;
 
 function isDomainOrApplicationFile(relativePath) {
   return /^src\/modules\/[^/]+\/(?:domain|application)\//.test(relativePath);
@@ -186,8 +187,9 @@ export function buildInventory() {
   const forbiddenFindings = [];
 
   // Phase 2 #27: operational probes outside both OpenAPI product surfaces.
-  // /livez and /readyz are the only allowed runtime routes; product adapters
-  // arrive later. Product operation counts stay exact.
+  // /livez and /readyz are the only allowed Route Handlers in Phase 2.
+  // Product operations remain handwritten transport adapters under
+  // src/runtime/http until later phases connect real application behavior.
   const ALLOWED_OPERATIONAL_ROUTE_FILES = new Set([
     "src/app/livez/route.ts",
     "src/app/readyz/route.ts",
@@ -265,6 +267,9 @@ export function buildInventory() {
     // React presentation / JSX-TSX / browser state.
     if (/\.(?:tsx|jsx)$/.test(base)) {
       forbiddenFindings.push({ file: relativePath, reason: "jsx-tsx-surface" });
+    }
+    if (FRONTEND_STYLE_FILE.test(base)) {
+      forbiddenFindings.push({ file: relativePath, reason: "frontend-style-surface" });
     }
     if (REACT_IMPORT.test(content)) {
       forbiddenFindings.push({ file: relativePath, reason: "react-presentation-import" });
@@ -348,12 +353,12 @@ export function buildInventory() {
   });
 
   const operationalOk =
-    operationalRoutes.length <= ALLOWED_OPERATIONAL_ROUTE_FILES.size &&
+    operationalRoutes.length === ALLOWED_OPERATIONAL_ROUTE_FILES.size &&
     operationalRoutes.every((route) => ALLOWED_OPERATIONAL_ROUTE_FILES.has(route.file));
   checks.push({
     name: "operational-probes-allowlisted",
     passed: operationalOk,
-    detail: operationalOk ? `${operationalRoutes.length} operational probe(s) within allowlist` : "unexpected operational route detected",
+    detail: operationalOk ? "exactly /livez and /readyz operational probes" : "missing or unexpected operational route detected",
   });
 
   const forbiddenOk = forbiddenFindings.length === 0;

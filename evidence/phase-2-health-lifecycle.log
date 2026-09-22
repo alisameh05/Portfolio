@@ -1,0 +1,10 @@
+
+ RUN  v3.2.4 D:/Personal/Personal_Projects/Portfolio
+
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 47ms
+ ✓ tests/runtime/livez.test.ts (4 tests) 3ms
+
+ Test Files  2 passed (2)
+      Tests  16 passed (16)
+   Start at  15:41:17
+   Duration  388ms (transform 99ms, setup 0ms, collect 92ms, tests 50ms, environment 0ms, prepare 100ms)

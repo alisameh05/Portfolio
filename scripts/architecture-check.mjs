@@ -15,6 +15,13 @@ import { fileURLToPath } from "node:url";
 import { ensureDependencyCruiserTsSupport } from "./ensure-depcruise-support.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\\/]$/, "");
+const DEPCRUISE_CLI = join(
+  ROOT,
+  "node_modules",
+  "dependency-cruiser",
+  "bin",
+  "dependency-cruise.mjs",
+);
 
 // Shared deterministic seam: dependency-cruiser 16.10.3 must parse TS 6.0.x.
 // See scripts/ensure-depcruise-support.mjs (also used by arch tests + gate).
@@ -53,7 +60,7 @@ function recordCheck(name, passed, message) {
 // ── 1. Check src/ against allowed dependency graph ──────────────────────────
 const srcCheck = run(
   "Architecture check: src/",
-  `npx depcruise src --config .dependency-cruiser.cjs --output-type err-long`,
+  `"${process.execPath}" "${DEPCRUISE_CLI}" src --config .dependency-cruiser.cjs --output-type err-long`,
 );
 if (!srcCheck.ok) {
   console.error("\n✗ Architecture check FAILED: forbidden dependencies detected in src/");
@@ -99,7 +106,7 @@ for (const suite of FIXTURE_SUITES) {
 
   const check = run(
     `Testing fixture rejection: ${suite.name}`,
-    `npx depcruise ${suite.path} --config .dependency-cruiser.cjs --output-type err-long`,
+    `"${process.execPath}" "${DEPCRUISE_CLI}" ${suite.path} --config .dependency-cruiser.cjs --output-type err-long`,
   );
 
   if (check.ok) {
@@ -246,7 +253,26 @@ if (purityOk) {
   recordCheck("Module skeleton purity", false, purityViolations.join("; "));
 }
 
-// ── 5. Reviewable Architecture Report ─────────────────────────────────────────
+// ── 5. Verify Phase 2 runtime boundaries ────────────────────────────────────
+const runtimeArchitectureCheck = run(
+  "Runtime architecture boundaries",
+  `"${process.execPath}" scripts/check-runtime-architecture.mjs`,
+);
+if (runtimeArchitectureCheck.ok) {
+  recordCheck(
+    "Phase 2 runtime architecture",
+    true,
+    "Framework, environment, generated transport, provider, and Route Handler boundaries preserved",
+  );
+} else {
+  recordCheck(
+    "Phase 2 runtime architecture",
+    false,
+    "Runtime architecture boundary violation detected",
+  );
+}
+
+// ── 6. Reviewable Architecture Report ─────────────────────────────────────────
 console.log("\n═════════════════════════════════════════════════════════════════");
 console.log("             ARCHITECTURE CONFORMANCE REPORT                    ");
 console.log("═════════════════════════════════════════════════════════════════");

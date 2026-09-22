@@ -1,0 +1,9 @@
+
+ RUN  v3.2.4 D:/Personal/Personal_Projects/Portfolio
+
+ ✓ tests/runtime/problem.test.ts (11 tests) 15ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  15:41:17
+   Duration  425ms (transform 115ms, setup 0ms, collect 152ms, tests 15ms, environment 0ms, prepare 107ms)

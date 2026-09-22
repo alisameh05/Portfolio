@@ -139,7 +139,7 @@
     {
       "name": "operational-probes-allowlisted",
       "passed": true,
-      "detail": "2 operational probe(s) within allowlist"
+      "detail": "exactly /livez and /readyz operational probes"
     },
     {
       "name": "no-forbidden-source-surface",
