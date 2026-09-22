@@ -59,8 +59,10 @@ npm run db:stop
 `supabase/config.toml`, `supabase/migrations/`, and `supabase/seed.sql` are the
 only repository-owned database inputs in this flow. Ticket #45 intentionally
 ships no application migration or seed data; ticket #46 owns the first reviewed
-schema and security migration. Remote authentication, project linking, remote
-migration, and deployment remain outside this workflow.
+schema and security migration. Data APIs, Auth/signup, Realtime, Storage,
+Studio, Edge Runtime, and Analytics remain disabled until their owning phase.
+Remote authentication, project linking, remote migration, and deployment remain
+outside this workflow.
 
 ## Safe failure behavior
 

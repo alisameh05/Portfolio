@@ -25,6 +25,14 @@ function runNode(...args: string[]) {
   });
 }
 
+function tomlSection(source: string, name: string) {
+  const heading = `[${name}]`;
+  const start = source.indexOf(heading);
+  if (start === -1) return "";
+  const next = source.indexOf("\n[", start + heading.length);
+  return source.slice(start, next === -1 ? undefined : next);
+}
+
 describe("Phase 3 local PostgreSQL toolchain (#45)", () => {
   it("pins the reviewed database packages exactly in both manifests", () => {
     const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
@@ -100,6 +108,22 @@ describe("Phase 3 local PostgreSQL toolchain (#45)", () => {
     expect(config).toMatch(/^\[db\.migrations\]$/m);
     expect(config).toMatch(/^\[db\.seed\]$/m);
     expect(config).toMatch(/^sql_paths\s*=\s*\["\.\/seed\.sql"\]$/m);
+    for (const section of [
+      "api",
+      "realtime",
+      "studio",
+      "local_smtp",
+      "storage",
+      "storage.s3_protocol",
+      "storage.vector",
+      "auth",
+      "edge_runtime",
+      "analytics",
+    ]) {
+      expect(tomlSection(config, section), section).toMatch(/^enabled\s*=\s*false$/m);
+    }
+    expect(tomlSection(config, "auth")).toMatch(/^enable_signup\s*=\s*false$/m);
+    expect(tomlSection(config, "auth.email")).toMatch(/^enable_signup\s*=\s*false$/m);
     expect(`${config}\n${seed}`).not.toMatch(
       /postgres(?:ql)?:\/\/[^\s]+:[^\s]+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+/i,
     );

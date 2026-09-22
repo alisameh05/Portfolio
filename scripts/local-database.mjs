@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
+const ROOT_PACKAGE_PATH = join(ROOT, "package.json");
 const PACKAGE_PATH = join(ROOT, "node_modules", "supabase", "package.json");
 const CLI_ENTRY = join(ROOT, "node_modules", "supabase", "dist", "supabase.js");
 
@@ -44,10 +45,15 @@ function localOnlyEnvironment() {
 }
 
 function installedSupabaseVersion() {
-  if (!existsSync(PACKAGE_PATH) || !existsSync(CLI_ENTRY)) {
+  if (!existsSync(ROOT_PACKAGE_PATH) || !existsSync(PACKAGE_PATH) || !existsSync(CLI_ENTRY)) {
     throw new Error("LOCAL_SUPABASE_CLI_MISSING");
   }
-  return JSON.parse(readFileSync(PACKAGE_PATH, "utf8")).version;
+  const declared = JSON.parse(readFileSync(ROOT_PACKAGE_PATH, "utf8")).devDependencies?.supabase;
+  const installed = JSON.parse(readFileSync(PACKAGE_PATH, "utf8")).version;
+  if (!/^\d+\.\d+\.\d+$/.test(declared ?? "") || installed !== declared) {
+    throw new Error("LOCAL_SUPABASE_CLI_VERSION_MISMATCH: run npm ci before local database commands");
+  }
+  return installed;
 }
 
 function plan(action) {
