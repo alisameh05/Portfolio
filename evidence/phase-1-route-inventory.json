@@ -100,6 +100,10 @@
     {
       "file": "src/app/livez/route.ts",
       "reason": "operational-probe"
+    },
+    {
+      "file": "src/app/readyz/route.ts",
+      "reason": "operational-probe"
     }
   ],
   "runtimeRoutes": [],
@@ -130,12 +134,12 @@
     {
       "name": "no-undeclared-runtime-http-surface",
       "passed": true,
-      "detail": "allowed OpenAPI paths only; 1 operational probe(s), 0 product runtime routes"
+      "detail": "allowed OpenAPI paths only; 2 operational probe(s), 0 product runtime routes"
     },
     {
       "name": "operational-probes-allowlisted",
       "passed": true,
-      "detail": "1 operational probe(s) within allowlist"
+      "detail": "2 operational probe(s) within allowlist"
     },
     {
       "name": "no-forbidden-source-surface",
