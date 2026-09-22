@@ -1,0 +1,24 @@
+{
+  "ticket": 45,
+  "parent": 44,
+  "scope": "phase-3-local-postgresql-toolchain",
+  "node": "24.21.0",
+  "packageManager": "npm@11.19.0",
+  "expected": {
+    "kysely": "0.29.6",
+    "pg": "8.23.0",
+    "@types/pg": "8.23.1",
+    "kysely-codegen": "0.20.0",
+    "supabase": "2.117.0"
+  },
+  "installed": {
+    "kysely": "0.29.6",
+    "pg": "8.23.0",
+    "@types/pg": "8.23.1",
+    "kysely-codegen": "0.20.0",
+    "supabase": "2.117.0"
+  },
+  "supabaseCli": "2.117.0",
+  "commandSource": "project-local node_modules/supabase/dist/supabase.js",
+  "remoteCredentialsRequired": false
+}
