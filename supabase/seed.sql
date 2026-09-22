@@ -1,0 +1,2 @@
+-- Phase 3 ticket #45 intentionally contains no data.
+-- Later tickets may add deterministic, non-secret integration fixtures only.
