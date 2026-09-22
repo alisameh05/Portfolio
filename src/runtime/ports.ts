@@ -53,7 +53,7 @@ export function createSystemIdGenerator(): StableIdGenerator {
   };
 }
 
-// ── Transaction Runner (Phase 2 fake) ────────────────────────────────────────
+// ── Transaction Runner ───────────────────────────────────────────────────────
 
 /**
  * Provider-neutral transaction runner port.
@@ -61,23 +61,34 @@ export function createSystemIdGenerator(): StableIdGenerator {
  * Later phases supply atomic execution (PostgreSQL); Phase 2 supplies only
  * the pass-through fake below.
  */
-export interface TransactionRunner {
-  run<T>(callback: () => Promise<T> | T): Promise<T>;
+export interface TransactionContext {
+  /** Opaque marker only; provider handles are deliberately absent. */
+  readonly kind: "transaction";
 }
 
-/**
- * Phase 2 transaction fake: executes one callback and returns its result.
- *
- * This fake performs no atomicity and no rollback. It exists only so the
- * application seam can be exercised before the PostgreSQL phase. It must
- * never be mistaken for a real transaction.
- */
-export function createPhase2TransactionFake(): TransactionRunner {
-  return {
-    async run<T>(callback: () => Promise<T> | T): Promise<T> {
-      return await callback();
-    },
-  };
+const ROLLBACK = Symbol("transaction-rollback");
+
+export interface TransactionRollback<T> {
+  readonly [ROLLBACK]: true;
+  readonly value: T;
+}
+
+export function requestTransactionRollback<T>(value: T): TransactionRollback<T> {
+  return Object.freeze({ [ROLLBACK]: true as const, value });
+}
+
+export function isTransactionRollback<T>(
+  value: T | TransactionRollback<T>,
+): value is TransactionRollback<T> {
+  return typeof value === "object" && value !== null && ROLLBACK in value;
+}
+
+export interface TransactionRunner {
+  run<T>(
+    callback: (
+      context: TransactionContext,
+    ) => Promise<T | TransactionRollback<T>> | T | TransactionRollback<T>,
+  ): Promise<T>;
 }
 
 // ── Logger ───────────────────────────────────────────────────────────────────
@@ -230,4 +241,10 @@ export interface Readiness {
 export interface LifecycleResource {
   readonly name: string;
   close(): Promise<void>;
+}
+
+/** A bounded dependency check contributing only a boolean readiness result. */
+export interface ReadinessCheck {
+  readonly name: string;
+  check(): Promise<boolean>;
 }

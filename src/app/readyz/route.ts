@@ -7,9 +7,14 @@
  * Auth, storage, or external-provider check. Implemented against the
  * standard Web Response so the probe stays independent of framework types.
  */
-import { getLifecycleState } from "../../runtime/lifecycle.js";
-import { createReadyzResponse } from "../../runtime/readyz.js";
+import {
+  getLifecycleCoordinator,
+  getLifecycleState,
+} from "../../runtime/lifecycle.js";
+import { createCheckedReadyzResponse } from "../../runtime/readyz.js";
 
 export async function GET(): Promise<Response> {
-  return createReadyzResponse(getLifecycleState());
+  return createCheckedReadyzResponse(getLifecycleState(), () =>
+    getLifecycleCoordinator().checkReadiness(),
+  );
 }

@@ -29,11 +29,11 @@ import { describe, expect, it } from "vitest";
 import {
   createSystemClock,
   createSystemIdGenerator,
-  createPhase2TransactionFake,
   createTestLogger,
   createCorrelation,
   type RequestContext,
 } from "../../src/runtime/ports.js";
+import { createPhase2TransactionFake } from "../../src/runtime/fakes/transaction.js";
 
 const ROOT = process.cwd();
 const UUID_V7_RE =
@@ -86,7 +86,7 @@ describe("runtime ports (#26)", () => {
     });
     expect(result).toBe("ok-value");
     expect(calls).toBe(1);
-    const content = readFileSync(join(ROOT, "src/runtime/ports.ts"), "utf8");
+    const content = readFileSync(join(ROOT, "src/runtime/fakes/transaction.ts"), "utf8");
     expect(content).toMatch(/Phase2/i);
     expect(content).toMatch(/fake/i);
     // The fake must disclaim atomicity/rollback rather than claim it.

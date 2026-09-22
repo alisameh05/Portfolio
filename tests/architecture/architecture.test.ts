@@ -101,7 +101,11 @@ describe("Module Skeletons Purity and Isolation Invariants", () => {
     const sqlViolations: string[] = [];
     for (const file of allFiles) {
       const content = readFileSync(file, "utf8");
-      if (/\b(?:SELECT\s+.+\s+FROM|INSERT\s+INTO\s+|DELETE\s+FROM\s+|UPDATE\s+.+\s+SET)\b/i.test(content)) {
+      const isAdapter = /[\\/]adapters[\\/]/.test(file);
+      if (
+        /\b(?:SELECT\s+.+\s+FROM|INSERT\s+INTO\s+|DELETE\s+FROM\s+|UPDATE\s+.+\s+SET)\b/i.test(content) &&
+        !isAdapter
+      ) {
         sqlViolations.push(file);
       }
     }
@@ -112,7 +116,8 @@ describe("Module Skeletons Purity and Isolation Invariants", () => {
     const providerViolations: string[] = [];
     for (const file of allFiles) {
       const content = readFileSync(file, "utf8");
-      if (/from\s+["'](?:@supabase\/|kysely|@vercel\/|next\/)/i.test(content)) {
+      const isAdapter = /[\\/]adapters[\\/]/.test(file);
+      if (/from\s+["'](?:@supabase\/|kysely|pg|@vercel\/|next\/)/i.test(content) && !isAdapter) {
         providerViolations.push(file);
       }
     }

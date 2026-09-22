@@ -21,6 +21,8 @@ export interface RuntimeConfig {
   readonly appBaseUrl: string;
 }
 
+export type DatabaseRuntimeKind = "application" | "worker";
+
 /** Explicit env record forwarded once by the composition root. */
 export type RuntimeConfigEnv = Record<string, string | undefined>;
 

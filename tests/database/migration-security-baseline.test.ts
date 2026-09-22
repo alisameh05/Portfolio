@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { cleanupIsolatedProjects } from "../../scripts/check-database-baseline.mjs";
+import { cleanupIsolatedProjects } from "../../scripts/database-baseline-support.mjs";
 
 const ROOT = process.cwd();
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
@@ -182,11 +182,11 @@ describe("Phase 3 migration and security baseline (#46)", () => {
 
     try {
       const failures = cleanupIsolatedProjects(projects, {
-        stop(project) {
+        stop(project: { projectId: string; workdir: string }) {
           attempted.push(project.projectId);
           if (project.projectId.includes("upgrade")) throw new Error("injected stop failure");
         },
-        remove(workdir) {
+        remove(workdir: string) {
           rmSync(workdir, { recursive: true, force: true });
         },
       });

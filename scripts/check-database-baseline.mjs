@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
+import { cleanupIsolatedProjects as cleanupProjects } from "./database-baseline-support.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
@@ -53,6 +54,7 @@ const RESTRICTED_ROLES = Object.freeze([
 
 const SECRET_PATTERN =
   /postgres(?:ql)?:\/\/[^\s]+:[^\s]+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+/i;
+const PHASE3_MODE = process.argv.includes("--phase3");
 
 function argumentValue(name) {
   const index = process.argv.indexOf(name);
@@ -74,6 +76,12 @@ function migrationFiles() {
   return readdirSync(MIGRATIONS)
     .filter((name) => /^\d{14}_[a-z0-9_]+\.sql$/.test(name))
     .sort();
+}
+
+function selectedMigrationFiles() {
+  if (PHASE3_MODE) return migrationFiles();
+  const baseline = baselineMigrationPath().split(/[\\/]/).at(-1);
+  return migrationFiles().filter((name) => name <= baseline);
 }
 
 function baselineMigrationPath() {
@@ -230,7 +238,7 @@ function isolatedConfig(projectId, basePort) {
 
 function copyRepositoryMigrations(workdir) {
   const destination = join(workdir, "supabase", "migrations");
-  for (const file of migrationFiles()) {
+  for (const file of selectedMigrationFiles()) {
     copyFileSync(join(MIGRATIONS, file), join(destination, file));
   }
 }
@@ -261,29 +269,17 @@ function createIsolatedWorkdir(kind, basePort, includeMigrations) {
   }
 }
 
-export function cleanupIsolatedProjects(
-  projects,
-  {
-    stop = (project) => {
+function cleanupIsolatedProjects(projects) {
+  return cleanupProjects(projects, {
+    stop: (project) => {
       runLocalCommand(
         project.workdir,
         ["stop", "--project-id", project.projectId, "--no-backup"],
         "LOCAL_DB_STOP_FAILED",
       );
     },
-    remove = (workdir) => rmSync(workdir, { recursive: true, force: true }),
-  } = {},
-) {
-  const failures = [];
-  for (const project of [...projects].reverse()) {
-    try {
-      stop(project);
-      remove(project.workdir);
-    } catch {
-      failures.push(project.projectId);
-    }
-  }
-  return failures;
+    remove: (workdir) => rmSync(workdir, { recursive: true, force: true }),
+  });
 }
 
 async function assertPriorBaseline(baseUrl) {
@@ -440,8 +436,20 @@ async function snapshot(baseUrl) {
     ) {
       throw new Error("CAPABILITY_ROLE_IS_OVERPRIVILEGED");
     }
-    if (privileges.rows.some((row) => row.has_usage || row.has_create)) {
-      throw new Error("RESTRICTED_ROLE_HAS_SCHEMA_ACCESS");
+    if (
+      privileges.rows.some((row) => {
+        if (!PHASE3_MODE) return row.has_usage || row.has_create;
+        const expectedUsage =
+          row.schema_name === "operations" &&
+          [
+            "shipwithali_application",
+            "shipwithali_worker",
+            "shipwithali_backup",
+          ].includes(row.role_name);
+        return row.has_create || row.has_usage !== expectedUsage;
+      })
+    ) {
+      throw new Error("CAPABILITY_SCHEMA_ACCESS_MISMATCH");
     }
     if (defaults.rows.some((row) => row.grantee === "PUBLIC")) {
       throw new Error("PUBLIC_HAS_DEFAULT_OBJECT_PRIVILEGES");
@@ -505,7 +513,7 @@ async function verifyLocal() {
     await verifyFutureDefaults(cleanUrl);
     const clean = await snapshot(cleanUrl);
 
-    const expectedVersions = migrationFiles().map((name) => name.slice(0, 14));
+    const expectedVersions = selectedMigrationFiles().map((name) => name.slice(0, 14));
     if (
       JSON.stringify(upgrade.migrationVersions) !== JSON.stringify(expectedVersions) ||
       JSON.stringify(clean.migrationVersions) !== JSON.stringify(expectedVersions)
@@ -518,9 +526,11 @@ async function verifyLocal() {
 
     const migrationPath = baselineMigrationPath();
     evidence = {
-      ticket: 46,
+      ticket: PHASE3_MODE ? 54 : 46,
       parent: 44,
-      scope: "phase-3-migration-security-baseline",
+      scope: PHASE3_MODE
+        ? "phase-3-complete-migration-equivalence"
+        : "phase-3-migration-security-baseline",
       baseline: "phase-2",
       migration: migrationPath.slice(MIGRATIONS.length + 1),
       migrationSha256: createHash("sha256")
@@ -529,6 +539,10 @@ async function verifyLocal() {
       schemas: SCHEMAS,
       capabilityRoles: CAPABILITY_ROLES,
       migrationVersions: clean.migrationVersions,
+      migrationChecksums: selectedMigrationFiles().map((file) => ({
+        file,
+        sha256: createHash("sha256").update(readFileSync(join(MIGRATIONS, file))).digest("hex"),
+      })),
       applicationObjectCount: clean.objects.length,
       cleanUpgradeEquivalent: true,
       migrationReplayNoop: true,
@@ -572,7 +586,11 @@ async function main() {
           mkdirSync(dirname(EVIDENCE_PATH), { recursive: true });
           writeFileSync(EVIDENCE_PATH, `${JSON.stringify(localEvidence, null, 2)}\n`, "utf8");
         }
-        console.log("✓ Clean and Phase 2 baseline upgrades produced equivalent database state");
+        console.log(
+          `✓ Clean and Phase 2 baseline upgrades produced equivalent ${
+            PHASE3_MODE ? "complete Phase 3" : "security-baseline"
+          } database state`,
+        );
       } else if (!sourceOnly) {
         throw new Error("VERIFICATION_MODE_REQUIRED");
       }

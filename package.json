@@ -40,8 +40,13 @@
     "db:stop": "node scripts/local-database.mjs stop",
     "db:baseline:verify": "node scripts/check-database-baseline.mjs --source-only",
     "db:baseline:test": "node scripts/check-database-baseline.mjs --local",
+    "db:phase3:source": "node scripts/check-phase3-database.mjs --source-only",
+    "db:phase3:migrations": "node scripts/check-database-baseline.mjs --local --phase3",
+    "db:phase3:integration": "vitest run tests/database/postgres-integration.test.ts",
+    "db:phase3:security": "node scripts/check-phase3-database.mjs",
     "phase1:gate": "node scripts/phase1-gate.mjs",
-    "phase2:gate": "node scripts/phase2-gate.mjs"
+    "phase2:gate": "node scripts/phase2-gate.mjs",
+    "phase3:gate": "node scripts/phase3-gate.mjs"
   },
   "dependencies": {
     "kysely": "0.29.6",
