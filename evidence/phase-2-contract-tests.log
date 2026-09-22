@@ -1,11 +1,11 @@
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/contracts/compatibility-gate.test.ts (8 tests) 556ms
- ✓ tests/contracts/contract-drift-gate.test.ts (4 tests) 411ms
+ ✓ tests/contracts/compatibility-gate.test.ts (8 tests) 566ms
+ ✓ tests/contracts/contract-drift-gate.test.ts (4 tests) 438ms
  ✓ tests/contracts/owner-contract.test.ts (5 tests) 15ms
- ✓ tests/contracts/owner-issue-8-generated-validation.test.ts (7 tests) 9ms
  ✓ tests/contracts/public-contract.test.ts (6 tests) 4ms
+ ✓ tests/contracts/owner-issue-8-generated-validation.test.ts (7 tests) 7ms
  ✓ tests/contracts/generated-validation.test.ts (6 tests) 3ms
  ✓ tests/contracts/owner-generated-validation.test.ts (5 tests) 1ms
  ✓ tests/contracts/owner-issue-7-generated-validation.test.ts (9 tests) 2ms
@@ -13,5 +13,5 @@
 
  Test Files  9 passed (9)
       Tests  51 passed (51)
-   Start at  16:40:17
-   Duration  1.41s (transform 127ms, setup 0ms, collect 176ms, tests 1.00s, environment 0ms, prepare 93ms)
+   Start at  17:11:01
+   Duration  1.46s (transform 138ms, setup 0ms, collect 191ms, tests 1.04s, environment 0ms, prepare 85ms)

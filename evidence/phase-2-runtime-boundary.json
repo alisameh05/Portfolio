@@ -30,6 +30,11 @@
       "detail": "44 adapter exports declared by a contract"
     },
     {
+      "name": "only-callable-runtime-adapters",
+      "passed": true,
+      "detail": "44/44 handler exports are callable runtime values"
+    },
+    {
       "name": "only-operational-routes",
       "passed": true,
       "detail": "/livez and /readyz are the only Route Handlers"
@@ -45,7 +50,8 @@
       "matches": [
         {
           "exportName": "handleGetCurrentCv",
-          "file": "src/runtime/http/current-cv.ts"
+          "file": "src/runtime/http/current-cv.ts",
+          "callable": true
         }
       ]
     },
@@ -58,7 +64,8 @@
       "matches": [
         {
           "exportName": "handlePostProjectFeedback",
-          "file": "src/runtime/http/feedback.ts"
+          "file": "src/runtime/http/feedback.ts",
+          "callable": true
         }
       ]
     },
@@ -71,7 +78,8 @@
       "matches": [
         {
           "exportName": "handlePostPublicEvent",
-          "file": "src/runtime/http/public-event.ts"
+          "file": "src/runtime/http/public-event.ts",
+          "callable": true
         }
       ]
     },
@@ -84,7 +92,8 @@
       "matches": [
         {
           "exportName": "handlePutProjectRating",
-          "file": "src/runtime/http/rating.ts"
+          "file": "src/runtime/http/rating.ts",
+          "callable": true
         }
       ]
     },
@@ -97,7 +106,8 @@
       "matches": [
         {
           "exportName": "handlePutProjectReaction",
-          "file": "src/runtime/http/reaction.ts"
+          "file": "src/runtime/http/reaction.ts",
+          "callable": true
         }
       ]
     },
@@ -110,7 +120,8 @@
       "matches": [
         {
           "exportName": "handleAcceptOwnerCvVersion",
-          "file": "src/runtime/http/owner-cv.ts"
+          "file": "src/runtime/http/owner-cv.ts",
+          "callable": true
         }
       ]
     },
@@ -123,7 +134,8 @@
       "matches": [
         {
           "exportName": "handleAcceptOwnerMediaAsset",
-          "file": "src/runtime/http/owner-media.ts"
+          "file": "src/runtime/http/owner-media.ts",
+          "callable": true
         }
       ]
     },
@@ -136,7 +148,8 @@
       "matches": [
         {
           "exportName": "handleActivateOwnerAnalyticsGoalVersion",
-          "file": "src/runtime/http/owner-analytics.ts"
+          "file": "src/runtime/http/owner-analytics.ts",
+          "callable": true
         }
       ]
     },
@@ -149,7 +162,8 @@
       "matches": [
         {
           "exportName": "handleActivateOwnerCvVersion",
-          "file": "src/runtime/http/owner-cv.ts"
+          "file": "src/runtime/http/owner-cv.ts",
+          "callable": true
         }
       ]
     },
@@ -162,7 +176,8 @@
       "matches": [
         {
           "exportName": "handleApproveOwnerFeedback",
-          "file": "src/runtime/http/owner-moderation.ts"
+          "file": "src/runtime/http/owner-moderation.ts",
+          "callable": true
         }
       ]
     },
@@ -175,7 +190,8 @@
       "matches": [
         {
           "exportName": "handleArchiveOwnerContent",
-          "file": "src/runtime/http/owner-publication.ts"
+          "file": "src/runtime/http/owner-publication.ts",
+          "callable": true
         }
       ]
     },
@@ -188,7 +204,8 @@
       "matches": [
         {
           "exportName": "handleAssignOwnerProjectTaxonomyValue",
-          "file": "src/runtime/http/owner-project.ts"
+          "file": "src/runtime/http/owner-project.ts",
+          "callable": true
         }
       ]
     },
@@ -201,7 +218,8 @@
       "matches": [
         {
           "exportName": "handleChangeOwnerProjectPublicSlug",
-          "file": "src/runtime/http/owner-project.ts"
+          "file": "src/runtime/http/owner-project.ts",
+          "callable": true
         }
       ]
     },
@@ -214,7 +232,8 @@
       "matches": [
         {
           "exportName": "handleChangeOwnerProjectStatus",
-          "file": "src/runtime/http/owner-project.ts"
+          "file": "src/runtime/http/owner-project.ts",
+          "callable": true
         }
       ]
     },
@@ -227,7 +246,8 @@
       "matches": [
         {
           "exportName": "handleCreateOwnerAnalyticsGoalVersion",
-          "file": "src/runtime/http/owner-analytics.ts"
+          "file": "src/runtime/http/owner-analytics.ts",
+          "callable": true
         }
       ]
     },
@@ -240,7 +260,8 @@
       "matches": [
         {
           "exportName": "handleCreateOwnerMediaUploadIntent",
-          "file": "src/runtime/http/owner-media.ts"
+          "file": "src/runtime/http/owner-media.ts",
+          "callable": true
         }
       ]
     },
@@ -253,7 +274,8 @@
       "matches": [
         {
           "exportName": "handleCreateOwnerTaxonomyValue",
-          "file": "src/runtime/http/owner-taxonomy.ts"
+          "file": "src/runtime/http/owner-taxonomy.ts",
+          "callable": true
         }
       ]
     },
@@ -266,7 +288,8 @@
       "matches": [
         {
           "exportName": "handleDownloadOwnerExport",
-          "file": "src/runtime/http/owner-export.ts"
+          "file": "src/runtime/http/owner-export.ts",
+          "callable": true
         }
       ]
     },
@@ -279,7 +302,8 @@
       "matches": [
         {
           "exportName": "handleGetOwnerAnalyticsGoal",
-          "file": "src/runtime/http/owner-analytics.ts"
+          "file": "src/runtime/http/owner-analytics.ts",
+          "callable": true
         }
       ]
     },
@@ -292,7 +316,8 @@
       "matches": [
         {
           "exportName": "handleGetOwnerContentAggregate",
-          "file": "src/runtime/http/owner-publication.ts"
+          "file": "src/runtime/http/owner-publication.ts",
+          "callable": true
         }
       ]
     },
@@ -305,7 +330,8 @@
       "matches": [
         {
           "exportName": "handleGetOwnerCvPortfolio",
-          "file": "src/runtime/http/owner-cv.ts"
+          "file": "src/runtime/http/owner-cv.ts",
+          "callable": true
         }
       ]
     },
@@ -318,7 +344,8 @@
       "matches": [
         {
           "exportName": "handleGetOwnerExport",
-          "file": "src/runtime/http/owner-export.ts"
+          "file": "src/runtime/http/owner-export.ts",
+          "callable": true
         }
       ]
     },
@@ -331,7 +358,8 @@
       "matches": [
         {
           "exportName": "handleGetOwnerFeedbackModeration",
-          "file": "src/runtime/http/owner-moderation.ts"
+          "file": "src/runtime/http/owner-moderation.ts",
+          "callable": true
         }
       ]
     },
@@ -344,7 +372,8 @@
       "matches": [
         {
           "exportName": "handleGetOwnerMediaAggregate",
-          "file": "src/runtime/http/owner-media.ts"
+          "file": "src/runtime/http/owner-media.ts",
+          "callable": true
         }
       ]
     },
@@ -357,7 +386,8 @@
       "matches": [
         {
           "exportName": "handleGetOwnerProjectAggregate",
-          "file": "src/runtime/http/owner-project.ts"
+          "file": "src/runtime/http/owner-project.ts",
+          "callable": true
         }
       ]
     },
@@ -370,7 +400,8 @@
       "matches": [
         {
           "exportName": "handleGetOwnerTaxonomyAggregate",
-          "file": "src/runtime/http/owner-taxonomy.ts"
+          "file": "src/runtime/http/owner-taxonomy.ts",
+          "callable": true
         }
       ]
     },
@@ -383,7 +414,8 @@
       "matches": [
         {
           "exportName": "handleHideOwnerContent",
-          "file": "src/runtime/http/owner-publication.ts"
+          "file": "src/runtime/http/owner-publication.ts",
+          "callable": true
         }
       ]
     },
@@ -396,7 +428,8 @@
       "matches": [
         {
           "exportName": "handleMergeOwnerTaxonomyValue",
-          "file": "src/runtime/http/owner-taxonomy.ts"
+          "file": "src/runtime/http/owner-taxonomy.ts",
+          "callable": true
         }
       ]
     },
@@ -409,7 +442,8 @@
       "matches": [
         {
           "exportName": "handlePublishOwnerContentLanguage",
-          "file": "src/runtime/http/owner-publication.ts"
+          "file": "src/runtime/http/owner-publication.ts",
+          "callable": true
         }
       ]
     },
@@ -422,7 +456,8 @@
       "matches": [
         {
           "exportName": "handleRecordOwnerMediaProcessing",
-          "file": "src/runtime/http/owner-media.ts"
+          "file": "src/runtime/http/owner-media.ts",
+          "callable": true
         }
       ]
     },
@@ -435,7 +470,8 @@
       "matches": [
         {
           "exportName": "handleRegisterOwnerCvVersion",
-          "file": "src/runtime/http/owner-cv.ts"
+          "file": "src/runtime/http/owner-cv.ts",
+          "callable": true
         }
       ]
     },
@@ -448,7 +484,8 @@
       "matches": [
         {
           "exportName": "handleRejectOwnerFeedback",
-          "file": "src/runtime/http/owner-moderation.ts"
+          "file": "src/runtime/http/owner-moderation.ts",
+          "callable": true
         }
       ]
     },
@@ -461,7 +498,8 @@
       "matches": [
         {
           "exportName": "handleRejectOwnerMediaAsset",
-          "file": "src/runtime/http/owner-media.ts"
+          "file": "src/runtime/http/owner-media.ts",
+          "callable": true
         }
       ]
     },
@@ -474,7 +512,8 @@
       "matches": [
         {
           "exportName": "handleRelateOwnerProjects",
-          "file": "src/runtime/http/owner-project.ts"
+          "file": "src/runtime/http/owner-project.ts",
+          "callable": true
         }
       ]
     },
@@ -487,7 +526,8 @@
       "matches": [
         {
           "exportName": "handleRenameOwnerTaxonomyValue",
-          "file": "src/runtime/http/owner-taxonomy.ts"
+          "file": "src/runtime/http/owner-taxonomy.ts",
+          "callable": true
         }
       ]
     },
@@ -500,7 +540,8 @@
       "matches": [
         {
           "exportName": "handleRequestOwnerExport",
-          "file": "src/runtime/http/owner-export.ts"
+          "file": "src/runtime/http/owner-export.ts",
+          "callable": true
         }
       ]
     },
@@ -513,7 +554,8 @@
       "matches": [
         {
           "exportName": "handleRestoreOwnerContent",
-          "file": "src/runtime/http/owner-publication.ts"
+          "file": "src/runtime/http/owner-publication.ts",
+          "callable": true
         }
       ]
     },
@@ -526,7 +568,8 @@
       "matches": [
         {
           "exportName": "handleRetireOwnerTaxonomyValue",
-          "file": "src/runtime/http/owner-taxonomy.ts"
+          "file": "src/runtime/http/owner-taxonomy.ts",
+          "callable": true
         }
       ]
     },
@@ -539,7 +582,8 @@
       "matches": [
         {
           "exportName": "handleSaveOwnerContentRevision",
-          "file": "src/runtime/http/owner-publication.ts"
+          "file": "src/runtime/http/owner-publication.ts",
+          "callable": true
         }
       ]
     },
@@ -552,7 +596,8 @@
       "matches": [
         {
           "exportName": "handleSetOwnerProjectFeatured",
-          "file": "src/runtime/http/owner-project.ts"
+          "file": "src/runtime/http/owner-project.ts",
+          "callable": true
         }
       ]
     },
@@ -565,7 +610,8 @@
       "matches": [
         {
           "exportName": "handleSuppressOwnerFeedback",
-          "file": "src/runtime/http/owner-moderation.ts"
+          "file": "src/runtime/http/owner-moderation.ts",
+          "callable": true
         }
       ]
     },
@@ -578,7 +624,8 @@
       "matches": [
         {
           "exportName": "handleUpdateOwnerContactChannels",
-          "file": "src/runtime/http/owner-configuration.ts"
+          "file": "src/runtime/http/owner-configuration.ts",
+          "callable": true
         }
       ]
     },
@@ -591,7 +638,8 @@
       "matches": [
         {
           "exportName": "handleUpdateOwnerGlobalProjectCta",
-          "file": "src/runtime/http/owner-configuration.ts"
+          "file": "src/runtime/http/owner-configuration.ts",
+          "callable": true
         }
       ]
     },
@@ -604,7 +652,8 @@
       "matches": [
         {
           "exportName": "handleUpdateOwnerProfileConfiguration",
-          "file": "src/runtime/http/owner-configuration.ts"
+          "file": "src/runtime/http/owner-configuration.ts",
+          "callable": true
         }
       ]
     }
@@ -612,181 +661,226 @@
   "adapters": [
     {
       "exportName": "handleAcceptOwnerCvVersion",
-      "file": "src/runtime/http/owner-cv.ts"
+      "file": "src/runtime/http/owner-cv.ts",
+      "callable": true
     },
     {
       "exportName": "handleAcceptOwnerMediaAsset",
-      "file": "src/runtime/http/owner-media.ts"
+      "file": "src/runtime/http/owner-media.ts",
+      "callable": true
     },
     {
       "exportName": "handleActivateOwnerAnalyticsGoalVersion",
-      "file": "src/runtime/http/owner-analytics.ts"
+      "file": "src/runtime/http/owner-analytics.ts",
+      "callable": true
     },
     {
       "exportName": "handleActivateOwnerCvVersion",
-      "file": "src/runtime/http/owner-cv.ts"
+      "file": "src/runtime/http/owner-cv.ts",
+      "callable": true
     },
     {
       "exportName": "handleApproveOwnerFeedback",
-      "file": "src/runtime/http/owner-moderation.ts"
+      "file": "src/runtime/http/owner-moderation.ts",
+      "callable": true
     },
     {
       "exportName": "handleArchiveOwnerContent",
-      "file": "src/runtime/http/owner-publication.ts"
+      "file": "src/runtime/http/owner-publication.ts",
+      "callable": true
     },
     {
       "exportName": "handleAssignOwnerProjectTaxonomyValue",
-      "file": "src/runtime/http/owner-project.ts"
+      "file": "src/runtime/http/owner-project.ts",
+      "callable": true
     },
     {
       "exportName": "handleChangeOwnerProjectPublicSlug",
-      "file": "src/runtime/http/owner-project.ts"
+      "file": "src/runtime/http/owner-project.ts",
+      "callable": true
     },
     {
       "exportName": "handleChangeOwnerProjectStatus",
-      "file": "src/runtime/http/owner-project.ts"
+      "file": "src/runtime/http/owner-project.ts",
+      "callable": true
     },
     {
       "exportName": "handleCreateOwnerAnalyticsGoalVersion",
-      "file": "src/runtime/http/owner-analytics.ts"
+      "file": "src/runtime/http/owner-analytics.ts",
+      "callable": true
     },
     {
       "exportName": "handleCreateOwnerMediaUploadIntent",
-      "file": "src/runtime/http/owner-media.ts"
+      "file": "src/runtime/http/owner-media.ts",
+      "callable": true
     },
     {
       "exportName": "handleCreateOwnerTaxonomyValue",
-      "file": "src/runtime/http/owner-taxonomy.ts"
+      "file": "src/runtime/http/owner-taxonomy.ts",
+      "callable": true
     },
     {
       "exportName": "handleDownloadOwnerExport",
-      "file": "src/runtime/http/owner-export.ts"
+      "file": "src/runtime/http/owner-export.ts",
+      "callable": true
     },
     {
       "exportName": "handleGetCurrentCv",
-      "file": "src/runtime/http/current-cv.ts"
+      "file": "src/runtime/http/current-cv.ts",
+      "callable": true
     },
     {
       "exportName": "handleGetOwnerAnalyticsGoal",
-      "file": "src/runtime/http/owner-analytics.ts"
+      "file": "src/runtime/http/owner-analytics.ts",
+      "callable": true
     },
     {
       "exportName": "handleGetOwnerContentAggregate",
-      "file": "src/runtime/http/owner-publication.ts"
+      "file": "src/runtime/http/owner-publication.ts",
+      "callable": true
     },
     {
       "exportName": "handleGetOwnerCvPortfolio",
-      "file": "src/runtime/http/owner-cv.ts"
+      "file": "src/runtime/http/owner-cv.ts",
+      "callable": true
     },
     {
       "exportName": "handleGetOwnerExport",
-      "file": "src/runtime/http/owner-export.ts"
+      "file": "src/runtime/http/owner-export.ts",
+      "callable": true
     },
     {
       "exportName": "handleGetOwnerFeedbackModeration",
-      "file": "src/runtime/http/owner-moderation.ts"
+      "file": "src/runtime/http/owner-moderation.ts",
+      "callable": true
     },
     {
       "exportName": "handleGetOwnerMediaAggregate",
-      "file": "src/runtime/http/owner-media.ts"
+      "file": "src/runtime/http/owner-media.ts",
+      "callable": true
     },
     {
       "exportName": "handleGetOwnerProjectAggregate",
-      "file": "src/runtime/http/owner-project.ts"
+      "file": "src/runtime/http/owner-project.ts",
+      "callable": true
     },
     {
       "exportName": "handleGetOwnerTaxonomyAggregate",
-      "file": "src/runtime/http/owner-taxonomy.ts"
+      "file": "src/runtime/http/owner-taxonomy.ts",
+      "callable": true
     },
     {
       "exportName": "handleHideOwnerContent",
-      "file": "src/runtime/http/owner-publication.ts"
+      "file": "src/runtime/http/owner-publication.ts",
+      "callable": true
     },
     {
       "exportName": "handleMergeOwnerTaxonomyValue",
-      "file": "src/runtime/http/owner-taxonomy.ts"
+      "file": "src/runtime/http/owner-taxonomy.ts",
+      "callable": true
     },
     {
       "exportName": "handlePostProjectFeedback",
-      "file": "src/runtime/http/feedback.ts"
+      "file": "src/runtime/http/feedback.ts",
+      "callable": true
     },
     {
       "exportName": "handlePostPublicEvent",
-      "file": "src/runtime/http/public-event.ts"
+      "file": "src/runtime/http/public-event.ts",
+      "callable": true
     },
     {
       "exportName": "handlePublishOwnerContentLanguage",
-      "file": "src/runtime/http/owner-publication.ts"
+      "file": "src/runtime/http/owner-publication.ts",
+      "callable": true
     },
     {
       "exportName": "handlePutProjectRating",
-      "file": "src/runtime/http/rating.ts"
+      "file": "src/runtime/http/rating.ts",
+      "callable": true
     },
     {
       "exportName": "handlePutProjectReaction",
-      "file": "src/runtime/http/reaction.ts"
+      "file": "src/runtime/http/reaction.ts",
+      "callable": true
     },
     {
       "exportName": "handleRecordOwnerMediaProcessing",
-      "file": "src/runtime/http/owner-media.ts"
+      "file": "src/runtime/http/owner-media.ts",
+      "callable": true
     },
     {
       "exportName": "handleRegisterOwnerCvVersion",
-      "file": "src/runtime/http/owner-cv.ts"
+      "file": "src/runtime/http/owner-cv.ts",
+      "callable": true
     },
     {
       "exportName": "handleRejectOwnerFeedback",
-      "file": "src/runtime/http/owner-moderation.ts"
+      "file": "src/runtime/http/owner-moderation.ts",
+      "callable": true
     },
     {
       "exportName": "handleRejectOwnerMediaAsset",
-      "file": "src/runtime/http/owner-media.ts"
+      "file": "src/runtime/http/owner-media.ts",
+      "callable": true
     },
     {
       "exportName": "handleRelateOwnerProjects",
-      "file": "src/runtime/http/owner-project.ts"
+      "file": "src/runtime/http/owner-project.ts",
+      "callable": true
     },
     {
       "exportName": "handleRenameOwnerTaxonomyValue",
-      "file": "src/runtime/http/owner-taxonomy.ts"
+      "file": "src/runtime/http/owner-taxonomy.ts",
+      "callable": true
     },
     {
       "exportName": "handleRequestOwnerExport",
-      "file": "src/runtime/http/owner-export.ts"
+      "file": "src/runtime/http/owner-export.ts",
+      "callable": true
     },
     {
       "exportName": "handleRestoreOwnerContent",
-      "file": "src/runtime/http/owner-publication.ts"
+      "file": "src/runtime/http/owner-publication.ts",
+      "callable": true
     },
     {
       "exportName": "handleRetireOwnerTaxonomyValue",
-      "file": "src/runtime/http/owner-taxonomy.ts"
+      "file": "src/runtime/http/owner-taxonomy.ts",
+      "callable": true
     },
     {
       "exportName": "handleSaveOwnerContentRevision",
-      "file": "src/runtime/http/owner-publication.ts"
+      "file": "src/runtime/http/owner-publication.ts",
+      "callable": true
     },
     {
       "exportName": "handleSetOwnerProjectFeatured",
-      "file": "src/runtime/http/owner-project.ts"
+      "file": "src/runtime/http/owner-project.ts",
+      "callable": true
     },
     {
       "exportName": "handleSuppressOwnerFeedback",
-      "file": "src/runtime/http/owner-moderation.ts"
+      "file": "src/runtime/http/owner-moderation.ts",
+      "callable": true
     },
     {
       "exportName": "handleUpdateOwnerContactChannels",
-      "file": "src/runtime/http/owner-configuration.ts"
+      "file": "src/runtime/http/owner-configuration.ts",
+      "callable": true
     },
     {
       "exportName": "handleUpdateOwnerGlobalProjectCta",
-      "file": "src/runtime/http/owner-configuration.ts"
+      "file": "src/runtime/http/owner-configuration.ts",
+      "callable": true
     },
     {
       "exportName": "handleUpdateOwnerProfileConfiguration",
-      "file": "src/runtime/http/owner-configuration.ts"
+      "file": "src/runtime/http/owner-configuration.ts",
+      "callable": true
     }
   ],
+  "invalidAdapters": [],
   "duplicateOperationIds": [],
   "undeclaredAdapters": [],
   "operationalRoutes": [

@@ -3,5 +3,6 @@
 ✓ unique-operation-identifiers: 44 unique operation identifiers
 ✓ one-adapter-per-operation: 44/44 resolved exactly once
 ✓ no-undeclared-product-adapters: 44 adapter exports declared by a contract
+✓ only-callable-runtime-adapters: 44/44 handler exports are callable runtime values
 ✓ only-operational-routes: /livez and /readyz are the only Route Handlers
 ✓ runtime boundary: 5 public + 39 Owner operations resolve exactly once

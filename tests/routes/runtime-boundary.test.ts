@@ -1,10 +1,19 @@
-import { existsSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   buildRuntimeBoundary,
   contractOperations,
   discoverExportedHandlerNames,
+  discoverRuntimeAdapterExports,
 } from "../../scripts/check-runtime-boundary.mjs";
 import { forbiddenSourceReasons } from "../../scripts/runtime-source-policy.mjs";
 
@@ -24,6 +33,7 @@ describe("Phase 2 contract-to-adapter runtime boundary (#33)", () => {
     const report = buildRuntimeBoundary(ROOT);
 
     expect(report.undeclaredAdapters).toEqual([]);
+    expect(report.invalidAdapters).toEqual([]);
     expect(report.duplicateOperationIds).toEqual([]);
   });
 
@@ -32,6 +42,7 @@ describe("Phase 2 contract-to-adapter runtime boundary (#33)", () => {
       export async function handleAsync() {}
       export function handleSync() {}
       export const handleArrow = async () => {};
+      export default function handleDefault() {}
       const local = () => {};
       export { local as handleReExported };
       export { handleForwarded } from "./forwarded.js";
@@ -40,10 +51,45 @@ describe("Phase 2 contract-to-adapter runtime boundary (#33)", () => {
     expect(discoverExportedHandlerNames(source)).toEqual([
       "handleArrow",
       "handleAsync",
+      "handleDefault",
       "handleForwarded",
       "handleReExported",
       "handleSync",
     ]);
+  });
+
+  it("counts only callable runtime values as adapters", () => {
+    const root = mkdtempSync(join(tmpdir(), "phase2-runtime-adapters-"));
+    const adapterRoot = join(root, "src", "runtime", "http");
+    mkdirSync(adapterRoot, { recursive: true });
+    writeFileSync(
+      join(adapterRoot, "fixture.ts"),
+      `
+        export default function handleDefaultExtra() {}
+        type OnlyType = { value: string };
+        export type { OnlyType as handleTypeOnly };
+        const value = 42;
+        export { value as handleNotCallable };
+        export { handleForwarded } from "../forwarded.js";
+      `,
+      "utf8",
+    );
+    writeFileSync(
+      join(root, "src", "runtime", "forwarded.ts"),
+      "export function handleForwarded() {}\n",
+      "utf8",
+    );
+
+    try {
+      expect(discoverRuntimeAdapterExports(root)).toEqual([
+        expect.objectContaining({ exportName: "handleDefaultExtra", callable: true }),
+        expect.objectContaining({ exportName: "handleForwarded", callable: true }),
+        expect.objectContaining({ exportName: "handleNotCallable", callable: false }),
+        expect.objectContaining({ exportName: "handleTypeOnly", callable: false }),
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("ignores handler syntax that appears only in comments or strings", () => {

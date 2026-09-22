@@ -86,17 +86,15 @@ export function discoverExportedHandlerNames(content) {
     node.modifiers?.some((modifier) => modifier.kind === kind) ?? false;
 
   for (const statement of sourceFile.statements) {
-    const isNamedExport =
-      hasModifier(statement, ts.SyntaxKind.ExportKeyword) &&
-      !hasModifier(statement, ts.SyntaxKind.DefaultKeyword);
+    const isExported = hasModifier(statement, ts.SyntaxKind.ExportKeyword);
     if (
-      isNamedExport &&
+      isExported &&
       ts.isFunctionDeclaration(statement) &&
       statement.name?.text.startsWith("handle")
     ) {
       names.add(statement.name.text);
     }
-    if (isNamedExport && ts.isVariableStatement(statement)) {
+    if (isExported && ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         if (ts.isIdentifier(declaration.name) && declaration.name.text.startsWith("handle")) {
           names.add(declaration.name.text);
@@ -116,20 +114,52 @@ export function discoverExportedHandlerNames(content) {
   return [...names].sort();
 }
 
-function discoverAdapters(root) {
+export function discoverRuntimeAdapterExports(root) {
   const adapterRoot = join(root, "src", "runtime", "http");
-  const adapters = [];
+  const files = listFiles(adapterRoot).filter((candidate) => candidate.endsWith(".ts"));
+  const program = ts.createProgram(files, {
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    noEmit: true,
+    skipLibCheck: true,
+    target: ts.ScriptTarget.ES2022,
+  });
+  const checker = program.getTypeChecker();
+  const handlerExports = [];
 
-  for (const file of listFiles(adapterRoot).filter((candidate) => candidate.endsWith(".ts"))) {
-    const content = readFileSync(file, "utf8");
-    for (const exportName of discoverExportedHandlerNames(content)) {
-      adapters.push({
+  for (const file of files) {
+    const sourceFile = program.getSourceFile(file);
+    const moduleSymbol = sourceFile && checker.getSymbolAtLocation(sourceFile);
+    if (!sourceFile || !moduleSymbol) continue;
+    for (const exportedSymbol of checker.getExportsOfModule(moduleSymbol)) {
+      const target =
+        exportedSymbol.flags & ts.SymbolFlags.Alias
+          ? checker.getAliasedSymbol(exportedSymbol)
+          : exportedSymbol;
+      const declaration =
+        target.valueDeclaration ?? target.declarations?.[0] ?? sourceFile;
+      let exportName = exportedSymbol.getName();
+      if (
+        exportName === "default" &&
+        "name" in declaration &&
+        declaration.name !== undefined &&
+        ts.isIdentifier(declaration.name)
+      ) {
+        exportName = declaration.name.text;
+      }
+      if (!exportName.startsWith("handle")) continue;
+      const type = checker.getTypeOfSymbolAtLocation(target, declaration);
+      const callable =
+        (target.flags & ts.SymbolFlags.Value) !== 0 &&
+        checker.getSignaturesOfType(type, ts.SignatureKind.Call).length > 0;
+      handlerExports.push({
         exportName,
         file: toPosix(relative(root, file)),
+        callable,
       });
     }
   }
-  return adapters.sort((left, right) =>
+  return handlerExports.sort((left, right) =>
     left.exportName === right.exportName
       ? left.file.localeCompare(right.file)
       : left.exportName.localeCompare(right.exportName),
@@ -154,7 +184,9 @@ export function buildRuntimeBoundary(root = DEFAULT_ROOT) {
     ...contractOperations(publicBundle, "public"),
     ...contractOperations(ownerBundle, "owner"),
   ];
-  const adapters = discoverAdapters(root);
+  const handlerExports = discoverRuntimeAdapterExports(root);
+  const adapters = handlerExports.filter((adapter) => adapter.callable);
+  const invalidAdapters = handlerExports.filter((adapter) => !adapter.callable);
   const operationIdCounts = new Map();
   for (const operation of operations) {
     operationIdCounts.set(
@@ -176,7 +208,7 @@ export function buildRuntimeBoundary(root = DEFAULT_ROOT) {
     };
   });
   const declaredExports = new Set(matrix.map((entry) => entry.expectedExport));
-  const undeclaredAdapters = adapters.filter(
+  const undeclaredAdapters = handlerExports.filter(
     (adapter) => !declaredExports.has(adapter.exportName),
   );
   const routeFiles = discoverRouteFiles(root);
@@ -217,6 +249,11 @@ export function buildRuntimeBoundary(root = DEFAULT_ROOT) {
       detail: `${adapters.length} adapter exports declared by a contract`,
     },
     {
+      name: "only-callable-runtime-adapters",
+      passed: invalidAdapters.length === 0,
+      detail: `${adapters.length}/${handlerExports.length} handler exports are callable runtime values`,
+    },
+    {
       name: "only-operational-routes",
       passed:
         unexpectedRouteFiles.length === 0 && missingOperationalRoutes.length === 0,
@@ -233,6 +270,7 @@ export function buildRuntimeBoundary(root = DEFAULT_ROOT) {
     checks,
     matrix,
     adapters,
+    invalidAdapters,
     duplicateOperationIds,
     undeclaredAdapters,
     operationalRoutes,
