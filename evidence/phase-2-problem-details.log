@@ -1,0 +1,9 @@
+
+ RUN  v3.2.4 <WORKSPACE>
+
+ ✓ tests/runtime/problem.test.ts (11 tests) 15ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  17:12:42
+   Duration  421ms (transform 111ms, setup 0ms, collect 148ms, tests 15ms, environment 0ms, prepare 102ms)

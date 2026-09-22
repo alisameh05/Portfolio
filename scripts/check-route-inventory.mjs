@@ -21,13 +21,23 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { forbiddenSourceReasons } from "./runtime-source-policy.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const PUBLIC_BUNDLE = join(ROOT, "openapi", "generated", "public-v1.json");
 const OWNER_BUNDLE = join(ROOT, "openapi", "generated", "owner-v1.json");
 const DEFAULT_REPORT = join(ROOT, "evidence", "phase-1-route-inventory.json");
 
-const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
+const HTTP_METHODS = new Set([
+  "get",
+  "put",
+  "post",
+  "delete",
+  "options",
+  "head",
+  "patch",
+  "trace",
+]);
 
 export const EXPECTED_PUBLIC_OPERATIONS = [
   "GET /api/v1/cv/current",
@@ -133,32 +143,10 @@ function scanSourceFiles() {
   return files.sort();
 }
 
-const PROVIDER_SPEC = "(?:next\\/|@supabase\\/|kysely(?:\\/|\"|')|@vercel\\/|vercel(?:\\/|\"|'))";
-const GENERATED_SPEC = "(?:src\\/contracts\\/http\\/|@hey-api\\/openapi-ts|@redocly\\/|openapi-typescript|(?:\\.\\.?\\/)+contracts\\/http\\/)";
-const PROVIDER_IMPORT = new RegExp(`(?:from\\s+|require\\s*\\(\\s*|import\\s*\\(\\s*)["']${PROVIDER_SPEC}`, "i");
-const PROVIDER_EXPORT_FROM = new RegExp(`export\\s+[^;]*?\\bfrom\\s+["']${PROVIDER_SPEC}`, "i");
-const GENERATED_IMPORT = new RegExp(`(?:from\\s+|require\\s*\\(\\s*|import\\s*\\(\\s*)["']${GENERATED_SPEC}`);
-const GENERATED_EXPORT_FROM = new RegExp(`export\\s+[^;]*?\\bfrom\\s+["']${GENERATED_SPEC}`);
-const SHARED_VALIDATOR_IMPORT = /from\s+["'](?:zod|valibot|@supabase\/|kysely|next\/|@vercel\/|@hey-api\/openapi-ts|@redocly\/|openapi-typescript)/i;
 const ROUTE_HANDLER_EXPORT =
   /export\s+(?:async\s+)?function\s+(?:GET|POST|PUT|PATCH|DELETE)\b|export\s+(?:const|let|var)\s+(?:GET|POST|PUT|PATCH|DELETE)\b/;
 const NEXT_HANDLER_IMPORT = /from\s+["']next\/server["']/;
 const API_PATH_LITERAL = /["'`](?:\/api\/(?:v1|owner\/v1)\/[^"'`\s]*)/;
-const LAB_ENTRY_DEF = /\b(?:class|function|interface|type)\s+LabEntry\b/i;
-const LAB_ENTRY_LITERAL = /\blab[-_ ]?entry\b/i;
-const LAB_PATH = /\/lab(?:\/|$)/i;
-const REACT_IMPORT = /from\s+["']react["']/;
-const BROWSER_STATE = /\b(?:localStorage|sessionStorage|indexedDB)\b|document\s*\.\s*cookie/;
-const SERVER_STUB_HINT = /generated[\s_-]*server[\s_-]*stub|server[\s_-]*stub|openapi-generator/i;
-
-function isDomainOrApplicationFile(relativePath) {
-  return /^src\/modules\/[^/]+\/(?:domain|application)\//.test(relativePath);
-}
-
-function isSharedDomainFile(relativePath) {
-  return /^src\/shared\/domain\//.test(relativePath);
-}
-
 function isGeneratedTransportFile(relativePath) {
   return /^src\/contracts\/http\//.test(relativePath);
 }
@@ -186,8 +174,9 @@ export function buildInventory() {
   const forbiddenFindings = [];
 
   // Phase 2 #27: operational probes outside both OpenAPI product surfaces.
-  // /livez and /readyz are the only allowed runtime routes; product adapters
-  // arrive later. Product operation counts stay exact.
+  // /livez and /readyz are the only allowed Route Handlers in Phase 2.
+  // Product operations remain handwritten transport adapters under
+  // src/runtime/http until later phases connect real application behavior.
   const ALLOWED_OPERATIONAL_ROUTE_FILES = new Set([
     "src/app/livez/route.ts",
     "src/app/readyz/route.ts",
@@ -203,18 +192,19 @@ export function buildInventory() {
     const base = file.split(/[\\/]/).at(-1) ?? "";
 
     // ── Allowlisted operational probes (Phase 2): not product surface ──
-    if (ALLOWED_OPERATIONAL_ROUTE_FILES.has(relativePath)) {
+    const isOperationalRoute = ALLOWED_OPERATIONAL_ROUTE_FILES.has(relativePath);
+    if (isOperationalRoute) {
       operationalRoutes.push({ file: relativePath, reason: "operational-probe" });
-      continue;
     }
 
     // ── Runtime route files (Next.js App Router / pages) are otherwise forbidden ──
-    if (/^route\.(?:ts|tsx|js|jsx|mjs)$/.test(base)) {
+    if (!isOperationalRoute && /^route\.(?:ts|tsx|js|jsx|mjs)$/.test(base)) {
       runtimeRoutes.push({ file: relativePath, reason: "route-handler-file" });
       forbiddenFindings.push({ file: relativePath, reason: "working-route-handler-file" });
       continue;
     }
     if (
+      !isOperationalRoute &&
       /(?:^|\/)(?:app|pages)\//.test(`/${relativePath}`) &&
       /\.(?:ts|js|mjs)$/.test(base)
     ) {
@@ -237,7 +227,7 @@ export function buildInventory() {
     }
 
     // Working Route Handler implementations.
-    if ((ROUTE_HANDLER_EXPORT.test(content) && NEXT_HANDLER_IMPORT.test(content)) || (ROUTE_HANDLER_EXPORT.test(content) && /NextResponse|NextRequest/.test(content))) {
+    if (!isOperationalRoute && ((ROUTE_HANDLER_EXPORT.test(content) && NEXT_HANDLER_IMPORT.test(content)) || (ROUTE_HANDLER_EXPORT.test(content) && /NextResponse|NextRequest/.test(content)))) {
       runtimeRoutes.push({ file: relativePath, reason: "exported-http-method-handler" });
       forbiddenFindings.push({ file: relativePath, reason: "working-route-handler" });
     }
@@ -257,39 +247,8 @@ export function buildInventory() {
       }
     }
 
-    // Lab entry surface (deferred after v1).
-    if (LAB_ENTRY_DEF.test(content) || LAB_ENTRY_LITERAL.test(content) || (LAB_PATH.test(relativePath) && !/openapi\//.test(relativePath))) {
-      forbiddenFindings.push({ file: relativePath, reason: "lab-entry-surface" });
-    }
-
-    // React presentation / JSX-TSX / browser state.
-    if (/\.(?:tsx|jsx)$/.test(base)) {
-      forbiddenFindings.push({ file: relativePath, reason: "jsx-tsx-surface" });
-    }
-    if (REACT_IMPORT.test(content)) {
-      forbiddenFindings.push({ file: relativePath, reason: "react-presentation-import" });
-    }
-    if (BROWSER_STATE.test(content)) {
-      forbiddenFindings.push({ file: relativePath, reason: "browser-state" });
-    }
-    if (SERVER_STUB_HINT.test(content)) {
-      forbiddenFindings.push({ file: relativePath, reason: "generated-server-stub" });
-    }
-
-    // Provider / generated-transport leakage into domain and application layers.
-    // Mirrors .dependency-cruiser.cjs (no-provider-in-domain,
-    // no-provider-in-application, no-generated-code-leakage) as a
-    // deterministic content scan: static, dynamic, and re-export forms.
-    if (isDomainOrApplicationFile(relativePath)) {
-      if (PROVIDER_IMPORT.test(content) || PROVIDER_EXPORT_FROM.test(content)) {
-        forbiddenFindings.push({ file: relativePath, reason: "provider-import-in-domain-or-application" });
-      }
-      if (GENERATED_IMPORT.test(content) || GENERATED_EXPORT_FROM.test(content)) {
-        forbiddenFindings.push({ file: relativePath, reason: "generated-transport-import-in-domain-or-application" });
-      }
-    }
-    if (isSharedDomainFile(relativePath) && SHARED_VALIDATOR_IMPORT.test(content)) {
-      forbiddenFindings.push({ file: relativePath, reason: "provider-or-validator-import-in-shared-domain" });
+    for (const reason of forbiddenSourceReasons(relativePath, content)) {
+      forbiddenFindings.push({ file: relativePath, reason });
     }
   }
 
@@ -348,12 +307,12 @@ export function buildInventory() {
   });
 
   const operationalOk =
-    operationalRoutes.length <= ALLOWED_OPERATIONAL_ROUTE_FILES.size &&
+    operationalRoutes.length === ALLOWED_OPERATIONAL_ROUTE_FILES.size &&
     operationalRoutes.every((route) => ALLOWED_OPERATIONAL_ROUTE_FILES.has(route.file));
   checks.push({
     name: "operational-probes-allowlisted",
     passed: operationalOk,
-    detail: operationalOk ? `${operationalRoutes.length} operational probe(s) within allowlist` : "unexpected operational route detected",
+    detail: operationalOk ? "exactly /livez and /readyz operational probes" : "missing or unexpected operational route detected",
   });
 
   const forbiddenOk = forbiddenFindings.length === 0;
