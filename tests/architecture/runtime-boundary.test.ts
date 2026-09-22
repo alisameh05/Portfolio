@@ -46,6 +46,18 @@ describe("Phase 2 runtime architecture enforcement (#33)", () => {
       content: 'import { createClient } from "@supabase/supabase-js";\n',
       reason: "provider-import-outside-adapter-composition",
     },
+    {
+      name: "provider import in an HTTP adapter",
+      file: "src/runtime/http/leak.ts",
+      content: 'import { createClient } from "@supabase/supabase-js";\n',
+      reason: "provider-import-outside-adapter-composition",
+    },
+    {
+      name: "provider import in a Route Handler",
+      file: "src/app/readyz/route.ts",
+      content: 'import "kysely";\nexport async function GET() {}\n',
+      reason: "provider-import-outside-adapter-composition",
+    },
   ])("rejects $name", ({ file, content, reason }) => {
     const report = inspectSourceRecords([{ file, content }]);
     expect(report.findings).toContainEqual({ file, reason });

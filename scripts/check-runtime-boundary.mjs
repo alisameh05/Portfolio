@@ -19,7 +19,16 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
-const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
+const HTTP_METHODS = new Set([
+  "get",
+  "put",
+  "post",
+  "delete",
+  "options",
+  "head",
+  "patch",
+  "trace",
+]);
 const EXPECTED_OPERATIONAL_ROUTES = [
   "src/app/livez/route.ts",
   "src/app/readyz/route.ts",
@@ -41,7 +50,7 @@ function listFiles(dir) {
   return files;
 }
 
-function contractOperations(bundle, surface) {
+export function contractOperations(bundle, surface) {
   return Object.entries(bundle.paths ?? {})
     .flatMap(([path, pathItem]) =>
       Object.entries(pathItem ?? {})
@@ -63,16 +72,34 @@ function handlerNameFor(operationId) {
     : `handle${operationId[0].toUpperCase()}${operationId.slice(1)}`;
 }
 
+export function discoverExportedHandlerNames(content) {
+  const names = new Set();
+  const declarationPatterns = [
+    /export\s+(?:default\s+)?(?:async\s+)?function\s+(handle[A-Za-z0-9_]+)\s*\(/g,
+    /export\s+(?:const|let|var)\s+(handle[A-Za-z0-9_]+)\b/g,
+  ];
+  for (const pattern of declarationPatterns) {
+    for (const match of content.matchAll(pattern)) names.add(match[1]);
+  }
+  for (const match of content.matchAll(/export\s*\{([^}]+)\}/g)) {
+    for (const specifier of match[1].split(",")) {
+      const parts = specifier.trim().split(/\s+as\s+/);
+      const exportedName = parts.at(-1)?.trim();
+      if (exportedName?.startsWith("handle")) names.add(exportedName);
+    }
+  }
+  return [...names].sort();
+}
+
 function discoverAdapters(root) {
   const adapterRoot = join(root, "src", "runtime", "http");
   const adapters = [];
-  const exportPattern = /export\s+async\s+function\s+(handle[A-Za-z0-9_]+)\s*\(/g;
 
   for (const file of listFiles(adapterRoot).filter((candidate) => candidate.endsWith(".ts"))) {
     const content = readFileSync(file, "utf8");
-    for (const match of content.matchAll(exportPattern)) {
+    for (const exportName of discoverExportedHandlerNames(content)) {
       adapters.push({
-        exportName: match[1],
+        exportName,
         file: toPosix(relative(root, file)),
       });
     }

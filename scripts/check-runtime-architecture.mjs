@@ -34,6 +34,9 @@ function importSpecifiers(content) {
   const specifiers = [];
   const pattern = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)["']([^"']+)["']/g;
   for (const match of content.matchAll(pattern)) specifiers.push(match[1]);
+  for (const match of content.matchAll(/\bimport\s*["']([^"']+)["']/g)) {
+    specifiers.push(match[1]);
+  }
   return specifiers;
 }
 
@@ -41,8 +44,8 @@ function isFramework(specifier) {
   return /^(?:next(?:\/|$)|react(?:\/|$)|react-dom(?:\/|$))/.test(specifier);
 }
 
-function isProvider(specifier) {
-  return /^(?:next(?:\/|$)|@supabase\/|kysely(?:\/|$)|@vercel\/|vercel(?:\/|$))/.test(
+function isInfrastructureProvider(specifier) {
+  return /^(?:@supabase\/|kysely(?:\/|$)|@vercel\/|vercel(?:\/|$))/.test(
     specifier,
   );
 }
@@ -62,9 +65,7 @@ function isHttpOrBootstrap(file) {
 function isProviderAdapterOrComposition(file) {
   return (
     /\/adapters\//.test(file) ||
-    /^src\/bootstrap\//.test(file) ||
-    /^src\/runtime\/http\//.test(file) ||
-    /^src\/app\//.test(file)
+    file === "src/bootstrap/composition-root.ts"
   );
 }
 
@@ -93,7 +94,10 @@ export function inspectSourceRecords(records) {
     ) {
       findings.push({ file, reason: "generated-validator-import-outside-transport" });
     }
-    if (imports.some(isProvider) && !isProviderAdapterOrComposition(file)) {
+    if (
+      imports.some(isInfrastructureProvider) &&
+      !isProviderAdapterOrComposition(file)
+    ) {
       findings.push({
         file,
         reason: "provider-import-outside-adapter-composition",

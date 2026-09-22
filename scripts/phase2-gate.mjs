@@ -10,11 +10,25 @@
 
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const REPORT_PATH = join(ROOT, "evidence", "phase-2-gate-report.json");
+
+function sanitizeOutput(output) {
+  let sanitized = output;
+  for (const [path, replacement] of [
+    [ROOT, "<WORKSPACE>"],
+    [tmpdir(), "<TEMP>"],
+  ]) {
+    sanitized = sanitized
+      .replaceAll(path, replacement)
+      .replaceAll(path.split("\\").join("/"), replacement);
+  }
+  return sanitized;
+}
 
 const checks = [
   {
@@ -118,18 +132,18 @@ function runCheck(check) {
     const chunks = [];
     child.stdout.on("data", (chunk) => {
       chunks.push(chunk);
-      process.stdout.write(chunk);
+      process.stdout.write(sanitizeOutput(chunk.toString("utf8")));
     });
     child.stderr.on("data", (chunk) => {
       chunks.push(chunk);
-      process.stderr.write(chunk);
+      process.stderr.write(sanitizeOutput(chunk.toString("utf8")));
     });
     let spawnError;
     child.on("error", (error) => {
       spawnError = error;
     });
     child.on("close", (exitCode) => {
-      const output = Buffer.concat(chunks).toString("utf8");
+      const output = sanitizeOutput(Buffer.concat(chunks).toString("utf8"));
       const evidencePath = join(ROOT, check.evidence);
       mkdirSync(dirname(evidencePath), { recursive: true });
       writeFileSync(

@@ -67,7 +67,7 @@ if (!srcCheck.ok) {
   recordCheck("Clean dependency graph for src/", false, "Forbidden dependencies detected");
 } else {
   console.log("✓ Architecture check passed: no forbidden dependencies in src/");
-  recordCheck("Clean dependency graph for src/", true, "82 modules cruised, 0 violations");
+  recordCheck("Clean dependency graph for src/", true, "src/ cruised with 0 violations");
 }
 
 // ── 2. Validate the invalid fixtures are correctly rejected ──────────────────

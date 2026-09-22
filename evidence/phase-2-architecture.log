@@ -51,7 +51,7 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 ═════════════════════════════════════════════════════════════════
              ARCHITECTURE CONFORMANCE REPORT
 ═════════════════════════════════════════════════════════════════
-[✓ PASS] Clean dependency graph for src/        : 82 modules cruised, 0 violations
+[✓ PASS] Clean dependency graph for src/        : src/ cruised with 0 violations
 [✓ PASS] Provider leakage fixture               : Correctly rejected with rule no-provider-in-domain
 [✓ PASS] Generated-code leakage fixture         : Correctly rejected with rule no-generated-code-leakage
 [✓ PASS] Deep cross-module import fixture       : Correctly rejected with rule no-deep-cross-module-import

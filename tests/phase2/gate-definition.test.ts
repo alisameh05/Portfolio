@@ -27,4 +27,19 @@ describe("Phase 2 authoritative gate definition (#33)", () => {
   it("provides the aggregate gate script", () => {
     expect(existsSync(join(ROOT, "scripts", "phase2-gate.mjs"))).toBe(true);
   });
+
+  it("keeps committed evidence free of local absolute paths", () => {
+    const evidenceFiles = [
+      "phase-2-contract-drift.log",
+      "phase-2-contract-tests.log",
+      "phase-2-configuration.log",
+      "phase-2-http-adapters.log",
+      "phase-2-problem-details.log",
+      "phase-2-health-lifecycle.log",
+    ];
+    for (const file of evidenceFiles) {
+      const content = readFileSync(join(ROOT, "evidence", file), "utf8");
+      expect(content, file).not.toMatch(/(?:^|[^A-Za-z])[A-Za-z]:[\\/]/m);
+    }
+  });
 });
