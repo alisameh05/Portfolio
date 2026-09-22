@@ -180,9 +180,18 @@ export function buildInventory() {
 
   const sourceFiles = scanSourceFiles();
   const runtimeRoutes = [];
+  const operationalRoutes = [];
   const declaredContractReferences = [];
   const undeclaredHttpSurface = [];
   const forbiddenFindings = [];
+
+  // Phase 2 #27: operational probes outside both OpenAPI product surfaces.
+  // /livez and /readyz are the only allowed runtime routes; product adapters
+  // arrive later. Product operation counts stay exact.
+  const ALLOWED_OPERATIONAL_ROUTE_FILES = new Set([
+    "src/app/livez/route.ts",
+    "src/app/readyz/route.ts",
+  ]);
 
   const allowedContractPaths = new Set([
     ...Object.keys(publicBundle.paths ?? {}),
@@ -193,7 +202,13 @@ export function buildInventory() {
     const relativePath = repoRelative(file);
     const base = file.split(/[\\/]/).at(-1) ?? "";
 
-    // ── Runtime route files (Next.js App Router / pages) are forbidden in Phase 1 ──
+    // ── Allowlisted operational probes (Phase 2): not product surface ──
+    if (ALLOWED_OPERATIONAL_ROUTE_FILES.has(relativePath)) {
+      operationalRoutes.push({ file: relativePath, reason: "operational-probe" });
+      continue;
+    }
+
+    // ── Runtime route files (Next.js App Router / pages) are otherwise forbidden ──
     if (/^route\.(?:ts|tsx|js|jsx|mjs)$/.test(base)) {
       runtimeRoutes.push({ file: relativePath, reason: "route-handler-file" });
       forbiddenFindings.push({ file: relativePath, reason: "working-route-handler-file" });
@@ -279,6 +294,7 @@ export function buildInventory() {
   }
 
   const sortByFile = (a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.reason < b.reason ? -1 : 1);
+  operationalRoutes.sort(sortByFile);
   runtimeRoutes.sort(sortByFile);
   declaredContractReferences.sort(sortByFile);
   undeclaredHttpSurface.sort(sortByFile);
@@ -328,7 +344,16 @@ export function buildInventory() {
   checks.push({
     name: "no-undeclared-runtime-http-surface",
     passed: runtimeOk,
-    detail: runtimeOk ? "allowed OpenAPI paths only; no implemented runtime routes" : `${runtimeRoutes.length} runtime route(s) detected`,
+    detail: runtimeOk ? `allowed OpenAPI paths only; ${operationalRoutes.length} operational probe(s), 0 product runtime routes` : `${runtimeRoutes.length} runtime route(s) detected`,
+  });
+
+  const operationalOk =
+    operationalRoutes.length <= ALLOWED_OPERATIONAL_ROUTE_FILES.size &&
+    operationalRoutes.every((route) => ALLOWED_OPERATIONAL_ROUTE_FILES.has(route.file));
+  checks.push({
+    name: "operational-probes-allowlisted",
+    passed: operationalOk,
+    detail: operationalOk ? `${operationalRoutes.length} operational probe(s) within allowlist` : "unexpected operational route detected",
   });
 
   const forbiddenOk = forbiddenFindings.length === 0;
@@ -345,6 +370,7 @@ export function buildInventory() {
     publicOperations,
     ownerOperations,
     allowedContractPaths: [...allowedContractPaths].sort(),
+    operationalRoutes,
     runtimeRoutes,
     declaredContractReferences,
     undeclaredHttpSurface,
@@ -403,7 +429,7 @@ export function main(argv = process.argv.slice(2)) {
     console.error(`✗ route inventory: ${failed.length} of ${report.checks.length} checks FAILED`);
     return 1;
   }
-  console.log(`✓ route inventory: all ${report.checks.length} checks passed (${report.publicOperations.length} public, ${report.ownerOperations.length} owner, 0 runtime routes)`);
+  console.log(`✓ route inventory: all ${report.checks.length} checks passed (${report.publicOperations.length} public, ${report.ownerOperations.length} owner, ${report.operationalRoutes?.length ?? 0} operational, 0 product runtime routes)`);
   return 0;
 }
 

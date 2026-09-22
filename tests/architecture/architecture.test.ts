@@ -132,11 +132,13 @@ describe("Module Skeletons Purity and Isolation Invariants", () => {
 });
 
 describe("Architecture Checker Dependency Rules Enforcement", () => {
+  // Phase 2 runtime adds bootstrap/app modules; depcruise over src/ takes
+  // longer on Windows single-thread exec. Explicit timeout only — same check.
   it("passes clean dependency check for src/ with 0 violations", () => {
     const result = runDepcruise("src");
     expect(result.ok).toBe(true);
     expect(result.output).toContain("no dependency violations found");
-  });
+  }, 60000);
 
   it("rejects provider-leakage fixture with rule: no-provider-in-domain", () => {
     const result = runDepcruise("tests/fixtures/invalid-deps/provider-leakage");

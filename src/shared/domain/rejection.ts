@@ -5,21 +5,16 @@
  *
  * INVARIANTS (from spec §Shared domain contracts):
  *   - The rejection union is CLOSED. Adding a rejection kind without a
- *     corresponding HTTP mapping must fail contract verification.
+ *     corresponding adapter mapping must fail contract verification
+ *     (the exhaustive HTTP mapper lives at the transport seam).
  *   - `code` is a STABLE MACHINE VALUE. Human detail is produced at the
  *     transport seam and MUST NOT be used for control flow.
  *   - Rejection represents EXPECTED business outcomes only. Infrastructure
  *     faults and programmer defects propagate as exceptions.
  *
- * HTTP mapping (RFC 9457 Problem Details) — exhaustive:
- *   validation          → 400 Bad Request
- *   unauthenticated     → 401 Unauthorized
- *   forbidden           → 403 Forbidden
- *   not_found           → 404 Not Found
- *   conflict            → 409 Conflict
- *   precondition_failed → 412 Precondition Failed
- *   rate_limited        → 429 Too Many Requests  (+ Retry-After)
- *   temporarily_unavailable → 503 Service Unavailable
+ * The union is transport-neutral: HTTP status, headers, titles, detail, and
+ * Problem types are adapter concerns (see `src/runtime/http/problem.ts`).
+ * No HTTP mapping lives in this module.
  *
  * This module imports ONLY from ./result.ts within this shared/domain directory.
  * It MUST NOT import Next.js, Supabase, Kysely, Vercel, OpenAPI, or any other
@@ -28,7 +23,7 @@
 
 // ── Rejection union ──────────────────────────────────────────────────────────
 
-/** Input failed structural or business validation. HTTP 400. */
+/** Input failed structural or business validation. */
 export type ValidationRejection = {
   readonly kind: "validation";
   /** Stable machine code. Example: "IDEMPOTENCY_KEY_TOO_LONG" */
@@ -37,26 +32,26 @@ export type ValidationRejection = {
   readonly details?: Readonly<Record<string, unknown>>;
 };
 
-/** No valid authentication credential was provided. HTTP 401. */
+/** No valid authentication credential was provided. */
 export type UnauthenticatedRejection = {
   readonly kind: "unauthenticated";
   readonly code: string;
 };
 
-/** Authenticated actor lacks authorization for this operation. HTTP 403. */
+/** Authenticated actor lacks authorization for this operation. */
 export type ForbiddenRejection = {
   readonly kind: "forbidden";
   readonly code: string;
 };
 
-/** The requested aggregate or resource does not exist. HTTP 404. */
+/** The requested aggregate or resource does not exist. */
 export type NotFoundRejection = {
   readonly kind: "not_found";
   readonly code: string;
 };
 
 /**
- * An idempotency, identity, slug, or invalid-transition conflict. HTTP 409.
+ * An idempotency, identity, slug, or invalid-transition conflict.
  *
  * `currentVersion` is present when the conflict is an optimistic-concurrency
  * version mismatch surfaced at the application layer before the DB write.
@@ -68,7 +63,7 @@ export type ConflictRejection = {
 };
 
 /**
- * Optimistic concurrency or If-Match failure on an existing aggregate. HTTP 412.
+ * Optimistic concurrency or If-Match failure on an existing aggregate.
  *
  * Commands that update an existing aggregate carry an `expectedVersion`.
  * A mismatch returns `precondition_failed` and NEVER partially changes state.
@@ -80,7 +75,7 @@ export type PreconditionFailedRejection = {
 };
 
 /**
- * The actor has exceeded an operation rate limit. HTTP 429.
+ * The actor has exceeded an operation rate limit.
  *
  * `retryAfterSeconds` MUST be present and MUST be forwarded as a `Retry-After`
  * header at the transport seam.
@@ -91,7 +86,7 @@ export type RateLimitedRejection = {
   readonly retryAfterSeconds: number;
 };
 
-/** A transient dependency or readiness failure; safe to retry later. HTTP 503. */
+/** A transient dependency or readiness failure; safe to retry later. */
 export type TemporarilyUnavailableRejection = {
   readonly kind: "temporarily_unavailable";
   readonly code: string;
@@ -112,32 +107,3 @@ export type Rejection =
   | PreconditionFailedRejection
   | RateLimitedRejection
   | TemporarilyUnavailableRejection;
-
-// ── HTTP status mapping ───────────────────────────────────────────────────────
-
-/**
- * Return the canonical HTTP status code for a Rejection.
- *
- * This mapping is exhaustive — TypeScript will error if a new Rejection kind
- * is added without updating this function.
- */
-export function rejectionToHttpStatus(rejection: Rejection): number {
-  switch (rejection.kind) {
-    case "validation":
-      return 400;
-    case "unauthenticated":
-      return 401;
-    case "forbidden":
-      return 403;
-    case "not_found":
-      return 404;
-    case "conflict":
-      return 409;
-    case "precondition_failed":
-      return 412;
-    case "rate_limited":
-      return 429;
-    case "temporarily_unavailable":
-      return 503;
-  }
-}

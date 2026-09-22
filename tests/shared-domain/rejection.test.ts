@@ -1,11 +1,12 @@
 /**
- * rejection.test.ts
+ * rejection.test.ts — Phase 2 #26
  *
  * Tests for the Rejection shared domain contract.
  *
  * Covers (per spec §Testing Decisions):
  *   - Union exhaustiveness: all 8 rejection kinds handled
- *   - Canonical HTTP status mapping (rejectionToHttpStatus)
+ *   - Transport neutrality: no HTTP status mapping lives in shared domain
+ *     (mapping moved to the runtime HTTP boundary in #26)
  *   - Machine-code stability and required properties
  *   - Rate limited Retry-After requirement
  *   - Precondition failed optimistic concurrency metadata
@@ -13,90 +14,66 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  type ConflictRejection,
-  type ForbiddenRejection,
-  type NotFoundRejection,
-  type PreconditionFailedRejection,
-  type RateLimitedRejection,
-  type Rejection,
-  type TemporarilyUnavailableRejection,
-  type UnauthenticatedRejection,
-  type ValidationRejection,
-  rejectionToHttpStatus,
+import type {
+  ConflictRejection,
+  ForbiddenRejection,
+  NotFoundRejection,
+  PreconditionFailedRejection,
+  RateLimitedRejection,
+  Rejection,
+  TemporarilyUnavailableRejection,
+  UnauthenticatedRejection,
+  ValidationRejection,
 } from "../../src/shared/domain/rejection.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 describe("Rejection domain contract", () => {
-  describe("rejectionToHttpStatus() mapping", () => {
-    it("maps validation to 400", () => {
-      const rej: ValidationRejection = {
-        kind: "validation",
-        code: "INVALID_INPUT",
-        details: { field: "email" },
-      };
-      expect(rejectionToHttpStatus(rej)).toBe(400);
+  describe("transport neutrality (#26)", () => {
+    it("owns no HTTP status mapping", () => {
+      const filePath = resolve(__dirname, "../../src/shared/domain/rejection.ts");
+      const content = readFileSync(filePath, "utf-8");
+      expect(content).not.toMatch(/rejectionToHttpStatus/);
+      expect(content).not.toMatch(/return\s+40\d|return\s+41\d|return\s+42\d|return\s+50\d/);
+      expect(content).not.toMatch(/→\s*40\d|→\s*50\d/);
     });
 
-    it("maps unauthenticated to 401", () => {
-      const rej: UnauthenticatedRejection = {
-        kind: "unauthenticated",
-        code: "AUTH_REQUIRED",
-      };
-      expect(rejectionToHttpStatus(rej)).toBe(401);
+    it("is not re-exported with an HTTP helper from the barrel", () => {
+      const barrelPath = resolve(__dirname, "../../src/shared/domain/index.ts");
+      const content = readFileSync(barrelPath, "utf-8");
+      expect(content).not.toMatch(/rejectionToHttpStatus/);
     });
 
-    it("maps forbidden to 403", () => {
-      const rej: ForbiddenRejection = {
-        kind: "forbidden",
-        code: "ACCESS_DENIED",
-      };
-      expect(rejectionToHttpStatus(rej)).toBe(403);
-    });
-
-    it("maps not_found to 404", () => {
-      const rej: NotFoundRejection = {
-        kind: "not_found",
-        code: "RESOURCE_NOT_FOUND",
-      };
-      expect(rejectionToHttpStatus(rej)).toBe(404);
-    });
-
-    it("maps conflict to 409", () => {
-      const rej: ConflictRejection = {
-        kind: "conflict",
-        code: "SLUG_ALREADY_EXISTS",
-        currentVersion: 3,
-      };
-      expect(rejectionToHttpStatus(rej)).toBe(409);
-    });
-
-    it("maps precondition_failed to 412", () => {
-      const rej: PreconditionFailedRejection = {
-        kind: "precondition_failed",
-        code: "CONCURRENCY_VERSION_MISMATCH",
-        currentVersion: 5,
-      };
-      expect(rejectionToHttpStatus(rej)).toBe(412);
-    });
-
-    it("maps rate_limited to 429", () => {
-      const rej: RateLimitedRejection = {
-        kind: "rate_limited",
-        code: "RATE_LIMIT_EXCEEDED",
-        retryAfterSeconds: 60,
-      };
-      expect(rejectionToHttpStatus(rej)).toBe(429);
-      expect(rej.retryAfterSeconds).toBe(60);
-    });
-
-    it("maps temporarily_unavailable to 503", () => {
-      const rej: TemporarilyUnavailableRejection = {
-        kind: "temporarily_unavailable",
-        code: "SERVICE_WARMING_UP",
-      };
-      expect(rejectionToHttpStatus(rej)).toBe(503);
+    it("keeps the closed 8-kind union", () => {
+      const kinds: Array<Rejection["kind"]> = [
+        "validation",
+        "unauthenticated",
+        "forbidden",
+        "not_found",
+        "conflict",
+        "precondition_failed",
+        "rate_limited",
+        "temporarily_unavailable",
+      ];
+      expect(new Set(kinds).size).toBe(8);
+      // Compile-time exhaustiveness: adding a ninth kind breaks this switch.
+      for (const kind of kinds) {
+        switch (kind) {
+          case "validation":
+          case "unauthenticated":
+          case "forbidden":
+          case "not_found":
+          case "conflict":
+          case "precondition_failed":
+          case "rate_limited":
+          case "temporarily_unavailable":
+            break;
+          default: {
+            const exhaustive: never = kind;
+            throw new Error(`Unhandled rejection kind: ${String(exhaustive)}`);
+          }
+        }
+      }
     });
   });
 
@@ -119,6 +96,61 @@ describe("Rejection domain contract", () => {
       }
     });
 
+    it("validation rejects without carrying HTTP semantics", () => {
+      const rej: ValidationRejection = {
+        kind: "validation",
+        code: "INVALID_INPUT",
+        details: { field: "email" },
+      };
+      expect(rej.kind).toBe("validation");
+      expect(rej).not.toHaveProperty("status");
+      expect(rej).not.toHaveProperty("title");
+    });
+
+    it("unauthenticated and forbidden stay distinct without HTTP status", () => {
+      const unauth: UnauthenticatedRejection = {
+        kind: "unauthenticated",
+        code: "AUTH_REQUIRED",
+      };
+      const forbid: ForbiddenRejection = {
+        kind: "forbidden",
+        code: "ACCESS_DENIED",
+      };
+      expect(unauth.kind).not.toBe(forbid.kind);
+    });
+
+    it("not_found carries no HTTP status", () => {
+      const rej: NotFoundRejection = {
+        kind: "not_found",
+        code: "RESOURCE_NOT_FOUND",
+      };
+      expect(rej).not.toHaveProperty("status");
+    });
+
+    it("conflict optionally includes currentVersion", () => {
+      const rej: ConflictRejection = {
+        kind: "conflict",
+        code: "SLUG_ALREADY_EXISTS",
+        currentVersion: 3,
+      };
+      expect(rej.currentVersion).toBe(3);
+    });
+
+    it("maps precondition_failed to optimistic-concurrency metadata only", () => {
+      const withVersion: PreconditionFailedRejection = {
+        kind: "precondition_failed",
+        code: "CONCURRENCY_VERSION_MISMATCH",
+        currentVersion: 5,
+      };
+      const withoutVersion: PreconditionFailedRejection = {
+        kind: "precondition_failed",
+        code: "PRECONDITION_UNMET",
+      };
+
+      expect(withVersion.currentVersion).toBe(5);
+      expect(withoutVersion.currentVersion).toBeUndefined();
+    });
+
     it("rate_limited requires a non-negative retryAfterSeconds", () => {
       const rej: RateLimitedRejection = {
         kind: "rate_limited",
@@ -128,19 +160,12 @@ describe("Rejection domain contract", () => {
       expect(rej.retryAfterSeconds).toBeGreaterThanOrEqual(0);
     });
 
-    it("precondition_failed optionally includes currentVersion", () => {
-      const withVersion: PreconditionFailedRejection = {
-        kind: "precondition_failed",
-        code: "VERSION_MISMATCH",
-        currentVersion: 4,
+    it("temporarily_unavailable carries a stable machine code", () => {
+      const rej: TemporarilyUnavailableRejection = {
+        kind: "temporarily_unavailable",
+        code: "RUNTIME_NOT_IMPLEMENTED",
       };
-      const withoutVersion: PreconditionFailedRejection = {
-        kind: "precondition_failed",
-        code: "PRECONDITION_UNMET",
-      };
-
-      expect(withVersion.currentVersion).toBe(4);
-      expect(withoutVersion.currentVersion).toBeUndefined();
+      expect(rej.code).toBe("RUNTIME_NOT_IMPLEMENTED");
     });
   });
 
