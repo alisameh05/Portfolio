@@ -64,6 +64,46 @@ Studio, Edge Runtime, and Analytics remain disabled until their owning phase.
 Remote authentication, project linking, remote migration, and deployment remain
 outside this workflow.
 
+## Migration and security baseline
+
+Ticket #46 adds the first timestamped application migration. It creates only
+the declared module schemas and passwordless capability roles; it creates no
+business table or seed data. The Phase 2 prior-release snapshot is recorded at
+`supabase/baselines/phase2.json` as an initialized local Supabase database with
+zero application migrations and zero application schemas.
+
+Run the deterministic source and policy checks without Docker:
+
+```powershell
+npm run db:baseline:verify
+```
+
+With Docker running, prove clean and prior-baseline upgrades produce the same
+normalized schemas, owners, capability-role attributes, default privileges,
+object inventory, and migration ledger:
+
+```powershell
+npm run db:baseline:test
+```
+
+The live check creates two process-scoped Supabase projects on separate local
+ports and never changes the repository's normal local stack. The upgrade
+project starts with an empty migration set, verifies the initialized Phase 2
+platform schemas and empty migration history, then applies the Phase 3
+migration through `supabase migration up --local` twice: once to migrate and
+once to prove replay is a no-op. The clean project starts with the committed
+migration and runs `supabase db reset --local`. Both paths create and remove
+privilege probes for future tables, sequences, and functions before their
+normalized states and migration ledgers are compared. The verifier stops both
+projects, removes their temporary work directories, writes sanitized evidence,
+rejects non-loopback database URLs, and never emits the captured connection
+string or provider output. Application login principals and passwords are
+provisioned outside migrations; the committed roles are passwordless
+capabilities only. If an isolated project cannot be stopped, the command exits
+nonzero, reports `LOCAL_DB_CLEANUP_FAILED`, and retains that project's temporary
+metadata so an operator can recover it; cleanup failure can never be reported
+as success.
+
 ## Safe failure behavior
 
 The wrapper removes remote credential variables before invoking the project-local
