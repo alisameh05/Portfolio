@@ -46,6 +46,16 @@ describe("Phase 2 contract-to-adapter runtime boundary (#33)", () => {
     ]);
   });
 
+  it("ignores handler syntax that appears only in comments or strings", () => {
+    const source = `
+      // export async function handleCommentOnly() {}
+      const example = "export const handleStringOnly = async () => {}";
+      /* export { local as handleBlockCommentOnly }; */
+    `;
+
+    expect(discoverExportedHandlerNames(source)).toEqual([]);
+  });
+
   it("counts every OpenAPI Path Item operation method", () => {
     const operations = contractOperations(
       {
@@ -97,6 +107,19 @@ describe("Phase 2 contract-to-adapter runtime boundary (#33)", () => {
       );
     },
   );
+
+  it.each([
+    'import "react";',
+    'import React from "react";',
+    'export { createElement } from "react";',
+    'const React = require("react");',
+    'const React = await import("react");',
+    'import { renderToString } from "react-dom/server";',
+  ])("rejects React presentation import form: %s", (content) => {
+    expect(forbiddenSourceReasons("src/app/livez/route.ts", content)).toContain(
+      "react-presentation-import",
+    );
+  });
 
   it("emits the durable Phase 2 runtime-boundary evidence", () => {
     const reportPath = join(ROOT, "evidence", "phase-2-runtime-boundary.json");

@@ -1,9 +1,9 @@
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/runtime/configuration.test.ts (17 tests) 12ms
+ ✓ tests/runtime/configuration.test.ts (17 tests) 11ms
 
  Test Files  1 passed (1)
       Tests  17 passed (17)
-   Start at  16:19:30
-   Duration  393ms (transform 98ms, setup 0ms, collect 100ms, tests 12ms, environment 0ms, prepare 111ms)
+   Start at  16:45:35
+   Duration  329ms (transform 69ms, setup 0ms, collect 70ms, tests 11ms, environment 0ms, prepare 99ms)

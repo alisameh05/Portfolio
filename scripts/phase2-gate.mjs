@@ -30,6 +30,15 @@ function sanitizeOutput(output) {
   return sanitized;
 }
 
+function normalizeEvidenceOutput(output) {
+  return `${sanitizeOutput(output)
+    .replaceAll("\r\n", "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .trimEnd()}\n`;
+}
+
 const checks = [
   {
     name: "phase1-toolchain",
@@ -146,11 +155,7 @@ function runCheck(check) {
       const output = sanitizeOutput(Buffer.concat(chunks).toString("utf8"));
       const evidencePath = join(ROOT, check.evidence);
       mkdirSync(dirname(evidencePath), { recursive: true });
-      writeFileSync(
-        evidencePath,
-        output.endsWith("\n") ? output : `${output}\n`,
-        "utf8",
-      );
+      writeFileSync(evidencePath, normalizeEvidenceOutput(output), "utf8");
       resolve({
         name: check.name,
         passed: exitCode === 0 && spawnError === undefined,

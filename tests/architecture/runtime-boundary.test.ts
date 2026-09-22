@@ -58,6 +58,46 @@ describe("Phase 2 runtime architecture enforcement (#33)", () => {
       content: 'import "kysely";\nexport async function GET() {}\n',
       reason: "provider-import-outside-adapter-composition",
     },
+    {
+      name: "React side-effect import in a Route Handler",
+      file: "src/app/livez/route.ts",
+      content: 'import "react";\nexport async function GET() {}\n',
+      reason: "react-presentation-import",
+    },
+    {
+      name: "React DOM dynamic import in an HTTP adapter",
+      file: "src/runtime/http/leak.ts",
+      content: 'const renderer = await import("react-dom/server");\n',
+      reason: "react-presentation-import",
+    },
+    {
+      name: "bootstrap orchestration import in the liveness Route Handler",
+      file: "src/app/livez/route.ts",
+      content:
+        'import { runPublication } from "../../bootstrap/composition-root.js";\nexport async function GET() { return runPublication(); }\n',
+      reason: "route-handler-import-outside-allowlist",
+    },
+    {
+      name: "module barrel import in the readiness Route Handler",
+      file: "src/app/readyz/route.ts",
+      content:
+        'import { runPublication } from "../../modules/content-publication/index.js";\nexport async function GET() { return runPublication(); }\n',
+      reason: "route-handler-import-outside-allowlist",
+    },
+    {
+      name: "shared application import in the readiness Route Handler",
+      file: "src/app/readyz/route.ts",
+      content:
+        'import { runPublication } from "../../shared/application/index.js";\nexport async function GET() { return runPublication(); }\n',
+      reason: "route-handler-import-outside-allowlist",
+    },
+    {
+      name: "runtime HTTP import in the readiness Route Handler",
+      file: "src/app/readyz/route.ts",
+      content:
+        'import { handleGetCurrentCv } from "../../runtime/http/current-cv.js";\nexport async function GET() { return handleGetCurrentCv(); }\n',
+      reason: "route-handler-import-outside-allowlist",
+    },
   ])("rejects $name", ({ file, content, reason }) => {
     const report = inspectSourceRecords([{ file, content }]);
     expect(report.findings).toContainEqual({ file, reason });

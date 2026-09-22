@@ -13,6 +13,13 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
+const ROUTE_IMPORT_ALLOWLIST = new Map([
+  ["src/app/livez/route.ts", new Set()],
+  [
+    "src/app/readyz/route.ts",
+    new Set(["../../runtime/lifecycle.js", "../../runtime/readyz.js"]),
+  ],
+]);
 
 function toPosix(path) {
   return path.split("\\").join("/");
@@ -41,7 +48,11 @@ function importSpecifiers(content) {
 }
 
 function isFramework(specifier) {
-  return /^(?:next(?:\/|$)|react(?:\/|$)|react-dom(?:\/|$))/.test(specifier);
+  return /^next(?:\/|$)/.test(specifier);
+}
+
+function isReactPresentation(specifier) {
+  return /^(?:react|react-dom)(?:\/|$)/.test(specifier);
 }
 
 function isInfrastructureProvider(specifier) {
@@ -75,7 +86,18 @@ export function inspectSourceRecords(records) {
     const file = toPosix(record.file);
     const content = record.content;
     const imports = importSpecifiers(content);
+    const isRouteHandler = /(?:^|\/)route\.(?:ts|tsx|js|jsx|mjs)$/.test(file);
 
+    if (isRouteHandler) {
+      const allowedImports = ROUTE_IMPORT_ALLOWLIST.get(file) ?? new Set();
+      if (imports.some((specifier) => !allowedImports.has(specifier))) {
+        findings.push({ file, reason: "route-handler-import-outside-allowlist" });
+      }
+    }
+
+    if (imports.some(isReactPresentation)) {
+      findings.push({ file, reason: "react-presentation-import" });
+    }
     if (imports.some(isFramework) && !isHttpOrBootstrap(file)) {
       findings.push({ file, reason: "framework-import-outside-http-bootstrap" });
     }
@@ -104,7 +126,7 @@ export function inspectSourceRecords(records) {
       });
     }
     if (
-      /(?:^|\/)route\.(?:ts|tsx|js|jsx|mjs)$/.test(file) &&
+      isRouteHandler &&
       (imports.some((specifier) =>
         /(?:^|\/)(?:modules|runtime\/fakes|contracts\/http)(?:\/|$)/.test(
           specifier,

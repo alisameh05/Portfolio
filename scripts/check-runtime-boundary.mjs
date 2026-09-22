@@ -17,6 +17,7 @@ import {
 } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const DEFAULT_ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const HTTP_METHODS = new Set([
@@ -74,18 +75,42 @@ function handlerNameFor(operationId) {
 
 export function discoverExportedHandlerNames(content) {
   const names = new Set();
-  const declarationPatterns = [
-    /export\s+(?:default\s+)?(?:async\s+)?function\s+(handle[A-Za-z0-9_]+)\s*\(/g,
-    /export\s+(?:const|let|var)\s+(handle[A-Za-z0-9_]+)\b/g,
-  ];
-  for (const pattern of declarationPatterns) {
-    for (const match of content.matchAll(pattern)) names.add(match[1]);
-  }
-  for (const match of content.matchAll(/export\s*\{([^}]+)\}/g)) {
-    for (const specifier of match[1].split(",")) {
-      const parts = specifier.trim().split(/\s+as\s+/);
-      const exportedName = parts.at(-1)?.trim();
-      if (exportedName?.startsWith("handle")) names.add(exportedName);
+  const sourceFile = ts.createSourceFile(
+    "runtime-adapter.ts",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const hasModifier = (node, kind) =>
+    node.modifiers?.some((modifier) => modifier.kind === kind) ?? false;
+
+  for (const statement of sourceFile.statements) {
+    const isNamedExport =
+      hasModifier(statement, ts.SyntaxKind.ExportKeyword) &&
+      !hasModifier(statement, ts.SyntaxKind.DefaultKeyword);
+    if (
+      isNamedExport &&
+      ts.isFunctionDeclaration(statement) &&
+      statement.name?.text.startsWith("handle")
+    ) {
+      names.add(statement.name.text);
+    }
+    if (isNamedExport && ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.name.text.startsWith("handle")) {
+          names.add(declaration.name.text);
+        }
+      }
+    }
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.exportClause !== undefined &&
+      ts.isNamedExports(statement.exportClause)
+    ) {
+      for (const element of statement.exportClause.elements) {
+        if (element.name.text.startsWith("handle")) names.add(element.name.text);
+      }
     }
   }
   return [...names].sort();

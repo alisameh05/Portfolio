@@ -8,7 +8,15 @@ const SHARED_VALIDATOR_IMPORT = /from\s+["'](?:zod|valibot|@supabase\/|kysely|ne
 const LAB_ENTRY_DEF = /\b(?:class|function|interface|type)\s+LabEntry\b/i;
 const LAB_ENTRY_LITERAL = /\blab[-_ ]?entry\b/i;
 const LAB_PATH = /\/lab(?:\/|$)/i;
-const REACT_IMPORT = /from\s+["']react["']/;
+const REACT_SPEC = "react(?:-dom)?(?:\\/[^\"']*)?";
+const REACT_IMPORT = new RegExp(
+  `(?:from\\s+|require\\s*\\(\\s*|import\\s*\\(\\s*|\\bimport\\s*)["']${REACT_SPEC}["']`,
+  "i",
+);
+const REACT_EXPORT_FROM = new RegExp(
+  `export\\s+[^;]*?\\bfrom\\s+["']${REACT_SPEC}["']`,
+  "i",
+);
 const BROWSER_STATE = /\b(?:localStorage|sessionStorage|indexedDB)\b|document\s*\.\s*cookie/;
 const SERVER_STUB_HINT = /generated[\s_-]*server[\s_-]*stub|server[\s_-]*stub|openapi-generator/i;
 const FRONTEND_STYLE_FILE = /\.(?:css|scss|sass|less|styl)$/i;
@@ -33,7 +41,9 @@ export function forbiddenSourceReasons(relativePath, content) {
   }
   if (/\.(?:tsx|jsx)$/.test(base)) reasons.push("jsx-tsx-surface");
   if (FRONTEND_STYLE_FILE.test(base)) reasons.push("frontend-style-surface");
-  if (REACT_IMPORT.test(content)) reasons.push("react-presentation-import");
+  if (REACT_IMPORT.test(content) || REACT_EXPORT_FROM.test(content)) {
+    reasons.push("react-presentation-import");
+  }
   if (BROWSER_STATE.test(content)) reasons.push("browser-state");
   if (SERVER_STUB_HINT.test(content)) reasons.push("generated-server-stub");
   if (isDomainOrApplicationFile(relativePath)) {
