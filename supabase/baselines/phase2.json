@@ -1,0 +1,6 @@
+{
+  "release": "phase-2",
+  "platform": "local-supabase",
+  "applicationMigrations": [],
+  "applicationSchemas": []
+}

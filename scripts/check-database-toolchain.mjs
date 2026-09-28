@@ -74,7 +74,7 @@ function verify(root = ROOT) {
   for (const requiredPath of [
     "supabase/config.toml",
     "supabase/seed.sql",
-    "supabase/migrations/.gitkeep",
+    "supabase/migrations",
     "scripts/local-database.mjs",
     "docs/phase3-local-database.md",
   ]) {
