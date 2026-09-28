@@ -109,6 +109,39 @@ describe("PostgreSQL runtime composition (#47)", () => {
     resetRuntimeForTests();
   });
 
+  it("closes the database resource when the readiness check throws", async () => {
+    resetRuntimeForTests();
+    let closeCount = 0;
+    await expect(
+      initializeDatabaseRuntime(
+        {
+          NODE_ENV: "test",
+          APP_BASE_URL: "http://localhost:3000",
+          DATABASE_URL: "postgresql://runtime:secret@127.0.0.1:54322/postgres",
+        },
+        "application",
+        () => ({
+          operations: createOperationsFake(),
+          resource: {
+            name: "postgresql",
+            close: async () => { closeCount += 1; },
+          },
+          readiness: {
+            name: "postgresql",
+            check: async () => { throw new Error("probe failed"); },
+          },
+        }),
+      ),
+    ).rejects.toThrow("Database runtime initialization failed.");
+    expect(closeCount).toBe(1);
+    const { getLifecycleCoordinator } = await import(
+      "../../src/runtime/lifecycle.js"
+    );
+    await getLifecycleCoordinator().shutdown();
+    expect(closeCount).toBe(1);
+    resetRuntimeForTests();
+  });
+
   it("keeps readiness false while a registered dependency is unavailable and recovers", async () => {
     let databaseReady = false;
     const lifecycle = createLifecycleCoordinator();

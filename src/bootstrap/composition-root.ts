@@ -102,19 +102,25 @@ export async function initializeDatabaseRuntime(
         };
       });
     const dependencies = await resolvedFactory();
-    lifecycle.registerResource(dependencies.resource);
-    lifecycle.registerReadinessCheck(dependencies.readiness);
-    if (!(await dependencies.readiness.check())) {
+    let ready = false;
+    try {
+      ready = await dependencies.readiness.check();
+    } catch {
+      ready = false;
+    }
+    if (!ready) {
       await dependencies.resource.close();
       throw new Error("DATABASE_NOT_READY");
     }
+    lifecycle.registerResource(dependencies.resource);
+    lifecycle.registerReadinessCheck(dependencies.readiness);
     current = config;
     currentOperations = dependencies.operations;
     lifecycle.markReady();
     return Object.freeze({ ...config, runtimeKind });
-  } catch {
+  } catch (error) {
     lifecycle.markFailed();
-    throw new Error("Database runtime initialization failed.");
+    throw new Error("Database runtime initialization failed.", { cause: error });
   }
 }
 
