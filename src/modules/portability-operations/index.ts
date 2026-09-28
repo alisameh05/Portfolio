@@ -26,7 +26,23 @@ export type {
   FailJobCommand,
   HealthCheckResult,
   PortabilityOperationsService,
+  IdempotencyPort,
+  IdempotentExecutionInput,
+  IdempotentExecutionResult,
+  JobInput,
+  LeaseClaimInput,
+  LeasedJobRecord,
+  LeasedJobStorePort,
+  LeasedOutboxEvent,
+  OperationsPersistencePorts,
+  OutboxEventInput,
+  OutboxPersistencePort,
+  SafeResultEnvelope,
+  SafeErrorCode,
+  VersionedPayload,
 } from "./application/index.js";
+
+export { parseSafeErrorCode } from "./application/index.js";
 
 export type {
   ExportRepositoryPort,

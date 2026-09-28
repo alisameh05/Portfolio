@@ -57,9 +57,9 @@ npm run db:stop
 ```
 
 `supabase/config.toml`, `supabase/migrations/`, and `supabase/seed.sql` are the
-only repository-owned database inputs in this flow. Ticket #45 intentionally
-ships no application migration or seed data; ticket #46 owns the first reviewed
-schema and security migration. Data APIs, Auth/signup, Realtime, Storage,
+only repository-owned database inputs in this flow. Ticket #45 introduced no
+application migration or seed data; #46 and the remaining Phase 3 work own the
+reviewed schemas, security baseline, and operations primitives. Data APIs, Auth/signup, Realtime, Storage,
 Studio, Edge Runtime, and Analytics remain disabled until their owning phase.
 Remote authentication, project linking, remote migration, and deployment remain
 outside this workflow.
@@ -103,6 +103,46 @@ capabilities only. If an isolated project cannot be stopped, the command exits
 nonzero, reports `LOCAL_DB_CLEANUP_FAILED`, and retains that project's temporary
 metadata so an operator can recover it; cleanup failure can never be reported
 as success.
+
+## Runtime and focused verification
+
+Database-enabled application and worker composition requires `DATABASE_URL`.
+Each process receives a separately provisioned login principal whose only
+capability membership is `shipwithali_application` or `shipwithali_worker`.
+`DATABASE_DIRECT_URL` is reserved for migration, type-generation, and backup
+tooling and is never read by runtime composition.
+
+The following checks remain independently runnable after the local stack has
+been reset. Commands that exercise PostgreSQL read the loopback URL internally;
+do not paste it into issue comments, logs, or evidence.
+
+```powershell
+npm run db:phase3:source
+npm run db:phase3:migrations
+$env:PHASE3_DATABASE_URL = '<loopback URL reported internally by the local stack>'
+$env:PHASE3_REQUIRE_DATABASE = '1'
+npm run db:phase3:integration
+npm run db:phase3:security
+```
+
+`db:phase3:integration` proves observable commit/rollback, optimistic
+concurrency, idempotency replay/conflict, outbox atomicity, exclusive leases,
+token guards, and reclaim behavior through provider-neutral ports.
+`db:phase3:security` connects as the credited database roles, verifies forced
+RLS and future-object defaults, checks generated Kysely types byte-for-byte,
+and captures index-backed outbox, job, and disposable `public_read` plans.
+
+The authoritative completion command orchestrates all of this from a clean
+checkout, starts with the complete Phase 2 gate, resets the local stack, rejects
+missing or stale evidence, and stops the stack when finished:
+
+```powershell
+npm run phase3:gate
+```
+
+Docker must be running. A skipped database suite, unavailable Docker daemon,
+missing local image, stale evidence file, or partial prior result is a failing
+verdict, never a successful Phase 3 result.
 
 ## Safe failure behavior
 

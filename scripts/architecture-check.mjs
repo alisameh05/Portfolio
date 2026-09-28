@@ -220,6 +220,7 @@ for (const file of moduleFiles) {
   }
 
   const content = readFileSync(file, "utf8");
+  const isAdapter = /\/adapters\//.test(relative);
 
   // Check 3: No Lab entry implementation (ADR-0007 / Acceptance Criteria)
   // Matching active Lab entry class, function, or interface definitions
@@ -229,24 +230,27 @@ for (const file of moduleFiles) {
   }
 
   // Check 4: No active persistence SQL queries
-  if (/\b(?:SELECT\s+.+\s+FROM|INSERT\s+INTO\s+|DELETE\s+FROM\s+|UPDATE\s+.+\s+SET)\b/i.test(content)) {
-    purityViolations.push(`${relative}: Active SQL persistence query found`);
+  if (
+    /\b(?:SELECT\s+.+\s+FROM|INSERT\s+INTO\s+|DELETE\s+FROM\s+|UPDATE\s+.+\s+SET)\b/i.test(content) &&
+    !isAdapter
+  ) {
+    purityViolations.push(`${relative}: Active SQL persistence query found outside an adapter`);
     purityOk = false;
   }
 
-  // Check 5: No provider calls or imports
-  if (/from\s+["'](?:@supabase\/|kysely|@vercel\/|next\/)/i.test(content)) {
-    purityViolations.push(`${relative}: Provider package import found in module`);
+  // Check 5: Provider calls remain confined to adapters.
+  if (/from\s+["'](?:@supabase\/|kysely|pg|@vercel\/|next\/)/i.test(content) && !isAdapter) {
+    purityViolations.push(`${relative}: Provider package import found outside a module adapter`);
     purityOk = false;
   }
 }
 
 if (purityOk) {
-  console.log("✓ Module skeletons contain no persistence, provider calls, Route Handlers, UI, or Lab entry implementation");
+  console.log("✓ Modules confine persistence/providers to adapters and contain no Route Handlers, UI, or Lab entry implementation");
   recordCheck(
     "Module skeleton purity",
     true,
-    "No persistence, provider calls, Route Handlers, UI, or Lab entry implementation",
+    "Persistence/providers confined to adapters; no Route Handlers, UI, or Lab entry implementation",
   );
 } else {
   console.error("✗ Purity violations found:\n " + purityViolations.join("\n  "));

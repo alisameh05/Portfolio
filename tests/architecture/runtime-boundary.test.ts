@@ -59,6 +59,18 @@ describe("Phase 2 runtime architecture enforcement (#33)", () => {
       reason: "provider-import-outside-adapter-composition",
     },
     {
+      name: "provider runtime exported by the composition root",
+      file: "src/bootstrap/composition-root.ts",
+      content: "export function getDatabaseRuntime(): PostgresRuntimeDatabase { throw new Error(); }\n",
+      reason: "provider-runtime-exported-from-composition",
+    },
+    {
+      name: "secret-bearing database configuration exported",
+      file: "src/bootstrap/configuration.ts",
+      content: "export interface DatabaseRuntimeConfig { readonly databaseUrl: string; }\n",
+      reason: "secret-database-config-exported",
+    },
+    {
       name: "React side-effect import in a Route Handler",
       file: "src/app/livez/route.ts",
       content: 'import "react";\nexport async function GET() {}\n',

@@ -56,7 +56,7 @@ function isReactPresentation(specifier) {
 }
 
 function isInfrastructureProvider(specifier) {
-  return /^(?:@supabase\/|kysely(?:\/|$)|@vercel\/|vercel(?:\/|$))/.test(
+  return /^(?:@supabase\/|kysely(?:\/|$)|pg(?:\/|$)|@vercel\/|vercel(?:\/|$))/.test(
     specifier,
   );
 }
@@ -124,6 +124,36 @@ export function inspectSourceRecords(records) {
         file,
         reason: "provider-import-outside-adapter-composition",
       });
+    }
+    if (
+      imports.some((specifier) => /database\.generated(?:\.js)?$/.test(specifier)) &&
+      !/\/adapters\//.test(file)
+    ) {
+      findings.push({
+        file,
+        reason: "generated-database-types-outside-adapter",
+      });
+    }
+    if (/\bAsyncLocalStorage\b/.test(content)) {
+      findings.push({ file, reason: "hidden-ambient-transaction-state" });
+    }
+    if (
+      /new\s+(?:Pool|Kysely)\s*\(/.test(content) &&
+      !isProviderAdapterOrComposition(file)
+    ) {
+      findings.push({ file, reason: "direct-database-construction-outside-composition" });
+    }
+    if (
+      file === "src/bootstrap/composition-root.ts" &&
+      /\b(?:PostgresRuntimeDatabase|getDatabaseRuntime)\b/.test(content)
+    ) {
+      findings.push({ file, reason: "provider-runtime-exported-from-composition" });
+    }
+    if (
+      file === "src/bootstrap/configuration.ts" &&
+      /\b(?:DatabaseRuntimeConfig|databaseUrl)\b/.test(content)
+    ) {
+      findings.push({ file, reason: "secret-database-config-exported" });
     }
     if (
       isRouteHandler &&

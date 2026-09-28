@@ -34,3 +34,13 @@ export function createReadyzResponse(state: LifecycleState): Response {
     },
   );
 }
+
+export async function createCheckedReadyzResponse(
+  state: LifecycleState,
+  check: () => Promise<boolean>,
+): Promise<Response> {
+  if (state === "ready" && !(await check())) {
+    return createReadyzResponse("failed");
+  }
+  return createReadyzResponse(state);
+}

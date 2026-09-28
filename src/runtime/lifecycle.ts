@@ -15,7 +15,11 @@
  * deterministic without real timers.
  */
 
-import type { LifecycleResource, LifecycleState } from "./ports.js";
+import type {
+  LifecycleResource,
+  LifecycleState,
+  ReadinessCheck,
+} from "./ports.js";
 
 export type { LifecycleState };
 
@@ -36,10 +40,12 @@ export interface SignalTarget {
 export interface LifecycleCoordinator {
   getState(): LifecycleState;
   isReady(): boolean;
+  checkReadiness(): Promise<boolean>;
   markReady(): void;
   markFailed(): void;
   track<T>(work: Promise<T>): Promise<T>;
   registerResource(resource: LifecycleResource): void;
+  registerReadinessCheck(check: ReadinessCheck): void;
   shutdown(): Promise<void>;
   installSignalHandlers(target?: SignalTarget): () => void;
 }
@@ -59,6 +65,7 @@ export function createLifecycleCoordinator(
   let state: LifecycleState = "starting";
   const inFlight = new Set<Promise<unknown>>();
   const resources: Array<LifecycleResource> = [];
+  const readinessChecks: Array<ReadinessCheck> = [];
   let shutdownPromise: Promise<void> | undefined;
 
   function getState(): LifecycleState {
@@ -67,6 +74,20 @@ export function createLifecycleCoordinator(
 
   function isReady(): boolean {
     return state === "ready";
+  }
+
+  async function checkReadiness(): Promise<boolean> {
+    if (!isReady()) return false;
+    const results = await Promise.all(
+      readinessChecks.map(async (check) => {
+        try {
+          return await check.check();
+        } catch {
+          return false;
+        }
+      }),
+    );
+    return results.every(Boolean);
   }
 
   function markReady(): void {
@@ -160,13 +181,20 @@ export function createLifecycleCoordinator(
     resources.push(resource);
   }
 
+
+  function registerReadinessCheck(check: ReadinessCheck): void {
+    readinessChecks.push(check);
+  }
+
   return {
     getState,
     isReady,
+    checkReadiness,
     markReady,
     markFailed,
     track,
     registerResource,
+    registerReadinessCheck,
     shutdown,
     installSignalHandlers,
   };
