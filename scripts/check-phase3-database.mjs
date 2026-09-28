@@ -75,6 +75,15 @@ function sourceVerification() {
     const path = relative(ROOT, file).split("\\").join("/");
     const content = readFileSync(file, "utf8");
     const adapter = path.includes("/adapters/") || path === "src/bootstrap/composition-root.ts";
+    const specifiers = [];
+    for (const match of content.matchAll(
+      /(?:from\s+|import\s*\(\s*|require\s*\(\s*)["']([^"']+)["']/g,
+    )) {
+      specifiers.push(match[1]);
+    }
+    for (const match of content.matchAll(/\bimport\s*["']([^"']+)["']/g)) {
+      specifiers.push(match[1]);
+    }
     if (/from\s+["'](?:kysely|pg)["']/.test(content) && !adapter) {
       failures.push(`${path} imports a database provider outside adapters/composition`);
     }
@@ -88,9 +97,7 @@ function sourceVerification() {
       failures.push(`${path} constructs a database provider outside composition/adapters`);
     }
     if (
-      /(?:from\s+["'][^"']*postgres\/runtime(?:\.js)?["']|import\s*\(\s*["'][^"']*postgres\/runtime(?:\.js)?["']\s*\))/.test(
-        content,
-      ) &&
+      specifiers.some((specifier) => /postgres\/runtime(?:\.js)?$/.test(specifier)) &&
       !adapter
     ) {
       failures.push(`${path} imports transaction implementation outside adapters/composition`);
