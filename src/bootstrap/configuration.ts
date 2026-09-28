@@ -2,8 +2,11 @@
  * configuration.ts — Phase 2 #25 active runtime configuration.
  *
  * The active Phase 2 runtime requires only NODE_ENV and APP_BASE_URL.
- * Future environment variables (DATABASE_URL, Supabase, Auth, storage,
- * deployment, testing secrets) remain documented placeholders in
+ * Database-enabled application or worker composition additionally validates
+ * DATABASE_URL through the composition root; the migration-only
+ * DATABASE_DIRECT_URL is accepted solely by migration, generation, and
+ * backup tooling and is never read here. Remaining Supabase, Auth, storage,
+ * deployment, and testing secrets stay documented placeholders in
  * `.env.example` and are neither read nor required here.
  *
  * Rules:

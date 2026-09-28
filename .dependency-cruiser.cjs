@@ -5,7 +5,8 @@ module.exports = {
      * Rule: no-provider-in-domain
      *
      * Domain areas may only import their own domain and shared domain contracts.
-     * Provider SDKs (Next.js, Supabase, Kysely, Vercel) are forbidden.
+     * Provider SDKs (Next.js, Supabase, Kysely, the PostgreSQL driver, Vercel)
+     * are forbidden.
      */
     {
       name: "no-provider-in-domain",
@@ -20,6 +21,7 @@ module.exports = {
           "^next(/|$)",
           "^@supabase/",
           "^kysely(/|$)",
+          "^pg(/|$)",
           "^@vercel/",
           "^vercel(/|$)",
         ],
@@ -45,6 +47,7 @@ module.exports = {
           "^next(/|$)",
           "^@supabase/",
           "^kysely(/|$)",
+          "^pg(/|$)",
           "^@vercel/",
           "^vercel(/|$)",
         ],
@@ -173,6 +176,7 @@ module.exports = {
           "^next(/|$)",
           "^@supabase/",
           "^kysely(/|$)",
+          "^pg(/|$)",
           "^@vercel/",
           "^vercel(/|$)",
           "^src/contracts/http/",
