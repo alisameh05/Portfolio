@@ -87,6 +87,14 @@ function sourceVerification() {
     if (/new\s+(?:Pool|Kysely)\s*\(/.test(content) && !adapter) {
       failures.push(`${path} constructs a database provider outside composition/adapters`);
     }
+    if (
+      /(?:from\s+["'][^"']*postgres\/runtime(?:\.js)?["']|import\s*\(\s*["'][^"']*postgres\/runtime(?:\.js)?["']\s*\))/.test(
+        content,
+      ) &&
+      !adapter
+    ) {
+      failures.push(`${path} imports transaction implementation outside adapters/composition`);
+    }
   }
 
   return { failures, migrations };

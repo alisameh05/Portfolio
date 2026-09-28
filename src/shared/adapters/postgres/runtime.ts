@@ -1,3 +1,12 @@
+/**
+ * postgres/runtime.ts — Phase 3 #48 PostgreSQL transaction and pool adapter.
+ *
+ * Production `TransactionRunner`: one `READ COMMITTED` transaction per run,
+ * explicit opaque `TransactionContext` (resolvable only here via
+ * `resolvePostgresTransaction`), bounded `lock_timeout`/`statement_timeout`,
+ * parameterized statements, and redacted `PostgresInfrastructureError`
+ * outcomes. No hidden ambient transaction state is used.
+ */
 import { Kysely, PostgresDialect, sql, type Transaction } from "kysely";
 import { Pool } from "pg";
 
