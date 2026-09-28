@@ -1,5 +1,5 @@
 /**
- * ports.ts — Phase 2 #26 provider-neutral runtime ports.
+ * ports.ts — Phase 2 #26 provider-neutral runtime ports, Phase 3 #48 PostgreSQL runner.
  *
  * Small interfaces for Clock, stable-ID generation, Transaction Runner,
  * Logger, Request Context, Readiness, and lifecycle resources. This module
@@ -7,9 +7,12 @@
  * stable identities) and plain TypeScript types — never Next.js, Supabase,
  * Kysely, Vercel, OpenAPI tooling, or generated transport code.
  *
- * The Phase 2 transaction runner is explicitly named and documented as a
- * fake: it executes one callback without claiming atomicity or rollback.
- * Phase 3 replaces it with the PostgreSQL transaction runner.
+ * Production uses the PostgreSQL transaction runner
+ * (`src/shared/adapters/postgres/runtime.ts`): one `READ COMMITTED`
+ * transaction per `run`, explicit opaque context, bounded lock/statement
+ * timeouts, and safe redacted errors. The Phase 2 pass-through remains only
+ * as the clearly named test fake `createPhase2TransactionFake`: it executes
+ * one callback without claiming atomicity or rollback.
  */
 
 import { uuidv7 } from "uuidv7";
@@ -58,8 +61,11 @@ export function createSystemIdGenerator(): StableIdGenerator {
 /**
  * Provider-neutral transaction runner port.
  *
- * Later phases supply atomic execution (PostgreSQL); Phase 2 supplies only
- * the pass-through fake below.
+ * Production (Phase 3 #48) supplies `createPostgresTransactionRunner`: the
+ * callback receives one opaque `TransactionContext`, repository mutations
+ * accept that context explicitly, and commit/rollback is atomic. Tests may
+ * use `createPhase2TransactionFake`, which executes one callback without
+ * claiming atomicity.
  */
 export interface TransactionContext {
   /** Opaque marker only; provider handles are deliberately absent. */

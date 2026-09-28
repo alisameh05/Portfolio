@@ -59,6 +59,26 @@ describe("Phase 2 runtime architecture enforcement (#33)", () => {
       reason: "provider-import-outside-adapter-composition",
     },
     {
+      name: "transaction runtime static import outside adapters",
+      file: "src/modules/media/application/leak.ts",
+      content:
+        'import { createPostgresTransactionRunner } from "../../shared/adapters/postgres/runtime.js";\n',
+      reason: "transaction-implementation-outside-adapter-composition",
+    },
+    {
+      name: "transaction runtime side-effect import outside adapters",
+      file: "src/modules/media/application/leak.ts",
+      content: 'import "../../shared/adapters/postgres/runtime.js";\n',
+      reason: "transaction-implementation-outside-adapter-composition",
+    },
+    {
+      name: "transaction runtime require call outside adapters",
+      file: "src/modules/media/application/leak.ts",
+      content:
+        'const runner = require("../../shared/adapters/postgres/runtime.js");\n',
+      reason: "transaction-implementation-outside-adapter-composition",
+    },
+    {
       name: "provider runtime exported by the composition root",
       file: "src/bootstrap/composition-root.ts",
       content: "export function getDatabaseRuntime(): PostgresRuntimeDatabase { throw new Error(); }\n",

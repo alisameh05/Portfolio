@@ -144,6 +144,12 @@ export function inspectSourceRecords(records) {
       findings.push({ file, reason: "direct-database-construction-outside-composition" });
     }
     if (
+      imports.some((specifier) => /postgres\/runtime(?:\.js)?$/.test(specifier)) &&
+      !isProviderAdapterOrComposition(file)
+    ) {
+      findings.push({ file, reason: "transaction-implementation-outside-adapter-composition" });
+    }
+    if (
       file === "src/bootstrap/composition-root.ts" &&
       /\b(?:PostgresRuntimeDatabase|getDatabaseRuntime)\b/.test(content)
     ) {
