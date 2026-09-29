@@ -18,6 +18,7 @@ import {
   type TransactionRollback,
   type TransactionRunner,
 } from "../../../runtime/ports.js";
+import { InputValidationError } from "@shared/domain";
 import type { DB } from "./database.generated.js";
 
 export type PostgresExecutor = Kysely<DB> | Transaction<DB>;
@@ -81,6 +82,10 @@ export function createPostgresTransactionRunner(
       } catch (error) {
         if (error instanceof RequestedRollback) return error.value as T;
         if (error instanceof PostgresInfrastructureError) throw error;
+        // Branded adapter-boundary validation carries only a constructed
+        // message, so it surfaces unwrapped. Every other failure — including
+        // a provider-thrown TypeError — is redacted as infrastructure.
+        if (error instanceof InputValidationError) throw error;
         throw new PostgresInfrastructureError();
       }
     },

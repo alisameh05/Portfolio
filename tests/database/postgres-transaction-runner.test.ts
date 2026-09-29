@@ -139,6 +139,29 @@ describe("PostgreSQL transaction runner (#48)", () => {
     }
   });
 
+  it("redacts even a provider-thrown TypeError as infrastructure", async () => {
+    const { database } = createStubDatabase();
+    const runner = createPostgresTransactionRunner(database);
+
+    const providerFault = new TypeError(
+      "pg connection postgres://user:hunter2@localhost/db failed",
+    );
+    await expect(
+      runner.run(() => {
+        throw providerFault;
+      }),
+    ).rejects.toBeInstanceOf(PostgresInfrastructureError);
+    try {
+      await runner.run(() => {
+        throw providerFault;
+      });
+      expect.unreachable();
+    } catch (error) {
+      expect((error as Error).message).toBe("PostgreSQL operation failed.");
+      expect((error as Error).message).not.toContain("postgres://");
+    }
+  });
+
   it("honors explicit rollback outcomes as a rolled-back value", async () => {
     const { database, calls } = createStubDatabase();
     const runner = createPostgresTransactionRunner(database);

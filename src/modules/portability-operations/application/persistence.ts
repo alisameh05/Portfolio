@@ -17,6 +17,7 @@ import type {
   TransactionRunner,
 } from "../../../runtime/ports.js";
 import type { IdempotencyKey } from "@shared/domain";
+import { InputValidationError } from "@shared/domain";
 
 export type SafeResultEnvelope = Readonly<Record<string, JsonValue>>;
 declare const SAFE_ERROR_CODE: unique symbol;
@@ -110,7 +111,7 @@ const SENSITIVE_KEYS = /(?:password|secret|token|authorization|cookie|feedback|e
 /** Bounded non-sensitive machine code suitable for durable operational state. */
 export function parseSafeErrorCode(value: string): SafeErrorCode {
   if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(value)) {
-    throw new TypeError("Safe error code must be 1-64 uppercase letters, digits, or underscores.");
+    throw new InputValidationError("Safe error code must be 1-64 uppercase letters, digits, or underscores.");
   }
   return value as SafeErrorCode;
 }
@@ -123,7 +124,7 @@ function assertSafe(value: JsonValue, path = "payload"): void {
   if (value !== null && typeof value === "object") {
     for (const [key, entry] of Object.entries(value)) {
       if (SENSITIVE_KEYS.test(key)) {
-        throw new TypeError(`Versioned payload contains a sensitive field at ${path}.`);
+        throw new InputValidationError(`Versioned payload contains a sensitive field at ${path}.`);
       }
       assertSafe(entry, `${path}.${key}`);
     }
@@ -133,10 +134,10 @@ function assertSafe(value: JsonValue, path = "payload"): void {
 /** Minimal adapter-boundary validation shared by outbox and job ports. */
 export function validateVersionedPayload(input: VersionedPayload): VersionedPayload {
   if (!/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$/.test(input.type)) {
-    throw new TypeError("Versioned payload type is invalid.");
+    throw new InputValidationError("Versioned payload type is invalid.");
   }
   if (!Number.isSafeInteger(input.version) || input.version < 1) {
-    throw new TypeError("Versioned payload version must be a positive integer.");
+    throw new InputValidationError("Versioned payload version must be a positive integer.");
   }
   assertSafe(input.value);
   return Object.freeze({
