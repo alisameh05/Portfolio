@@ -212,11 +212,34 @@ describeDatabase("PostgreSQL production adapters (#48-#52)", () => {
       { ...input, requestHash: createHash("sha256").update("different").digest("hex") },
       async () => ({ status: "must-not-run" }),
     );
+    const anotherActor = {
+      ...input,
+      actorScope: createHash("sha256").update("another-actor").digest("hex"),
+    };
+    const actorResult = await store.idempotency.execute(anotherActor, async () => {
+      effects += 1;
+      return { status: "accepted", version: 2 };
+    });
+    const actorReplay = await store.idempotency.execute(anotherActor, async () => ({
+      status: "must-not-run",
+    }));
+    const anotherOperation = { ...input, operationScope: "project.measure" };
+    const operationResult = await store.idempotency.execute(anotherOperation, async () => {
+      effects += 1;
+      return { status: "accepted", version: 2 };
+    });
+    const operationReplay = await store.idempotency.execute(anotherOperation, async () => ({
+      status: "must-not-run",
+    }));
 
     expect(firstResult.kind).toBe("executed");
     expect(replay).toEqual({ kind: "replayed", result: { status: "accepted", version: 2 } });
     expect(conflict).toEqual({ kind: "conflict" });
-    expect(effects).toBe(1);
+    expect(actorResult.kind).toBe("executed");
+    expect(actorReplay.kind).toBe("replayed");
+    expect(operationResult.kind).toBe("executed");
+    expect(operationReplay.kind).toBe("replayed");
+    expect(effects).toBe(3);
     const stored = await sql<{ body: string }>`
       select row_to_json(r)::text as body from operations.idempotency_records r
     `.execute(first.database);

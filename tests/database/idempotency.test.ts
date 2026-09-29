@@ -185,29 +185,6 @@ describe("idempotency ledger and execution seam (#51)", () => {
     expect(effects).toBe(0);
   });
 
-  it("keeps actor and operation scopes independent for the same key text", async () => {
-    const firstInsert = (): QueueEntry[] => [
-      { rows: [] },
-      { rows: [] },
-      { rows: [{ inserted: true }] },
-      { rows: [] },
-    ];
-    const executeOnce = async (input: IdempotentExecutionInput) => {
-      const stub = stubOperationsDatabase(firstInsert());
-      const store = createPostgresOperationsPersistence(stub.database, { now: () => NOW });
-      return store.idempotency.execute(input, async () => ({ owner: input.operationScope }));
-    };
-
-    const base = validInput();
-    expect((await executeOnce(base)).kind).toBe("executed");
-    expect((await executeOnce(validInput({ actorScope: sha256("another-actor") }))).kind).toBe(
-      "executed",
-    );
-    expect((await executeOnce(validInput({ operationScope: "project.measure" }))).kind).toBe(
-      "executed",
-    );
-  });
-
   it("replaces an expired reservation and re-executes the effect", async () => {
     const stub = stubOperationsDatabase([
       { rows: [] },
@@ -305,18 +282,25 @@ describe("idempotency ledger and execution seam (#51)", () => {
       .sort()
       .map((file) => readFileSync(join(root, "supabase", "migrations", file), "utf8"))
       .join("\n");
+    const unrelatedMigration =
+      "create table content.contact_requests (email text, ip_address text, cookie text);";
+    const source = `${migrations}\n${unrelatedMigration}`;
+    expect(source.toLowerCase()).toContain("email text");
+    const table = source.match(
+      /create table operations\.idempotency_records\s*\(([\s\S]*?)\);/i,
+    )?.[1];
+    expect(table).toBeDefined();
+    const lowerTable = table?.toLowerCase() ?? "";
     const lower = migrations.toLowerCase();
-    expect(lower).toContain("create table operations.idempotency_records");
-    expect(lower).toContain("key_hash char(64)");
-    expect(lower).toContain("request_hash char(64)");
-    expect(lower).toContain("alter table operations.idempotency_records force row level security");
+    expect(lowerTable).toContain("key_hash char(64)");
+    expect(lowerTable).toContain("request_hash char(64)");
+    expect(source.toLowerCase()).toContain(
+      "alter table operations.idempotency_records force row level security",
+    );
     expect(migrations).toContain("grant select, insert, update on operations.idempotency_records");
     expect(migrations).toContain("to shipwithali_application");
     // Raw tokens, cookies, IPs, emails, and provider identities are never stored.
-    expect(lower).not.toContain("raw_token");
-    expect(lower).not.toContain("cookie");
-    expect(lower).not.toContain("ip_address");
-    expect(lower).not.toContain("email");
+    expect(lowerTable).not.toMatch(/\b(?:raw_token|cookie|ip_address|email)\b/);
     expect(lower).toMatch(/grant select, insert, update on operations\.idempotency_records to shipwithali_application/);
     expect(migrations).not.toMatch(
       /grant\s+.+operations\.idempotency_records.+to\s+(?:anon|authenticated)/,
