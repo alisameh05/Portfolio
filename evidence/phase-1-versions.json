@@ -15,7 +15,7 @@
     "uuidv7": "1.0.2"
   },
   "effective": {
-    "node": "v22.23.2",
+    "node": "v24.21.0",
     "npm": "11.19.0",
     "typescript": "6.0.3",
     "@redocly/cli": "1.34.3",
@@ -26,7 +26,5 @@
     "valibot": "1.1.0",
     "uuidv7": "1.0.2"
   },
-  "warnings": [
-    "runtime v22.23.2 differs from pinned Node 24.21.0; CI uses 24.21.0"
-  ]
+  "warnings": []
 }
