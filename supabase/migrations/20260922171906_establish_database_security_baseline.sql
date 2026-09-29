@@ -4,10 +4,17 @@
 
 set lock_timeout = '5s';
 
+-- The local Supabase `postgres` login holds CREATEROLE without SUPERUSER, so role
+-- creation stays unconditional while attribute correction runs only when the
+-- executor is a superuser. Fresh roles are always created least-privilege.
 do $migration$
 declare
   capability_role text;
+  executor_is_superuser boolean;
 begin
+  select rolsuper into executor_is_superuser
+    from pg_roles
+   where rolname = current_user;
   foreach capability_role in array array[
     'shipwithali_application',
     'shipwithali_worker',
@@ -20,7 +27,7 @@ begin
         'create role %I nologin nosuperuser nocreatedb nocreaterole noreplication nobypassrls',
         capability_role
       );
-    else
+    elsif executor_is_superuser then
       execute format(
         'alter role %I with nologin nosuperuser nocreatedb nocreaterole noreplication nobypassrls',
         capability_role
@@ -29,6 +36,12 @@ begin
   end loop;
 end
 $migration$;
+
+-- The migration executor administers objects owned by the migration role, so it
+-- receives membership before any `set role`. Membership is executor-scoped DDL
+-- administration only: no application, worker, backup, anonymous, or
+-- authenticated grant is created here.
+grant shipwithali_migration to current_user;
 
 set role shipwithali_migration;
 
