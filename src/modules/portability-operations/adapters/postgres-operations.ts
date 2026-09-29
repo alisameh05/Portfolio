@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { sql, type Kysely } from "kysely";
 
-import type { IdempotencyKey } from "@shared/domain";
+import { InputValidationError, type IdempotencyKey } from "@shared/domain";
 import type { TransactionContext } from "../../../runtime/ports.js";
 import type { DB } from "../../../shared/adapters/postgres/database.generated.js";
 import {
@@ -136,14 +136,24 @@ export function createPostgresOperationsPersistence(
 ): OperationsPersistencePorts {
   const tokens = options.leaseTokens ?? systemLeaseTokens();
   const now = options.now ?? (() => new Date().toISOString());
-  const transactions = createPostgresTransactionRunner(database);
+  const safeInputErrors = new WeakSet<InputValidationError>();
+  const transactions = createPostgresTransactionRunner(database, safeInputErrors);
+
+  function validateInputPayload(input: VersionedPayload): VersionedPayload {
+    try {
+      return validateVersionedPayload(input);
+    } catch (error) {
+      if (error instanceof InputValidationError) safeInputErrors.add(error);
+      throw error;
+    }
+  }
 
   const appendOutbox = async (
     context: TransactionContext,
     event: OutboxEventInput,
   ): Promise<void> => {
     const executor = resolvePostgresTransaction(context);
-    const payload = validateVersionedPayload(event.payload);
+    const payload = validateInputPayload(event.payload);
     try {
       await sql`
         insert into operations.outbox_events (
@@ -350,7 +360,7 @@ export function createPostgresOperationsPersistence(
   const jobs: LeasedJobStorePort = {
     async enqueue(context: TransactionContext, job: JobInput): Promise<void> {
       const executor = resolvePostgresTransaction(context);
-      const payload = validateVersionedPayload(job.payload);
+      const payload = validateInputPayload(job.payload);
       try {
         await sql`
           insert into operations.jobs (

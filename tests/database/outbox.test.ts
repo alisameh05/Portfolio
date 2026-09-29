@@ -5,7 +5,6 @@ import { PostgresInfrastructureError } from "../../src/shared/adapters/postgres/
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import {
   parseSafeErrorCode,
-  validateVersionedPayload,
   type VersionedPayload,
 } from "../../src/modules/portability-operations/application/persistence.js";
 import type { TransactionContext } from "../../src/runtime/ports.js";
@@ -123,8 +122,13 @@ describe("transactional outbox adapter (#50)", () => {
     for (const entry of cases) {
       const stub = stubOperationsDatabase([{ rows: [] }, { rows: [] }]);
       const store = createPostgresOperationsPersistence(stub.database);
-      expect(() => validateVersionedPayload(entry.payload), entry.name).toThrow(TypeError);
-      expect(stub.queryCount(), entry.name).toBe(0);
+      await expect(
+        store.transactions.run((context) =>
+          store.outbox.append(context, { ...validEvent(EVENT_A), payload: entry.payload }),
+        ),
+        entry.name,
+      ).rejects.toThrow(TypeError);
+      expect(stub.queryCount(), entry.name).toBe(2);
     }
   });
 
