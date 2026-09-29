@@ -110,11 +110,15 @@ function safePayload(row: {
   payload_version?: number;
   payload: Readonly<Record<string, never>>;
 }): VersionedPayload {
-  return validateVersionedPayload({
-    type: row.event_type ?? row.job_type ?? "unknown.payload",
-    version: row.schema_version ?? row.payload_version ?? 0,
-    value: row.payload,
-  });
+  try {
+    return validateVersionedPayload({
+      type: row.event_type ?? row.job_type ?? "unknown.payload",
+      version: row.schema_version ?? row.payload_version ?? 0,
+      value: row.payload,
+    });
+  } catch {
+    throw new PostgresInfrastructureError();
+  }
 }
 
 function keyHash(key: IdempotencyKey): string {

@@ -5,6 +5,7 @@ import { PostgresInfrastructureError } from "../../src/shared/adapters/postgres/
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import {
   parseSafeErrorCode,
+  validateVersionedPayload,
   type VersionedPayload,
 } from "../../src/modules/portability-operations/application/persistence.js";
 import type { TransactionContext } from "../../src/runtime/ports.js";
@@ -122,12 +123,8 @@ describe("transactional outbox adapter (#50)", () => {
     for (const entry of cases) {
       const stub = stubOperationsDatabase([{ rows: [] }, { rows: [] }]);
       const store = createPostgresOperationsPersistence(stub.database);
-      await expect(
-        store.transactions.run((context) =>
-          store.outbox.append(context, { ...validEvent(EVENT_A), payload: entry.payload }),
-        ),
-      ).rejects.toThrow(TypeError);
-      expect(stub.queryCount(), entry.name).toBe(2);
+      expect(() => validateVersionedPayload(entry.payload), entry.name).toThrow(TypeError);
+      expect(stub.queryCount(), entry.name).toBe(0);
     }
   });
 
@@ -187,6 +184,62 @@ describe("transactional outbox adapter (#50)", () => {
       type: "project.published",
       version: 1,
       value: { locale: "en" },
+    });
+  });
+
+  it("redacts malformed persisted payloads when claiming outbox events or jobs", async () => {
+    const malformedOutbox = stubOperationsDatabase([
+      { rows: [] },
+      { rows: [] },
+      {
+        rows: [{
+          event_id: EVENT_A,
+          event_type: "project.published",
+          schema_version: 0,
+          payload: { locale: "en", secret: "persisted-secret" },
+          attempt_count: 0,
+        }],
+      },
+      { rows: [] },
+    ]);
+    const outboxStore = createPostgresOperationsPersistence(malformedOutbox.database);
+    await expect(
+      outboxStore.outbox.claimDue({
+        workerId: "worker-one",
+        now: NOW,
+        leaseDurationSeconds: 30,
+        limit: 1,
+      }),
+    ).rejects.toMatchObject({
+      name: "PostgresInfrastructureError",
+      message: "PostgreSQL operation failed.",
+    });
+
+    const malformedJob = stubOperationsDatabase([
+      { rows: [] },
+      { rows: [] },
+      {
+        rows: [{
+          job_id: EVENT_A,
+          job_type: "project.published",
+          payload_version: 0,
+          payload: { locale: "en", secret: "persisted-secret" },
+          attempt_count: 0,
+        }],
+      },
+      { rows: [] },
+    ]);
+    const jobStore = createPostgresOperationsPersistence(malformedJob.database);
+    await expect(
+      jobStore.jobs.claimDue({
+        workerId: "worker-one",
+        now: NOW,
+        leaseDurationSeconds: 30,
+        limit: 1,
+      }),
+    ).rejects.toMatchObject({
+      name: "PostgresInfrastructureError",
+      message: "PostgreSQL operation failed.",
     });
   });
 
