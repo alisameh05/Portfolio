@@ -75,15 +75,15 @@ function assertHexSha256(name: string, value: string): void {
 }
 
 function isRfc3339Instant(value: string): boolean {
-  const parts =
+  const match =
     /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):([0-5]\d):([0-5]\d)(?:\.\d+)?(?:[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.exec(
       value,
     );
-  if (!parts) return false;
+  if (!match) return false;
 
-  const year = Number(parts[1]);
-  const month = Number(parts[2]);
-  const day = Number(parts[3]);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
   const daysInMonth = [
     31,
     year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28,
