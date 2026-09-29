@@ -49,6 +49,9 @@ export { isOwner, isVisitor, isSystem, assertNeverActor } from "./actor.js";
 export type { Result, Ok, Err } from "./result.js";
 export { ok, err, isOk, isErr } from "./result.js";
 
+// Validation errors
+export { InputValidationError } from "./validation-error.js";
+
 // Rejection
 export type {
   Rejection,

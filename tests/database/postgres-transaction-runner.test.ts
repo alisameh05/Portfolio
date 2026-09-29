@@ -11,6 +11,7 @@ import {
   type TransactionContext,
 } from "../../src/runtime/ports.js";
 import type { DB } from "../../src/shared/adapters/postgres/database.generated.js";
+import { InputValidationError } from "../../src/shared/domain/validation-error.js";
 
 interface StubCall {
   readonly isolationLevel?: string;
@@ -137,6 +138,43 @@ describe("PostgreSQL transaction runner (#48)", () => {
       expect(String((error as Error).message)).not.toContain("hunter2");
       expect(String((error as Error).stack ?? "")).not.toContain("outbox_events_pkey");
     }
+  });
+
+  it("redacts even a provider-thrown TypeError as infrastructure", async () => {
+    const { database } = createStubDatabase();
+    const runner = createPostgresTransactionRunner(database);
+
+    const providerFault = new TypeError(
+      "pg connection postgres://user:hunter2@localhost/db failed",
+    );
+    await expect(
+      runner.run(() => {
+        throw providerFault;
+      }),
+    ).rejects.toBeInstanceOf(PostgresInfrastructureError);
+    try {
+      await runner.run(() => {
+        throw providerFault;
+      });
+      expect.unreachable();
+    } catch (error) {
+      expect((error as Error).message).toBe("PostgreSQL operation failed.");
+      expect((error as Error).message).not.toContain("postgres://");
+    }
+  });
+
+  it("redacts a publicly constructed validation error from a transaction callback", async () => {
+    const { database } = createStubDatabase();
+    const runner = createPostgresTransactionRunner(database);
+
+    await expect(
+      runner.run(() => {
+        throw new InputValidationError("callback detail with postgres://user:secret@db");
+      }),
+    ).rejects.toMatchObject({
+      name: "PostgresInfrastructureError",
+      message: "PostgreSQL operation failed.",
+    });
   });
 
   it("honors explicit rollback outcomes as a rolled-back value", async () => {

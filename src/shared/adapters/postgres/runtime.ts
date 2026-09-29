@@ -18,6 +18,7 @@ import {
   type TransactionRollback,
   type TransactionRunner,
 } from "../../../runtime/ports.js";
+import { InputValidationError } from "@shared/domain";
 import type { DB } from "./database.generated.js";
 
 export type PostgresExecutor = Kysely<DB> | Transaction<DB>;
@@ -59,6 +60,7 @@ export function resolvePostgresTransaction(
 
 export function createPostgresTransactionRunner(
   database: Kysely<DB>,
+  safeInputErrors: WeakSet<InputValidationError> = new WeakSet(),
 ): TransactionRunner {
   return {
     async run<T>(
@@ -81,6 +83,7 @@ export function createPostgresTransactionRunner(
       } catch (error) {
         if (error instanceof RequestedRollback) return error.value as T;
         if (error instanceof PostgresInfrastructureError) throw error;
+        if (error instanceof InputValidationError && safeInputErrors.has(error)) throw error;
         throw new PostgresInfrastructureError();
       }
     },
