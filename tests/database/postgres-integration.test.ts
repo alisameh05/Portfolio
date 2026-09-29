@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { parseIdempotencyKey } from "../../src/shared/domain/idempotency-key.js";
+import { parseSafeErrorCode } from "../../src/modules/portability-operations/application/persistence.js";
 import {
   createPostgresRuntimeDatabase,
   resolvePostgresTransaction,
@@ -30,6 +31,8 @@ const EVENT_D = "018f4f7d-0000-7000-8000-000000000004";
 const AGGREGATE = "018f4f7d-0000-7000-8000-000000000010";
 const JOB_A = "018f4f7d-0000-7000-8000-000000000021";
 const JOB_B = "018f4f7d-0000-7000-8000-000000000022";
+const JOB_C = "018f4f7d-0000-7000-8000-000000000023";
+const JOB_D = "018f4f7d-0000-7000-8000-000000000024";
 const VERSIONED = "018f4f7d-0000-7000-8000-000000000031";
 const MISSING_VERSIONED = "018f4f7d-0000-7000-8000-000000000032";
 const STATE_COMMIT = "018f4f7d-0000-7000-8000-000000000041";
@@ -425,5 +428,63 @@ describeDatabase("PostgreSQL production adapters (#48-#52)", () => {
     const reclaimed = await secondStore.jobs.claimDue({ ...claim, now: LATER, workerId: "worker-two" });
     expect(reclaimed).toHaveLength(1);
     expect(reclaimed[0]?.leaseToken).not.toBe(jobsOne[0]?.leaseToken);
+  });
+
+  it("claims jobs concurrently with no simultaneous ownership and recovers after failure", async () => {
+    await store.transactions.run(async (context) => {
+      for (const jobId of [JOB_C, JOB_D]) {
+        await store.jobs.enqueue(context, {
+          jobId,
+          payload: { type: "cache.refresh", version: 1, value: { target: "public" } },
+          availableAt: NOW,
+        });
+      }
+      return undefined;
+    });
+
+    const claim = { workerId: "worker-one", now: NOW, leaseDurationSeconds: 30, limit: 10 };
+    const [firstClaim, secondClaim] = await Promise.all([
+      store.jobs.claimDue(claim),
+      secondStore.jobs.claimDue({ ...claim, workerId: "worker-two" }),
+    ]);
+    const owned = [...firstClaim, ...secondClaim];
+    expect(owned).toHaveLength(2);
+    expect(new Set(owned.map((job) => job.jobId))).toEqual(new Set([JOB_C, JOB_D]));
+    expect(new Set(owned.map((job) => job.leaseToken)).size).toBe(2);
+
+    const survivor = owned[0];
+    const survivorId = survivor?.jobId ?? "";
+    const survivorToken = survivor?.leaseToken ?? "";
+    expect(await store.jobs.complete(survivorId, "stale-token", LATER)).toBe(false);
+    expect(await store.jobs.complete(survivorId, survivorToken, LATER)).toBe(true);
+    expect(await store.jobs.complete(survivorId, survivorToken, LATER)).toBe(false);
+
+    const remaining = owned[1];
+    const remainingId = remaining?.jobId ?? "";
+    const remainingToken = remaining?.leaseToken ?? "";
+    expect(
+      await secondStore.jobs.fail(remainingId, remainingToken, parseSafeErrorCode("HANDLER_TIMEOUT")),
+    ).toBe(true);
+    const afterFail = await store.jobs.claimDue({ ...claim, workerId: "worker-three" });
+    expect(afterFail.map((job) => job.jobId)).toEqual([remainingId]);
+    expect(afterFail[0]?.leaseToken).not.toBe(remainingToken);
+    expect(await store.jobs.release(remainingId, remainingToken)).toBe(false);
+    expect(await store.jobs.fail(remainingId, remainingToken, parseSafeErrorCode("HANDLER_TIMEOUT"))).toBe(
+      false,
+    );
+
+    const crashToken = afterFail[0]?.leaseToken ?? "";
+    const recovered = await secondStore.jobs.claimDue({
+      ...claim,
+      now: LATER,
+      workerId: "worker-two",
+    });
+    expect(recovered.map((job) => job.jobId)).toEqual([remainingId]);
+    expect(recovered[0]?.leaseToken).not.toBe(crashToken);
+    expect(await secondStore.jobs.complete(remainingId, crashToken, LATER)).toBe(false);
+    expect(await secondStore.jobs.release(remainingId, crashToken)).toBe(false);
+    expect(
+      await secondStore.jobs.complete(remainingId, recovered[0]?.leaseToken ?? "", LATER),
+    ).toBe(true);
   });
 });

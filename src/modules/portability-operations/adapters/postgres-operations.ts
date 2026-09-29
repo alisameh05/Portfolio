@@ -4,6 +4,7 @@ import { sql, type Kysely } from "kysely";
 import {
   InputValidationError,
   parseIdempotencyKey,
+  parseStableId,
   type IdempotencyKey,
 } from "@shared/domain";
 import type { TransactionContext } from "../../../runtime/ports.js";
@@ -149,6 +150,20 @@ export function createPostgresOperationsPersistence(
   function validateInputPayload(input: VersionedPayload): VersionedPayload {
     try {
       return validateVersionedPayload(input);
+    } catch (error) {
+      if (error instanceof InputValidationError) safeInputErrors.add(error);
+      throw error;
+    }
+  }
+
+  function validateJobEnqueueInput(job: JobInput): void {
+    try {
+      if (parseStableId("Job", job.jobId).ok === false) {
+        throw new InputValidationError("Job identity must be a stable UUIDv7.");
+      }
+      if (!Number.isFinite(Date.parse(job.availableAt))) {
+        throw new InputValidationError("Job availability must be an RFC 3339 instant.");
+      }
     } catch (error) {
       if (error instanceof InputValidationError) safeInputErrors.add(error);
       throw error;
@@ -367,6 +382,7 @@ export function createPostgresOperationsPersistence(
   const jobs: LeasedJobStorePort = {
     async enqueue(context: TransactionContext, job: JobInput): Promise<void> {
       const executor = resolvePostgresTransaction(context);
+      validateJobEnqueueInput(job);
       const payload = validateInputPayload(job.payload);
       try {
         await sql`
