@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
-import { cleanupIsolatedProjects as cleanupProjects } from "./database-baseline-support.mjs";
+import { cleanupIsolatedProjects as cleanupProjects, findUnrevokedFunctions } from "./database-baseline-support.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
@@ -163,6 +163,13 @@ function verifySources(baselinePath = BASELINE_PATH) {
     failures.push("anon and authenticated cannot receive application schema access");
   }
   if (SECRET_PATTERN.test(source)) failures.push("Database sources contain credential material");
+
+  const allMigrations = migrationFiles()
+    .map((file) => readFileSync(join(MIGRATIONS, file), "utf8"))
+    .join("\n");
+  for (const name of findUnrevokedFunctions(allMigrations)) {
+    failures.push(`Function ${name} is missing an explicit REVOKE from public clients`);
+  }
 
   return failures;
 }

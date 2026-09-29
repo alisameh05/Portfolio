@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { findUnrevokedFunctions } from "../../scripts/database-baseline-support.mjs";
 
 const ROOT = process.cwd();
 
@@ -64,5 +65,22 @@ describe("Phase 3 operations persistence migration (#50-#53)", () => {
     expect(migrations).not.toMatch(/grant\s+select[^;]*operations\.outbox_events\s+to\s+shipwithali_application/);
     expect(migrations).not.toContain("for all to shipwithali_application");
     expect(migrations).not.toContain("for all to shipwithali_worker");
+  });
+
+  it("pairs every created function with an explicit public revoke", () => {
+    // PostgreSQL 17 ignores default-privilege entries for new functions, so
+    // the migration contract requires an object-level revoke per function.
+    expect(findUnrevokedFunctions(migrations)).toEqual([]);
+    expect(
+      findUnrevokedFunctions(
+        "create function operations.report() returns integer language sql immutable as 'select 1'",
+      ),
+    ).toEqual(["operations.report"]);
+    expect(
+      findUnrevokedFunctions(
+        `create function operations.report() returns integer language sql immutable as 'select 1';
+         revoke all on function operations.report() from public, anon, authenticated;`,
+      ),
+    ).toEqual([]);
   });
 });
