@@ -2,9 +2,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { sql, type Kysely } from "kysely";
 
 import {
-  IDEMPOTENCY_KEY_MAX_LENGTH,
-  IDEMPOTENCY_KEY_MIN_LENGTH,
   InputValidationError,
+  parseIdempotencyKey,
   type IdempotencyKey,
 } from "@shared/domain";
 import type { TransactionContext } from "../../../runtime/ports.js";
@@ -80,12 +79,7 @@ function validateIdempotencyInput(input: IdempotentExecutionInput): void {
   }
   assertHexSha256("Actor scope", input.actorScope);
   assertHexSha256("Request hash", input.requestHash);
-  if (
-    typeof input.key !== "string" ||
-    input.key.length < IDEMPOTENCY_KEY_MIN_LENGTH ||
-    input.key.length > IDEMPOTENCY_KEY_MAX_LENGTH ||
-    !/^[\x21-\x7E]+$/.test(input.key)
-  ) {
+  if (typeof input.key !== "string" || !parseIdempotencyKey(input.key).ok) {
     throw new TypeError("Idempotency key is invalid.");
   }
   if (!Number.isFinite(Date.parse(input.expiresAt))) {
