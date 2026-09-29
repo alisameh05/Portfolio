@@ -5,9 +5,10 @@ import { describe, expect, it } from "vitest";
 const ROOT = process.cwd();
 
 describe("Phase 3 operations persistence migration (#50-#53)", () => {
-  const migrations = readdirSync(join(ROOT, "supabase", "migrations"))
+  const migrationFiles = readdirSync(join(ROOT, "supabase", "migrations"))
     .filter((file) => file.endsWith(".sql"))
-    .sort()
+    .sort();
+  const migrations = migrationFiles
     .map((file) => readFileSync(join(ROOT, "supabase", "migrations", file), "utf8"))
     .join("\n")
     .toLowerCase();
@@ -26,6 +27,32 @@ describe("Phase 3 operations persistence migration (#50-#53)", () => {
     expect(migrations).toMatch(/create index jobs_due_idx[\s\S]*available_at[\s\S]*job_id/);
     expect(migrations).toContain("lease_token is not null");
     expect(migrations).toContain("attempt_count >= 0");
+  });
+
+  it("keeps leased-job identities application-supplied with database-enforced status invariants", () => {
+    const operationsMigration = migrationFiles
+      .filter((file) => file.includes("create_operations_primitives"))
+      .map((file) => readFileSync(join(ROOT, "supabase", "migrations", file), "utf8"))
+      .join("\n")
+      .toLowerCase();
+    expect(operationsMigration).toContain("create table operations.jobs");
+    expect(operationsMigration).toContain("job_id uuid primary key");
+    expect(operationsMigration).not.toMatch(/job_id\s+uuid\s+(primary key\s+)?default/);
+    expect(operationsMigration).not.toMatch(/job_id\s+uuid\s+default/);
+    expect(operationsMigration).toContain("status in ('available', 'leased', 'completed')");
+    expect(operationsMigration).toContain("status = 'leased'");
+    expect(operationsMigration).toContain("status = 'available'");
+    expect(operationsMigration).toContain("status = 'completed'");
+    expect(operationsMigration).toContain("payload_version integer not null check (payload_version > 0)");
+    expect(operationsMigration).toContain("job_type text not null");
+    expect(operationsMigration).toContain("payload jsonb not null");
+    expect(operationsMigration).toContain("available_at timestamptz not null");
+    expect(operationsMigration).toContain("attempt_count integer not null default 0 check (attempt_count >= 0)");
+    expect(operationsMigration).toContain("lease_owner text");
+    expect(operationsMigration).toContain("lease_token text");
+    expect(operationsMigration).toContain("lease_expires_at timestamptz");
+    expect(operationsMigration).toContain("completed_at timestamptz");
+    expect(operationsMigration).toContain("last_error_code");
   });
 
   it("keeps public clients and capability roles least-privileged", () => {

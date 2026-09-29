@@ -4,6 +4,7 @@ import { sql, type Kysely } from "kysely";
 import {
   InputValidationError,
   parseIdempotencyKey,
+  parseStableId,
   type IdempotencyKey,
 } from "@shared/domain";
 import type { TransactionContext } from "../../../runtime/ports.js";
@@ -71,6 +72,34 @@ function assertHexSha256(name: string, value: string): void {
   if (!/^[0-9a-f]{64}$/.test(value)) {
     throw new TypeError(`${name} must be a lowercase SHA-256 value.`);
   }
+}
+
+function isRfc3339Instant(value: string): boolean {
+  const parts =
+    /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):([0-5]\d):([0-5]\d)(?:\.\d+)?(?:[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.exec(
+      value,
+    );
+  if (!parts) return false;
+
+  const year = Number(parts[1]);
+  const month = Number(parts[2]);
+  const day = Number(parts[3]);
+  const daysInMonth = [
+    31,
+    year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ][month - 1];
+
+  return day >= 1 && day <= (daysInMonth ?? 0) && Number.isFinite(Date.parse(value));
 }
 
 function validateIdempotencyInput(input: IdempotentExecutionInput): void {
@@ -149,6 +178,20 @@ export function createPostgresOperationsPersistence(
   function validateInputPayload(input: VersionedPayload): VersionedPayload {
     try {
       return validateVersionedPayload(input);
+    } catch (error) {
+      if (error instanceof InputValidationError) safeInputErrors.add(error);
+      throw error;
+    }
+  }
+
+  function validateJobEnqueueInput(job: JobInput): void {
+    try {
+      if (parseStableId("Job", job.jobId).ok === false) {
+        throw new InputValidationError("Job identity must be a stable UUIDv7.");
+      }
+      if (!isRfc3339Instant(job.availableAt)) {
+        throw new InputValidationError("Job availability must be an RFC 3339 instant.");
+      }
     } catch (error) {
       if (error instanceof InputValidationError) safeInputErrors.add(error);
       throw error;
@@ -367,6 +410,7 @@ export function createPostgresOperationsPersistence(
   const jobs: LeasedJobStorePort = {
     async enqueue(context: TransactionContext, job: JobInput): Promise<void> {
       const executor = resolvePostgresTransaction(context);
+      validateJobEnqueueInput(job);
       const payload = validateInputPayload(job.payload);
       try {
         await sql`
