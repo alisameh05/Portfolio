@@ -83,15 +83,34 @@ describe("leased-job store adapter (#52)", () => {
     }
   });
 
-  it("rejects invalid availability clocks and secret payloads without writing", async () => {
-    const badClock = stubOperationsDatabase([{ rows: [] }, { rows: [] }]);
-    const badClockStore = createPostgresOperationsPersistence(badClock.database);
-    await expect(
-      badClockStore.transactions.run((context) =>
-        badClockStore.jobs.enqueue(context, { ...validJob(JOB_A), availableAt: "not-a-time" }),
-      ),
-    ).rejects.toThrow(/RFC 3339|availability|clock/i);
-    expect(badClock.queryCount()).toBe(2);
+  it("validates RFC 3339 availability clocks and rejects secret payloads before writes", async () => {
+    for (const availableAt of [NOW, "2026-09-22T15:00:00+03:00"]) {
+      const validClock = stubOperationsDatabase([{ rows: [] }, { rows: [] }, { rows: [] }]);
+      const validClockStore = createPostgresOperationsPersistence(validClock.database);
+      await expect(
+        validClockStore.transactions.run((context) =>
+          validClockStore.jobs.enqueue(context, { ...validJob(JOB_A), availableAt }),
+        ),
+      ).resolves.toBeUndefined();
+      expect(validClock.queryCount()).toBe(3);
+    }
+
+    for (const availableAt of [
+      "not-a-time",
+      "2026-09-22",
+      "09/22/2026",
+      "0",
+      "2026-02-30T12:00:00Z",
+    ]) {
+      const badClock = stubOperationsDatabase([{ rows: [] }, { rows: [] }]);
+      const badClockStore = createPostgresOperationsPersistence(badClock.database);
+      await expect(
+        badClockStore.transactions.run((context) =>
+          badClockStore.jobs.enqueue(context, { ...validJob(JOB_A), availableAt }),
+        ),
+      ).rejects.toThrow(/RFC 3339|availability|clock/i);
+      expect(badClock.queryCount()).toBe(2);
+    }
 
     const secret = stubOperationsDatabase([{ rows: [] }, { rows: [] }]);
     const secretStore = createPostgresOperationsPersistence(secret.database);
