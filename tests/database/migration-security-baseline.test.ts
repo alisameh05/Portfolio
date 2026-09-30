@@ -10,7 +10,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { cleanupIsolatedProjects } from "../../scripts/database-baseline-support.mjs";
+import {
+  cleanupIsolatedProjects,
+  cleanupProbeRole,
+} from "../../scripts/database-baseline-support.mjs";
 
 const ROOT = process.cwd();
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
@@ -36,6 +39,30 @@ function runNode(...args: string[]) {
 }
 
 describe("Phase 3 migration and security baseline (#46)", () => {
+  it("fails closed when a disposable probe role cannot be dropped", async () => {
+    const statements: string[] = [];
+    await expect(
+      cleanupProbeRole({
+        admin: {
+          async query(statement: string) {
+            statements.push(statement);
+            if (statement.startsWith("drop role")) throw new Error("injected drop failure");
+          },
+          async end() {},
+        },
+        probe: { async end() {} },
+        login: "phase3_verify_test",
+        role: "shipwithali_application",
+      }),
+    ).rejects.toThrow("PROBE_ROLE_CLEANUP_FAILED");
+
+    expect(statements).toEqual([
+      'revoke shipwithali_application from "phase3_verify_test"',
+      'alter role "phase3_verify_test" nologin',
+      'drop role if exists "phase3_verify_test"',
+    ]);
+  });
+
   it("ships one reviewed timestamped migration with bounded locking and recovery guidance", () => {
     const migration = migrationSource();
     expect(migration).toMatch(/^-- Phase 3 database security baseline/m);

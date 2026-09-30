@@ -128,9 +128,33 @@ npm run db:phase3:security
 `db:phase3:integration` proves observable commit/rollback, optimistic
 concurrency, idempotency replay/conflict, outbox atomicity, exclusive leases,
 token guards, and reclaim behavior through provider-neutral ports.
-`db:phase3:security` connects as the credited database roles, verifies forced
-RLS and future-object defaults, checks generated Kysely types byte-for-byte,
-and captures index-backed outbox, job, and disposable `public_read` plans.
+`db:phase3:security` verifies forced RLS and future-object defaults, checks
+generated Kysely types byte-for-byte, and captures index-backed outbox, job,
+and disposable `public_read` plans.
+
+Role and grant assertions connect as the credited role. Capability roles are
+passwordless `NOLOGIN` roles, so the check and the `role-rls-matrix` suite
+create disposable login roles (random per-run passwords, provisioned outside
+migrations), grant each login exactly one capability, connect with that login,
+and assert through `SET ROLE`. Every assertion verifies
+`session_user` (the unprivileged login) differs from `current_user` (the
+credited role); superuser and migration-owner connections only arrange
+fixtures and are never the asserting identity. Probe logins are dropped
+afterwards and hold no grants, so a leaked probe cannot reach data.
+
+Migration executor note: the local Supabase `postgres` login holds
+`CREATEROLE` without `SUPERUSER`, so migrations cannot assume a superuser.
+Role creation is unconditional while attribute correction runs only for
+superuser executors, and each migration grants the executor membership in
+`shipwithali_migration` before `SET ROLE`. No application, worker, backup,
+anonymous, or authenticated grant is created by that membership.
+
+Function default privileges: PostgreSQL 17 does not apply
+default-privilege entries to newly created functions (their system default
+remains `PUBLIC EXECUTE`). The baseline revoke is kept as defense in depth,
+but every `CREATE FUNCTION` in production migrations must additionally carry
+an explicit object-level `REVOKE ... FROM public, anon, authenticated`. The
+baseline source verifier rejects unrevoked functions.
 
 The authoritative completion command orchestrates all of this from a clean
 checkout, starts with the complete Phase 2 gate, resets the local stack, rejects

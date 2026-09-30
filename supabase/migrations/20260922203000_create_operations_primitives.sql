@@ -3,6 +3,11 @@
 -- Forward fix: correct defects with a new timestamped expand-compatible migration.
 
 set lock_timeout = '5s';
+
+-- Membership persists from the security-baseline migration; re-granting keeps
+-- this migration applicable on its own when the executor administers schema.
+grant shipwithali_migration to current_user;
+
 set role shipwithali_migration;
 
 create table operations.idempotency_records (
