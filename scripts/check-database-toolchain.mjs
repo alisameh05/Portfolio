@@ -27,6 +27,17 @@ const EXPECTED_SCRIPTS = Object.freeze({
   "db:reset": "node scripts/local-database.mjs reset",
   "db:reuse": "node scripts/local-database.mjs reuse",
   "db:stop": "node scripts/local-database.mjs stop",
+  "phase3:focus:migration": "node scripts/check-database-baseline.mjs --local --phase3",
+  "phase3:focus:source": "node scripts/check-phase3-database.mjs --source-only",
+  "phase3:focus:security": "node scripts/check-phase3-database.mjs",
+  "phase3:focus:transaction": "vitest run tests/database/postgres-transaction-runner.test.ts tests/database/postgres-integration.test.ts",
+  "phase3:focus:occ": "vitest run tests/database/optimistic-concurrency.test.ts",
+  "phase3:focus:idempotency": "vitest run tests/database/idempotency.test.ts tests/database/postgres-integration.test.ts",
+  "phase3:focus:outbox": "vitest run tests/database/outbox.test.ts tests/database/postgres-integration.test.ts",
+  "phase3:focus:leases": "vitest run tests/database/leased-jobs.test.ts tests/database/postgres-integration.test.ts",
+  "phase3:focus:readiness": "vitest run tests/database/postgres-runtime.test.ts tests/runtime/readiness-lifecycle.test.ts",
+  "phase3:focus:role-rls": "vitest run tests/database/role-rls-matrix.test.ts",
+  "phase3:focus:plans": "node scripts/check-phase3-database.mjs",
 });
 
 function readJson(path) {

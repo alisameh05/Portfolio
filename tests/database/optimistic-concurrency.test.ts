@@ -16,6 +16,9 @@ import type { DB } from "../../src/shared/adapters/postgres/database.generated.j
 import type { TransactionContext } from "../../src/runtime/ports.js";
 
 const DATABASE_URL = process.env["PHASE3_DATABASE_URL"];
+if (process.env["PHASE3_REQUIRE_DATABASE"] === "1" && !DATABASE_URL) {
+  throw new Error("PHASE3_DATABASE_URL is required for the Phase 3 integration gate.");
+}
 const describeDatabase = DATABASE_URL === undefined ? describe.skip : describe;
 
 const DEFINITION: OptimisticFixtureDefinition = {
