@@ -219,7 +219,14 @@ function readLocalDatabaseUrl(workdir) {
   );
 
   const jsonStart = output.indexOf("{");
-  const status = JSON.parse(output.slice(jsonStart));
+  const jsonEnd = output.lastIndexOf("}");
+  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd < jsonStart) throw new Error("LOCAL_DB_UNAVAILABLE");
+  let status;
+  try {
+    status = JSON.parse(output.slice(jsonStart, jsonEnd + 1));
+  } catch {
+    throw new Error("LOCAL_DB_UNAVAILABLE");
+  }
   const connectionString = status.DB_URL ?? status.db_url;
   if (typeof connectionString !== "string") throw new Error("LOCAL_DB_URL_MISSING");
 
