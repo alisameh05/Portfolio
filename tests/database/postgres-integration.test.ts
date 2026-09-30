@@ -57,6 +57,19 @@ describeDatabase("PostgreSQL production adapters (#48-#52)", () => {
     return parsed.value;
   }
 
+  async function databaseClockIso(): Promise<string> {
+    const result = await sql<{ now: string }>`select now()::text as now`.execute(
+      first.database,
+    );
+    const value = result.rows[0]?.now;
+    if (!value) throw new Error("database clock unavailable");
+    return new Date(value).toISOString();
+  }
+
+  function addHours(iso: string, hours: number): string {
+    return new Date(Date.parse(iso) + hours * 3_600_000).toISOString();
+  }
+
   async function writeRepresentativeState(
     context: TransactionContext,
     id: string,
@@ -196,12 +209,14 @@ describeDatabase("PostgreSQL production adapters (#48-#52)", () => {
 
   it("replays exact idempotent requests, rejects conflicts, and persists only hashes", async () => {
     let effects = 0;
+    const databaseNow = await databaseClockIso();
+    const expiresAt = addHours(databaseNow, 24);
     const input = {
       operationScope: "project.publish",
       actorScope: createHash("sha256").update("opaque-actor").digest("hex"),
       key: idempotencyKey("retry-key-never-stored"),
       requestHash: createHash("sha256").update("canonical-request").digest("hex"),
-      expiresAt: "2026-09-23T12:00:00.000Z",
+      expiresAt,
     };
     const execute = () =>
       store.idempotency.execute(input, async () => {
@@ -251,12 +266,14 @@ describeDatabase("PostgreSQL production adapters (#48-#52)", () => {
   });
 
   it("serializes concurrent retries and rolls reservation, state, and outbox back together", async () => {
+    const databaseNow = await databaseClockIso();
+    const expiresAt = addHours(databaseNow, 24);
     const input = {
       operationScope: "project.publish",
       actorScope: createHash("sha256").update("concurrent-actor").digest("hex"),
       key: idempotencyKey("concurrent-retry-key"),
       requestHash: createHash("sha256").update("same-request").digest("hex"),
-      expiresAt: "2026-09-23T12:00:00.000Z",
+      expiresAt,
     };
     let effects = 0;
     const effect = async () => {
@@ -300,23 +317,27 @@ describeDatabase("PostgreSQL production adapters (#48-#52)", () => {
 
   it("replaces an expired idempotency record using the injected clock", async () => {
     const key = idempotencyKey("expiring-retry-key");
+    const databaseNow = await databaseClockIso();
+    const expiresAt = addHours(databaseNow, 24);
+    const futureNow = addHours(databaseNow, 48);
+    const replacementExpiresAt = addHours(databaseNow, 72);
     const base = {
       operationScope: "project.publish",
       actorScope: createHash("sha256").update("expiry-actor").digest("hex"),
       key,
       requestHash: createHash("sha256").update("request-one").digest("hex"),
-      expiresAt: "2026-09-23T12:00:00.000Z",
+      expiresAt,
     };
     expect((await store.idempotency.execute(base, async () => ({ version: 1 }))).kind).toBe("executed");
     const futureStore = createPostgresOperationsPersistence(second.database, {
-      now: () => "2026-09-24T12:00:00.000Z",
+      now: () => futureNow,
       leaseTokens: { generate: () => "future-token" },
     });
     const replacement = await futureStore.idempotency.execute(
       {
         ...base,
         requestHash: createHash("sha256").update("request-two").digest("hex"),
-        expiresAt: "2026-09-25T12:00:00.000Z",
+        expiresAt: replacementExpiresAt,
       },
       async () => ({ version: 2 }),
     );
