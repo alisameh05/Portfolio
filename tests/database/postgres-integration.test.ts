@@ -10,6 +10,7 @@ import {
 } from "../../src/shared/adapters/postgres/runtime.js";
 import { updateVersionedRecord } from "../../src/shared/adapters/postgres/optimistic-concurrency.js";
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
+import { assertBaselineSnapshotsEquivalent } from "../../scripts/database-baseline-support.mjs";
 import {
   requestTransactionRollback,
   type TransactionContext,
@@ -159,6 +160,62 @@ describeDatabase("PostgreSQL production adapters (#48-#52)", () => {
       select id::text from phase3_test.representative_state order by id
     `.execute(first.database);
     expect(state.rows.map((row) => row.id)).toEqual([STATE_COMMIT]);
+  });
+
+  it("detects live policy predicate drift between clean and upgrade snapshots", async () => {
+    await sql`drop table if exists phase3_test.policy_equivalence`.execute(first.database);
+    try {
+      await sql`
+        create table phase3_test.policy_equivalence (id integer primary key)
+      `.execute(first.database);
+      await sql`alter table phase3_test.policy_equivalence enable row level security`.execute(
+        first.database,
+      );
+      await sql`
+        create policy policy_equivalence_select on phase3_test.policy_equivalence
+        for select using (true)
+      `.execute(first.database);
+
+      const clean = await sql`
+        select schemaname as schema, tablename as table_name, policyname as policy,
+               lower(permissive) as permissive, roles, cmd,
+               coalesce(qual, '') as qual, coalesce(with_check, '') as with_check
+          from pg_policies
+         where schemaname = 'phase3_test' and tablename = 'policy_equivalence'
+         order by schemaname, tablename, policyname
+      `.execute(first.database);
+      await sql`
+        alter policy policy_equivalence_select on phase3_test.policy_equivalence
+        using (false)
+      `.execute(first.database);
+      const upgrade = await sql`
+        select schemaname as schema, tablename as table_name, policyname as policy,
+               lower(permissive) as permissive, roles, cmd,
+               coalesce(qual, '') as qual, coalesce(with_check, '') as with_check
+          from pg_policies
+         where schemaname = 'phase3_test' and tablename = 'policy_equivalence'
+         order by schemaname, tablename, policyname
+      `.execute(first.database);
+
+      expect(clean.rows[0]).toMatchObject({
+        schema: "phase3_test",
+        table_name: "policy_equivalence",
+        policy: "policy_equivalence_select",
+        permissive: "permissive",
+        cmd: "SELECT",
+        qual: "true",
+        with_check: "",
+      });
+      expect(upgrade.rows[0]).toMatchObject({ qual: "false" });
+      expect(() =>
+        assertBaselineSnapshotsEquivalent(
+          { policies: clean.rows },
+          { policies: upgrade.rows },
+        ),
+      ).toThrow("CLEAN_AND_UPGRADE_BASELINES_DIFFER");
+    } finally {
+      await sql`drop table if exists phase3_test.policy_equivalence`.execute(first.database);
+    }
   });
 
   it("allows exactly one optimistic update from the same expected version", async () => {

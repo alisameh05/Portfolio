@@ -16,7 +16,13 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
-import { cleanupIsolatedProjects as cleanupProjects, findUnrevokedFunctions } from "./database-baseline-support.mjs";
+import {
+  assertBaselineSnapshotsEquivalent,
+  assertPhase3Rls,
+  cleanupIsolatedProjects as cleanupProjects,
+  findUnrevokedFunctions,
+  isPhase2BaselineMarkers,
+} from "./database-baseline-support.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
@@ -300,18 +306,23 @@ async function assertPriorBaseline(baseUrl) {
     if (schemas.rowCount !== 0) throw new Error("PHASE2_BASELINE_CONTAINS_APPLICATION_SCHEMAS");
 
     const markers = await client.query(
-      `select to_regclass('supabase_migrations.schema_migrations') is not null as migrations,
-              to_regclass('auth.users') is not null as auth,
+      `select to_regclass('auth.users') is not null as auth,
               to_regclass('storage.objects') is not null as storage`,
     );
     const marker = markers.rows[0];
-    if (!marker?.migrations || !marker.auth || !marker.storage) {
+    if (!isPhase2BaselineMarkers(marker ?? {})) {
       throw new Error("PHASE2_BASELINE_IS_NOT_INITIALIZED_SUPABASE");
     }
 
-    const migrations = await client.query(
-      "select version from supabase_migrations.schema_migrations order by version",
-    );
+    let migrations;
+    try {
+      migrations = await client.query(
+        "select version from supabase_migrations.schema_migrations order by version",
+      );
+    } catch (error) {
+      if (error?.code !== "42P01") throw error;
+      migrations = { rowCount: 0 };
+    }
     if (migrations.rowCount !== 0) {
       throw new Error("PHASE2_BASELINE_CONTAINS_APPLICATION_MIGRATIONS");
     }
@@ -336,6 +347,13 @@ async function verifyFutureDefaults(baseUrl) {
       await client.query(`create sequence ${schema}.__privilege_probe_sequence`);
       await client.query(
         `create function ${schema}.__privilege_probe_function() returns integer language sql immutable as 'select 1'`,
+      );
+      // PostgreSQL 17 keeps PUBLIC EXECUTE on new functions despite
+      // default-privilege revokes, so production migrations must carry an
+      // explicit object-level revoke per function. The probe follows the same
+      // documented pattern before asserting restrictive access.
+      await client.query(
+        `revoke all on function ${schema}.__privilege_probe_function() from public, anon, authenticated`,
       );
     }
     await client.query("reset role");
@@ -414,11 +432,39 @@ async function snapshot(baseUrl) {
     );
     const objects = await client.query(
       `select n.nspname as schema, c.relname as name, c.relkind as kind,
-              pg_get_userbyid(c.relowner) as owner
+              pg_get_userbyid(c.relowner) as owner,
+              c.relrowsecurity as rls_enabled, c.relforcerowsecurity as rls_forced
          from pg_class c
          join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = any($1::text[])
         order by n.nspname, c.relname, c.relkind`,
+      [SCHEMAS],
+    );
+    const policies = await client.query(
+      `select schemaname as schema, tablename as table_name, policyname as policy,
+              lower(permissive) as permissive, roles, cmd,
+              coalesce(qual, '') as qual, coalesce(with_check, '') as with_check
+         from pg_policies
+        where schemaname = any($1::text[])
+        order by schemaname, tablename, policyname`,
+      [SCHEMAS],
+    );
+    const indexes = await client.query(
+      `select schemaname as schema, tablename as table_name, indexname as index,
+              indexdef
+         from pg_indexes
+        where schemaname = any($1::text[])
+        order by schemaname, tablename, indexname`,
+      [SCHEMAS],
+    );
+    const functions = await client.query(
+      `select n.nspname as schema, p.proname as name,
+              pg_get_function_identity_arguments(p.oid) as arguments,
+              p.prosecdef as security_definer
+         from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = any($1::text[])
+        order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)`,
       [SCHEMAS],
     );
     const migrations = await client.query(
@@ -468,6 +514,9 @@ async function snapshot(baseUrl) {
       privileges: privileges.rows,
       defaultPrivileges: defaults.rows,
       objects: objects.rows,
+      policies: policies.rows,
+      indexes: indexes.rows,
+      functions: functions.rows,
       migrationVersions: migrations.rows.map((row) => row.version),
     };
   } finally {
@@ -499,6 +548,7 @@ async function verifyLocal() {
     );
     await verifyFutureDefaults(upgradeUrl);
     const upgrade = await snapshot(upgradeUrl);
+    if (PHASE3_MODE) assertPhase3Rls(upgrade.objects);
 
     runLocalCommand(
       upgradeProject.workdir,
@@ -519,6 +569,7 @@ async function verifyLocal() {
     const cleanUrl = readLocalDatabaseUrl(cleanProject.workdir);
     await verifyFutureDefaults(cleanUrl);
     const clean = await snapshot(cleanUrl);
+    if (PHASE3_MODE) assertPhase3Rls(clean.objects);
 
     const expectedVersions = selectedMigrationFiles().map((name) => name.slice(0, 14));
     if (
@@ -527,9 +578,7 @@ async function verifyLocal() {
     ) {
       throw new Error("MIGRATION_HISTORY_MISMATCH");
     }
-    if (JSON.stringify(clean) !== JSON.stringify(upgrade)) {
-      throw new Error("CLEAN_AND_UPGRADE_BASELINES_DIFFER");
-    }
+    assertBaselineSnapshotsEquivalent(clean, upgrade);
 
     const migrationPath = baselineMigrationPath();
     evidence = {
@@ -551,6 +600,10 @@ async function verifyLocal() {
         sha256: createHash("sha256").update(readFileSync(join(MIGRATIONS, file))).digest("hex"),
       })),
       applicationObjectCount: clean.objects.length,
+      policyCount: clean.policies.length,
+      indexCount: clean.indexes.length,
+      functionCount: clean.functions.length,
+      ...(PHASE3_MODE ? { rlsEnforced: true } : {}),
       cleanUpgradeEquivalent: true,
       migrationReplayNoop: true,
       isolatedProjects: true,

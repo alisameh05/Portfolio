@@ -1,0 +1,54 @@
+{
+  "ticket": 54,
+  "parent": 44,
+  "scope": "phase-3-complete-migration-equivalence",
+  "baseline": "phase-2",
+  "migration": "20260922171906_establish_database_security_baseline.sql",
+  "migrationSha256": "f57b86d6718d64f4a1901823a79e3fb01d862e5b57ed627ce47cd94b8ef888de",
+  "schemas": [
+    "portfolio_config",
+    "content",
+    "taxonomy",
+    "media",
+    "cv",
+    "interaction",
+    "measurement",
+    "identity_access",
+    "operations",
+    "public_read"
+  ],
+  "capabilityRoles": [
+    "shipwithali_application",
+    "shipwithali_worker",
+    "shipwithali_migration",
+    "shipwithali_backup"
+  ],
+  "migrationVersions": [
+    "20260922170000",
+    "20260922171906",
+    "20260922203000"
+  ],
+  "migrationChecksums": [
+    {
+      "file": "20260922170000_prepare_migration_capability.sql",
+      "sha256": "0a6b85ed5198b8a58b51a4ed8d702d200968fd2002065d6f48c972817fe800cb"
+    },
+    {
+      "file": "20260922171906_establish_database_security_baseline.sql",
+      "sha256": "f57b86d6718d64f4a1901823a79e3fb01d862e5b57ed627ce47cd94b8ef888de"
+    },
+    {
+      "file": "20260922203000_create_operations_primitives.sql",
+      "sha256": "7dbbfec208f85d0619f623b2d0bf3634212933fa91aca9d3918d1f0c30d197a8"
+    }
+  ],
+  "applicationObjectCount": 8,
+  "policyCount": 12,
+  "indexCount": 5,
+  "functionCount": 0,
+  "rlsEnforced": true,
+  "cleanUpgradeEquivalent": true,
+  "migrationReplayNoop": true,
+  "isolatedProjects": true,
+  "remoteCredentialsRequired": false
+}

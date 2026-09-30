@@ -12,6 +12,49 @@ export function cleanupIsolatedProjects(projects, { stop, remove }) {
   return failures;
 }
 
+/**
+ * Decide whether platform markers describe an initialized Phase 2 baseline
+ * under this repository's local topology.
+ *
+ * The local Supabase stack disables Storage (see supabase/config.toml), so a
+ * fresh baseline keeps `auth.users` while `storage.objects` stays absent. A
+ * present storage marker would hide topology drift. The migration-history
+ * table itself may be absent before the first `migration up`; empty history
+ * is verified separately, so its presence is not a platform marker.
+ */
+export function isPhase2BaselineMarkers({ auth, storage }) {
+  return auth === true && storage === false;
+}
+
+const PHASE3_TABLES = Object.freeze([
+  "operations.idempotency_records",
+  "operations.outbox_events",
+  "operations.jobs",
+]);
+
+/** Require every Phase 3 operations table to exist with forced row security. */
+export function assertPhase3Rls(objects) {
+  const tables = new Map(
+    objects
+      .filter((row) => row.kind === "r")
+      .map((row) => [`${row.schema}.${row.name}`, row]),
+  );
+  for (const name of PHASE3_TABLES) {
+    const table = tables.get(name);
+    if (!table) throw new Error("PHASE3_EXPECTED_TABLE_MISSING");
+    if (table.rls_enabled !== true || table.rls_forced !== true) {
+      throw new Error("PHASE3_TABLE_RLS_NOT_ENFORCED");
+    }
+  }
+}
+
+/** Fail if clean and upgrade database snapshots differ in any captured state. */
+export function assertBaselineSnapshotsEquivalent(clean, upgrade) {
+  if (JSON.stringify(clean) !== JSON.stringify(upgrade)) {
+    throw new Error("CLEAN_AND_UPGRADE_BASELINES_DIFFER");
+  }
+}
+
 /** Remove a temporary login's capability before dropping the role. */
 export async function cleanupProbeRole({ admin, probe, login, role }) {
   let failed = false;

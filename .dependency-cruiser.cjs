@@ -80,6 +80,26 @@ module.exports = {
     },
 
     /**
+     * Rule: no-database-type-leakage
+     *
+     * Committed Kysely database types are a persistence-adapter concern.
+     * Domain, application, ports, shared contracts, and generated transport
+     * layers must remain independent of database structure (#54).
+     */
+    {
+      name: "no-database-type-leakage",
+      severity: "error",
+      comment:
+        "Generated database types may be imported only by PostgreSQL adapters.",
+      from: {
+        pathNot: "(?:/adapters/|tests/fixtures/invalid-deps/)",
+      },
+      to: {
+        path: "database\\.generated",
+      },
+    },
+
+    /**
      * Rule: no-deep-cross-module-import
      *
      * Modules may only be imported through their public barrel (index.ts).

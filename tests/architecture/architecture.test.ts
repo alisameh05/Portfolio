@@ -169,3 +169,27 @@ describe("Architecture Checker Dependency Rules Enforcement", () => {
     expect(result.output).toContain("no-cycles");
   });
 });
+
+describe("Phase 3 generated database-type confinement (#54)", () => {
+  it("declares a dependency rule keeping database.generated inside adapters", () => {
+    const config = readFileSync(join(ROOT, ".dependency-cruiser.cjs"), "utf8");
+    expect(config).toContain("no-database-type-leakage");
+    expect(config).toMatch(/database.*generated/);
+  });
+
+  it("imports generated database types only from PostgreSQL adapters", () => {
+    const offenders: string[] = [];
+    for (const file of scanAllFiles(join(ROOT, "src"))) {
+      if (!file.endsWith(".ts")) continue;
+      const content = readFileSync(file, "utf8");
+      if (/database\.generated(?:\.js)?["']/.test(content)) {
+        const relative = file
+          .replace(`${ROOT}/`, "")
+          .replace(`${ROOT}\\`, "")
+          .replace(/\\/g, "/");
+        if (!relative.includes("/adapters/")) offenders.push(relative);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});

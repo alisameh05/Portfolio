@@ -11,8 +11,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  assertBaselineSnapshotsEquivalent,
+  assertPhase3Rls,
   cleanupIsolatedProjects,
   cleanupProbeRole,
+  isPhase2BaselineMarkers,
 } from "../../scripts/database-baseline-support.mjs";
 
 const ROOT = process.cwd();
@@ -39,6 +42,28 @@ function runNode(...args: string[]) {
 }
 
 describe("Phase 3 migration and security baseline (#46)", () => {
+  it("fails closed when an expected Phase 3 table is missing or lacks forced RLS", () => {
+    const requiredTables = [
+      { schema: "operations", name: "idempotency_records", kind: "r", rls_enabled: true, rls_forced: true },
+      { schema: "operations", name: "outbox_events", kind: "r", rls_enabled: true, rls_forced: true },
+      { schema: "operations", name: "jobs", kind: "r", rls_enabled: true, rls_forced: true },
+    ];
+
+    expect(() => assertPhase3Rls(requiredTables.slice(0, 2))).toThrow(
+      "PHASE3_EXPECTED_TABLE_MISSING",
+    );
+    expect(() =>
+      assertPhase3Rls(requiredTables.map((table) =>
+        table.name === "jobs" ? { ...table, rls_forced: false } : table,
+      )),
+    ).toThrow("PHASE3_TABLE_RLS_NOT_ENFORCED");
+    expect(() =>
+      assertPhase3Rls(requiredTables.map((table) =>
+        table.name === "jobs" ? { ...table, rls_enabled: false } : table,
+      )),
+    ).toThrow("PHASE3_TABLE_RLS_NOT_ENFORCED");
+  });
+
   it("fails closed when a disposable probe role cannot be dropped", async () => {
     const statements: string[] = [];
     await expect(
@@ -230,6 +255,29 @@ describe("Phase 3 migration and security baseline (#46)", () => {
       rmSync(upgradeWorkdir, { recursive: true, force: true });
       rmSync(cleanWorkdir, { recursive: true, force: true });
     }
+  });
+
+  it("accepts an initialized baseline with storage disabled and rejects drifted markers", () => {
+    // Local topology disables Storage but keeps auth platform tables;
+    // storage.objects must stay absent (see supabase/config.toml). The
+    // migration-history table may be absent before the first `migration up`,
+    // so empty history is verified separately from platform markers.
+    expect(isPhase2BaselineMarkers({ auth: true, storage: false })).toBe(true);
+    expect(isPhase2BaselineMarkers({ auth: true, storage: true })).toBe(false);
+    expect(isPhase2BaselineMarkers({ auth: false, storage: false })).toBe(false);
+  });
+
+  it("proves clean and upgrade equivalence covers policies, indexes, and functions", () => {
+    const verifier = readFileSync(
+      join(ROOT, "scripts", "check-database-baseline.mjs"),
+      "utf8",
+    );
+    expect(verifier).toContain("pg_policies");
+    expect(verifier).toContain("pg_indexes");
+    expect(verifier).toContain("pg_proc");
+    // PostgreSQL 17 keeps PUBLIC EXECUTE on new functions, so the privilege
+    // probe follows the production pattern (create + explicit revoke).
+    expect(verifier).toContain("revoke all on function");
   });
 
   it("rejects a prior-release baseline that contains application state", () => {
