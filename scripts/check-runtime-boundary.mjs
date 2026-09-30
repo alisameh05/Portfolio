@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Contract-driven Phase 2 runtime boundary check (#33).
  *

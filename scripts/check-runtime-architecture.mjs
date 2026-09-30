@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /** Phase 2 runtime architecture enforcement (#33). */
 
 import {
