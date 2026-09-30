@@ -11,6 +11,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  assertBaselineSnapshotsEquivalent,
+  assertPhase3Rls,
   cleanupIsolatedProjects,
   cleanupProbeRole,
   isPhase2BaselineMarkers,
@@ -40,6 +42,28 @@ function runNode(...args: string[]) {
 }
 
 describe("Phase 3 migration and security baseline (#46)", () => {
+  it("fails closed when an expected Phase 3 table is missing or lacks forced RLS", () => {
+    const requiredTables = [
+      { schema: "operations", name: "idempotency_records", kind: "r", rls_enabled: true, rls_forced: true },
+      { schema: "operations", name: "outbox_events", kind: "r", rls_enabled: true, rls_forced: true },
+      { schema: "operations", name: "jobs", kind: "r", rls_enabled: true, rls_forced: true },
+    ];
+
+    expect(() => assertPhase3Rls(requiredTables.slice(0, 2))).toThrow(
+      "PHASE3_EXPECTED_TABLE_MISSING",
+    );
+    expect(() =>
+      assertPhase3Rls(requiredTables.map((table) =>
+        table.name === "jobs" ? { ...table, rls_forced: false } : table,
+      )),
+    ).toThrow("PHASE3_TABLE_RLS_NOT_ENFORCED");
+    expect(() =>
+      assertPhase3Rls(requiredTables.map((table) =>
+        table.name === "jobs" ? { ...table, rls_enabled: false } : table,
+      )),
+    ).toThrow("PHASE3_TABLE_RLS_NOT_ENFORCED");
+  });
+
   it("fails closed when a disposable probe role cannot be dropped", async () => {
     const statements: string[] = [];
     await expect(

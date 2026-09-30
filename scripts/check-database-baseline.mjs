@@ -16,7 +16,13 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
-import { cleanupIsolatedProjects as cleanupProjects, findUnrevokedFunctions, isPhase2BaselineMarkers } from "./database-baseline-support.mjs";
+import {
+  assertBaselineSnapshotsEquivalent,
+  assertPhase3Rls,
+  cleanupIsolatedProjects as cleanupProjects,
+  findUnrevokedFunctions,
+  isPhase2BaselineMarkers,
+} from "./database-baseline-support.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
@@ -436,7 +442,8 @@ async function snapshot(baseUrl) {
     );
     const policies = await client.query(
       `select schemaname as schema, tablename as table_name, policyname as policy,
-              roles, cmd
+              lower(permissive) as permissive, roles, cmd,
+              coalesce(qual, '') as qual, coalesce(with_check, '') as with_check
          from pg_policies
         where schemaname = any($1::text[])
         order by schemaname, tablename, policyname`,
@@ -541,6 +548,7 @@ async function verifyLocal() {
     );
     await verifyFutureDefaults(upgradeUrl);
     const upgrade = await snapshot(upgradeUrl);
+    if (PHASE3_MODE) assertPhase3Rls(upgrade.objects);
 
     runLocalCommand(
       upgradeProject.workdir,
@@ -561,6 +569,7 @@ async function verifyLocal() {
     const cleanUrl = readLocalDatabaseUrl(cleanProject.workdir);
     await verifyFutureDefaults(cleanUrl);
     const clean = await snapshot(cleanUrl);
+    if (PHASE3_MODE) assertPhase3Rls(clean.objects);
 
     const expectedVersions = selectedMigrationFiles().map((name) => name.slice(0, 14));
     if (
@@ -569,9 +578,7 @@ async function verifyLocal() {
     ) {
       throw new Error("MIGRATION_HISTORY_MISMATCH");
     }
-    if (JSON.stringify(clean) !== JSON.stringify(upgrade)) {
-      throw new Error("CLEAN_AND_UPGRADE_BASELINES_DIFFER");
-    }
+    assertBaselineSnapshotsEquivalent(clean, upgrade);
 
     const migrationPath = baselineMigrationPath();
     evidence = {
@@ -596,9 +603,7 @@ async function verifyLocal() {
       policyCount: clean.policies.length,
       indexCount: clean.indexes.length,
       functionCount: clean.functions.length,
-      rlsEnforced: clean.objects
-        .filter((row) => row.kind === "r")
-        .every((row) => row.rls_enabled && row.rls_forced),
+      ...(PHASE3_MODE ? { rlsEnforced: true } : {}),
       cleanUpgradeEquivalent: true,
       migrationReplayNoop: true,
       isolatedProjects: true,
