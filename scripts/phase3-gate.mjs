@@ -70,7 +70,14 @@ async function readLocalDatabaseUrl() {
   if (code !== 0) throw new Error("LOCAL_DB_STATUS_FAILED");
   const output = Buffer.concat(chunks).toString("utf8");
   const start = output.indexOf("{");
-  const status = JSON.parse(output.slice(start));
+  const end = output.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) throw new Error("LOCAL_DB_STATUS_FAILED");
+  let status;
+  try {
+    status = JSON.parse(output.slice(start, end + 1));
+  } catch {
+    throw new Error("LOCAL_DB_STATUS_FAILED");
+  }
   const value = status.DB_URL ?? status.db_url;
   if (typeof value !== "string") throw new Error("LOCAL_DB_URL_MISSING");
   const url = new URL(value);
