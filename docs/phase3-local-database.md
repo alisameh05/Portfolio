@@ -127,6 +127,36 @@ npm run db:phase3:integration
 npm run db:phase3:security
 ```
 
+Ticket #55 focused checks (#55 criterion 3) remain independently runnable for
+migration/reset, baseline upgrade, type drift, role/RLS, transaction rollback,
+optimistic concurrency, idempotency, outbox, lease recovery,
+readiness/lifecycle, and query plans:
+
+```powershell
+npm run phase3:focus:migration
+npm run phase3:focus:source
+npm run phase3:focus:security
+npm run phase3:focus:role-rls
+npm run phase3:focus:transaction
+npm run phase3:focus:occ
+npm run phase3:focus:idempotency
+npm run phase3:focus:outbox
+npm run phase3:focus:leases
+npm run phase3:focus:readiness
+npm run phase3:focus:plans
+```
+
+`phase3:focus:migration` proves clean and Phase-2-baseline upgrades are
+equivalent; `phase3:focus:source` proves adapter-confined sources without
+Docker; `phase3:focus:security`/`role-rls` prove the allow/deny matrix as the
+credited roles; `transaction`/`occ`/`idempotency`/`outbox`/`leases` prove
+rollback, versioned updates, replay/conflict, atomic appends, and lease
+recovery; `readiness` proves database-backed ready state and lifecycle drain;
+`plans` captures index-backed outbox, job, and disposable `public_read`
+`EXPLAIN` output. With `PHASE3_REQUIRE_DATABASE=1`, a missing
+`PHASE3_DATABASE_URL` throws instead of skipping, and the gate fails on any
+non-zero skipped suite, missing/stale evidence, or partial result.
+
 `db:phase3:integration` proves observable commit/rollback, optimistic
 concurrency, idempotency replay/conflict, outbox atomicity, exclusive leases,
 token guards, and reclaim behavior through provider-neutral ports.

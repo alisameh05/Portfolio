@@ -74,6 +74,33 @@ describe("Phase 3 local PostgreSQL toolchain (#45)", () => {
     });
   });
 
+  it("exposes independently runnable Phase 3 focused checks (#55)", () => {
+    const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+
+    expect(packageJson.scripts).toMatchObject({
+      "phase3:focus:migration": "node scripts/check-database-baseline.mjs --local --phase3",
+      "phase3:focus:source": "node scripts/check-phase3-database.mjs --source-only",
+      "phase3:focus:security": "node scripts/check-phase3-database.mjs",
+      "phase3:focus:transaction":
+        "node scripts/phase3-database-tests.mjs tests/database/postgres-transaction-runner.test.ts tests/database/postgres-integration.test.ts",
+      "phase3:focus:occ":
+        "node scripts/phase3-database-tests.mjs tests/database/optimistic-concurrency.test.ts",
+      "phase3:focus:idempotency":
+        "node scripts/phase3-database-tests.mjs tests/database/idempotency.test.ts tests/database/postgres-integration.test.ts",
+      "phase3:focus:outbox":
+        "node scripts/phase3-database-tests.mjs tests/database/outbox.test.ts tests/database/postgres-integration.test.ts",
+      "phase3:focus:leases":
+        "node scripts/phase3-database-tests.mjs tests/database/leased-jobs.test.ts tests/database/postgres-integration.test.ts",
+      "phase3:focus:readiness":
+        "vitest run tests/database/postgres-runtime.test.ts tests/runtime/readiness-lifecycle.test.ts",
+      "phase3:focus:role-rls":
+        "node scripts/phase3-database-tests.mjs tests/database/role-rls-matrix.test.ts",
+      "phase3:focus:plans": "node scripts/check-phase3-database.mjs",
+    });
+  });
+
   it("plans only local Supabase operations through the pinned project dependency", () => {
     const expectedPlans = {
       start: ["start"],

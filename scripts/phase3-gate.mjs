@@ -18,7 +18,7 @@ function sanitize(value) {
     .replace(/(?:password|token|secret|idempotency[-_]?key)\s*[=:]\s*[^\s,;]+/gi, "$1=[redacted]");
 }
 
-function run(name, entry, args, { env = {}, evidence } = {}) {
+function run(name, entry, args, { env = {}, evidence, failOnSkipped = false } = {}) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [entry, ...args], {
       cwd: ROOT,
@@ -47,10 +47,14 @@ function run(name, entry, args, { env = {}, evidence } = {}) {
         mkdirSync(dirname(path), { recursive: true });
         writeFileSync(path, output, "utf8");
       }
+      const skipped = failOnSkipped && /[1-9]\d*\s+skipped/i.test(output);
+      if (skipped) {
+        console.error(`✗ ${name}: skipped database suites are a failing verdict, never success`);
+      }
       resolve({
         name,
-        passed: code === 0 && spawnError === undefined,
-        exitCode: code ?? 1,
+        passed: code === 0 && spawnError === undefined && !skipped,
+        exitCode: skipped ? 1 : (code ?? 1),
         evidence,
       });
     });
@@ -145,7 +149,7 @@ try {
     ["architecture", "scripts/architecture-check.mjs", [], {}, "evidence/phase-3-architecture.log"],
   ];
   for (const [name, entry, args, env, evidence] of checks) {
-    results.push(await run(name, entry, args, { env, evidence }));
+    results.push(await run(name, entry, args, { env, evidence, failOnSkipped: name === "phase3-focused-tests" }));
   }
 } catch (error) {
   const code = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message)
