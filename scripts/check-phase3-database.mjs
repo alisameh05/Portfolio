@@ -13,6 +13,7 @@ import {
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
+import { cleanupProbeRole } from "./database-baseline-support.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE = join(ROOT, "evidence", "phase-3-database-verification.json");
@@ -149,17 +150,7 @@ async function roleAllows(connectionString, role, statement) {
     }
     await probe.query("rollback");
   } finally {
-    try {
-      await probe.end();
-    } catch {
-      // Teardown must not mask the recorded matrix outcome.
-    }
-    try {
-      await admin.query(`drop role if exists "${login}"`);
-    } catch {
-      // A leaked probe login holds no grants and cannot reach application data.
-    }
-    await admin.end();
+    await cleanupProbeRole({ admin, probe, login, role });
   }
   return allowed;
 }

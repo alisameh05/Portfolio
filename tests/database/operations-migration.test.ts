@@ -75,12 +75,26 @@ describe("Phase 3 operations persistence migration (#50-#53)", () => {
       findUnrevokedFunctions(
         "create function operations.report() returns integer language sql immutable as 'select 1'",
       ),
-    ).toEqual(["operations.report"]);
+    ).toEqual(["operations.report()"]);
     expect(
       findUnrevokedFunctions(
         `create function operations.report() returns integer language sql immutable as 'select 1';
          revoke all on function operations.report() from public, anon, authenticated;`,
       ),
     ).toEqual([]);
+    expect(
+      findUnrevokedFunctions(
+        `create function operations.report(integer) returns integer language sql immutable as 'select 1';
+         create function operations.report(text) returns integer language sql immutable as 'select 1';
+         revoke all on function operations.report(integer) from public, anon, authenticated;`,
+      ),
+    ).toEqual(["operations.report(text)"]);
+    expect(
+      findUnrevokedFunctions(
+        `create function alpha.report() returns integer language sql immutable as 'select 1';
+         create function beta.report() returns integer language sql immutable as 'select 1';
+         revoke all on function alpha.report() from public, anon, authenticated;`,
+      ),
+    ).toEqual(["beta.report()"]);
   });
 });
