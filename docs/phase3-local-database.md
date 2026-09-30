@@ -89,7 +89,9 @@ npm run db:baseline:test
 The live check creates two process-scoped Supabase projects on separate local
 ports and never changes the repository's normal local stack. The upgrade
 project starts with an empty migration set, verifies the initialized Phase 2
-platform schemas and empty migration history, then applies the Phase 3
+platform markers (`auth.users` present, `storage.objects` absent per the
+storage-disabled topology) and empty migration history (the history table may
+be absent before the first `migration up`), then applies the Phase 3
 migration through `supabase migration up --local` twice: once to migrate and
 once to prove replay is a no-op. The clean project starts with the committed
 migration and runs `supabase db reset --local`. Both paths create and remove

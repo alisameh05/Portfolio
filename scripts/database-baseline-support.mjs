@@ -12,6 +12,20 @@ export function cleanupIsolatedProjects(projects, { stop, remove }) {
   return failures;
 }
 
+/**
+ * Decide whether platform markers describe an initialized Phase 2 baseline
+ * under this repository's local topology.
+ *
+ * The local Supabase stack disables Storage (see supabase/config.toml), so a
+ * fresh baseline keeps `auth.users` while `storage.objects` stays absent. A
+ * present storage marker would hide topology drift. The migration-history
+ * table itself may be absent before the first `migration up`; empty history
+ * is verified separately, so its presence is not a platform marker.
+ */
+export function isPhase2BaselineMarkers({ auth, storage }) {
+  return auth === true && storage === false;
+}
+
 /** Remove a temporary login's capability before dropping the role. */
 export async function cleanupProbeRole({ admin, probe, login, role }) {
   let failed = false;
