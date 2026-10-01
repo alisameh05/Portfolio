@@ -20,6 +20,8 @@ The single-line command requires the script on the default branch because
 initial setup checks out that branch. Reset the environment cache after activation.
 The script selects the exact Node/npm versions, persists Node activation for
 subsequent Bash shells, and runs `npm ci` before agent networking is restricted.
+It also verifies the runtime and dependencies in a fresh login shell before setup
+finishes. Existing login-profile precedence is preserved.
 Maintenance repeats the install for the selected PR's lockfile, so cached
 containers cannot silently reuse another branch's dependencies.
 

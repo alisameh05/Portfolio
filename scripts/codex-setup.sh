@@ -21,7 +21,11 @@ fi
 # Setup exports do not survive into the agent shell. Activate the pin in new
 # interactive and login Bash shells, including cached-container follow-ups.
 activation="export NVM_DIR=\"$NVM_DIR\"; [ ! -s \"\$NVM_DIR/nvm.sh\" ] || { source \"\$NVM_DIR/nvm.sh\"; nvm use --silent $node_version; }"
-for profile in "$HOME/.bashrc" "$HOME/.bash_profile"; do
+login_profile="$HOME/.profile"
+if [[ -f "$HOME/.bash_profile" ]]; then login_profile="$HOME/.bash_profile"
+elif [[ -f "$HOME/.bash_login" ]]; then login_profile="$HOME/.bash_login"
+fi
+for profile in "$HOME/.bashrc" "$login_profile"; do
   touch "$profile"
   if ! grep -Fqx "$activation" "$profile"; then printf '\n%s\n' "$activation" >> "$profile"; fi
 done
@@ -34,3 +38,18 @@ else
   node node_modules/typescript/bin/tsc --version
   node node_modules/vitest/vitest.mjs --version
 fi
+# Prove setup's exports are unnecessary in the next login shell. A persistence
+# failure stops setup rather than letting the agent start on the image default.
+bash -lc '
+  set -euo pipefail
+  cd "$1"
+  expected_node="v$(tr -d "[:space:]" < .nvmrc)"
+  expected_npm="$(node -p '\''JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).engines.npm'\'')"
+  if [[ "$(node --version)" != "$expected_node" || "$(npm --version)" != "$expected_npm" ]]; then
+    echo "VALIDATION_LOGIN_RUNTIME_MISMATCH: pinned runtime did not persist into a new shell" >&2
+    exit 1
+  fi
+  if [[ -f scripts/validation-environment.mjs ]]; then npm run validation:ready
+  else node node_modules/typescript/bin/tsc --version; node node_modules/vitest/vitest.mjs --version
+  fi
+' validation-login "$PWD"
