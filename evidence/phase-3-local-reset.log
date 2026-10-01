@@ -1,0 +1,3 @@
+… reset: running supabase@2.117.0 from this repository
+… reset: waiting for the local Supabase command to finish
+✓ Local database reset from repository migrations and non-secret seed.

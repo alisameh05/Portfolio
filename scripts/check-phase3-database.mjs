@@ -14,6 +14,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { cleanupProbeRole } from "./database-baseline-support.mjs";
+import { migrationSha256 } from "./migration-checksum.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE = join(ROOT, "evidence", "phase-3-database-verification.json");
@@ -701,9 +702,9 @@ async function main() {
     const local = await localVerification(connectionString);
     const migrations = source.migrations.map((file) => ({
       file,
-      sha256: createHash("sha256")
-        .update(readFileSync(join(ROOT, "supabase", "migrations", file)) )
-        .digest("hex"),
+      sha256: migrationSha256(
+        readFileSync(join(ROOT, "supabase", "migrations", file), "utf8"),
+      ),
     }));
     mkdirSync(dirname(EVIDENCE), { recursive: true });
     const serialized = `${JSON.stringify(

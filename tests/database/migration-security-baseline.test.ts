@@ -17,6 +17,7 @@ import {
   cleanupProbeRole,
   isPhase2BaselineMarkers,
 } from "../../scripts/database-baseline-support.mjs";
+import { migrationSha256 } from "../../scripts/migration-checksum.mjs";
 
 const ROOT = process.cwd();
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
@@ -182,6 +183,21 @@ describe("Phase 3 migration and security baseline (#46)", () => {
     expect(source).not.toMatch(
       /postgres(?:ql)?:\/\/[^\s]+:[^\s]+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+/i,
     );
+  });
+
+  it("records migration checksums consistently across LF and CRLF checkouts", () => {
+    const verification = JSON.parse(
+      readFileSync(join(ROOT, "evidence", "phase-3-database-verification.json"), "utf8"),
+    ) as { migrations: Array<{ file: string; sha256: string }> };
+    const recorded = new Map(verification.migrations.map(({ file, sha256 }) => [file, sha256]));
+
+    for (const file of migrationFiles()) {
+      const source = readFileSync(join(MIGRATIONS, file), "utf8");
+      const checksum = migrationSha256(source);
+
+      expect(checksum).toBe(recorded.get(file));
+      expect(migrationSha256(source.replace(/\r?\n/g, "\r\n"))).toBe(checksum);
+    }
   });
 
   it("exposes offline and live clean-versus-upgrade verification commands", () => {

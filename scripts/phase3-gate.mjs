@@ -98,6 +98,15 @@ function fresh(path) {
   return existsSync(full) && statSync(full).mtimeMs >= startedAt - 1_000;
 }
 
+function phase2ReportMatchesRuntime() {
+  try {
+    const report = JSON.parse(readFileSync(join(ROOT, "evidence", "phase-2-gate-report.json"), "utf8"));
+    return report.verdict === "pass" && report.node === process.version;
+  } catch {
+    return false;
+  }
+}
+
 console.log("═══════════════════════════════════════════════");
 console.log("  Phase 3 PostgreSQL Completion Gate (#44)");
 console.log("═══════════════════════════════════════════════");
@@ -110,6 +119,16 @@ try {
       evidence: "evidence/phase-3-phase2-gate.log",
     }),
   );
+  const phase2ReportConsistent = phase2ReportMatchesRuntime();
+  console.log(
+    `${phase2ReportConsistent ? "✓" : "✗"} phase2-report-runtime — nested report matches ${process.version}`,
+  );
+  results.push({
+    name: "phase2-report-runtime",
+    passed: phase2ReportConsistent,
+    exitCode: phase2ReportConsistent ? 0 : 1,
+    evidence: "evidence/phase-2-gate-report.json",
+  });
   results.push(
     await run("database-toolchain", "scripts/check-database-toolchain.mjs", [], {
       evidence: "evidence/phase-3-database-toolchain.log",

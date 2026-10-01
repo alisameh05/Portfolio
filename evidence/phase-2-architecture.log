@@ -1,6 +1,6 @@
 
 ── Architecture check: src/ ──
-✔ no dependency violations found (125 modules, 259 dependencies cruised)
+✔ no dependency violations found (136 modules, 288 dependencies cruised)
 ✓ Architecture check passed: no forbidden dependencies in src/
 
 ── Validating Invalid Architecture Fixtures ──
@@ -43,10 +43,10 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 
 ── Validating Module Skeletons and Invariants ──
 ✓ All nine module skeletons exist with required subdirectories and index.ts barrels
-✓ Module skeletons contain no persistence, provider calls, Route Handlers, UI, or Lab entry implementation
+✓ Modules confine persistence/providers to adapters and contain no Route Handlers, UI, or Lab entry implementation
 
 ── Runtime architecture boundaries ──
-✓ runtime architecture: 121 source files preserve framework, environment, transport, provider, and Route Handler boundaries
+✓ runtime architecture: 130 source files preserve framework, environment, transport, provider, and Route Handler boundaries
 
 ═════════════════════════════════════════════════════════════════
              ARCHITECTURE CONFORMANCE REPORT
@@ -57,7 +57,7 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 [✓ PASS] Deep cross-module import fixture       : Correctly rejected with rule no-deep-cross-module-import
 [✓ PASS] Cycle fixture                          : Correctly rejected with rule no-cycles
 [✓ PASS] Nine module skeletons structure        : All 9 modules have domain/, application/, ports/, adapters/, and index.ts
-[✓ PASS] Module skeleton purity                 : No persistence, provider calls, Route Handlers, UI, or Lab entry implementation
+[✓ PASS] Module skeleton purity                 : Persistence/providers confined to adapters; no Route Handlers, UI, or Lab entry implementation
 [✓ PASS] Phase 2 runtime architecture           : Framework, environment, generated transport, provider, and Route Handler boundaries preserved
 ═════════════════════════════════════════════════════════════════
 

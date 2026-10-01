@@ -1,0 +1,153 @@
+{
+  "ticket": 55,
+  "parent": 44,
+  "scope": "phase-3-postgresql-completion-gate",
+  "node": "v24.21.0",
+  "verdict": "pass",
+  "checks": [
+    {
+      "name": "phase2-gate",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-3-phase2-gate.log"
+    },
+    {
+      "name": "phase2-report-runtime",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-2-gate-report.json"
+    },
+    {
+      "name": "database-toolchain",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-3-database-toolchain.log"
+    },
+    {
+      "name": "migration-clean-upgrade-equivalence",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-3-migration-equivalence.log"
+    },
+    {
+      "name": "local-database-start",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-3-local-start.log"
+    },
+    {
+      "name": "local-database-reset",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-3-local-reset.log"
+    },
+    {
+      "name": "phase3-focused-tests",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-3-focused-tests.log"
+    },
+    {
+      "name": "role-rls-types-plans",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-3-security-types-plans.log"
+    },
+    {
+      "name": "strict-typecheck",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-3-typecheck.log"
+    },
+    {
+      "name": "deterministic-lint",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-3-lint.log"
+    },
+    {
+      "name": "architecture",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-3-architecture.log"
+    },
+    {
+      "name": "local-database-stop",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-3-local-stop.log"
+    }
+  ],
+  "evidence": [
+    {
+      "file": "evidence/phase-2-gate-report.json",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-database-toolchain.json",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-migration-baseline.json",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-database-verification.json",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-phase2-gate.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-2-gate-report.json",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-database-toolchain.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-migration-equivalence.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-local-start.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-local-reset.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-focused-tests.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-security-types-plans.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-typecheck.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-lint.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-architecture.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-3-local-stop.log",
+      "fresh": true
+    }
+  ],
+  "guarantees": {
+    "predecessor": "complete Phase 2 gate runs first",
+    "database": "disposable loopback Supabase/PostgreSQL only",
+    "remoteCredentialsRequired": false,
+    "secretValuesRecorded": false
+  }
+}

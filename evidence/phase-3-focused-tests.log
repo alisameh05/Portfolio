@@ -1,0 +1,27 @@
+
+ RUN  v3.2.4 <WORKSPACE>
+
+ ✓ tests/database/role-rls-matrix.test.ts (54 tests) 5291ms
+   ✓ Phase 3 role, grant, and RLS matrix (#53) > denies every base-table path to logins holding no capability  406ms
+   ✓ Phase 3 role, grant, and RLS matrix (#53) > denies schema usage to public clients and confines capabilities to operations  663ms
+   ✓ Phase 3 role, grant, and RLS matrix (#53) > grants new objects no access to public, anonymous, authenticated, application, worker, or backup  1050ms
+ ✓ tests/database/toolchain-workflow.test.ts (7 tests) 1304ms
+   ✓ Phase 3 local PostgreSQL toolchain (#45) > plans only local Supabase operations through the pinned project dependency  420ms
+   ✓ Phase 3 local PostgreSQL toolchain (#45) > passes the focused offline toolchain verification without exposing credentials  875ms
+ ✓ tests/database/phase3-database-tests-command.test.ts (2 tests) 1310ms
+   ✓ Phase 3 focused database test command > fails the command when Vitest reports a skipped database suite  1231ms
+ ✓ tests/database/postgres-integration.test.ts (8 tests) 893ms
+ ✓ tests/database/migration-security-baseline.test.ts (16 tests) 287ms
+ ✓ tests/database/optimistic-concurrency.test.ts (8 tests) 97ms
+ ✓ tests/database/postgres-runtime.test.ts (7 tests) 16ms
+ ✓ tests/database/idempotency.test.ts (11 tests) 7ms
+ ✓ tests/database/outbox.test.ts (10 tests) 5ms
+ ✓ tests/database/leased-jobs.test.ts (10 tests) 4ms
+ ✓ tests/database/postgres-transaction-runner.test.ts (6 tests) 2ms
+ ✓ tests/database/operations-migration.test.ts (7 tests) 2ms
+ ✓ tests/database/persistence-contracts.test.ts (4 tests) 2ms
+
+ Test Files  13 passed (13)
+      Tests  150 passed (150)
+   Start at  18:40:19
+   Duration  10.29s (transform 322ms, setup 0ms, collect 762ms, tests 9.22s, environment 0ms, prepare 110ms)
