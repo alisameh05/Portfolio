@@ -318,11 +318,41 @@ max_frequency = "5s"
 # Use an external OAuth provider. The full list of providers are: `apple`, `azure`, `bitbucket`,
 # `discord`, `facebook`, `github`, `gitlab`, `google`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`,
 # `twitter`, `x`, `slack`, `spotify`, `workos`, `zoom`.
+#
+# Phase 4 #80 sole-Owner GitHub provisioning (controlled, local-only):
+# - Keep this section disabled until the Owner provisions the single allowlisted
+#   GitHub identity. Provisioning never uses public registration: password,
+#   anonymous, and unrestricted signup flows stay disabled elsewhere in this file.
+# - Exact OAuth callback/redirect settings: `site_url` plus
+#   `additional_redirect_urls` above are the only permitted post-authentication
+#   destinations. No product authentication routes are added by this change.
+# - OAuth secrets are injected only into the provider consumer via environment
+#   substitution below; they are never committed or read by domain code.
 [auth.external.apple]
 enabled = false
 client_id = ""
 # DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
 secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
+# Overrides the default auth callback URL derived from auth.external_url.
+redirect_uri = ""
+# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
+# or any other third-party OIDC providers.
+url = ""
+# If enabled, the nonce check will be skipped. Required for local sign in with Google auth.
+skip_nonce_check = false
+# If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
+email_optional = false
+
+# Phase 4 #80: GitHub is the sole Owner provider. Disabled by default; enable
+# only for controlled local verification with the Owner allowlist configured.
+# Only `identity-access` adapter code consumes this provider behind the
+# provider-neutral Auth port. See docs/phase4-owner-auth.md for the
+# provisioning, refresh/expiry/revocation, and redirect contract.
+[auth.external.github]
+enabled = false
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID)"
+# DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
+secret = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET)"
 # Overrides the default auth callback URL derived from auth.external_url.
 redirect_uri = ""
 # Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,

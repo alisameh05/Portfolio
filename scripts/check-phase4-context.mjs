@@ -221,7 +221,12 @@ function checkNoLaterPhaseActivation(root) {
       }
     })
     .join("\n");
-  if (/create\s+table\s+(?:portfolio_config|content|taxonomy|media|cv|interaction|measurement|identity_access)\./i.test(migrationText)) {
+  // Phase 4 #80 evolution: Spec #77 explicitly permits identity-access and
+  // portfolio-configuration activation, so only later-phase business tables
+  // (content, taxonomy, media, cv, interaction, measurement) are forbidden
+  // here. Historical Phase 3 infrastructure-only restrictions remain enforced
+  // against the Phase 3 baseline, not against current Phase 4 migrations.
+  if (/create\s+table\s+(?:content|taxonomy|media|cv|interaction|measurement)\./i.test(migrationText)) {
     violations.push("supabase/migrations: later-phase-business-table");
   }
   return violations;
