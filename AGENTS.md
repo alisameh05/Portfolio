@@ -2,6 +2,14 @@
 
 This repository uses the engineering workflow conventions documented in `docs/agents/`.
 
+## Validation environment
+
+Before validation, follow `docs/agents/validation-setup.md`. Use the exact Node/npm
+pins and run `npm run setup:validation` during network-enabled setup (and cloud
+maintenance), then `npm run validation:ready`. Never treat checks blocked by a
+wrong runtime, missing dependencies or HTTP 403 as passing. Do not retry registry
+installation in the restricted agent phase; correct the environment setup first.
+
 ## Agent skills
 
 ### Issue tracker

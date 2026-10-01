@@ -1,5 +1,6 @@
 /.agents
 node_modules/
+.worktrees/
 artifacts/
 coverage/
 .next/
