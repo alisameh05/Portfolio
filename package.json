@@ -57,7 +57,10 @@
     "phase3:focus:plans": "node scripts/check-phase3-database.mjs",
     "phase1:gate": "node scripts/phase1-gate.mjs",
     "phase2:gate": "node scripts/phase2-gate.mjs",
-    "phase3:gate": "node scripts/phase3-gate.mjs"
+    "phase3:gate": "node scripts/phase3-gate.mjs",
+    "phase4:context": "node scripts/check-phase4-context.mjs",
+    "phase4:gate": "node scripts/phase4-gate.mjs",
+    "phase4:focus:context": "vitest run tests/phase4"
   },
   "dependencies": {
     "kysely": "0.29.6",
