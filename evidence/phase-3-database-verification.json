@@ -5,15 +5,15 @@
   "migrations": [
     {
       "file": "20260922170000_prepare_migration_capability.sql",
-      "sha256": "0a6b85ed5198b8a58b51a4ed8d702d200968fd2002065d6f48c972817fe800cb"
+      "sha256": "f626df30438e644254fd6c5af015118be117ef5090fbc976bb0762593ac481fe"
     },
     {
       "file": "20260922171906_establish_database_security_baseline.sql",
-      "sha256": "f57b86d6718d64f4a1901823a79e3fb01d862e5b57ed627ce47cd94b8ef888de"
+      "sha256": "1406e77b9a2505ec684ef350170545558217ca2bf345675f67eb723a735f6be3"
     },
     {
       "file": "20260922203000_create_operations_primitives.sql",
-      "sha256": "7dbbfec208f85d0619f623b2d0bf3634212933fa91aca9d3918d1f0c30d197a8"
+      "sha256": "adad38103c83693de591f1691fe4eaabbe7da90423b3e68a02d7b7aa9b76cb98"
     }
   ],
   "tables": [

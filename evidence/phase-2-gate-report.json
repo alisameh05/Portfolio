@@ -14,7 +14,7 @@
       "name": "phase1-toolchain",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 587,
+      "durationMs": 597,
       "evidence": "evidence/phase-2-toolchain.log",
       "detail": "passed"
     },
@@ -22,7 +22,7 @@
       "name": "phase1-contract-drift",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 9457,
+      "durationMs": 20986,
       "evidence": "evidence/phase-2-contract-drift.log",
       "detail": "passed"
     },
@@ -30,7 +30,7 @@
       "name": "phase1-contract-compatibility",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 146,
+      "durationMs": 171,
       "evidence": "evidence/phase-2-contract-compatibility.log",
       "detail": "passed"
     },
@@ -38,7 +38,7 @@
       "name": "phase1-contract-and-strict-validator-tests",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 2181,
+      "durationMs": 2671,
       "evidence": "evidence/phase-2-contract-tests.log",
       "detail": "passed"
     },
@@ -46,7 +46,7 @@
       "name": "production-build",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 64713,
+      "durationMs": 63636,
       "evidence": "evidence/phase-2-build.log",
       "detail": "passed"
     },
@@ -54,7 +54,7 @@
       "name": "strict-typecheck",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 1843,
+      "durationMs": 2467,
       "evidence": "evidence/phase-2-typecheck.log",
       "detail": "passed"
     },
@@ -62,7 +62,7 @@
       "name": "deterministic-lint",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 2754,
+      "durationMs": 4451,
       "evidence": "evidence/phase-2-lint.log",
       "detail": "passed"
     },
@@ -70,7 +70,7 @@
       "name": "architecture",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 4550,
+      "durationMs": 5538,
       "evidence": "evidence/phase-2-architecture.log",
       "detail": "passed"
     },
@@ -78,7 +78,7 @@
       "name": "route-inventory",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 111,
+      "durationMs": 174,
       "evidence": "evidence/phase-2-route-inventory.log",
       "detail": "passed"
     },
@@ -86,7 +86,7 @@
       "name": "contract-to-adapter-matrix",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 710,
+      "durationMs": 863,
       "evidence": "evidence/phase-2-runtime-boundary.log",
       "detail": "passed"
     },
@@ -94,7 +94,7 @@
       "name": "configuration-negative-tests",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 1193,
+      "durationMs": 1338,
       "evidence": "evidence/phase-2-configuration.log",
       "detail": "passed"
     },
@@ -102,7 +102,7 @@
       "name": "http-adapter-tests",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 2091,
+      "durationMs": 2180,
       "evidence": "evidence/phase-2-http-adapters.log",
       "detail": "passed"
     },
@@ -110,7 +110,7 @@
       "name": "problem-details-tests",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 1250,
+      "durationMs": 1342,
       "evidence": "evidence/phase-2-problem-details.log",
       "detail": "passed"
     },
@@ -118,7 +118,7 @@
       "name": "health-lifecycle-tests",
       "passed": true,
       "exitCode": 0,
-      "durationMs": 1196,
+      "durationMs": 1308,
       "evidence": "evidence/phase-2-health-lifecycle.log",
       "detail": "passed"
     }

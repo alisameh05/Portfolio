@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -16,6 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
+import { migrationSha256 } from "./migration-checksum.mjs";
 import {
   assertBaselineSnapshotsEquivalent,
   assertPhase3Rls,
@@ -596,15 +596,13 @@ async function verifyLocal() {
         : "phase-3-migration-security-baseline",
       baseline: "phase-2",
       migration: migrationPath.slice(MIGRATIONS.length + 1),
-      migrationSha256: createHash("sha256")
-        .update(readFileSync(migrationPath))
-        .digest("hex"),
+      migrationSha256: migrationSha256(readFileSync(migrationPath, "utf8")),
       schemas: SCHEMAS,
       capabilityRoles: CAPABILITY_ROLES,
       migrationVersions: clean.migrationVersions,
       migrationChecksums: selectedMigrationFiles().map((file) => ({
         file,
-        sha256: createHash("sha256").update(readFileSync(join(MIGRATIONS, file))).digest("hex"),
+        sha256: migrationSha256(readFileSync(join(MIGRATIONS, file), "utf8")),
       })),
       applicationObjectCount: clean.objects.length,
       policyCount: clean.policies.length,

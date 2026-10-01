@@ -2,7 +2,7 @@
   "ticket": 55,
   "parent": 44,
   "scope": "phase-3-postgresql-completion-gate",
-  "node": "v22.23.2",
+  "node": "v24.21.0",
   "verdict": "pass",
   "checks": [
     {
@@ -10,6 +10,12 @@
       "passed": true,
       "exitCode": 0,
       "evidence": "evidence/phase-3-phase2-gate.log"
+    },
+    {
+      "name": "phase2-report-runtime",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-2-gate-report.json"
     },
     {
       "name": "database-toolchain",
@@ -91,6 +97,10 @@
     },
     {
       "file": "evidence/phase-3-phase2-gate.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-2-gate-report.json",
       "fresh": true
     },
     {

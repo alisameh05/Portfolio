@@ -1,27 +1,27 @@
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/runtime/owner-media.test.ts (68 tests) 54ms
+ ✓ tests/runtime/owner-media.test.ts (68 tests) 64ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 33ms
  ✓ tests/runtime/owner-cv.test.ts (55 tests) 21ms
- ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 25ms
- ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 15ms
- ✓ tests/runtime/owner-moderation.test.ts (32 tests) 16ms
+ ✓ tests/runtime/owner-project.test.ts (35 tests) 16ms
+ ✓ tests/runtime/owner-moderation.test.ts (32 tests) 15ms
  ✓ tests/runtime/owner-publication.test.ts (36 tests) 16ms
- ✓ tests/runtime/owner-analytics.test.ts (32 tests) 23ms
- ✓ tests/runtime/owner-export.test.ts (35 tests) 15ms
- ✓ tests/runtime/owner-project.test.ts (35 tests) 13ms
- ✓ tests/runtime/feedback.test.ts (20 tests) 9ms
- ✓ tests/runtime/configuration.test.ts (17 tests) 11ms
- ✓ tests/runtime/rating.test.ts (21 tests) 11ms
- ✓ tests/runtime/public-event.test.ts (19 tests) 16ms
- ✓ tests/runtime/owner-configuration.test.ts (31 tests) 16ms
- ✓ tests/runtime/reaction.test.ts (19 tests) 8ms
- ✓ tests/runtime/current-cv.test.ts (13 tests) 6ms
- ✓ tests/runtime/problem.test.ts (11 tests) 4ms
- ✓ tests/runtime/runtime-ports.test.ts (6 tests) 3ms
+ ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 15ms
+ ✓ tests/runtime/owner-analytics.test.ts (32 tests) 13ms
+ ✓ tests/runtime/owner-configuration.test.ts (31 tests) 10ms
+ ✓ tests/runtime/owner-export.test.ts (35 tests) 11ms
+ ✓ tests/runtime/public-event.test.ts (19 tests) 7ms
+ ✓ tests/runtime/rating.test.ts (21 tests) 7ms
+ ✓ tests/runtime/feedback.test.ts (20 tests) 6ms
+ ✓ tests/runtime/reaction.test.ts (19 tests) 12ms
+ ✓ tests/runtime/current-cv.test.ts (13 tests) 7ms
+ ✓ tests/runtime/configuration.test.ts (17 tests) 6ms
+ ✓ tests/runtime/problem.test.ts (11 tests) 3ms
+ ✓ tests/runtime/runtime-ports.test.ts (6 tests) 5ms
  ✓ tests/runtime/livez.test.ts (4 tests) 1ms
 
  Test Files  19 passed (19)
       Tests  501 passed (501)
-   Start at  17:12:42
-   Duration  1.25s (transform 479ms, setup 0ms, collect 678ms, tests 283ms, environment 0ms, prepare 97ms)
+   Start at  18:38:04
+   Duration  1.27s (transform 491ms, setup 0ms, collect 680ms, tests 269ms, environment 0ms, prepare 117ms)
