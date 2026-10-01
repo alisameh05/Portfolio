@@ -40,7 +40,7 @@ else
 fi
 # Prove setup's exports are unnecessary in the next login shell. A persistence
 # failure stops setup rather than letting the agent start on the image default.
-bash -lc '
+env -u NVM_DIR -u NVM_BIN -u NVM_INC PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin bash -lc '
   set -euo pipefail
   cd "$1"
   expected_node="v$(tr -d "[:space:]" < .nvmrc)"
