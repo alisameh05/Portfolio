@@ -1,0 +1,162 @@
+{
+  "ticket": 54,
+  "parent": 44,
+  "scope": "phase-3-database-reproducibility-security-and-plans",
+  "migrations": [
+    {
+      "file": "20260922170000_prepare_migration_capability.sql",
+      "sha256": "0a6b85ed5198b8a58b51a4ed8d702d200968fd2002065d6f48c972817fe800cb"
+    },
+    {
+      "file": "20260922171906_establish_database_security_baseline.sql",
+      "sha256": "f57b86d6718d64f4a1901823a79e3fb01d862e5b57ed627ce47cd94b8ef888de"
+    },
+    {
+      "file": "20260922203000_create_operations_primitives.sql",
+      "sha256": "7dbbfec208f85d0619f623b2d0bf3634212933fa91aca9d3918d1f0c30d197a8"
+    }
+  ],
+  "tables": [
+    "idempotency_records",
+    "jobs",
+    "outbox_events"
+  ],
+  "policies": [
+    {
+      "table": "idempotency_records",
+      "policy": "idempotency_application_insert_policy",
+      "roles": "{shipwithali_application}",
+      "command": "INSERT"
+    },
+    {
+      "table": "idempotency_records",
+      "policy": "idempotency_application_select_policy",
+      "roles": "{shipwithali_application}",
+      "command": "SELECT"
+    },
+    {
+      "table": "idempotency_records",
+      "policy": "idempotency_application_update_policy",
+      "roles": "{shipwithali_application}",
+      "command": "UPDATE"
+    },
+    {
+      "table": "idempotency_records",
+      "policy": "operations_backup_policy_idempotency",
+      "roles": "{shipwithali_backup}",
+      "command": "SELECT"
+    },
+    {
+      "table": "jobs",
+      "policy": "jobs_worker_insert_policy",
+      "roles": "{shipwithali_worker}",
+      "command": "INSERT"
+    },
+    {
+      "table": "jobs",
+      "policy": "jobs_worker_select_policy",
+      "roles": "{shipwithali_worker}",
+      "command": "SELECT"
+    },
+    {
+      "table": "jobs",
+      "policy": "jobs_worker_update_policy",
+      "roles": "{shipwithali_worker}",
+      "command": "UPDATE"
+    },
+    {
+      "table": "jobs",
+      "policy": "operations_backup_policy_jobs",
+      "roles": "{shipwithali_backup}",
+      "command": "SELECT"
+    },
+    {
+      "table": "outbox_events",
+      "policy": "operations_backup_policy_outbox",
+      "roles": "{shipwithali_backup}",
+      "command": "SELECT"
+    },
+    {
+      "table": "outbox_events",
+      "policy": "outbox_application_insert_policy",
+      "roles": "{shipwithali_application}",
+      "command": "INSERT"
+    },
+    {
+      "table": "outbox_events",
+      "policy": "outbox_worker_select_policy",
+      "roles": "{shipwithali_worker}",
+      "command": "SELECT"
+    },
+    {
+      "table": "outbox_events",
+      "policy": "outbox_worker_update_policy",
+      "roles": "{shipwithali_worker}",
+      "command": "UPDATE"
+    }
+  ],
+  "roleMatrix": {
+    "anonBaseRead": false,
+    "anonIdempotencyRead": false,
+    "anonJobRead": false,
+    "authenticatedBaseRead": false,
+    "authenticatedIdempotencyRead": false,
+    "authenticatedJobRead": false,
+    "applicationIdempotencyRead": true,
+    "applicationIdempotencyInsert": true,
+    "applicationIdempotencyUpdate": true,
+    "applicationIdempotencyDelete": false,
+    "applicationOutboxInsert": true,
+    "applicationOutboxRead": false,
+    "applicationOutboxUpdate": false,
+    "applicationOutboxDelete": false,
+    "applicationJobRead": false,
+    "applicationJobInsert": false,
+    "applicationJobUpdate": false,
+    "applicationOutboxClaim": false,
+    "applicationDdl": false,
+    "workerJobRead": true,
+    "workerJobInsert": true,
+    "workerJobUpdate": true,
+    "workerJobDelete": false,
+    "workerOutboxRead": true,
+    "workerOutboxInsert": false,
+    "workerOutboxUpdate": true,
+    "workerOutboxClaim": true,
+    "workerOutboxDelete": false,
+    "workerIdempotencyRead": false,
+    "workerIdempotencyInsert": false,
+    "workerFutureSchemaDdl": false,
+    "backupRead": true,
+    "backupIdempotencyRead": true,
+    "backupJobRead": true,
+    "backupInsert": false,
+    "backupWrite": false,
+    "backupDdl": false,
+    "migrationDdl": true,
+    "migrationRead": true,
+    "anonBaseWrite": false,
+    "authenticatedBaseWrite": false,
+    "applicationFutureObjectRead": false,
+    "workerFutureObjectRead": false,
+    "anonFutureObjectRead": false,
+    "authenticatedFutureObjectRead": false,
+    "backupFutureObjectRead": false
+  },
+  "roleAttribution": "disposable-login-set-role",
+  "privilegeElevation": [],
+  "queryPlanIndexes": {
+    "outbox": [
+      "outbox_events_due_idx"
+    ],
+    "jobs": [
+      "jobs_due_idx"
+    ],
+    "publicRead": [
+      "phase3_plan_projects_published_idx"
+    ]
+  },
+  "generatedTypeDrift": false,
+  "credentialsRecorded": false,
+  "rawSqlRecorded": false
+}

@@ -1,0 +1,27 @@
+
+[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90m<WORKSPACE>[39m
+
+ [32m✓[39m tests/database/role-rls-matrix.test.ts [2m([22m[2m54 tests[22m[2m)[22m[33m 6696[2mms[22m[39m
+   [33m[2m✓[22m[39m Phase 3 role, grant, and RLS matrix (#53)[2m > [22mdenies every base-table path to logins holding no capability [33m 327[2mms[22m[39m
+   [33m[2m✓[22m[39m Phase 3 role, grant, and RLS matrix (#53)[2m > [22mdenies schema usage to public clients and confines capabilities to operations [33m 948[2mms[22m[39m
+   [33m[2m✓[22m[39m Phase 3 role, grant, and RLS matrix (#53)[2m > [22mgrants new objects no access to public, anonymous, authenticated, application, worker, or backup [33m 1531[2mms[22m[39m
+ [32m✓[39m tests/database/toolchain-workflow.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 1486[2mms[22m[39m
+   [33m[2m✓[22m[39m Phase 3 local PostgreSQL toolchain (#45)[2m > [22mplans only local Supabase operations through the pinned project dependency [33m 530[2mms[22m[39m
+   [33m[2m✓[22m[39m Phase 3 local PostgreSQL toolchain (#45)[2m > [22mpasses the focused offline toolchain verification without exposing credentials [33m 922[2mms[22m[39m
+ [32m✓[39m tests/database/phase3-database-tests-command.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 1418[2mms[22m[39m
+   [33m[2m✓[22m[39m Phase 3 focused database test command[2m > [22mfails the command when Vitest reports a skipped database suite [33m 1311[2mms[22m[39m
+ [32m✓[39m tests/database/migration-security-baseline.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 354[2mms[22m[39m
+ [32m✓[39m tests/database/postgres-runtime.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [32m✓[39m tests/database/optimistic-concurrency.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 173[2mms[22m[39m
+ [32m✓[39m tests/database/idempotency.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m tests/database/leased-jobs.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m tests/database/outbox.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m tests/database/postgres-transaction-runner.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/database/persistence-contracts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/database/operations-migration.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/database/postgres-integration.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 880[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m13 passed[39m[22m[90m (13)[39m
+[2m      Tests [22m [1m[32m149 passed[39m[22m[90m (149)[39m
+[2m   Start at [22m 17:58:52
+[2m   Duration [22m 13.67s[2m (transform 773ms, setup 0ms, collect 2.14s, tests 11.15s, environment 0ms, prepare 101ms)[22m

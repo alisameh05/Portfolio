@@ -1,0 +1,68 @@
+
+── Architecture check: src/ ──
+[32m✔[39m no dependency violations found (136 modules, 288 dependencies cruised)
+✓ Architecture check passed: no forbidden dependencies in src/
+
+── Validating Invalid Architecture Fixtures ──
+
+── Testing fixture rejection: Provider leakage fixture ──
+[31merror[39m no-provider-in-domain: [1mtests/fixtures/invalid-deps/provider-leakage/modules/alpha/domain/leaky.ts[22m → [1m@supabase/supabase-js[22m
+[2m    Domain areas must not import provider, framework, or database packages.[22m
+
+[31m
+x 1 dependency violations (1 errors, 0 warnings). 2 modules, 1 dependencies cruised.
+[39m
+✓ Provider leakage fixture correctly rejected with rule: no-provider-in-domain
+
+── Testing fixture rejection: Generated-code leakage fixture ──
+[31merror[39m no-generated-code-leakage: [1mtests/fixtures/invalid-deps/generated-code-leakage/modules/beta/domain/leaky.ts[22m → [1m@redocly/cli[22m
+[2m    Generated transport types and tooling must not leak into domain or
+    application layers.[22m
+
+[31m
+x 1 dependency violations (1 errors, 0 warnings). 2 modules, 1 dependencies cruised.
+[39m
+✓ Generated-code leakage fixture correctly rejected with rule: no-generated-code-leakage
+
+── Testing fixture rejection: Deep cross-module import fixture ──
+[31merror[39m no-deep-cross-module-import: [1mtests/fixtures/invalid-deps/deep-cross-module-import/modules/gamma/application/deep.ts[22m → [1mtests/fixtures/invalid-deps/deep-cross-module-import/modules/delta/domain/index.ts[22m
+[2m    Cross-module imports must go through the module barrel (index.ts), not into
+    sub-folders.[22m
+
+[31m
+x 1 dependency violations (1 errors, 0 warnings). 3 modules, 2 dependencies cruised.
+[39m
+✓ Deep cross-module import fixture correctly rejected with rule: no-deep-cross-module-import
+
+── Testing fixture rejection: Cycle fixture ──
+[31merror[39m no-cycles: [1mtests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts[22m → 
+      tests/fixtures/invalid-deps/cycle/modules/cycle-b/index.ts →
+      tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts
+[2m    Dependency cycles are forbidden in the modular monolith.[22m
+
+[31m
+x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies cruised.
+[39m
+✓ Cycle fixture correctly rejected with rule: no-cycles
+
+── Validating Module Skeletons and Invariants ──
+✓ All nine module skeletons exist with required subdirectories and index.ts barrels
+✓ Modules confine persistence/providers to adapters and contain no Route Handlers, UI, or Lab entry implementation
+
+── Runtime architecture boundaries ──
+✓ runtime architecture: 130 source files preserve framework, environment, transport, provider, and Route Handler boundaries
+
+═════════════════════════════════════════════════════════════════
+             ARCHITECTURE CONFORMANCE REPORT                    
+═════════════════════════════════════════════════════════════════
+[✓ PASS] Clean dependency graph for src/        : src/ cruised with 0 violations
+[✓ PASS] Provider leakage fixture               : Correctly rejected with rule no-provider-in-domain
+[✓ PASS] Generated-code leakage fixture         : Correctly rejected with rule no-generated-code-leakage
+[✓ PASS] Deep cross-module import fixture       : Correctly rejected with rule no-deep-cross-module-import
+[✓ PASS] Cycle fixture                          : Correctly rejected with rule no-cycles
+[✓ PASS] Nine module skeletons structure        : All 9 modules have domain/, application/, ports/, adapters/, and index.ts
+[✓ PASS] Module skeleton purity                 : Persistence/providers confined to adapters; no Route Handlers, UI, or Lab entry implementation
+[✓ PASS] Phase 2 runtime architecture           : Framework, environment, generated transport, provider, and Route Handler boundaries preserved
+═════════════════════════════════════════════════════════════════
+
+✓ architecture-check: ALL CHECKS PASSED
