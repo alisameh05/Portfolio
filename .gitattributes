@@ -1,4 +1,7 @@
 # Contract artifacts are compared byte-for-byte across Windows and CI.
+# Executable scripts must keep Unix shebangs importable by Vitest and Bash.
+*.mjs text eol=lf
+*.sh text eol=lf
 openapi/generated/*.json text eol=lf
 openapi/baseline/master/*.json text eol=lf
 src/contracts/http/**/generated/*.ts text eol=lf
