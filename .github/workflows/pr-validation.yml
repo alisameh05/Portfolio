@@ -36,3 +36,38 @@ jobs:
       - run: npm run phase4:focus:context
       - run: npm run test:arch
       - run: npm run contract:verify
+
+  cloud-bootstrap:
+    name: Cloud bootstrap from Node 20
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: node@sha256:a5fb035ac1dff34a4ecaea85f90f7321185695d3fd22c12ba12f4535a4647cc5 # 20.19.0-bookworm
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Prepare nvm without the repository runtime installed
+        run: |
+          test "$(node --version)" = v20.19.0
+          test ! -d node_modules
+          export NVM_DIR="$HOME/.nvm"
+          git init -q "$NVM_DIR"
+          git -C "$NVM_DIR" fetch --depth 1 https://github.com/nvm-sh/nvm.git 977563e97ddc66facf3a8e31c6cff01d236f09bd # v0.40.3
+          git -C "$NVM_DIR" checkout --detach FETCH_HEAD
+      - name: Verify cold setup and login activation
+        run: bash scripts/codex-setup.sh
+      - name: Verify cached maintenance repairs missing TypeScript
+        run: |
+          rm node_modules/typescript/package.json
+          if bash -lc 'cd "$1"; npm run validation:ready' validation-test "$PWD"; then
+            echo "Missing TypeScript was not rejected" >&2
+            exit 1
+          fi
+          bash scripts/codex-setup.sh
+      - name: Run the originally blocked checks in a new shell
+        run: |
+          bash -lc 'set -euo pipefail; cd "$1"; npm run typecheck; npm run phase4:focus:context' validation-test "$PWD"
