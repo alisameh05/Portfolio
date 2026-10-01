@@ -1,9 +1,41 @@
-import type { StableId, Result, Rejection } from "@shared/domain";
-import type { OwnerIdentity, PseudonymousToken } from "../domain/index.js";
+import type { Result, Rejection, StableId } from "@shared/domain";
+import type {
+  OwnerIdentity,
+  PseudonymousPurpose,
+  MeasurementConsent,
+  PseudonymousToken,
+} from "../domain/index.js";
+
+/**
+ * Verified Owner session input. The adapter validates signature, algorithm,
+ * issuer, audience, expiry, and required subject/session claims against
+ * trusted provider identity records before constructing the stable Owner
+ * actor. Raw Supabase/JWT/cookie/request objects never cross this seam.
+ */
+export interface VerifyOwnerSessionInput {
+  readonly sessionToken: string;
+  readonly expectedPurpose: "owner_session";
+}
+
+export interface IssuePseudonymousTokenInput {
+  readonly purpose: PseudonymousPurpose;
+  readonly ttlSeconds: number;
+  readonly consent: MeasurementConsent;
+}
+
+export interface VerifyPseudonymousTokenInput {
+  readonly tokenString: string;
+  readonly expectedPurpose: PseudonymousPurpose;
+}
+
+export interface VerifiedPseudonymousToken {
+  readonly subject: StableId<string>;
+  readonly purpose: PseudonymousPurpose;
+}
 
 export interface AuthProviderPort {
   verifyOwnerSession(
-    token: string,
+    input: VerifyOwnerSessionInput,
   ): Promise<Result<OwnerIdentity, Rejection>>;
 
   getOwnerAllowlist(): Promise<Result<readonly string[], Rejection>>;
@@ -11,12 +43,10 @@ export interface AuthProviderPort {
 
 export interface CryptoPort {
   issuePseudonymousToken(
-    subject: string,
-    purpose: "visitor_functional" | "visitor_measurement",
-    ttlSeconds: number,
+    input: IssuePseudonymousTokenInput,
   ): Promise<Result<PseudonymousToken, Rejection>>;
 
   verifyPseudonymousToken(
-    tokenString: string,
-  ): Promise<Result<{ subject: string; purpose: string }, Rejection>>;
+    input: VerifyPseudonymousTokenInput,
+  ): Promise<Result<VerifiedPseudonymousToken, Rejection>>;
 }

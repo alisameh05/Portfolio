@@ -1,15 +1,23 @@
-import type { StableId, Result, Rejection } from "@shared/domain";
+import type { Result, Rejection } from "@shared/domain";
 import { err } from "@shared/domain";
-import type { AuthProviderPort, CryptoPort } from "../ports/index.js";
+import type {
+  AuthProviderPort,
+  CryptoPort,
+  VerifyOwnerSessionInput,
+  IssuePseudonymousTokenInput,
+  VerifyPseudonymousTokenInput,
+  VerifiedPseudonymousToken,
+} from "../ports/index.js";
 import type { OwnerIdentity, PseudonymousToken } from "../domain/index.js";
 
 /**
- * Stub adapters for Phase 1 skeleton.
- * Supabase Auth and crypto implementations are deferred to later phases.
+ * Stub adapters reconciled with Spec #77 contracts (#79).
+ * Supabase Auth and crypto implementations remain deferred to their
+ * owning tickets; every method stays fail closed with safe codes.
  */
 export class StubAuthProvider implements AuthProviderPort {
   async verifyOwnerSession(
-    _token: string,
+    _input: VerifyOwnerSessionInput,
   ): Promise<Result<OwnerIdentity, Rejection>> {
     return err({ kind: "unauthenticated", code: "SESSION_NOT_FOUND" });
   }
@@ -21,16 +29,14 @@ export class StubAuthProvider implements AuthProviderPort {
 
 export class StubCryptoAdapter implements CryptoPort {
   async issuePseudonymousToken(
-    _subject: string,
-    _purpose: "visitor_functional" | "visitor_measurement",
-    _ttlSeconds: number,
+    _input: IssuePseudonymousTokenInput,
   ): Promise<Result<PseudonymousToken, Rejection>> {
     return err({ kind: "temporarily_unavailable", code: "CRYPTO_NOT_IMPLEMENTED" });
   }
 
   async verifyPseudonymousToken(
-    _tokenString: string,
-  ): Promise<Result<{ subject: string; purpose: string }, Rejection>> {
+    _input: VerifyPseudonymousTokenInput,
+  ): Promise<Result<VerifiedPseudonymousToken, Rejection>> {
     return err({ kind: "unauthenticated", code: "INVALID_TOKEN" });
   }
 }

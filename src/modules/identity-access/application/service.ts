@@ -1,12 +1,26 @@
-import type { Result, Rejection, ActorContext } from "@shared/domain";
+import type {
+  Result,
+  Rejection,
+  ActorContext,
+  StableId,
+} from "@shared/domain";
 import type {
   Permission,
+  PseudonymousPurpose,
+  MeasurementConsent,
   PseudonymousToken,
 } from "../domain/index.js";
 
+/**
+ * Provider-neutral Owner session resolution. `sessionToken` is the opaque
+ * session material handed to the adapter; transport headers, cookies, JWTs,
+ * and Supabase claims never cross this seam. `expectedPurpose` binds the
+ * token to `owner_session`; `correlationId` threads safe diagnostics.
+ */
 export interface ResolveActorContextQuery {
-  readonly authorizationHeader?: string;
-  readonly clientToken?: string;
+  readonly sessionToken: string;
+  readonly expectedPurpose: "owner_session";
+  readonly correlationId?: string;
 }
 
 export interface AuthorizeOperationQuery {
@@ -14,15 +28,27 @@ export interface AuthorizeOperationQuery {
   readonly requiredPermission: Permission;
 }
 
+/**
+ * Purpose-limited Visitor signal issuance. The adapter generates the opaque
+ * random subject; callers never supply it. Functional identity stays in its
+ * existing `ActorContext` slot independent of Measurement consent;
+ * Measurement issuance/use requires current `granted` consent.
+ */
 export interface IssuePseudonymousTokenCommand {
-  readonly actor: ActorContext;
-  readonly subject: string;
-  readonly purpose: "visitor_functional" | "visitor_measurement";
+  readonly purpose: PseudonymousPurpose;
   readonly ttlSeconds: number;
+  readonly consent: MeasurementConsent;
+  readonly correlationId?: string;
 }
 
 export interface VerifyPseudonymousTokenQuery {
   readonly tokenString: string;
+  readonly expectedPurpose: PseudonymousPurpose;
+}
+
+export interface VerifiedPseudonymousSubject {
+  readonly subject: StableId<string>;
+  readonly purpose: PseudonymousPurpose;
 }
 
 export interface IdentityAccessService {
@@ -40,5 +66,5 @@ export interface IdentityAccessService {
 
   verifyPseudonymousToken(
     query: VerifyPseudonymousTokenQuery,
-  ): Promise<Result<{ subject: string; purpose: string }, Rejection>>;
+  ): Promise<Result<VerifiedPseudonymousSubject, Rejection>>;
 }

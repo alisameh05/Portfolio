@@ -37,11 +37,16 @@ export type OwnerActor = {
 /**
  * An anonymous or pseudonymous visitor.
  *
- * `functionalId` is present when the visitor has granted consent and the
- * identity adapter has issued or recognized a pseudonymous functional ID.
+ * `functionalId` is present only when needed for a permitted interaction
+ * (reaction, rating, feedback) and the identity adapter has issued or
+ * recognized a purpose-limited functional ID. It is independent of
+ * Measurement consent per ADR-0015: declining Measurement does not disable
+ * functional identity, and ordinary reads create no functional ID.
  * Domain code must not derive it from cookies, headers, or IP addresses.
  *
- * `consent` reflects the visitor's current analytics/measurement consent.
+ * `consent` reflects the visitor's current Measurement consent
+ * (`granted` enables Measurement identity issuance/use; `denied`/`unknown`
+ * yield no usable Measurement identity). It never gates functional identity.
  */
 export type VisitorActor = {
   readonly kind: "visitor";
