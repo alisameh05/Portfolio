@@ -1,1 +1,4 @@
-export type { PortfolioConfigurationRepositoryPort } from "./repository.js";
+export type {
+  PortfolioScope,
+  PortfolioConfigurationRepositoryPort,
+} from "./repository.js";

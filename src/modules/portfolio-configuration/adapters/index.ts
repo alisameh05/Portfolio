@@ -1,16 +1,25 @@
 import type { Result, Rejection } from "@shared/domain";
 import { err } from "@shared/domain";
-import type { PortfolioConfigurationRepositoryPort } from "../ports/index.js";
+import type { TransactionContext } from "../../../runtime/ports.js";
+import type {
+  PortfolioConfigurationRepositoryPort,
+  PortfolioScope,
+} from "../ports/index.js";
 import type { PortfolioSettings } from "../domain/index.js";
 
 /**
- * Stub repository adapter for Phase 1 skeleton.
- * Business implementation and persistence are deferred to later phases.
+ * Stub repository adapter reconciled with Spec #77 contracts (#79).
+ * Signatures accept explicit provider-neutral transaction context and
+ * configured Portfolio scope; business persistence remains deferred to
+ * its owning ticket and stays fail closed.
  */
 export class StubPortfolioConfigurationRepository
   implements PortfolioConfigurationRepositoryPort
 {
-  async getSettings(): Promise<Result<PortfolioSettings, Rejection>> {
+  async getSettings(
+    _scope: PortfolioScope,
+    _context: TransactionContext,
+  ): Promise<Result<PortfolioSettings, Rejection>> {
     return err({
       kind: "not_found",
       code: "PORTFOLIO_SETTINGS_NOT_CONFIGURED",
@@ -18,7 +27,10 @@ export class StubPortfolioConfigurationRepository
   }
 
   async saveSettings(
+    _scope: PortfolioScope,
     _settings: PortfolioSettings,
+    _expectedVersion: number,
+    _context: TransactionContext,
   ): Promise<Result<PortfolioSettings, Rejection>> {
     return err({
       kind: "temporarily_unavailable",

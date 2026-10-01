@@ -6,22 +6,30 @@
  */
 
 export type {
+  SupportedLocale,
   PortfolioProfile,
   ContactChannelType,
   ContactChannel,
   GlobalProjectCta,
   PortfolioSettings,
+  OwnerPortfolioSettingsView,
+  PublicPortfolioConfigurationView,
   PortfolioProfileUpdatedEvent,
   ContactChannelsUpdatedEvent,
   GlobalProjectCtaUpdatedEvent,
 } from "./domain/index.js";
 
 export type {
+  ConfigurationCorrelation,
   GetPortfolioSettingsQuery,
+  GetPublicConfigurationQuery,
   UpdatePortfolioProfileCommand,
   UpdateContactChannelsCommand,
   UpdateGlobalProjectCtaCommand,
   PortfolioConfigurationService,
 } from "./application/index.js";
 
-export type { PortfolioConfigurationRepositoryPort } from "./ports/index.js";
+export type {
+  PortfolioScope,
+  PortfolioConfigurationRepositoryPort,
+} from "./ports/index.js";

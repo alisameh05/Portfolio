@@ -9,6 +9,8 @@ export type {
   Role,
   Permission,
   OwnerIdentity,
+  PseudonymousPurpose,
+  MeasurementConsent,
   PseudonymousToken,
 } from "./domain/index.js";
 
@@ -17,10 +19,15 @@ export type {
   AuthorizeOperationQuery,
   IssuePseudonymousTokenCommand,
   VerifyPseudonymousTokenQuery,
+  VerifiedPseudonymousSubject,
   IdentityAccessService,
 } from "./application/index.js";
 
 export type {
+  VerifyOwnerSessionInput,
+  IssuePseudonymousTokenInput,
+  VerifyPseudonymousTokenInput,
+  VerifiedPseudonymousToken,
   AuthProviderPort,
   CryptoPort,
 } from "./ports/index.js";

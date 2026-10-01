@@ -1,5 +1,7 @@
 export type {
+  ConfigurationCorrelation,
   GetPortfolioSettingsQuery,
+  GetPublicConfigurationQuery,
   UpdatePortfolioProfileCommand,
   UpdateContactChannelsCommand,
   UpdateGlobalProjectCtaCommand,
