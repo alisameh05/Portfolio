@@ -26,6 +26,10 @@ function databaseUrl() {
   return value;
 }
 
+function stripAnsi(value) {
+  return value.replaceAll(/\u001B\[[0-9;]*m/g, "");
+}
+
 function main() {
   if (TEST_FILES.length === 0) {
     console.error("✗ PHASE3_TEST_FILES_REQUIRED");
@@ -66,7 +70,8 @@ function main() {
     process.exitCode = 1;
   });
   child.on("close", (code) => {
-    const skipped = /\b[1-9]\d*\s+skipped\b/i.test(Buffer.concat(output).toString("utf8"));
+    const plain = stripAnsi(Buffer.concat(output).toString("utf8"));
+    const skipped = /\b[1-9]\d*\s+skipped\b/i.test(plain);
     if (skipped) console.error("✗ skipped database suites are a failing verdict");
     process.exitCode = code === 0 && !skipped ? 0 : 1;
   });
