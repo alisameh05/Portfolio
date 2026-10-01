@@ -9,7 +9,9 @@ if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
   echo "VALIDATION_NVM_MISSING: select the Codex universal image with nvm available." >&2
   exit 1
 fi
-source "$NVM_DIR/nvm.sh"
+# .nvmrc names a version that may not exist yet on a cold container. Avoid
+# nvm's automatic `use` failure before the explicit install below.
+source "$NVM_DIR/nvm.sh" --no-use
 node_version="$(tr -d '[:space:]' < .nvmrc)"
 nvm install "$node_version"
 nvm alias default "$node_version"
@@ -20,7 +22,7 @@ if [[ "$(npm --version)" != "$npm_version" ]]; then
 fi
 # Setup exports do not survive into the agent shell. Activate the pin in new
 # interactive and login Bash shells, including cached-container follow-ups.
-activation="export NVM_DIR=\"$NVM_DIR\"; [ ! -s \"\$NVM_DIR/nvm.sh\" ] || { source \"\$NVM_DIR/nvm.sh\"; nvm use --silent $node_version; }"
+activation="export NVM_DIR=\"$NVM_DIR\"; [ ! -s \"\$NVM_DIR/nvm.sh\" ] || { source \"\$NVM_DIR/nvm.sh\" --no-use; nvm use --silent $node_version; }"
 login_profile="$HOME/.profile"
 if [[ -f "$HOME/.bash_profile" ]]; then login_profile="$HOME/.bash_profile"
 elif [[ -f "$HOME/.bash_login" ]]; then login_profile="$HOME/.bash_login"

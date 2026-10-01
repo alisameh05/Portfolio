@@ -22,6 +22,8 @@ The script selects the exact Node/npm versions, persists Node activation for
 subsequent Bash shells, and runs `npm ci` before agent networking is restricted.
 It also verifies the runtime and dependencies in a fresh login shell before setup
 finishes. Existing login-profile precedence is preserved.
+Initialization disables nvm's automatic version selection until the exact
+`.nvmrc` version has been installed, so a Node 20 cold start cannot exit early.
 Maintenance repeats the install for the selected PR's lockfile, so cached
 containers cannot silently reuse another branch's dependencies.
 
