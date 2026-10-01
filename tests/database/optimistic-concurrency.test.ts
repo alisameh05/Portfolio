@@ -184,6 +184,7 @@ describe("optimistic-concurrency adapter pattern (#49)", () => {
       const content = readFileSync(join(migrationDir, file), "utf8").toLowerCase();
       expect(content).not.toContain("versioned_records");
       expect(content).not.toContain("phase3_test");
+      expect(content).not.toContain("phase3_occ_disposable");
     }
     const generated = readFileSync(
       join(root, "src", "shared", "adapters", "postgres", "database.generated.ts"),
@@ -191,10 +192,13 @@ describe("optimistic-concurrency adapter pattern (#49)", () => {
     );
     expect(generated).not.toContain("versioned_records");
     expect(generated).not.toContain("phase3_test");
+    expect(generated).not.toContain("phase3_occ_disposable");
     const seedPath = join(root, "supabase", "seed.sql");
     if (existsSync(seedPath)) {
       const seed = readFileSync(seedPath, "utf8").toLowerCase();
       expect(seed).not.toContain("versioned_records");
+      expect(seed).not.toContain("phase3_test");
+      expect(seed).not.toContain("phase3_occ_disposable");
     }
   });
 });
