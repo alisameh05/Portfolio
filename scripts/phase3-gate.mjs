@@ -47,7 +47,9 @@ function run(name, entry, args, { env = {}, evidence, failOnSkipped = false } = 
         mkdirSync(dirname(path), { recursive: true });
         writeFileSync(path, output, "utf8");
       }
-      const skipped = failOnSkipped && /[1-9]\d*\s+skipped/i.test(output);
+      const skipped =
+        failOnSkipped &&
+        /[1-9]\d*\s+skipped/i.test(output.replaceAll(/\u001B\[[0-9;]*m/g, ""));
       if (skipped) {
         console.error(`✗ ${name}: skipped database suites are a failing verdict, never success`);
       }
