@@ -9,7 +9,11 @@ existing `AuthProviderPort`; domain and application code only see
 ## What is verified before an Owner actor exists
 
 Signature, allowed algorithm and key, issuer, audience, expiry, and the
-required subject/session/purpose claims are all checked first. The adapter
+standard Supabase `sub` and `session_id` claims are all checked first. This
+dedicated adapter binds the operation to `owner_session`; it does not require
+custom `sid` or `purpose` JWT claims. ES256 uses trusted P-256 public keys supplied
+as PEM by the provider consumer; HS256 fixtures use separately injected secrets.
+Unknown keys, wrong curves and public-key/HMAC confusion fail closed. The adapter
 then consults the trusted provider identity record (GitHub provider with a
 matching immutable subject) and rechecks the current `OWNER_GITHUB_SUBJECTS`
 allowlist. Mutable username/email, user-editable metadata, and
@@ -32,7 +36,8 @@ are `forbidden`, and provider timeout or outage is
 
 ## Local Auth services and provisioning
 
-Only the Auth service required for local verification is enabled in isolation.
+The real-token runner enables Auth and its API gateway only in a disposable
+project. The committed development configuration keeps both disabled.
 Password, anonymous-account, and unrestricted signup flows stay disabled, and
 no product authentication routes are added.
 
@@ -49,6 +54,17 @@ Controlled sole-Owner provisioning:
 5. Verify with `tests/phase4/owner-session-auth.test.ts`, which uses
    deterministic HMAC fixtures and needs no live GitHub exchange,
    production secret, or remote Auth change.
+
+Run `npm run phase4:focus:local-auth` for the separate real-token check. It starts
+an isolated local Auth stack using the pinned CLI, provisions a disposable user,
+obtains an actual access token via an admin-generated one-time link, checks its
+standard claims through the real adapter, and verifies tampering, allowlist
+removal and revocation rejection. Trusted GitHub identity/revocation lookups
+remain controlled fixtures; this proves emitted token compatibility, not a live
+GitHub OAuth exchange. Signup and anonymous sign-in restrictions stay disabled;
+no password login is used. Credentials stay in memory and cleanup removes only
+the disposable stack. See [validation setup](agents/validation-setup.md) for
+Docker requirements and the required `Local Auth real-token` CI verdict.
 
 ## Configuration
 

@@ -14,8 +14,9 @@ import type {
 /**
  * Provider-neutral Owner session resolution. `sessionToken` is the opaque
  * session material handed to the adapter; transport headers, cookies, JWTs,
- * and Supabase claims never cross this seam. `expectedPurpose` binds the
- * token to `owner_session`; `correlationId` threads safe diagnostics.
+ * and Supabase claims never cross this seam. `expectedPurpose` selects the
+ * dedicated Owner verification operation; it is not a custom JWT claim.
+ * `correlationId` threads safe diagnostics.
  */
 export interface ResolveActorContextQuery {
   readonly sessionToken: string;

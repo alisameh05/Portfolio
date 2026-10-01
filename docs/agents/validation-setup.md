@@ -59,4 +59,38 @@ available. A failed or blocked setup is never passing validation evidence.
 The `PR validation` GitHub workflow performs a clean setup and these checks on
 every PR to `master`, plus architecture and contract checks. Its npm cache speeds
 downloads; it does not replace `npm ci` or cache `node_modules`. This workflow
-does not claim database verification or phase-gate completion.
+does not claim phase-gate completion. Its separate `Local Auth real-token` job
+runs on an Ubuntu host with a Linux Docker engine, outside the Node-only cloud
+bootstrap container. It executes `npm run phase4:focus:local-auth` on every PR
+and fails for a missing/inaccessible engine, failed startup, failed assertions,
+skipped tests, or failed cleanup. Require this check in branch protection when
+accepting Owner Auth changes.
+
+## Local Auth integration
+
+After validation setup, run:
+
+```text
+npm run phase4:focus:local-auth
+```
+
+Install a Docker-compatible Linux engine and allow the executing runner access
+to it. On Windows, start Docker Desktop; an installed CLI alone is insufficient.
+The command preflights `docker info`, creates a disposable Supabase project and
+loopback-only Docker network on ports 56320–56322, enables only the required API
+gateway/Auth services, applies repository migrations, captures status credentials
+in memory, and runs the real-token suite with zero skips required. It cleans up
+only its own project containers/volumes/network. The normal development stack and
+its data are preserved. Reserve those ports for this command; do not run it twice
+concurrently on one host. Initial image downloads require registry access.
+
+Never print `supabase status -o env` to an agent transcript or CI log: it contains
+local privileged keys and signing material. The command consumes JSON status
+without exposing values or persisting an env file.
+
+Codex Cloud's Node setup does not install or guarantee a running Docker daemon.
+Installing a CLI in that runner does not supply an engine or engine privileges.
+When its preflight reports `LOCAL_AUTH_DOCKER_MISSING` or
+`LOCAL_AUTH_DOCKER_UNAVAILABLE`, use the PR's `Local Auth real-token` check or a
+local Docker-capable host for the actual result. Deterministic fixture tests and
+an opt-in test reported as skipped are never real-token acceptance evidence.

@@ -7,8 +7,8 @@
  * exchange, production secret, remote Auth, or database required.
  *
  * Acceptance (issue #80):
- * - Verify signature, allowed algorithm/key, issuer, audience, expiry, and
- *   required subject/session claims plus trusted GitHub provider identity
+ * - Verify HS256/ES256 signature, allowed algorithm/key, issuer, audience,
+ *   expiry, and standard sub/session_id claims plus trusted GitHub provider identity
  *   before constructing the stable Owner actor.
  * - OWNER_GITHUB_SUBJECTS matches immutable subjects from trusted records;
  *   spoofed username/email/metadata, caller Owner IDs, non-GitHub, and
@@ -21,7 +21,7 @@
  *   secret leakage.
  */
 
-import { createHmac } from "node:crypto";
+import { createHmac, generateKeyPairSync, sign } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -58,12 +58,11 @@ function mintToken(
 function validPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     sub: OWNER_SUBJECT,
-    sid: "session-opaque-001",
+    session_id: "session-opaque-001",
     iss: ISSUER,
     aud: AUDIENCE,
     exp: FIXED_NOW + 600,
     iat: FIXED_NOW - 60,
-    purpose: "owner_session",
     provider: "github",
     ...overrides,
   };
@@ -143,8 +142,8 @@ describe("verified GitHub Owner sessions (#80)", () => {
       validPayload({ iss: "https://evil.example/issuer" }),
       validPayload({ aud: "wrong-audience" }),
       validPayload({ exp: FIXED_NOW - 10 }),
-      validPayload({ sub: undefined, sid: undefined }),
-      validPayload({ purpose: "wrong_purpose" }),
+      validPayload({ sub: undefined, session_id: undefined }),
+      validPayload({ session_id: undefined, sid: "bespoke-session" }),
     ]) {
       const token = mintToken(validHeader(), JSON.parse(JSON.stringify(payload)));
       const result = await adapter.verifyOwnerSession({
@@ -160,6 +159,33 @@ describe("verified GitHub Owner sessions (#80)", () => {
     });
     expect(malformed.ok).toBe(false);
     if (!malformed.ok) expect(malformed.error.kind).toBe("unauthenticated");
+  });
+
+  it("rejects non-object JWT segments without throwing", async () => {
+    const adapter = new SupabaseOwnerSessionAdapter(depsWith());
+    for (const value of [null, [], "string", 42]) {
+      for (const segment of ["header", "payload"]) {
+        const header = base64url(JSON.stringify(segment === "header" ? value : validHeader()));
+        const payload = base64url(JSON.stringify(segment === "payload" ? value : validPayload()));
+        const result = await adapter.verifyOwnerSession({ sessionToken: `${header}.${payload}.signature`, expectedPurpose: "owner_session" });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.code).toBe("SESSION_MALFORMED");
+      }
+    }
+  });
+
+  it("verifies ES256 and rejects public-key HMAC confusion and wrong curves", async () => {
+    const pair = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const publicKey = pair.publicKey.export({ format: "pem", type: "spki" }).toString();
+    const encoded = `${base64url(JSON.stringify(validHeader({ alg: "ES256" })))}.${base64url(JSON.stringify(validPayload()))}`;
+    const token = `${encoded}.${sign("sha256", Buffer.from(encoded), { key: pair.privateKey, dsaEncoding: "ieee-p1363" }).toString("base64url")}`;
+    const adapter = new SupabaseOwnerSessionAdapter(depsWith({ allowedAlgorithms: ["HS256", "ES256"], signingKeys: new Map([[KID, publicKey]]) }));
+    expect((await adapter.verifyOwnerSession({ sessionToken: token, expectedPurpose: "owner_session" })).ok).toBe(true);
+    expect((await adapter.verifyOwnerSession({ sessionToken: mintToken(validHeader(), validPayload(), publicKey), expectedPurpose: "owner_session" })).ok).toBe(false);
+    const wrong = generateKeyPairSync("ec", { namedCurve: "secp384r1" });
+    const wrongToken = `${encoded}.${sign("sha256", Buffer.from(encoded), { key: wrong.privateKey, dsaEncoding: "ieee-p1363" }).toString("base64url")}`;
+    const wrongAdapter = new SupabaseOwnerSessionAdapter(depsWith({ allowedAlgorithms: ["ES256"], signingKeys: new Map([[KID, wrong.publicKey.export({ format: "pem", type: "spki" }).toString()]]) }));
+    expect((await wrongAdapter.verifyOwnerSession({ sessionToken: wrongToken, expectedPurpose: "owner_session" })).ok).toBe(false);
   });
 
   it("ignores spoofed username/email/metadata and caller Owner IDs", async () => {

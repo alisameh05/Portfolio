@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, createPublicKey, timingSafeEqual, verify } from "node:crypto";
 import type { Result, Rejection, StableId } from "@shared/domain";
 import { err, ok } from "@shared/domain";
 import type {
@@ -19,14 +19,14 @@ import type { OwnerIdentity } from "../domain/index.js";
  * Verification order (fail closed):
  * 1. JWT shape (three segments, JSON header/payload).
  * 2. Allowed algorithm and known signing key.
- * 3. HMAC signature (timing-safe compare).
+ * 3. HS256 HMAC or ES256 P-256 signature against an injected trusted key.
  * 4. Expiry against the injected clock (bounded refresh/expiry semantics:
  *    `exp` must be in the future; refresh is a new token, never an extension
  *    of an expired one).
  * 5. Exact issuer/audience match.
- * 6. Required subject/session/purpose claims (`sub`, `sid`, purpose bound to
- *    `owner_session`).
- * 7. Sensitive-session revocation check: a revoked `sid` denies even with a
+ * 6. Standard Supabase subject/session claims (`sub`, `session_id`), with
+ *    owner_session bound by this dedicated adapter and trusted identity lookup.
+ * 7. Sensitive-session revocation check: a revoked `session_id` denies even with a
  *    valid signature — parsing a JWT alone never overrides revocation policy.
  * 8. Trusted provider identity record: provider must be `github` with a
  *    matching immutable subject. Mutable username/email, user-editable
@@ -42,9 +42,9 @@ import type { OwnerIdentity } from "../domain/index.js";
  *
  * Local fixtures use HS256 with injected keys so deterministic tests need no
  * live GitHub exchange, production secret, or remote Auth changes. Production
- * Supabase JWTs use asymmetric signing via JWKS; that key-set resolution
- * belongs to the deployment consumer holding the OAuth/JWKS secrets, not to
- * domain or application code.
+ * Supabase ES256 JWTs use injected PEM public keys resolved from trusted JWKS
+ * by the provider consumer. Key-set resolution stays outside domain and
+ * application code.
  */
 
 export interface TrustedProviderIdentity {
@@ -73,11 +73,14 @@ interface JwtHeader {
 
 interface JwtPayload {
   readonly sub: unknown;
-  readonly sid: unknown;
+  readonly session_id: unknown;
   readonly iss: unknown;
   readonly aud: unknown;
   readonly exp: unknown;
-  readonly purpose: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function unauthenticated(code: string): Rejection {
@@ -129,18 +132,20 @@ export class SupabaseOwnerSessionAdapter implements AuthProviderPort {
     let header: JwtHeader;
     let payload: JwtPayload;
     try {
-      header = decodeSegment(encodedHeader) as JwtHeader;
-      payload = decodeSegment(encodedPayload) as JwtPayload;
+      const decodedHeader = decodeSegment(encodedHeader);
+      const decodedPayload = decodeSegment(encodedPayload);
+      if (!isRecord(decodedHeader) || !isRecord(decodedPayload)) {
+        return err(unauthenticated("SESSION_MALFORMED"));
+      }
+      header = decodedHeader as unknown as JwtHeader;
+      payload = decodedPayload as unknown as JwtPayload;
     } catch {
       return err(unauthenticated("SESSION_MALFORMED"));
     }
 
-    // Local fixtures verify HS256 with injected keys; production Supabase
-    // JWTs use asymmetric signing via JWKS in the deployment consumer, which
-    // supplies an adapter instance whose allowedAlgorithms/keys match.
     if (
       typeof header.alg !== "string" ||
-      header.alg !== "HS256" ||
+      !["HS256", "ES256"].includes(header.alg) ||
       !this.deps.allowedAlgorithms.includes(header.alg)
     ) {
       return err(unauthenticated("UNSUPPORTED_ALGORITHM"));
@@ -153,10 +158,25 @@ export class SupabaseOwnerSessionAdapter implements AuthProviderPort {
       return err(unauthenticated("UNKNOWN_SIGNING_KEY"));
     }
 
-    const expectedSignature = createHmac("sha256", secret)
-      .update(`${encodedHeader}.${encodedPayload}`)
-      .digest("base64url");
-    if (!signaturesEqual(expectedSignature, signature)) {
+    let validSignature = false;
+    try {
+      if (header.alg === "HS256") {
+        // Never interpret an asymmetric PEM public key as an HMAC secret.
+        if (!secret.trimStart().startsWith("-----BEGIN")) {
+          const expected = createHmac("sha256", secret).update(`${encodedHeader}.${encodedPayload}`).digest("base64url");
+          validSignature = signaturesEqual(expected, signature);
+        }
+      } else {
+        const key = createPublicKey(secret);
+        if (key.asymmetricKeyType === "ec" && key.asymmetricKeyDetails?.namedCurve === "prime256v1") {
+          validSignature = verify("sha256", Buffer.from(`${encodedHeader}.${encodedPayload}`),
+            { key, dsaEncoding: "ieee-p1363" }, Buffer.from(signature, "base64url"));
+        }
+      }
+    } catch {
+      // Invalid trusted key material and malformed signatures fail closed.
+    }
+    if (!validSignature) {
       return err(unauthenticated("INVALID_SIGNATURE"));
     }
 
@@ -172,14 +192,14 @@ export class SupabaseOwnerSessionAdapter implements AuthProviderPort {
     if (
       typeof payload.sub !== "string" ||
       payload.sub.length === 0 ||
-      typeof payload.sid !== "string" ||
-      payload.sid.length === 0 ||
-      payload.purpose !== input.expectedPurpose
+      typeof payload.session_id !== "string" ||
+      payload.session_id.length === 0 ||
+      input.expectedPurpose !== "owner_session"
     ) {
       return err(unauthenticated("INVALID_CLAIMS"));
     }
     const subject = payload.sub;
-    const sessionId = payload.sid;
+    const sessionId = payload.session_id;
 
     let revoked: boolean;
     try {
