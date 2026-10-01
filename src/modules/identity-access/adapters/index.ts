@@ -12,9 +12,16 @@ import type { OwnerIdentity, PseudonymousToken } from "../domain/index.js";
 
 /**
  * Stub adapters reconciled with Spec #77 contracts (#79).
- * Supabase Auth and crypto implementations remain deferred to their
- * owning tickets; every method stays fail closed with safe codes.
+ * Supabase Auth verification for Owner sessions is implemented in
+ * `./supabase-auth.js` (#80); unrelated crypto behavior remains deferred and
+ * fail closed with safe codes.
  */
+export { SupabaseOwnerSessionAdapter } from "./supabase-auth.js";
+export type { OwnerSessionAdapterDeps, TrustedProviderIdentity } from "./supabase-auth.js";
+export { createOwnerAuthConfig } from "./auth-config.js";
+export type { OwnerAuthConfig, OwnerAuthConfigEnv } from "./auth-config.js";
+export { OwnerAuthConfigError } from "./auth-config.js";
+
 export class StubAuthProvider implements AuthProviderPort {
   async verifyOwnerSession(
     _input: VerifyOwnerSessionInput,

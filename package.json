@@ -65,7 +65,9 @@
     "phase3:gate": "node scripts/phase3-gate.mjs",
     "phase4:context": "node scripts/check-phase4-context.mjs",
     "phase4:gate": "node scripts/phase4-gate.mjs",
-    "phase4:focus:context": "vitest run tests/phase4"
+    "phase4:focus:context": "vitest run tests/phase4",
+    "phase4:focus:local-auth": "node scripts/local-auth-integration.mjs",
+    "test:local-auth-runner": "node --test tests/tooling/local-auth-integration.test.mjs"
   },
   "dependencies": {
     "kysely": "0.29.6",

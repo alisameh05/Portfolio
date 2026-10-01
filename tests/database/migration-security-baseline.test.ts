@@ -191,12 +191,17 @@ describe("Phase 3 migration and security baseline (#46)", () => {
     ) as { migrations: Array<{ file: string; sha256: string }> };
     const recorded = new Map(verification.migrations.map(({ file, sha256 }) => [file, sha256]));
 
-    for (const file of migrationFiles()) {
+    // Phase 4 #80 evolution: historical Phase 3 checksums are verified against
+    // their recorded baseline context. New Phase 4 expansion migrations are
+    // permitted and covered by Phase 4 migration-equivalence checks (#88), so
+    // this loop iterates recorded entries rather than every current file.
+    for (const { file, sha256 } of verification.migrations) {
       const source = readFileSync(join(MIGRATIONS, file), "utf8");
       const checksum = migrationSha256(source);
 
-      expect(checksum).toBe(recorded.get(file));
+      expect(checksum).toBe(sha256);
       expect(migrationSha256(source.replace(/\r?\n/g, "\r\n"))).toBe(checksum);
+      expect(recorded.get(file)).toBe(sha256);
     }
   });
 

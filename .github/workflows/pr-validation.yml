@@ -37,6 +37,26 @@ jobs:
       - run: npm run test:arch
       - run: npm run contract:verify
 
+  local-auth:
+    name: Local Auth real-token
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Select pinned npm
+        run: |
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).engines.npm')"
+          npm install --global "npm@$npm_version" --no-audit --no-fund
+      - name: Install locked development dependencies
+        run: npm run setup:validation
+      - run: npm run test:local-auth-runner
+      - name: Require actual local Auth token verification with zero skips
+        run: npm run phase4:focus:local-auth
+
   cloud-bootstrap:
     name: Cloud bootstrap from Node 20
     runs-on: ubuntu-24.04
