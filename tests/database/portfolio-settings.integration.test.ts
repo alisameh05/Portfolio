@@ -733,7 +733,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
         },
       },
     };
-    const makeRequest = (version: number, key: string, globalCta: PortfolioSettingsProvisioningValues["globalCta"]) =>
+    const makeRequest = (version: number, key: string, globalCta: unknown) =>
       new Request("https://example.com/api/owner/v1/configuration/project-cta", {
         method: "PUT",
         headers: {
@@ -743,8 +743,22 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
         },
         body: JSON.stringify(globalCta),
       });
-    const update = (version: number, key: string, nextCta: PortfolioSettingsProvisioningValues["globalCta"]) =>
+    const update = (version: number, key: string, nextCta: unknown) =>
       handleUpdateOwnerGlobalProjectCta(makeRequest(version, key, nextCta), { service, security });
+    const invalidUpdates = [
+      [{ ...values.globalCta, destination: "http://example.com/contact" }, 422],
+      [{ ...values.globalCta, label: "" }, 400],
+      [{ ...values.globalCta, label: "x".repeat(81) }, 400],
+      [{ ...values.globalCta, unavailableFallback: " " }, 400],
+      [{ ...values.globalCta, unavailableFallback: "x".repeat(161) }, 400],
+    ] as const;
+    for (const [index, [invalidCta, status]] of invalidUpdates.entries()) {
+      const response = await update(1, `cta-invalid-${process.pid}-${index}`, invalidCta);
+      expect(response.status).toBe(status);
+    }
+    const unchanged = await createPortfolioSettingsReader({ repository, transactions: database.transactions, scope })
+      .getSettings({ actor, portfolioId: scope.portfolioId });
+    expect(unchanged).toMatchObject({ ok: true, value: { version: 1, globalCta: values.globalCta } });
     const nextLeft = { ...values.globalCta, label: "Start a project", unavailableFallback: "Please contact me by email." };
     const nextRight = { ...values.globalCta, label: "Discuss a project", unavailableFallback: "Please use the contact details." };
     const startBarrier = () => {
