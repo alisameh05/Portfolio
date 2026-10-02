@@ -10,16 +10,18 @@ export type {
   Permission,
   OwnerIdentity,
   PseudonymousPurpose,
+  FunctionalIdentityOperation,
   MeasurementConsent,
   PseudonymousToken,
 } from "./domain/index.js";
+export { FUNCTIONAL_IDENTITY_OPERATIONS, isFunctionalIdentityOperation } from "./domain/index.js";
 
 export type {
   ResolveActorContextQuery,
   AuthorizeOperationQuery,
   IssuePseudonymousTokenCommand,
   VerifyPseudonymousTokenQuery,
-  VerifiedPseudonymousSubject,
+  VerifiedPseudonymousIdentity,
   IdentityAccessService,
 } from "./application/index.js";
 export {

@@ -488,7 +488,11 @@ Names are normative unless a provider forces a different name. Commit only `.env
 | `GITHUB_OAUTH_CLIENT_SECRET` | Yes | Auth environment | Owner GitHub OAuth app secret |
 | `OWNER_GITHUB_SUBJECTS` | Sensitive config | App | Explicit allowlist of Owner GitHub identities |
 | `FUNCTIONAL_ID_HASH_KEY` | Yes | App | Purpose-limited interaction identity |
+| `FUNCTIONAL_ID_HASH_KEY_VERSION` | No | App | Active functional identity key version |
+| `FUNCTIONAL_ID_HASH_PREVIOUS_KEYS` | Yes | App | Up to two previous functional keys as `version:base64url`, comma-separated |
 | `MEASUREMENT_ID_HASH_KEY` | Yes | App | Separate consented Measurement identity |
+| `MEASUREMENT_ID_HASH_KEY_VERSION` | No | App | Active Measurement identity key version |
+| `MEASUREMENT_ID_HASH_PREVIOUS_KEYS` | Yes | App | Up to two previous Measurement keys as `version:base64url`, comma-separated |
 | `CRON_TRIGGER_SECRET` | Yes | Scheduler/worker | Authenticates scheduled job trigger |
 | `VERCEL_TOKEN` | Yes | Deployment workflow | Vercel CLI deployment/promotion |
 | `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` | No | GitHub variables | Exact Vercel target |
@@ -499,6 +503,10 @@ Names are normative unless a provider forces a different name. Commit only `.env
 | `GITHUB_TOKEN` | Ephemeral | Workflow | GHCR push and attestations with minimal permissions |
 
 Validate configuration at process startup with a handwritten provider-neutral configuration schema. Fail readiness on missing required runtime configuration, but never print secret values. Maintain separate development, CI, staging, and production values.
+
+Visitor identity configuration is activated only by the identity adapter. Each active and previous hash key is canonical base64url for exactly 32 random bytes; version numbers are 1–65535, and each purpose's previous versions must be unique and lower than its active version. Functional and Measurement key material must be distinct across both active and previous keyrings. Tokens are purpose-bound AES-256-GCM envelopes with HMAC-SHA-256 purpose-specific key derivation, random nonces, independent UUIDv7 subjects, and a maximum lifetime of 30 days. Functional identity supports only `reaction` or `rating`; Interaction and Moderation must authorize the current Project interaction before requesting issuance and before exposing a verified Visitor `ActorContext`. Measurement identity remains a separate verified value. Only `visitor_measurement` issuance/use requires current affirmative consent; callers must pass the current consent state on every verification. A denied or unknown state prevents use even when a token has not expired.
+
+For rotation, deploy a new active key/version while retaining the prior key in `*_HASH_PREVIOUS_KEYS`; accept old tokens only for their remaining bounded lifetime. Remove the old key after that lifetime has elapsed. Retiring a key earlier intentionally invalidates its tokens. Rotate the two purposes independently, never copy a key between purposes, and do not log key material or decrypted subjects.
 
 ## 14. Gated implementation phases
 

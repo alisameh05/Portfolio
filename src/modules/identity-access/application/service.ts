@@ -6,7 +6,7 @@ import type {
 } from "@shared/domain";
 import type {
   Permission,
-  PseudonymousPurpose,
+  FunctionalIdentityOperation,
   MeasurementConsent,
   PseudonymousToken,
 } from "../domain/index.js";
@@ -35,22 +35,46 @@ export interface AuthorizeOperationQuery {
  * existing `ActorContext` slot independent of Measurement consent;
  * Measurement issuance/use requires current `granted` consent.
  */
-export interface IssuePseudonymousTokenCommand {
-  readonly purpose: PseudonymousPurpose;
+interface IssuePseudonymousTokenCommandBase {
   readonly ttlSeconds: number;
   readonly consent: MeasurementConsent;
   readonly correlationId?: string;
 }
 
-export interface VerifyPseudonymousTokenQuery {
+export type IssuePseudonymousTokenCommand =
+  | (IssuePseudonymousTokenCommandBase & {
+      readonly purpose: "visitor_functional";
+      readonly interaction: FunctionalIdentityOperation;
+    })
+  | (IssuePseudonymousTokenCommandBase & {
+      readonly purpose: "visitor_measurement";
+    });
+
+interface VerifyPseudonymousTokenQueryBase {
   readonly tokenString: string;
-  readonly expectedPurpose: PseudonymousPurpose;
+  /** Current consent is rechecked when a Measurement token is used. */
+  readonly consent: MeasurementConsent;
 }
 
-export interface VerifiedPseudonymousSubject {
-  readonly subject: StableId<string>;
-  readonly purpose: PseudonymousPurpose;
-}
+export type VerifyPseudonymousTokenQuery =
+  | (VerifyPseudonymousTokenQueryBase & {
+      readonly expectedPurpose: "visitor_functional";
+      readonly interaction: FunctionalIdentityOperation;
+    })
+  | (VerifyPseudonymousTokenQueryBase & {
+      readonly expectedPurpose: "visitor_measurement";
+    });
+
+export type VerifiedPseudonymousIdentity =
+  | {
+      readonly purpose: "visitor_functional";
+      /** The interaction orchestration builds a Visitor ActorContext only after Project authorization. */
+      readonly subject: StableId<"FunctionalVisitor">;
+    }
+  | {
+      readonly purpose: "visitor_measurement";
+      readonly subject: StableId<"MeasurementVisitor">;
+    };
 
 export interface IdentityAccessService {
   resolveActorContext(
@@ -67,5 +91,5 @@ export interface IdentityAccessService {
 
   verifyPseudonymousToken(
     query: VerifyPseudonymousTokenQuery,
-  ): Promise<Result<VerifiedPseudonymousSubject, Rejection>>;
+  ): Promise<Result<VerifiedPseudonymousIdentity, Rejection>>;
 }

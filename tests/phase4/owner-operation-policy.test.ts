@@ -10,7 +10,7 @@
  *   never a bypass; caller-forged privileged claims are ignored; unsupported
  *   System purposes and job triggering remain unavailable.
  * - `resolveActorContext` maps a verified Owner identity to a stable
- *   provider-neutral Owner actor; pseudonymous issuance stays fail closed.
+ *   provider-neutral Owner actor; production crypto remains an injected port.
  */
 
 import { describe, expect, it } from "vitest";
@@ -21,6 +21,7 @@ import {
   decideAuthorization,
   requiredPermissionForOwnerOperation,
 } from "../../src/modules/identity-access/application/policy.js";
+import { StubCryptoAdapter } from "../../src/modules/identity-access/adapters/index.js";
 
 const OWNER: ActorContext = {
   kind: "owner",
@@ -147,6 +148,7 @@ describe("Owner operation policy (#81)", () => {
 
   it("resolves verified Owner identities to stable provider-neutral actors", async () => {
     const service = createIdentityAccessService({
+      crypto: new StubCryptoAdapter(),
       auth: {
         async verifyOwnerSession() {
           return {
@@ -179,6 +181,7 @@ describe("Owner operation policy (#81)", () => {
 
   it("propagates verification rejections without constructing an actor", async () => {
     const service = createIdentityAccessService({
+      crypto: new StubCryptoAdapter(),
       auth: {
         async verifyOwnerSession() {
           return { ok: false as const, error: { kind: "forbidden" as const, code: "NOT_OWNER" } };
@@ -195,8 +198,9 @@ describe("Owner operation policy (#81)", () => {
     expect(resolved.ok).toBe(false);
   });
 
-  it("keeps pseudonymous issuance fail closed outside ticket #82", async () => {
+  it("keeps an explicitly injected stub crypto adapter fail closed", async () => {
     const service = createIdentityAccessService({
+      crypto: new StubCryptoAdapter(),
       auth: {
         async verifyOwnerSession() {
           return { ok: false as const, error: { kind: "unauthenticated" as const, code: "SESSION_NOT_FOUND" } };
@@ -208,6 +212,7 @@ describe("Owner operation policy (#81)", () => {
     });
     const issued = await service.issuePseudonymousToken({
       purpose: "visitor_functional",
+      interaction: "reaction",
       ttlSeconds: 3600,
       consent: "unknown",
     });

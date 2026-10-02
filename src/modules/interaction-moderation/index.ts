@@ -29,6 +29,13 @@ export type {
   GetProjectAggregateQuery,
   GetApprovedFeedbackQuery,
   InteractionModerationService,
+  FunctionalInteractionAuthorizationPort,
+  FunctionalIdentityOrchestrationDeps,
+} from "./application/index.js";
+
+export {
+  issueFunctionalIdentityForInteraction,
+  verifyFunctionalIdentityForInteraction,
 } from "./application/index.js";
 
 export type {

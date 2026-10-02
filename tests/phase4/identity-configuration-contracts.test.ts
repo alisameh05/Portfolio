@@ -91,7 +91,7 @@ describe("Phase 4 #79: Identity and Configuration contract reconciliation", () =
     const app = src("src/modules/identity-access/application/service.ts");
     expect(app.includes("expectedPurpose")).toBe(true);
     expect(app.includes("consent")).toBe(true);
-    expect(app.includes("VerifiedPseudonymousSubject")).toBe(true);
+    expect(app.includes("VerifiedPseudonymousIdentity")).toBe(true);
   });
 
   it("keeps functional identity in ActorContext independent of Measurement consent", () => {
