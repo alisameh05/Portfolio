@@ -23,7 +23,7 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
-export interface IdempotencyRecords {
+export interface OperationsIdempotencyRecords {
   actor_scope: string;
   completed_at: Timestamp | null;
   created_at: Generated<Timestamp>;
@@ -35,7 +35,7 @@ export interface IdempotencyRecords {
   status: string;
 }
 
-export interface Jobs {
+export interface OperationsJobs {
   attempt_count: Generated<number>;
   available_at: Timestamp;
   completed_at: Timestamp | null;
@@ -50,7 +50,7 @@ export interface Jobs {
   status: Generated<string>;
 }
 
-export interface OutboxEvents {
+export interface OperationsOutboxEvents {
   aggregate_id: string;
   aggregate_version: number;
   attempt_count: Generated<number>;
@@ -69,8 +69,36 @@ export interface OutboxEvents {
   schema_version: number;
 }
 
+export interface PortfolioConfigContactChannels {
+  available_locales: Json;
+  channel: string;
+  destination: string;
+  label: string;
+  portfolio_id: string;
+  position: number;
+}
+
+export interface PortfolioConfigSettings {
+  bio: string;
+  created_at: Generated<Timestamp>;
+  display_name: string;
+  global_cta_destination: string;
+  global_cta_label: string;
+  global_cta_unavailable_fallback: string;
+  headline: string;
+  /**
+   * Private stable Owner scope used only by trusted application authorization and RLS.
+   */
+  owner_id: string;
+  portfolio_id: string;
+  updated_at: Generated<Timestamp>;
+  version: Generated<number>;
+}
+
 export interface DB {
-  idempotency_records: IdempotencyRecords;
-  jobs: Jobs;
-  outbox_events: OutboxEvents;
+  "operations.idempotency_records": OperationsIdempotencyRecords;
+  "operations.jobs": OperationsJobs;
+  "operations.outbox_events": OperationsOutboxEvents;
+  "portfolio_config.contact_channels": PortfolioConfigContactChannels;
+  "portfolio_config.settings": PortfolioConfigSettings;
 }

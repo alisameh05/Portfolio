@@ -87,10 +87,14 @@ function parseKeyring(
       if (version >= active.version || seenVersions.has(version)) {
         throw new PseudonymousIdentityConfigError(previousName, "must use unique versions older than the active key");
       }
+      const secret = match[2];
+      if (secret === undefined) {
+        throw new PseudonymousIdentityConfigError(previousName, "must use version:base64url entries");
+      }
       seenVersions.add(version);
       previous.push(Object.freeze({
         version,
-        secret: validateSecret(match[2], previousName),
+        secret: validateSecret(secret, previousName),
       }));
     }
   }

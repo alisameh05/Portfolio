@@ -8,6 +8,8 @@ import type { PortfolioSettings } from "../domain/index.js";
  */
 export interface PortfolioScope {
   readonly portfolioId: StableId<"Portfolio">;
+  /** Stable Owner configured for this Portfolio; private to persistence scope. */
+  readonly ownerId: StableId<"Owner">;
 }
 
 /**

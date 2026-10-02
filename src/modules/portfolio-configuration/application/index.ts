@@ -7,3 +7,7 @@ export type {
   UpdateGlobalProjectCtaCommand,
   PortfolioConfigurationService,
 } from "./service.js";
+export {
+  createPortfolioSettingsReader,
+  type PortfolioSettingsApplicationService,
+} from "./settings-service.js";

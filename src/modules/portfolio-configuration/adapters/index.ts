@@ -7,6 +7,8 @@ import type {
 } from "../ports/index.js";
 import type { PortfolioSettings } from "../domain/index.js";
 
+export { createPostgresPortfolioSettingsRepository } from "./postgres-settings.js";
+
 /**
  * Stub repository adapter reconciled with Spec #77 contracts (#79).
  * Signatures accept explicit provider-neutral transaction context and
