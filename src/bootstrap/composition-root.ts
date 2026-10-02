@@ -120,19 +120,28 @@ export async function initializeDatabaseRuntime(
           const [
             { createPostgresPortfolioSettingsRepository },
             { createPortfolioProfileCommandService },
+            { createPortfolioContactChannelsCommandService },
             { createOwnerConfigurationApplicationService },
           ] = await Promise.all([
             import("../modules/portfolio-configuration/adapters/postgres-settings.js"),
             import("../modules/portfolio-configuration/application/profile-command.js"),
+            import("../modules/portfolio-configuration/application/contact-channels-command.js"),
             import("../runtime/owner-configuration-service.js"),
           ]);
+          const repository = createPostgresPortfolioSettingsRepository();
           const profileCommands = createPortfolioProfileCommandService({
-            repository: createPostgresPortfolioSettingsRepository(),
+            repository,
+            operations,
+            scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
+          });
+          const contactChannelsCommands = createPortfolioContactChannelsCommandService({
+            repository,
             operations,
             scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
           });
           ownerConfiguration = createOwnerConfigurationApplicationService(
             profileCommands,
+            contactChannelsCommands,
             configuredScope.portfolioId.value,
           );
         }

@@ -1,0 +1,148 @@
+import { err, parseStableId, type Rejection, type Result, type StableId } from "@shared/domain";
+import { hashCanonicalRequest } from "../../../shared/application/idempotency.js";
+import type { Clock, StableIdGenerator } from "../../../runtime/ports.js";
+import { createSystemClock, createSystemIdGenerator } from "../../../runtime/ports.js";
+import type { OperationsPersistencePorts, SafeResultEnvelope } from "../../portability-operations/index.js";
+import type { ContactChannel } from "../domain/index.js";
+import type { PortfolioScope } from "../ports/index.js";
+import type { UpdateContactChannelsCommand } from "./service.js";
+import { invalidContactChannelsField, type PortfolioSettingsRepository } from "./settings-service.js";
+import {
+  outcomeFromRejection,
+  readPortfolioCommandOutcome,
+  rejectionFromPortfolioCommandOutcome,
+} from "./command-outcome.js";
+
+export interface PortfolioContactChannelsCommandService {
+  updateContactChannels(
+    command: UpdateContactChannelsCommand,
+  ): Promise<Result<PortfolioContactChannelsCommandReceipt, Rejection>>;
+}
+
+export interface PortfolioContactChannelsCommandReceipt {
+  readonly aggregateId: StableId<string>;
+  readonly aggregateVersion: number;
+  readonly outcome: "configuration-updated";
+}
+
+const IDEMPOTENCY_RETENTION_MS = 24 * 60 * 60 * 1_000;
+const OPERATION_SCOPE = "portfolio-configuration.update-owner-contact-channels";
+
+function snapshotChannels(channels: readonly ContactChannel[]): readonly ContactChannel[] {
+  return channels.map((channel) => Object.freeze({
+    channel: channel.channel,
+    label: channel.label,
+    destination: channel.destination,
+    availableLocales: Object.freeze([...channel.availableLocales]),
+  }));
+}
+
+export function createPortfolioContactChannelsCommandService(input: {
+  readonly repository: Pick<PortfolioSettingsRepository, "getSettings" | "updateContactChannels">;
+  readonly operations: OperationsPersistencePorts;
+  readonly scope: PortfolioScope;
+  readonly clock?: Clock;
+  readonly ids?: StableIdGenerator;
+}): PortfolioContactChannelsCommandService {
+  const clock = input.clock ?? createSystemClock();
+  const ids = input.ids ?? createSystemIdGenerator();
+
+  return {
+    async updateContactChannels(command) {
+      // Authorization always precedes access to the shared replay ledger.
+      if (command.actor.kind !== "owner" || command.actor.ownerId !== input.scope.ownerId) {
+        return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      }
+      if (command.portfolioId !== input.scope.portfolioId) {
+        return err({ kind: "forbidden", code: "PORTFOLIO_SCOPE_MISMATCH" });
+      }
+      if (!Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1) {
+        return err({ kind: "validation", code: "INVALID_EXPECTED_VERSION" });
+      }
+      if (invalidContactChannelsField(command.contactChannels) !== undefined) {
+        return err({ kind: "validation", code: "INVALID_CONTACT_CHANNELS" });
+      }
+      if (!/^[\x21-\x7e]{1,128}$/.test(command.correlationId) ||
+          (command.causationId !== undefined && !/^[\x21-\x7e]{1,128}$/.test(command.causationId))) {
+        return err({ kind: "validation", code: "INVALID_CONFIGURATION_CORRELATION" });
+      }
+
+      const contactChannels = snapshotChannels(command.contactChannels);
+      const requestChannels = contactChannels.map((channel) => ({
+        channel: channel.channel,
+        label: channel.label,
+        destination: channel.destination,
+        availableLocales: [...channel.availableLocales],
+      }));
+      const [requestHash, actorScope] = await Promise.all([
+        hashCanonicalRequest({ expectedVersion: command.expectedVersion, contactChannels: requestChannels }),
+        hashCanonicalRequest({ ownerId: command.actor.ownerId }),
+      ]);
+      const now = clock.now();
+      const expiresAt = new Date(Date.parse(now) + IDEMPOTENCY_RETENTION_MS).toISOString();
+      const execution = await input.operations.idempotency.execute({
+        operationScope: OPERATION_SCOPE,
+        actorScope,
+        key: command.idempotencyKey,
+        requestHash,
+        expiresAt,
+      }, async (context): Promise<SafeResultEnvelope> => {
+        const current = await input.repository.getSettings(input.scope, context);
+        if (!current.ok) return outcomeFromRejection(current.error);
+        if (current.value.version !== command.expectedVersion) {
+          return outcomeFromRejection({
+            kind: "precondition_failed",
+            code: "PORTFOLIO_SETTINGS_VERSION_MISMATCH",
+            currentVersion: current.value.version,
+          });
+        }
+        const updated = await input.repository.updateContactChannels(
+          input.scope,
+          contactChannels,
+          command.expectedVersion,
+          context,
+        );
+        if (!updated.ok) return outcomeFromRejection(updated.error);
+
+        const channelTypes = [...new Set(contactChannels.map(({ channel }) => channel))].sort();
+        await input.operations.outbox.append(context, {
+          eventId: ids.generate("DomainEvent"),
+          payload: {
+            type: "portfolio_configuration.channels_updated.v1",
+            version: 1,
+            value: { channelTypes, channelCount: contactChannels.length, ownerScope: actorScope },
+          },
+          aggregateId: input.scope.portfolioId,
+          aggregateVersion: updated.value.aggregateVersion,
+          correlationId: command.correlationId,
+          ...(command.causationId === undefined ? {} : { causationId: command.causationId }),
+          occurredAt: updated.value.updatedAt,
+          availableAt: updated.value.updatedAt,
+        });
+        return {
+          kind: "completed",
+          aggregateId: input.scope.portfolioId,
+          aggregateVersion: updated.value.aggregateVersion,
+        };
+      });
+
+      if (execution.kind === "conflict") {
+        return err({ kind: "conflict", code: "IDEMPOTENCY_KEY_REUSED" });
+      }
+      const outcome = readPortfolioCommandOutcome(execution.result);
+      if (outcome.kind === "rejected") return err(rejectionFromPortfolioCommandOutcome(outcome));
+      const aggregateId = parseStableId("Portfolio", outcome.aggregateId);
+      if (!aggregateId.ok || aggregateId.value !== input.scope.portfolioId) {
+        throw new Error("Invalid stored configuration aggregate identity.");
+      }
+      return {
+        ok: true,
+        value: {
+          aggregateId: aggregateId.value,
+          aggregateVersion: outcome.aggregateVersion,
+          outcome: "configuration-updated",
+        },
+      };
+    },
+  };
+}

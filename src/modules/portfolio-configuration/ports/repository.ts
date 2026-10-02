@@ -1,8 +1,8 @@
 import type { Result, Rejection, StableId } from "@shared/domain";
 import type { TransactionContext } from "../../../runtime/ports.js";
-import type { PortfolioProfile, PortfolioSettings } from "../domain/index.js";
+import type { ContactChannel, PortfolioProfile, PortfolioSettings } from "../domain/index.js";
 
-export interface PortfolioProfileUpdate {
+export interface PortfolioAggregateUpdate {
   readonly aggregateVersion: number;
   /** Database transaction timestamp used by the matching audit event. */
   readonly updatedAt: string;
@@ -41,5 +41,11 @@ export interface PortfolioConfigurationRepositoryPort {
     profile: PortfolioProfile,
     expectedVersion: number,
     context: TransactionContext,
-  ): Promise<Result<PortfolioProfileUpdate, Rejection>>;
+  ): Promise<Result<PortfolioAggregateUpdate, Rejection>>;
+  updateContactChannels(
+    scope: PortfolioScope,
+    channels: readonly ContactChannel[],
+    expectedVersion: number,
+    context: TransactionContext,
+  ): Promise<Result<PortfolioAggregateUpdate, Rejection>>;
 }

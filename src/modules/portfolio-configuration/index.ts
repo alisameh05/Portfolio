@@ -37,9 +37,14 @@ export {
   type PortfolioProfileCommandService,
   type PortfolioProfileCommandReceipt,
 } from "./application/index.js";
+export {
+  createPortfolioContactChannelsCommandService,
+  type PortfolioContactChannelsCommandService,
+  type PortfolioContactChannelsCommandReceipt,
+} from "./application/index.js";
 
 export type {
   PortfolioScope,
   PortfolioConfigurationRepositoryPort,
-  PortfolioProfileUpdate,
+  PortfolioAggregateUpdate,
 } from "./ports/index.js";

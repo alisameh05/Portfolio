@@ -1,5 +1,8 @@
 import type { Rejection, Result, StableId } from "../shared/domain/index.js";
-import type { PortfolioProfileCommandService } from "../modules/portfolio-configuration/index.js";
+import type {
+  PortfolioContactChannelsCommandService,
+  PortfolioProfileCommandService,
+} from "../modules/portfolio-configuration/index.js";
 import type {
   OwnerConfigurationApplicationService,
   OwnerConfigurationReceipt,
@@ -13,9 +16,10 @@ const notImplemented: Rejection = {
   code: "RUNTIME_NOT_IMPLEMENTED",
 };
 
-/** Runtime translation for the one configuration command activated in Phase 4 #84. */
+/** Runtime translation for the configuration commands activated by Phase 4 #84 and #85. */
 export function createOwnerConfigurationApplicationService(
   profileCommands: PortfolioProfileCommandService,
+  contactChannelsCommands: PortfolioContactChannelsCommandService,
   portfolioId: StableId<"Portfolio">,
 ): OwnerConfigurationApplicationService {
   return {
@@ -37,9 +41,17 @@ export function createOwnerConfigurationApplicationService(
       });
     },
     async updateOwnerContactChannels(
-      _command: UpdateOwnerContactChannelsApplicationCommand,
+      command: UpdateOwnerContactChannelsApplicationCommand,
     ): Promise<Result<OwnerConfigurationReceipt, Rejection>> {
-      return { ok: false, error: notImplemented };
+      return contactChannelsCommands.updateContactChannels({
+        actor: command.actor,
+        portfolioId,
+        idempotencyKey: command.idempotencyKey,
+        expectedVersion: command.expectedVersion,
+        correlationId: command.correlationId,
+        ...(command.causationId === undefined ? {} : { causationId: command.causationId }),
+        contactChannels: command.channels,
+      });
     },
     async updateOwnerGlobalProjectCta(
       _command: UpdateOwnerGlobalProjectCtaApplicationCommand,
