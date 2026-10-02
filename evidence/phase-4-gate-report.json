@@ -1,0 +1,193 @@
+{
+  "ticket": 78,
+  "parent": 77,
+  "scope": "phase-4-verification-prefactor-gate",
+  "node": "v24.21.0",
+  "verdict": "fail",
+  "checks": [
+    {
+      "name": "phase2-gate-predecessor",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-phase2-gate.log"
+    },
+    {
+      "name": "database-toolchain",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-database-toolchain.log"
+    },
+    {
+      "name": "migration-baseline-source",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-migration-baseline-source.log"
+    },
+    {
+      "name": "phase3-database-source",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-phase3-database-source.log"
+    },
+    {
+      "name": "toolchain",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-toolchain.log"
+    },
+    {
+      "name": "contract-drift",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-contract-drift.log"
+    },
+    {
+      "name": "contract-compatibility",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-contract-compatibility.log"
+    },
+    {
+      "name": "contract-tests",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-contract-tests.log"
+    },
+    {
+      "name": "strict-typecheck",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-typecheck.log"
+    },
+    {
+      "name": "deterministic-lint",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-lint.log"
+    },
+    {
+      "name": "architecture",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-architecture.log"
+    },
+    {
+      "name": "route-inventory",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-route-inventory.log"
+    },
+    {
+      "name": "runtime-boundary",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-runtime-boundary.log"
+    },
+    {
+      "name": "runtime-architecture",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-runtime-architecture.log"
+    },
+    {
+      "name": "phase4-context",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-context-check.log"
+    },
+    {
+      "name": "phase4-focused-tests",
+      "passed": false,
+      "exitCode": 1,
+      "evidence": "evidence/phase-4-focused-tests.log"
+    },
+    {
+      "name": "local-service-probe",
+      "passed": true,
+      "exitCode": 0,
+      "evidence": "evidence/phase-4-local-service-probe.log"
+    }
+  ],
+  "evidence": [
+    {
+      "file": "evidence/phase-4-context.json",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-phase2-gate.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-database-toolchain.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-migration-baseline-source.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-phase3-database-source.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-toolchain.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-contract-drift.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-contract-compatibility.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-contract-tests.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-typecheck.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-lint.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-architecture.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-route-inventory.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-runtime-boundary.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-runtime-architecture.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-context-check.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-focused-tests.log",
+      "fresh": true
+    },
+    {
+      "file": "evidence/phase-4-local-service-probe.log",
+      "fresh": true
+    }
+  ],
+  "guarantees": {
+    "predecessor": "complete Phase 2 gate plus Phase 3 source baselines run first in phase4 context",
+    "historical": "phase2 fake-only and phase3 infrastructure-only restrictions evaluated against original fixtures/baselines",
+    "current": "only Spec #77 identity-access and portfolio-configuration activation permitted",
+    "failureSemantics": "single failure, absent required local service (LOCAL_DB_UNAVAILABLE), missing/skipped/partial result, or stale evidence fails the verdict",
+    "remoteCredentialsRequired": false,
+    "secretValuesRecorded": false
+  }
+}

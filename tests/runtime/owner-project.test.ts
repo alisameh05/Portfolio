@@ -46,6 +46,7 @@ import {
   handleRelateOwnerProjects,
   handleSetOwnerProjectFeatured,
 } from "../../src/runtime/http/owner-project.js";
+import { ownerTestSecurity, withOwnerTestAuth } from "./owner-test-auth.js";
 
 const PROJECT_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e8f";
 const RELATED_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e90";
@@ -55,7 +56,7 @@ const IDEMPOTENCY_KEY = "test-key-123";
 const IF_MATCH = '"2"';
 
 function getRequest(projectId: string = PROJECT_ID, inboundTrace?: string): Request {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = withOwnerTestAuth({});
   if (inboundTrace !== undefined) {
     headers["x-request-id"] = inboundTrace;
   }
@@ -75,7 +76,7 @@ function postRequest(
     rawBody?: string;
   },
 ): Request {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = withOwnerTestAuth({ "content-type": "application/json" });
   if (options?.idempotencyKey !== null) {
     headers["Idempotency-Key"] = options?.idempotencyKey ?? IDEMPOTENCY_KEY;
   }
@@ -101,7 +102,7 @@ describe("Owner Project aggregate retrieval (#29)", () => {
     const response = await handleGetOwnerProjectAggregate(
       getRequest(),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.getOwnerProjectAggregate).toHaveLength(1);
@@ -128,7 +129,7 @@ describe("Owner Project aggregate retrieval (#29)", () => {
       const response = await handleGetOwnerProjectAggregate(
         getRequest(projectId),
         { projectId },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(400);
       expect(fake.calls.getOwnerProjectAggregate).toHaveLength(0);
@@ -161,7 +162,7 @@ describe("Owner Project aggregate retrieval (#29)", () => {
       const response = await handleGetOwnerProjectAggregate(
         getRequest(),
         { projectId: PROJECT_ID },
-        { service: fake, logger },
+        { service: fake, security: ownerTestSecurity(), logger },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.getOwnerProjectAggregate).toHaveLength(1);
@@ -179,7 +180,7 @@ describe("Owner Project aggregate retrieval (#29)", () => {
     const response = await handleGetOwnerProjectAggregate(
       getRequest(),
       { projectId: PROJECT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -193,7 +194,7 @@ describe("Owner Project aggregate retrieval (#29)", () => {
     const first = await handleGetOwnerProjectAggregate(
       getRequest(PROJECT_ID, "inbound-attacker-value"),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
@@ -209,7 +210,7 @@ describe("Owner Project commands (#29)", () => {
     const response = await handleChangeOwnerProjectStatus(
       postRequest(PROJECT_ID, "change-status", { body: { statusValueId: STATUS_ID } }),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.changeOwnerProjectStatus).toHaveLength(1);
@@ -237,7 +238,7 @@ describe("Owner Project commands (#29)", () => {
     const response = await handleSetOwnerProjectFeatured(
       postRequest(PROJECT_ID, "set-featured", { body: { featured: true } }),
       { projectId: PROJECT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.setOwnerProjectFeatured).toHaveLength(1);
@@ -255,7 +256,7 @@ describe("Owner Project commands (#29)", () => {
     const response = await handleChangeOwnerProjectPublicSlug(
       postRequest(PROJECT_ID, "change-slug", { body: { slug: "evidence-led-portfolio" } }),
       { projectId: PROJECT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.changeOwnerProjectPublicSlug).toHaveLength(1);
@@ -273,7 +274,7 @@ describe("Owner Project commands (#29)", () => {
     const response = await handleRelateOwnerProjects(
       postRequest(PROJECT_ID, "relate-project", { body: { relatedProjectId: RELATED_ID } }),
       { projectId: PROJECT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.relateOwnerProjects).toHaveLength(1);
@@ -291,7 +292,7 @@ describe("Owner Project commands (#29)", () => {
     const response = await handleAssignOwnerProjectTaxonomyValue(
       postRequest(PROJECT_ID, "assign-taxonomy-value", { body: { valueId: VALUE_ID } }),
       { projectId: PROJECT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.assignOwnerProjectTaxonomyValue).toHaveLength(1);
@@ -328,13 +329,13 @@ describe("Owner Project commands (#29)", () => {
       const handler = handlers[suffix] as (
         request: Request,
         params: { projectId: string },
-        deps: { service: ReturnType<typeof createOwnerProjectTestFake> },
+        deps: Parameters<typeof handleChangeOwnerProjectStatus>[2],
       ) => Promise<Response>;
       const resolvedProjectId = (projectId as string | undefined) ?? PROJECT_ID;
       const response = await handler(
         postRequest(resolvedProjectId, suffix, options),
         { projectId: resolvedProjectId },
-        { service: fake },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(400);
       const totalCalls =
@@ -375,7 +376,7 @@ describe("Owner Project commands (#29)", () => {
       const response = await handleChangeOwnerProjectStatus(
         postRequest(PROJECT_ID, "change-status", { body: { statusValueId: STATUS_ID } }),
         { projectId: PROJECT_ID },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.changeOwnerProjectStatus).toHaveLength(1);
@@ -396,7 +397,7 @@ describe("Owner Project commands (#29)", () => {
     const slug = await handleChangeOwnerProjectPublicSlug(
       postRequest(PROJECT_ID, "change-slug", { body: { slug: "evidence-led-portfolio" } }),
       { projectId: PROJECT_ID },
-      { service: forbidden, logger: createTestLogger() },
+      { service: forbidden, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(slug.status).toBe(403);
 
@@ -407,7 +408,7 @@ describe("Owner Project commands (#29)", () => {
     const assign = await handleAssignOwnerProjectTaxonomyValue(
       postRequest(PROJECT_ID, "assign-taxonomy-value", { body: { valueId: VALUE_ID } }),
       { projectId: PROJECT_ID },
-      { service: invalid, logger: createTestLogger() },
+      { service: invalid, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(assign.status).toBe(422);
   });
@@ -417,7 +418,7 @@ describe("Owner Project commands (#29)", () => {
     const response = await handleChangeOwnerProjectStatus(
       postRequest(PROJECT_ID, "change-status", { body: { statusValueId: STATUS_ID } }),
       { projectId: PROJECT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -426,31 +427,31 @@ describe("Owner Project commands (#29)", () => {
     const service = createProductionOwnerProjectService();
     const logger = createTestLogger();
     const responses = [
-      await handleGetOwnerProjectAggregate(getRequest(), { projectId: PROJECT_ID }, { service, logger }),
+      await handleGetOwnerProjectAggregate(getRequest(), { projectId: PROJECT_ID }, { service, security: ownerTestSecurity(), logger }),
       await handleChangeOwnerProjectStatus(
         postRequest(PROJECT_ID, "change-status", { body: { statusValueId: STATUS_ID } }),
         { projectId: PROJECT_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleSetOwnerProjectFeatured(
         postRequest(PROJECT_ID, "set-featured", { body: { featured: true } }),
         { projectId: PROJECT_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleChangeOwnerProjectPublicSlug(
         postRequest(PROJECT_ID, "change-slug", { body: { slug: "evidence-led-portfolio" } }),
         { projectId: PROJECT_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleRelateOwnerProjects(
         postRequest(PROJECT_ID, "relate-project", { body: { relatedProjectId: RELATED_ID } }),
         { projectId: PROJECT_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleAssignOwnerProjectTaxonomyValue(
         postRequest(PROJECT_ID, "assign-taxonomy-value", { body: { valueId: VALUE_ID } }),
         { projectId: PROJECT_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
     ];
     expect(responses).toHaveLength(6);
@@ -533,7 +534,7 @@ describe("Owner Project commands (#29)", () => {
     const response = await handleGetOwnerProjectAggregate(
       getRequest(),
       { projectId: PROJECT_ID },
-      { service: throwing, logger },
+      { service: throwing, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());

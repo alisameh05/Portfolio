@@ -15,9 +15,11 @@
  * command or query; call one injected application interface once; validate
  * and serialize the declared response; complete request logging.
  *
- * The Owner actor is a deterministic Phase 2 placeholder. Real Supabase
- * session, cookie, and Owner allowlist enforcement remain Phase 4 work;
- * unauthenticated and forbidden translation is exercised through fakes.
+ * The Owner actor is resolved through the shared Phase 4 verified-actor
+ * boundary (`./owner-security.js`): every operation requires a verified
+ * Owner session, owner-scoped authorization, and (for mutations) exact
+ * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
+ * translation is exercised through fakes.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application
@@ -57,6 +59,10 @@ import type {
   StableId,
 } from "../../shared/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
+import {
+  guardOwnerRequest,
+  type OwnerRequestSecurity,
+} from "./owner-security.js";
 import {
   internalErrorProblem,
   rejectionToProblem,
@@ -167,17 +173,8 @@ export interface OwnerProjectApplicationService {
 
 export interface OwnerProjectAdapterDeps {
   service: OwnerProjectApplicationService;
+  security: OwnerRequestSecurity;
   logger?: Logger;
-}
-
-const PHASE2_OWNER_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea0";
-
-function ownerActor(): ActorContext {
-  return {
-    kind: "owner",
-    ownerId: PHASE2_OWNER_ID as StableId<"Owner">,
-    sessionId: "phase2-owner-session",
-  };
 }
 
 function requestInstance(request: Request): string {
@@ -251,6 +248,17 @@ export async function handleGetOwnerProjectAggregate(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "getOwnerProjectAggregate",
+      mode: "read",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const pathResult = zGetOwnerProjectAggregatePath.safeParse({
       projectId: params.projectId,
     });
@@ -258,7 +266,7 @@ export async function handleGetOwnerProjectAggregate(
       return reject(logger, traceId, instance, "Invalid path parameters.");
     }
     const query: GetOwnerProjectAggregateQuery = {
-      actor: ownerActor(),
+      actor: guard.actor,
       projectId: pathResult.data.projectId as StableId<"Project">,
     };
     let result: Awaited<ReturnType<typeof deps.service.getOwnerProjectAggregate>>;
@@ -303,6 +311,7 @@ async function handleProjectCommand(
   request: Request,
   params: { projectId: string },
   deps: OwnerProjectAdapterDeps,
+  operation: string,
   validators: {
     readonly path: { safeParse(value: unknown): { success: boolean; data?: { projectId: string } } };
     readonly headers: { safeParse(value: unknown): { success: boolean; data?: Record<string, string> } };
@@ -310,6 +319,7 @@ async function handleProjectCommand(
     readonly response: { safeParse(value: unknown): { success: boolean; data?: unknown } };
   },
   buildCommand: (args: {
+    readonly actor: ActorContext;
     readonly projectId: StableId<"Project">;
     readonly idempotencyKey: IdempotencyKey;
     readonly expectedVersion: number;
@@ -323,6 +333,17 @@ async function handleProjectCommand(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation,
+      mode: "mutation",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const pathResult = validators.path.safeParse({ projectId: params.projectId });
     if (!pathResult.success || pathResult.data === undefined) {
       return reject(logger, traceId, instance, "Invalid path parameters.");
@@ -344,6 +365,7 @@ async function handleProjectCommand(
       return reject(logger, traceId, instance, "Missing or invalid concurrency headers.");
     }
     const command = buildCommand({
+      actor: guard.actor,
       projectId: pathResult.data.projectId as StableId<"Project">,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
@@ -388,14 +410,15 @@ export async function handleChangeOwnerProjectStatus(
     request,
     params,
     deps,
+    "changeOwnerProjectStatus",
     {
       path: zChangeOwnerProjectStatusPath,
       headers: zChangeOwnerProjectStatusHeaders,
       body: zChangeOwnerProjectStatusBody,
       response: zChangeOwnerProjectStatusResponse,
     },
-    ({ projectId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, projectId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       projectId,
@@ -414,14 +437,15 @@ export async function handleSetOwnerProjectFeatured(
     request,
     params,
     deps,
+    "setOwnerProjectFeatured",
     {
       path: zSetOwnerProjectFeaturedPath,
       headers: zSetOwnerProjectFeaturedHeaders,
       body: zSetOwnerProjectFeaturedBody,
       response: zSetOwnerProjectFeaturedResponse,
     },
-    ({ projectId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, projectId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       projectId,
@@ -440,14 +464,15 @@ export async function handleChangeOwnerProjectPublicSlug(
     request,
     params,
     deps,
+    "changeOwnerProjectPublicSlug",
     {
       path: zChangeOwnerProjectPublicSlugPath,
       headers: zChangeOwnerProjectPublicSlugHeaders,
       body: zChangeOwnerProjectPublicSlugBody,
       response: zChangeOwnerProjectPublicSlugResponse,
     },
-    ({ projectId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, projectId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       projectId,
@@ -466,14 +491,15 @@ export async function handleRelateOwnerProjects(
     request,
     params,
     deps,
+    "relateOwnerProjects",
     {
       path: zRelateOwnerProjectsPath,
       headers: zRelateOwnerProjectsHeaders,
       body: zRelateOwnerProjectsBody,
       response: zRelateOwnerProjectsResponse,
     },
-    ({ projectId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, projectId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       projectId,
@@ -492,14 +518,15 @@ export async function handleAssignOwnerProjectTaxonomyValue(
     request,
     params,
     deps,
+    "assignOwnerProjectTaxonomyValue",
     {
       path: zAssignOwnerProjectTaxonomyValuePath,
       headers: zAssignOwnerProjectTaxonomyValueHeaders,
       body: zAssignOwnerProjectTaxonomyValueBody,
       response: zAssignOwnerProjectTaxonomyValueResponse,
     },
-    ({ projectId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, projectId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       projectId,

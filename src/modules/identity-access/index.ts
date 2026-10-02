@@ -22,6 +22,13 @@ export type {
   VerifiedPseudonymousSubject,
   IdentityAccessService,
 } from "./application/index.js";
+export {
+  OWNER_SCOPED_PERMISSION,
+  createIdentityAccessService,
+  decideAuthorization,
+  requiredPermissionForOwnerOperation,
+} from "./application/index.js";
+export type { IdentityAccessServiceDeps } from "./application/index.js";
 
 export type {
   VerifyOwnerSessionInput,

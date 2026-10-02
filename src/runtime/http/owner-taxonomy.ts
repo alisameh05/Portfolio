@@ -14,11 +14,13 @@
  * command or query; call one injected application interface once; validate
  * and serialize the declared response; complete request logging.
  *
- * The Owner actor is a deterministic Phase 2 placeholder. Real Supabase
- * session, cookie, and Owner allowlist enforcement remain Phase 4 work;
- * unauthenticated and forbidden translation is exercised through fakes.
- * Taxonomy evolution, persistence, and authorization rules remain
- * unimplemented provider-neutral application behavior.
+ * The Owner actor is resolved through the shared Phase 4 verified-actor
+ * boundary (`./owner-security.js`): every operation requires a verified
+ * Owner session, owner-scoped authorization, and (for mutations) exact
+ * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
+ * translation is exercised through fakes. Taxonomy evolution, persistence,
+ * and authorization rules remain unimplemented provider-neutral application
+ * behavior.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application
@@ -54,6 +56,10 @@ import type {
   StableId,
 } from "../../shared/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
+import {
+  guardOwnerRequest,
+  type OwnerRequestSecurity,
+} from "./owner-security.js";
 import {
   internalErrorProblem,
   rejectionToProblem,
@@ -146,17 +152,8 @@ export interface OwnerTaxonomyApplicationService {
 
 export interface OwnerTaxonomyAdapterDeps {
   service: OwnerTaxonomyApplicationService;
+  security: OwnerRequestSecurity;
   logger?: Logger;
-}
-
-const PHASE2_OWNER_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea0";
-
-function ownerActor(): ActorContext {
-  return {
-    kind: "owner",
-    ownerId: PHASE2_OWNER_ID as StableId<"Owner">,
-    sessionId: "phase2-owner-session",
-  };
 }
 
 function requestInstance(request: Request): string {
@@ -230,6 +227,17 @@ export async function handleGetOwnerTaxonomyAggregate(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "getOwnerTaxonomyAggregate",
+      mode: "read",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const pathResult = zGetOwnerTaxonomyAggregatePath.safeParse({
       taxonomyId: params.taxonomyId,
     });
@@ -237,7 +245,7 @@ export async function handleGetOwnerTaxonomyAggregate(
       return reject(logger, traceId, instance, "Invalid path parameters.");
     }
     const query: GetOwnerTaxonomyAggregateQuery = {
-      actor: ownerActor(),
+      actor: guard.actor,
       taxonomyId: pathResult.data.taxonomyId as StableId<string>,
     };
     let result: Awaited<ReturnType<typeof deps.service.getOwnerTaxonomyAggregate>>;
@@ -275,6 +283,7 @@ async function handleTaxonomyCommand(
   request: Request,
   pathParams: Record<string, string>,
   deps: OwnerTaxonomyAdapterDeps,
+  operation: string,
   validators: {
     readonly path: { safeParse(value: unknown): { success: boolean; data?: Record<string, string> } };
     readonly headers: { safeParse(value: unknown): { success: boolean; data?: Record<string, string> } };
@@ -283,6 +292,7 @@ async function handleTaxonomyCommand(
   },
   successStatus: number,
   buildCommand: (args: {
+    readonly actor: ActorContext;
     readonly path: Record<string, StableId<string>>;
     readonly idempotencyKey: IdempotencyKey;
     readonly expectedVersion: number;
@@ -296,6 +306,17 @@ async function handleTaxonomyCommand(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation,
+      mode: "mutation",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const pathResult = validators.path.safeParse(pathParams);
     if (!pathResult.success || pathResult.data === undefined) {
       return reject(logger, traceId, instance, "Invalid path parameters.");
@@ -321,6 +342,7 @@ async function handleTaxonomyCommand(
       path[key] = value as StableId<string>;
     }
     const command = buildCommand({
+      actor: guard.actor,
       path,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
@@ -365,6 +387,7 @@ export async function handleCreateOwnerTaxonomyValue(
     request,
     { taxonomyId: params.taxonomyId },
     deps,
+    "createOwnerTaxonomyValue",
     {
       path: zCreateOwnerTaxonomyValuePath,
       headers: zCreateOwnerTaxonomyValueHeaders,
@@ -372,8 +395,8 @@ export async function handleCreateOwnerTaxonomyValue(
       response: zCreateOwnerTaxonomyValueResponse,
     },
     201,
-    ({ path, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, path, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       taxonomyId: path["taxonomyId"] as StableId<string>,
@@ -392,6 +415,7 @@ export async function handleRenameOwnerTaxonomyValue(
     request,
     { valueId: params.valueId },
     deps,
+    "renameOwnerTaxonomyValue",
     {
       path: zRenameOwnerTaxonomyValuePath,
       headers: zRenameOwnerTaxonomyValueHeaders,
@@ -399,8 +423,8 @@ export async function handleRenameOwnerTaxonomyValue(
       response: zRenameOwnerTaxonomyValueResponse,
     },
     200,
-    ({ path, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, path, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       valueId: path["valueId"] as StableId<string>,
@@ -419,6 +443,7 @@ export async function handleRetireOwnerTaxonomyValue(
     request,
     { valueId: params.valueId },
     deps,
+    "retireOwnerTaxonomyValue",
     {
       path: zRetireOwnerTaxonomyValuePath,
       headers: zRetireOwnerTaxonomyValueHeaders,
@@ -426,8 +451,8 @@ export async function handleRetireOwnerTaxonomyValue(
       response: zRetireOwnerTaxonomyValueResponse,
     },
     200,
-    ({ path, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, path, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       valueId: path["valueId"] as StableId<string>,
@@ -446,6 +471,7 @@ export async function handleMergeOwnerTaxonomyValue(
     request,
     { valueId: params.valueId },
     deps,
+    "mergeOwnerTaxonomyValue",
     {
       path: zMergeOwnerTaxonomyValuePath,
       headers: zMergeOwnerTaxonomyValueHeaders,
@@ -453,8 +479,8 @@ export async function handleMergeOwnerTaxonomyValue(
       response: zMergeOwnerTaxonomyValueResponse,
     },
     200,
-    ({ path, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, path, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       valueId: path["valueId"] as StableId<string>,

@@ -23,9 +23,11 @@
  * authorization behavior remain later-phase work behind provider-neutral
  * application interfaces.
  *
- * The Owner actor is a deterministic Phase 2 placeholder. Real Supabase
- * session, cookie, and Owner allowlist enforcement remain Phase 4 work;
- * unauthenticated and forbidden translation is exercised through fakes.
+ * The Owner actor is resolved through the shared Phase 4 verified-actor
+ * boundary (`./owner-security.js`): every operation requires a verified
+ * Owner session, owner-scoped authorization, and (for the request mutation)
+ * exact origin plus CSRF proof before dispatch. Unauthenticated and
+ * forbidden translation is exercised through fakes.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application
@@ -49,6 +51,10 @@ import type {
   StableId,
 } from "../../shared/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
+import {
+  guardOwnerRequest,
+  type OwnerRequestSecurity,
+} from "./owner-security.js";
 import {
   internalErrorProblem,
   rejectionToProblem,
@@ -129,23 +135,14 @@ export interface OwnerExportApplicationService {
 
 export interface OwnerExportAdapterDeps {
   service: OwnerExportApplicationService;
+  security: OwnerRequestSecurity;
   logger?: Logger;
 }
 
 export const OWNER_EXPORT_MEDIA_TYPE = "application/vnd.shipwithali.owner-export+zip";
-
-const PHASE2_OWNER_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea0";
 const SCHEMA_VERSION_PATTERN = /^[1-9][0-9]*\.[0-9]+$/;
 const FILENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\.zip$/;
 const MAX_DOWNLOAD_BYTES = 25_000_000;
-
-function ownerActor(): ActorContext {
-  return {
-    kind: "owner",
-    ownerId: PHASE2_OWNER_ID as StableId<"Owner">,
-    sessionId: "phase2-owner-session",
-  };
-}
 
 function requestInstance(request: Request): string {
   try {
@@ -201,6 +198,17 @@ export async function handleRequestOwnerExport(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "requestOwnerExport",
+      mode: "mutation",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const headersResult = zRequestOwnerExportHeaders.safeParse({
       "Idempotency-Key": request.headers.get("idempotency-key") ?? undefined,
     });
@@ -217,7 +225,7 @@ export async function handleRequestOwnerExport(
     }
     const body = bodyResult.data as { includedScopes: OwnerExportScope[] };
     const command: RequestOwnerExportApplicationCommand = {
-      actor: ownerActor(),
+      actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       includedScopes: [...body.includedScopes],
     };
@@ -262,6 +270,17 @@ export async function handleGetOwnerExport(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "getOwnerExport",
+      mode: "read",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const pathResult = zGetOwnerExportPath.safeParse({
       exportId: params.exportId,
     });
@@ -269,7 +288,7 @@ export async function handleGetOwnerExport(
       return reject(logger, traceId, instance, "Invalid path parameters.");
     }
     const query: GetOwnerExportQuery = {
-      actor: ownerActor(),
+      actor: guard.actor,
       exportId: pathResult.data.exportId as StableId<string>,
     };
     let result: Awaited<ReturnType<typeof deps.service.getOwnerExport>>;
@@ -339,6 +358,17 @@ export async function handleDownloadOwnerExport(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "downloadOwnerExport",
+      mode: "read",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const pathResult = zDownloadOwnerExportPath.safeParse({
       exportId: params.exportId,
     });
@@ -347,7 +377,7 @@ export async function handleDownloadOwnerExport(
     }
     const exportId = pathResult.data.exportId as StableId<string>;
     const query: DownloadOwnerExportQuery = {
-      actor: ownerActor(),
+      actor: guard.actor,
       exportId,
     };
     let result: Awaited<ReturnType<typeof deps.service.downloadOwnerExport>>;

@@ -37,6 +37,10 @@ import {
   handleCreateOwnerAnalyticsGoalVersion,
   handleGetOwnerAnalyticsGoal,
 } from "../../src/runtime/http/owner-analytics.js";
+import {
+  ownerTestSecurity,
+  withOwnerTestAuth,
+} from "./owner-test-auth.js";
 
 const GOAL_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ed0";
 const VERSION_ID = OWNER_ANALYTICS_VERSION_ID;
@@ -44,7 +48,7 @@ const IDEMPOTENCY_KEY = "test-key-123";
 const IF_MATCH = '"2"';
 
 function getRequest(goalId: string = GOAL_ID, inboundTrace?: string): Request {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = withOwnerTestAuth({});
   if (inboundTrace !== undefined) {
     headers["x-request-id"] = inboundTrace;
   }
@@ -63,7 +67,9 @@ function postRequest(
     rawBody?: string;
   },
 ): Request {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = withOwnerTestAuth({
+    "content-type": "application/json",
+  });
   if (options?.idempotencyKey !== null) {
     headers["Idempotency-Key"] = options?.idempotencyKey ?? IDEMPOTENCY_KEY;
   }
@@ -96,7 +102,7 @@ describe("Owner Analytics goal retrieval (#32)", () => {
     const response = await handleGetOwnerAnalyticsGoal(
       getRequest(),
       { goalId: GOAL_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.getOwnerAnalyticsGoal).toHaveLength(1);
@@ -131,7 +137,7 @@ describe("Owner Analytics goal retrieval (#32)", () => {
       const response = await handleGetOwnerAnalyticsGoal(
         getRequest(goalId),
         { goalId },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(400);
       expect(fake.calls.getOwnerAnalyticsGoal).toHaveLength(0);
@@ -161,7 +167,7 @@ describe("Owner Analytics goal retrieval (#32)", () => {
       const response = await handleGetOwnerAnalyticsGoal(
         getRequest(),
         { goalId: GOAL_ID },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.getOwnerAnalyticsGoal).toHaveLength(1);
@@ -179,7 +185,7 @@ describe("Owner Analytics goal retrieval (#32)", () => {
     const response = await handleGetOwnerAnalyticsGoal(
       getRequest(),
       { goalId: GOAL_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -193,7 +199,7 @@ describe("Owner Analytics goal retrieval (#32)", () => {
     const first = await handleGetOwnerAnalyticsGoal(
       getRequest(GOAL_ID, "inbound-attacker-value"),
       { goalId: GOAL_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
@@ -209,7 +215,7 @@ describe("Owner Analytics goal version creation and activation (#32)", () => {
     const response = await handleCreateOwnerAnalyticsGoalVersion(
       postRequest(versionsUrl, { body: definitionBody }),
       { goalId: GOAL_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(201);
     expect(fake.calls.createOwnerAnalyticsGoalVersion).toHaveLength(1);
@@ -239,7 +245,7 @@ describe("Owner Analytics goal version creation and activation (#32)", () => {
     const response = await handleActivateOwnerAnalyticsGoalVersion(
       postRequest(activateUrl, { body: activateBody }),
       { goalId: GOAL_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.activateOwnerAnalyticsGoalVersion).toHaveLength(1);
@@ -281,7 +287,7 @@ describe("Owner Analytics goal version creation and activation (#32)", () => {
     const response = await handler(
       postRequest(url, options as { body?: unknown; rawBody?: string }),
       { goalId: GOAL_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(400);
     expect([
@@ -295,7 +301,7 @@ describe("Owner Analytics goal version creation and activation (#32)", () => {
     const response = await handleCreateOwnerAnalyticsGoalVersion(
       postRequest(versionsUrl, { body: definitionBody }),
       { goalId: "not-a-uuid" },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(400);
     expect(fake.calls.createOwnerAnalyticsGoalVersion).toHaveLength(0);
@@ -329,7 +335,7 @@ describe("Owner Analytics goal version creation and activation (#32)", () => {
           return handleCreateOwnerAnalyticsGoalVersion(
             postRequest(versionsUrl, { body: definitionBody }),
             { goalId: GOAL_ID },
-            { service: fake, logger: createTestLogger() },
+            { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
           );
         },
         () => {
@@ -337,7 +343,7 @@ describe("Owner Analytics goal version creation and activation (#32)", () => {
           return handleActivateOwnerAnalyticsGoalVersion(
             postRequest(activateUrl, { body: activateBody }),
             { goalId: GOAL_ID },
-            { service: fake, logger: createTestLogger() },
+            { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
           );
         },
       ]) {
@@ -357,7 +363,7 @@ describe("Owner Analytics goal version creation and activation (#32)", () => {
     const response = await handleCreateOwnerAnalyticsGoalVersion(
       postRequest(versionsUrl, { body: definitionBody }),
       { goalId: GOAL_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -366,16 +372,16 @@ describe("Owner Analytics goal version creation and activation (#32)", () => {
     const service = createProductionOwnerAnalyticsService();
     const logger = createTestLogger();
     const responses = [
-      await handleGetOwnerAnalyticsGoal(getRequest(), { goalId: GOAL_ID }, { service, logger }),
+      await handleGetOwnerAnalyticsGoal(getRequest(), { goalId: GOAL_ID }, { service, security: ownerTestSecurity(), logger }),
       await handleCreateOwnerAnalyticsGoalVersion(
         postRequest(versionsUrl, { body: definitionBody }),
         { goalId: GOAL_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleActivateOwnerAnalyticsGoalVersion(
         postRequest(activateUrl, { body: activateBody }),
         { goalId: GOAL_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
     ];
     expect(responses).toHaveLength(3);
@@ -428,7 +434,7 @@ describe("Owner Analytics goal version creation and activation (#32)", () => {
     const response = await handleGetOwnerAnalyticsGoal(
       getRequest(),
       { goalId: GOAL_ID },
-      { service: throwing, logger },
+      { service: throwing, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());

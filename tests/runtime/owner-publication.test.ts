@@ -43,6 +43,7 @@ import {
   handleRestoreOwnerContent,
   handleSaveOwnerContentRevision,
 } from "../../src/runtime/http/owner-publication.js";
+import { ownerTestSecurity, withOwnerTestAuth } from "./owner-test-auth.js";
 
 const CONTENT_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea1";
 const REVISION_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea5";
@@ -59,7 +60,7 @@ const REVISION_BODY = {
 const PUBLISH_BODY = { locale: "en", revisionId: REVISION_ID };
 
 function getRequest(contentId: string = CONTENT_ID, inboundTrace?: string): Request {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = withOwnerTestAuth({});
   if (inboundTrace !== undefined) {
     headers["x-request-id"] = inboundTrace;
   }
@@ -79,7 +80,7 @@ function postRequest(
     rawBody?: string;
   },
 ): Request {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = withOwnerTestAuth({ "content-type": "application/json" });
   if (options?.idempotencyKey !== null) {
     headers["Idempotency-Key"] = options?.idempotencyKey ?? IDEMPOTENCY_KEY;
   }
@@ -102,7 +103,7 @@ describe("Owner Publication aggregate retrieval (#30)", () => {
     const response = await handleGetOwnerContentAggregate(
       getRequest(),
       { contentId: CONTENT_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.getOwnerContentAggregate).toHaveLength(1);
@@ -132,7 +133,7 @@ describe("Owner Publication aggregate retrieval (#30)", () => {
       const response = await handleGetOwnerContentAggregate(
         getRequest(contentId),
         { contentId },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(400);
       expect(fake.calls.getOwnerContentAggregate).toHaveLength(0);
@@ -165,7 +166,7 @@ describe("Owner Publication aggregate retrieval (#30)", () => {
       const response = await handleGetOwnerContentAggregate(
         getRequest(),
         { contentId: CONTENT_ID },
-        { service: fake, logger },
+        { service: fake, security: ownerTestSecurity(), logger },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.getOwnerContentAggregate).toHaveLength(1);
@@ -183,7 +184,7 @@ describe("Owner Publication aggregate retrieval (#30)", () => {
     const response = await handleGetOwnerContentAggregate(
       getRequest(),
       { contentId: CONTENT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -197,7 +198,7 @@ describe("Owner Publication aggregate retrieval (#30)", () => {
     const first = await handleGetOwnerContentAggregate(
       getRequest(CONTENT_ID, "inbound-attacker-value"),
       { contentId: CONTENT_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
@@ -213,7 +214,7 @@ describe("Owner Publication commands (#30)", () => {
     const response = await handleSaveOwnerContentRevision(
       postRequest(CONTENT_ID, "revisions", { body: REVISION_BODY }),
       { contentId: CONTENT_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(201);
     expect(fake.calls.saveOwnerContentRevision).toHaveLength(1);
@@ -244,7 +245,7 @@ describe("Owner Publication commands (#30)", () => {
     const response = await handlePublishOwnerContentLanguage(
       postRequest(CONTENT_ID, "commands/publish-language", { body: PUBLISH_BODY }),
       { contentId: CONTENT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.publishOwnerContentLanguage).toHaveLength(1);
@@ -262,7 +263,7 @@ describe("Owner Publication commands (#30)", () => {
     const response = await handleHideOwnerContent(
       postRequest(CONTENT_ID, "commands/hide", { body: { reason: "Outdated draft" } }),
       { contentId: CONTENT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.hideOwnerContent).toHaveLength(1);
@@ -280,7 +281,7 @@ describe("Owner Publication commands (#30)", () => {
     const response = await handleArchiveOwnerContent(
       postRequest(CONTENT_ID, "commands/archive", { body: {} }),
       { contentId: CONTENT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.archiveOwnerContent).toHaveLength(1);
@@ -298,7 +299,7 @@ describe("Owner Publication commands (#30)", () => {
     const response = await handleRestoreOwnerContent(
       postRequest(CONTENT_ID, "commands/restore", { body: {} }),
       { contentId: CONTENT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.restoreOwnerContent).toHaveLength(1);
@@ -336,13 +337,17 @@ describe("Owner Publication commands (#30)", () => {
       const handler = handlers[suffix] as (
         request: Request,
         params: { contentId: string },
-        deps: { service: ReturnType<typeof createOwnerPublicationTestFake> },
+        deps: {
+          service: ReturnType<typeof createOwnerPublicationTestFake>;
+          security: ReturnType<typeof ownerTestSecurity>;
+          logger?: ReturnType<typeof createTestLogger>;
+        },
       ) => Promise<Response>;
       const resolvedContentId = (contentId as string | undefined) ?? CONTENT_ID;
       const response = await handler(
         postRequest(resolvedContentId, suffix, options),
         { contentId: resolvedContentId },
-        { service: fake },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(400);
       const totalCalls =
@@ -383,7 +388,7 @@ describe("Owner Publication commands (#30)", () => {
       const response = await handleSaveOwnerContentRevision(
         postRequest(CONTENT_ID, "revisions", { body: REVISION_BODY }),
         { contentId: CONTENT_ID },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.saveOwnerContentRevision).toHaveLength(1);
@@ -404,7 +409,7 @@ describe("Owner Publication commands (#30)", () => {
     const publish = await handlePublishOwnerContentLanguage(
       postRequest(CONTENT_ID, "commands/publish-language", { body: PUBLISH_BODY }),
       { contentId: CONTENT_ID },
-      { service: forbidden, logger: createTestLogger() },
+      { service: forbidden, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(publish.status).toBe(403);
 
@@ -415,7 +420,7 @@ describe("Owner Publication commands (#30)", () => {
     const hide = await handleHideOwnerContent(
       postRequest(CONTENT_ID, "commands/hide", { body: {} }),
       { contentId: CONTENT_ID },
-      { service: invalid, logger: createTestLogger() },
+      { service: invalid, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(hide.status).toBe(422);
   });
@@ -425,7 +430,7 @@ describe("Owner Publication commands (#30)", () => {
     const response = await handleSaveOwnerContentRevision(
       postRequest(CONTENT_ID, "revisions", { body: REVISION_BODY }),
       { contentId: CONTENT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -434,31 +439,31 @@ describe("Owner Publication commands (#30)", () => {
     const service = createProductionOwnerPublicationService();
     const logger = createTestLogger();
     const responses = [
-      await handleGetOwnerContentAggregate(getRequest(), { contentId: CONTENT_ID }, { service, logger }),
+      await handleGetOwnerContentAggregate(getRequest(), { contentId: CONTENT_ID }, { service, security: ownerTestSecurity(), logger }),
       await handleSaveOwnerContentRevision(
         postRequest(CONTENT_ID, "revisions", { body: REVISION_BODY }),
         { contentId: CONTENT_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handlePublishOwnerContentLanguage(
         postRequest(CONTENT_ID, "commands/publish-language", { body: PUBLISH_BODY }),
         { contentId: CONTENT_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleHideOwnerContent(
         postRequest(CONTENT_ID, "commands/hide", { body: {} }),
         { contentId: CONTENT_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleArchiveOwnerContent(
         postRequest(CONTENT_ID, "commands/archive", { body: {} }),
         { contentId: CONTENT_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleRestoreOwnerContent(
         postRequest(CONTENT_ID, "commands/restore", { body: {} }),
         { contentId: CONTENT_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
     ];
     expect(responses).toHaveLength(6);
@@ -542,7 +547,7 @@ describe("Owner Publication commands (#30)", () => {
     const response = await handleGetOwnerContentAggregate(
       getRequest(),
       { contentId: CONTENT_ID },
-      { service: throwing, logger },
+      { service: throwing, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());
