@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,11 +24,12 @@ export function removeInstallStamp(root) {
   rmSync(join(root, "node_modules", STAMP), { force: true });
 }
 
-export function observeRuntime() {
-  // npm supplies its own CLI path, avoiding npm.cmd spawning and PATH ambiguity on Windows.
-  const cli = process.env.npm_execpath;
-  const result = cli ? spawnSync(process.execPath, [cli, "--version"], { encoding: "utf8" }) : undefined;
-  return { node: process.versions.node, npm: result?.status === 0 ? result.stdout.trim() : "unknown" };
+export function observeRuntime(env = process.env) {
+  // npm exposes its exact version to lifecycle scripts; read it directly to
+  // avoid spawning npm.cmd, which Windows sandbox policies can reject with EPERM.
+  const userAgent = env.npm_config_user_agent ?? env.NPM_CONFIG_USER_AGENT;
+  const npm = userAgent?.match(/(?:^|\s)npm\/([^\s]+)/)?.[1] ?? "unknown";
+  return { node: process.versions.node, npm };
 }
 
 export function verifyEnvironment(root, runtime, { runtimeOnly = false, requireStamp = true } = {}) {

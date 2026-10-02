@@ -35,6 +35,23 @@ export interface GetPublicConfigurationQuery {
   readonly locale: SupportedLocale;
 }
 
+export type PublicCapabilityAvailability = "available" | "unavailable" | "unknown";
+
+/** Facts made available to the public settings query through module exports. */
+export interface PublicPortfolioCapabilityFacts {
+  readonly currentCv: PublicCapabilityAvailability;
+  readonly externalLinks: PublicCapabilityAvailability;
+  readonly globalProjectCta: PublicCapabilityAvailability;
+}
+
+/**
+ * Optional composition-owned source of capability facts. Missing, unknown,
+ * rejected, or throwing sources are treated as unavailable by the query.
+ */
+export interface PublicPortfolioCapabilityReader {
+  getFacts(): Promise<Partial<PublicPortfolioCapabilityFacts>>;
+}
+
 export interface UpdatePortfolioProfileCommand extends ConfigurationCorrelation {
   readonly actor: ActorContext;
   readonly portfolioId: StableId<"Portfolio">;

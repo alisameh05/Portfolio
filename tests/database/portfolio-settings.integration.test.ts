@@ -290,6 +290,38 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     const ctaCommands = createPortfolioGlobalCtaCommandService({ repository, operations, scope });
     const service = createOwnerConfigurationApplicationService(commands, contactChannelsCommands, ctaCommands, scope.portfolioId);
     const reader = createPortfolioSettingsReader({ repository, transactions: database.transactions, scope });
+    const publicReader = createPortfolioSettingsReader({
+      repository,
+      transactions: database.transactions,
+      scope,
+      capabilityReader: {
+        async getFacts() {
+          return {
+            currentCv: "available",
+            externalLinks: "available",
+            globalProjectCta: "unavailable",
+          } as const;
+        },
+      },
+    });
+    const arabicPublicSettings = await publicReader.getPublicConfiguration({ locale: "ar" });
+    expect(arabicPublicSettings).toMatchObject({
+      ok: true,
+      value: {
+        locale: "ar",
+        profile: values.profile,
+        contactChannels: [values.contactChannels[0]],
+        globalCta: {
+          availability: "unavailable",
+          label: values.globalCta.label,
+          unavailableFallback: values.globalCta.unavailableFallback,
+        },
+        capabilities: { currentCvAvailable: false, externalLinksAvailable: false },
+      },
+    });
+    expect(JSON.stringify(arabicPublicSettings)).not.toContain(String(scope.ownerId));
+    expect(JSON.stringify(arabicPublicSettings)).not.toContain(String(scope.portfolioId));
+    expect(JSON.stringify(arabicPublicSettings)).not.toContain(values.globalCta.destination);
     const actor = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "integration-session" };
     let authorized = true;
     let barrier: (() => Promise<void>) | undefined;
@@ -365,6 +397,11 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
 
     const advance = await handler(3, "profile-advance-key", { ...retryProfile, bio: "Advanced to version four." });
     expect(advance.status).toBe(200);
+    const publicSettingsAfterCommand = await publicReader.getPublicConfiguration({ locale: "en" });
+    expect(publicSettingsAfterCommand).toMatchObject({
+      ok: true,
+      value: { profile: { ...retryProfile, bio: "Advanced to version four." } },
+    });
     const replayAfterAdvance = await handler(2, "profile-retry-key", retryProfile);
     expect(replayAfterAdvance.status).toBe(200);
     expect(await replayAfterAdvance.json()).toEqual(retryBodies[0]);
