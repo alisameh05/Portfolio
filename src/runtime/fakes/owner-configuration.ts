@@ -104,11 +104,11 @@ export function createOwnerConfigurationTestFake(
 }
 
 /**
- * Production Phase 2 composition for the three Owner Configuration operations.
+ * Fail-closed placeholder for an uninitialized Owner Configuration runtime.
  *
- * Every unfinished product operation fails closed with the declared 503
- * response (`temporarily_unavailable` / `RUNTIME_NOT_IMPLEMENTED`) and
- * never returns fabricated business success.
+ * Database composition replaces only profile updates with the real Phase 4
+ * command. Contact channel and CTA updates remain unavailable until their
+ * own tickets land.
  */
 export function createProductionOwnerConfigurationService(): OwnerConfigurationApplicationService {
   const failure = {

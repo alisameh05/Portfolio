@@ -34,6 +34,7 @@ function fixture() {
   const repository: PortfolioSettingsRepository = {
     getSettings: vi.fn(notConfigured),
     provisionSettings: vi.fn(async (_scope, settings) => ok(settings)),
+    updateProfile: vi.fn(async () => err({ kind: "temporarily_unavailable", code: "NOT_IMPLEMENTED" } as const)),
   };
   return {
     repository,

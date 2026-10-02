@@ -333,6 +333,7 @@ describe("Owner Configuration adapter (#29)", () => {
         actor: owner as never,
         idempotencyKey: IDEMPOTENCY_KEY as never,
         expectedVersion: 3,
+        correlationId: "test-correlation",
         displayName: "Ali Sameh",
         headline: "AI and ML product engineer",
         bio: "I build evidence-led AI products.",

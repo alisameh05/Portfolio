@@ -7,11 +7,10 @@ import {
 } from "../../../shared/adapters/postgres/runtime.js";
 import type {
   ContactChannel,
+  PortfolioProfile,
   PortfolioSettings,
 } from "../domain/index.js";
-import type {
-  PortfolioScope,
-} from "../ports/index.js";
+import type { PortfolioProfileUpdate, PortfolioScope } from "../ports/index.js";
 import type { PortfolioSettingsRepository } from "../application/settings-service.js";
 
 interface SettingsRow {
@@ -150,6 +149,59 @@ export function createPostgresPortfolioSettingsRepository(
           `.execute(executor);
         }
         return { ok: true, value: settings };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async updateProfile(
+      scope: PortfolioScope,
+      profile: PortfolioProfile,
+      expectedVersion: number,
+      context: TransactionContext,
+    ): Promise<Result<PortfolioProfileUpdate, Rejection>> {
+      if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) {
+        return err({ kind: "validation", code: "INVALID_EXPECTED_VERSION" });
+      }
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, scope);
+        const updated = await sql<{ version: number; updated_at: Date | string }>`
+          update portfolio_config.settings
+             set display_name = ${profile.displayName},
+                 headline = ${profile.headline},
+                 bio = ${profile.bio},
+                 version = version + 1,
+                 updated_at = transaction_timestamp()
+           where portfolio_id = ${scope.portfolioId}::uuid
+             and owner_id = ${scope.ownerId}::uuid
+             and version = ${expectedVersion}
+          returning version, updated_at
+        `.execute(executor);
+        const row = updated.rows[0];
+        if (row !== undefined) {
+          const updatedAt = row.updated_at instanceof Date
+            ? row.updated_at.toISOString()
+            : new Date(row.updated_at).toISOString();
+          if (!Number.isFinite(Date.parse(updatedAt))) throw new PostgresInfrastructureError();
+          return { ok: true, value: { aggregateVersion: row.version, updatedAt } };
+        }
+
+        const existing = await sql<{ version: number }>`
+          select version
+            from portfolio_config.settings
+           where portfolio_id = ${scope.portfolioId}::uuid
+             and owner_id = ${scope.ownerId}::uuid
+        `.execute(executor);
+        const current = existing.rows[0];
+        return current === undefined
+          ? err({ kind: "not_found", code: "PORTFOLIO_SETTINGS_NOT_CONFIGURED" })
+          : err({
+            kind: "precondition_failed",
+            code: "PORTFOLIO_SETTINGS_VERSION_MISMATCH",
+            currentVersion: current.version,
+          });
       } catch (error) {
         if (error instanceof PostgresInfrastructureError) throw error;
         throw new PostgresInfrastructureError();

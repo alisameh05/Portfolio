@@ -1,13 +1,20 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { sql } from "kysely";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createStableId, err } from "../../src/shared/domain/index.js";
+import { createStableId, err, ok } from "../../src/shared/domain/index.js";
+import { decideAuthorization } from "../../src/modules/identity-access/index.js";
+import { createOwnerConfigurationApplicationService } from "../../src/runtime/owner-configuration-service.js";
+import { handleUpdateOwnerProfileConfiguration } from "../../src/runtime/http/owner-configuration.js";
+import type { OwnerRequestSecurity } from "../../src/runtime/http/owner-security.js";
+import { createPortfolioProfileCommandService } from "../../src/modules/portfolio-configuration/application/profile-command.js";
 import {
   createPortfolioSettingsService,
+  createPortfolioSettingsReader,
   type PortfolioSettingsProvisioningValues,
 } from "../../src/modules/portfolio-configuration/application/settings-service.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
+import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
 
 const DATABASE_URL = process.env["PHASE4_SETTINGS_DATABASE_URL"];
@@ -189,15 +196,23 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
              has_schema_privilege(role_name, 'portfolio_config', 'USAGE') as schema_usage,
              has_table_privilege(role_name, 'portfolio_config.settings', 'SELECT') as can_select,
              has_table_privilege(role_name, 'portfolio_config.settings', 'INSERT') as can_insert,
-             has_table_privilege(role_name, 'portfolio_config.settings', 'UPDATE') as can_update
+             has_column_privilege(role_name, 'portfolio_config.settings', 'display_name', 'UPDATE') as can_update_profile,
+             has_column_privilege(role_name, 'portfolio_config.settings', 'global_cta_label', 'UPDATE') as can_update_cta,
+             has_column_privilege(role_name, 'portfolio_config.settings', 'portfolio_id', 'UPDATE') as can_update_identity
         from unnest(array[
           'shipwithali_application', 'shipwithali_worker', 'shipwithali_backup', 'anon', 'authenticated'
         ]) as role_name
     `);
     const byRole = new Map(privileges.rows.map((row) => [row.role_name, row]));
-    expect(byRole.get("shipwithali_application")).toMatchObject({ schema_usage: true, can_select: true, can_insert: true, can_update: false });
+    expect(byRole.get("shipwithali_application")).toMatchObject({
+      schema_usage: true, can_select: true, can_insert: true,
+      can_update_profile: true, can_update_cta: false, can_update_identity: false,
+    });
     for (const role of ["shipwithali_worker", "shipwithali_backup", "anon", "authenticated"]) {
-      expect(byRole.get(role)).toMatchObject({ schema_usage: false, can_select: false, can_insert: false, can_update: false });
+      expect(byRole.get(role)).toMatchObject({
+        schema_usage: false, can_select: false, can_insert: false,
+        can_update_profile: false, can_update_cta: false, can_update_identity: false,
+      });
     }
   });
 
@@ -238,4 +253,192 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
       await singleConnection.resource.close();
     }
   });
+
+  it("executes the secured HTTP profile command atomically with replay, concurrency, audit, and the Owner query", async () => {
+    const scope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+    const provisioning = createPortfolioSettingsService({ repository, transactions: database.transactions, scope });
+    await provisioning.provision(values);
+    const operations = createPostgresOperationsPersistence(database.database);
+    const commands = createPortfolioProfileCommandService({ repository, operations, scope });
+    const service = createOwnerConfigurationApplicationService(commands, scope.portfolioId);
+    const reader = createPortfolioSettingsReader({ repository, transactions: database.transactions, scope });
+    const actor = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "integration-session" };
+    let authorized = true;
+    let barrier: (() => Promise<void>) | undefined;
+    const security: OwnerRequestSecurity = {
+      appOrigin: "https://example.com",
+      identity: {
+        async resolveActorContext() { return ok(actor); },
+        async authorizeOperation(query) {
+          if (!authorized) return ok(false);
+          await barrier?.();
+          return decideAuthorization(query);
+        },
+      },
+    };
+    const makeRequest = (version: number, key: string, profile: PortfolioSettingsProvisioningValues["profile"]) =>
+      new Request("https://example.com/api/owner/v1/configuration/profile", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          cookie: "sw_owner_session=integration-session-token",
+          origin: "https://example.com",
+          "x-csrf-token": "integration-csrf-proof",
+          "idempotency-key": key,
+          "if-match": `"${version}"`,
+        },
+        body: JSON.stringify(profile),
+      });
+    const handler = (version: number, key: string, nextProfile: PortfolioSettingsProvisioningValues["profile"]) =>
+      handleUpdateOwnerProfileConfiguration(makeRequest(version, key, nextProfile), { service, security });
+    const read = () => reader.getSettings({ actor, portfolioId: scope.portfolioId });
+    const eventCount = async () => {
+      const result = await admin.query(
+        "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'portfolio_configuration.profile_updated.v1'",
+        [scope.portfolioId],
+      );
+      return result.rows[0].count as number;
+    };
+    const startBarrier = () => {
+      let release!: () => void;
+      const waiting = new Promise<void>((resolve) => { release = resolve; });
+      let count = 0;
+      barrier = async () => {
+        count += 1;
+        if (count === 2) release();
+        await waiting;
+      };
+    };
+
+    const raceProfile = { displayName: "Ali Sameh", headline: "Racing update", bio: "Only one transaction can win." };
+    startBarrier();
+    const race = await Promise.all([
+      handler(1, "profile-race-key-left", raceProfile),
+      handler(1, "profile-race-key-right", raceProfile),
+    ]);
+    barrier = undefined;
+    expect(race.map((response) => response.status).sort()).toEqual([200, 412]);
+    const racedSettings = await read();
+    expect(racedSettings.ok && racedSettings.value.version).toBe(2);
+    expect(await eventCount()).toBe(1);
+
+    const retryProfile = { ...raceProfile, headline: "Retry-safe update" };
+    startBarrier();
+    const concurrentRetries = await Promise.all([
+      handler(2, "profile-retry-key", retryProfile),
+      handler(2, "profile-retry-key", retryProfile),
+    ]);
+    barrier = undefined;
+    const retryBodies = await Promise.all(concurrentRetries.map((response) => response.json()));
+    expect(concurrentRetries.map((response) => response.status)).toEqual([200, 200]);
+    expect(retryBodies[0]).toEqual(retryBodies[1]);
+    expect(retryBodies[0]).toMatchObject({ aggregateVersion: 3, outcome: "configuration-updated" });
+    expect(await eventCount()).toBe(2);
+
+    const advance = await handler(3, "profile-advance-key", { ...retryProfile, bio: "Advanced to version four." });
+    expect(advance.status).toBe(200);
+    const replayAfterAdvance = await handler(2, "profile-retry-key", retryProfile);
+    expect(replayAfterAdvance.status).toBe(200);
+    expect(await replayAfterAdvance.json()).toEqual(retryBodies[0]);
+    expect(await eventCount()).toBe(3);
+
+    const changedHash = await handler(2, "profile-retry-key", { ...retryProfile, bio: "Changed body." });
+    expect(changedHash.status).toBe(409);
+    const stale = await handler(2, "profile-stale-key", { ...retryProfile, headline: "Stale attempt" });
+    expect(stale.status).toBe(412);
+    expect(await eventCount()).toBe(3);
+
+    authorized = false;
+    const removedAllowlist = await handler(2, "profile-retry-key", retryProfile);
+    authorized = true;
+    expect(removedAllowlist.status).toBe(403);
+    expect(await eventCount()).toBe(3);
+    const committed = await read();
+    expect(committed).toMatchObject({
+      ok: true,
+      value: { portfolioId: scope.portfolioId, profile: { headline: "Retry-safe update", bio: "Advanced to version four." }, version: 4 },
+    });
+    if (committed.ok) {
+      expect(committed.value.contactChannels).toEqual(values.contactChannels);
+      expect(committed.value.globalCta).toEqual(values.globalCta);
+    }
+    expect(JSON.stringify(committed)).not.toContain(scope.ownerId);
+    expect(JSON.stringify(committed)).not.toContain("integration-session");
+  }, 30_000);
+
+  it.each([
+    ["settings", "update", "portfolio_config.settings", "new.portfolio_id"],
+    ["ledger", "insert", "operations.idempotency_records", "new.operation_scope"],
+    ["outbox", "insert", "operations.outbox_events", "new.event_type"],
+  ] as const)("rolls back profile state, ledger, and outbox when the %s stage fails", async (stage, action, table, conditionColumn) => {
+    const scope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+    const provisioning = createPortfolioSettingsService({ repository, transactions: database.transactions, scope });
+    await provisioning.provision(values);
+    const before = await admin.query(
+      "select version, display_name, headline, bio from portfolio_config.settings where portfolio_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    const eventCount = await admin.query(
+      "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    const actor = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "failure-session" };
+    const security: OwnerRequestSecurity = {
+      appOrigin: "https://example.com",
+      identity: {
+        async resolveActorContext() { return ok(actor); },
+        async authorizeOperation(query) { return decideAuthorization(query); },
+      },
+    };
+    const operations = createPostgresOperationsPersistence(database.database);
+    const commands = createPortfolioProfileCommandService({ repository, operations, scope });
+    const service = createOwnerConfigurationApplicationService(commands, scope.portfolioId);
+    const suffix = `${stage}_${process.pid}_${randomBytes(3).toString("hex")}`;
+    const idempotencyKey = `failure-key-${stage}-${process.pid}`;
+    const trigger = `phase4_profile_fail_${suffix}`;
+    const functionName = `phase4_profile_fail_${suffix}`;
+    const reference = conditionColumn === "new.portfolio_id"
+      ? `new.portfolio_id = '${scope.portfolioId}'::uuid`
+      : conditionColumn === "new.event_type"
+        ? "new.event_type = 'portfolio_configuration.profile_updated.v1'"
+        : "new.operation_scope = 'portfolio-configuration.update-owner-profile'";
+    await admin.query(`create function public.${functionName}() returns trigger language plpgsql as $$ begin raise exception 'synthetic profile ${stage} failure'; end $$`);
+    await admin.query(`create trigger ${trigger} before ${action} on ${table} for each row when (${reference}) execute function public.${functionName}()`);
+    try {
+      const response = await handleUpdateOwnerProfileConfiguration(
+        new Request("https://example.com/api/owner/v1/configuration/profile", {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+            cookie: "sw_owner_session=failure-session-token",
+            origin: "https://example.com",
+            "x-csrf-token": "failure-csrf-proof",
+            "idempotency-key": idempotencyKey,
+            "if-match": '"1"',
+          },
+          body: JSON.stringify({ ...values.profile, bio: `Profile update reaches ${stage}.` }),
+        }),
+        { service, security },
+      );
+      expect(response.status).toBe(500);
+    } finally {
+      await admin.query(`drop trigger if exists ${trigger} on ${table}`);
+      await admin.query(`drop function if exists public.${functionName}()`);
+    }
+    const after = await admin.query(
+      "select version, display_name, headline, bio from portfolio_config.settings where portfolio_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    const eventsAfter = await admin.query(
+      "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    expect(after.rows).toEqual(before.rows);
+    expect(eventsAfter.rows[0].count).toBe(eventCount.rows[0].count);
+    const keyCount = await admin.query(
+      "select count(*)::int as count from operations.idempotency_records where operation_scope = 'portfolio-configuration.update-owner-profile' and key_hash = $1",
+      [createHash("sha256").update(idempotencyKey, "utf8").digest("hex")],
+    );
+    expect(keyCount.rows[0].count).toBe(0);
+  }, 30_000);
 });

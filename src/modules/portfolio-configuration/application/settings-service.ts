@@ -11,7 +11,7 @@ import type {
   ContactChannel,
   GlobalProjectCta,
 } from "../domain/index.js";
-import type { PortfolioConfigurationRepositoryPort, PortfolioScope } from "../ports/index.js";
+import type { PortfolioConfigurationRepositoryPort, PortfolioProfileUpdate, PortfolioScope } from "../ports/index.js";
 import type { GetPortfolioSettingsQuery } from "./service.js";
 
 export interface PortfolioSettingsRepository {
@@ -24,6 +24,12 @@ export interface PortfolioSettingsRepository {
     settings: OwnerPortfolioSettingsView,
     context: TransactionContext,
   ): Promise<Result<OwnerPortfolioSettingsView, Rejection>>;
+  updateProfile(
+    scope: PortfolioScope,
+    profile: PortfolioProfile,
+    expectedVersion: number,
+    context: TransactionContext,
+  ): Promise<Result<PortfolioProfileUpdate, Rejection>>;
 }
 
 export interface PortfolioSettingsProvisioningValues {
