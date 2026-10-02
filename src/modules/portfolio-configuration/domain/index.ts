@@ -6,6 +6,8 @@ export type {
   GlobalProjectCta,
   PortfolioSettings,
   OwnerPortfolioSettingsView,
+  PublicPortfolioCapabilities,
+  PublicGlobalProjectCtaView,
   PublicPortfolioConfigurationView,
   PortfolioProfileUpdatedEvent,
   ContactChannelsUpdatedEvent,

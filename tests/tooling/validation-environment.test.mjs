@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { fingerprint, verifyEnvironment, writeInstallStamp } from "../../scripts/validation-environment.mjs";
+import { fingerprint, observeRuntime, verifyEnvironment, writeInstallStamp } from "../../scripts/validation-environment.mjs";
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "validation-environment-"));
@@ -34,6 +34,14 @@ test("rejects Node 20 and mismatched npm before installation", (t) => {
 test("runtime-only preflight works before dependencies exist", (t) => {
   const { root, runtime } = fixture(t);
   assert.deepEqual(verifyEnvironment(root, runtime, { runtimeOnly: true }), []);
+});
+
+test("reads exact npm from lifecycle metadata without spawning another process", () => {
+  assert.deepEqual(observeRuntime({ npm_config_user_agent: "npm/11.19.0 node/v24.21.0 win32 x64" }), {
+    node: process.versions.node,
+    npm: "11.19.0",
+  });
+  assert.equal(observeRuntime({}).npm, "unknown");
 });
 
 test("rejects missing development dependencies even with an installation stamp", (t) => {
@@ -71,7 +79,11 @@ test("a registry install failure cannot leave a previously ready environment", (
   const cli = join(root, "npm-cli.mjs");
   writeFileSync(cli, 'if (process.argv[2] === "--version") console.log("11.19.0"); else { console.error("HTTP 403"); process.exitCode = 23; }');
   const result = spawnSync(process.execPath, [join(root, "scripts", "setup-validation.mjs")], {
-    cwd: root, encoding: "utf8", env: { ...process.env, npm_execpath: cli },
+    cwd: root, encoding: "utf8", env: {
+      ...process.env,
+      npm_config_user_agent: "npm/11.19.0 node/v24.21.0 win32 x64",
+      npm_execpath: cli,
+    },
   });
   assert.equal(result.status, 23, result.stderr);
   assert.match(result.stderr, /VALIDATION_INSTALL_FAILED/);

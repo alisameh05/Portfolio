@@ -10,9 +10,15 @@ import type {
   PortfolioProfile,
   ContactChannel,
   GlobalProjectCta,
+  PublicPortfolioConfigurationView,
 } from "../domain/index.js";
 import type { PortfolioAggregateUpdate, PortfolioConfigurationRepositoryPort, PortfolioScope } from "../ports/index.js";
-import type { GetPortfolioSettingsQuery } from "./service.js";
+import type {
+  GetPortfolioSettingsQuery,
+  GetPublicConfigurationQuery,
+  PublicPortfolioCapabilityFacts,
+  PublicPortfolioCapabilityReader,
+} from "./service.js";
 
 export interface PortfolioSettingsRepository {
   getSettings(
@@ -54,6 +60,9 @@ export interface PortfolioSettingsApplicationService {
   getSettings(
     query: GetPortfolioSettingsQuery,
   ): Promise<Result<OwnerPortfolioSettingsView, Rejection>>;
+  getPublicConfiguration(
+    query: GetPublicConfigurationQuery,
+  ): Promise<Result<PublicPortfolioConfigurationView, Rejection>>;
 }
 
 /** Private controlled provisioning seam; it is intentionally absent from module barrels and HTTP. */
@@ -183,8 +192,21 @@ export function createPortfolioSettingsReader(input: {
   readonly repository: Pick<PortfolioConfigurationRepositoryPort, "getSettings">;
   readonly transactions: TransactionRunner;
   readonly scope: PortfolioScope;
+  readonly capabilityReader?: PublicPortfolioCapabilityReader;
 }): PortfolioSettingsApplicationService {
-  const { repository, transactions, scope } = input;
+  const { repository, transactions, scope, capabilityReader } = input;
+
+  async function readCapabilityFacts(): Promise<Partial<PublicPortfolioCapabilityFacts> | undefined> {
+    try {
+      return await capabilityReader?.getFacts();
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function getSettingsInTransaction(): Promise<Result<OwnerPortfolioSettingsView, Rejection>> {
+    return transactions.run((context) => repository.getSettings(scope, context));
+  }
 
   return {
     async getSettings(query) {
@@ -195,7 +217,46 @@ export function createPortfolioSettingsReader(input: {
       if (query.portfolioId !== scope.portfolioId) {
         return err({ kind: "forbidden", code: "PORTFOLIO_SCOPE_MISMATCH" });
       }
-      return transactions.run((context) => repository.getSettings(scope, context));
+      return getSettingsInTransaction();
+    },
+    async getPublicConfiguration(query: GetPublicConfigurationQuery) {
+      const settings = await getSettingsInTransaction();
+      if (!settings.ok) return settings;
+
+      const facts = await readCapabilityFacts();
+      const currentCvAvailable = query.locale === "en" && facts?.currentCv === "available";
+      const externalLinksAvailable = query.locale === "en" && facts?.externalLinks === "available";
+      const globalCtaAvailable = facts?.globalProjectCta === "available";
+      const contactChannels = settings.value.contactChannels
+        .filter((channel) => channel.availableLocales.includes(query.locale))
+        .map((channel) => Object.freeze({
+          ...channel,
+          availableLocales: Object.freeze([...channel.availableLocales]),
+        }));
+
+      return {
+        ok: true,
+        value: Object.freeze({
+          locale: query.locale,
+          profile: Object.freeze({ ...settings.value.profile }),
+          contactChannels: Object.freeze(contactChannels),
+          globalCta: globalCtaAvailable
+            ? Object.freeze({
+              availability: "available" as const,
+              label: settings.value.globalCta.label,
+              destination: settings.value.globalCta.destination,
+            })
+            : Object.freeze({
+              availability: "unavailable" as const,
+              label: settings.value.globalCta.label,
+              unavailableFallback: settings.value.globalCta.unavailableFallback,
+            }),
+          capabilities: Object.freeze({
+            currentCvAvailable,
+            externalLinksAvailable,
+          }),
+        }),
+      };
     },
   };
 }

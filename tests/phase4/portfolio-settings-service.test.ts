@@ -72,6 +72,132 @@ describe("Portfolio settings application service", () => {
     expect(reader.getSettings).toBeTypeOf("function");
   });
 
+  it("exposes only locale-eligible public fields and withholds English-only capabilities in Arabic", async () => {
+    const { repository, transactions } = fixture();
+    const committed: PortfolioSettings = { portfolioId, ...initialValues, version: 5 };
+    vi.mocked(repository.getSettings).mockResolvedValue(ok(committed));
+    const reader = createPortfolioSettingsReader({
+      repository,
+      transactions,
+      scope: { portfolioId, ownerId },
+      capabilityReader: {
+        async getFacts() {
+          return {
+            currentCv: "available" as const,
+            externalLinks: "available" as const,
+            globalProjectCta: "unavailable" as const,
+          };
+        },
+      },
+    });
+
+    const result = await reader.getPublicConfiguration({ locale: "ar" });
+
+    expect(result).toEqual(ok({
+      locale: "ar",
+      profile: initialValues.profile,
+      contactChannels: initialValues.contactChannels,
+      globalCta: {
+        availability: "unavailable",
+        label: initialValues.globalCta.label,
+        unavailableFallback: initialValues.globalCta.unavailableFallback,
+      },
+      capabilities: { currentCvAvailable: false, externalLinksAvailable: false },
+    }));
+    expect(repository.getSettings).toHaveBeenCalledWith({ portfolioId, ownerId }, context);
+    expect(JSON.stringify(result)).not.toContain("opaque-session");
+    expect(JSON.stringify(result)).not.toContain("version");
+    expect(JSON.stringify(result)).not.toContain(String(ownerId));
+    expect(JSON.stringify(result)).not.toContain(String(portfolioId));
+    expect(JSON.stringify(result)).not.toContain(initialValues.globalCta.destination);
+  });
+
+  it("preserves channel order in each locale and reports only available English capabilities", async () => {
+    const { repository, transactions } = fixture();
+    const channels = [
+      { channel: "email" as const, label: "Email", destination: "mailto:ali@example.com", availableLocales: ["en"] as const },
+      { channel: "phone" as const, label: "Phone", destination: "tel:+201234567890", availableLocales: ["ar"] as const },
+      { channel: "linkedin" as const, label: "LinkedIn", destination: "https://www.linkedin.com/in/ali", availableLocales: ["en", "ar"] as const },
+    ];
+    vi.mocked(repository.getSettings).mockResolvedValue(ok({ ...initialValues, portfolioId, contactChannels: channels, version: 8 }));
+    const reader = createPortfolioSettingsReader({
+      repository,
+      transactions,
+      scope: { portfolioId, ownerId },
+      capabilityReader: {
+        async getFacts() {
+          return { currentCv: "available" as const, externalLinks: "unknown" as const, globalProjectCta: "available" as const };
+        },
+      },
+    });
+
+    const english = await reader.getPublicConfiguration({ locale: "en" });
+    const arabic = await reader.getPublicConfiguration({ locale: "ar" });
+
+    expect(english).toMatchObject({
+      ok: true,
+      value: {
+        contactChannels: [channels[0], channels[2]],
+        globalCta: { availability: "available", destination: initialValues.globalCta.destination },
+        capabilities: { currentCvAvailable: true, externalLinksAvailable: false },
+      },
+    });
+    expect(arabic).toMatchObject({
+      ok: true,
+      value: {
+        contactChannels: [channels[1], channels[2]],
+        capabilities: { currentCvAvailable: false, externalLinksAvailable: false },
+      },
+    });
+  });
+
+  it("keeps the public settings read available when capability lookup fails", async () => {
+    const { repository, transactions } = fixture();
+    vi.mocked(repository.getSettings).mockResolvedValue(ok({ portfolioId, ...initialValues, version: 9 }));
+    const reader = createPortfolioSettingsReader({
+      repository,
+      transactions,
+      scope: { portfolioId, ownerId },
+      capabilityReader: { async getFacts() { throw new Error("private provider failure"); } },
+    });
+
+    const result = await reader.getPublicConfiguration({ locale: "en" });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        profile: initialValues.profile,
+        capabilities: { currentCvAvailable: false, externalLinksAvailable: false },
+        globalCta: {
+          availability: "unavailable",
+          unavailableFallback: initialValues.globalCta.unavailableFallback,
+        },
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("private provider failure");
+    expect(JSON.stringify(result)).not.toContain(initialValues.globalCta.destination);
+  });
+
+  it("treats capabilities as unavailable when no exported facts are implemented", async () => {
+    const { repository, transactions } = fixture();
+    vi.mocked(repository.getSettings).mockResolvedValue(ok({ portfolioId, ...initialValues, version: 1 }));
+    const reader = createPortfolioSettingsReader({ repository, transactions, scope: { portfolioId, ownerId } });
+
+    const result = await reader.getPublicConfiguration({ locale: "en" });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        capabilities: { currentCvAvailable: false, externalLinksAvailable: false },
+        globalCta: {
+          availability: "unavailable",
+          unavailableFallback: initialValues.globalCta.unavailableFallback,
+        },
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(initialValues.globalCta.destination);
+  });
+
   const deniedActors: readonly (readonly [string, ActorContext])[] = [
     ["visitor", { kind: "visitor", consent: "unknown" }],
     ["different Owner", { kind: "owner", ownerId: otherOwnerId, sessionId: "opaque-session" }],

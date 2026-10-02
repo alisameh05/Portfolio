@@ -76,6 +76,23 @@ export interface PortfolioSettings {
  */
 export type OwnerPortfolioSettingsView = PortfolioSettings;
 
+export interface PublicPortfolioCapabilities {
+  readonly currentCvAvailable: boolean;
+  readonly externalLinksAvailable: boolean;
+}
+
+export type PublicGlobalProjectCtaView =
+  | {
+    readonly availability: "available";
+    readonly label: string;
+    readonly destination: string;
+  }
+  | {
+    readonly availability: "unavailable";
+    readonly label: string;
+    readonly unavailableFallback: string;
+  };
+
 /**
  * Narrow locale-aware public configuration view. Contains only approved
  * public fields for one locale; private Owner/session material is excluded.
@@ -85,7 +102,9 @@ export interface PublicPortfolioConfigurationView {
   readonly profile: PortfolioProfile;
   /** Channels filtered to the requested locale, order preserved. */
   readonly contactChannels: readonly ContactChannel[];
-  readonly globalCta: GlobalProjectCta;
+  /** An unavailable CTA exposes its safe fallback, never its destination. */
+  readonly globalCta: PublicGlobalProjectCtaView;
+  readonly capabilities: PublicPortfolioCapabilities;
   readonly locale: SupportedLocale;
 }
 

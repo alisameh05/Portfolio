@@ -16,11 +16,9 @@
  *     the exact versions in `package.json#devDependencies`
  *   - `docs/phase1-versions.md` must exist and mention every pinned package
  *
- * Runtime observation (recorded, warn-only):
- *   - current `process.version` and `npm --version` are recorded. A major
- *     Node mismatch against the pinned 24.21.0 LTS is reported as a warning
- *     so the gate remains runnable on Windows dev machines, while CI uses
- *     the exact pinned runtime.
+ * Runtime observation (required):
+ *   - current `process.version` and `npm --version` must exactly equal the
+ *     Node and npm pins. A different major, minor, or patch fails the gate.
  *
  * Exits non-zero when any pin check fails. Emits no network, database, or
  * credential access.
@@ -54,6 +52,9 @@ function installedVersion(packageName) {
 }
 
 function npmVersion() {
+  const userAgent = process.env.npm_config_user_agent ?? process.env.NPM_CONFIG_USER_AGENT;
+  const reportedVersion = userAgent?.match(/(?:^|\s)npm\/([^\s]+)/)?.[1];
+  if (reportedVersion !== undefined) return reportedVersion;
   try {
     return execSync("npm --version", { cwd: ROOT, encoding: "utf8" }).trim();
   } catch {
@@ -61,7 +62,7 @@ function npmVersion() {
   }
 }
 
-export function verifyToolchain(root = ROOT) {
+export function verifyToolchain(root = ROOT, observedRuntime) {
   const failures = [];
   const warnings = [];
 
@@ -120,14 +121,15 @@ export function verifyToolchain(root = ROOT) {
     }
   }
 
-  const runtime = {
+  const runtime = observedRuntime ?? {
     node: process.version,
     npm: npmVersion() ?? "unknown",
   };
-  if (expectedNode && !runtime.node.startsWith(`v${expectedNode.split(".")[0]}.`)) {
-    warnings.push(
-      `runtime ${runtime.node} differs from pinned Node ${expectedNode}; CI uses ${expectedNode}`,
-    );
+  if (expectedNode && runtime.node !== `v${expectedNode}`) {
+    failures.push(`runtime node (${runtime.node}) must equal pinned Node ${expectedNode}`);
+  }
+  if (expectedNpm && runtime.npm !== expectedNpm) {
+    failures.push(`runtime npm (${runtime.npm}) must equal pinned npm ${expectedNpm}`);
   }
 
   const manifest = {
