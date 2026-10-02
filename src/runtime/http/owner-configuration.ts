@@ -80,6 +80,7 @@ export interface UpdateOwnerGlobalProjectCtaApplicationCommand {
   readonly actor: ActorContext;
   readonly idempotencyKey: IdempotencyKey;
   readonly expectedVersion: number;
+  readonly correlationId: string;
   readonly label: string;
   readonly destination: string;
   readonly unavailableFallback: string;
@@ -351,6 +352,7 @@ export async function handleUpdateOwnerGlobalProjectCta(
       actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
+      correlationId: traceId,
       label: bodyResult.data.label,
       destination: bodyResult.data.destination,
       unavailableFallback: bodyResult.data.unavailableFallback,

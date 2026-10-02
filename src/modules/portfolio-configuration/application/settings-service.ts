@@ -36,6 +36,12 @@ export interface PortfolioSettingsRepository {
     expectedVersion: number,
     context: TransactionContext,
   ): Promise<Result<PortfolioAggregateUpdate, Rejection>>;
+  updateGlobalCta(
+    scope: PortfolioScope,
+    globalCta: GlobalProjectCta,
+    expectedVersion: number,
+    context: TransactionContext,
+  ): Promise<Result<PortfolioAggregateUpdate, Rejection>>;
 }
 
 export interface PortfolioSettingsProvisioningValues {
@@ -124,6 +130,19 @@ function validChannelDestination(channel: ContactChannel["channel"], destination
   }
 }
 
+function safeGlobalCtaDestination(value: unknown): boolean {
+  if (typeof value !== "string" || value.includes("\\")) return false;
+  const url = secureWebDestination(value);
+  return url !== undefined && url.hostname.includes(".");
+}
+
+export function isValidGlobalProjectCta(value: unknown): value is GlobalProjectCta {
+  if (value === null || typeof value !== "object") return false;
+  const cta = value as Partial<GlobalProjectCta>;
+  return meaningfulText(cta.label, 80) && safeGlobalCtaDestination(cta.destination) &&
+    meaningfulText(cta.unavailableFallback, 160) && !/[<>]/.test(cta.unavailableFallback);
+}
+
 /** Validate a replacement list identically for controlled provisioning and Owner updates. */
 export function invalidContactChannelsField(channels: unknown): string | undefined {
   if (!Array.isArray(channels) || channels.length > 20) return "contactChannels";
@@ -156,12 +175,7 @@ function validateValues(values: PortfolioSettingsProvisioningValues): string | u
   if (!meaningfulText(profile.bio, 4000)) return "profile.bio";
   const invalidChannelField = invalidContactChannelsField(contactChannels);
   if (invalidChannelField !== undefined) return invalidChannelField;
-  if (!meaningfulText(globalCta.label, 80)) return "globalCta.label";
-  if (secureWebDestination(globalCta.destination) === undefined) return "globalCta.destination";
-  if (
-    !meaningfulText(globalCta.unavailableFallback, 160) ||
-    /[<>]/.test(globalCta.unavailableFallback)
-  ) return "globalCta.unavailableFallback";
+  if (!isValidGlobalProjectCta(globalCta)) return "globalCta";
   return undefined;
 }
 

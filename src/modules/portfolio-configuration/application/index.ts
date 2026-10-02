@@ -21,3 +21,7 @@ export {
   type PortfolioContactChannelsCommandService,
   type PortfolioContactChannelsCommandReceipt,
 } from "./contact-channels-command.js";
+export {
+  createPortfolioGlobalCtaCommandService,
+  type PortfolioGlobalCtaCommandService,
+} from "./cta-command.js";

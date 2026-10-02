@@ -42,6 +42,10 @@ export {
   type PortfolioContactChannelsCommandService,
   type PortfolioContactChannelsCommandReceipt,
 } from "./application/index.js";
+export {
+  createPortfolioGlobalCtaCommandService,
+  type PortfolioGlobalCtaCommandService,
+} from "./application/index.js";
 
 export type {
   PortfolioScope,

@@ -161,8 +161,9 @@ describe("Owner Configuration adapter (#29)", () => {
     );
     expect(response.status).toBe(200);
     expect(fake.calls.updateOwnerGlobalProjectCta).toHaveLength(1);
-    const command = fake.calls.updateOwnerGlobalProjectCta[0] as { label: string };
+    const command = fake.calls.updateOwnerGlobalProjectCta[0] as { label: string; correlationId: string };
     expect(command.label).toBe("Discuss this project");
+    expect(command.correlationId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     const body = (await response.json()) as unknown;
     expect(zUpdateOwnerGlobalProjectCtaResponse.safeParse(body).success).toBe(true);
   });
@@ -349,6 +350,7 @@ describe("Owner Configuration adapter (#29)", () => {
         actor: owner as never,
         idempotencyKey: IDEMPOTENCY_KEY as never,
         expectedVersion: 3,
+        correlationId: "test-correlation",
         label: "Discuss this project",
         destination: "https://example.com/contact",
         unavailableFallback: "Use another Contact channel.",

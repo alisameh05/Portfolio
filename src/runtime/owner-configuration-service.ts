@@ -1,6 +1,7 @@
 import type { Rejection, Result, StableId } from "../shared/domain/index.js";
 import type {
   PortfolioContactChannelsCommandService,
+  PortfolioGlobalCtaCommandService,
   PortfolioProfileCommandService,
 } from "../modules/portfolio-configuration/index.js";
 import type {
@@ -11,15 +12,11 @@ import type {
   UpdateOwnerProfileApplicationCommand,
 } from "./http/owner-configuration.js";
 
-const notImplemented: Rejection = {
-  kind: "temporarily_unavailable",
-  code: "RUNTIME_NOT_IMPLEMENTED",
-};
-
-/** Runtime translation for the configuration commands activated by Phase 4 #84 and #85. */
+/** Runtime translation for the secured profile, channel, and CTA commands. */
 export function createOwnerConfigurationApplicationService(
   profileCommands: PortfolioProfileCommandService,
   contactChannelsCommands: PortfolioContactChannelsCommandService,
+  ctaCommands: PortfolioGlobalCtaCommandService,
   portfolioId: StableId<"Portfolio">,
 ): OwnerConfigurationApplicationService {
   return {
@@ -54,9 +51,20 @@ export function createOwnerConfigurationApplicationService(
       });
     },
     async updateOwnerGlobalProjectCta(
-      _command: UpdateOwnerGlobalProjectCtaApplicationCommand,
+      command: UpdateOwnerGlobalProjectCtaApplicationCommand,
     ): Promise<Result<OwnerConfigurationReceipt, Rejection>> {
-      return { ok: false, error: notImplemented };
+      return ctaCommands.updateGlobalCta({
+        actor: command.actor,
+        portfolioId,
+        idempotencyKey: command.idempotencyKey,
+        expectedVersion: command.expectedVersion,
+        correlationId: command.correlationId,
+        globalCta: {
+          label: command.label,
+          destination: command.destination,
+          unavailableFallback: command.unavailableFallback,
+        },
+      });
     },
   };
 }

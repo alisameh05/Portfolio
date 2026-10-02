@@ -1,6 +1,6 @@
 import type { Result, Rejection, StableId } from "@shared/domain";
 import type { TransactionContext } from "../../../runtime/ports.js";
-import type { ContactChannel, PortfolioProfile, PortfolioSettings } from "../domain/index.js";
+import type { ContactChannel, GlobalProjectCta, PortfolioProfile, PortfolioSettings } from "../domain/index.js";
 
 export interface PortfolioAggregateUpdate {
   readonly aggregateVersion: number;
@@ -45,6 +45,12 @@ export interface PortfolioConfigurationRepositoryPort {
   updateContactChannels(
     scope: PortfolioScope,
     channels: readonly ContactChannel[],
+    expectedVersion: number,
+    context: TransactionContext,
+  ): Promise<Result<PortfolioAggregateUpdate, Rejection>>;
+  updateGlobalCta(
+    scope: PortfolioScope,
+    globalCta: GlobalProjectCta,
     expectedVersion: number,
     context: TransactionContext,
   ): Promise<Result<PortfolioAggregateUpdate, Rejection>>;
