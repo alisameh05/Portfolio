@@ -32,8 +32,14 @@ export {
   createPortfolioSettingsReader,
   type PortfolioSettingsApplicationService,
 } from "./application/index.js";
+export {
+  createPortfolioProfileCommandService,
+  type PortfolioProfileCommandService,
+  type PortfolioProfileCommandReceipt,
+} from "./application/index.js";
 
 export type {
   PortfolioScope,
   PortfolioConfigurationRepositoryPort,
+  PortfolioProfileUpdate,
 } from "./ports/index.js";

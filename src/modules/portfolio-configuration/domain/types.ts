@@ -92,7 +92,10 @@ export interface PublicPortfolioConfigurationView {
 export type PortfolioProfileUpdatedEvent = DomainEvent<
   "portfolio_configuration.profile_updated.v1",
   {
-    readonly profile: PortfolioProfile;
+    /** Changed field names only; never copy the full biography into the outbox. */
+    readonly changedFields: readonly (keyof PortfolioProfile)[];
+    /** One-way stable Owner scope digest; raw Owner and provider identities stay private. */
+    readonly ownerScope: string;
   }
 >;
 

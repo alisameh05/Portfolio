@@ -23,12 +23,15 @@ import {
 } from "./configuration.js";
 import { RuntimeConfigError } from "./configuration.js";
 import type { OperationsPersistencePorts } from "../modules/portability-operations/application/index.js";
+import type { OwnerConfigurationApplicationService } from "../runtime/http/owner-configuration.js";
 import type { LifecycleResource, ReadinessCheck } from "../runtime/ports.js";
+import { parseStableId } from "../shared/domain/index.js";
 
 export type { RuntimeConfig } from "./configuration.js";
 
 let current: RuntimeConfig | undefined;
 let currentOperations: OperationsPersistencePorts | undefined;
+let currentOwnerConfiguration: OwnerConfigurationApplicationService | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -53,6 +56,7 @@ export interface DatabaseRuntimeState extends RuntimeConfig {
 
 export interface DatabaseRuntimeDependencies {
   readonly operations: OperationsPersistencePorts;
+  readonly ownerConfiguration?: OwnerConfigurationApplicationService;
   readonly resource: LifecycleResource;
   readonly readiness: ReadinessCheck;
 }
@@ -94,9 +98,47 @@ export async function initializeDatabaseRuntime(
             import("../shared/adapters/postgres/runtime.js"),
             import("../modules/portability-operations/adapters/postgres-operations.js"),
           ]);
+        const configuredScope = runtimeKind === "application"
+          ? {
+            portfolioId: parseStableId("Portfolio", env["PORTFOLIO_ID"] ?? ""),
+            ownerId: parseStableId("Owner", env["OWNER_ID"] ?? ""),
+          }
+          : undefined;
+        if (configuredScope !== undefined && !configuredScope.portfolioId.ok) {
+          throw new RuntimeConfigError("PORTFOLIO_ID", "must be a configured UUIDv7 identity");
+        }
+        if (configuredScope !== undefined && !configuredScope.ownerId.ok) {
+          throw new RuntimeConfigError("OWNER_ID", "must be a configured UUIDv7 identity");
+        }
         const database = createPostgresRuntimeDatabase(databaseUrl);
+        const operations = createPostgresOperationsPersistence(database.database);
+        let ownerConfiguration: OwnerConfigurationApplicationService | undefined;
+        if (runtimeKind === "application") {
+          if (configuredScope === undefined || !configuredScope.portfolioId.ok || !configuredScope.ownerId.ok) {
+            throw new RuntimeConfigError("PORTFOLIO_ID", "must be configured for Owner profile commands");
+          }
+          const [
+            { createPostgresPortfolioSettingsRepository },
+            { createPortfolioProfileCommandService },
+            { createOwnerConfigurationApplicationService },
+          ] = await Promise.all([
+            import("../modules/portfolio-configuration/adapters/postgres-settings.js"),
+            import("../modules/portfolio-configuration/application/profile-command.js"),
+            import("../runtime/owner-configuration-service.js"),
+          ]);
+          const profileCommands = createPortfolioProfileCommandService({
+            repository: createPostgresPortfolioSettingsRepository(),
+            operations,
+            scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
+          });
+          ownerConfiguration = createOwnerConfigurationApplicationService(
+            profileCommands,
+            configuredScope.portfolioId.value,
+          );
+        }
         return {
-          operations: createPostgresOperationsPersistence(database.database),
+          operations,
+          ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
           resource: database.resource,
           readiness: database.readiness,
         };
@@ -116,6 +158,7 @@ export async function initializeDatabaseRuntime(
     lifecycle.registerReadinessCheck(dependencies.readiness);
     current = config;
     currentOperations = dependencies.operations;
+    currentOwnerConfiguration = dependencies.ownerConfiguration;
     lifecycle.markReady();
     return Object.freeze({ ...config, runtimeKind });
   } catch (error) {
@@ -129,6 +172,13 @@ export function getOperationsPersistence(): OperationsPersistencePorts {
     throw new Error("Database persistence is not initialized.");
   }
   return currentOperations;
+}
+
+/** Real profile updates are available after database composition; other configuration commands stay fail closed. */
+export async function getOwnerConfigurationApplicationService(): Promise<OwnerConfigurationApplicationService> {
+  if (currentOwnerConfiguration !== undefined) return currentOwnerConfiguration;
+  const { createProductionOwnerConfigurationService } = await import("../runtime/fakes/owner-configuration.js");
+  return createProductionOwnerConfigurationService();
 }
 
 export function getRuntimeConfig(): RuntimeConfig {
@@ -146,5 +196,6 @@ export function isRuntimeInitialized(): boolean {
 export function resetRuntimeForTests(): void {
   current = undefined;
   currentOperations = undefined;
+  currentOwnerConfiguration = undefined;
   resetLifecycleForTests();
 }

@@ -3,9 +3,10 @@ import { err } from "@shared/domain";
 import type { TransactionContext } from "../../../runtime/ports.js";
 import type {
   PortfolioConfigurationRepositoryPort,
+  PortfolioProfileUpdate,
   PortfolioScope,
 } from "../ports/index.js";
-import type { PortfolioSettings } from "../domain/index.js";
+import type { PortfolioProfile, PortfolioSettings } from "../domain/index.js";
 
 export { createPostgresPortfolioSettingsRepository } from "./postgres-settings.js";
 
@@ -38,5 +39,14 @@ export class StubPortfolioConfigurationRepository
       kind: "temporarily_unavailable",
       code: "PERSISTENCE_NOT_IMPLEMENTED",
     });
+  }
+
+  async updateProfile(
+    _scope: PortfolioScope,
+    _profile: PortfolioProfile,
+    _expectedVersion: number,
+    _context: TransactionContext,
+  ): Promise<Result<PortfolioProfileUpdate, Rejection>> {
+    return err({ kind: "temporarily_unavailable", code: "PERSISTENCE_NOT_IMPLEMENTED" });
   }
 }

@@ -59,6 +59,8 @@ export interface UpdateOwnerProfileApplicationCommand {
   readonly actor: ActorContext;
   readonly idempotencyKey: IdempotencyKey;
   readonly expectedVersion: number;
+  readonly correlationId: string;
+  readonly causationId?: string;
   readonly displayName: string;
   readonly headline: string;
   readonly bio: string;
@@ -231,6 +233,7 @@ export async function handleUpdateOwnerProfileConfiguration(
       actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
+      correlationId: traceId,
       displayName: bodyResult.data.displayName,
       headline: bodyResult.data.headline,
       bio: bodyResult.data.bio,

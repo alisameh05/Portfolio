@@ -11,3 +11,8 @@ export {
   createPortfolioSettingsReader,
   type PortfolioSettingsApplicationService,
 } from "./settings-service.js";
+export {
+  createPortfolioProfileCommandService,
+  type PortfolioProfileCommandService,
+  type PortfolioProfileCommandReceipt,
+} from "./profile-command.js";

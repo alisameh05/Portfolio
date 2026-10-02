@@ -1,6 +1,12 @@
 import type { Result, Rejection, StableId } from "@shared/domain";
 import type { TransactionContext } from "../../../runtime/ports.js";
-import type { PortfolioSettings } from "../domain/index.js";
+import type { PortfolioProfile, PortfolioSettings } from "../domain/index.js";
+
+export interface PortfolioProfileUpdate {
+  readonly aggregateVersion: number;
+  /** Database transaction timestamp used by the matching audit event. */
+  readonly updatedAt: string;
+}
 
 /**
  * Explicit configured-Portfolio scope. The server resolves the stable
@@ -30,4 +36,10 @@ export interface PortfolioConfigurationRepositoryPort {
     expectedVersion: number,
     context: TransactionContext,
   ): Promise<Result<PortfolioSettings, Rejection>>;
+  updateProfile(
+    scope: PortfolioScope,
+    profile: PortfolioProfile,
+    expectedVersion: number,
+    context: TransactionContext,
+  ): Promise<Result<PortfolioProfileUpdate, Rejection>>;
 }

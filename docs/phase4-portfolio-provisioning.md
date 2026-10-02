@@ -34,6 +34,34 @@ Set `DATABASE_URL` to the restricted application database URL and run:
 node scripts/provision-portfolio-settings.mjs <path-to-settings-json>
 ```
 
+For the database-enabled application runtime, set `PORTFOLIO_ID` and `OWNER_ID`
+to the same UUIDv7 values used in the provisioning file. The Owner identity
+resolved from each verified session must match `OWNER_ID`.
+
+The profile command writes a minimal outbox fact. Identifiers and timestamps
+below are placeholders; the Owner scope value is a one-way digest. Profile text,
+raw Owner IDs, session IDs, and provider usernames are not copied into the event.
+
+```json
+{
+  "eventId": "<stable UUIDv7 domain-event ID>",
+  "eventType": "portfolio_configuration.profile_updated.v1",
+  "aggregateId": "<configured Portfolio UUIDv7>",
+  "aggregateVersion": 2,
+  "payload": {
+    "version": 1,
+    "value": {
+      "changedFields": ["headline"],
+      "ownerScope": "<sha256 stable Owner scope>"
+    }
+  },
+  "correlationId": "<request correlation ID>",
+  "causationId": null,
+  "occurredAt": "<transaction timestamp>",
+  "availableAt": "<same transaction timestamp>"
+}
+```
+
 Provisioning validates the profile bounds, ordered channel count and locale
 values, channel-specific safe destinations, and CTA fallback text. Empty
 Contact channel lists are valid. A second or concurrent attempt returns a
