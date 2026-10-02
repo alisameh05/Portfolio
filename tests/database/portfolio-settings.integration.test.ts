@@ -748,8 +748,9 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     const invalidUpdates = [
       [{ ...values.globalCta, destination: "http://example.com/contact" }, 422],
       [{ ...values.globalCta, label: "" }, 400],
+      [{ ...values.globalCta, label: " " }, 422],
       [{ ...values.globalCta, label: "x".repeat(81) }, 400],
-      [{ ...values.globalCta, unavailableFallback: " " }, 400],
+      [{ ...values.globalCta, unavailableFallback: " " }, 422],
       [{ ...values.globalCta, unavailableFallback: "x".repeat(161) }, 400],
     ] as const;
     for (const [index, [invalidCta, status]] of invalidUpdates.entries()) {
