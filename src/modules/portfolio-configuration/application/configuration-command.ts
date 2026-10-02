@@ -1,5 +1,6 @@
 import { err, parseStableId, type ActorContext, type IdempotencyKey, type Rejection, type Result, type StableId } from "@shared/domain";
 import { hashCanonicalRequest } from "../../../shared/application/idempotency.js";
+import type { CanonicalValue } from "../../../shared/application/idempotency.js";
 import type { Clock, StableIdGenerator, TransactionContext } from "../../../runtime/ports.js";
 import { createSystemClock, createSystemIdGenerator } from "../../../runtime/ports.js";
 import type { OperationsPersistencePorts, SafeResultEnvelope, VersionedPayload } from "../../portability-operations/index.js";
@@ -47,7 +48,7 @@ export async function executePortfolioConfigurationCommand<T>(input: {
   readonly invalidCode: string;
   readonly request: unknown;
   /** Operation-specific canonical form; keep persisted retry hashes stable across versions. */
-  readonly idempotencyRequest: unknown;
+  readonly idempotencyRequest: CanonicalValue;
   readonly isValid: (request: unknown) => request is T;
   readonly apply: (request: T, context: TransactionContext) => Promise<Result<PortfolioAggregateUpdate, Rejection>>;
   readonly event: (before: PortfolioSettings, request: T, ownerScope: string) => VersionedPayload;

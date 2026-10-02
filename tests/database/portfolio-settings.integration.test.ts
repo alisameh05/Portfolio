@@ -778,9 +778,9 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     const reader = createPortfolioSettingsReader({ repository, transactions: database.transactions, scope });
     const read = () => reader.getSettings({ actor, portfolioId: scope.portfolioId });
     const committed = await read();
-    expect(committed.ok && committed.value.version).toBe(2);
-    expect(committed.ok && [nextLeft.label, nextRight.label]).toContain(committed.value.globalCta.label);
     if (!committed.ok) throw new Error("CTA settings did not commit.");
+    expect(committed.value.version).toBe(2);
+    expect([nextLeft.label, nextRight.label]).toContain(committed.value.globalCta.label);
     const winning = committed.value.globalCta.label === nextLeft.label
       ? { key: `cta-left-${process.pid}`, value: nextLeft }
       : { key: `cta-right-${process.pid}`, value: nextRight };
