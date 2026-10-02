@@ -115,11 +115,11 @@ export async function initializeDatabaseRuntime(
         let ownerConfiguration: OwnerConfigurationApplicationService | undefined;
         if (runtimeKind === "application") {
           if (configuredScope === undefined || !configuredScope.portfolioId.ok || !configuredScope.ownerId.ok) {
-            throw new RuntimeConfigError("PORTFOLIO_ID", "must be configured for Owner profile commands");
+            throw new RuntimeConfigError("PORTFOLIO_ID", "must be configured for Owner configuration commands");
           }
           const [
             { createPostgresPortfolioSettingsRepository },
-            { createPortfolioProfileCommandService },
+            { createPortfolioProfileCommandService, createPortfolioGlobalCtaCommandService },
             { createOwnerConfigurationApplicationService },
           ] = await Promise.all([
             import("../modules/portfolio-configuration/adapters/postgres-settings.js"),
@@ -131,8 +131,14 @@ export async function initializeDatabaseRuntime(
             operations,
             scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
           });
+          const ctaCommands = createPortfolioGlobalCtaCommandService({
+            repository: createPostgresPortfolioSettingsRepository(),
+            operations,
+            scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
+          });
           ownerConfiguration = createOwnerConfigurationApplicationService(
             profileCommands,
+            ctaCommands,
             configuredScope.portfolioId.value,
           );
         }
@@ -174,7 +180,7 @@ export function getOperationsPersistence(): OperationsPersistencePorts {
   return currentOperations;
 }
 
-/** Real profile updates are available after database composition; other configuration commands stay fail closed. */
+/** Database composition activates only configuration commands with completed phase tickets. */
 export async function getOwnerConfigurationApplicationService(): Promise<OwnerConfigurationApplicationService> {
   if (currentOwnerConfiguration !== undefined) return currentOwnerConfiguration;
   const { createProductionOwnerConfigurationService } = await import("../runtime/fakes/owner-configuration.js");

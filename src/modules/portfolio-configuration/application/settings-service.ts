@@ -30,6 +30,12 @@ export interface PortfolioSettingsRepository {
     expectedVersion: number,
     context: TransactionContext,
   ): Promise<Result<PortfolioProfileUpdate, Rejection>>;
+  updateGlobalCta(
+    scope: PortfolioScope,
+    globalCta: GlobalProjectCta,
+    expectedVersion: number,
+    context: TransactionContext,
+  ): Promise<Result<PortfolioProfileUpdate, Rejection>>;
 }
 
 export interface PortfolioSettingsProvisioningValues {
@@ -77,12 +83,31 @@ function secureWebDestination(value: unknown): URL | undefined {
       host.endsWith(".localhost") ||
       host.endsWith(".local") ||
       /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) ||
+      !host.includes(".") ||
       host.startsWith("[")
     ) return undefined;
     return url;
   } catch {
     return undefined;
   }
+}
+
+function safeGlobalCtaDestination(value: unknown): boolean {
+  // Reject parser-normalized backslashes and single-label hosts on the CTA
+  // path, where the Owner-configured destination is used as a direct link.
+  if (typeof value !== "string" || value.includes("\\")) return false;
+  const url = secureWebDestination(value);
+  return url !== undefined && url.hostname.includes(".");
+}
+
+/** Strict shared validation for the single portfolio-wide CTA destination and fallback. */
+export function isValidGlobalProjectCta(value: unknown): value is GlobalProjectCta {
+  if (value === null || typeof value !== "object") return false;
+  const cta = value as Partial<GlobalProjectCta>;
+  return meaningfulText(cta.label, 80) &&
+    safeGlobalCtaDestination(cta.destination) &&
+    meaningfulText(cta.unavailableFallback, 160) &&
+    !/[<>]/.test(cta.unavailableFallback);
 }
 
 function validChannelDestination(channel: ContactChannel["channel"], destination: unknown): boolean {
@@ -120,12 +145,7 @@ function validateValues(values: PortfolioSettingsProvisioningValues): string | u
       locales.some((locale) => locale !== "en" && locale !== "ar")
     ) return `contactChannels.${index}.availableLocales`;
   }
-  if (!meaningfulText(globalCta.label, 80)) return "globalCta.label";
-  if (secureWebDestination(globalCta.destination) === undefined) return "globalCta.destination";
-  if (
-    !meaningfulText(globalCta.unavailableFallback, 160) ||
-    /[<>]/.test(globalCta.unavailableFallback)
-  ) return "globalCta.unavailableFallback";
+  if (!isValidGlobalProjectCta(globalCta)) return "globalCta";
   return undefined;
 }
 

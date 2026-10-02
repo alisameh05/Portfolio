@@ -6,7 +6,7 @@ import type {
   PortfolioProfileUpdate,
   PortfolioScope,
 } from "../ports/index.js";
-import type { PortfolioProfile, PortfolioSettings } from "../domain/index.js";
+import type { GlobalProjectCta, PortfolioProfile, PortfolioSettings } from "../domain/index.js";
 
 export { createPostgresPortfolioSettingsRepository } from "./postgres-settings.js";
 
@@ -44,6 +44,15 @@ export class StubPortfolioConfigurationRepository
   async updateProfile(
     _scope: PortfolioScope,
     _profile: PortfolioProfile,
+    _expectedVersion: number,
+    _context: TransactionContext,
+  ): Promise<Result<PortfolioProfileUpdate, Rejection>> {
+    return err({ kind: "temporarily_unavailable", code: "PERSISTENCE_NOT_IMPLEMENTED" });
+  }
+
+  async updateGlobalCta(
+    _scope: PortfolioScope,
+    _globalCta: GlobalProjectCta,
     _expectedVersion: number,
     _context: TransactionContext,
   ): Promise<Result<PortfolioProfileUpdate, Rejection>> {

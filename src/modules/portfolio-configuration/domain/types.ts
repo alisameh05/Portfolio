@@ -109,6 +109,9 @@ export type ContactChannelsUpdatedEvent = DomainEvent<
 export type GlobalProjectCtaUpdatedEvent = DomainEvent<
   "portfolio_configuration.cta_updated.v1",
   {
-    readonly globalCta: GlobalProjectCta;
+    /** Changed field names only; destinations and fallback text are not copied into audit history. */
+    readonly changedFields: readonly (keyof GlobalProjectCta)[];
+    /** One-way stable Owner scope digest; raw Owner and provider identities stay private. */
+    readonly ownerScope: string;
   }
 >;

@@ -6,8 +6,10 @@ import { createStableId, err, ok } from "../../src/shared/domain/index.js";
 import { decideAuthorization } from "../../src/modules/identity-access/index.js";
 import { createOwnerConfigurationApplicationService } from "../../src/runtime/owner-configuration-service.js";
 import { handleUpdateOwnerProfileConfiguration } from "../../src/runtime/http/owner-configuration.js";
+import { handleUpdateOwnerGlobalProjectCta } from "../../src/runtime/http/owner-configuration.js";
 import type { OwnerRequestSecurity } from "../../src/runtime/http/owner-security.js";
 import { createPortfolioProfileCommandService } from "../../src/modules/portfolio-configuration/application/profile-command.js";
+import { createPortfolioGlobalCtaCommandService } from "../../src/modules/portfolio-configuration/application/cta-command.js";
 import {
   createPortfolioSettingsService,
   createPortfolioSettingsReader,
@@ -206,7 +208,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     const byRole = new Map(privileges.rows.map((row) => [row.role_name, row]));
     expect(byRole.get("shipwithali_application")).toMatchObject({
       schema_usage: true, can_select: true, can_insert: true,
-      can_update_profile: true, can_update_cta: false, can_update_identity: false,
+      can_update_profile: true, can_update_cta: true, can_update_identity: false,
     });
     for (const role of ["shipwithali_worker", "shipwithali_backup", "anon", "authenticated"]) {
       expect(byRole.get(role)).toMatchObject({
@@ -231,6 +233,34 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
       expect(privileges.rows).toEqual([
         { can_update: false }, { can_update: false }, { can_update: false },
         { can_update: false }, { can_update: false },
+      ]);
+    } finally {
+      await admin.query("rollback");
+    }
+  });
+
+  it("can independently roll back only the Global project CTA column grants", async () => {
+    await admin.query("begin");
+    try {
+      await admin.query(`
+        revoke update (global_cta_label, global_cta_destination, global_cta_unavailable_fallback)
+          on portfolio_config.settings from shipwithali_application
+      `);
+      const privileges = await admin.query(`
+        select column_name,
+               has_column_privilege('shipwithali_application', 'portfolio_config.settings', column_name, 'UPDATE') as can_update
+          from unnest(array[
+            'global_cta_label', 'global_cta_destination', 'global_cta_unavailable_fallback',
+            'display_name', 'headline', 'bio'
+          ]) as column_name
+      `);
+      expect(privileges.rows).toEqual([
+        { column_name: "global_cta_label", can_update: false },
+        { column_name: "global_cta_destination", can_update: false },
+        { column_name: "global_cta_unavailable_fallback", can_update: false },
+        { column_name: "display_name", can_update: true },
+        { column_name: "headline", can_update: true },
+        { column_name: "bio", can_update: true },
       ]);
     } finally {
       await admin.query("rollback");
@@ -281,7 +311,8 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     await provisioning.provision(values);
     const operations = createPostgresOperationsPersistence(database.database);
     const commands = createPortfolioProfileCommandService({ repository, operations, scope });
-    const service = createOwnerConfigurationApplicationService(commands, scope.portfolioId);
+    const ctaCommands = createPortfolioGlobalCtaCommandService({ repository, operations, scope });
+    const service = createOwnerConfigurationApplicationService(commands, ctaCommands, scope.portfolioId);
     const reader = createPortfolioSettingsReader({ repository, transactions: database.transactions, scope });
     const actor = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "integration-session" };
     let authorized = true;
@@ -387,6 +418,211 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     expect(JSON.stringify(committed)).not.toContain("integration-session");
   }, 30_000);
 
+  it("executes the secured HTTP CTA command with safe fallback, replay, concurrency, and operation isolation", async () => {
+    const scope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+    const provisioning = createPortfolioSettingsService({ repository, transactions: database.transactions, scope });
+    await provisioning.provision(values);
+    const operations = createPostgresOperationsPersistence(database.database);
+    const profileCommands = createPortfolioProfileCommandService({ repository, operations, scope });
+    const ctaCommands = createPortfolioGlobalCtaCommandService({ repository, operations, scope });
+    const service = createOwnerConfigurationApplicationService(profileCommands, ctaCommands, scope.portfolioId);
+    const reader = createPortfolioSettingsReader({ repository, transactions: database.transactions, scope });
+    const actor = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "cta-integration-session" };
+    let authorized = true;
+    let barrier: (() => Promise<void>) | undefined;
+    const security: OwnerRequestSecurity = {
+      appOrigin: "https://example.com",
+      identity: {
+        async resolveActorContext() { return ok(actor); },
+        async authorizeOperation(query) {
+          if (!authorized) return ok(false);
+          await barrier?.();
+          return decideAuthorization(query);
+        },
+      },
+    };
+    const makeRequest = (version: number, key: string, globalCta: PortfolioSettingsProvisioningValues["globalCta"]) =>
+      new Request("https://example.com/api/owner/v1/configuration/project-cta", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          cookie: "sw_owner_session=cta-integration-token",
+          origin: "https://example.com",
+          "x-csrf-token": "cta-integration-csrf",
+          "idempotency-key": key,
+          "if-match": `"${version}"`,
+        },
+        body: JSON.stringify(globalCta),
+      });
+    const handler = (version: number, key: string, globalCta: PortfolioSettingsProvisioningValues["globalCta"]) =>
+      handleUpdateOwnerGlobalProjectCta(makeRequest(version, key, globalCta), { service, security });
+    const read = () => reader.getSettings({ actor, portfolioId: scope.portfolioId });
+    const ctaEventCount = async () => {
+      const result = await admin.query(
+        "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'portfolio_configuration.cta_updated.v1'",
+        [scope.portfolioId],
+      );
+      return result.rows[0].count as number;
+    };
+    const startBarrier = () => {
+      let release!: () => void;
+      const waiting = new Promise<void>((resolve) => { release = resolve; });
+      let count = 0;
+      barrier = async () => {
+        count += 1;
+        if (count === 2) release();
+        await waiting;
+      };
+    };
+
+    const left = { ...values.globalCta, label: "Talk about an AI project" };
+    const right = { ...values.globalCta, label: "Discuss a collaboration" };
+    startBarrier();
+    const race = await Promise.all([
+      handler(1, "cta-race-key-left", left),
+      handler(1, "cta-race-key-right", right),
+    ]);
+    barrier = undefined;
+    expect(race.map((response) => response.status).sort()).toEqual([200, 412]);
+    expect(await ctaEventCount()).toBe(1);
+    const racedSettings = await read();
+    expect(racedSettings.ok && racedSettings.value.version).toBe(2);
+    expect(racedSettings.ok && [left.label, right.label]).toContain(racedSettings.value.globalCta.label);
+    if (!racedSettings.ok) throw new Error("CTA settings did not commit.");
+    const winning = racedSettings.value.globalCta.label === left.label
+      ? { key: "cta-race-key-left", value: left }
+      : { key: "cta-race-key-right", value: right };
+
+    startBarrier();
+    const concurrentRetries = await Promise.all([
+      handler(1, winning.key, winning.value),
+      handler(1, winning.key, winning.value),
+    ]);
+    barrier = undefined;
+    const retryBodies = await Promise.all(concurrentRetries.map((response) => response.json()));
+    expect(concurrentRetries.map((response) => response.status)).toEqual([200, 200]);
+    expect(retryBodies[0]).toEqual(retryBodies[1]);
+    expect(retryBodies[0]).toMatchObject({ aggregateVersion: 2, outcome: "configuration-updated" });
+    expect(await ctaEventCount()).toBe(1);
+
+    const changedHash = await handler(1, winning.key, { ...winning.value, unavailableFallback: "Changed fallback text." });
+    const stale = await handler(1, "cta-stale-key", { ...winning.value, label: "Stale CTA" });
+    expect(changedHash.status).toBe(409);
+    expect(stale.status).toBe(412);
+    expect(await ctaEventCount()).toBe(1);
+
+    // The same idempotency key is independent across operation scopes.
+    const profileUpdate = await handleUpdateOwnerProfileConfiguration(
+      new Request("https://example.com/api/owner/v1/configuration/profile", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json", cookie: "sw_owner_session=cta-integration-token",
+          origin: "https://example.com", "x-csrf-token": "cta-integration-csrf",
+          "idempotency-key": winning.key, "if-match": '"2"',
+        },
+        body: JSON.stringify({ ...values.profile, headline: "An unrelated profile edit." }),
+      }),
+      { service, security },
+    );
+    expect(profileUpdate.status).toBe(200);
+    const replayAfterOtherOperation = await handler(1, winning.key, winning.value);
+    expect(replayAfterOtherOperation.status).toBe(200);
+    expect(await replayAfterOtherOperation.json()).toEqual(retryBodies[0]);
+    expect(await ctaEventCount()).toBe(1);
+
+    authorized = false;
+    const removedAllowlist = await handler(1, winning.key, winning.value);
+    authorized = true;
+    expect(removedAllowlist.status).toBe(403);
+    const committed = await read();
+    expect(committed).toMatchObject({
+      ok: true,
+      value: {
+        portfolioId: scope.portfolioId,
+        profile: { headline: "An unrelated profile edit." },
+        globalCta: winning.value,
+        contactChannels: values.contactChannels,
+        version: 3,
+      },
+    });
+    expect(JSON.stringify(committed)).not.toContain(scope.ownerId);
+    expect(JSON.stringify(committed)).not.toContain("cta-integration-token");
+  }, 30_000);
+
+  it.each([
+    ["settings", "update", "portfolio_config.settings", "new.portfolio_id"],
+    ["ledger", "insert", "operations.idempotency_records", "new.operation_scope"],
+    ["outbox", "insert", "operations.outbox_events", "new.event_type"],
+  ] as const)("rolls back CTA state, ledger, and outbox when the %s stage fails", async (stage, action, table, conditionColumn) => {
+    const scope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+    const provisioning = createPortfolioSettingsService({ repository, transactions: database.transactions, scope });
+    await provisioning.provision(values);
+    const before = await admin.query(
+      "select version, global_cta_label, global_cta_destination, global_cta_unavailable_fallback from portfolio_config.settings where portfolio_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    const eventsBefore = await admin.query(
+      "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'portfolio_configuration.cta_updated.v1'",
+      [scope.portfolioId],
+    );
+    const actor = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "cta-failure-session" };
+    const security: OwnerRequestSecurity = {
+      appOrigin: "https://example.com",
+      identity: {
+        async resolveActorContext() { return ok(actor); },
+        async authorizeOperation(query) { return decideAuthorization(query); },
+      },
+    };
+    const operations = createPostgresOperationsPersistence(database.database);
+    const profileCommands = createPortfolioProfileCommandService({ repository, operations, scope });
+    const ctaCommands = createPortfolioGlobalCtaCommandService({ repository, operations, scope });
+    const service = createOwnerConfigurationApplicationService(profileCommands, ctaCommands, scope.portfolioId);
+    const suffix = `${stage}_${process.pid}_${randomBytes(3).toString("hex")}`;
+    const idempotencyKey = `failure-key-cta-${stage}-${process.pid}`;
+    const trigger = `phase4_cta_fail_${suffix}`;
+    const functionName = `phase4_cta_fail_${suffix}`;
+    const reference = conditionColumn === "new.portfolio_id"
+      ? `new.portfolio_id = '${scope.portfolioId}'::uuid`
+      : conditionColumn === "new.event_type"
+        ? "new.event_type = 'portfolio_configuration.cta_updated.v1'"
+        : "new.operation_scope = 'portfolio-configuration.update-owner-global-project-cta'";
+    await admin.query(`create function public.${functionName}() returns trigger language plpgsql as $$ begin raise exception 'synthetic CTA ${stage} failure'; end $$`);
+    await admin.query(`create trigger ${trigger} before ${action} on ${table} for each row when (${reference}) execute function public.${functionName}()`);
+    try {
+      const response = await handleUpdateOwnerGlobalProjectCta(
+        new Request("https://example.com/api/owner/v1/configuration/project-cta", {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json", cookie: "sw_owner_session=cta-failure-token",
+            origin: "https://example.com", "x-csrf-token": "cta-failure-csrf",
+            "idempotency-key": idempotencyKey, "if-match": '"1"',
+          },
+          body: JSON.stringify({ ...values.globalCta, label: `CTA update reaches ${stage}.` }),
+        }),
+        { service, security },
+      );
+      expect(response.status).toBe(500);
+    } finally {
+      await admin.query(`drop trigger if exists ${trigger} on ${table}`);
+      await admin.query(`drop function if exists public.${functionName}()`);
+    }
+    const after = await admin.query(
+      "select version, global_cta_label, global_cta_destination, global_cta_unavailable_fallback from portfolio_config.settings where portfolio_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    expect(after.rows).toEqual(before.rows);
+    const eventsAfter = await admin.query(
+      "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'portfolio_configuration.cta_updated.v1'",
+      [scope.portfolioId],
+    );
+    expect(eventsAfter.rows[0].count).toBe(eventsBefore.rows[0].count);
+    const keyCount = await admin.query(
+      "select count(*)::int as count from operations.idempotency_records where operation_scope = 'portfolio-configuration.update-owner-global-project-cta' and key_hash = $1",
+      [createHash("sha256").update(idempotencyKey, "utf8").digest("hex")],
+    );
+    expect(keyCount.rows[0].count).toBe(0);
+  }, 30_000);
+
   it.each([
     ["settings", "update", "portfolio_config.settings", "new.portfolio_id"],
     ["ledger", "insert", "operations.idempotency_records", "new.operation_scope"],
@@ -413,7 +649,8 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     };
     const operations = createPostgresOperationsPersistence(database.database);
     const commands = createPortfolioProfileCommandService({ repository, operations, scope });
-    const service = createOwnerConfigurationApplicationService(commands, scope.portfolioId);
+    const ctaCommands = createPortfolioGlobalCtaCommandService({ repository, operations, scope });
+    const service = createOwnerConfigurationApplicationService(commands, ctaCommands, scope.portfolioId);
     const suffix = `${stage}_${process.pid}_${randomBytes(3).toString("hex")}`;
     const idempotencyKey = `failure-key-${stage}-${process.pid}`;
     const trigger = `phase4_profile_fail_${suffix}`;

@@ -16,3 +16,7 @@ export {
   type PortfolioProfileCommandService,
   type PortfolioProfileCommandReceipt,
 } from "./profile-command.js";
+export {
+  createPortfolioGlobalCtaCommandService,
+  type PortfolioGlobalCtaCommandService,
+} from "./cta-command.js";
