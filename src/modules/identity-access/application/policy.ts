@@ -6,7 +6,7 @@ import type {
 } from "@shared/domain";
 import { assertNeverActor, err, ok } from "@shared/domain";
 import type { Permission } from "../domain/index.js";
-import type { AuthProviderPort } from "../ports/index.js";
+import type { AuthProviderPort, CryptoPort } from "../ports/index.js";
 import type {
   AuthorizeOperationQuery,
   IdentityAccessService,
@@ -91,6 +91,7 @@ export function decideAuthorization(
 
 export interface IdentityAccessServiceDeps {
   readonly auth: AuthProviderPort;
+  readonly crypto: CryptoPort;
 }
 
 /**
@@ -133,18 +134,27 @@ export function createIdentityAccessService(
     },
 
     async issuePseudonymousToken(
-      _command: IssuePseudonymousTokenCommand,
+      command: IssuePseudonymousTokenCommand,
     ): Promise<Result<PseudonymousToken, Rejection>> {
-      return err({
-        kind: "temporarily_unavailable",
-        code: "CRYPTO_NOT_IMPLEMENTED",
-      });
+      if (
+        command.purpose === "visitor_measurement" &&
+        command.consent !== "granted"
+      ) {
+        return err({ kind: "forbidden", code: "MEASUREMENT_CONSENT_REQUIRED" });
+      }
+      return deps.crypto.issuePseudonymousToken(command);
     },
 
     async verifyPseudonymousToken(
-      _query: VerifyPseudonymousTokenQuery,
+      query: VerifyPseudonymousTokenQuery,
     ): Promise<Result<VerifiedPseudonymousSubject, Rejection>> {
-      return err({ kind: "unauthenticated", code: "INVALID_TOKEN" });
+      if (
+        query.expectedPurpose === "visitor_measurement" &&
+        query.consent !== "granted"
+      ) {
+        return err({ kind: "forbidden", code: "MEASUREMENT_CONSENT_REQUIRED" });
+      }
+      return deps.crypto.verifyPseudonymousToken(query);
     },
   };
 }

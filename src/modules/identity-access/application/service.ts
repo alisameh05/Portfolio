@@ -45,6 +45,8 @@ export interface IssuePseudonymousTokenCommand {
 export interface VerifyPseudonymousTokenQuery {
   readonly tokenString: string;
   readonly expectedPurpose: PseudonymousPurpose;
+  /** Current consent is rechecked when a Measurement token is used. */
+  readonly consent: MeasurementConsent;
 }
 
 export interface VerifiedPseudonymousSubject {

@@ -26,6 +26,8 @@ export interface IssuePseudonymousTokenInput {
 export interface VerifyPseudonymousTokenInput {
   readonly tokenString: string;
   readonly expectedPurpose: PseudonymousPurpose;
+  /** Current consent is checked on every Measurement token use. */
+  readonly consent: MeasurementConsent;
 }
 
 export interface VerifiedPseudonymousToken {
