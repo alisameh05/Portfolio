@@ -1,0 +1,159 @@
+import { sql } from "kysely";
+import { err, type Rejection, type Result } from "@shared/domain";
+import type { TransactionContext } from "../../../runtime/ports.js";
+import {
+  PostgresInfrastructureError,
+  resolvePostgresTransaction,
+} from "../../../shared/adapters/postgres/runtime.js";
+import type {
+  ContactChannel,
+  PortfolioSettings,
+} from "../domain/index.js";
+import type {
+  PortfolioScope,
+} from "../ports/index.js";
+import type { PortfolioSettingsRepository } from "../application/settings-service.js";
+
+interface SettingsRow {
+  readonly portfolio_id: string;
+  readonly display_name: string;
+  readonly headline: string;
+  readonly bio: string;
+  readonly global_cta_label: string;
+  readonly global_cta_destination: string;
+  readonly global_cta_unavailable_fallback: string;
+  readonly version: number;
+}
+
+interface ChannelRow {
+  readonly channel: ContactChannel["channel"];
+  readonly label: string;
+  readonly destination: string;
+  readonly available_locales: unknown;
+}
+
+function isLocaleList(value: unknown): value is readonly ("en" | "ar")[] {
+  return Array.isArray(value) && value.length >= 1 && value.length <= 2 &&
+    value.every((locale): locale is "en" | "ar" => locale === "en" || locale === "ar") &&
+    new Set(value).size === value.length;
+}
+
+function safeRow(row: SettingsRow, channels: readonly ChannelRow[]): PortfolioSettings {
+  const contactChannels = channels.map((channel): ContactChannel => {
+    let locales: unknown = channel.available_locales;
+    if (typeof locales === "string") {
+      try { locales = JSON.parse(locales) as unknown; } catch { throw new PostgresInfrastructureError(); }
+    }
+    if (!isLocaleList(locales)) throw new PostgresInfrastructureError();
+    return {
+      channel: channel.channel,
+      label: channel.label,
+      destination: channel.destination,
+      availableLocales: locales,
+    };
+  });
+  return {
+    portfolioId: row.portfolio_id as PortfolioSettings["portfolioId"],
+    profile: { displayName: row.display_name, headline: row.headline, bio: row.bio },
+    contactChannels,
+    globalCta: {
+      label: row.global_cta_label,
+      destination: row.global_cta_destination,
+      unavailableFallback: row.global_cta_unavailable_fallback,
+    },
+    version: row.version,
+  };
+}
+
+function expectedScope(scope: PortfolioScope, settings: PortfolioSettings): boolean {
+  return settings.portfolioId === scope.portfolioId && settings.version === 1;
+}
+
+export function createPostgresPortfolioSettingsRepository(
+): PortfolioSettingsRepository {
+  async function setTrustedScope(context: TransactionContext, scope: PortfolioScope): Promise<void> {
+    const executor = resolvePostgresTransaction(context);
+    await sql`
+      select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
+             set_config('shipwithali.owner_id', ${scope.ownerId}, true)
+    `.execute(executor);
+  }
+
+  return {
+    async getSettings(
+      scope: PortfolioScope,
+      context: TransactionContext,
+    ): Promise<Result<PortfolioSettings, Rejection>> {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, scope);
+        const selected = await sql<SettingsRow>`
+          select portfolio_id::text as portfolio_id, display_name, headline, bio,
+                 global_cta_label, global_cta_destination,
+                 global_cta_unavailable_fallback, version
+            from portfolio_config.settings
+           where portfolio_id = ${scope.portfolioId}::uuid
+             and owner_id = ${scope.ownerId}::uuid
+        `.execute(executor);
+        const row = selected.rows[0];
+        if (row === undefined) {
+          return err({ kind: "not_found", code: "PORTFOLIO_SETTINGS_NOT_CONFIGURED" });
+        }
+        const channelRows = await sql<ChannelRow>`
+          select channel, label, destination, available_locales
+            from portfolio_config.contact_channels
+           where portfolio_id = ${scope.portfolioId}::uuid
+           order by position asc
+        `.execute(executor);
+        return { ok: true, value: safeRow(row, channelRows.rows) };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async provisionSettings(
+      scope: PortfolioScope,
+      settings: PortfolioSettings,
+      context: TransactionContext,
+    ): Promise<Result<PortfolioSettings, Rejection>> {
+      if (!expectedScope(scope, settings)) {
+        return err({ kind: "validation", code: "INVALID_PORTFOLIO_SETTINGS_SCOPE" });
+      }
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, scope);
+        const inserted = await sql<{ portfolio_id: string }>`
+          insert into portfolio_config.settings (
+            portfolio_id, owner_id, display_name, headline, bio,
+            global_cta_label, global_cta_destination,
+            global_cta_unavailable_fallback, version
+          ) values (
+            ${scope.portfolioId}::uuid, ${scope.ownerId}::uuid,
+            ${settings.profile.displayName}, ${settings.profile.headline}, ${settings.profile.bio},
+            ${settings.globalCta.label}, ${settings.globalCta.destination},
+            ${settings.globalCta.unavailableFallback}, 1
+          ) on conflict do nothing
+          returning portfolio_id::text as portfolio_id
+        `.execute(executor);
+        if (inserted.rows.length === 0) {
+          return err({ kind: "conflict", code: "PORTFOLIO_SETTINGS_ALREADY_PROVISIONED" });
+        }
+        for (const [position, channel] of settings.contactChannels.entries()) {
+          await sql`
+            insert into portfolio_config.contact_channels (
+              portfolio_id, position, channel, label, destination, available_locales
+            ) values (
+              ${scope.portfolioId}::uuid, ${position}, ${channel.channel}, ${channel.label},
+              ${channel.destination}, ${JSON.stringify(channel.availableLocales)}::jsonb
+            )
+          `.execute(executor);
+        }
+        return { ok: true, value: settings };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+  };
+}

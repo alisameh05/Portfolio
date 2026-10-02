@@ -92,12 +92,12 @@ function parsePayload(value: unknown): TokenPayload | null {
   const keys = Object.keys(payload).sort().join(",");
   if (keys !== "expiresAt,issuedAt,keyVersion,purpose,subject") return null;
   if (
-    typeof payload.subject !== "string" ||
-    typeof payload.purpose !== "string" ||
-    (payload.purpose !== "visitor_functional" && payload.purpose !== "visitor_measurement") ||
-    typeof payload.issuedAt !== "number" || !Number.isSafeInteger(payload.issuedAt) ||
-    typeof payload.expiresAt !== "number" || !Number.isSafeInteger(payload.expiresAt) ||
-    typeof payload.keyVersion !== "number" || !Number.isSafeInteger(payload.keyVersion)
+    typeof payload["subject"] !== "string" ||
+    typeof payload["purpose"] !== "string" ||
+    (payload["purpose"] !== "visitor_functional" && payload["purpose"] !== "visitor_measurement") ||
+    typeof payload["issuedAt"] !== "number" || !Number.isSafeInteger(payload["issuedAt"]) ||
+    typeof payload["expiresAt"] !== "number" || !Number.isSafeInteger(payload["expiresAt"]) ||
+    typeof payload["keyVersion"] !== "number" || !Number.isSafeInteger(payload["keyVersion"])
   ) return null;
   return payload as unknown as TokenPayload;
 }

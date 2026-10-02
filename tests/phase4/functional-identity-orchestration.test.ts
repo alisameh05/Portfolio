@@ -47,7 +47,7 @@ describe("functional identity interaction orchestration (#82)", () => {
     } satisfies Pick<IdentityAccessService, "issuePseudonymousToken" | "verifyPseudonymousToken">;
     const deps = {
       identityAccess,
-      authorization: { async authorize() { return err({ kind: "temporarily_unavailable", code: "PROJECT_POLICY_UNAVAILABLE" }); } },
+      authorization: { async authorize() { return err({ kind: "temporarily_unavailable" as const, code: "PROJECT_POLICY_UNAVAILABLE" }); } },
     };
 
     await expect(issueFunctionalIdentityForInteraction(deps, {

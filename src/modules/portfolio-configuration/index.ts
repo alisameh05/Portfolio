@@ -28,6 +28,10 @@ export type {
   UpdateGlobalProjectCtaCommand,
   PortfolioConfigurationService,
 } from "./application/index.js";
+export {
+  createPortfolioSettingsReader,
+  type PortfolioSettingsApplicationService,
+} from "./application/index.js";
 
 export type {
   PortfolioScope,
