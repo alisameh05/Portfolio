@@ -1,5 +1,8 @@
 -- Phase 4 #84: permit the application to update only its scoped settings row.
--- Rollback: drop the update policy and revoke UPDATE from the application role.
+-- Rollback:
+--   drop policy portfolio_settings_application_update on portfolio_config.settings;
+--   revoke update (display_name, headline, bio, version, updated_at)
+--     on portfolio_config.settings from shipwithali_application;
 -- Forward fix: correct any policy or grant defect with a new expansion migration.
 
 set lock_timeout = '5s';

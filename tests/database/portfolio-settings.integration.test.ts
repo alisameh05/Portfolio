@@ -216,6 +216,27 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     }
   });
 
+  it("rolls back the profile policy and every column-level update grant", async () => {
+    await admin.query("begin");
+    try {
+      await admin.query("drop policy portfolio_settings_application_update on portfolio_config.settings");
+      await admin.query(`
+        revoke update (display_name, headline, bio, version, updated_at)
+          on portfolio_config.settings from shipwithali_application
+      `);
+      const privileges = await admin.query(`
+        select has_column_privilege('shipwithali_application', 'portfolio_config.settings', column_name, 'UPDATE') as can_update
+          from unnest(array['display_name', 'headline', 'bio', 'version', 'updated_at']) as column_name
+      `);
+      expect(privileges.rows).toEqual([
+        { can_update: false }, { can_update: false }, { can_update: false },
+        { can_update: false }, { can_update: false },
+      ]);
+    } finally {
+      await admin.query("rollback");
+    }
+  });
+
   it("uses forced RLS on both settings tables and clears scope after transaction reuse", async () => {
     const rls = await admin.query(`
       select relname, relrowsecurity, relforcerowsecurity
