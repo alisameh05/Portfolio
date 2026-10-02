@@ -340,7 +340,7 @@ function main() {
   writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
   if (result.failures.length === 0) {
-    console.log("✓ phase4 context: 5 public + 39 owner, seams preserved, 6 negative fixtures rejected, 9 placeholders confined");
+    console.log("✓ phase4 context: 5 public + 39 owner, seams preserved, 6 negative fixtures rejected, 0 placeholders confined");
     return 0;
   }
   for (const failure of result.failures) console.error(`✗ phase4 context: ${failure}`);

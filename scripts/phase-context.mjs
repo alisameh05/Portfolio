@@ -89,17 +89,7 @@ export const HISTORICAL_INVALID_FIXTURES = Object.freeze([
  * failure. Test fakes under src/runtime/fakes/ and tests/ are explicitly
  * excluded from this production scan.
  */
-export const EXPECTED_PLACEHOLDER_PRODUCTION_FILES = Object.freeze([
-  "src/runtime/http/owner-analytics.ts",
-  "src/runtime/http/owner-configuration.ts",
-  "src/runtime/http/owner-cv.ts",
-  "src/runtime/http/owner-export.ts",
-  "src/runtime/http/owner-media.ts",
-  "src/runtime/http/owner-moderation.ts",
-  "src/runtime/http/owner-project.ts",
-  "src/runtime/http/owner-publication.ts",
-  "src/runtime/http/owner-taxonomy.ts",
-]);
+export const EXPECTED_PLACEHOLDER_PRODUCTION_FILES = Object.freeze([]);
 
 export function allowedActivationsFor(phase) {
   switch (phase) {

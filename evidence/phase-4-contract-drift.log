@@ -1,0 +1,61 @@
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-Fqs05r
+[90mvalidating openapi\public-v1\openapi.yaml...
+[39m[90mopenapi\public-v1\openapi.yaml: validated in 63ms
+
+[39m[32mWoohoo! Your API description is valid. 🎉
+[39m
+[90mbundling openapi\public-v1\openapi.yaml...
+[39m📦 Created a bundle for [34mopenapi\public-v1\openapi.yaml[39m at [34m<TEMP>\shipwithali-contract-a-Fqs05r\openapi\generated\public-v1.json[39m [32m23ms[39m.
+[90m@hey-api/openapi-ts v0.99.0[39m
+
+[90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-Fqs05r\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m<TEMP>\shipwithali-contract-a-Fqs05r\src\contracts\http\v1\generated[39m [90m· 3 files · 115ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-Fqs05r
+[90mvalidating openapi\owner-v1\openapi.yaml...
+[39m[90mopenapi\owner-v1\openapi.yaml: validated in 122ms
+
+[39m[32mWoohoo! Your API description is valid. 🎉
+[39m
+[90mbundling openapi\owner-v1\openapi.yaml...
+[39m📦 Created a bundle for [34mopenapi\owner-v1\openapi.yaml[39m at [34m<TEMP>\shipwithali-contract-a-Fqs05r\openapi\generated\owner-v1.json[39m [32m58ms[39m.
+[90m@hey-api/openapi-ts v0.99.0[39m
+
+[90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-Fqs05r\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m<TEMP>\shipwithali-contract-a-Fqs05r\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 295ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-Fqs05r\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 144 generated Zod object schemas in <TEMP>\shipwithali-contract-a-Fqs05r\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-Fqs05r
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-NkpDk1
+[90mvalidating openapi\public-v1\openapi.yaml...
+[39m[90mopenapi\public-v1\openapi.yaml: validated in 61ms
+
+[39m[32mWoohoo! Your API description is valid. 🎉
+[39m
+[90mbundling openapi\public-v1\openapi.yaml...
+[39m📦 Created a bundle for [34mopenapi\public-v1\openapi.yaml[39m at [34m<TEMP>\shipwithali-contract-b-NkpDk1\openapi\generated\public-v1.json[39m [32m20ms[39m.
+[90m@hey-api/openapi-ts v0.99.0[39m
+
+[90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-NkpDk1\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m<TEMP>\shipwithali-contract-b-NkpDk1\src\contracts\http\v1\generated[39m [90m· 3 files · 129ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-NkpDk1
+[90mvalidating openapi\owner-v1\openapi.yaml...
+[39m[90mopenapi\owner-v1\openapi.yaml: validated in 118ms
+
+[39m[32mWoohoo! Your API description is valid. 🎉
+[39m
+[90mbundling openapi\owner-v1\openapi.yaml...
+[39m📦 Created a bundle for [34mopenapi\owner-v1\openapi.yaml[39m at [34m<TEMP>\shipwithali-contract-b-NkpDk1\openapi\generated\owner-v1.json[39m [32m76ms[39m.
+[90m@hey-api/openapi-ts v0.99.0[39m
+
+[90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-NkpDk1\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m<TEMP>\shipwithali-contract-b-NkpDk1\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 301ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-NkpDk1\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 144 generated Zod object schemas in <TEMP>\shipwithali-contract-b-NkpDk1\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-NkpDk1
+✓ both clean generations are byte-for-byte deterministic
+✓ committed bundles and generated transport artifacts contain no drift
+✓ generated output is limited to transport types and validators; no server stubs exist

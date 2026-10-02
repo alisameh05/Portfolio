@@ -41,6 +41,7 @@ import {
   handleGetOwnerCvPortfolio,
   handleRegisterOwnerCvVersion,
 } from "../../src/runtime/http/owner-cv.js";
+import { ownerTestSecurity, withOwnerTestAuth } from "./owner-test-auth.js";
 
 const VERSION_ID = OWNER_CV_VERSION_ID;
 const MEDIA_ID = OWNER_CV_MEDIA_ID;
@@ -48,7 +49,7 @@ const IDEMPOTENCY_KEY = "test-key-123";
 const IF_MATCH = '"2"';
 
 function portfolioRequest(inboundTrace?: string): Request {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = withOwnerTestAuth({});
   if (inboundTrace !== undefined) {
     headers["x-request-id"] = inboundTrace;
   }
@@ -67,7 +68,7 @@ function postRequest(
     rawBody?: string;
   },
 ): Request {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = withOwnerTestAuth({ "content-type": "application/json" });
   if (options?.idempotencyKey !== null) {
     headers["Idempotency-Key"] = options?.idempotencyKey ?? IDEMPOTENCY_KEY;
   }
@@ -84,10 +85,10 @@ function postRequest(
 }
 
 function commandRequest(url: string, includeBody = false): Request {
-  const headers: Record<string, string> = {
+  const headers: Record<string, string> = withOwnerTestAuth({
     "Idempotency-Key": IDEMPOTENCY_KEY,
     "If-Match": IF_MATCH,
-  };
+  });
   const init: RequestInit = { method: "POST", headers };
   if (includeBody) {
     init.body = JSON.stringify({});
@@ -107,6 +108,7 @@ describe("Owner CV Portfolio retrieval (#31)", () => {
     const logger = createTestLogger();
     const response = await handleGetOwnerCvPortfolio(portfolioRequest(), {
       service: fake,
+      security: ownerTestSecurity(),
       logger,
     });
     expect(response.status).toBe(200);
@@ -156,6 +158,7 @@ describe("Owner CV Portfolio retrieval (#31)", () => {
       const logger = createTestLogger();
       const response = await handleGetOwnerCvPortfolio(portfolioRequest(), {
         service: fake,
+        security: ownerTestSecurity(),
         logger,
       });
       expect(response.status).toBe(status);
@@ -173,6 +176,7 @@ describe("Owner CV Portfolio retrieval (#31)", () => {
     const fake = createOwnerCvTestFake({ type: "invalid-success" });
     const response = await handleGetOwnerCvPortfolio(portfolioRequest(), {
       service: fake,
+      security: ownerTestSecurity(),
       logger: createTestLogger(),
     });
     expect(response.status).toBe(500);
@@ -186,6 +190,7 @@ describe("Owner CV Portfolio retrieval (#31)", () => {
     const logger = createTestLogger();
     const first = await handleGetOwnerCvPortfolio(portfolioRequest("inbound-attacker-value"), {
       service: fake,
+      security: ownerTestSecurity(),
       logger,
     });
     const firstBody = (await first.json()) as Record<string, unknown>;
@@ -201,7 +206,7 @@ describe("Owner CV version registration (#31)", () => {
     const logger = createTestLogger();
     const response = await handleRegisterOwnerCvVersion(
       postRequest(registerUrl, { body: registerBody }),
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(201);
     expect(fake.calls.registerOwnerCvVersion).toHaveLength(1);
@@ -243,7 +248,7 @@ describe("Owner CV version registration (#31)", () => {
       const fake = createOwnerCvTestFake({ type: "success" });
       const response = await handleRegisterOwnerCvVersion(
         postRequest(registerUrl, options),
-        { service: fake },
+        { service: fake, security: ownerTestSecurity() },
       );
       expect(response.status).toBe(400);
       expect(fake.calls.registerOwnerCvVersion).toHaveLength(0);
@@ -277,7 +282,7 @@ describe("Owner CV version registration (#31)", () => {
       const fake = createOwnerCvTestFake({ type: "rejection", rejection });
       const response = await handleRegisterOwnerCvVersion(
         postRequest(registerUrl, { body: registerBody }),
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.registerOwnerCvVersion).toHaveLength(1);
@@ -294,7 +299,7 @@ describe("Owner CV version registration (#31)", () => {
     const fake = createOwnerCvTestFake({ type: "invalid-success" });
     const response = await handleRegisterOwnerCvVersion(
       postRequest(registerUrl, { body: registerBody }),
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -306,7 +311,7 @@ describe("Owner CV version acceptance and activation (#31)", () => {
     const response = await handleAcceptOwnerCvVersion(
       commandRequest(acceptUrl),
       { versionId: VERSION_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.acceptOwnerCvVersion).toHaveLength(1);
@@ -332,7 +337,7 @@ describe("Owner CV version acceptance and activation (#31)", () => {
     const response = await handleActivateOwnerCvVersion(
       commandRequest(activateUrl),
       { versionId: VERSION_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.activateOwnerCvVersion).toHaveLength(1);
@@ -355,7 +360,7 @@ describe("Owner CV version acceptance and activation (#31)", () => {
     "rejects version command %s %s as 400 before dispatch",
     async (_kind, op, versionId, idempotencyKey, ifMatch) => {
       const fake = createOwnerCvTestFake({ type: "success" });
-      const headers: Record<string, string> = {};
+      const headers: Record<string, string> = withOwnerTestAuth({});
       if (idempotencyKey !== null) {
         headers["Idempotency-Key"] = idempotencyKey ?? IDEMPOTENCY_KEY;
       }
@@ -366,7 +371,7 @@ describe("Owner CV version acceptance and activation (#31)", () => {
         op === "accept" ? acceptUrl : activateUrl,
         { method: "POST", headers },
       );
-      const deps = { service: fake };
+      const deps = { service: fake, security: ownerTestSecurity() };
       const response =
         op === "accept"
           ? await handleAcceptOwnerCvVersion(request, { versionId }, deps)
@@ -408,7 +413,7 @@ describe("Owner CV version acceptance and activation (#31)", () => {
       const response = await handleAcceptOwnerCvVersion(
         commandRequest(acceptUrl),
         { versionId: VERSION_ID },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.acceptOwnerCvVersion).toHaveLength(1);
@@ -428,7 +433,7 @@ describe("Owner CV version acceptance and activation (#31)", () => {
       const response = await handleActivateOwnerCvVersion(
         commandRequest(activateUrl),
         { versionId: VERSION_ID },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.activateOwnerCvVersion).toHaveLength(1);
@@ -449,7 +454,7 @@ describe("Owner CV version acceptance and activation (#31)", () => {
     const activate = await handleActivateOwnerCvVersion(
       commandRequest(activateUrl),
       { versionId: VERSION_ID },
-      { service: forbidden, logger: createTestLogger() },
+      { service: forbidden, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(activate.status).toBe(403);
 
@@ -460,7 +465,7 @@ describe("Owner CV version acceptance and activation (#31)", () => {
     const second = await handleActivateOwnerCvVersion(
       commandRequest(activateUrl),
       { versionId: VERSION_ID },
-      { service: invalid, logger: createTestLogger() },
+      { service: invalid, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(second.status).toBe(422);
   });
@@ -470,7 +475,7 @@ describe("Owner CV version acceptance and activation (#31)", () => {
     const response = await handleAcceptOwnerCvVersion(
       commandRequest(acceptUrl),
       { versionId: VERSION_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -479,13 +484,13 @@ describe("Owner CV version acceptance and activation (#31)", () => {
     const service = createProductionOwnerCvService();
     const logger = createTestLogger();
     const responses = [
-      await handleGetOwnerCvPortfolio(portfolioRequest(), { service, logger }),
+      await handleGetOwnerCvPortfolio(portfolioRequest(), { service, security: ownerTestSecurity(), logger }),
       await handleRegisterOwnerCvVersion(
         postRequest(registerUrl, { body: registerBody }),
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
-      await handleAcceptOwnerCvVersion(commandRequest(acceptUrl), { versionId: VERSION_ID }, { service, logger }),
-      await handleActivateOwnerCvVersion(commandRequest(activateUrl), { versionId: VERSION_ID }, { service, logger }),
+      await handleAcceptOwnerCvVersion(commandRequest(acceptUrl), { versionId: VERSION_ID }, { service, security: ownerTestSecurity(), logger }),
+      await handleActivateOwnerCvVersion(commandRequest(activateUrl), { versionId: VERSION_ID }, { service, security: ownerTestSecurity(), logger }),
     ];
     expect(responses).toHaveLength(4);
     for (const response of responses) {
@@ -545,6 +550,7 @@ describe("Owner CV version acceptance and activation (#31)", () => {
     };
     const response = await handleGetOwnerCvPortfolio(portfolioRequest(), {
       service: throwing,
+      security: ownerTestSecurity(),
       logger,
     });
     expect(response.status).toBe(500);

@@ -45,6 +45,7 @@ import {
   handleRecordOwnerMediaProcessing,
   handleRejectOwnerMediaAsset,
 } from "../../src/runtime/http/owner-media.js";
+import { ownerTestSecurity, withOwnerTestAuth } from "./owner-test-auth.js";
 
 const MEDIA_ID = OWNER_MEDIA_ID;
 const IDEMPOTENCY_KEY = "test-key-123";
@@ -52,7 +53,7 @@ const IF_MATCH = '"2"';
 const SHA256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 function getRequest(mediaId: string = MEDIA_ID, inboundTrace?: string): Request {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = withOwnerTestAuth({});
   if (inboundTrace !== undefined) {
     headers["x-request-id"] = inboundTrace;
   }
@@ -71,7 +72,7 @@ function postRequest(
     rawBody?: string | undefined;
   },
 ): Request {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = withOwnerTestAuth({ "content-type": "application/json" });
   if (options?.idempotencyKey !== null) {
     headers["Idempotency-Key"] = options?.idempotencyKey ?? IDEMPOTENCY_KEY;
   }
@@ -145,7 +146,7 @@ describe("Owner Media aggregate retrieval (#31)", () => {
     const response = await handleGetOwnerMediaAggregate(
       getRequest(),
       { mediaId: MEDIA_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.getOwnerMediaAggregate).toHaveLength(1);
@@ -174,7 +175,7 @@ describe("Owner Media aggregate retrieval (#31)", () => {
       const response = await handleGetOwnerMediaAggregate(
         getRequest(mediaId),
         { mediaId },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(400);
       expect(fake.calls.getOwnerMediaAggregate).toHaveLength(0);
@@ -207,7 +208,7 @@ describe("Owner Media aggregate retrieval (#31)", () => {
       const response = await handleGetOwnerMediaAggregate(
         getRequest(),
         { mediaId: MEDIA_ID },
-        { service: fake, logger },
+        { service: fake, security: ownerTestSecurity(), logger },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.getOwnerMediaAggregate).toHaveLength(1);
@@ -225,7 +226,7 @@ describe("Owner Media aggregate retrieval (#31)", () => {
     const response = await handleGetOwnerMediaAggregate(
       getRequest(),
       { mediaId: MEDIA_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -239,7 +240,7 @@ describe("Owner Media aggregate retrieval (#31)", () => {
     const first = await handleGetOwnerMediaAggregate(
       getRequest(MEDIA_ID, "inbound-attacker-value"),
       { mediaId: MEDIA_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
@@ -254,7 +255,7 @@ describe("Owner Media upload intents (#31)", () => {
     const logger = createTestLogger();
     const response = await handleCreateOwnerMediaUploadIntent(
       intentRequest({ body: intentBody }),
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(201);
     expect(fake.calls.createOwnerMediaUploadIntent).toHaveLength(1);
@@ -289,7 +290,7 @@ describe("Owner Media upload intents (#31)", () => {
     const logger = createTestLogger();
     const response = await handleCreateOwnerMediaUploadIntent(
       intentRequest({ body: intentBody }),
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(201);
     const body = (await response.json()) as Record<string, unknown>;
@@ -315,7 +316,7 @@ describe("Owner Media upload intents (#31)", () => {
       const fake = createOwnerMediaTestFake({ type: "success" });
       const response = await handleCreateOwnerMediaUploadIntent(
         intentRequest(options),
-        { service: fake },
+        { service: fake, security: ownerTestSecurity() },
       );
       expect(response.status).toBe(400);
       expect(fake.calls.createOwnerMediaUploadIntent).toHaveLength(0);
@@ -347,7 +348,7 @@ describe("Owner Media upload intents (#31)", () => {
       const fake = createOwnerMediaTestFake({ type: "rejection", rejection });
       const response = await handleCreateOwnerMediaUploadIntent(
         intentRequest({ body: intentBody }),
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.createOwnerMediaUploadIntent).toHaveLength(1);
@@ -364,7 +365,7 @@ describe("Owner Media upload intents (#31)", () => {
     const fake = createOwnerMediaTestFake({ type: "invalid-success" });
     const response = await handleCreateOwnerMediaUploadIntent(
       intentRequest({ body: intentBody }),
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -376,7 +377,7 @@ describe("Owner Media processing, acceptance, and rejection (#31)", () => {
     const response = await handleRecordOwnerMediaProcessing(
       commandRequest(recordUrl, { body: recordBody }),
       { mediaId: MEDIA_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.recordOwnerMediaProcessing).toHaveLength(1);
@@ -404,7 +405,7 @@ describe("Owner Media processing, acceptance, and rejection (#31)", () => {
     const response = await handleAcceptOwnerMediaAsset(
       commandRequest(acceptUrl, { body: acceptBody }),
       { mediaId: MEDIA_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.acceptOwnerMediaAsset).toHaveLength(1);
@@ -428,7 +429,7 @@ describe("Owner Media processing, acceptance, and rejection (#31)", () => {
     const response = await handleRejectOwnerMediaAsset(
       commandRequest(rejectUrl, { body: { reason: "Unsafe content detected." } }),
       { mediaId: MEDIA_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.rejectOwnerMediaAsset).toHaveLength(1);
@@ -457,7 +458,7 @@ describe("Owner Media processing, acceptance, and rejection (#31)", () => {
     "rejects media command %s %s as 400 before dispatch",
     async (_kind, op, options, pathOverride) => {
       const fake = createOwnerMediaTestFake({ type: "success" });
-      const deps = { service: fake };
+      const deps = { service: fake, security: ownerTestSecurity() };
       let response: Response;
       if (op === "record") {
         response = await handleRecordOwnerMediaProcessing(
@@ -514,7 +515,7 @@ describe("Owner Media processing, acceptance, and rejection (#31)", () => {
     op: "record" | "accept" | "reject",
     fake: ReturnType<typeof createOwnerMediaTestFake>,
   ): Promise<Response> {
-    const deps = { service: fake, logger: createTestLogger() };
+    const deps = { service: fake, security: ownerTestSecurity(), logger: createTestLogger() };
     if (op === "record") {
       return await handleRecordOwnerMediaProcessing(
         commandRequest(recordUrl, { body: recordBody }),
@@ -601,7 +602,7 @@ describe("Owner Media processing, acceptance, and rejection (#31)", () => {
     const accepted = await handleAcceptOwnerMediaAsset(
       commandRequest(acceptUrl, { body: acceptBody }),
       { mediaId: MEDIA_ID },
-      { service: forbidden, logger: createTestLogger() },
+      { service: forbidden, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(accepted.status).toBe(403);
 
@@ -612,7 +613,7 @@ describe("Owner Media processing, acceptance, and rejection (#31)", () => {
     const rejected = await handleRejectOwnerMediaAsset(
       commandRequest(rejectUrl, { body: { reason: "Unsafe content detected." } }),
       { mediaId: MEDIA_ID },
-      { service: invalid, logger: createTestLogger() },
+      { service: invalid, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(rejected.status).toBe(422);
   });
@@ -622,7 +623,7 @@ describe("Owner Media processing, acceptance, and rejection (#31)", () => {
     const response = await handleRecordOwnerMediaProcessing(
       commandRequest(recordUrl, { body: recordBody }),
       { mediaId: MEDIA_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -631,25 +632,25 @@ describe("Owner Media processing, acceptance, and rejection (#31)", () => {
     const service = createProductionOwnerMediaService();
     const logger = createTestLogger();
     const responses = [
-      await handleGetOwnerMediaAggregate(getRequest(), { mediaId: MEDIA_ID }, { service, logger }),
+      await handleGetOwnerMediaAggregate(getRequest(), { mediaId: MEDIA_ID }, { service, security: ownerTestSecurity(), logger }),
       await handleCreateOwnerMediaUploadIntent(
         intentRequest({ body: intentBody }),
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleRecordOwnerMediaProcessing(
         commandRequest(recordUrl, { body: recordBody }),
         { mediaId: MEDIA_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleAcceptOwnerMediaAsset(
         commandRequest(acceptUrl, { body: acceptBody }),
         { mediaId: MEDIA_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleRejectOwnerMediaAsset(
         commandRequest(rejectUrl, { body: { reason: "Unsafe content detected." } }),
         { mediaId: MEDIA_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
     ];
     expect(responses).toHaveLength(5);
@@ -727,7 +728,7 @@ describe("Owner Media processing, acceptance, and rejection (#31)", () => {
     const response = await handleGetOwnerMediaAggregate(
       getRequest(),
       { mediaId: MEDIA_ID },
-      { service: throwing, logger },
+      { service: throwing, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());

@@ -51,17 +51,7 @@
     }
   ],
   "placeholderScan": {
-    "productionFiles": [
-      "src/runtime/http/owner-analytics.ts",
-      "src/runtime/http/owner-configuration.ts",
-      "src/runtime/http/owner-cv.ts",
-      "src/runtime/http/owner-export.ts",
-      "src/runtime/http/owner-media.ts",
-      "src/runtime/http/owner-moderation.ts",
-      "src/runtime/http/owner-project.ts",
-      "src/runtime/http/owner-publication.ts",
-      "src/runtime/http/owner-taxonomy.ts"
-    ],
+    "productionFiles": [],
     "unexpectedFiles": []
   },
   "laterPhaseViolations": [],

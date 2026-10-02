@@ -1,9 +1,9 @@
 
- RUN  v3.2.4 <WORKSPACE>
+[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90m<WORKSPACE>[39m
 
- ✓ tests/runtime/configuration.test.ts (17 tests) 13ms
+ [32m✓[39m tests/runtime/configuration.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 15[2mms[22m[39m
 
- Test Files  1 passed (1)
-      Tests  17 passed (17)
-   Start at  18:38:04
-   Duration  391ms (transform 95ms, setup 0ms, collect 88ms, tests 13ms, environment 0ms, prepare 115ms)
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m17 passed[39m[22m[90m (17)[39m
+[2m   Start at [22m 11:45:14
+[2m   Duration [22m 444ms[2m (transform 93ms, setup 0ms, collect 88ms, tests 15ms, environment 0ms, prepare 140ms)[22m

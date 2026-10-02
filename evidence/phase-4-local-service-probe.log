@@ -1,0 +1,4 @@
+A new version of Supabase CLI is available: v2.119.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+✓ Phase 3 database toolchain verification passed
+✓ Supabase CLI 2.117.0 resolved from the project lockfile

@@ -15,12 +15,14 @@
  * command or query; call one injected application interface once; validate
  * and serialize the declared response; complete request logging.
  *
- * The Owner actor is a deterministic Phase 2 placeholder. Real Supabase
- * session, cookie, and Owner allowlist enforcement remain Phase 4 work;
- * unauthenticated and forbidden translation is exercised through fakes.
- * Revisions, Language-version publication, lifecycle decisions, Taxonomy
- * evolution, evidence, routes, persistence, and authorization rules remain
- * unimplemented provider-neutral application behavior.
+ * The Owner actor is resolved through the shared Phase 4 verified-actor
+ * boundary (`./owner-security.js`): every operation requires a verified
+ * Owner session, owner-scoped authorization, and (for mutations) exact
+ * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
+ * translation is exercised through fakes. Revisions, Language-version
+ * publication, lifecycle decisions, Taxonomy evolution, evidence, routes,
+ * persistence, and authorization rules remain unimplemented
+ * provider-neutral application behavior.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application
@@ -60,6 +62,10 @@ import type {
   StableId,
 } from "../../shared/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
+import {
+  guardOwnerRequest,
+  type OwnerRequestSecurity,
+} from "./owner-security.js";
 import {
   internalErrorProblem,
   rejectionToProblem,
@@ -180,17 +186,8 @@ export interface OwnerPublicationApplicationService {
 
 export interface OwnerPublicationAdapterDeps {
   service: OwnerPublicationApplicationService;
+  security: OwnerRequestSecurity;
   logger?: Logger;
-}
-
-const PHASE2_OWNER_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea0";
-
-function ownerActor(): ActorContext {
-  return {
-    kind: "owner",
-    ownerId: PHASE2_OWNER_ID as StableId<"Owner">,
-    sessionId: "phase2-owner-session",
-  };
 }
 
 function requestInstance(request: Request): string {
@@ -264,6 +261,17 @@ export async function handleGetOwnerContentAggregate(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "getOwnerContentAggregate",
+      mode: "read",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const pathResult = zGetOwnerContentAggregatePath.safeParse({
       contentId: params.contentId,
     });
@@ -271,7 +279,7 @@ export async function handleGetOwnerContentAggregate(
       return reject(logger, traceId, instance, "Invalid path parameters.");
     }
     const query: GetOwnerContentAggregateQuery = {
-      actor: ownerActor(),
+      actor: guard.actor,
       contentId: pathResult.data.contentId as StableId<string>,
     };
     let result: Awaited<ReturnType<typeof deps.service.getOwnerContentAggregate>>;
@@ -311,6 +319,7 @@ async function handleContentCommand(
   request: Request,
   params: { contentId: string },
   deps: OwnerPublicationAdapterDeps,
+  operation: string,
   validators: {
     readonly path: { safeParse(value: unknown): { success: boolean; data?: { contentId: string } } };
     readonly headers: { safeParse(value: unknown): { success: boolean; data?: Record<string, string> } };
@@ -319,6 +328,7 @@ async function handleContentCommand(
   },
   successStatus: number,
   buildCommand: (args: {
+    readonly actor: ActorContext;
     readonly contentId: StableId<string>;
     readonly idempotencyKey: IdempotencyKey;
     readonly expectedVersion: number;
@@ -339,6 +349,17 @@ async function handleContentCommand(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation,
+      mode: "mutation",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const pathResult = validators.path.safeParse({ contentId: params.contentId });
     if (!pathResult.success || pathResult.data === undefined) {
       return reject(logger, traceId, instance, "Invalid path parameters.");
@@ -360,6 +381,7 @@ async function handleContentCommand(
       return reject(logger, traceId, instance, "Missing or invalid concurrency headers.");
     }
     const command = buildCommand({
+      actor: guard.actor,
       contentId: pathResult.data.contentId as StableId<string>,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
@@ -403,6 +425,7 @@ export async function handleSaveOwnerContentRevision(
     request,
     params,
     deps,
+    "saveOwnerContentRevision",
     {
       path: zSaveOwnerContentRevisionPath,
       headers: zSaveOwnerContentRevisionHeaders,
@@ -410,8 +433,8 @@ export async function handleSaveOwnerContentRevision(
       response: zSaveOwnerContentRevisionResponse,
     },
     201,
-    ({ contentId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, contentId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       contentId,
@@ -439,6 +462,7 @@ export async function handlePublishOwnerContentLanguage(
     request,
     params,
     deps,
+    "publishOwnerContentLanguage",
     {
       path: zPublishOwnerContentLanguagePath,
       headers: zPublishOwnerContentLanguageHeaders,
@@ -446,8 +470,8 @@ export async function handlePublishOwnerContentLanguage(
       response: zPublishOwnerContentLanguageResponse,
     },
     200,
-    ({ contentId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, contentId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       contentId,
@@ -484,6 +508,7 @@ export async function handleHideOwnerContent(
     request,
     params,
     deps,
+    "hideOwnerContent",
     {
       path: zHideOwnerContentPath,
       headers: zHideOwnerContentHeaders,
@@ -491,8 +516,8 @@ export async function handleHideOwnerContent(
       response: zHideOwnerContentResponse,
     },
     200,
-    ({ contentId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, contentId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       contentId,
@@ -512,6 +537,7 @@ export async function handleArchiveOwnerContent(
     request,
     params,
     deps,
+    "archiveOwnerContent",
     {
       path: zArchiveOwnerContentPath,
       headers: zArchiveOwnerContentHeaders,
@@ -519,8 +545,8 @@ export async function handleArchiveOwnerContent(
       response: zArchiveOwnerContentResponse,
     },
     200,
-    ({ contentId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, contentId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       contentId,
@@ -540,6 +566,7 @@ export async function handleRestoreOwnerContent(
     request,
     params,
     deps,
+    "restoreOwnerContent",
     {
       path: zRestoreOwnerContentPath,
       headers: zRestoreOwnerContentHeaders,
@@ -547,8 +574,8 @@ export async function handleRestoreOwnerContent(
       response: zRestoreOwnerContentResponse,
     },
     200,
-    ({ contentId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, contentId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       contentId,

@@ -42,6 +42,7 @@ import {
   handleRequestOwnerExport,
   OWNER_EXPORT_MEDIA_TYPE,
 } from "../../src/runtime/http/owner-export.js";
+import { ownerTestSecurity, withOwnerTestAuth } from "./owner-test-auth.js";
 
 const EXPORT_ID = OWNER_EXPORT_ID;
 const IDEMPOTENCY_KEY = "test-key-123";
@@ -54,7 +55,7 @@ function requestExportRequest(
   },
   inboundTrace?: string,
 ): Request {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = withOwnerTestAuth({ "content-type": "application/json" });
   if (options?.idempotencyKey !== null) {
     headers["Idempotency-Key"] = options?.idempotencyKey ?? IDEMPOTENCY_KEY;
   }
@@ -71,7 +72,7 @@ function requestExportRequest(
 }
 
 function getRequest(exportId: string = EXPORT_ID, inboundTrace?: string): Request {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = withOwnerTestAuth({});
   if (inboundTrace !== undefined) {
     headers["x-request-id"] = inboundTrace;
   }
@@ -82,7 +83,7 @@ function getRequest(exportId: string = EXPORT_ID, inboundTrace?: string): Reques
 }
 
 function downloadRequest(exportId: string = EXPORT_ID, inboundTrace?: string): Request {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = withOwnerTestAuth({});
   if (inboundTrace !== undefined) {
     headers["x-request-id"] = inboundTrace;
   }
@@ -100,7 +101,7 @@ describe("Owner export request (#32)", () => {
     const logger = createTestLogger();
     const response = await handleRequestOwnerExport(
       requestExportRequest({ body: requestBody }),
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(202);
     expect(fake.calls.requestOwnerExport).toHaveLength(1);
@@ -131,7 +132,7 @@ describe("Owner export request (#32)", () => {
     const fake = createOwnerExportTestFake({ type: "success" });
     const response = await handleRequestOwnerExport(
       requestExportRequest(options as { body?: unknown; rawBody?: string }),
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(400);
     expect(fake.calls.requestOwnerExport).toHaveLength(0);
@@ -160,7 +161,7 @@ describe("Owner export request (#32)", () => {
       const fake = createOwnerExportTestFake({ type: "rejection", rejection });
       const response = await handleRequestOwnerExport(
         requestExportRequest({ body: requestBody }),
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.requestOwnerExport).toHaveLength(1);
@@ -177,7 +178,7 @@ describe("Owner export request (#32)", () => {
     const fake = createOwnerExportTestFake({ type: "invalid-success" });
     const response = await handleRequestOwnerExport(
       requestExportRequest({ body: requestBody }),
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -190,7 +191,7 @@ describe("Owner export status retrieval (#32)", () => {
     const response = await handleGetOwnerExport(
       getRequest(),
       { exportId: EXPORT_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.getOwnerExport).toHaveLength(1);
@@ -214,7 +215,7 @@ describe("Owner export status retrieval (#32)", () => {
     const response = await handleGetOwnerExport(
       getRequest("not-a-uuid"),
       { exportId: "not-a-uuid" },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(400);
     expect(fake.calls.getOwnerExport).toHaveLength(0);
@@ -243,7 +244,7 @@ describe("Owner export status retrieval (#32)", () => {
       const response = await handleGetOwnerExport(
         getRequest(),
         { exportId: EXPORT_ID },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(status);
       const body = (await response.json()) as Record<string, unknown>;
@@ -259,7 +260,7 @@ describe("Owner export status retrieval (#32)", () => {
     const response = await handleGetOwnerExport(
       getRequest(),
       { exportId: EXPORT_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -273,7 +274,7 @@ describe("Owner export status retrieval (#32)", () => {
     const first = await handleGetOwnerExport(
       getRequest(EXPORT_ID, "inbound-attacker-value"),
       { exportId: EXPORT_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
@@ -289,7 +290,7 @@ describe("Owner export download (#32)", () => {
     const response = await handleDownloadOwnerExport(
       downloadRequest(),
       { exportId: EXPORT_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.downloadOwnerExport).toHaveLength(1);
@@ -315,7 +316,7 @@ describe("Owner export download (#32)", () => {
     const response = await handleDownloadOwnerExport(
       downloadRequest("not-a-uuid"),
       { exportId: "not-a-uuid" },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(400);
     expect(fake.calls.downloadOwnerExport).toHaveLength(0);
@@ -345,7 +346,7 @@ describe("Owner export download (#32)", () => {
       const response = await handleDownloadOwnerExport(
         downloadRequest(),
         { exportId: EXPORT_ID },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(status);
       const body = (await response.json()) as Record<string, unknown>;
@@ -363,7 +364,7 @@ describe("Owner export download (#32)", () => {
     const response = await handleDownloadOwnerExport(
       downloadRequest(),
       { exportId: EXPORT_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(500);
     const body = (await response.json()) as Record<string, unknown>;
@@ -380,7 +381,7 @@ describe("Owner export download (#32)", () => {
     const denied = await handleDownloadOwnerExport(
       downloadRequest(),
       { exportId: EXPORT_ID },
-      { service: unauthenticated, logger: createTestLogger() },
+      { service: unauthenticated, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(denied.status).toBe(401);
 
@@ -392,7 +393,7 @@ describe("Owner export download (#32)", () => {
     const blocked = await handleDownloadOwnerExport(
       downloadRequest(),
       { exportId: EXPORT_ID },
-      { service: forbidden, logger },
+      { service: forbidden, security: ownerTestSecurity(), logger },
     );
     expect(blocked.status).toBe(403);
     expect(JSON.stringify(logger.records)).not.toContain("signed");
@@ -404,13 +405,13 @@ describe("Owner export download (#32)", () => {
     const responses = [
       await handleRequestOwnerExport(
         requestExportRequest({ body: requestBody }),
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
-      await handleGetOwnerExport(getRequest(), { exportId: EXPORT_ID }, { service, logger }),
+      await handleGetOwnerExport(getRequest(), { exportId: EXPORT_ID }, { service, security: ownerTestSecurity(), logger }),
       await handleDownloadOwnerExport(
         downloadRequest(),
         { exportId: EXPORT_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
     ];
     expect(responses).toHaveLength(3);
@@ -454,7 +455,7 @@ describe("Owner export download (#32)", () => {
     };
     const response = await handleRequestOwnerExport(
       requestExportRequest({ body: requestBody }),
-      { service: throwing, logger },
+      { service: throwing, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());

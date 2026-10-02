@@ -15,12 +15,13 @@
  * interface once; validate and serialize the declared response; complete
  * request logging.
  *
- * The Owner actor is a deterministic Phase 2 placeholder. Real Supabase
- * session, cookie, and Owner allowlist enforcement remain Phase 4 work;
- * unauthenticated and forbidden translation is exercised through fakes.
- * CV registration, acceptance, Current CV activation, retention, storage,
- * and delivery rules remain unimplemented provider-neutral application
- * behavior.
+ * The Owner actor is resolved through the shared Phase 4 verified-actor
+ * boundary (`./owner-security.js`): every operation requires a verified
+ * Owner session, owner-scoped authorization, and (for mutations) exact
+ * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
+ * translation is exercised through fakes. CV registration, acceptance,
+ * Current CV activation, retention, storage, and delivery rules remain
+ * unimplemented provider-neutral application behavior.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application
@@ -48,6 +49,10 @@ import type {
   StableId,
 } from "../../shared/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
+import {
+  guardOwnerRequest,
+  type OwnerRequestSecurity,
+} from "./owner-security.js";
 import {
   internalErrorProblem,
   rejectionToProblem,
@@ -133,17 +138,8 @@ export interface OwnerCvApplicationService {
 
 export interface OwnerCvAdapterDeps {
   service: OwnerCvApplicationService;
+  security: OwnerRequestSecurity;
   logger?: Logger;
-}
-
-const PHASE2_OWNER_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea0";
-
-function ownerActor(): ActorContext {
-  return {
-    kind: "owner",
-    ownerId: PHASE2_OWNER_ID as StableId<"Owner">,
-    sessionId: "phase2-owner-session",
-  };
 }
 
 function requestInstance(request: Request): string {
@@ -209,9 +205,20 @@ export async function handleGetOwnerCvPortfolio(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "getOwnerCvPortfolio",
+      mode: "read",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     // The CV Portfolio retrieval declares no path, query, header, or body
     // input: dispatch a single owner-scoped query directly.
-    const query: GetOwnerCvPortfolioQuery = { actor: ownerActor() };
+    const query: GetOwnerCvPortfolioQuery = { actor: guard.actor };
     let result: Awaited<ReturnType<typeof deps.service.getOwnerCvPortfolio>>;
     try {
       result = await deps.service.getOwnerCvPortfolio(query);
@@ -253,6 +260,17 @@ export async function handleRegisterOwnerCvVersion(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "registerOwnerCvVersion",
+      mode: "mutation",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const headersResult = zRegisterOwnerCvVersionHeaders.safeParse({
       "Idempotency-Key": request.headers.get("idempotency-key") ?? undefined,
       "If-Match": request.headers.get("if-match") ?? undefined,
@@ -273,7 +291,7 @@ export async function handleRegisterOwnerCvVersion(
       return reject(logger, traceId, instance, "Missing or invalid concurrency headers.");
     }
     const command: RegisterOwnerCvVersionApplicationCommand = {
-      actor: ownerActor(),
+      actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
       mediaId: bodyResult.data.mediaId as StableId<string>,
@@ -314,12 +332,14 @@ async function handleCvVersionCommand(
   request: Request,
   params: { versionId: string },
   deps: OwnerCvAdapterDeps,
+  operation: string,
   validators: {
     readonly path: { safeParse(value: unknown): { success: boolean; data?: { versionId: string } } };
     readonly headers: { safeParse(value: unknown): { success: boolean; data?: Record<string, string> } };
     readonly response: { safeParse(value: unknown): { success: boolean; data?: unknown } };
   },
   buildCommand: (args: {
+    readonly actor: ActorContext;
     readonly versionId: StableId<string>;
     readonly idempotencyKey: IdempotencyKey;
     readonly expectedVersion: number;
@@ -332,6 +352,17 @@ async function handleCvVersionCommand(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation,
+      mode: "mutation",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     // Accept and activate declare no request body: validate only the declared
     // path and concurrency headers before dispatch.
     const pathResult = validators.path.safeParse({ versionId: params.versionId });
@@ -350,6 +381,7 @@ async function handleCvVersionCommand(
       return reject(logger, traceId, instance, "Missing or invalid concurrency headers.");
     }
     const command = buildCommand({
+      actor: guard.actor,
       versionId: pathResult.data.versionId as StableId<string>,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
@@ -393,13 +425,14 @@ export async function handleAcceptOwnerCvVersion(
     request,
     params,
     deps,
+    "acceptOwnerCvVersion",
     {
       path: zAcceptOwnerCvVersionPath,
       headers: zAcceptOwnerCvVersionHeaders,
       response: zAcceptOwnerCvVersionResponse,
     },
-    ({ versionId, idempotencyKey, expectedVersion }) => ({
-      actor: ownerActor(),
+    ({ actor, versionId, idempotencyKey, expectedVersion }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       versionId,
@@ -417,13 +450,14 @@ export async function handleActivateOwnerCvVersion(
     request,
     params,
     deps,
+    "activateOwnerCvVersion",
     {
       path: zActivateOwnerCvVersionPath,
       headers: zActivateOwnerCvVersionHeaders,
       response: zActivateOwnerCvVersionResponse,
     },
-    ({ versionId, idempotencyKey, expectedVersion }) => ({
-      actor: ownerActor(),
+    ({ actor, versionId, idempotencyKey, expectedVersion }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       versionId,

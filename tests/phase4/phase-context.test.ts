@@ -128,11 +128,8 @@ describe("Phase 4 verification prefactor (#78)", () => {
       productionFiles: string[];
       unexpectedFiles: string[];
     };
-    expect(scan.productionFiles).toHaveLength(9);
+    expect(scan.productionFiles).toHaveLength(0);
     expect(scan.unexpectedFiles).toEqual([]);
-    for (const file of scan.productionFiles) {
-      expect(file.startsWith("src/runtime/http/owner-")).toBe(true);
-    }
   });
 
   it("preserves exact toolchain pins and never bypasses architecture checks", () => {

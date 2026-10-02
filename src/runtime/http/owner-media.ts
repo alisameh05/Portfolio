@@ -19,13 +19,15 @@
  * starts a new aggregate at version 1. Record, accept, and reject carry
  * optimistic-concurrency versions parsed from the declared If-Match header.
  *
- * The Owner actor is a deterministic Phase 2 placeholder. Real Supabase
- * session, cookie, and Owner allowlist enforcement remain Phase 4 work;
- * unauthenticated and forbidden translation is exercised through fakes.
- * Storage, scanning, processing, acceptance, and delivery rules remain
- * unimplemented provider-neutral application behavior. Declared upload and
- * delivery references stay provider-neutral opaque HTTPS URLs; signed
- * secrets never appear in logs or errors.
+ * The Owner actor is resolved through the shared Phase 4 verified-actor
+ * boundary (`./owner-security.js`): every operation requires a verified
+ * Owner session, owner-scoped authorization, and (for mutations) exact
+ * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
+ * translation is exercised through fakes. Storage, scanning, processing,
+ * acceptance, and delivery rules remain unimplemented provider-neutral
+ * application behavior. Declared upload and delivery references stay
+ * provider-neutral opaque HTTPS URLs; signed secrets never appear in logs
+ * or errors.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application
@@ -60,6 +62,10 @@ import type {
   StableId,
 } from "../../shared/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
+import {
+  guardOwnerRequest,
+  type OwnerRequestSecurity,
+} from "./owner-security.js";
 import {
   internalErrorProblem,
   rejectionToProblem,
@@ -179,17 +185,8 @@ export interface OwnerMediaApplicationService {
 
 export interface OwnerMediaAdapterDeps {
   service: OwnerMediaApplicationService;
+  security: OwnerRequestSecurity;
   logger?: Logger;
-}
-
-const PHASE2_OWNER_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea0";
-
-function ownerActor(): ActorContext {
-  return {
-    kind: "owner",
-    ownerId: PHASE2_OWNER_ID as StableId<"Owner">,
-    sessionId: "phase2-owner-session",
-  };
 }
 
 function requestInstance(request: Request): string {
@@ -256,6 +253,17 @@ export async function handleGetOwnerMediaAggregate(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "getOwnerMediaAggregate",
+      mode: "read",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const pathResult = zGetOwnerMediaAggregatePath.safeParse({
       mediaId: params.mediaId,
     });
@@ -263,7 +271,7 @@ export async function handleGetOwnerMediaAggregate(
       return reject(logger, traceId, instance, "Invalid path parameters.");
     }
     const query: GetOwnerMediaAggregateQuery = {
-      actor: ownerActor(),
+      actor: guard.actor,
       mediaId: pathResult.data.mediaId as StableId<string>,
     };
     let result: Awaited<ReturnType<typeof deps.service.getOwnerMediaAggregate>>;
@@ -312,6 +320,17 @@ export async function handleCreateOwnerMediaUploadIntent(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "createOwnerMediaUploadIntent",
+      mode: "mutation",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const headersResult = zCreateOwnerMediaUploadIntentHeaders.safeParse({
       "Idempotency-Key": request.headers.get("idempotency-key") ?? undefined,
     });
@@ -327,7 +346,7 @@ export async function handleCreateOwnerMediaUploadIntent(
       return reject(logger, traceId, instance, "Invalid request body.");
     }
     const command: CreateOwnerMediaUploadIntentApplicationCommand = {
-      actor: ownerActor(),
+      actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       kind: bodyResult.data.kind,
       originalFileName: bodyResult.data.originalFileName,
@@ -372,6 +391,7 @@ async function handleMediaCommand(
   request: Request,
   params: { mediaId: string },
   deps: OwnerMediaAdapterDeps,
+  operation: string,
   validators: {
     readonly path: { safeParse(value: unknown): { success: boolean; data?: { mediaId: string } } };
     readonly headers: { safeParse(value: unknown): { success: boolean; data?: Record<string, string> } };
@@ -379,6 +399,7 @@ async function handleMediaCommand(
     readonly response: { safeParse(value: unknown): { success: boolean; data?: unknown } };
   },
   buildCommand: (args: {
+    readonly actor: ActorContext;
     readonly mediaId: StableId<string>;
     readonly idempotencyKey: IdempotencyKey;
     readonly expectedVersion: number;
@@ -392,6 +413,17 @@ async function handleMediaCommand(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation,
+      mode: "mutation",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const pathResult = validators.path.safeParse({ mediaId: params.mediaId });
     if (!pathResult.success || pathResult.data === undefined) {
       return reject(logger, traceId, instance, "Invalid path parameters.");
@@ -416,6 +448,7 @@ async function handleMediaCommand(
       return reject(logger, traceId, instance, "Missing or invalid concurrency headers.");
     }
     const command = buildCommand({
+      actor: guard.actor,
       mediaId: pathResult.data.mediaId as StableId<string>,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
@@ -460,14 +493,15 @@ export async function handleRecordOwnerMediaProcessing(
     request,
     params,
     deps,
+    "recordOwnerMediaProcessing",
     {
       path: zRecordOwnerMediaProcessingPath,
       headers: zRecordOwnerMediaProcessingHeaders,
       body: zRecordOwnerMediaProcessingBody,
       response: zRecordOwnerMediaProcessingResponse,
     },
-    ({ mediaId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, mediaId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       mediaId,
@@ -492,14 +526,15 @@ export async function handleAcceptOwnerMediaAsset(
     request,
     params,
     deps,
+    "acceptOwnerMediaAsset",
     {
       path: zAcceptOwnerMediaAssetPath,
       headers: zAcceptOwnerMediaAssetHeaders,
       body: zAcceptOwnerMediaAssetBody,
       response: zAcceptOwnerMediaAssetResponse,
     },
-    ({ mediaId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, mediaId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       mediaId,
@@ -518,14 +553,15 @@ export async function handleRejectOwnerMediaAsset(
     request,
     params,
     deps,
+    "rejectOwnerMediaAsset",
     {
       path: zRejectOwnerMediaAssetPath,
       headers: zRejectOwnerMediaAssetHeaders,
       body: zRejectOwnerMediaAssetBody,
       response: zRejectOwnerMediaAssetResponse,
     },
-    ({ mediaId, idempotencyKey, expectedVersion, body }) => ({
-      actor: ownerActor(),
+    ({ actor, mediaId, idempotencyKey, expectedVersion, body }) => ({
+      actor,
       idempotencyKey,
       expectedVersion,
       mediaId,

@@ -12,9 +12,11 @@
  * call one injected application interface once; validate and serialize the
  * declared CommandReceipt response; complete request logging.
  *
- * The Owner actor is a deterministic Phase 2 placeholder. Real Supabase
- * session, cookie, and Owner allowlist enforcement remain Phase 4 work;
- * unauthenticated and forbidden translation is exercised through fakes.
+ * The Owner actor is resolved through the shared Phase 4 verified-actor
+ * boundary (`./owner-security.js`): every operation requires a verified
+ * Owner session, owner-scoped authorization, and (for these mutations) exact
+ * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
+ * translation is exercised through fakes.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, results, and rejections crossing the application seam
@@ -41,6 +43,10 @@ import type {
   StableId,
 } from "../../shared/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
+import {
+  guardOwnerRequest,
+  type OwnerRequestSecurity,
+} from "./owner-security.js";
 import {
   internalErrorProblem,
   rejectionToProblem,
@@ -99,17 +105,8 @@ export interface OwnerConfigurationApplicationService {
 
 export interface OwnerConfigurationAdapterDeps {
   service: OwnerConfigurationApplicationService;
+  security: OwnerRequestSecurity;
   logger?: Logger;
-}
-
-const PHASE2_OWNER_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea0";
-
-function ownerActor(): ActorContext {
-  return {
-    kind: "owner",
-    ownerId: PHASE2_OWNER_ID as StableId<"Owner">,
-    sessionId: "phase2-owner-session",
-  };
 }
 
 function requestInstance(request: Request): string {
@@ -200,6 +197,17 @@ export async function handleUpdateOwnerProfileConfiguration(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "updateOwnerProfileConfiguration",
+      mode: "mutation",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const headersResult = zUpdateOwnerProfileConfigurationHeaders.safeParse({
       "Idempotency-Key": request.headers.get("idempotency-key") ?? undefined,
       "If-Match": request.headers.get("if-match") ?? undefined,
@@ -220,7 +228,7 @@ export async function handleUpdateOwnerProfileConfiguration(
       return reject(logger, traceId, instance, "Missing or invalid concurrency headers.");
     }
     const command: UpdateOwnerProfileApplicationCommand = {
-      actor: ownerActor(),
+      actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
       displayName: bodyResult.data.displayName,
@@ -249,6 +257,17 @@ export async function handleUpdateOwnerContactChannels(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "updateOwnerContactChannels",
+      mode: "mutation",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const headersResult = zUpdateOwnerContactChannelsHeaders.safeParse({
       "Idempotency-Key": request.headers.get("idempotency-key") ?? undefined,
       "If-Match": request.headers.get("if-match") ?? undefined,
@@ -269,7 +288,7 @@ export async function handleUpdateOwnerContactChannels(
       return reject(logger, traceId, instance, "Missing or invalid concurrency headers.");
     }
     const command: UpdateOwnerContactChannelsApplicationCommand = {
-      actor: ownerActor(),
+      actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
       channels: bodyResult.data.channels,
@@ -296,6 +315,17 @@ export async function handleUpdateOwnerGlobalProjectCta(
   );
   const instance = requestInstance(request);
   try {
+    const guard = await guardOwnerRequest(request, {
+      operation: "updateOwnerGlobalProjectCta",
+      mode: "mutation",
+      security: deps.security,
+      traceId,
+      instance,
+      logger,
+    });
+    if (!guard.ok) {
+      return guard.response;
+    }
     const headersResult = zUpdateOwnerGlobalProjectCtaHeaders.safeParse({
       "Idempotency-Key": request.headers.get("idempotency-key") ?? undefined,
       "If-Match": request.headers.get("if-match") ?? undefined,
@@ -316,7 +346,7 @@ export async function handleUpdateOwnerGlobalProjectCta(
       return reject(logger, traceId, instance, "Missing or invalid concurrency headers.");
     }
     const command: UpdateOwnerGlobalProjectCtaApplicationCommand = {
-      actor: ownerActor(),
+      actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
       label: bodyResult.data.label,

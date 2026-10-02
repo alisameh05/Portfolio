@@ -38,6 +38,10 @@ import {
   handleUpdateOwnerGlobalProjectCta,
   handleUpdateOwnerProfileConfiguration,
 } from "../../src/runtime/http/owner-configuration.js";
+import {
+  ownerTestSecurity,
+  withOwnerTestAuth,
+} from "./owner-test-auth.js";
 
 const IDEMPOTENCY_KEY = "test-key-123";
 const IF_MATCH = '"3"';
@@ -76,7 +80,9 @@ function putRequest(
     inboundTrace?: string;
   },
 ): Request {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = withOwnerTestAuth({
+    "content-type": "application/json",
+  });
   if (options?.idempotencyKey !== null) {
     headers["Idempotency-Key"] = options?.idempotencyKey ?? IDEMPOTENCY_KEY;
   }
@@ -105,7 +111,7 @@ describe("Owner Configuration adapter (#29)", () => {
     const logger = createTestLogger();
     const response = await handleUpdateOwnerProfileConfiguration(
       putRequest(PROFILE_PATH, { body: PROFILE_BODY }),
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.updateOwnerProfile).toHaveLength(1);
@@ -133,7 +139,7 @@ describe("Owner Configuration adapter (#29)", () => {
     const logger = createTestLogger();
     const response = await handleUpdateOwnerContactChannels(
       putRequest(CHANNELS_PATH, { body: CHANNELS_BODY }),
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.updateOwnerContactChannels).toHaveLength(1);
@@ -151,7 +157,7 @@ describe("Owner Configuration adapter (#29)", () => {
     const logger = createTestLogger();
     const response = await handleUpdateOwnerGlobalProjectCta(
       putRequest(CTA_PATH, { body: CTA_BODY }),
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.updateOwnerGlobalProjectCta).toHaveLength(1);
@@ -175,7 +181,7 @@ describe("Owner Configuration adapter (#29)", () => {
     const logger = createTestLogger();
     const response = await handleUpdateOwnerProfileConfiguration(
       putRequest(PROFILE_PATH, options),
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(400);
     expect(fake.calls.updateOwnerProfile).toHaveLength(0);
@@ -194,7 +200,7 @@ describe("Owner Configuration adapter (#29)", () => {
     const logger = createTestLogger();
     const response = await handleUpdateOwnerContactChannels(
       putRequest(CHANNELS_PATH, options),
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(400);
     expect(fake.calls.updateOwnerContactChannels).toHaveLength(0);
@@ -208,7 +214,7 @@ describe("Owner Configuration adapter (#29)", () => {
     const logger = createTestLogger();
     const response = await handleUpdateOwnerGlobalProjectCta(
       putRequest(CTA_PATH, options),
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(400);
     expect(fake.calls.updateOwnerGlobalProjectCta).toHaveLength(0);
@@ -240,7 +246,7 @@ describe("Owner Configuration adapter (#29)", () => {
       const logger = createTestLogger();
       const response = await handleUpdateOwnerProfileConfiguration(
         putRequest(PROFILE_PATH, { body: PROFILE_BODY }),
-        { service: fake, logger },
+        { service: fake, security: ownerTestSecurity(), logger },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.updateOwnerProfile).toHaveLength(1);
@@ -261,7 +267,7 @@ describe("Owner Configuration adapter (#29)", () => {
       const fake = createOwnerConfigurationTestFake({ type: "rejection", rejection });
       const response = await handleUpdateOwnerContactChannels(
         putRequest(CHANNELS_PATH, { body: CHANNELS_BODY }),
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(rejection.kind === "unauthenticated" ? 401 : 403);
       expect(fake.calls.updateOwnerContactChannels).toHaveLength(1);
@@ -275,7 +281,7 @@ describe("Owner Configuration adapter (#29)", () => {
     });
     const response = await handleUpdateOwnerGlobalProjectCta(
       putRequest(CTA_PATH, { body: CTA_BODY }),
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(422);
     const body = (await response.json()) as Record<string, unknown>;
@@ -287,7 +293,7 @@ describe("Owner Configuration adapter (#29)", () => {
     const logger = createTestLogger();
     const response = await handleUpdateOwnerProfileConfiguration(
       putRequest(PROFILE_PATH, { body: PROFILE_BODY }),
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(500);
     const body = (await response.json()) as Record<string, unknown>;
@@ -299,17 +305,17 @@ describe("Owner Configuration adapter (#29)", () => {
     const logger = createTestLogger();
     const profile = await handleUpdateOwnerProfileConfiguration(
       putRequest(PROFILE_PATH, { body: PROFILE_BODY }),
-      { service, logger },
+      { service, security: ownerTestSecurity(), logger },
     );
     expect(profile.status).toBe(503);
     const channels = await handleUpdateOwnerContactChannels(
       putRequest(CHANNELS_PATH, { body: CHANNELS_BODY }),
-      { service, logger },
+      { service, security: ownerTestSecurity(), logger },
     );
     expect(channels.status).toBe(503);
     const cta = await handleUpdateOwnerGlobalProjectCta(
       putRequest(CTA_PATH, { body: CTA_BODY }),
-      { service, logger },
+      { service, security: ownerTestSecurity(), logger },
     );
     expect(cta.status).toBe(503);
     for (const response of [profile, channels, cta]) {
@@ -363,7 +369,7 @@ describe("Owner Configuration adapter (#29)", () => {
     const logger = createTestLogger();
     const first = await handleUpdateOwnerProfileConfiguration(
       putRequest(PROFILE_PATH, { body: PROFILE_BODY, inboundTrace: "inbound-attacker-value" }),
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
@@ -373,7 +379,7 @@ describe("Owner Configuration adapter (#29)", () => {
     const secondLogger = createTestLogger();
     const second = await handleUpdateOwnerProfileConfiguration(
       putRequest(PROFILE_PATH, { body: PROFILE_BODY }),
-      { service: fake, logger: secondLogger },
+      { service: fake, security: ownerTestSecurity(), logger: secondLogger },
     );
     const secondBody = (await second.json()) as Record<string, unknown>;
     expect(secondBody["traceId"]).not.toBe(firstBody["traceId"]);
@@ -394,7 +400,7 @@ describe("Owner Configuration adapter (#29)", () => {
     };
     const response = await handleUpdateOwnerProfileConfiguration(
       putRequest(PROFILE_PATH, { body: PROFILE_BODY }),
-      { service: throwing, logger },
+      { service: throwing, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());

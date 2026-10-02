@@ -38,13 +38,14 @@ import {
   handleRejectOwnerFeedback,
   handleSuppressOwnerFeedback,
 } from "../../src/runtime/http/owner-moderation.js";
+import { ownerTestSecurity, withOwnerTestAuth } from "./owner-test-auth.js";
 
 const FEEDBACK_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ec0";
 const IDEMPOTENCY_KEY = "test-key-123";
 const IF_MATCH = '"2"';
 
 function getRequest(feedbackId: string = FEEDBACK_ID, inboundTrace?: string): Request {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = withOwnerTestAuth({});
   if (inboundTrace !== undefined) {
     headers["x-request-id"] = inboundTrace;
   }
@@ -63,7 +64,7 @@ function postRequest(
     rawBody?: string;
   },
 ): Request {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = withOwnerTestAuth({ "content-type": "application/json" });
   if (options?.idempotencyKey !== null) {
     headers["Idempotency-Key"] = options?.idempotencyKey ?? IDEMPOTENCY_KEY;
   }
@@ -91,7 +92,7 @@ describe("Owner Feedback Moderation retrieval (#32)", () => {
     const response = await handleGetOwnerFeedbackModeration(
       getRequest(),
       { feedbackId: FEEDBACK_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.getOwnerFeedbackModeration).toHaveLength(1);
@@ -119,7 +120,7 @@ describe("Owner Feedback Moderation retrieval (#32)", () => {
       const response = await handleGetOwnerFeedbackModeration(
         getRequest(feedbackId),
         { feedbackId },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(400);
       expect(fake.calls.getOwnerFeedbackModeration).toHaveLength(0);
@@ -152,7 +153,7 @@ describe("Owner Feedback Moderation retrieval (#32)", () => {
       const response = await handleGetOwnerFeedbackModeration(
         getRequest(),
         { feedbackId: FEEDBACK_ID },
-        { service: fake, logger },
+        { service: fake, security: ownerTestSecurity(), logger },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.getOwnerFeedbackModeration).toHaveLength(1);
@@ -170,7 +171,7 @@ describe("Owner Feedback Moderation retrieval (#32)", () => {
     const response = await handleGetOwnerFeedbackModeration(
       getRequest(),
       { feedbackId: FEEDBACK_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -184,7 +185,7 @@ describe("Owner Feedback Moderation retrieval (#32)", () => {
     const first = await handleGetOwnerFeedbackModeration(
       getRequest(FEEDBACK_ID, "inbound-attacker-value"),
       { feedbackId: FEEDBACK_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
@@ -212,7 +213,7 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
       const response = await handler(
         postRequest(url, { body: decisionBody }),
         { feedbackId: FEEDBACK_ID },
-        { service: fake, logger },
+        { service: fake, security: ownerTestSecurity(), logger },
       );
       expect(response.status).toBe(200);
       const allCalls = [
@@ -259,7 +260,7 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
     const response = await handler(
       postRequest(url, options as { body?: unknown; rawBody?: string }),
       { feedbackId: FEEDBACK_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(400);
     expect([
@@ -274,7 +275,7 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
     const response = await handleApproveOwnerFeedback(
       postRequest(approveUrl, { body: decisionBody }),
       { feedbackId: "not-a-uuid" },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(400);
     expect(fake.calls.approveOwnerFeedback).toHaveLength(0);
@@ -308,19 +309,19 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
           handleApproveOwnerFeedback(
             postRequest(approveUrl, { body: decisionBody }),
             { feedbackId: FEEDBACK_ID },
-            { service: fake, logger: createTestLogger() },
+            { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
           ),
         () =>
           handleRejectOwnerFeedback(
             postRequest(rejectUrl, { body: decisionBody }),
             { feedbackId: FEEDBACK_ID },
-            { service: fake, logger: createTestLogger() },
+            { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
           ),
         () =>
           handleSuppressOwnerFeedback(
             postRequest(suppressUrl, { body: decisionBody }),
             { feedbackId: FEEDBACK_ID },
-            { service: fake, logger: createTestLogger() },
+            { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
           ),
       ];
       for (const run of handlers) {
@@ -343,7 +344,7 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
     const approve = await handleApproveOwnerFeedback(
       postRequest(approveUrl, { body: decisionBody }),
       { feedbackId: FEEDBACK_ID },
-      { service: unauthenticated, logger: createTestLogger() },
+      { service: unauthenticated, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(approve.status).toBe(401);
 
@@ -354,7 +355,7 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
     const suppress = await handleSuppressOwnerFeedback(
       postRequest(suppressUrl, { body: decisionBody }),
       { feedbackId: FEEDBACK_ID },
-      { service: forbidden, logger: createTestLogger() },
+      { service: forbidden, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(suppress.status).toBe(403);
 
@@ -365,7 +366,7 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
     const reject = await handleRejectOwnerFeedback(
       postRequest(rejectUrl, { body: decisionBody }),
       { feedbackId: FEEDBACK_ID },
-      { service: invalid, logger: createTestLogger() },
+      { service: invalid, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(reject.status).toBe(422);
   });
@@ -375,7 +376,7 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
     const response = await handleApproveOwnerFeedback(
       postRequest(approveUrl, { body: decisionBody }),
       { feedbackId: FEEDBACK_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -384,21 +385,21 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
     const service = createProductionOwnerModerationService();
     const logger = createTestLogger();
     const responses = [
-      await handleGetOwnerFeedbackModeration(getRequest(), { feedbackId: FEEDBACK_ID }, { service, logger }),
+      await handleGetOwnerFeedbackModeration(getRequest(), { feedbackId: FEEDBACK_ID }, { service, security: ownerTestSecurity(), logger }),
       await handleApproveOwnerFeedback(
         postRequest(approveUrl, { body: decisionBody }),
         { feedbackId: FEEDBACK_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleRejectOwnerFeedback(
         postRequest(rejectUrl, { body: decisionBody }),
         { feedbackId: FEEDBACK_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleSuppressOwnerFeedback(
         postRequest(suppressUrl, { body: decisionBody }),
         { feedbackId: FEEDBACK_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
     ];
     expect(responses).toHaveLength(4);
@@ -461,7 +462,7 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
     const response = await handleGetOwnerFeedbackModeration(
       getRequest(),
       { feedbackId: FEEDBACK_ID },
-      { service: throwing, logger },
+      { service: throwing, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());

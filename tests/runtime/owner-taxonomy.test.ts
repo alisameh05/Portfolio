@@ -40,6 +40,7 @@ import {
   handleRenameOwnerTaxonomyValue,
   handleRetireOwnerTaxonomyValue,
 } from "../../src/runtime/http/owner-taxonomy.js";
+import { ownerTestSecurity, withOwnerTestAuth } from "./owner-test-auth.js";
 
 const TAXONOMY_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7eb0";
 const VALUE_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7eb1";
@@ -48,7 +49,7 @@ const IDEMPOTENCY_KEY = "test-key-123";
 const IF_MATCH = '"2"';
 
 function getRequest(taxonomyId: string = TAXONOMY_ID, inboundTrace?: string): Request {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = withOwnerTestAuth({});
   if (inboundTrace !== undefined) {
     headers["x-request-id"] = inboundTrace;
   }
@@ -67,7 +68,7 @@ function postRequest(
     rawBody?: string;
   },
 ): Request {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = withOwnerTestAuth({ "content-type": "application/json" });
   if (options?.idempotencyKey !== null) {
     headers["Idempotency-Key"] = options?.idempotencyKey ?? IDEMPOTENCY_KEY;
   }
@@ -95,7 +96,7 @@ describe("Owner Taxonomy aggregate retrieval (#30)", () => {
     const response = await handleGetOwnerTaxonomyAggregate(
       getRequest(),
       { taxonomyId: TAXONOMY_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.getOwnerTaxonomyAggregate).toHaveLength(1);
@@ -119,7 +120,7 @@ describe("Owner Taxonomy aggregate retrieval (#30)", () => {
       const response = await handleGetOwnerTaxonomyAggregate(
         getRequest(taxonomyId),
         { taxonomyId },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(400);
       expect(fake.calls.getOwnerTaxonomyAggregate).toHaveLength(0);
@@ -152,7 +153,7 @@ describe("Owner Taxonomy aggregate retrieval (#30)", () => {
       const response = await handleGetOwnerTaxonomyAggregate(
         getRequest(),
         { taxonomyId: TAXONOMY_ID },
-        { service: fake, logger },
+        { service: fake, security: ownerTestSecurity(), logger },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.getOwnerTaxonomyAggregate).toHaveLength(1);
@@ -170,7 +171,7 @@ describe("Owner Taxonomy aggregate retrieval (#30)", () => {
     const response = await handleGetOwnerTaxonomyAggregate(
       getRequest(),
       { taxonomyId: TAXONOMY_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -184,7 +185,7 @@ describe("Owner Taxonomy aggregate retrieval (#30)", () => {
     const first = await handleGetOwnerTaxonomyAggregate(
       getRequest(TAXONOMY_ID, "inbound-attacker-value"),
       { taxonomyId: TAXONOMY_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
@@ -200,7 +201,7 @@ describe("Owner Taxonomy commands (#30)", () => {
     const response = await handleCreateOwnerTaxonomyValue(
       postRequest(taxonomyValuesUrl, { body: { name: "TypeScript" } }),
       { taxonomyId: TAXONOMY_ID },
-      { service: fake, logger },
+      { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(201);
     expect(fake.calls.createOwnerTaxonomyValue).toHaveLength(1);
@@ -228,7 +229,7 @@ describe("Owner Taxonomy commands (#30)", () => {
     const response = await handleRenameOwnerTaxonomyValue(
       postRequest(renameUrl, { body: { name: "TypeScript Renamed" } }),
       { valueId: VALUE_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.renameOwnerTaxonomyValue).toHaveLength(1);
@@ -246,7 +247,7 @@ describe("Owner Taxonomy commands (#30)", () => {
     const response = await handleRetireOwnerTaxonomyValue(
       postRequest(retireUrl, { body: {} }),
       { valueId: VALUE_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.retireOwnerTaxonomyValue).toHaveLength(1);
@@ -264,7 +265,7 @@ describe("Owner Taxonomy commands (#30)", () => {
     const response = await handleMergeOwnerTaxonomyValue(
       postRequest(mergeUrl, { body: { targetValueId: TARGET_VALUE_ID } }),
       { valueId: VALUE_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(200);
     expect(fake.calls.mergeOwnerTaxonomyValue).toHaveLength(1);
@@ -292,7 +293,7 @@ describe("Owner Taxonomy commands (#30)", () => {
     "rejects command %s %s as 400 before dispatch",
     async (_kind, op, options, pathOverride) => {
       const fake = createOwnerTaxonomyTestFake({ type: "success" });
-      const deps = { service: fake };
+      const deps = { service: fake, security: ownerTestSecurity() };
       let response: Response;
       if (op === "create") {
         response = await handleCreateOwnerTaxonomyValue(
@@ -358,7 +359,7 @@ describe("Owner Taxonomy commands (#30)", () => {
       const response = await handleCreateOwnerTaxonomyValue(
         postRequest(taxonomyValuesUrl, { body: { name: "TypeScript" } }),
         { taxonomyId: TAXONOMY_ID },
-        { service: fake, logger: createTestLogger() },
+        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
       );
       expect(response.status).toBe(status);
       expect(fake.calls.createOwnerTaxonomyValue).toHaveLength(1);
@@ -379,7 +380,7 @@ describe("Owner Taxonomy commands (#30)", () => {
     const rename = await handleRenameOwnerTaxonomyValue(
       postRequest(renameUrl, { body: { name: "TypeScript Renamed" } }),
       { valueId: VALUE_ID },
-      { service: forbidden, logger: createTestLogger() },
+      { service: forbidden, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(rename.status).toBe(403);
 
@@ -390,7 +391,7 @@ describe("Owner Taxonomy commands (#30)", () => {
     const merge = await handleMergeOwnerTaxonomyValue(
       postRequest(mergeUrl, { body: { targetValueId: TARGET_VALUE_ID } }),
       { valueId: VALUE_ID },
-      { service: invalid, logger: createTestLogger() },
+      { service: invalid, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(merge.status).toBe(422);
   });
@@ -400,7 +401,7 @@ describe("Owner Taxonomy commands (#30)", () => {
     const response = await handleCreateOwnerTaxonomyValue(
       postRequest(taxonomyValuesUrl, { body: { name: "TypeScript" } }),
       { taxonomyId: TAXONOMY_ID },
-      { service: fake, logger: createTestLogger() },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(500);
   });
@@ -409,26 +410,26 @@ describe("Owner Taxonomy commands (#30)", () => {
     const service = createProductionOwnerTaxonomyService();
     const logger = createTestLogger();
     const responses = [
-      await handleGetOwnerTaxonomyAggregate(getRequest(), { taxonomyId: TAXONOMY_ID }, { service, logger }),
+      await handleGetOwnerTaxonomyAggregate(getRequest(), { taxonomyId: TAXONOMY_ID }, { service, security: ownerTestSecurity(), logger }),
       await handleCreateOwnerTaxonomyValue(
         postRequest(taxonomyValuesUrl, { body: { name: "TypeScript" } }),
         { taxonomyId: TAXONOMY_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleRenameOwnerTaxonomyValue(
         postRequest(renameUrl, { body: { name: "TypeScript Renamed" } }),
         { valueId: VALUE_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleRetireOwnerTaxonomyValue(
         postRequest(retireUrl, { body: {} }),
         { valueId: VALUE_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
       await handleMergeOwnerTaxonomyValue(
         postRequest(mergeUrl, { body: { targetValueId: TARGET_VALUE_ID } }),
         { valueId: VALUE_ID },
-        { service, logger },
+        { service, security: ownerTestSecurity(), logger },
       ),
     ];
     expect(responses).toHaveLength(5);
@@ -500,7 +501,7 @@ describe("Owner Taxonomy commands (#30)", () => {
     const response = await handleGetOwnerTaxonomyAggregate(
       getRequest(),
       { taxonomyId: TAXONOMY_ID },
-      { service: throwing, logger },
+      { service: throwing, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());
