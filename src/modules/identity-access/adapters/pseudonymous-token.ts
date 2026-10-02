@@ -7,6 +7,7 @@ import {
 import type { Result, Rejection, StableId } from "@shared/domain";
 import { err, ok } from "@shared/domain";
 import type { PseudonymousPurpose, PseudonymousToken } from "../domain/index.js";
+import { isFunctionalIdentityOperation } from "../domain/index.js";
 import type {
   CryptoPort,
   IssuePseudonymousTokenInput,
@@ -73,14 +74,16 @@ function uuidV7Subject(nowSeconds: number, random: Uint8Array): string | null {
   const randB = hex.slice(3, 19);
   const variant = (8 | (Number.parseInt(randB[0] ?? "0", 16) & 3)).toString(16);
   const value = `${timestamp.slice(0, 8)}-${timestamp.slice(8)}-7${randA}-${variant}${randB.slice(1, 4)}-${randB.slice(4, 16)}`;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value)
-    ? value
-    : null;
+  return isUuidV7(value) ? value : null;
 }
 
 function isCanonicalBase64Url(value: string): boolean {
   return value.length > 0 && /^[A-Za-z0-9_-]+$/.test(value) &&
     Buffer.from(value, "base64url").toString("base64url") === value;
+}
+
+function isUuidV7(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 }
 
 function parsePayload(value: unknown): TokenPayload | null {
@@ -115,6 +118,12 @@ export class AesGcmPseudonymousTokenAdapter implements CryptoPort {
   async issuePseudonymousToken(
     input: IssuePseudonymousTokenInput,
   ): Promise<Result<PseudonymousToken, Rejection>> {
+    if (
+      input.purpose === "visitor_functional" &&
+      !isFunctionalIdentityOperation(input.interaction)
+    ) {
+      return err(rejected("forbidden", "FUNCTIONAL_IDENTITY_NOT_REQUIRED"));
+    }
     if (!consentAllows(input)) {
       return err(rejected("forbidden", "MEASUREMENT_CONSENT_REQUIRED"));
     }
@@ -216,7 +225,7 @@ export class AesGcmPseudonymousTokenAdapter implements CryptoPort {
     if (
       payload === null || payload.purpose !== input.expectedPurpose ||
       payload.keyVersion !== version ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(payload.subject) ||
+      !isUuidV7(payload.subject) ||
       !Number.isSafeInteger(now) || now < 0 ||
       payload.issuedAt > now + CLOCK_SKEW_SECONDS ||
       payload.expiresAt <= now || payload.expiresAt <= payload.issuedAt ||

@@ -3,7 +3,7 @@ export type {
   AuthorizeOperationQuery,
   IssuePseudonymousTokenCommand,
   VerifyPseudonymousTokenQuery,
-  VerifiedPseudonymousSubject,
+  VerifiedPseudonymousIdentity,
   IdentityAccessService,
 } from "./service.js";
 export {

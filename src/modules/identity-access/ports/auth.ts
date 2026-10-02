@@ -3,6 +3,7 @@ import type {
   OwnerIdentity,
   PseudonymousPurpose,
   MeasurementConsent,
+  FunctionalIdentityOperation,
   PseudonymousToken,
 } from "../domain/index.js";
 
@@ -17,11 +18,19 @@ export interface VerifyOwnerSessionInput {
   readonly expectedPurpose: "owner_session";
 }
 
-export interface IssuePseudonymousTokenInput {
-  readonly purpose: PseudonymousPurpose;
+interface IssuePseudonymousTokenInputBase {
   readonly ttlSeconds: number;
   readonly consent: MeasurementConsent;
 }
+
+export type IssuePseudonymousTokenInput =
+  | (IssuePseudonymousTokenInputBase & {
+      readonly purpose: "visitor_functional";
+      readonly interaction: FunctionalIdentityOperation;
+    })
+  | (IssuePseudonymousTokenInputBase & {
+      readonly purpose: "visitor_measurement";
+    });
 
 export interface VerifyPseudonymousTokenInput {
   readonly tokenString: string;

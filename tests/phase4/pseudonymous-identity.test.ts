@@ -58,7 +58,7 @@ describe("purpose-separated Visitor identities (#82)", () => {
     const crypto = adapter();
     const identities = service(crypto);
     const functional = await identities.issuePseudonymousToken({
-      purpose: "visitor_functional", ttlSeconds: 3600, consent: "denied",
+      purpose: "visitor_functional", interaction: "rating", ttlSeconds: 3600, consent: "denied",
     });
     const measurement = await identities.issuePseudonymousToken({
       purpose: "visitor_measurement", ttlSeconds: 3600, consent: "granted",
@@ -77,10 +77,20 @@ describe("purpose-separated Visitor identities (#82)", () => {
       consent: "granted",
     });
     expect(functionalSubject.ok && measurementSubject.ok).toBe(true);
-    if (functionalSubject.ok && measurementSubject.ok) {
+    if (
+      functionalSubject.ok && measurementSubject.ok &&
+      functionalSubject.value.purpose === "visitor_functional" &&
+      measurementSubject.value.purpose === "visitor_measurement"
+    ) {
       expect(functionalSubject.value.purpose).toBe("visitor_functional");
+      expect(functionalSubject.value.actor).toMatchObject({
+        kind: "visitor",
+        consent: "denied",
+      });
+      expect(functionalSubject.value.actor.functionalId).toBeDefined();
       expect(measurementSubject.value.purpose).toBe("visitor_measurement");
-      expect(functionalSubject.value.subject).not.toBe(measurementSubject.value.subject);
+      expect(functionalSubject.value.actor.functionalId).not.toBe(measurementSubject.value.subject);
+      expect("actor" in measurementSubject.value).toBe(false);
     }
     expect(functional.value.tokenString).not.toContain("visitor_functional");
     expect(measurement.value.tokenString).not.toContain("visitor_measurement");
@@ -98,10 +108,15 @@ describe("purpose-separated Visitor identities (#82)", () => {
     expect(randomCalls).toBe(0);
     for (const consent of ["denied", "unknown"] as const) {
       const issued = await identities.issuePseudonymousToken({
-        purpose: "visitor_functional", ttlSeconds: 60, consent,
+        purpose: "visitor_functional", interaction: "reaction", ttlSeconds: 60, consent,
       });
       expect(issued.ok).toBe(true);
     }
+    expect(randomCalls).toBe(4);
+    const invalidIntent = await identities.issuePseudonymousToken({
+      purpose: "visitor_functional", interaction: "browse", ttlSeconds: 60, consent: "unknown",
+    } as never);
+    expect(invalidIntent).toMatchObject({ ok: false, error: { code: "FUNCTIONAL_IDENTITY_NOT_REQUIRED" } });
     expect(randomCalls).toBe(4);
   });
 
@@ -142,7 +157,7 @@ describe("purpose-separated Visitor identities (#82)", () => {
     let now = 1_800_000_000;
     const crypto = adapter(config(), () => now);
     const issued = await crypto.issuePseudonymousToken({
-      purpose: "visitor_functional", ttlSeconds: 60, consent: "unknown",
+      purpose: "visitor_functional", interaction: "rating", ttlSeconds: 60, consent: "unknown",
     });
     expect(issued.ok).toBe(true);
     if (!issued.ok) return;
@@ -181,9 +196,11 @@ describe("purpose-separated Visitor identities (#82)", () => {
         ? config()
         : config({ MEASUREMENT_ID_HASH_KEY: key(4) });
       const oldAdapter = adapter(oldConfig);
-      const issued = await oldAdapter.issuePseudonymousToken({
-        purpose, ttlSeconds: 120, consent: "granted",
-      });
+      const issued = await oldAdapter.issuePseudonymousToken(
+        purpose === "visitor_functional"
+          ? { purpose, interaction: "reaction", ttlSeconds: 120, consent: "granted" }
+          : { purpose, ttlSeconds: 120, consent: "granted" },
+      );
       expect(issued.ok).toBe(true);
       if (!issued.ok) continue;
       const newConfig = purpose === "visitor_functional"
@@ -227,7 +244,7 @@ describe("purpose-separated Visitor identities (#82)", () => {
     const crypto = adapter();
     const identities = service(crypto);
     await expect(identities.issuePseudonymousToken({
-      purpose: "visitor_functional", ttlSeconds: 30 * 24 * 60 * 60 + 1, consent: "granted",
+      purpose: "visitor_functional", interaction: "reaction", ttlSeconds: 30 * 24 * 60 * 60 + 1, consent: "granted",
     })).resolves.toMatchObject({ ok: false, error: { kind: "validation" } });
     const issued = await identities.issuePseudonymousToken({
       purpose: "visitor_measurement", ttlSeconds: 60, consent: "granted",

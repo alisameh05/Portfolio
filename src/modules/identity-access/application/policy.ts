@@ -6,13 +6,14 @@ import type {
 } from "@shared/domain";
 import { assertNeverActor, err, ok } from "@shared/domain";
 import type { Permission } from "../domain/index.js";
+import { isFunctionalIdentityOperation } from "../domain/index.js";
 import type { AuthProviderPort, CryptoPort } from "../ports/index.js";
 import type {
   AuthorizeOperationQuery,
   IdentityAccessService,
   IssuePseudonymousTokenCommand,
   ResolveActorContextQuery,
-  VerifiedPseudonymousSubject,
+  VerifiedPseudonymousIdentity,
   VerifyPseudonymousTokenQuery,
 } from "./service.js";
 import type { PseudonymousToken } from "../domain/index.js";
@@ -142,19 +143,43 @@ export function createIdentityAccessService(
       ) {
         return err({ kind: "forbidden", code: "MEASUREMENT_CONSENT_REQUIRED" });
       }
+      if (
+        command.purpose === "visitor_functional" &&
+        !isFunctionalIdentityOperation(command.interaction)
+      ) {
+        return err({ kind: "forbidden", code: "FUNCTIONAL_IDENTITY_NOT_REQUIRED" });
+      }
       return deps.crypto.issuePseudonymousToken(command);
     },
 
     async verifyPseudonymousToken(
       query: VerifyPseudonymousTokenQuery,
-    ): Promise<Result<VerifiedPseudonymousSubject, Rejection>> {
+    ): Promise<Result<VerifiedPseudonymousIdentity, Rejection>> {
       if (
         query.expectedPurpose === "visitor_measurement" &&
         query.consent !== "granted"
       ) {
         return err({ kind: "forbidden", code: "MEASUREMENT_CONSENT_REQUIRED" });
       }
-      return deps.crypto.verifyPseudonymousToken(query);
+      const verified = await deps.crypto.verifyPseudonymousToken(query);
+      if (!verified.ok) return err(verified.error);
+      if (verified.value.purpose !== query.expectedPurpose) {
+        return err({ kind: "unauthenticated", code: "WRONG_TOKEN_PURPOSE" });
+      }
+      if (verified.value.purpose === "visitor_functional") {
+        return ok({
+          purpose: "visitor_functional",
+          actor: {
+            kind: "visitor",
+            functionalId: verified.value.subject as StableId<"FunctionalVisitor">,
+            consent: query.consent,
+          },
+        });
+      }
+      return ok({
+        purpose: "visitor_measurement",
+        subject: verified.value.subject as StableId<"MeasurementVisitor">,
+      });
     },
   };
 }

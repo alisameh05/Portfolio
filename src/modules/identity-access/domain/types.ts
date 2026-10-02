@@ -23,6 +23,16 @@ export interface OwnerIdentity {
 
 export type PseudonymousPurpose = "visitor_functional" | "visitor_measurement";
 
+/** Only interactions whose current value is deduplicated need functional identity. */
+export const FUNCTIONAL_IDENTITY_OPERATIONS = Object.freeze(["reaction", "rating"] as const);
+export type FunctionalIdentityOperation = (typeof FUNCTIONAL_IDENTITY_OPERATIONS)[number];
+
+export function isFunctionalIdentityOperation(
+  value: unknown,
+): value is FunctionalIdentityOperation {
+  return FUNCTIONAL_IDENTITY_OPERATIONS.includes(value as FunctionalIdentityOperation);
+}
+
 /**
  * Current Measurement consent as seen by identity issuance/verification.
  * Functional identity in `ActorContext` remains independent of this value

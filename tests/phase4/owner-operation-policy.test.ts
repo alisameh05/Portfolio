@@ -212,6 +212,7 @@ describe("Owner operation policy (#81)", () => {
     });
     const issued = await service.issuePseudonymousToken({
       purpose: "visitor_functional",
+      interaction: "reaction",
       ttlSeconds: 3600,
       consent: "unknown",
     });
