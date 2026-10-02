@@ -161,6 +161,12 @@ export function createIdentityAccessService(
       ) {
         return err({ kind: "forbidden", code: "MEASUREMENT_CONSENT_REQUIRED" });
       }
+      if (
+        query.expectedPurpose === "visitor_functional" &&
+        !isFunctionalIdentityOperation(query.interaction)
+      ) {
+        return err({ kind: "forbidden", code: "FUNCTIONAL_IDENTITY_NOT_REQUIRED" });
+      }
       const verified = await deps.crypto.verifyPseudonymousToken(query);
       if (!verified.ok) return err(verified.error);
       if (verified.value.purpose !== query.expectedPurpose) {
@@ -169,11 +175,7 @@ export function createIdentityAccessService(
       if (verified.value.purpose === "visitor_functional") {
         return ok({
           purpose: "visitor_functional",
-          actor: {
-            kind: "visitor",
-            functionalId: verified.value.subject as StableId<"FunctionalVisitor">,
-            consent: query.consent,
-          },
+          subject: verified.value.subject as StableId<"FunctionalVisitor">,
         });
       }
       return ok({

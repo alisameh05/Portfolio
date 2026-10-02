@@ -2,12 +2,10 @@ import type {
   Result,
   Rejection,
   ActorContext,
-  VisitorActor,
   StableId,
 } from "@shared/domain";
 import type {
   Permission,
-  PseudonymousPurpose,
   FunctionalIdentityOperation,
   MeasurementConsent,
   PseudonymousToken,
@@ -52,17 +50,26 @@ export type IssuePseudonymousTokenCommand =
       readonly purpose: "visitor_measurement";
     });
 
-export interface VerifyPseudonymousTokenQuery {
+interface VerifyPseudonymousTokenQueryBase {
   readonly tokenString: string;
-  readonly expectedPurpose: PseudonymousPurpose;
   /** Current consent is rechecked when a Measurement token is used. */
   readonly consent: MeasurementConsent;
 }
 
+export type VerifyPseudonymousTokenQuery =
+  | (VerifyPseudonymousTokenQueryBase & {
+      readonly expectedPurpose: "visitor_functional";
+      readonly interaction: FunctionalIdentityOperation;
+    })
+  | (VerifyPseudonymousTokenQueryBase & {
+      readonly expectedPurpose: "visitor_measurement";
+    });
+
 export type VerifiedPseudonymousIdentity =
   | {
       readonly purpose: "visitor_functional";
-      readonly actor: VisitorActor;
+      /** The interaction orchestration builds a Visitor ActorContext only after Project authorization. */
+      readonly subject: StableId<"FunctionalVisitor">;
     }
   | {
       readonly purpose: "visitor_measurement";
