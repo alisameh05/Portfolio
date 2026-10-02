@@ -16,3 +16,8 @@ export {
   type PortfolioProfileCommandService,
   type PortfolioProfileCommandReceipt,
 } from "./profile-command.js";
+export {
+  createPortfolioContactChannelsCommandService,
+  type PortfolioContactChannelsCommandService,
+  type PortfolioContactChannelsCommandReceipt,
+} from "./contact-channels-command.js";

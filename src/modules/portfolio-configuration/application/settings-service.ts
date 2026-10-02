@@ -11,7 +11,7 @@ import type {
   ContactChannel,
   GlobalProjectCta,
 } from "../domain/index.js";
-import type { PortfolioConfigurationRepositoryPort, PortfolioProfileUpdate, PortfolioScope } from "../ports/index.js";
+import type { PortfolioAggregateUpdate, PortfolioConfigurationRepositoryPort, PortfolioScope } from "../ports/index.js";
 import type { GetPortfolioSettingsQuery } from "./service.js";
 
 export interface PortfolioSettingsRepository {
@@ -29,7 +29,13 @@ export interface PortfolioSettingsRepository {
     profile: PortfolioProfile,
     expectedVersion: number,
     context: TransactionContext,
-  ): Promise<Result<PortfolioProfileUpdate, Rejection>>;
+  ): Promise<Result<PortfolioAggregateUpdate, Rejection>>;
+  updateContactChannels(
+    scope: PortfolioScope,
+    channels: readonly ContactChannel[],
+    expectedVersion: number,
+    context: TransactionContext,
+  ): Promise<Result<PortfolioAggregateUpdate, Rejection>>;
 }
 
 export interface PortfolioSettingsProvisioningValues {
@@ -85,9 +91,27 @@ function secureWebDestination(value: unknown): URL | undefined {
   }
 }
 
+function validMailtoDestination(value: string): boolean {
+  if (!value.startsWith("mailto:")) return false;
+  const address = value.slice("mailto:".length);
+  const separator = address.indexOf("@");
+  if (separator < 1 || separator !== address.lastIndexOf("@")) return false;
+  const local = address.slice(0, separator);
+  const domain = address.slice(separator + 1);
+  if (
+    local.length > 64 || local.startsWith(".") || local.endsWith(".") || local.includes("..") ||
+    !/^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/i.test(local) || domain.length > 253
+  ) return false;
+  const labels = domain.split(".");
+  return labels.length >= 2 && labels.every((label) =>
+    label.length <= 63 && /^[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?$/i.test(label)
+  ) && /^[A-Z]{2,}$/i.test(labels.at(-1) ?? "");
+}
+
 function validChannelDestination(channel: ContactChannel["channel"], destination: unknown): boolean {
-  if (channel === "phone") return typeof destination === "string" && /^tel:\+[1-9]\d{7,14}$/.test(destination);
-  if (channel === "email") return typeof destination === "string" && /^mailto:[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(destination);
+  if (typeof destination !== "string" || destination.length > 2048 || /[\s\u0000-\u001f\u007f]/.test(destination)) return false;
+  if (channel === "phone") return /^tel:\+[1-9]\d{7,14}$/.test(destination);
+  if (channel === "email") return validMailtoDestination(destination);
   const url = secureWebDestination(destination);
   if (url === undefined) return false;
   const host = url.hostname.toLowerCase();
@@ -100,6 +124,28 @@ function validChannelDestination(channel: ContactChannel["channel"], destination
   }
 }
 
+/** Validate a replacement list identically for controlled provisioning and Owner updates. */
+export function invalidContactChannelsField(channels: unknown): string | undefined {
+  if (!Array.isArray(channels) || channels.length > 20) return "contactChannels";
+  const channelTypes = new Set(["linkedin", "whatsapp", "instagram", "phone", "email", "other"]);
+  for (const [index, channel] of channels.entries()) {
+    if (channel === null || typeof channel !== "object" || !channelTypes.has(channel.channel)) {
+      return `contactChannels.${index}`;
+    }
+    if (!meaningfulText(channel.label, 80)) return `contactChannels.${index}.label`;
+    if (!validChannelDestination(channel.channel as ContactChannel["channel"], channel.destination)) {
+      return `contactChannels.${index}.destination`;
+    }
+    const locales = channel.availableLocales;
+    if (
+      !Array.isArray(locales) || locales.length < 1 || locales.length > 2 ||
+      new Set(locales).size !== locales.length ||
+      locales.some((locale) => locale !== "en" && locale !== "ar")
+    ) return `contactChannels.${index}.availableLocales`;
+  }
+  return undefined;
+}
+
 function validateValues(values: PortfolioSettingsProvisioningValues): string | undefined {
   if (values === null || typeof values !== "object") return "settings";
   const { profile, contactChannels, globalCta } = values;
@@ -108,18 +154,8 @@ function validateValues(values: PortfolioSettingsProvisioningValues): string | u
   if (!meaningfulText(profile.displayName, 100)) return "profile.displayName";
   if (!meaningfulText(profile.headline, 160)) return "profile.headline";
   if (!meaningfulText(profile.bio, 4000)) return "profile.bio";
-  if (!Array.isArray(contactChannels) || contactChannels.length > 20) return "contactChannels";
-  for (const [index, channel] of contactChannels.entries()) {
-    if (channel === null || typeof channel !== "object") return `contactChannels.${index}`;
-    if (!meaningfulText(channel.label, 80)) return `contactChannels.${index}.label`;
-    if (!validChannelDestination(channel.channel, channel.destination)) return `contactChannels.${index}.destination`;
-    const locales = channel.availableLocales;
-    if (
-      !Array.isArray(locales) || locales.length < 1 || locales.length > 2 ||
-      new Set(locales).size !== locales.length ||
-      locales.some((locale) => locale !== "en" && locale !== "ar")
-    ) return `contactChannels.${index}.availableLocales`;
-  }
+  const invalidChannelField = invalidContactChannelsField(contactChannels);
+  if (invalidChannelField !== undefined) return invalidChannelField;
   if (!meaningfulText(globalCta.label, 80)) return "globalCta.label";
   if (secureWebDestination(globalCta.destination) === undefined) return "globalCta.destination";
   if (

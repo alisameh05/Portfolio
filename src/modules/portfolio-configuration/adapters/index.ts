@@ -3,10 +3,10 @@ import { err } from "@shared/domain";
 import type { TransactionContext } from "../../../runtime/ports.js";
 import type {
   PortfolioConfigurationRepositoryPort,
-  PortfolioProfileUpdate,
+  PortfolioAggregateUpdate,
   PortfolioScope,
 } from "../ports/index.js";
-import type { PortfolioProfile, PortfolioSettings } from "../domain/index.js";
+import type { ContactChannel, PortfolioProfile, PortfolioSettings } from "../domain/index.js";
 
 export { createPostgresPortfolioSettingsRepository } from "./postgres-settings.js";
 
@@ -46,7 +46,16 @@ export class StubPortfolioConfigurationRepository
     _profile: PortfolioProfile,
     _expectedVersion: number,
     _context: TransactionContext,
-  ): Promise<Result<PortfolioProfileUpdate, Rejection>> {
+  ): Promise<Result<PortfolioAggregateUpdate, Rejection>> {
+    return err({ kind: "temporarily_unavailable", code: "PERSISTENCE_NOT_IMPLEMENTED" });
+  }
+
+  async updateContactChannels(
+    _scope: PortfolioScope,
+    _channels: readonly ContactChannel[],
+    _expectedVersion: number,
+    _context: TransactionContext,
+  ): Promise<Result<PortfolioAggregateUpdate, Rejection>> {
     return err({ kind: "temporarily_unavailable", code: "PERSISTENCE_NOT_IMPLEMENTED" });
   }
 }

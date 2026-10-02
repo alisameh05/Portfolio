@@ -1,5 +1,5 @@
 export type {
   PortfolioScope,
   PortfolioConfigurationRepositoryPort,
-  PortfolioProfileUpdate,
+  PortfolioAggregateUpdate,
 } from "./repository.js";

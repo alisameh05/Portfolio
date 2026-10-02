@@ -102,7 +102,11 @@ export type PortfolioProfileUpdatedEvent = DomainEvent<
 export type ContactChannelsUpdatedEvent = DomainEvent<
   "portfolio_configuration.channels_updated.v1",
   {
-    readonly contactChannels: readonly ContactChannel[];
+    /** Channel kinds only; never copy Contact destinations or labels to the outbox. */
+    readonly channelTypes: readonly ContactChannelType[];
+    readonly channelCount: number;
+    /** One-way stable Owner scope digest; raw Owner and provider identities stay private. */
+    readonly ownerScope: string;
   }
 >;
 

@@ -5,9 +5,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createStableId, err, ok } from "../../src/shared/domain/index.js";
 import { decideAuthorization } from "../../src/modules/identity-access/index.js";
 import { createOwnerConfigurationApplicationService } from "../../src/runtime/owner-configuration-service.js";
-import { handleUpdateOwnerProfileConfiguration } from "../../src/runtime/http/owner-configuration.js";
+import { handleUpdateOwnerContactChannels, handleUpdateOwnerProfileConfiguration } from "../../src/runtime/http/owner-configuration.js";
 import type { OwnerRequestSecurity } from "../../src/runtime/http/owner-security.js";
 import { createPortfolioProfileCommandService } from "../../src/modules/portfolio-configuration/application/profile-command.js";
+import { createPortfolioContactChannelsCommandService } from "../../src/modules/portfolio-configuration/application/contact-channels-command.js";
 import {
   createPortfolioSettingsService,
   createPortfolioSettingsReader,
@@ -196,6 +197,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
              has_schema_privilege(role_name, 'portfolio_config', 'USAGE') as schema_usage,
              has_table_privilege(role_name, 'portfolio_config.settings', 'SELECT') as can_select,
              has_table_privilege(role_name, 'portfolio_config.settings', 'INSERT') as can_insert,
+             has_table_privilege(role_name, 'portfolio_config.contact_channels', 'DELETE') as can_delete_channels,
              has_column_privilege(role_name, 'portfolio_config.settings', 'display_name', 'UPDATE') as can_update_profile,
              has_column_privilege(role_name, 'portfolio_config.settings', 'global_cta_label', 'UPDATE') as can_update_cta,
              has_column_privilege(role_name, 'portfolio_config.settings', 'portfolio_id', 'UPDATE') as can_update_identity
@@ -206,11 +208,13 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     const byRole = new Map(privileges.rows.map((row) => [row.role_name, row]));
     expect(byRole.get("shipwithali_application")).toMatchObject({
       schema_usage: true, can_select: true, can_insert: true,
+      can_delete_channels: true,
       can_update_profile: true, can_update_cta: false, can_update_identity: false,
     });
     for (const role of ["shipwithali_worker", "shipwithali_backup", "anon", "authenticated"]) {
       expect(byRole.get(role)).toMatchObject({
         schema_usage: false, can_select: false, can_insert: false,
+        can_delete_channels: false,
         can_update_profile: false, can_update_cta: false, can_update_identity: false,
       });
     }
@@ -281,7 +285,8 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     await provisioning.provision(values);
     const operations = createPostgresOperationsPersistence(database.database);
     const commands = createPortfolioProfileCommandService({ repository, operations, scope });
-    const service = createOwnerConfigurationApplicationService(commands, scope.portfolioId);
+    const contactChannelsCommands = createPortfolioContactChannelsCommandService({ repository, operations, scope });
+    const service = createOwnerConfigurationApplicationService(commands, contactChannelsCommands, scope.portfolioId);
     const reader = createPortfolioSettingsReader({ repository, transactions: database.transactions, scope });
     const actor = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "integration-session" };
     let authorized = true;
@@ -387,6 +392,243 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     expect(JSON.stringify(committed)).not.toContain("integration-session");
   }, 30_000);
 
+  it("executes secured Contact channel replacement with ordering, atomic versioning, replay, concurrency, and a minimal audit", async () => {
+    const scope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+    const provisioning = createPortfolioSettingsService({ repository, transactions: database.transactions, scope });
+    await provisioning.provision(values);
+    const operations = createPostgresOperationsPersistence(database.database);
+    const commands = createPortfolioContactChannelsCommandService({ repository, operations, scope });
+    const service = createOwnerConfigurationApplicationService(
+      createPortfolioProfileCommandService({ repository, operations, scope }),
+      commands,
+      scope.portfolioId,
+    );
+    const reader = createPortfolioSettingsReader({ repository, transactions: database.transactions, scope });
+    const actor = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "channels-integration-session" };
+    let authorized = true;
+    let barrier: (() => Promise<void>) | undefined;
+    const security: OwnerRequestSecurity = {
+      appOrigin: "https://example.com",
+      identity: {
+        async resolveActorContext() { return ok(actor); },
+        async authorizeOperation(query) {
+          if (!authorized) return ok(false);
+          await barrier?.();
+          return decideAuthorization(query);
+        },
+      },
+    };
+    const makeRequest = (version: number, key: string, nextChannels: readonly unknown[]) =>
+      new Request("https://example.com/api/owner/v1/configuration/contact-channels", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          cookie: "sw_owner_session=channels-integration-token",
+          origin: "https://example.com",
+          "x-csrf-token": "channels-integration-csrf",
+          "idempotency-key": key,
+          "if-match": `"${version}"`,
+        },
+        body: JSON.stringify({ channels: nextChannels }),
+      });
+    const handler = (version: number, key: string, nextChannels: readonly unknown[]) =>
+      handleUpdateOwnerContactChannels(makeRequest(version, key, nextChannels), { service, security });
+    const read = () => reader.getSettings({ actor, portfolioId: scope.portfolioId });
+    const eventCount = async () => {
+      const result = await admin.query(
+        "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'portfolio_configuration.channels_updated.v1'",
+        [scope.portfolioId],
+      );
+      return result.rows[0].count as number;
+    };
+    const startBarrier = () => {
+      let release!: () => void;
+      const waiting = new Promise<void>((resolve) => { release = resolve; });
+      let count = 0;
+      barrier = async () => {
+        count += 1;
+        if (count === 2) release();
+        await waiting;
+      };
+    };
+    const orderedChannels = [
+      { channel: "linkedin", label: "LinkedIn", destination: "https://www.linkedin.com/in/ali", availableLocales: ["ar", "en"] },
+      { channel: "whatsapp", label: "WhatsApp", destination: "https://wa.me/201234567890", availableLocales: ["ar", "en"] },
+      { channel: "instagram", label: "Instagram", destination: "https://www.instagram.com/ali", availableLocales: ["en"] },
+      { channel: "phone", label: "Phone", destination: "tel:+201234567890", availableLocales: ["ar"] },
+      { channel: "email", label: "Email", destination: "mailto:ali@example.com", availableLocales: ["en"] },
+      { channel: "other", label: "Website", destination: "https://example.org/contact", availableLocales: ["ar"] },
+    ];
+    const maximumChannels = Array.from({ length: 20 }, (_, index) => ({
+      ...orderedChannels[index % orderedChannels.length]!,
+      label: `Channel ${index + 1}`,
+    }));
+
+    const first = await handler(1, "channels-replace-key", orderedChannels);
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({ aggregateId: scope.portfolioId, aggregateVersion: 2, outcome: "configuration-updated" });
+    let committed = await read();
+    expect(committed).toMatchObject({ ok: true, value: { contactChannels: orderedChannels, version: 2 } });
+    if (committed.ok) {
+      expect(committed.value.profile).toEqual(values.profile);
+      expect(committed.value.globalCta).toEqual(values.globalCta);
+    }
+
+    const maximum = await handler(2, "channels-maximum-key", maximumChannels);
+    expect(maximum.status).toBe(200);
+    expect(await maximum.json()).toMatchObject({ aggregateVersion: 3, outcome: "configuration-updated" });
+    committed = await read();
+    expect(committed).toMatchObject({ ok: true, value: { contactChannels: maximumChannels, version: 3 } });
+
+    const oversized = await handler(3, "channels-oversized-key", [...maximumChannels, maximumChannels[0]]);
+    expect(oversized.status).toBe(400);
+    for (const [key, channel, destination] of [
+      ["channels-unsafe-scheme-key", "linkedin", "javascript:alert(1)"],
+      ["channels-credentials-key", "linkedin", "https://user:password@www.linkedin.com/in/ali"],
+      ["channels-malformed-mailto-key", "email", "mailto:ali@bad..com"],
+      ["channels-lookalike-host-key", "linkedin", "https://linkedin.com.attacker.example/ali"],
+      ["channels-mail-protocol-mismatch-key", "email", "https://example.org/contact"],
+      ["channels-phone-protocol-mismatch-key", "phone", "mailto:ali@example.com"],
+    ] as const) {
+      const rejected = await handler(3, key, [{ ...orderedChannels[0]!, channel, destination }]);
+      expect(rejected.status).toBe(422);
+    }
+    expect(await eventCount()).toBe(2);
+    committed = await read();
+    expect(committed).toMatchObject({ ok: true, value: { contactChannels: maximumChannels, version: 3 } });
+
+    const empty = await handler(3, "channels-empty-key", []);
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toMatchObject({ aggregateVersion: 4, outcome: "configuration-updated" });
+    const replay = await handler(1, "channels-replace-key", orderedChannels);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ aggregateVersion: 2, outcome: "configuration-updated" });
+    const changedHash = await handler(1, "channels-replace-key", [...orderedChannels].reverse());
+    expect(changedHash.status).toBe(409);
+    const stale = await handler(3, "channels-stale-key", orderedChannels);
+    expect(stale.status).toBe(412);
+    authorized = false;
+    const removedAllowlist = await handler(1, "channels-replace-key", orderedChannels);
+    authorized = true;
+    expect(removedAllowlist.status).toBe(403);
+    expect(await eventCount()).toBe(3);
+    committed = await read();
+    expect(committed).toMatchObject({ ok: true, value: { contactChannels: [], version: 4 } });
+
+    const audit = await admin.query(
+      "select payload, aggregate_version from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'portfolio_configuration.channels_updated.v1' order by aggregate_version",
+      [scope.portfolioId],
+    );
+    expect(audit.rows).toHaveLength(3);
+    expect(audit.rows[0]).toMatchObject({
+      aggregate_version: 2,
+      payload: { channelCount: 6, channelTypes: ["email", "instagram", "linkedin", "other", "phone", "whatsapp"], ownerScope: expect.stringMatching(/^[0-9a-f]{64}$/) },
+    });
+    expect(JSON.stringify(audit.rows)).not.toContain("mailto:ali@example.com");
+    expect(JSON.stringify(audit.rows)).not.toContain("wa.me");
+
+    startBarrier();
+    const race = await Promise.all([
+      handler(4, "channels-race-left", orderedChannels.slice(0, 1)),
+      handler(4, "channels-race-right", orderedChannels.slice(1)),
+    ]);
+    barrier = undefined;
+    expect(race.map((response) => response.status).sort()).toEqual([200, 412]);
+    expect(await eventCount()).toBe(4);
+    committed = await read();
+    expect(committed.ok && committed.value.version).toBe(5);
+    if (committed.ok) expect([orderedChannels.slice(0, 1), orderedChannels.slice(1)]).toContainEqual(committed.value.contactChannels);
+    expect(JSON.stringify(committed)).not.toContain(scope.ownerId);
+    expect(JSON.stringify(committed)).not.toContain("channels-integration-session");
+  }, 30_000);
+
+  it.each([
+    ["aggregate", "update", "portfolio_config.settings", "new.portfolio_id = '${portfolioId}'::uuid"],
+    ["channel delete", "delete", "portfolio_config.contact_channels", "old.portfolio_id = '${portfolioId}'::uuid"],
+    ["channel insert", "insert", "portfolio_config.contact_channels", "new.portfolio_id = '${portfolioId}'::uuid"],
+    ["ledger", "insert", "operations.idempotency_records", "new.operation_scope = 'portfolio-configuration.update-owner-contact-channels'"],
+    ["outbox", "insert", "operations.outbox_events", "new.event_type = 'portfolio_configuration.channels_updated.v1'"],
+  ] as const)("rolls back channel state, ledger, and outbox when the %s stage fails", async (stage, action, table, rawCondition) => {
+    const scope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+    const provisioning = createPortfolioSettingsService({ repository, transactions: database.transactions, scope });
+    await provisioning.provision(values);
+    const beforeSettings = await admin.query(
+      "select version, display_name, headline, bio from portfolio_config.settings where portfolio_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    const beforeChannels = await admin.query(
+      "select position, channel, label, destination, available_locales from portfolio_config.contact_channels where portfolio_id = $1::uuid order by position",
+      [scope.portfolioId],
+    );
+    const beforeEvents = await admin.query(
+      "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    const actor = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "channel-failure-session" };
+    const security: OwnerRequestSecurity = {
+      appOrigin: "https://example.com",
+      identity: {
+        async resolveActorContext() { return ok(actor); },
+        async authorizeOperation(query) { return decideAuthorization(query); },
+      },
+    };
+    const operations = createPostgresOperationsPersistence(database.database);
+    const commands = createPortfolioContactChannelsCommandService({ repository, operations, scope });
+    const service = createOwnerConfigurationApplicationService(
+      createPortfolioProfileCommandService({ repository, operations, scope }), commands, scope.portfolioId,
+    );
+    const key = `channels-failure-${stage.replaceAll(" ", "-")}-${process.pid}-${randomBytes(3).toString("hex")}`;
+    const suffix = `${stage.replaceAll(" ", "_")}_${process.pid}_${randomBytes(3).toString("hex")}`;
+    const trigger = `phase4_channels_fail_${suffix}`;
+    const functionName = `phase4_channels_fail_${suffix}`;
+    const condition = rawCondition.replaceAll("${portfolioId}", scope.portfolioId);
+    await admin.query(`create function public.${functionName}() returns trigger language plpgsql as $$ begin raise exception 'synthetic channel ${stage} failure'; end $$`);
+    await admin.query(`create trigger ${trigger} before ${action} on ${table} for each row when (${condition}) execute function public.${functionName}()`);
+    try {
+      const response = await handleUpdateOwnerContactChannels(
+        new Request("https://example.com/api/owner/v1/configuration/contact-channels", {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+            cookie: "sw_owner_session=channel-failure-token",
+            origin: "https://example.com",
+            "x-csrf-token": "channel-failure-csrf",
+            "idempotency-key": key,
+            "if-match": '"1"',
+          },
+          body: JSON.stringify({ channels: [{
+            channel: "email", label: "Replacement", destination: "mailto:replacement@example.com", availableLocales: ["en"],
+          }] }),
+        }),
+        { service, security },
+      );
+      expect(response.status).toBe(500);
+    } finally {
+      await admin.query(`drop trigger if exists ${trigger} on ${table}`);
+      await admin.query(`drop function if exists public.${functionName}()`);
+    }
+    const afterSettings = await admin.query(
+      "select version, display_name, headline, bio from portfolio_config.settings where portfolio_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    const afterChannels = await admin.query(
+      "select position, channel, label, destination, available_locales from portfolio_config.contact_channels where portfolio_id = $1::uuid order by position",
+      [scope.portfolioId],
+    );
+    const afterEvents = await admin.query(
+      "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    const keyCount = await admin.query(
+      "select count(*)::int as count from operations.idempotency_records where operation_scope = 'portfolio-configuration.update-owner-contact-channels' and key_hash = $1",
+      [createHash("sha256").update(key, "utf8").digest("hex")],
+    );
+    expect(afterSettings.rows).toEqual(beforeSettings.rows);
+    expect(afterChannels.rows).toEqual(beforeChannels.rows);
+    expect(afterEvents.rows[0].count).toBe(beforeEvents.rows[0].count);
+    expect(keyCount.rows[0].count).toBe(0);
+  }, 30_000);
+
   it.each([
     ["settings", "update", "portfolio_config.settings", "new.portfolio_id"],
     ["ledger", "insert", "operations.idempotency_records", "new.operation_scope"],
@@ -413,7 +655,8 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     };
     const operations = createPostgresOperationsPersistence(database.database);
     const commands = createPortfolioProfileCommandService({ repository, operations, scope });
-    const service = createOwnerConfigurationApplicationService(commands, scope.portfolioId);
+    const contactChannelsCommands = createPortfolioContactChannelsCommandService({ repository, operations, scope });
+    const service = createOwnerConfigurationApplicationService(commands, contactChannelsCommands, scope.portfolioId);
     const suffix = `${stage}_${process.pid}_${randomBytes(3).toString("hex")}`;
     const idempotencyKey = `failure-key-${stage}-${process.pid}`;
     const trigger = `phase4_profile_fail_${suffix}`;
