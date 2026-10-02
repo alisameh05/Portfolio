@@ -4,8 +4,13 @@ import type { Clock, StableIdGenerator, TransactionContext } from "../../../runt
 import { createSystemClock, createSystemIdGenerator } from "../../../runtime/ports.js";
 import type { OperationsPersistencePorts, SafeResultEnvelope, VersionedPayload } from "../../portability-operations/index.js";
 import type { PortfolioSettings, PortfolioProfile } from "../domain/index.js";
-import type { PortfolioScope, PortfolioProfileUpdate } from "../ports/index.js";
+import type { PortfolioAggregateUpdate, PortfolioScope } from "../ports/index.js";
 import type { PortfolioSettingsRepository } from "./settings-service.js";
+import {
+  outcomeFromRejection,
+  readPortfolioCommandOutcome,
+  rejectionFromPortfolioCommandOutcome,
+} from "./command-outcome.js";
 
 const IDEMPOTENCY_RETENTION_MS = 24 * 60 * 60 * 1_000;
 
@@ -24,62 +29,12 @@ export interface PortfolioConfigurationCommandReceipt {
   readonly outcome: "configuration-updated";
 }
 
-type StoredOutcome =
-  | { readonly kind: "completed"; readonly aggregateId: string; readonly aggregateVersion: number }
-  | { readonly kind: "rejected"; readonly rejectionKind: string; readonly code: string; readonly currentVersion?: number };
-
 export function changedConfigurationFields<T extends object>(
   before: T,
   after: T,
   fields: readonly (keyof T & string)[],
 ): readonly (keyof T & string)[] {
   return fields.filter((field) => before[field] !== after[field]);
-}
-
-function rejectionOutcome(rejection: Rejection): StoredOutcome {
-  if (rejection.kind === "conflict" || rejection.kind === "precondition_failed") {
-    return {
-      kind: "rejected",
-      rejectionKind: rejection.kind,
-      code: rejection.code,
-      ...(rejection.currentVersion === undefined ? {} : { currentVersion: rejection.currentVersion }),
-    };
-  }
-  return { kind: "rejected", rejectionKind: rejection.kind, code: rejection.code };
-}
-
-function storedOutcome(result: SafeResultEnvelope): StoredOutcome {
-  const kind = result["kind"];
-  if (kind === "completed" && typeof result["aggregateId"] === "string" &&
-      typeof result["aggregateVersion"] === "number" && Number.isSafeInteger(result["aggregateVersion"]) &&
-      result["aggregateVersion"] > 0) {
-    return { kind, aggregateId: result["aggregateId"], aggregateVersion: result["aggregateVersion"] };
-  }
-  if (kind === "rejected" && typeof result["rejectionKind"] === "string" &&
-      typeof result["code"] === "string" &&
-      (result["currentVersion"] === undefined || Number.isSafeInteger(result["currentVersion"]))) {
-    return {
-      kind,
-      rejectionKind: result["rejectionKind"],
-      code: result["code"],
-      ...(typeof result["currentVersion"] === "number" ? { currentVersion: result["currentVersion"] } : {}),
-    };
-  }
-  throw new Error("Invalid stored configuration command result.");
-}
-
-function asRejection(outcome: Extract<StoredOutcome, { kind: "rejected" }>): Rejection {
-  switch (outcome.rejectionKind) {
-    case "validation": return { kind: "validation", code: outcome.code };
-    case "unauthenticated": return { kind: "unauthenticated", code: outcome.code };
-    case "forbidden": return { kind: "forbidden", code: outcome.code };
-    case "not_found": return { kind: "not_found", code: outcome.code };
-    case "conflict": return { kind: "conflict", code: outcome.code, ...(outcome.currentVersion === undefined ? {} : { currentVersion: outcome.currentVersion }) };
-    case "precondition_failed": return { kind: "precondition_failed", code: outcome.code, ...(outcome.currentVersion === undefined ? {} : { currentVersion: outcome.currentVersion }) };
-    case "rate_limited": return { kind: "rate_limited", code: outcome.code, retryAfterSeconds: 60 };
-    case "temporarily_unavailable": return { kind: "temporarily_unavailable", code: outcome.code };
-    default: throw new Error("Invalid stored configuration rejection.");
-  }
 }
 
 function meaningfulCorrelation(value: string): boolean {
@@ -94,7 +49,7 @@ export async function executePortfolioConfigurationCommand<T>(input: {
   /** Operation-specific canonical form; keep persisted retry hashes stable across versions. */
   readonly idempotencyRequest: unknown;
   readonly isValid: (request: unknown) => request is T;
-  readonly apply: (request: T, context: TransactionContext) => Promise<Result<PortfolioProfileUpdate, Rejection>>;
+  readonly apply: (request: T, context: TransactionContext) => Promise<Result<PortfolioAggregateUpdate, Rejection>>;
   readonly event: (before: PortfolioSettings, request: T, ownerScope: string) => VersionedPayload;
   readonly repository: Pick<PortfolioSettingsRepository, "getSettings">;
   readonly operations: OperationsPersistencePorts;
@@ -137,16 +92,16 @@ export async function executePortfolioConfigurationCommand<T>(input: {
     expiresAt,
   }, async (context): Promise<SafeResultEnvelope> => {
     const current = await input.repository.getSettings(input.scope, context);
-    if (!current.ok) return rejectionOutcome(current.error);
+    if (!current.ok) return outcomeFromRejection(current.error);
     if (current.value.version !== command.expectedVersion) {
-      return rejectionOutcome({
+      return outcomeFromRejection({
         kind: "precondition_failed",
         code: "PORTFOLIO_SETTINGS_VERSION_MISMATCH",
         currentVersion: current.value.version,
       });
     }
     const updated = await input.apply(request, context);
-    if (!updated.ok) return rejectionOutcome(updated.error);
+    if (!updated.ok) return outcomeFromRejection(updated.error);
 
     await input.operations.outbox.append(context, {
       eventId: ids.generate("DomainEvent"),
@@ -166,8 +121,8 @@ export async function executePortfolioConfigurationCommand<T>(input: {
   });
 
   if (execution.kind === "conflict") return err({ kind: "conflict", code: "IDEMPOTENCY_KEY_REUSED" });
-  const outcome = storedOutcome(execution.result);
-  if (outcome.kind === "rejected") return err(asRejection(outcome));
+  const outcome = readPortfolioCommandOutcome(execution.result);
+  if (outcome.kind === "rejected") return err(rejectionFromPortfolioCommandOutcome(outcome));
   const aggregateId = parseStableId("Portfolio", outcome.aggregateId);
   if (!aggregateId.ok || aggregateId.value !== input.scope.portfolioId) {
     throw new Error("Invalid stored configuration aggregate identity.");
@@ -181,5 +136,3 @@ export async function executePortfolioConfigurationCommand<T>(input: {
     },
   };
 }
-
-export type { PortfolioProfile };

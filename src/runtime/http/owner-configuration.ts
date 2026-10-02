@@ -42,6 +42,7 @@ import type {
   Result,
   StableId,
 } from "../../shared/domain/index.js";
+import type { ContactChannel } from "../../modules/portfolio-configuration/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
@@ -70,12 +71,9 @@ export interface UpdateOwnerContactChannelsApplicationCommand {
   readonly actor: ActorContext;
   readonly idempotencyKey: IdempotencyKey;
   readonly expectedVersion: number;
-  readonly channels: ReadonlyArray<{
-    readonly channel: string;
-    readonly label: string;
-    readonly destination: string;
-    readonly availableLocales: ReadonlyArray<string>;
-  }>;
+  readonly correlationId: string;
+  readonly causationId?: string;
+  readonly channels: readonly ContactChannel[];
 }
 
 export interface UpdateOwnerGlobalProjectCtaApplicationCommand {
@@ -295,6 +293,7 @@ export async function handleUpdateOwnerContactChannels(
       actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
+      correlationId: traceId,
       channels: bodyResult.data.channels,
     };
     return await dispatchReceipt(

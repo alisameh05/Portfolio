@@ -343,6 +343,7 @@ describe("Owner Configuration adapter (#29)", () => {
         actor: owner as never,
         idempotencyKey: IDEMPOTENCY_KEY as never,
         expectedVersion: 3,
+        correlationId: "test-correlation",
         channels: [],
       }),
       service.updateOwnerGlobalProjectCta({
