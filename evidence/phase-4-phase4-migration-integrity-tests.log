@@ -1,0 +1,9 @@
+
+ RUN  v3.2.4 <WORKSPACE>
+
+ ✓ tests/database/phase4-migration-integrity.test.ts (4 tests) 5ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  18:48:57
+   Duration  327ms (transform 52ms, setup 0ms, collect 82ms, tests 5ms, environment 0ms, prepare 104ms)

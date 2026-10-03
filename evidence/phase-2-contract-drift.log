@@ -1,61 +1,61 @@
-Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-T3ZjFw
-[90mvalidating openapi\public-v1\openapi.yaml...
-[39m[90mopenapi\public-v1\openapi.yaml: validated in 129ms
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-B9i61N
+validating openapi\public-v1\openapi.yaml...
+openapi\public-v1\openapi.yaml: validated in 65ms
 
-[39m[32mWoohoo! Your API description is valid. 🎉
-[39m
-[90mbundling openapi\public-v1\openapi.yaml...
-[39m📦 Created a bundle for [34mopenapi\public-v1\openapi.yaml[39m at [34m<TEMP>\shipwithali-contract-a-T3ZjFw\openapi\generated\public-v1.json[39m [32m26ms[39m.
+Woohoo! Your API description is valid. 🎉
+
+bundling openapi\public-v1\openapi.yaml...
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-B9i61N\openapi\generated\public-v1.json 28ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-T3ZjFw\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m<TEMP>\shipwithali-contract-a-T3ZjFw\src\contracts\http\v1\generated[39m [90m· 3 files · 138ms[39m
-Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-T3ZjFw
-[90mvalidating openapi\owner-v1\openapi.yaml...
-[39m[90mopenapi\owner-v1\openapi.yaml: validated in 168ms
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-B9i61N\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-a-B9i61N\src\contracts\http\v1\generated[39m [90m· 3 files · 97ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-B9i61N
+validating openapi\owner-v1\openapi.yaml...
+openapi\owner-v1\openapi.yaml: validated in 107ms
 
-[39m[32mWoohoo! Your API description is valid. 🎉
-[39m
-[90mbundling openapi\owner-v1\openapi.yaml...
-[39m📦 Created a bundle for [34mopenapi\owner-v1\openapi.yaml[39m at [34m<TEMP>\shipwithali-contract-a-T3ZjFw\openapi\generated\owner-v1.json[39m [32m67ms[39m.
+Woohoo! Your API description is valid. 🎉
+
+bundling openapi\owner-v1\openapi.yaml...
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-B9i61N\openapi\generated\owner-v1.json 57ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-T3ZjFw\openapi\generated\owner-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m<TEMP>\shipwithali-contract-a-T3ZjFw\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 305ms[39m
-Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-T3ZjFw\src\contracts\http\v1\generated\zod.gen.ts.
-Strictified 144 generated Zod object schemas in <TEMP>\shipwithali-contract-a-T3ZjFw\src\contracts\http\owner\v1\generated\zod.gen.ts.
-Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-T3ZjFw
-Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-nfZugw
-[90mvalidating openapi\public-v1\openapi.yaml...
-[39m[90mopenapi\public-v1\openapi.yaml: validated in 71ms
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-B9i61N\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-a-B9i61N\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 237ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-B9i61N\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 144 generated Zod object schemas in <TEMP>\shipwithali-contract-a-B9i61N\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-B9i61N
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-D2nX8T
+validating openapi\public-v1\openapi.yaml...
+openapi\public-v1\openapi.yaml: validated in 65ms
 
-[39m[32mWoohoo! Your API description is valid. 🎉
-[39m
-[90mbundling openapi\public-v1\openapi.yaml...
-[39m📦 Created a bundle for [34mopenapi\public-v1\openapi.yaml[39m at [34m<TEMP>\shipwithali-contract-b-nfZugw\openapi\generated\public-v1.json[39m [32m21ms[39m.
+Woohoo! Your API description is valid. 🎉
+
+bundling openapi\public-v1\openapi.yaml...
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-D2nX8T\openapi\generated\public-v1.json 24ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-nfZugw\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m<TEMP>\shipwithali-contract-b-nfZugw\src\contracts\http\v1\generated[39m [90m· 3 files · 123ms[39m
-Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-nfZugw
-[90mvalidating openapi\owner-v1\openapi.yaml...
-[39m[90mopenapi\owner-v1\openapi.yaml: validated in 117ms
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-D2nX8T\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-b-D2nX8T\src\contracts\http\v1\generated[39m [90m· 3 files · 100ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-D2nX8T
+validating openapi\owner-v1\openapi.yaml...
+openapi\owner-v1\openapi.yaml: validated in 116ms
 
-[39m[32mWoohoo! Your API description is valid. 🎉
-[39m
-[90mbundling openapi\owner-v1\openapi.yaml...
-[39m📦 Created a bundle for [34mopenapi\owner-v1\openapi.yaml[39m at [34m<TEMP>\shipwithali-contract-b-nfZugw\openapi\generated\owner-v1.json[39m [32m66ms[39m.
+Woohoo! Your API description is valid. 🎉
+
+bundling openapi\owner-v1\openapi.yaml...
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-D2nX8T\openapi\generated\owner-v1.json 59ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-nfZugw\openapi\generated\owner-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m<TEMP>\shipwithali-contract-b-nfZugw\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 319ms[39m
-Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-nfZugw\src\contracts\http\v1\generated\zod.gen.ts.
-Strictified 144 generated Zod object schemas in <TEMP>\shipwithali-contract-b-nfZugw\src\contracts\http\owner\v1\generated\zod.gen.ts.
-Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-nfZugw
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-D2nX8T\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-b-D2nX8T\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 247ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-D2nX8T\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 144 generated Zod object schemas in <TEMP>\shipwithali-contract-b-D2nX8T\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-D2nX8T
 ✓ both clean generations are byte-for-byte deterministic
 ✓ committed bundles and generated transport artifacts contain no drift
 ✓ generated output is limited to transport types and validators; no server stubs exist

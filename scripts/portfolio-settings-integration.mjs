@@ -93,6 +93,16 @@ export function requireExecutedTests(report) {
   ) throw new Error("PORTFOLIO_SETTINGS_TEST_FAILED: no missing or skipped database evidence is accepted.");
 }
 
+export function requirePredecessorTests(report, expectedFiles) {
+  if (
+    report.success !== true || report.numPassedTests < 1 || report.numFailedTests !== 0 ||
+    report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
+    report.testResults?.length !== expectedFiles.length ||
+    report.testResults.some((suite) => suite.status !== "passed")
+  ) throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED");
+  return report.numPassedTests;
+}
+
 function migrationSources() {
   const directory = join(ROOT, "supabase/migrations");
   const sqlFiles = readdirSync(directory).filter((name) => name.endsWith(".sql")).sort();
@@ -271,6 +281,40 @@ export async function main() {
 
     const phase3Snapshot = await snapshotPhase4Database(upgradeUrl);
     assertPhase3OperationsRls(phase3Snapshot);
+    const predecessorTestFiles = [
+      "tests/database/postgres-transaction-runner.test.ts",
+      "tests/database/postgres-integration.test.ts",
+      "tests/database/optimistic-concurrency.test.ts",
+      "tests/database/idempotency.test.ts",
+      "tests/database/outbox.test.ts",
+      "tests/database/leased-jobs.test.ts",
+      "tests/database/role-rls-matrix.test.ts",
+    ];
+    const predecessorReportPath = join(upgradeProject.workdir, "phase3-test-report.json");
+    const predecessorResult = spawnSync(process.execPath, [
+      join(ROOT, "node_modules/vitest/vitest.mjs"),
+      "run",
+      ...predecessorTestFiles,
+      "--reporter=json",
+      `--outputFile=${predecessorReportPath}`,
+    ], {
+      cwd: ROOT,
+      env: { ...env, PHASE3_DATABASE_URL: upgradeUrl, PHASE3_REQUIRE_DATABASE: "1" },
+      encoding: "utf8",
+      timeout: 180_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let predecessorReport;
+    try {
+      predecessorReport = JSON.parse(readFileSync(predecessorReportPath, "utf8"));
+    } catch {
+      throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_REPORT_MISSING");
+    }
+    if (predecessorResult.error || predecessorResult.status !== 0) {
+      throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED");
+    }
+    const predecessorTestCount = requirePredecessorTests(predecessorReport, predecessorTestFiles);
+    console.log(`Phase 3 historical database invariants: ${predecessorTestCount} passed, 0 skipped before Phase 4 migrations.`);
     const phase3Rows = await seedAndCapturePhase3Operations(upgradeUrl);
     console.log("Captured the Phase 3 operations contract and seeded rows through restricted capability roles.");
     for (const file of phase4Files) {
@@ -354,6 +398,12 @@ export async function main() {
       parent: 77,
       scope: "phase4-migration-equivalence-restricted-principal-and-pooled-isolation",
       phase3Snapshot: "supabase/baselines/phase3.json",
+      predecessorDatabaseTests: {
+        context: "Phase 3 schema snapshot before Phase 4 migrations",
+        testFiles: predecessorTestFiles,
+        passed: predecessorTestCount,
+        skipped: 0,
+      },
       phase3MigrationFiles: migrations.phase3Files,
       migrationChecksums: migrations.checksums,
       migrationLedger: cleanSnapshot.migrationLedger,
@@ -398,6 +448,24 @@ export async function main() {
         jobs: preservedRows.jobs.length === 1,
       },
       generatedTypeDrift: false,
+      sanitizedAuditExamples: [
+        {
+          verifiedBy: "tests/database/portfolio-settings.integration.test.ts",
+          eventType: "portfolio_configuration.channels_updated.v1",
+          schemaVersion: 1,
+          aggregateVersion: 2,
+          payload: {
+            channelCount: 6,
+            channelTypes: ["email", "instagram", "linkedin", "other", "phone", "whatsapp"],
+            ownerScope: "[redacted stable Owner digest]",
+          },
+          privateContactDestinationsIncluded: false,
+        },
+      ],
+      databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
+        name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
+        status: test.status,
+      })),
       restrictedPrincipalMatrix: [
         { principal: "shipwithali_application login", settings: "allow", ownerIdentityMap: "allow", bypassRls: false },
         { principal: "anon Visitor login", settings: "deny", ownerIdentityMap: "deny", bypassRls: false },

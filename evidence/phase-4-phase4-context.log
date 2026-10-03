@@ -1,0 +1,3 @@
+✓ depcruise tests/fixtures/invalid-deps/phase4-provider-leakage — no-provider-in-application
+✓ depcruise tests/fixtures/invalid-deps/phase4-generated-leakage — no-generated-code-leakage
+✓ phase4 context: 5 public + 39 owner, seams preserved, 6 negative fixtures rejected, 0 placeholders confined

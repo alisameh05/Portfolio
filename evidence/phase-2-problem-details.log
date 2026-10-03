@@ -1,9 +1,9 @@
 
-[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90m<WORKSPACE>[39m
+ RUN  v3.2.4 <WORKSPACE>
 
- [32m✓[39m tests/runtime/problem.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ ✓ tests/runtime/problem.test.ts (11 tests) 16ms
 
-[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
-[2m      Tests [22m [1m[32m11 passed[39m[22m[90m (11)[39m
-[2m   Start at [22m 11:45:14
-[2m   Duration [22m 523ms[2m (transform 159ms, setup 0ms, collect 186ms, tests 20ms, environment 0ms, prepare 129ms)[22m
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  18:47:36
+   Duration  476ms (transform 142ms, setup 0ms, collect 173ms, tests 16ms, environment 0ms, prepare 124ms)

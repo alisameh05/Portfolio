@@ -1,0 +1,279 @@
+═══════════════════════════════════════════════
+  Phase 2 Runtime Completion Gate (#33)
+═══════════════════════════════════════════════
+✓ toolchain verification: pinned Node 24.21.0, npm 11.19.0
+✓ dependency/version manifest written to evidence\phase-1-versions.json
+✓ public-v1: candidate is backward compatible with the committed master baseline
+✓ owner-v1: candidate is backward compatible with the committed master baseline
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-B9i61N
+
+ RUN  v3.2.4 <WORKSPACE>
+
+validating openapi\public-v1\openapi.yaml...
+openapi\public-v1\openapi.yaml: validated in 65ms
+
+Woohoo! Your API description is valid. 🎉
+
+ ✓ tests/contracts/compatibility-gate.test.ts (8 tests) 662ms
+ ✓ tests/contracts/contract-drift-gate.test.ts (4 tests) 523ms
+ ✓ tests/contracts/owner-contract.test.ts (5 tests) 15ms
+ ✓ tests/contracts/public-contract.test.ts (6 tests) 5ms
+ ✓ tests/contracts/owner-issue-8-generated-validation.test.ts (7 tests) 8ms
+ ✓ tests/contracts/generated-validation.test.ts (6 tests) 3ms
+ ✓ tests/contracts/owner-issue-7-generated-validation.test.ts (9 tests) 2ms
+ ✓ tests/contracts/owner-generated-validation.test.ts (5 tests) 1ms
+ ✓ tests/contracts/public.test.ts (1 test) 2ms
+
+ Test Files  9 passed (9)
+      Tests  51 passed (51)
+   Start at  18:46:25
+   Duration  1.86s (transform 128ms, setup 0ms, collect 191ms, tests 1.22s, environment 0ms, prepare 98ms)
+
+bundling openapi\public-v1\openapi.yaml...
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-B9i61N\openapi\generated\public-v1.json 28ms.
+[90m@hey-api/openapi-ts v0.99.0[39m
+
+[90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-B9i61N\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-a-B9i61N\src\contracts\http\v1\generated[39m [90m· 3 files · 97ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-B9i61N
+validating openapi\owner-v1\openapi.yaml...
+openapi\owner-v1\openapi.yaml: validated in 107ms
+
+Woohoo! Your API description is valid. 🎉
+
+bundling openapi\owner-v1\openapi.yaml...
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-B9i61N\openapi\generated\owner-v1.json 57ms.
+[90m@hey-api/openapi-ts v0.99.0[39m
+
+[90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-B9i61N\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-a-B9i61N\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 237ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-B9i61N\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 144 generated Zod object schemas in <TEMP>\shipwithali-contract-a-B9i61N\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-B9i61N
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-D2nX8T
+… Phase 2 gate: phase1-toolchain, phase1-contract-drift, phase1-contract-compatibility, phase1-contract-and-strict-validator-tests still running
+validating openapi\public-v1\openapi.yaml...
+openapi\public-v1\openapi.yaml: validated in 65ms
+
+Woohoo! Your API description is valid. 🎉
+
+bundling openapi\public-v1\openapi.yaml...
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-D2nX8T\openapi\generated\public-v1.json 24ms.
+[90m@hey-api/openapi-ts v0.99.0[39m
+
+[90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-D2nX8T\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-b-D2nX8T\src\contracts\http\v1\generated[39m [90m· 3 files · 100ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-D2nX8T
+validating openapi\owner-v1\openapi.yaml...
+openapi\owner-v1\openapi.yaml: validated in 116ms
+
+Woohoo! Your API description is valid. 🎉
+
+bundling openapi\owner-v1\openapi.yaml...
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-D2nX8T\openapi\generated\owner-v1.json 59ms.
+[90m@hey-api/openapi-ts v0.99.0[39m
+
+[90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-D2nX8T\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-b-D2nX8T\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 247ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-D2nX8T\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 144 generated Zod object schemas in <TEMP>\shipwithali-contract-b-D2nX8T\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-D2nX8T
+✓ both clean generations are byte-for-byte deterministic
+✓ committed bundles and generated transport artifacts contain no drift
+✓ generated output is limited to transport types and validators; no server stubs exist
+✓ phase1-toolchain — passed
+✓ phase1-contract-drift — passed
+✓ phase1-contract-compatibility — passed
+✓ phase1-contract-and-strict-validator-tests — passed
+   ▲ Next.js 15.5.25
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 883ms
+   Linting and checking validity of types ...
+
+ ⚠ The Next.js plugin was not detected in your ESLint configuration. See https://nextjs.org/docs/app/api-reference/config/eslint#migrating-existing-config
+   Collecting page data ...
+… Phase 2 gate: production-build still running
+   Generating static pages (0/4) ...
+   Generating static pages (1/4)
+   Generating static pages (2/4)
+   Generating static pages (3/4)
+ ✓ Generating static pages (4/4)
+   Finalizing page optimization ...
+   Collecting build traces ...
+… Phase 2 gate: production-build still running
+
+Route (app)                                  Size  First Load JS
+┌ ƒ /livez                                  126 B         102 kB
+└ ƒ /readyz                                 126 B         102 kB
++ First Load JS shared by all              101 kB
+  ├ chunks/4bd1b696-c023c6e3521b1417.js   54.2 kB
+  ├ chunks/58-9ce6faf8e58245ce.js         45.3 kB
+  └ other shared chunks (total)           1.84 kB
+
+Route (pages)                                Size  First Load JS
+─ ○ /404                                  2.29 kB        97.4 kB
++ First Load JS shared by all             95.1 kB
+  ├ chunks/framework-b1e5f14688f9ffe6.js  57.7 kB
+  ├ chunks/main-5894a48f997be91a.js       35.2 kB
+  └ other shared chunks (total)           2.23 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+✓ production-build — passed
+
+── Architecture check: src/ ──
+… Phase 2 gate: strict-typecheck, deterministic-lint, architecture still running
+✔ no dependency violations found (151 modules, 409 dependencies cruised)
+✓ Architecture check passed: no forbidden dependencies in src/
+
+── Validating Invalid Architecture Fixtures ──
+
+── Testing fixture rejection: Provider leakage fixture ──
+error no-provider-in-domain: tests/fixtures/invalid-deps/provider-leakage/modules/alpha/domain/leaky.ts → @supabase/supabase-js
+    Domain areas must not import provider, framework, or database packages.
+
+
+x 1 dependency violations (1 errors, 0 warnings). 2 modules, 1 dependencies cruised.
+✓ Provider leakage fixture correctly rejected with rule: no-provider-in-domain
+
+── Testing fixture rejection: Generated-code leakage fixture ──
+error no-generated-code-leakage: tests/fixtures/invalid-deps/generated-code-leakage/modules/beta/domain/leaky.ts → @redocly/cli
+    Generated transport types and tooling must not leak into domain or
+    application layers.
+
+
+x 1 dependency violations (1 errors, 0 warnings). 2 modules, 1 dependencies cruised.
+✓ Generated-code leakage fixture correctly rejected with rule: no-generated-code-leakage
+
+── Testing fixture rejection: Deep cross-module import fixture ──
+… Phase 2 gate: strict-typecheck, deterministic-lint, architecture still running
+error no-deep-cross-module-import: tests/fixtures/invalid-deps/deep-cross-module-import/modules/gamma/application/deep.ts → tests/fixtures/invalid-deps/deep-cross-module-import/modules/delta/domain/index.ts
+    Cross-module imports must go through the module barrel (index.ts), not into
+    sub-folders.
+
+
+x 1 dependency violations (1 errors, 0 warnings). 3 modules, 2 dependencies cruised.
+✓ Deep cross-module import fixture correctly rejected with rule: no-deep-cross-module-import
+
+── Testing fixture rejection: Cycle fixture ──
+error no-cycles: tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts →
+      tests/fixtures/invalid-deps/cycle/modules/cycle-b/index.ts →
+      tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts
+    Dependency cycles are forbidden in the modular monolith.
+
+
+x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies cruised.
+✓ Cycle fixture correctly rejected with rule: no-cycles
+
+── Validating Module Skeletons and Invariants ──
+✓ All nine module skeletons exist with required subdirectories and index.ts barrels
+✓ Modules confine persistence/providers to adapters and contain no Route Handlers, UI, or Lab entry implementation
+
+── Runtime architecture boundaries ──
+✓ runtime architecture: 145 source files preserve framework, environment, transport, provider, and Route Handler boundaries
+
+═════════════════════════════════════════════════════════════════
+             ARCHITECTURE CONFORMANCE REPORT
+═════════════════════════════════════════════════════════════════
+[✓ PASS] Clean dependency graph for src/        : src/ cruised with 0 violations
+[✓ PASS] Provider leakage fixture               : Correctly rejected with rule no-provider-in-domain
+[✓ PASS] Generated-code leakage fixture         : Correctly rejected with rule no-generated-code-leakage
+[✓ PASS] Deep cross-module import fixture       : Correctly rejected with rule no-deep-cross-module-import
+[✓ PASS] Cycle fixture                          : Correctly rejected with rule no-cycles
+[✓ PASS] Nine module skeletons structure        : All 9 modules have domain/, application/, ports/, adapters/, and index.ts
+[✓ PASS] Module skeleton purity                 : Persistence/providers confined to adapters; no Route Handlers, UI, or Lab entry implementation
+[✓ PASS] Phase 2 runtime architecture           : Framework, environment, generated transport, provider, and Route Handler boundaries preserved
+═════════════════════════════════════════════════════════════════
+
+✓ architecture-check: ALL CHECKS PASSED
+✓ strict-typecheck — passed
+✓ deterministic-lint — passed
+✓ architecture — passed
+✓ public-exactly-five-operations: 5/5 public operations reconciled
+✓ public-no-forbidden-surface: no owner CRUD, broad reads, Lab, or provider surface
+✓ owner-exact-surface: 39/39 owner operations reconciled
+✓ owner-no-generic-patch-or-lab: command-oriented, no generic patch or Lab entry
+✓ no-undeclared-runtime-http-surface: allowed OpenAPI paths only; 2 operational probe(s), 0 product runtime routes
+✓ operational-probes-allowlisted: exactly /livez and /readyz operational probes
+✓ no-forbidden-source-surface: no Lab, frontend, stub, handler, or leakage surface
+✓ route inventory: all 7 checks passed (5 public, 39 owner, 2 operational, 0 product runtime routes)
+✓ public-operation-count: exactly five public operations
+✓ owner-operation-count: exactly thirty-nine Owner operations
+✓ unique-operation-identifiers: 44 unique operation identifiers
+✓ one-adapter-per-operation: 44/44 resolved exactly once
+✓ no-undeclared-product-adapters: 44 adapter exports declared by a contract
+✓ only-callable-runtime-adapters: 44/44 handler exports are callable runtime values
+✓ only-operational-routes: /livez and /readyz are the only Route Handlers
+✓ runtime boundary: 5 public + 39 Owner operations resolve exactly once
+✓ route-inventory — passed
+✓ contract-to-adapter-matrix — passed
+
+ RUN  v3.2.4 <WORKSPACE>
+
+
+ RUN  v3.2.4 <WORKSPACE>
+
+
+ RUN  v3.2.4 <WORKSPACE>
+
+
+ RUN  v3.2.4 <WORKSPACE>
+
+ ✓ tests/runtime/configuration.test.ts (17 tests) 14ms
+
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+   Start at  18:47:36
+   Duration  470ms (transform 141ms, setup 0ms, collect 149ms, tests 14ms, environment 0ms, prepare 126ms)
+
+ ✓ tests/runtime/problem.test.ts (11 tests) 16ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 107ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  18:47:36
+   Duration  476ms (transform 142ms, setup 0ms, collect 173ms, tests 16ms, environment 0ms, prepare 124ms)
+
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 106ms
+ ✓ tests/runtime/livez.test.ts (4 tests) 5ms
+
+ Test Files  2 passed (2)
+      Tests  16 passed (16)
+   Start at  18:47:36
+   Duration  523ms (transform 167ms, setup 0ms, collect 106ms, tests 111ms, environment 0ms, prepare 128ms)
+
+ ✓ tests/runtime/owner-media.test.ts (68 tests) 38ms
+ ✓ tests/runtime/owner-cv.test.ts (55 tests) 22ms
+ ✓ tests/runtime/owner-moderation.test.ts (32 tests) 18ms
+ ✓ tests/runtime/owner-publication.test.ts (36 tests) 16ms
+ ✓ tests/runtime/owner-project.test.ts (35 tests) 16ms
+ ✓ tests/runtime/owner-export.test.ts (35 tests) 14ms
+ ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 14ms
+ ✓ tests/runtime/owner-analytics.test.ts (32 tests) 13ms
+ ✓ tests/runtime/owner-configuration.test.ts (31 tests) 11ms
+ ✓ tests/runtime/public-event.test.ts (19 tests) 8ms
+ ✓ tests/runtime/feedback.test.ts (20 tests) 8ms
+ ✓ tests/runtime/rating.test.ts (21 tests) 7ms
+ ✓ tests/runtime/configuration.test.ts (17 tests) 8ms
+ ✓ tests/runtime/reaction.test.ts (19 tests) 9ms
+ ✓ tests/runtime/current-cv.test.ts (13 tests) 6ms
+ ✓ tests/runtime/runtime-ports.test.ts (6 tests) 4ms
+ ✓ tests/runtime/livez.test.ts (4 tests) 3ms
+ ✓ tests/runtime/problem.test.ts (11 tests) 3ms
+
+ Test Files  19 passed (19)
+      Tests  501 passed (501)
+   Start at  18:47:36
+   Duration  1.49s (transform 594ms, setup 0ms, collect 824ms, tests 325ms, environment 0ms, prepare 123ms)
+
+✓ configuration-negative-tests — passed
+✓ http-adapter-tests — passed
+✓ problem-details-tests — passed
+✓ health-lifecycle-tests — passed
+✓ Phase 2 gate: ALL 14 CHECKS PASSED

@@ -23,7 +23,7 @@ type RuntimeArchModule = {
   inspectRuntimeArchitecture: (root?: string) => { verdict: string; findings: unknown[] };
 };
 
-describe("Phase 4 verification prefactor (#78)", () => {
+describe("Phase 4 completion gate (#90)", () => {
   it("exposes a shared phase-context definition with historical and current phases", async () => {
     const modulePath = join(ROOT, "scripts", "phase-context.mjs");
     expect(existsSync(modulePath), "scripts/phase-context.mjs exists").toBe(true);
@@ -148,9 +148,11 @@ describe("Phase 4 verification prefactor (#78)", () => {
 
   it("fails the Phase 4 gate on missing services, skipped checks, and stale evidence", () => {
     const gate = readFileSync(join(ROOT, "scripts", "phase4-gate.mjs"), "utf8");
-    expect(gate).toMatch(/LOCAL_DB_UNAVAILABLE|missing.*service|required.*service/i);
-    expect(gate).toMatch(/skipped/i);
-    expect(gate).toMatch(/stale|fresh/i);
+    const support = readFileSync(join(ROOT, "scripts", "phase4-gate-support.mjs"), "utf8");
+    expect(gate).toMatch(/requiresService/);
+    expect(support).toMatch(/LOCAL_DB_UNAVAILABLE|LOCAL_AUTH_DOCKER_UNAVAILABLE/);
+    expect(support).toMatch(/skippedOrPartial/i);
+    expect(support).toMatch(/staleEvidence/);
     expect(gate).toMatch(/process\.exitCode\s*=\s*1/);
   });
 });
