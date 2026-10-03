@@ -15,6 +15,26 @@ const SNAPSHOT_SCHEMAS = [
 const CAPABILITY_ROLES = [
   "shipwithali_application", "shipwithali_backup", "shipwithali_migration", "shipwithali_worker",
 ];
+const SETTINGS_SCOPE_PREDICATE = "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))";
+const CHANNEL_SCOPE_PREDICATE = "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND (EXISTS ( SELECT 1 FROM portfolio_config.settings settings WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = current_setting('shipwithali.owner_id'::text, true))))))";
+const PHASE4_APPLICATION_POLICIES = new Map([
+  ["identity_access.owner_links", [
+    ["owner_links_application_select_policy", "SELECT", "{shipwithali_application}", "true"],
+    ["owner_links_application_insert_policy", "INSERT", "{shipwithali_application}", "true"],
+    ["owner_links_application_update_policy", "UPDATE", "{shipwithali_application}", "true"],
+    ["owner_links_backup_policy", "SELECT", "{shipwithali_backup}", "true"],
+  ]],
+  ["portfolio_config.settings", [
+    ["portfolio_settings_application_select", "SELECT", "{shipwithali_application}", SETTINGS_SCOPE_PREDICATE],
+    ["portfolio_settings_application_insert", "INSERT", "{shipwithali_application}", SETTINGS_SCOPE_PREDICATE],
+    ["portfolio_settings_application_update", "UPDATE", "{shipwithali_application}", SETTINGS_SCOPE_PREDICATE],
+  ]],
+  ["portfolio_config.contact_channels", [
+    ["portfolio_channels_application_select", "SELECT", "{shipwithali_application}", CHANNEL_SCOPE_PREDICATE],
+    ["portfolio_channels_application_insert", "INSERT", "{shipwithali_application}", CHANNEL_SCOPE_PREDICATE],
+    ["portfolio_channels_application_delete", "DELETE", "{shipwithali_application}", CHANNEL_SCOPE_PREDICATE],
+  ]],
+]);
 
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
@@ -65,10 +85,22 @@ export function assertPhase4ApplicationRls(snapshot) {
     const policies = snapshot.policies.filter((policy) =>
       `${policy.schema}.${policy.tableName}` === name,
     );
-    if (policies.length === 0 || policies.some((policy) =>
-      (policy.command !== "INSERT" && policy.usingPredicate === "") ||
-      (["INSERT", "UPDATE", "ALL"].includes(policy.command) && policy.withCheck === ""),
-    )) {
+    const expected = PHASE4_APPLICATION_POLICIES.get(name);
+    const byName = new Map(policies.map((policy) => [policy.name, policy]));
+    if (expected === undefined || policies.length !== expected.length || byName.size !== expected.length ||
+      expected.some(([policyName, command, roles, scope]) => {
+        const policy = byName.get(policyName);
+        if (policy === undefined || policy.command !== command || policy.roles !== roles || policy.permissive !== "permissive") return true;
+        const predicates = command === "UPDATE"
+          ? [policy.usingPredicate, policy.withCheck]
+          : [command === "INSERT" ? policy.withCheck : policy.usingPredicate];
+        return predicates.some((predicate) => {
+          if (scope === "true") return predicate.trim().toLowerCase() !== "true";
+          const normalized = predicate.toLowerCase().replaceAll(/\s+/g, "");
+          const expectedPredicate = scope.toLowerCase().replaceAll(/\s+/g, "");
+          return normalized !== expectedPredicate;
+        });
+      })) {
       throw new Error("PHASE4_APPLICATION_POLICY_PREDICATE_MISSING");
     }
   }

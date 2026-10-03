@@ -52,16 +52,29 @@ describe("Phase 4 migration integrity", () => {
     )).toThrow("PORTFOLIO_SETTINGS_DATABASE_STATE_DIFFER:policies");
   });
 
-  it("requires forced RLS and complete predicates on every Phase 4 application table", () => {
+  it("requires forced RLS and the intended policy roles and scope on every Phase 4 application table", () => {
+    const settingsScope = "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))";
+    const channelsScope = "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND (EXISTS ( SELECT 1 FROM portfolio_config.settings settings WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = current_setting('shipwithali.owner_id'::text, true))))))";
+    const policyData = [
+      ["identity_access", "owner_links", "owner_links_application_select_policy", "SELECT", "{shipwithali_application}", "true", ""],
+      ["identity_access", "owner_links", "owner_links_application_insert_policy", "INSERT", "{shipwithali_application}", "", "true"],
+      ["identity_access", "owner_links", "owner_links_application_update_policy", "UPDATE", "{shipwithali_application}", "true", "true"],
+      ["identity_access", "owner_links", "owner_links_backup_policy", "SELECT", "{shipwithali_backup}", "true", ""],
+      ["portfolio_config", "settings", "portfolio_settings_application_select", "SELECT", "{shipwithali_application}", settingsScope, ""],
+      ["portfolio_config", "settings", "portfolio_settings_application_insert", "INSERT", "{shipwithali_application}", "", settingsScope],
+      ["portfolio_config", "settings", "portfolio_settings_application_update", "UPDATE", "{shipwithali_application}", settingsScope, settingsScope],
+      ...["SELECT", "INSERT", "DELETE"].map((command) => {
+        return ["portfolio_config", "contact_channels", `portfolio_channels_application_${command.toLowerCase()}`, command, "{shipwithali_application}", command === "INSERT" ? "" : channelsScope, command === "INSERT" ? channelsScope : ""];
+      }),
+    ];
     const snapshot = {
       objects: PHASE4_APPLICATION_TABLES.map((name) => {
         const [schema, objectName] = name.split(".");
         return { schema, name: objectName, kind: "r", rlsEnabled: true, rlsForced: true };
       }),
-      policies: PHASE4_APPLICATION_TABLES.map((name) => {
-        const [schema, tableName] = name.split(".");
-        return { schema, tableName, command: "SELECT", usingPredicate: "true", withCheck: "" };
-      }),
+      policies: policyData.map(([schema, tableName, name, command, roles, usingPredicate, withCheck]) => ({
+        schema, tableName, name, command, roles, permissive: "permissive", usingPredicate, withCheck,
+      })),
       grants: [],
       defaultPrivileges: [],
     };
@@ -74,6 +87,21 @@ describe("Phase 4 migration integrity", () => {
     expect(() => assertPhase4ApplicationRls({
       ...snapshot,
       policies: snapshot.policies.map((policy, index) => index === 0 ? { ...policy, usingPredicate: "" } : policy),
+    })).toThrow("PHASE4_APPLICATION_POLICY_PREDICATE_MISSING");
+    expect(() => assertPhase4ApplicationRls({
+      ...snapshot,
+      policies: snapshot.policies.map((policy) => policy.name === "portfolio_settings_application_select"
+        ? { ...policy, usingPredicate: "true OR true" } : policy),
+    })).toThrow("PHASE4_APPLICATION_POLICY_PREDICATE_MISSING");
+    expect(() => assertPhase4ApplicationRls({
+      ...snapshot,
+      policies: snapshot.policies.map((policy) => policy.name === "portfolio_settings_application_insert"
+        ? { ...policy, withCheck: `${settingsScope} OR true` } : policy),
+    })).toThrow("PHASE4_APPLICATION_POLICY_PREDICATE_MISSING");
+    expect(() => assertPhase4ApplicationRls({
+      ...snapshot,
+      policies: snapshot.policies.map((policy) => policy.name === "portfolio_channels_application_select"
+        ? { ...policy, usingPredicate: `${channelsScope} OR true` } : policy),
     })).toThrow("PHASE4_APPLICATION_POLICY_PREDICATE_MISSING");
     expect(() => assertPhase4ApplicationRls({
       ...snapshot,

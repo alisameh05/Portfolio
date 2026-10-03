@@ -1,9 +1,11 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { sql } from "kysely";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createStableId, err, ok } from "../../src/shared/domain/index.js";
-import { decideAuthorization } from "../../src/modules/identity-access/index.js";
+import { createIdentityAccessService, decideAuthorization } from "../../src/modules/identity-access/index.js";
+import type { CryptoPort } from "../../src/modules/identity-access/index.js";
+import { SupabaseOwnerSessionAdapter } from "../../src/modules/identity-access/adapters/supabase-auth.js";
 import { createOwnerConfigurationApplicationService } from "../../src/runtime/owner-configuration-service.js";
 import { handleUpdateOwnerContactChannels, handleUpdateOwnerGlobalProjectCta, handleUpdateOwnerProfileConfiguration } from "../../src/runtime/http/owner-configuration.js";
 import type { OwnerRequestSecurity } from "../../src/runtime/http/owner-security.js";
@@ -292,10 +294,101 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
       }
     }
 
-    const wrongPortfolio = await database.transactions.run((context) => repository.getSettings(
-      { ...scope, portfolioId: createStableId("Portfolio") }, context,
-    ));
-    expect(wrongPortfolio).toEqual(err({ kind: "not_found", code: "PORTFOLIO_SETTINGS_NOT_CONFIGURED" }));
+    const otherScope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+    await createPortfolioSettingsService({ repository, transactions: database.transactions, scope: otherScope }).provision(values);
+    const configuredRows = await admin.query(
+      "select portfolio_id::text from portfolio_config.settings where portfolio_id = any($1::uuid[]) order by portfolio_id",
+      [[scope.portfolioId, otherScope.portfolioId]],
+    );
+    expect(configuredRows.rows).toHaveLength(2);
+
+    const isolated = new Client({ connectionString: applicationUrl });
+    await isolated.connect();
+    try {
+      await isolated.query("begin");
+      await isolated.query(
+        "select set_config('shipwithali.portfolio_id', $1, true), set_config('shipwithali.owner_id', $2, true)",
+        [scope.portfolioId, scope.ownerId],
+      );
+      const visibleRows = await isolated.query("select portfolio_id::text from portfolio_config.settings order by portfolio_id");
+      expect(visibleRows.rows).toEqual([{ portfolio_id: scope.portfolioId }]);
+    } finally {
+      await isolated.query("rollback");
+      await isolated.end();
+    }
+
+    const operations = createPostgresOperationsPersistence(database.database);
+    const profileCommands = createPortfolioProfileCommandService({ repository, operations, scope });
+    const contactCommands = createPortfolioContactChannelsCommandService({ repository, operations, scope });
+    const ctaCommands = createPortfolioGlobalCtaCommandService({ repository, operations, scope });
+    const configurationService = createOwnerConfigurationApplicationService(profileCommands, contactCommands, ctaCommands, scope.portfolioId);
+    const signingKey = "phase4-test-signing-key-with-at-least-32-characters";
+    const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+    const header = encode({ alg: "HS256", kid: "phase4-test" });
+    const payload = encode({
+      iss: "https://identity.example.test/auth/v1",
+      aud: "authenticated",
+      sub: "attacker-not-on-allowlist",
+      session_id: "forged-claims-session",
+      exp: Math.floor(Date.now() / 1000) + 300,
+      role: "owner",
+      user_metadata: { role: "owner", ownerId: scope.ownerId, portfolioId: scope.portfolioId },
+      app_metadata: { ownerId: scope.ownerId, portfolioId: scope.portfolioId },
+    });
+    const unsignedToken = `${header}.${payload}`;
+    const forgedSession = `${unsignedToken}.${createHmac("sha256", signingKey).update(unsignedToken).digest("base64url")}`;
+    const auth = new SupabaseOwnerSessionAdapter({
+      issuer: "https://identity.example.test/auth/v1",
+      audience: "authenticated",
+      allowedAlgorithms: ["HS256"],
+      signingKeys: new Map([["phase4-test", signingKey]]),
+      ownerAllowlist: ["known-github-owner"],
+      stableOwnerId: scope.ownerId,
+      nowSeconds: () => Math.floor(Date.now() / 1000),
+      resolveProviderIdentity: async (subject) => ({ provider: "github", subject }),
+      isSessionRevoked: async () => false,
+    });
+    const unusedCrypto = {} as CryptoPort;
+    const security: OwnerRequestSecurity = {
+      appOrigin: "https://example.com",
+      identity: createIdentityAccessService({ auth, crypto: unusedCrypto }),
+    };
+    const beforeSpoof = await admin.query(
+      "select display_name, version from portfolio_config.settings where portfolio_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    const beforeEvents = await admin.query(
+      "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    const spoofResponse = await handleUpdateOwnerProfileConfiguration(
+      new Request("https://example.com/api/owner/v1/configuration/profile", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          cookie: `sw_owner_session=${forgedSession}`,
+          origin: "https://example.com",
+          "x-csrf-token": "valid-test-csrf-proof",
+          "idempotency-key": "forged-claims-idempotency-key",
+          "if-match": '"1"',
+          "x-owner-id": scope.ownerId,
+          "x-portfolio-id": scope.portfolioId,
+        },
+        body: JSON.stringify({ displayName: "Forged Owner", headline: "Must be denied", bio: "Untrusted claims." }),
+      }),
+      { service: configurationService, security },
+    );
+    expect(spoofResponse.status).toBe(403);
+    const afterSpoof = await admin.query(
+      "select display_name, version from portfolio_config.settings where portfolio_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    const afterEvents = await admin.query(
+      "select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid",
+      [scope.portfolioId],
+    );
+    expect(afterSpoof.rows).toEqual(beforeSpoof.rows);
+    expect(afterEvents.rows).toEqual(beforeEvents.rows);
   });
 
   it("rolls back the profile policy and every column-level update grant", async () => {

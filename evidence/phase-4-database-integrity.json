@@ -2893,9 +2893,14 @@
       "ownerIdentityMap": "deny by grants and forced RLS"
     },
     {
-      "principal": "application login with another Portfolio",
-      "settings": "not found",
+      "principal": "application login scoped to a different Portfolio",
+      "settings": "existing second Portfolio hidden by forced RLS",
       "ownerIdentityMap": "not probed"
+    },
+    {
+      "principal": "signed non-allowlisted Owner JWT with forged editable Owner and Portfolio claims",
+      "settings": "denied by verified identity boundary before command dispatch",
+      "ownerIdentityMap": "no database writes"
     }
   ],
   "databaseIntegrationTestsPassed": 23,
