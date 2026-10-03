@@ -23,6 +23,19 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface IdentityAccessOwnerLinks {
+  created_at: Generated<Timestamp>;
+  /**
+   * Immutable GitHub subject from trusted provider identity records only.
+   */
+  github_subject: string;
+  last_seen_at: Generated<Timestamp>;
+  /**
+   * Stable domain Owner identity; unchanged by session or provider refresh.
+   */
+  owner_id: string;
+}
+
 export interface OperationsIdempotencyRecords {
   actor_scope: string;
   completed_at: Timestamp | null;
@@ -96,6 +109,7 @@ export interface PortfolioConfigSettings {
 }
 
 export interface DB {
+  "identity_access.owner_links": IdentityAccessOwnerLinks;
   "operations.idempotency_records": OperationsIdempotencyRecords;
   "operations.jobs": OperationsJobs;
   "operations.outbox_events": OperationsOutboxEvents;

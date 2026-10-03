@@ -1,0 +1,2911 @@
+{
+  "ticket": 88,
+  "parent": 77,
+  "scope": "phase4-migration-equivalence-restricted-principal-and-pooled-isolation",
+  "phase3Snapshot": "supabase/baselines/phase3.json",
+  "phase3MigrationFiles": [
+    "20260922170000_prepare_migration_capability.sql",
+    "20260922171906_establish_database_security_baseline.sql",
+    "20260922203000_create_operations_primitives.sql"
+  ],
+  "migrationChecksums": [
+    {
+      "file": "20260922170000_prepare_migration_capability.sql",
+      "sha256": "f626df30438e644254fd6c5af015118be117ef5090fbc976bb0762593ac481fe"
+    },
+    {
+      "file": "20260922171906_establish_database_security_baseline.sql",
+      "sha256": "1406e77b9a2505ec684ef350170545558217ca2bf345675f67eb723a735f6be3"
+    },
+    {
+      "file": "20260922203000_create_operations_primitives.sql",
+      "sha256": "adad38103c83693de591f1691fe4eaabbe7da90423b3e68a02d7b7aa9b76cb98"
+    },
+    {
+      "file": "20261001220000_create_identity_access_owner_links.sql",
+      "sha256": "caa742152a624883937f3204ca1ec2ee947c7c52a812e0760ba794d1195b1205"
+    },
+    {
+      "file": "20261002120000_create_portfolio_configuration_settings.sql",
+      "sha256": "55452f45d7b4b18720993ec5fe4d0e818652c331339bd97c7e15fed6fb6a9c90"
+    },
+    {
+      "file": "20261002130000_allow_versioned_portfolio_profile_updates.sql",
+      "sha256": "533e07ffcad2d12297337fd84a6b7beb29cc5254a8f1632e75024ad73a013fae"
+    },
+    {
+      "file": "20261002140000_allow_owner_contact_channel_replacement.sql",
+      "sha256": "046977710edcffca09133ea794e874dbdd9b68188526cdc548182b3c73843ca4"
+    },
+    {
+      "file": "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+      "sha256": "f05678c118b14daee3ccfaf34736169b3339720b32ed6c1a394366398ded605a"
+    }
+  ],
+  "migrationLedger": [
+    {
+      "version": "20260922170000",
+      "name": "prepare_migration_capability"
+    },
+    {
+      "version": "20260922171906",
+      "name": "establish_database_security_baseline"
+    },
+    {
+      "version": "20260922203000",
+      "name": "create_operations_primitives"
+    },
+    {
+      "version": "20261001220000",
+      "name": "create_identity_access_owner_links"
+    },
+    {
+      "version": "20261002120000",
+      "name": "create_portfolio_configuration_settings"
+    },
+    {
+      "version": "20261002130000",
+      "name": "allow_versioned_portfolio_profile_updates"
+    },
+    {
+      "version": "20261002140000",
+      "name": "allow_owner_contact_channel_replacement"
+    },
+    {
+      "version": "20261002150000",
+      "name": "allow_versioned_portfolio_cta_updates"
+    }
+  ],
+  "migrationSafety": {
+    "ticketIntroducedMigrations": [],
+    "phase4ExpansionSourceChecks": {
+      "boundedLockTimeout": "set lock_timeout = '5s'",
+      "rollbackNotes": true
+    },
+    "rollbackForwardFix": "No migration DDL is introduced by this ticket. Roll back the application release; correct migration defects with a later reviewed timestamped expansion migration.",
+    "remoteWrites": false
+  },
+  "cleanUpgradeEquivalent": true,
+  "migrationReplayNoop": true,
+  "normalizedCleanUpgradeDiff": [],
+  "normalizedStateSha256": "8f7ed94a30cb6e21376c523bc3bac16742562958a97e43fa12055800f594e35c",
+  "normalizedDatabaseState": {
+    "schemas": [
+      {
+        "name": "content",
+        "owner": "shipwithali_migration",
+        "acl": "{shipwithali_migration=UC/shipwithali_migration}"
+      },
+      {
+        "name": "cv",
+        "owner": "shipwithali_migration",
+        "acl": "{shipwithali_migration=UC/shipwithali_migration}"
+      },
+      {
+        "name": "identity_access",
+        "owner": "shipwithali_migration",
+        "acl": "{shipwithali_migration=UC/shipwithali_migration,shipwithali_application=U/shipwithali_migration,shipwithali_backup=U/shipwithali_migration}"
+      },
+      {
+        "name": "interaction",
+        "owner": "shipwithali_migration",
+        "acl": "{shipwithali_migration=UC/shipwithali_migration}"
+      },
+      {
+        "name": "measurement",
+        "owner": "shipwithali_migration",
+        "acl": "{shipwithali_migration=UC/shipwithali_migration}"
+      },
+      {
+        "name": "media",
+        "owner": "shipwithali_migration",
+        "acl": "{shipwithali_migration=UC/shipwithali_migration}"
+      },
+      {
+        "name": "operations",
+        "owner": "shipwithali_migration",
+        "acl": "{shipwithali_migration=UC/shipwithali_migration,shipwithali_application=U/shipwithali_migration,shipwithali_worker=U/shipwithali_migration,shipwithali_backup=U/shipwithali_migration}"
+      },
+      {
+        "name": "portfolio_config",
+        "owner": "shipwithali_migration",
+        "acl": "{shipwithali_migration=UC/shipwithali_migration,shipwithali_application=U/shipwithali_migration}"
+      },
+      {
+        "name": "public_read",
+        "owner": "shipwithali_migration",
+        "acl": "{shipwithali_migration=UC/shipwithali_migration}"
+      },
+      {
+        "name": "taxonomy",
+        "owner": "shipwithali_migration",
+        "acl": "{shipwithali_migration=UC/shipwithali_migration}"
+      }
+    ],
+    "roles": [
+      {
+        "rolname": "shipwithali_application",
+        "rolcanlogin": false,
+        "rolsuper": false,
+        "rolcreatedb": false,
+        "rolcreaterole": false,
+        "rolreplication": false,
+        "rolbypassrls": false
+      },
+      {
+        "rolname": "shipwithali_backup",
+        "rolcanlogin": false,
+        "rolsuper": false,
+        "rolcreatedb": false,
+        "rolcreaterole": false,
+        "rolreplication": false,
+        "rolbypassrls": false
+      },
+      {
+        "rolname": "shipwithali_migration",
+        "rolcanlogin": false,
+        "rolsuper": false,
+        "rolcreatedb": false,
+        "rolcreaterole": false,
+        "rolreplication": false,
+        "rolbypassrls": false
+      },
+      {
+        "rolname": "shipwithali_worker",
+        "rolcanlogin": false,
+        "rolsuper": false,
+        "rolcreatedb": false,
+        "rolcreaterole": false,
+        "rolreplication": false,
+        "rolbypassrls": false
+      }
+    ],
+    "roleMemberships": [
+      {
+        "role": "shipwithali_application",
+        "member": "postgres",
+        "adminOption": true
+      },
+      {
+        "role": "shipwithali_backup",
+        "member": "postgres",
+        "adminOption": true
+      },
+      {
+        "role": "shipwithali_migration",
+        "member": "postgres",
+        "adminOption": false
+      },
+      {
+        "role": "shipwithali_migration",
+        "member": "postgres",
+        "adminOption": true
+      },
+      {
+        "role": "shipwithali_worker",
+        "member": "postgres",
+        "adminOption": true
+      }
+    ],
+    "objects": [
+      {
+        "schema": "identity_access",
+        "name": "owner_links",
+        "kind": "r",
+        "owner": "shipwithali_migration",
+        "rlsEnabled": true,
+        "rlsForced": true
+      },
+      {
+        "schema": "operations",
+        "name": "idempotency_records",
+        "kind": "r",
+        "owner": "shipwithali_migration",
+        "rlsEnabled": true,
+        "rlsForced": true
+      },
+      {
+        "schema": "operations",
+        "name": "jobs",
+        "kind": "r",
+        "owner": "shipwithali_migration",
+        "rlsEnabled": true,
+        "rlsForced": true
+      },
+      {
+        "schema": "operations",
+        "name": "outbox_events",
+        "kind": "r",
+        "owner": "shipwithali_migration",
+        "rlsEnabled": true,
+        "rlsForced": true
+      },
+      {
+        "schema": "portfolio_config",
+        "name": "contact_channels",
+        "kind": "r",
+        "owner": "shipwithali_migration",
+        "rlsEnabled": true,
+        "rlsForced": true
+      },
+      {
+        "schema": "portfolio_config",
+        "name": "settings",
+        "kind": "r",
+        "owner": "shipwithali_migration",
+        "rlsEnabled": true,
+        "rlsForced": true
+      }
+    ],
+    "columns": [
+      {
+        "schema": "identity_access",
+        "tableName": "owner_links",
+        "position": 1,
+        "name": "github_subject",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "identity_access",
+        "tableName": "owner_links",
+        "position": 2,
+        "name": "owner_id",
+        "type": "uuid",
+        "typeSchema": "pg_catalog",
+        "typeName": "uuid",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "identity_access",
+        "tableName": "owner_links",
+        "position": 3,
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "NO",
+        "default": "transaction_timestamp()",
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "identity_access",
+        "tableName": "owner_links",
+        "position": 4,
+        "name": "last_seen_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "NO",
+        "default": "transaction_timestamp()",
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "position": 1,
+        "name": "operation_scope",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "position": 2,
+        "name": "actor_scope",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "position": 3,
+        "name": "key_hash",
+        "type": "character",
+        "typeSchema": "pg_catalog",
+        "typeName": "bpchar",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": 64,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "position": 4,
+        "name": "request_hash",
+        "type": "character",
+        "typeSchema": "pg_catalog",
+        "typeName": "bpchar",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": 64,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "position": 5,
+        "name": "status",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "position": 6,
+        "name": "result_envelope",
+        "type": "jsonb",
+        "typeSchema": "pg_catalog",
+        "typeName": "jsonb",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "position": 7,
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "NO",
+        "default": "transaction_timestamp()",
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "position": 8,
+        "name": "completed_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "position": 9,
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "position": 1,
+        "name": "job_id",
+        "type": "uuid",
+        "typeSchema": "pg_catalog",
+        "typeName": "uuid",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "position": 2,
+        "name": "job_type",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "position": 3,
+        "name": "payload_version",
+        "type": "integer",
+        "typeSchema": "pg_catalog",
+        "typeName": "int4",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": 32,
+        "numericScale": 0,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "position": 4,
+        "name": "payload",
+        "type": "jsonb",
+        "typeSchema": "pg_catalog",
+        "typeName": "jsonb",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "position": 5,
+        "name": "available_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "position": 6,
+        "name": "attempt_count",
+        "type": "integer",
+        "typeSchema": "pg_catalog",
+        "typeName": "int4",
+        "nullable": "NO",
+        "default": "0",
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": 32,
+        "numericScale": 0,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "position": 7,
+        "name": "status",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": "'available'::text",
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "position": 8,
+        "name": "lease_owner",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "position": 9,
+        "name": "lease_token",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "position": 10,
+        "name": "lease_expires_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "position": 11,
+        "name": "completed_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "position": 12,
+        "name": "last_error_code",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 1,
+        "name": "event_id",
+        "type": "uuid",
+        "typeSchema": "pg_catalog",
+        "typeName": "uuid",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 2,
+        "name": "event_type",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 3,
+        "name": "schema_version",
+        "type": "integer",
+        "typeSchema": "pg_catalog",
+        "typeName": "int4",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": 32,
+        "numericScale": 0,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 4,
+        "name": "aggregate_id",
+        "type": "uuid",
+        "typeSchema": "pg_catalog",
+        "typeName": "uuid",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 5,
+        "name": "aggregate_version",
+        "type": "integer",
+        "typeSchema": "pg_catalog",
+        "typeName": "int4",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": 32,
+        "numericScale": 0,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 6,
+        "name": "payload",
+        "type": "jsonb",
+        "typeSchema": "pg_catalog",
+        "typeName": "jsonb",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 7,
+        "name": "correlation_id",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 8,
+        "name": "causation_id",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 9,
+        "name": "occurred_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 10,
+        "name": "available_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 11,
+        "name": "attempt_count",
+        "type": "integer",
+        "typeSchema": "pg_catalog",
+        "typeName": "int4",
+        "nullable": "NO",
+        "default": "0",
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": 32,
+        "numericScale": 0,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 12,
+        "name": "lease_owner",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 13,
+        "name": "lease_token",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 14,
+        "name": "lease_expires_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 15,
+        "name": "completed_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "position": 16,
+        "name": "last_error_code",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "YES",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "position": 1,
+        "name": "portfolio_id",
+        "type": "uuid",
+        "typeSchema": "pg_catalog",
+        "typeName": "uuid",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "position": 2,
+        "name": "position",
+        "type": "smallint",
+        "typeSchema": "pg_catalog",
+        "typeName": "int2",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": 16,
+        "numericScale": 0,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "position": 3,
+        "name": "channel",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "position": 4,
+        "name": "label",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "position": 5,
+        "name": "destination",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "position": 6,
+        "name": "available_locales",
+        "type": "jsonb",
+        "typeSchema": "pg_catalog",
+        "typeName": "jsonb",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "position": 1,
+        "name": "portfolio_id",
+        "type": "uuid",
+        "typeSchema": "pg_catalog",
+        "typeName": "uuid",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "position": 2,
+        "name": "owner_id",
+        "type": "uuid",
+        "typeSchema": "pg_catalog",
+        "typeName": "uuid",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "position": 3,
+        "name": "display_name",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "position": 4,
+        "name": "headline",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "position": 5,
+        "name": "bio",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "position": 6,
+        "name": "global_cta_label",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "position": 7,
+        "name": "global_cta_destination",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "position": 8,
+        "name": "global_cta_unavailable_fallback",
+        "type": "text",
+        "typeSchema": "pg_catalog",
+        "typeName": "text",
+        "nullable": "NO",
+        "default": null,
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "position": 9,
+        "name": "version",
+        "type": "integer",
+        "typeSchema": "pg_catalog",
+        "typeName": "int4",
+        "nullable": "NO",
+        "default": "1",
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": 32,
+        "numericScale": 0,
+        "datetimePrecision": null
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "position": 10,
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "NO",
+        "default": "transaction_timestamp()",
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "position": 11,
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "typeSchema": "pg_catalog",
+        "typeName": "timestamptz",
+        "nullable": "NO",
+        "default": "transaction_timestamp()",
+        "identity": "NO",
+        "identityGeneration": null,
+        "generated": "NEVER",
+        "generationExpression": null,
+        "characterMaximumLength": null,
+        "numericPrecision": null,
+        "numericScale": null,
+        "datetimePrecision": 6
+      }
+    ],
+    "constraints": [
+      {
+        "schema": "identity_access",
+        "tableName": "owner_links",
+        "name": "owner_links_github_subject_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (github_subject <> ''::text)"
+      },
+      {
+        "schema": "identity_access",
+        "tableName": "owner_links",
+        "name": "owner_links_pkey",
+        "type": "p",
+        "validated": true,
+        "definition": "PRIMARY KEY (github_subject)"
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "name": "idempotency_records_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (status = 'reserved'::text AND result_envelope IS NULL AND completed_at IS NULL OR status = 'completed'::text AND result_envelope IS NOT NULL AND completed_at IS NOT NULL)"
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "name": "idempotency_records_check1",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (expires_at > created_at)"
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "name": "idempotency_records_pkey",
+        "type": "p",
+        "validated": true,
+        "definition": "PRIMARY KEY (operation_scope, actor_scope, key_hash)"
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "name": "idempotency_records_status_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (status = ANY (ARRAY['reserved'::text, 'completed'::text]))"
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "name": "jobs_attempt_count_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (attempt_count >= 0)"
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "name": "jobs_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (status = 'leased'::text AND lease_owner IS NOT NULL AND lease_token IS NOT NULL AND lease_expires_at IS NOT NULL AND completed_at IS NULL OR status = 'available'::text AND lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL AND completed_at IS NULL OR status = 'completed'::text AND lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL AND completed_at IS NOT NULL)"
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "name": "jobs_payload_version_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (payload_version > 0)"
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "name": "jobs_pkey",
+        "type": "p",
+        "validated": true,
+        "definition": "PRIMARY KEY (job_id)"
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "name": "jobs_status_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (status = ANY (ARRAY['available'::text, 'leased'::text, 'completed'::text]))"
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "name": "outbox_events_aggregate_version_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (aggregate_version > 0)"
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "name": "outbox_events_attempt_count_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (attempt_count >= 0)"
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "name": "outbox_events_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL OR lease_owner IS NOT NULL AND lease_token IS NOT NULL AND lease_expires_at IS NOT NULL)"
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "name": "outbox_events_pkey",
+        "type": "p",
+        "validated": true,
+        "definition": "PRIMARY KEY (event_id)"
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "name": "outbox_events_schema_version_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (schema_version > 0)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "name": "contact_channels_available_locales_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (available_locales = ANY (ARRAY['[\"en\"]'::jsonb, '[\"ar\"]'::jsonb, '[\"en\", \"ar\"]'::jsonb, '[\"ar\", \"en\"]'::jsonb]))"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "name": "contact_channels_channel_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (channel = ANY (ARRAY['linkedin'::text, 'whatsapp'::text, 'instagram'::text, 'phone'::text, 'email'::text, 'other'::text]))"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "name": "contact_channels_destination_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (char_length(destination) >= 1 AND char_length(destination) <= 2048)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "name": "contact_channels_label_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (char_length(btrim(label)) >= 1 AND char_length(btrim(label)) <= 80)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "name": "contact_channels_pkey",
+        "type": "p",
+        "validated": true,
+        "definition": "PRIMARY KEY (portfolio_id, \"position\")"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "name": "contact_channels_portfolio_id_fkey",
+        "type": "f",
+        "validated": true,
+        "definition": "FOREIGN KEY (portfolio_id) REFERENCES portfolio_config.settings(portfolio_id) ON DELETE CASCADE"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "name": "contact_channels_position_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (\"position\" >= 0 AND \"position\" <= 19)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "settings_bio_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (char_length(btrim(bio)) >= 1 AND char_length(btrim(bio)) <= 4000)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "settings_display_name_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (char_length(btrim(display_name)) >= 1 AND char_length(btrim(display_name)) <= 100)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "settings_global_cta_destination_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (char_length(global_cta_destination) >= 1 AND char_length(global_cta_destination) <= 2048)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "settings_global_cta_label_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (char_length(btrim(global_cta_label)) >= 1 AND char_length(btrim(global_cta_label)) <= 80)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "settings_global_cta_unavailable_fallback_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (char_length(btrim(global_cta_unavailable_fallback)) >= 1 AND char_length(btrim(global_cta_unavailable_fallback)) <= 160)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "settings_headline_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (char_length(btrim(headline)) >= 1 AND char_length(btrim(headline)) <= 160)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "settings_owner_id_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (owner_id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "settings_owner_id_key",
+        "type": "u",
+        "validated": true,
+        "definition": "UNIQUE (owner_id)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "settings_pkey",
+        "type": "p",
+        "validated": true,
+        "definition": "PRIMARY KEY (portfolio_id)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "settings_portfolio_id_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (portfolio_id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text)"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "settings_version_check",
+        "type": "c",
+        "validated": true,
+        "definition": "CHECK (version > 0)"
+      }
+    ],
+    "grants": [
+      {
+        "schema": "content",
+        "object": "content",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "CREATE",
+        "grantable": false
+      },
+      {
+        "schema": "content",
+        "object": "content",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "cv",
+        "object": "cv",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "CREATE",
+        "grantable": false
+      },
+      {
+        "schema": "cv",
+        "object": "cv",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "identity_access",
+        "objectType": "n",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "identity_access",
+        "objectType": "n",
+        "grantee": "shipwithali_backup",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "identity_access",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "CREATE",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "identity_access",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "owner_links",
+        "objectType": "r",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "INSERT",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "owner_links",
+        "objectType": "r",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "owner_links",
+        "objectType": "r",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "owner_links",
+        "objectType": "r",
+        "grantee": "shipwithali_backup",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "owner_links",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "DELETE",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "owner_links",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "INSERT",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "owner_links",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "MAINTAIN",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "owner_links",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "REFERENCES",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "owner_links",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "owner_links",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "TRIGGER",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "owner_links",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "TRUNCATE",
+        "grantable": false
+      },
+      {
+        "schema": "identity_access",
+        "object": "owner_links",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "interaction",
+        "object": "interaction",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "CREATE",
+        "grantable": false
+      },
+      {
+        "schema": "interaction",
+        "object": "interaction",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "measurement",
+        "object": "measurement",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "CREATE",
+        "grantable": false
+      },
+      {
+        "schema": "measurement",
+        "object": "measurement",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "media",
+        "object": "media",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "CREATE",
+        "grantable": false
+      },
+      {
+        "schema": "media",
+        "object": "media",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "idempotency_records",
+        "objectType": "r",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "INSERT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "idempotency_records",
+        "objectType": "r",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "idempotency_records",
+        "objectType": "r",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "idempotency_records",
+        "objectType": "r",
+        "grantee": "shipwithali_backup",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "idempotency_records",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "DELETE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "idempotency_records",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "INSERT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "idempotency_records",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "MAINTAIN",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "idempotency_records",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "REFERENCES",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "idempotency_records",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "idempotency_records",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "TRIGGER",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "idempotency_records",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "TRUNCATE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "idempotency_records",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "jobs",
+        "objectType": "r",
+        "grantee": "shipwithali_backup",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "jobs",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "DELETE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "jobs",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "INSERT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "jobs",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "MAINTAIN",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "jobs",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "REFERENCES",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "jobs",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "jobs",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "TRIGGER",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "jobs",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "TRUNCATE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "jobs",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "jobs",
+        "objectType": "r",
+        "grantee": "shipwithali_worker",
+        "grantor": "shipwithali_migration",
+        "privilege": "INSERT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "jobs",
+        "objectType": "r",
+        "grantee": "shipwithali_worker",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "jobs",
+        "objectType": "r",
+        "grantee": "shipwithali_worker",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "operations",
+        "objectType": "n",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "operations",
+        "objectType": "n",
+        "grantee": "shipwithali_backup",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "operations",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "CREATE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "operations",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "operations",
+        "objectType": "n",
+        "grantee": "shipwithali_worker",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "outbox_events",
+        "objectType": "r",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "INSERT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "outbox_events",
+        "objectType": "r",
+        "grantee": "shipwithali_backup",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "outbox_events",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "DELETE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "outbox_events",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "INSERT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "outbox_events",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "MAINTAIN",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "outbox_events",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "REFERENCES",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "outbox_events",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "outbox_events",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "TRIGGER",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "outbox_events",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "TRUNCATE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "outbox_events",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "outbox_events",
+        "objectType": "r",
+        "grantee": "shipwithali_worker",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "operations",
+        "object": "outbox_events",
+        "objectType": "r",
+        "grantee": "shipwithali_worker",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "contact_channels",
+        "objectType": "r",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "DELETE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "contact_channels",
+        "objectType": "r",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "INSERT",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "contact_channels",
+        "objectType": "r",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "contact_channels",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "DELETE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "contact_channels",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "INSERT",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "contact_channels",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "MAINTAIN",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "contact_channels",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "REFERENCES",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "contact_channels",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "contact_channels",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "TRIGGER",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "contact_channels",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "TRUNCATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "contact_channels",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "portfolio_config",
+        "objectType": "n",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "portfolio_config",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "CREATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "portfolio_config",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings",
+        "objectType": "r",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "INSERT",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings",
+        "objectType": "r",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "DELETE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "INSERT",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "MAINTAIN",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "REFERENCES",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "SELECT",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "TRIGGER",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "TRUNCATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings",
+        "objectType": "r",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings.bio",
+        "objectType": "c",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings.display_name",
+        "objectType": "c",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings.global_cta_destination",
+        "objectType": "c",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings.global_cta_label",
+        "objectType": "c",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings.global_cta_unavailable_fallback",
+        "objectType": "c",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings.headline",
+        "objectType": "c",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings.updated_at",
+        "objectType": "c",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "portfolio_config",
+        "object": "settings.version",
+        "objectType": "c",
+        "grantee": "shipwithali_application",
+        "grantor": "shipwithali_migration",
+        "privilege": "UPDATE",
+        "grantable": false
+      },
+      {
+        "schema": "public_read",
+        "object": "public_read",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "CREATE",
+        "grantable": false
+      },
+      {
+        "schema": "public_read",
+        "object": "public_read",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      },
+      {
+        "schema": "taxonomy",
+        "object": "taxonomy",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "CREATE",
+        "grantable": false
+      },
+      {
+        "schema": "taxonomy",
+        "object": "taxonomy",
+        "objectType": "n",
+        "grantee": "shipwithali_migration",
+        "grantor": "shipwithali_migration",
+        "privilege": "USAGE",
+        "grantable": false
+      }
+    ],
+    "defaultPrivileges": [],
+    "policies": [
+      {
+        "schema": "identity_access",
+        "tableName": "owner_links",
+        "name": "owner_links_application_insert_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "INSERT",
+        "usingPredicate": "",
+        "withCheck": "true"
+      },
+      {
+        "schema": "identity_access",
+        "tableName": "owner_links",
+        "name": "owner_links_application_select_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "SELECT",
+        "usingPredicate": "true",
+        "withCheck": ""
+      },
+      {
+        "schema": "identity_access",
+        "tableName": "owner_links",
+        "name": "owner_links_application_update_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "UPDATE",
+        "usingPredicate": "true",
+        "withCheck": "true"
+      },
+      {
+        "schema": "identity_access",
+        "tableName": "owner_links",
+        "name": "owner_links_backup_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_backup}",
+        "command": "SELECT",
+        "usingPredicate": "true",
+        "withCheck": ""
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "name": "idempotency_application_insert_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "INSERT",
+        "usingPredicate": "",
+        "withCheck": "true"
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "name": "idempotency_application_select_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "SELECT",
+        "usingPredicate": "true",
+        "withCheck": ""
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "name": "idempotency_application_update_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "UPDATE",
+        "usingPredicate": "true",
+        "withCheck": "true"
+      },
+      {
+        "schema": "operations",
+        "tableName": "idempotency_records",
+        "name": "operations_backup_policy_idempotency",
+        "permissive": "permissive",
+        "roles": "{shipwithali_backup}",
+        "command": "SELECT",
+        "usingPredicate": "true",
+        "withCheck": ""
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "name": "jobs_worker_insert_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_worker}",
+        "command": "INSERT",
+        "usingPredicate": "",
+        "withCheck": "true"
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "name": "jobs_worker_select_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_worker}",
+        "command": "SELECT",
+        "usingPredicate": "true",
+        "withCheck": ""
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "name": "jobs_worker_update_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_worker}",
+        "command": "UPDATE",
+        "usingPredicate": "true",
+        "withCheck": "true"
+      },
+      {
+        "schema": "operations",
+        "tableName": "jobs",
+        "name": "operations_backup_policy_jobs",
+        "permissive": "permissive",
+        "roles": "{shipwithali_backup}",
+        "command": "SELECT",
+        "usingPredicate": "true",
+        "withCheck": ""
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "name": "operations_backup_policy_outbox",
+        "permissive": "permissive",
+        "roles": "{shipwithali_backup}",
+        "command": "SELECT",
+        "usingPredicate": "true",
+        "withCheck": ""
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "name": "outbox_application_insert_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "INSERT",
+        "usingPredicate": "",
+        "withCheck": "true"
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "name": "outbox_worker_select_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_worker}",
+        "command": "SELECT",
+        "usingPredicate": "true",
+        "withCheck": ""
+      },
+      {
+        "schema": "operations",
+        "tableName": "outbox_events",
+        "name": "outbox_worker_update_policy",
+        "permissive": "permissive",
+        "roles": "{shipwithali_worker}",
+        "command": "UPDATE",
+        "usingPredicate": "true",
+        "withCheck": "true"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "name": "portfolio_channels_application_delete",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "DELETE",
+        "usingPredicate": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND (EXISTS ( SELECT 1\n   FROM portfolio_config.settings settings\n  WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = current_setting('shipwithali.owner_id'::text, true))))))",
+        "withCheck": ""
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "name": "portfolio_channels_application_insert",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "INSERT",
+        "usingPredicate": "",
+        "withCheck": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND (EXISTS ( SELECT 1\n   FROM portfolio_config.settings settings\n  WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = current_setting('shipwithali.owner_id'::text, true))))))"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "contact_channels",
+        "name": "portfolio_channels_application_select",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "SELECT",
+        "usingPredicate": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND (EXISTS ( SELECT 1\n   FROM portfolio_config.settings settings\n  WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = current_setting('shipwithali.owner_id'::text, true))))))",
+        "withCheck": ""
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "portfolio_settings_application_insert",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "INSERT",
+        "usingPredicate": "",
+        "withCheck": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))"
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "portfolio_settings_application_select",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "SELECT",
+        "usingPredicate": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))",
+        "withCheck": ""
+      },
+      {
+        "schema": "portfolio_config",
+        "tableName": "settings",
+        "name": "portfolio_settings_application_update",
+        "permissive": "permissive",
+        "roles": "{shipwithali_application}",
+        "command": "UPDATE",
+        "usingPredicate": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))",
+        "withCheck": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))"
+      }
+    ],
+    "indexes": [
+      {
+        "schema": "identity_access",
+        "table": "owner_links",
+        "name": "owner_links_pkey",
+        "definition": "CREATE UNIQUE INDEX owner_links_pkey ON identity_access.owner_links USING btree (github_subject)"
+      },
+      {
+        "schema": "operations",
+        "table": "idempotency_records",
+        "name": "idempotency_records_pkey",
+        "definition": "CREATE UNIQUE INDEX idempotency_records_pkey ON operations.idempotency_records USING btree (operation_scope, actor_scope, key_hash)"
+      },
+      {
+        "schema": "operations",
+        "table": "jobs",
+        "name": "jobs_due_idx",
+        "definition": "CREATE INDEX jobs_due_idx ON operations.jobs USING btree (available_at, job_id) WHERE (completed_at IS NULL)"
+      },
+      {
+        "schema": "operations",
+        "table": "jobs",
+        "name": "jobs_pkey",
+        "definition": "CREATE UNIQUE INDEX jobs_pkey ON operations.jobs USING btree (job_id)"
+      },
+      {
+        "schema": "operations",
+        "table": "outbox_events",
+        "name": "outbox_events_due_idx",
+        "definition": "CREATE INDEX outbox_events_due_idx ON operations.outbox_events USING btree (available_at, event_id) WHERE (completed_at IS NULL)"
+      },
+      {
+        "schema": "operations",
+        "table": "outbox_events",
+        "name": "outbox_events_pkey",
+        "definition": "CREATE UNIQUE INDEX outbox_events_pkey ON operations.outbox_events USING btree (event_id)"
+      },
+      {
+        "schema": "portfolio_config",
+        "table": "contact_channels",
+        "name": "contact_channels_pkey",
+        "definition": "CREATE UNIQUE INDEX contact_channels_pkey ON portfolio_config.contact_channels USING btree (portfolio_id, \"position\")"
+      },
+      {
+        "schema": "portfolio_config",
+        "table": "settings",
+        "name": "settings_owner_id_key",
+        "definition": "CREATE UNIQUE INDEX settings_owner_id_key ON portfolio_config.settings USING btree (owner_id)"
+      },
+      {
+        "schema": "portfolio_config",
+        "table": "settings",
+        "name": "settings_pkey",
+        "definition": "CREATE UNIQUE INDEX settings_pkey ON portfolio_config.settings USING btree (portfolio_id)"
+      }
+    ],
+    "functions": [],
+    "triggers": [],
+    "types": []
+  },
+  "schemaCount": 10,
+  "constraintCount": 34,
+  "grantCount": 103,
+  "policyCount": 22,
+  "applicationTablesWithForcedRls": [
+    "identity_access.owner_links",
+    "portfolio_config.contact_channels",
+    "portfolio_config.settings"
+  ],
+  "phase3OperationsRowsPreserved": {
+    "idempotencyRecords": true,
+    "outboxEvents": true,
+    "jobs": true
+  },
+  "generatedTypeDrift": false,
+  "restrictedPrincipalMatrix": [
+    {
+      "principal": "shipwithali_application login",
+      "settings": "allow",
+      "ownerIdentityMap": "allow",
+      "bypassRls": false
+    },
+    {
+      "principal": "anon Visitor login",
+      "settings": "deny",
+      "ownerIdentityMap": "deny",
+      "bypassRls": false
+    },
+    {
+      "principal": "authenticated non-Owner login",
+      "settings": "deny",
+      "ownerIdentityMap": "deny",
+      "bypassRls": false
+    },
+    {
+      "principal": "shipwithali_worker login",
+      "settings": "deny",
+      "ownerIdentityMap": "deny",
+      "bypassRls": false
+    },
+    {
+      "principal": "PUBLIC",
+      "settings": "deny by grants and forced RLS",
+      "ownerIdentityMap": "deny by grants and forced RLS"
+    },
+    {
+      "principal": "application login scoped to a different Portfolio",
+      "settings": "existing second Portfolio hidden by forced RLS",
+      "ownerIdentityMap": "not probed"
+    },
+    {
+      "principal": "signed non-allowlisted Owner JWT with forged editable Owner and Portfolio claims",
+      "settings": "denied by verified identity boundary before command dispatch",
+      "ownerIdentityMap": "no database writes"
+    }
+  ],
+  "databaseIntegrationTestsPassed": 23,
+  "skippedCases": 0,
+  "isolatedLoopbackProjects": true,
+  "credentialsRecorded": false,
+  "secretValuesRecorded": false
+}
