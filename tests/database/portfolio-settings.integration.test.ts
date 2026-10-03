@@ -20,6 +20,7 @@ import {
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
+import { createTestLogger } from "../../src/runtime/ports.js";
 
 const DATABASE_URL = process.env["PHASE4_SETTINGS_DATABASE_URL"];
 if (process.env["PHASE4_REQUIRE_SETTINGS"] === "1" && !DATABASE_URL) {
@@ -599,6 +600,203 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     }
     expect(JSON.stringify(committed)).not.toContain(scope.ownerId);
     expect(JSON.stringify(committed)).not.toContain("integration-session");
+  }, 30_000);
+
+  it("keeps profile, channel, and CTA updates isolated and atomic across one secured Portfolio", async () => {
+    const scope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+    await createPortfolioSettingsService({ repository, transactions: database.transactions, scope }).provision(values);
+    const operations = createPostgresOperationsPersistence(database.database);
+    const service = createOwnerConfigurationApplicationService(
+      createPortfolioProfileCommandService({ repository, operations, scope }),
+      createPortfolioContactChannelsCommandService({ repository, operations, scope }),
+      createPortfolioGlobalCtaCommandService({ repository, operations, scope }),
+      scope.portfolioId,
+    );
+    const ownerReader = createPortfolioSettingsReader({ repository, transactions: database.transactions, scope });
+    const publicReader = createPortfolioSettingsReader({
+      repository,
+      transactions: database.transactions,
+      scope,
+      capabilityReader: {
+        async getFacts() {
+          return { currentCv: "unavailable", externalLinks: "unavailable", globalProjectCta: "unavailable" } as const;
+        },
+      },
+    });
+    const actorA = { kind: "owner" as const, ownerId: scope.ownerId, sessionId: "integrated-session-a" };
+    const actorB = { kind: "owner" as const, ownerId: createStableId("Owner"), sessionId: "integrated-session-b" };
+    let actor = actorA;
+    let allowlisted = true;
+    let barrier: (() => Promise<void>) | undefined;
+    const security: OwnerRequestSecurity = {
+      appOrigin: "https://example.com",
+      identity: {
+        async resolveActorContext() { return ok(actor); },
+        async authorizeOperation(query) {
+          if (!allowlisted) return ok(false);
+          await barrier?.();
+          return decideAuthorization(query);
+        },
+      },
+    };
+    const secretCookie = "synthetic-cookie-secret-integrated-89";
+    const secretCsrf = "synthetic-csrf-secret-integrated-89";
+    const apply = (
+      kind: "profile" | "channels" | "cta",
+      version: number,
+      key: string,
+      value: unknown,
+      logger?: ReturnType<typeof createTestLogger>,
+    ) => {
+      const path = kind === "profile" ? "profile" : kind === "channels" ? "contact-channels" : "project-cta";
+      const body = kind === "channels" ? { channels: value } : value;
+      const request = new Request(`https://example.com/api/owner/v1/configuration/${path}`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          cookie: `sw_owner_session=${secretCookie}`,
+          origin: "https://example.com",
+          "x-csrf-token": secretCsrf,
+          "idempotency-key": key,
+          "if-match": `"${version}"`,
+        },
+        body: JSON.stringify(body),
+      });
+      const deps = { service, security, ...(logger === undefined ? {} : { logger }) };
+      if (kind === "profile") return handleUpdateOwnerProfileConfiguration(request, deps);
+      if (kind === "channels") return handleUpdateOwnerContactChannels(request, deps);
+      return handleUpdateOwnerGlobalProjectCta(request, deps);
+    };
+    const readOwner = () => ownerReader.getSettings({ actor: actorA, portfolioId: scope.portfolioId });
+    const readPublic = () => publicReader.getPublicConfiguration({ locale: "en" });
+    const eventRows = () => admin.query(
+      "select event_type, aggregate_version, payload from operations.outbox_events where aggregate_id = $1::uuid and event_type in ('portfolio_configuration.profile_updated.v1', 'portfolio_configuration.channels_updated.v1', 'portfolio_configuration.cta_updated.v1') order by aggregate_version",
+      [scope.portfolioId],
+    );
+    const releaseTogether = (parties: number) => {
+      let release!: () => void;
+      const waiting = new Promise<void>((resolve) => { release = resolve; });
+      let arrived = 0;
+      barrier = async () => {
+        arrived += 1;
+        if (arrived === parties) release();
+        await waiting;
+      };
+    };
+
+    const profile = { displayName: values.profile.displayName, headline: "Integrated race", bio: values.profile.bio };
+    const channels = [{ channel: "linkedin", label: "LinkedIn", destination: "https://www.linkedin.com/in/integrated", availableLocales: ["en", "ar"] }];
+    const cta = { ...values.globalCta, label: "Integrated race CTA" };
+    releaseTogether(3);
+    const race = await Promise.all([
+      apply("profile", 1, "integrated-race-profile", profile),
+      apply("channels", 1, "integrated-race-channels", channels),
+      apply("cta", 1, "integrated-race-cta", cta),
+    ]);
+    barrier = undefined;
+    expect(race.map(({ status }) => status).sort()).toEqual([200, 412, 412]);
+    let committed = await readOwner();
+    expect(committed.ok && committed.value.version).toBe(2);
+    expect((await eventRows()).rows).toHaveLength(1);
+
+    // The same caller key is valid once per operation because replay scopes are operation-specific.
+    const profileUpdate = await apply("profile", 2, "integrated-shared-key", { ...profile, headline: "Integrated profile" });
+    expect(profileUpdate.status).toBe(200);
+    const profileReceipt = await profileUpdate.json();
+    const channelUpdate = await apply("channels", 3, "integrated-shared-key", channels);
+    expect(channelUpdate.status).toBe(200);
+    const channelReceipt = await channelUpdate.json();
+    const ctaUpdate = await apply("cta", 4, "integrated-shared-key", { ...cta, label: "Integrated CTA" });
+    expect(ctaUpdate.status).toBe(200);
+    const ctaReceipt = await ctaUpdate.json();
+    releaseTogether(2);
+    const concurrentChannelRetries = await Promise.all([
+      apply("channels", 3, "integrated-shared-key", channels),
+      apply("channels", 3, "integrated-shared-key", channels),
+    ]);
+    barrier = undefined;
+    const retryReceipts = await Promise.all(concurrentChannelRetries.map((response) => response.json()));
+    expect(concurrentChannelRetries.map(({ status }) => status)).toEqual([200, 200]);
+    expect(retryReceipts[0]).toEqual(retryReceipts[1]);
+    expect(retryReceipts[0]).toEqual(channelReceipt);
+    expect(channelReceipt).toMatchObject({ aggregateVersion: 4, outcome: "configuration-updated" });
+    const [profileReplay, ctaReplay] = await Promise.all([
+      apply("profile", 2, "integrated-shared-key", { ...profile, headline: "Integrated profile" }),
+      apply("cta", 4, "integrated-shared-key", { ...cta, label: "Integrated CTA" }),
+    ]);
+    expect(profileReplay.status).toBe(200);
+    expect(ctaReplay.status).toBe(200);
+    expect(await profileReplay.json()).toEqual(profileReceipt);
+    expect(await ctaReplay.json()).toEqual(ctaReceipt);
+    committed = await readOwner();
+    expect(committed).toMatchObject({
+      ok: true,
+      value: { version: 5, profile: { headline: "Integrated profile" }, contactChannels: channels, globalCta: { label: "Integrated CTA" } },
+    });
+    const acceptedEvents = (await eventRows()).rows;
+    expect(acceptedEvents).toHaveLength(4);
+    expect(acceptedEvents.map(({ aggregate_version }) => aggregate_version)).toEqual([2, 3, 4, 5]);
+    expect(new Set(acceptedEvents.map(({ event_type }) => event_type))).toEqual(new Set([
+      "portfolio_configuration.profile_updated.v1",
+      "portfolio_configuration.channels_updated.v1",
+      "portfolio_configuration.cta_updated.v1",
+    ]));
+
+    const ownerViewBeforeFailure = await readOwner();
+    const publicViewBeforeFailure = await readPublic();
+    const rollbackSecret = "synthetic-database-provider-secret-integrated-89";
+    const trigger = `phase4_integrated_fail_${process.pid}_${randomBytes(3).toString("hex")}`;
+    const functionName = trigger;
+    await admin.query(`create function public.${functionName}() returns trigger language plpgsql as $$ begin raise exception '${rollbackSecret}'; end $$`);
+    await admin.query(`create trigger ${trigger} before insert on operations.outbox_events for each row when (new.aggregate_id = '${scope.portfolioId}'::uuid and new.event_type = 'portfolio_configuration.channels_updated.v1') execute function public.${functionName}()`);
+    const logger = createTestLogger();
+    let failedMutation: Response;
+    try {
+      failedMutation = await apply("channels", 5, "integrated-rollback-key", [], logger);
+    } finally {
+      await admin.query(`drop trigger if exists ${trigger} on operations.outbox_events`);
+      await admin.query(`drop function if exists public.${functionName}()`);
+    }
+    expect(failedMutation!.status).toBe(500);
+    const failureBody = JSON.stringify(await failedMutation!.json());
+    expect(failureBody).not.toContain(rollbackSecret);
+    expect(failureBody).not.toContain(secretCookie);
+    expect(failureBody).not.toContain(secretCsrf);
+    const failureLogs = JSON.stringify(logger.records);
+    expect(failureLogs).not.toContain(rollbackSecret);
+    expect(failureLogs).not.toContain(secretCookie);
+    expect(failureLogs).not.toContain(secretCsrf);
+    expect(await readOwner()).toEqual(ownerViewBeforeFailure);
+    expect(await readPublic()).toEqual(publicViewBeforeFailure);
+    expect((await eventRows()).rows).toHaveLength(4);
+    const rollbackLedger = await admin.query(
+      "select count(*)::int as count from operations.idempotency_records where operation_scope = 'portfolio-configuration.update-owner-contact-channels' and key_hash = $1",
+      [createHash("sha256").update("integrated-rollback-key", "utf8").digest("hex")],
+    );
+    expect(rollbackLedger.rows[0].count).toBe(0);
+
+    actor = actorB;
+    for (const [kind, value] of [["profile", profile], ["channels", channels], ["cta", cta]] as const) {
+      expect((await apply(kind, 5, `integrated-wrong-owner-${kind}`, value)).status).toBe(403);
+    }
+    actor = actorA;
+    allowlisted = false;
+    for (const [kind, version, value] of [["profile", 2, { ...profile, headline: "Integrated profile" }], ["channels", 3, channels], ["cta", 4, { ...cta, label: "Integrated CTA" }]] as const) {
+      expect((await apply(kind, version, "integrated-shared-key", value)).status).toBe(403);
+      expect((await apply(kind, 5, `integrated-removed-owner-${kind}`, value)).status).toBe(403);
+    }
+    allowlisted = true;
+    expect((await readOwner()).ok).toBe(true);
+    expect((await eventRows()).rows).toHaveLength(4);
+    const publicView = JSON.stringify(await readPublic());
+    const persistedEvents = JSON.stringify((await eventRows()).rows);
+    expect(publicView).not.toContain(secretCookie);
+    expect(publicView).not.toContain(secretCsrf);
+    expect(persistedEvents).not.toContain(secretCookie);
+    expect(persistedEvents).not.toContain(secretCsrf);
+    expect(persistedEvents).not.toContain(rollbackSecret);
+    expect(persistedEvents).not.toContain("https://www.linkedin.com/in/integrated");
+    expect(persistedEvents).not.toContain(values.globalCta.destination);
   }, 30_000);
 
   it("executes secured Contact channel replacement with ordering, atomic versioning, replay, concurrency, and a minimal audit", async () => {
