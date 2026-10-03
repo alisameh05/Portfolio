@@ -52,12 +52,20 @@ test("a required local service cannot pass when unavailable even with exit code 
 });
 
 test("skipped and partial required results fail", () => {
-  for (const output of ["2 skipped", "partial result: 1 check missing"]) {
+  for (const output of ["2 skipped", "Skipped tests: 1", "partial result: 1 check missing"]) {
     assert.deepEqual(
       classifyCheckResult({ code: 0, output, failOnSkipped: true }),
       { passed: false, exitCode: 1, failure: "skipped-or-partial" },
     );
   }
+  assert.deepEqual(
+    classifyCheckResult({
+      code: 0,
+      output: "Phase 3 historical database invariants: 107 passed, 0 skipped before Phase 4 migrations.",
+      failOnSkipped: true,
+    }),
+    { passed: true, exitCode: 0, failure: null },
+  );
 });
 
 test("evidence redacts database credentials, bearer tokens, and private payload fields", () => {

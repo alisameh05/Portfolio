@@ -65,9 +65,13 @@ export function classifyCheckResult({
   requiresService = null,
 }) {
   const cleanOutput = output.replaceAll(/\u001B\[[0-9;]*m/g, "");
+  const skippedCounts = [
+    ...cleanOutput.matchAll(/\b(\d+)\s+skipped\b/gi),
+    ...cleanOutput.matchAll(/\bskipped(?:\s+tests?)?\s*[:=]\s*(\d+)\b/gi),
+  ].map((match) => Number(match[1]));
   const skippedOrPartial =
     failOnSkipped &&
-    (/[1-9]\d*\s+skipped|\bskipped\b.*[1-9]|missing.*service/i.test(cleanOutput) ||
+    (skippedCounts.some((count) => count > 0) || /missing.*service/i.test(cleanOutput) ||
       /\bpartial\b/i.test(cleanOutput));
   const serviceUnavailable =
     requiresService !== null &&
