@@ -1,10 +1,10 @@
 
-[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90m<WORKSPACE>[39m
+ RUN  v3.2.4 <WORKSPACE>
 
- [32m✓[39m tests/runtime/readiness-lifecycle.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 60[2mms[22m[39m
- [32m✓[39m tests/runtime/livez.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 115ms
+ ✓ tests/runtime/livez.test.ts (4 tests) 4ms
 
-[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
-[2m      Tests [22m [1m[32m16 passed[39m[22m[90m (16)[39m
-[2m   Start at [22m 11:45:14
-[2m   Duration [22m 509ms[2m (transform 128ms, setup 0ms, collect 111ms, tests 63ms, environment 0ms, prepare 133ms)[22m
+ Test Files  2 passed (2)
+      Tests  16 passed (16)
+   Start at  18:26:10
+   Duration  517ms (transform 166ms, setup 0ms, collect 107ms, tests 119ms, environment 0ms, prepare 123ms)

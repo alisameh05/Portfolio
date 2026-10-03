@@ -3,6 +3,20 @@
   "parent": 77,
   "scope": "phase4-migration-equivalence-restricted-principal-and-pooled-isolation",
   "phase3Snapshot": "supabase/baselines/phase3.json",
+  "predecessorDatabaseTests": {
+    "context": "Phase 3 schema snapshot before Phase 4 migrations",
+    "testFiles": [
+      "tests/database/postgres-transaction-runner.test.ts",
+      "tests/database/postgres-integration.test.ts",
+      "tests/database/optimistic-concurrency.test.ts",
+      "tests/database/idempotency.test.ts",
+      "tests/database/outbox.test.ts",
+      "tests/database/leased-jobs.test.ts",
+      "tests/database/role-rls-matrix.test.ts"
+    ],
+    "passed": 107,
+    "skipped": 0
+  },
   "phase3MigrationFiles": [
     "20260922170000_prepare_migration_capability.sql",
     "20260922171906_establish_database_security_baseline.sql",
@@ -2862,6 +2876,125 @@
     "jobs": true
   },
   "generatedTypeDrift": false,
+  "sanitizedAuditExamples": [
+    {
+      "verifiedBy": "tests/database/portfolio-settings.integration.test.ts",
+      "eventType": "portfolio_configuration.channels_updated.v1",
+      "schemaVersion": 1,
+      "aggregateVersion": 2,
+      "payload": {
+        "channelCount": 6,
+        "channelTypes": [
+          "email",
+          "instagram",
+          "linkedin",
+          "other",
+          "phone",
+          "whatsapp"
+        ],
+        "ownerScope": "[redacted stable Owner digest]"
+      },
+      "privateContactDestinationsIncluded": false
+    }
+  ],
+  "databaseTestResults": [
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > provisions once and returns only committed Owner state and version",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > reports an absent configured aggregate without creating one",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > enforces RLS scope and Owner authorization for configuration reads",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > allows one winning concurrent provision and never overwrites the existing aggregate",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back the aggregate when an ordered channel insert fails",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > keeps application table access narrow and denies clients, workers, and backup",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > proves only the restricted application login can reach configured settings and private identity mappings",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back the profile policy and every column-level update grant",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > uses forced RLS on both settings tables and clears scope after transaction reuse",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > executes the secured HTTP profile command atomically with replay, concurrency, audit, and the Owner query",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > keeps profile, channel, and CTA updates isolated and atomic across one secured Portfolio",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > executes secured Contact channel replacement with ordering, atomic versioning, replay, concurrency, and a minimal audit",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back channel state, ledger, and outbox when the aggregate stage fails",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back channel state, ledger, and outbox when the channel delete stage fails",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back channel state, ledger, and outbox when the channel insert stage fails",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back channel state, ledger, and outbox when the ledger stage fails",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back channel state, ledger, and outbox when the outbox stage fails",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back profile state, ledger, and outbox when the settings stage fails",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back profile state, ledger, and outbox when the ledger stage fails",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back profile state, ledger, and outbox when the outbox stage fails",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > executes the secured HTTP CTA update with concurrency, exact replay, operation isolation, and fallback preservation",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back CTA state, ledger, and outbox when the settings stage fails",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back CTA state, ledger, and outbox when the ledger stage fails",
+      "status": "passed"
+    },
+    {
+      "name": "Portfolio Configuration production migration and restricted principal > rolls back CTA state, ledger, and outbox when the outbox stage fails",
+      "status": "passed"
+    }
+  ],
   "restrictedPrincipalMatrix": [
     {
       "principal": "shipwithali_application login",
@@ -2903,7 +3036,7 @@
       "ownerIdentityMap": "no database writes"
     }
   ],
-  "databaseIntegrationTestsPassed": 23,
+  "databaseIntegrationTestsPassed": 24,
   "skippedCases": 0,
   "isolatedLoopbackProjects": true,
   "credentialsRecorded": false,

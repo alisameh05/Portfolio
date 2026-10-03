@@ -1,0 +1,33 @@
+   ▲ Next.js 15.5.25
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 726ms
+   Linting and checking validity of types ...
+
+ ⚠ The Next.js plugin was not detected in your ESLint configuration. See https://nextjs.org/docs/app/api-reference/config/eslint#migrating-existing-config
+   Collecting page data ...
+   Generating static pages (0/4) ...
+   Generating static pages (1/4)
+   Generating static pages (2/4)
+   Generating static pages (3/4)
+ ✓ Generating static pages (4/4)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                  Size  First Load JS
+┌ ƒ /livez                                  126 B         102 kB
+└ ƒ /readyz                                 126 B         102 kB
++ First Load JS shared by all              101 kB
+  ├ chunks/4bd1b696-c023c6e3521b1417.js   54.2 kB
+  ├ chunks/58-9ce6faf8e58245ce.js         45.3 kB
+  └ other shared chunks (total)           1.84 kB
+
+Route (pages)                                Size  First Load JS
+─ ○ /404                                  2.29 kB        97.4 kB
++ First Load JS shared by all             95.1 kB
+  ├ chunks/framework-b1e5f14688f9ffe6.js  57.7 kB
+  ├ chunks/main-5894a48f997be91a.js       35.2 kB
+  └ other shared chunks (total)           2.23 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

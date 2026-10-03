@@ -1,27 +1,27 @@
 
-[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90m<WORKSPACE>[39m
+ RUN  v3.2.4 <WORKSPACE>
 
- [32m✓[39m tests/runtime/owner-media.test.ts [2m([22m[2m68 tests[22m[2m)[22m[32m 54[2mms[22m[39m
- [32m✓[39m tests/runtime/owner-cv.test.ts [2m([22m[2m55 tests[22m[2m)[22m[32m 23[2mms[22m[39m
- [32m✓[39m tests/runtime/readiness-lifecycle.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 38[2mms[22m[39m
- [32m✓[39m tests/runtime/owner-project.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 27[2mms[22m[39m
- [32m✓[39m tests/runtime/owner-taxonomy.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 19[2mms[22m[39m
- [32m✓[39m tests/runtime/owner-moderation.test.ts [2m([22m[2m32 tests[22m[2m)[22m[32m 18[2mms[22m[39m
- [32m✓[39m tests/runtime/owner-analytics.test.ts [2m([22m[2m32 tests[22m[2m)[22m[32m 15[2mms[22m[39m
- [32m✓[39m tests/runtime/configuration.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 10[2mms[22m[39m
- [32m✓[39m tests/runtime/owner-publication.test.ts [2m([22m[2m36 tests[22m[2m)[22m[32m 24[2mms[22m[39m
- [32m✓[39m tests/runtime/owner-configuration.test.ts [2m([22m[2m31 tests[22m[2m)[22m[32m 15[2mms[22m[39m
- [32m✓[39m tests/runtime/owner-export.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 18[2mms[22m[39m
- [32m✓[39m tests/runtime/rating.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 9[2mms[22m[39m
- [32m✓[39m tests/runtime/feedback.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 9[2mms[22m[39m
- [32m✓[39m tests/runtime/public-event.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 13[2mms[22m[39m
- [32m✓[39m tests/runtime/reaction.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 9[2mms[22m[39m
- [32m✓[39m tests/runtime/current-cv.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 8[2mms[22m[39m
- [32m✓[39m tests/runtime/problem.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 5[2mms[22m[39m
- [32m✓[39m tests/runtime/runtime-ports.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 3[2mms[22m[39m
- [32m✓[39m tests/runtime/livez.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ ✓ tests/runtime/owner-media.test.ts (68 tests) 59ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 44ms
+ ✓ tests/runtime/owner-cv.test.ts (55 tests) 24ms
+ ✓ tests/runtime/owner-publication.test.ts (36 tests) 20ms
+ ✓ tests/runtime/owner-moderation.test.ts (32 tests) 19ms
+ ✓ tests/runtime/owner-project.test.ts (35 tests) 18ms
+ ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 16ms
+ ✓ tests/runtime/owner-analytics.test.ts (32 tests) 16ms
+ ✓ tests/runtime/owner-configuration.test.ts (31 tests) 15ms
+ ✓ tests/runtime/owner-export.test.ts (35 tests) 16ms
+ ✓ tests/runtime/public-event.test.ts (19 tests) 8ms
+ ✓ tests/runtime/configuration.test.ts (17 tests) 8ms
+ ✓ tests/runtime/feedback.test.ts (20 tests) 9ms
+ ✓ tests/runtime/current-cv.test.ts (13 tests) 8ms
+ ✓ tests/runtime/rating.test.ts (21 tests) 11ms
+ ✓ tests/runtime/reaction.test.ts (19 tests) 9ms
+ ✓ tests/runtime/runtime-ports.test.ts (6 tests) 6ms
+ ✓ tests/runtime/livez.test.ts (4 tests) 3ms
+ ✓ tests/runtime/problem.test.ts (11 tests) 6ms
 
-[2m Test Files [22m [1m[32m19 passed[39m[22m[90m (19)[39m
-[2m      Tests [22m [1m[32m501 passed[39m[22m[90m (501)[39m
-[2m   Start at [22m 11:45:14
-[2m   Duration [22m 1.62s[2m (transform 617ms, setup 0ms, collect 924ms, tests 319ms, environment 0ms, prepare 132ms)[22m
+ Test Files  19 passed (19)
+      Tests  501 passed (501)
+   Start at  18:26:10
+   Duration  1.62s (transform 627ms, setup 0ms, collect 941ms, tests 314ms, environment 0ms, prepare 127ms)

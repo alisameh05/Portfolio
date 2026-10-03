@@ -1,0 +1,37 @@
+
+> shipwithali-portfolio@0.0.0 test:setup
+> node --test --test-isolation=none tests/tooling/*.test.mjs
+
+✔ rejects Node 22 even though it shares the major version accepted by the old gate (4.2371ms)
+✔ rejects another Node 24 patch instead of treating any Node 24 as pinned (2.2057ms)
+✔ rejects a different npm patch instead of recording it as accepted (2.2083ms)
+✔ missing Docker and inaccessible daemon fail with safe actionable diagnostics (0.5378ms)
+✔ a skipped or empty integration suite cannot count as passing (0.2453ms)
+✔ isolated Auth config preserves signup restrictions and leaves source untouched (1.3412ms)
+✔ remote provider credentials never reach isolated CLI or tests (0.829ms)
+✔ the required checklist includes every predecessor and Phase 4 acceptance runner (0.1305ms)
+✔ a passing constituent passes only when it exits cleanly (0.4394ms)
+✔ a required local service cannot pass when unavailable even with exit code zero (0.386ms)
+✔ skipped and partial required results fail (0.2598ms)
+✔ evidence redacts database credentials, bearer [redacted], and private payload fields (0.8387ms)
+✔ malformed database evidence is reported without crashing the gate (0.2362ms)
+✔ a successful gate requires every named constituent exactly once (0.2165ms)
+✔ missing, stale, or duplicate evidence and failed constituents fail the verdict (0.1104ms)
+✔ the settings runner isolates both Supabase projects to distinct loopback port ranges (0.2738ms)
+✔ the settings runner removes inherited provider credentials (0.1272ms)
+✔ the settings runner rejects missing, partial, failed, or skipped database evidence (0.9506ms)
+✔ rejects Node 20 and mismatched npm before installation (4.7147ms)
+✔ runtime-only preflight works before dependencies exist (3.4387ms)
+✔ reads exact npm from lifecycle metadata without spawning another process (0.2503ms)
+✔ rejects missing development dependencies even with an installation stamp (7.4584ms)
+✔ rejects cached dependencies after lockfile changes (7.8447ms)
+✔ requires successful setup and exact installed versions (10.497ms)
+✔ a registry install failure cannot leave a previously ready environment (179.6118ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 303.0006

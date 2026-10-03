@@ -1,193 +1,1208 @@
 {
-  "ticket": 78,
+  "ticket": 90,
   "parent": 77,
-  "scope": "phase-4-verification-prefactor-gate",
-  "node": "v24.21.0",
-  "verdict": "fail",
+  "scope": "phase-4-completion-gate-and-reproducible-evidence",
+  "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+  "generatedAt": "2026-10-03T15:30:23.349Z",
+  "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+  "toolVersions": {
+    "node": "v24.21.0",
+    "npm": "11.19.0",
+    "requiredNode": "24.21.0",
+    "requiredNpm": "11.19.0",
+    "packageManager": "npm@11.19.0"
+  },
+  "verdict": "pass",
   "checks": [
     {
-      "name": "phase2-gate-predecessor",
+      "name": "validation-ready",
       "passed": true,
       "exitCode": 0,
-      "evidence": "evidence/phase-4-phase2-gate.log"
+      "failure": null,
+      "evidence": "evidence/phase-4-validation-ready.log"
     },
     {
-      "name": "database-toolchain",
+      "name": "predecessor-phase1",
       "passed": true,
       "exitCode": 0,
-      "evidence": "evidence/phase-4-database-toolchain.log"
+      "failure": null,
+      "evidence": "evidence/phase-4-predecessor-phase1.log"
     },
     {
-      "name": "migration-baseline-source",
+      "name": "predecessor-phase2",
       "passed": true,
       "exitCode": 0,
-      "evidence": "evidence/phase-4-migration-baseline-source.log"
+      "failure": null,
+      "evidence": "evidence/phase-4-predecessor-phase2.log"
     },
     {
-      "name": "phase3-database-source",
+      "name": "predecessor-phase3-source",
       "passed": true,
       "exitCode": 0,
-      "evidence": "evidence/phase-4-phase3-database-source.log"
+      "failure": null,
+      "evidence": "evidence/phase-4-predecessor-phase3-source.log"
     },
     {
-      "name": "toolchain",
+      "name": "exact-toolchain",
       "passed": true,
       "exitCode": 0,
-      "evidence": "evidence/phase-4-toolchain.log"
+      "failure": null,
+      "evidence": "evidence/phase-4-exact-toolchain.log"
     },
     {
-      "name": "contract-drift",
+      "name": "contract-verification",
       "passed": true,
       "exitCode": 0,
-      "evidence": "evidence/phase-4-contract-drift.log"
+      "failure": null,
+      "evidence": "evidence/phase-4-contract-verification.log"
     },
     {
-      "name": "contract-compatibility",
+      "name": "tooling-tests",
       "passed": true,
       "exitCode": 0,
-      "evidence": "evidence/phase-4-contract-compatibility.log"
+      "failure": null,
+      "evidence": "evidence/phase-4-tooling-tests.log"
     },
     {
-      "name": "contract-tests",
+      "name": "typecheck",
       "passed": true,
       "exitCode": 0,
-      "evidence": "evidence/phase-4-contract-tests.log"
-    },
-    {
-      "name": "strict-typecheck",
-      "passed": true,
-      "exitCode": 0,
+      "failure": null,
       "evidence": "evidence/phase-4-typecheck.log"
     },
     {
-      "name": "deterministic-lint",
+      "name": "lint",
       "passed": true,
       "exitCode": 0,
+      "failure": null,
       "evidence": "evidence/phase-4-lint.log"
+    },
+    {
+      "name": "production-build",
+      "passed": true,
+      "exitCode": 0,
+      "failure": null,
+      "evidence": "evidence/phase-4-production-build.log"
     },
     {
       "name": "architecture",
       "passed": true,
       "exitCode": 0,
+      "failure": null,
       "evidence": "evidence/phase-4-architecture.log"
     },
     {
       "name": "route-inventory",
       "passed": true,
       "exitCode": 0,
+      "failure": null,
       "evidence": "evidence/phase-4-route-inventory.log"
     },
     {
       "name": "runtime-boundary",
       "passed": true,
       "exitCode": 0,
+      "failure": null,
       "evidence": "evidence/phase-4-runtime-boundary.log"
     },
     {
       "name": "runtime-architecture",
       "passed": true,
       "exitCode": 0,
+      "failure": null,
       "evidence": "evidence/phase-4-runtime-architecture.log"
     },
     {
       "name": "phase4-context",
       "passed": true,
       "exitCode": 0,
-      "evidence": "evidence/phase-4-context-check.log"
+      "failure": null,
+      "evidence": "evidence/phase-4-phase4-context.log"
     },
     {
       "name": "phase4-focused-tests",
-      "passed": false,
-      "exitCode": 1,
-      "evidence": "evidence/phase-4-focused-tests.log"
-    },
-    {
-      "name": "local-service-probe",
       "passed": true,
       "exitCode": 0,
-      "evidence": "evidence/phase-4-local-service-probe.log"
+      "failure": null,
+      "evidence": "evidence/phase-4-phase4-focused-tests.log"
+    },
+    {
+      "name": "phase4-migration-integrity-tests",
+      "passed": true,
+      "exitCode": 0,
+      "failure": null,
+      "evidence": "evidence/phase-4-phase4-migration-integrity-tests.log"
+    },
+    {
+      "name": "phase4-local-auth-real-token",
+      "passed": true,
+      "exitCode": 0,
+      "failure": null,
+      "evidence": "evidence/phase-4-phase4-local-auth-real-token.log"
+    },
+    {
+      "name": "phase4-database-integrity",
+      "passed": true,
+      "exitCode": 0,
+      "failure": null,
+      "evidence": "evidence/phase-4-phase4-database-integrity.log"
     }
   ],
+  "missingChecks": [],
+  "duplicateChecks": [],
+  "failedChecks": [],
+  "staleOrMissingEvidence": [],
+  "evidenceValidationErrors": [],
   "evidence": [
     {
-      "file": "evidence/phase-4-context.json",
-      "fresh": true
+      "file": "evidence/phase-4-validation-ready.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "11bcbfa02fbc4ba366502e7f459df05afe2ab78087d5ca7783693169eb7c37bb"
     },
     {
-      "file": "evidence/phase-4-phase2-gate.log",
-      "fresh": true
+      "file": "evidence/phase-4-predecessor-phase1.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "04c4924d514fd9b9d524c820da703cf4796adec7c409cfd93bcadaa8b9ce13c1"
     },
     {
-      "file": "evidence/phase-4-database-toolchain.log",
-      "fresh": true
+      "file": "evidence/phase-4-predecessor-phase2.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "8853daa0b542214ea23e06b29054f905f7f27a95f6f7924a981cdf33907e6f11"
     },
     {
-      "file": "evidence/phase-4-migration-baseline-source.log",
-      "fresh": true
+      "file": "evidence/phase-4-predecessor-phase3-source.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "241ffbb66d1f7d6a04737e2f11953aa2269681a5a8993e598dba0cf40b9c1ca1"
     },
     {
-      "file": "evidence/phase-4-phase3-database-source.log",
-      "fresh": true
+      "file": "evidence/phase-4-exact-toolchain.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "36bf37c8b60b333ff0ec3b925164e2671d357d430fa7c0a8d1ba4067b679c527"
     },
     {
-      "file": "evidence/phase-4-toolchain.log",
-      "fresh": true
+      "file": "evidence/phase-4-contract-verification.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "d130ac62ef3406c07b9b8098a17bedda595eb86c6d6bd87e67512688886b9d01"
     },
     {
-      "file": "evidence/phase-4-contract-drift.log",
-      "fresh": true
-    },
-    {
-      "file": "evidence/phase-4-contract-compatibility.log",
-      "fresh": true
-    },
-    {
-      "file": "evidence/phase-4-contract-tests.log",
-      "fresh": true
+      "file": "evidence/phase-4-tooling-tests.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "60c6e8c24782aa87cb4f563e7001dd2e70cabb8d1192b230ff65a3872cec26de"
     },
     {
       "file": "evidence/phase-4-typecheck.log",
-      "fresh": true
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
     },
     {
       "file": "evidence/phase-4-lint.log",
-      "fresh": true
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "file": "evidence/phase-4-production-build.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "b0de427c2d20436639a7c797a9e01b8c4e27aca7ad1fb2e7d32921a70b48ac1d"
     },
     {
       "file": "evidence/phase-4-architecture.log",
-      "fresh": true
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "f74a0cd14fed2c58e216be3bafcbbcb08512a888b67c13b898e87bd082c9be9c"
     },
     {
       "file": "evidence/phase-4-route-inventory.log",
-      "fresh": true
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "f2511b658a3091926e9d185d6c5e234126efe7b283d39f2ad005d67db530a81b"
     },
     {
       "file": "evidence/phase-4-runtime-boundary.log",
-      "fresh": true
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "8526ba4b61b152bfc3e6e0b1f4e2c4186b5d7058d0d854805a2e126e1df4da16"
     },
     {
       "file": "evidence/phase-4-runtime-architecture.log",
-      "fresh": true
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "43397bb6e48e05f071e6bb1f27f3103e559ebc27a19f8289b4f389b0e3ad9d06"
     },
     {
-      "file": "evidence/phase-4-context-check.log",
-      "fresh": true
+      "file": "evidence/phase-4-phase4-context.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "908dfd8bb533634d82baf9834a2ef4df94e67bf09bf6b531030367ef42be539b"
     },
     {
-      "file": "evidence/phase-4-focused-tests.log",
-      "fresh": true
+      "file": "evidence/phase-4-phase4-focused-tests.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "fa796e3547769ba12357f5acc98195bd1665973c2977b45dacdaa3a7d62fd83c"
     },
     {
-      "file": "evidence/phase-4-local-service-probe.log",
-      "fresh": true
+      "file": "evidence/phase-4-phase4-migration-integrity-tests.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "62360e8d1b137073aaf6e00838b7952d73c65c7f915eba524de5359a64c8d1ef"
+    },
+    {
+      "file": "evidence/phase-4-phase4-local-auth-real-token.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "65626d1e687057452e3c12a1a31757f8521e5f5b97cb34d697478909a851895e"
+    },
+    {
+      "file": "evidence/phase-4-phase4-database-integrity.log",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "1a8560a718852a545930800109fd61d7f33269fb78623ad6cc8a8cc100daefbd"
+    },
+    {
+      "file": "evidence/phase-1-gate-report.json",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "5d2154316bf0ffb5d9efcdecb9f008f5568a6fe3a90ada4bd8028c7b63fad985"
+    },
+    {
+      "file": "evidence/phase-2-gate-report.json",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "14cd8bdba9f40a82f0b9752f6c62eebccefc3336b9750a86abd320ba0c774ff1"
+    },
+    {
+      "file": "evidence/phase-4-context.json",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "8022559b46dea6b37e03375520ca7cf8f12c8fb136cdd1810c2402f00b1da1bf"
+    },
+    {
+      "file": "evidence/phase-4-database-integrity.json",
+      "runId": "b2a4f335-0775-4ff9-831a-3549de207cbb",
+      "revision": "caa6c032b3d6fa300e5505ed844ebbc7130aef4d",
+      "fresh": true,
+      "sha256": "c8ad2c41cc789e4f79a8018f28b5a104d322dde40c22a6cd8a5601c77b67f76a"
     }
   ],
+  "coverage": {
+    "authentication": {
+      "deterministicTests": "tests/phase4/owner-session-auth.test.ts",
+      "realAdapter": "tests/phase4/local-auth-token.integration.test.ts",
+      "realTokenRunner": "scripts/local-auth-integration.mjs",
+      "localFixtureOnly": true,
+      "liveGitHubExchange": false,
+      "productionOrStagingCredentials": false,
+      "scenarios": [
+        "valid Owner",
+        "missing or malformed token",
+        "signature and key",
+        "issuer and audience",
+        "expiry",
+        "revocation",
+        "non-GitHub",
+        "non-Owner",
+        "allowlist removal",
+        "provider unavailable"
+      ]
+    },
+    "authorizationCsrfCookiesAndPrivacy": {
+      "testFiles": [
+        "tests/phase4/owner-operation-policy.test.ts",
+        "tests/phase4/owner-request-security.test.ts"
+      ],
+      "scenarios": [
+        "Owner and unsupported-operation policy",
+        "cookie flags",
+        "same-origin",
+        "CSRF proof",
+        "forged forwarded host",
+        "rate limits",
+        "denied-request no-effects",
+        "safe Problem Details and redaction"
+      ]
+    },
+    "independentIdentitiesAndConsent": {
+      "testFiles": [
+        "tests/phase4/pseudonymous-identity.test.ts",
+        "tests/phase4/functional-identity-orchestration.test.ts"
+      ],
+      "scenarios": [
+        "separate keys and subjects",
+        "affirmative consent",
+        "denied and unknown consent",
+        "withdrawal",
+        "purpose substitution",
+        "expiry",
+        "key rotation",
+        "no cross-purpose persistence or private log fields"
+      ]
+    },
+    "settingsContracts": {
+      "testFiles": [
+        "tests/phase4/portfolio-profile-command.test.ts",
+        "tests/phase4/portfolio-contact-channels-command.test.ts",
+        "tests/phase4/portfolio-cta-command.test.ts",
+        "tests/phase4/portfolio-settings-service.test.ts",
+        "tests/phase4/identity-configuration-contracts.test.ts"
+      ],
+      "realPostgresIntegration": "tests/database/portfolio-settings.integration.test.ts",
+      "generatedTypeDrift": true
+    },
+    "database": {
+      "migrationSnapshot": "supabase/baselines/phase3.json",
+      "predecessorDatabaseTests": {
+        "context": "Phase 3 schema snapshot before Phase 4 migrations",
+        "testFiles": [
+          "tests/database/postgres-transaction-runner.test.ts",
+          "tests/database/postgres-integration.test.ts",
+          "tests/database/optimistic-concurrency.test.ts",
+          "tests/database/idempotency.test.ts",
+          "tests/database/outbox.test.ts",
+          "tests/database/leased-jobs.test.ts",
+          "tests/database/role-rls-matrix.test.ts"
+        ],
+        "passed": 107,
+        "skipped": 0
+      },
+      "migrationIdsAndChecksums": [
+        {
+          "file": "20260922170000_prepare_migration_capability.sql",
+          "sha256": "f626df30438e644254fd6c5af015118be117ef5090fbc976bb0762593ac481fe"
+        },
+        {
+          "file": "20260922171906_establish_database_security_baseline.sql",
+          "sha256": "1406e77b9a2505ec684ef350170545558217ca2bf345675f67eb723a735f6be3"
+        },
+        {
+          "file": "20260922203000_create_operations_primitives.sql",
+          "sha256": "adad38103c83693de591f1691fe4eaabbe7da90423b3e68a02d7b7aa9b76cb98"
+        },
+        {
+          "file": "20261001220000_create_identity_access_owner_links.sql",
+          "sha256": "caa742152a624883937f3204ca1ec2ee947c7c52a812e0760ba794d1195b1205"
+        },
+        {
+          "file": "20261002120000_create_portfolio_configuration_settings.sql",
+          "sha256": "55452f45d7b4b18720993ec5fe4d0e818652c331339bd97c7e15fed6fb6a9c90"
+        },
+        {
+          "file": "20261002130000_allow_versioned_portfolio_profile_updates.sql",
+          "sha256": "533e07ffcad2d12297337fd84a6b7beb29cc5254a8f1632e75024ad73a013fae"
+        },
+        {
+          "file": "20261002140000_allow_owner_contact_channel_replacement.sql",
+          "sha256": "046977710edcffca09133ea794e874dbdd9b68188526cdc548182b3c73843ca4"
+        },
+        {
+          "file": "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+          "sha256": "f05678c118b14daee3ccfaf34736169b3339720b32ed6c1a394366398ded605a"
+        }
+      ],
+      "migrationLedger": [
+        {
+          "version": "20260922170000",
+          "name": "prepare_migration_capability"
+        },
+        {
+          "version": "20260922171906",
+          "name": "establish_database_security_baseline"
+        },
+        {
+          "version": "20260922203000",
+          "name": "create_operations_primitives"
+        },
+        {
+          "version": "20261001220000",
+          "name": "create_identity_access_owner_links"
+        },
+        {
+          "version": "20261002120000",
+          "name": "create_portfolio_configuration_settings"
+        },
+        {
+          "version": "20261002130000",
+          "name": "allow_versioned_portfolio_profile_updates"
+        },
+        {
+          "version": "20261002140000",
+          "name": "allow_owner_contact_channel_replacement"
+        },
+        {
+          "version": "20261002150000",
+          "name": "allow_versioned_portfolio_cta_updates"
+        }
+      ],
+      "cleanUpgradeEquivalent": true,
+      "migrationReplayNoop": true,
+      "normalizedCleanUpgradeDiff": [],
+      "schemaStateSha256": "8f7ed94a30cb6e21376c523bc3bac16742562958a97e43fa12055800f594e35c",
+      "forcedRlsTables": [
+        "identity_access.owner_links",
+        "portfolio_config.contact_channels",
+        "portfolio_config.settings"
+      ],
+      "grants": [
+        {
+          "schema": "identity_access",
+          "object": "identity_access",
+          "objectType": "n",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "USAGE",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "identity_access",
+          "objectType": "n",
+          "grantee": "shipwithali_backup",
+          "grantor": "shipwithali_migration",
+          "privilege": "USAGE",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "identity_access",
+          "objectType": "n",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "CREATE",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "identity_access",
+          "objectType": "n",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "USAGE",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "owner_links",
+          "objectType": "r",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "INSERT",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "owner_links",
+          "objectType": "r",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "SELECT",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "owner_links",
+          "objectType": "r",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "UPDATE",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "owner_links",
+          "objectType": "r",
+          "grantee": "shipwithali_backup",
+          "grantor": "shipwithali_migration",
+          "privilege": "SELECT",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "owner_links",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "DELETE",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "owner_links",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "INSERT",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "owner_links",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "MAINTAIN",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "owner_links",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "REFERENCES",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "owner_links",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "SELECT",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "owner_links",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "TRIGGER",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "owner_links",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "TRUNCATE",
+          "grantable": false
+        },
+        {
+          "schema": "identity_access",
+          "object": "owner_links",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "UPDATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "contact_channels",
+          "objectType": "r",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "DELETE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "contact_channels",
+          "objectType": "r",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "INSERT",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "contact_channels",
+          "objectType": "r",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "SELECT",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "contact_channels",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "DELETE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "contact_channels",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "INSERT",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "contact_channels",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "MAINTAIN",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "contact_channels",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "REFERENCES",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "contact_channels",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "SELECT",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "contact_channels",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "TRIGGER",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "contact_channels",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "TRUNCATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "contact_channels",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "UPDATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "portfolio_config",
+          "objectType": "n",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "USAGE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "portfolio_config",
+          "objectType": "n",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "CREATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "portfolio_config",
+          "objectType": "n",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "USAGE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings",
+          "objectType": "r",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "INSERT",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings",
+          "objectType": "r",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "SELECT",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "DELETE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "INSERT",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "MAINTAIN",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "REFERENCES",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "SELECT",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "TRIGGER",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "TRUNCATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings",
+          "objectType": "r",
+          "grantee": "shipwithali_migration",
+          "grantor": "shipwithali_migration",
+          "privilege": "UPDATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings.bio",
+          "objectType": "c",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "UPDATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings.display_name",
+          "objectType": "c",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "UPDATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings.global_cta_destination",
+          "objectType": "c",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "UPDATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings.global_cta_label",
+          "objectType": "c",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "UPDATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings.global_cta_unavailable_fallback",
+          "objectType": "c",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "UPDATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings.headline",
+          "objectType": "c",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "UPDATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings.updated_at",
+          "objectType": "c",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "UPDATE",
+          "grantable": false
+        },
+        {
+          "schema": "portfolio_config",
+          "object": "settings.version",
+          "objectType": "c",
+          "grantee": "shipwithali_application",
+          "grantor": "shipwithali_migration",
+          "privilege": "UPDATE",
+          "grantable": false
+        }
+      ],
+      "policies": [
+        {
+          "schema": "identity_access",
+          "tableName": "owner_links",
+          "name": "owner_links_application_insert_policy",
+          "permissive": "permissive",
+          "roles": "{shipwithali_application}",
+          "command": "INSERT",
+          "usingPredicate": "",
+          "withCheck": "true"
+        },
+        {
+          "schema": "identity_access",
+          "tableName": "owner_links",
+          "name": "owner_links_application_select_policy",
+          "permissive": "permissive",
+          "roles": "{shipwithali_application}",
+          "command": "SELECT",
+          "usingPredicate": "true",
+          "withCheck": ""
+        },
+        {
+          "schema": "identity_access",
+          "tableName": "owner_links",
+          "name": "owner_links_application_update_policy",
+          "permissive": "permissive",
+          "roles": "{shipwithali_application}",
+          "command": "UPDATE",
+          "usingPredicate": "true",
+          "withCheck": "true"
+        },
+        {
+          "schema": "identity_access",
+          "tableName": "owner_links",
+          "name": "owner_links_backup_policy",
+          "permissive": "permissive",
+          "roles": "{shipwithali_backup}",
+          "command": "SELECT",
+          "usingPredicate": "true",
+          "withCheck": ""
+        },
+        {
+          "schema": "portfolio_config",
+          "tableName": "contact_channels",
+          "name": "portfolio_channels_application_delete",
+          "permissive": "permissive",
+          "roles": "{shipwithali_application}",
+          "command": "DELETE",
+          "usingPredicate": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND (EXISTS ( SELECT 1\n   FROM portfolio_config.settings settings\n  WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = current_setting('shipwithali.owner_id'::text, true))))))",
+          "withCheck": ""
+        },
+        {
+          "schema": "portfolio_config",
+          "tableName": "contact_channels",
+          "name": "portfolio_channels_application_insert",
+          "permissive": "permissive",
+          "roles": "{shipwithali_application}",
+          "command": "INSERT",
+          "usingPredicate": "",
+          "withCheck": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND (EXISTS ( SELECT 1\n   FROM portfolio_config.settings settings\n  WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = current_setting('shipwithali.owner_id'::text, true))))))"
+        },
+        {
+          "schema": "portfolio_config",
+          "tableName": "contact_channels",
+          "name": "portfolio_channels_application_select",
+          "permissive": "permissive",
+          "roles": "{shipwithali_application}",
+          "command": "SELECT",
+          "usingPredicate": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND (EXISTS ( SELECT 1\n   FROM portfolio_config.settings settings\n  WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = current_setting('shipwithali.owner_id'::text, true))))))",
+          "withCheck": ""
+        },
+        {
+          "schema": "portfolio_config",
+          "tableName": "settings",
+          "name": "portfolio_settings_application_insert",
+          "permissive": "permissive",
+          "roles": "{shipwithali_application}",
+          "command": "INSERT",
+          "usingPredicate": "",
+          "withCheck": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))"
+        },
+        {
+          "schema": "portfolio_config",
+          "tableName": "settings",
+          "name": "portfolio_settings_application_select",
+          "permissive": "permissive",
+          "roles": "{shipwithali_application}",
+          "command": "SELECT",
+          "usingPredicate": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))",
+          "withCheck": ""
+        },
+        {
+          "schema": "portfolio_config",
+          "tableName": "settings",
+          "name": "portfolio_settings_application_update",
+          "permissive": "permissive",
+          "roles": "{shipwithali_application}",
+          "command": "UPDATE",
+          "usingPredicate": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))",
+          "withCheck": "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))"
+        }
+      ],
+      "restrictedPrincipalMatrix": [
+        {
+          "principal": "shipwithali_application login",
+          "settings": "allow",
+          "ownerIdentityMap": "allow",
+          "bypassRls": false
+        },
+        {
+          "principal": "anon Visitor login",
+          "settings": "deny",
+          "ownerIdentityMap": "deny",
+          "bypassRls": false
+        },
+        {
+          "principal": "authenticated non-Owner login",
+          "settings": "deny",
+          "ownerIdentityMap": "deny",
+          "bypassRls": false
+        },
+        {
+          "principal": "shipwithali_worker login",
+          "settings": "deny",
+          "ownerIdentityMap": "deny",
+          "bypassRls": false
+        },
+        {
+          "principal": "PUBLIC",
+          "settings": "deny by grants and forced RLS",
+          "ownerIdentityMap": "deny by grants and forced RLS"
+        },
+        {
+          "principal": "application login scoped to a different Portfolio",
+          "settings": "existing second Portfolio hidden by forced RLS",
+          "ownerIdentityMap": "not probed"
+        },
+        {
+          "principal": "signed non-allowlisted Owner JWT with forged editable Owner and Portfolio claims",
+          "settings": "denied by verified identity boundary before command dispatch",
+          "ownerIdentityMap": "no database writes"
+        }
+      ],
+      "phase3OperationsRowsPreserved": {
+        "idempotencyRecords": true,
+        "outboxEvents": true,
+        "jobs": true
+      },
+      "generatedTypeDrift": false,
+      "databaseIntegrationTestsPassed": 24,
+      "databaseTestResults": [
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > provisions once and returns only committed Owner state and version",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > reports an absent configured aggregate without creating one",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > enforces RLS scope and Owner authorization for configuration reads",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > allows one winning concurrent provision and never overwrites the existing aggregate",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back the aggregate when an ordered channel insert fails",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > keeps application table access narrow and denies clients, workers, and backup",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > proves only the restricted application login can reach configured settings and private identity mappings",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back the profile policy and every column-level update grant",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > uses forced RLS on both settings tables and clears scope after transaction reuse",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > executes the secured HTTP profile command atomically with replay, concurrency, audit, and the Owner query",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > keeps profile, channel, and CTA updates isolated and atomic across one secured Portfolio",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > executes secured Contact channel replacement with ordering, atomic versioning, replay, concurrency, and a minimal audit",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back channel state, ledger, and outbox when the aggregate stage fails",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back channel state, ledger, and outbox when the channel delete stage fails",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back channel state, ledger, and outbox when the channel insert stage fails",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back channel state, ledger, and outbox when the ledger stage fails",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back channel state, ledger, and outbox when the outbox stage fails",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back profile state, ledger, and outbox when the settings stage fails",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back profile state, ledger, and outbox when the ledger stage fails",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back profile state, ledger, and outbox when the outbox stage fails",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > executes the secured HTTP CTA update with concurrency, exact replay, operation isolation, and fallback preservation",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back CTA state, ledger, and outbox when the settings stage fails",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back CTA state, ledger, and outbox when the ledger stage fails",
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio Configuration production migration and restricted principal > rolls back CTA state, ledger, and outbox when the outbox stage fails",
+          "status": "passed"
+        }
+      ],
+      "skippedCases": 0,
+      "sanitizedAuditExamples": [
+        {
+          "verifiedBy": "tests/database/portfolio-settings.integration.test.ts",
+          "eventType": "portfolio_configuration.channels_updated.v1",
+          "schemaVersion": 1,
+          "aggregateVersion": 2,
+          "payload": {
+            "channelCount": 6,
+            "channelTypes": [
+              "email",
+              "instagram",
+              "linkedin",
+              "other",
+              "phone",
+              "whatsapp"
+            ],
+            "ownerScope": "[redacted stable Owner digest]"
+          },
+          "privateContactDestinationsIncluded": false
+        }
+      ],
+      "evidenceFile": "evidence/phase-4-database-integrity.json"
+    },
+    "architectureContractsAndBuild": {
+      "publicOperations": 5,
+      "backendOnly": true,
+      "providerSeamsChecked": true,
+      "contractGenerationDriftAndCompatibility": true,
+      "checkNames": [
+        "architecture",
+        "route-inventory",
+        "runtime-boundary",
+        "runtime-architecture",
+        "contract-verification",
+        "production-build"
+      ]
+    }
+  },
   "guarantees": {
-    "predecessor": "complete Phase 2 gate plus Phase 3 source baselines run first in phase4 context",
-    "historical": "phase2 fake-only and phase3 infrastructure-only restrictions evaluated against original fixtures/baselines",
-    "current": "only Spec #77 identity-access and portfolio-configuration activation permitted",
-    "failureSemantics": "single failure, absent required local service (LOCAL_DB_UNAVAILABLE), missing/skipped/partial result, or stale evidence fails the verdict",
+    "predecessorInvariantCoverage": "Phase 1 and Phase 2 historical gates, Phase 3 source and database invariants on the Phase 3 migration snapshot, and Phase 3 migration preservation through current Phase 4 upgrade/RLS checks",
+    "currentPhase": "Phase 4 context check and focused checks",
+    "localServices": "only isolated disposable loopback Auth/PostgreSQL projects",
     "remoteCredentialsRequired": false,
-    "secretValuesRecorded": false
+    "liveGitHubExchangeRequired": false,
+    "remoteMigrationsOrAuthConfiguration": false,
+    "deployedServicesRequired": false,
+    "secretsAndRawPrivatePayloadsRecorded": false,
+    "missingSkippedPartialConstituentOrStaleEvidenceFails": true
   }
 }
