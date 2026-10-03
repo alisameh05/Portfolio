@@ -23,6 +23,10 @@
 
 import { createHmac, generateKeyPairSync, sign } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { err, ok, type ActorContext } from "../../src/shared/domain/index.js";
+import { decideAuthorization } from "../../src/modules/identity-access/application/policy.js";
+import { guardOwnerRequest } from "../../src/runtime/http/owner-security.js";
+import { createTestLogger } from "../../src/runtime/ports.js";
 
 import {
   SupabaseOwnerSessionAdapter,
@@ -267,20 +271,76 @@ describe("verified GitHub Owner sessions (#80)", () => {
     if (!revokedResult.ok) expect(revokedResult.error.kind).toBe("unauthenticated");
   });
 
-  it("maps provider timeout/outage to temporarily_unavailable without granting access", async () => {
+  it("maps provider outages safely without exposing provider errors or identity subjects", async () => {
+    const syntheticSubject = "synthetic-github-subject-secret-integrated-89";
+    const syntheticProviderError = `synthetic-oauth-auth-error-secret:${syntheticSubject}`;
     const failing = new SupabaseOwnerSessionAdapter(
       depsWith({
+        ownerAllowlist: [syntheticSubject],
         resolveProviderIdentity: async () => {
-          throw new Error("PROVIDER_TIMEOUT");
+          throw new Error(syntheticProviderError);
         },
       }),
     );
-    const result = await failing.verifyOwnerSession({
-      sessionToken: mintToken(validHeader(), validPayload()),
+    const adapterResult = await failing.verifyOwnerSession({
+      sessionToken: mintToken(validHeader(), validPayload({ sub: syntheticSubject })),
       expectedPurpose: "owner_session",
     });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.kind).toBe("temporarily_unavailable");
+    expect(adapterResult.ok).toBe(false);
+    if (!adapterResult.ok) {
+      expect(adapterResult.error).toEqual({ kind: "temporarily_unavailable", code: "AUTH_PROVIDER_UNAVAILABLE" });
+      expect(JSON.stringify(adapterResult.error)).not.toContain(syntheticProviderError);
+      expect(JSON.stringify(adapterResult.error)).not.toContain(syntheticSubject);
+    }
+    const sessionToken = mintToken(validHeader(), validPayload({ sub: syntheticSubject }));
+    const logger = createTestLogger();
+    const guardResult = await guardOwnerRequest(
+      new Request("https://example.com/api/owner/v1/configuration/profile", {
+        method: "PUT",
+        headers: {
+          cookie: `sw_owner_session=${sessionToken}`,
+          origin: "https://example.com",
+          "x-csrf-token": "synthetic-csrf-proof",
+        },
+        body: JSON.stringify({ displayName: "Test", headline: "Test", bio: "Test" }),
+      }),
+      {
+        operation: "updateOwnerProfileConfiguration",
+        mode: "mutation",
+        security: {
+          appOrigin: "https://example.com",
+          identity: {
+            async resolveActorContext(query) {
+              const verified = await failing.verifyOwnerSession(query);
+              if (!verified.ok) return err(verified.error);
+              const actor: ActorContext = {
+                kind: "owner",
+                ownerId: verified.value.ownerId,
+                sessionId: verified.value.sessionId,
+              };
+              return ok(actor);
+            },
+            async authorizeOperation(query) {
+              return decideAuthorization(query);
+            },
+          },
+        },
+        traceId: "integrated-auth-failure-trace",
+        instance: "/api/owner/v1/configuration/profile",
+        logger,
+      },
+    );
+    expect(guardResult.ok).toBe(false);
+    if (!guardResult.ok) {
+      expect(guardResult.response.status).toBe(503);
+      const problem = await guardResult.response.json();
+      expect(problem.code).toBe("temporarily_unavailable");
+      expect(JSON.stringify(problem)).not.toContain(syntheticProviderError);
+      expect(JSON.stringify(problem)).not.toContain(syntheticSubject);
+    }
+    const logs = JSON.stringify(logger.records);
+    expect(logs).not.toContain(syntheticProviderError);
+    expect(logs).not.toContain(syntheticSubject);
   });
 
   it("validates Owner auth configuration with redacted diagnostics", () => {
