@@ -5,20 +5,20 @@
 ✓ dependency/version manifest written to evidence\phase-1-versions.json
 ✓ public-v1: candidate is backward compatible with the committed master baseline
 ✓ owner-v1: candidate is backward compatible with the committed master baseline
-Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-X1Km09
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-B9i61N
 
  RUN  v3.2.4 <WORKSPACE>
 
 validating openapi\public-v1\openapi.yaml...
-openapi\public-v1\openapi.yaml: validated in 64ms
+openapi\public-v1\openapi.yaml: validated in 65ms
 
 Woohoo! Your API description is valid. 🎉
 
- ✓ tests/contracts/compatibility-gate.test.ts (8 tests) 661ms
- ✓ tests/contracts/contract-drift-gate.test.ts (4 tests) 543ms
- ✓ tests/contracts/owner-contract.test.ts (5 tests) 14ms
+ ✓ tests/contracts/compatibility-gate.test.ts (8 tests) 662ms
+ ✓ tests/contracts/contract-drift-gate.test.ts (4 tests) 523ms
+ ✓ tests/contracts/owner-contract.test.ts (5 tests) 15ms
  ✓ tests/contracts/public-contract.test.ts (6 tests) 5ms
- ✓ tests/contracts/owner-issue-8-generated-validation.test.ts (7 tests) 7ms
+ ✓ tests/contracts/owner-issue-8-generated-validation.test.ts (7 tests) 8ms
  ✓ tests/contracts/generated-validation.test.ts (6 tests) 3ms
  ✓ tests/contracts/owner-issue-7-generated-validation.test.ts (9 tests) 2ms
  ✓ tests/contracts/owner-generated-validation.test.ts (5 tests) 1ms
@@ -26,63 +26,62 @@ Woohoo! Your API description is valid. 🎉
 
  Test Files  9 passed (9)
       Tests  51 passed (51)
-   Start at  18:25:15
-   Duration  1.72s (transform 134ms, setup 0ms, collect 197ms, tests 1.24s, environment 0ms, prepare 105ms)
+   Start at  18:46:25
+   Duration  1.86s (transform 128ms, setup 0ms, collect 191ms, tests 1.22s, environment 0ms, prepare 98ms)
 
 bundling openapi\public-v1\openapi.yaml...
-📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-X1Km09\openapi\generated\public-v1.json 24ms.
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-B9i61N\openapi\generated\public-v1.json 28ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-X1Km09\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-a-X1Km09\src\contracts\http\v1\generated[39m [90m· 3 files · 101ms[39m
-Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-X1Km09
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-B9i61N\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-a-B9i61N\src\contracts\http\v1\generated[39m [90m· 3 files · 97ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-B9i61N
 validating openapi\owner-v1\openapi.yaml...
-openapi\owner-v1\openapi.yaml: validated in 123ms
+openapi\owner-v1\openapi.yaml: validated in 107ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\owner-v1\openapi.yaml...
-📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-X1Km09\openapi\generated\owner-v1.json 57ms.
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-B9i61N\openapi\generated\owner-v1.json 57ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-X1Km09\openapi\generated\owner-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-a-X1Km09\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 262ms[39m
-Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-X1Km09\src\contracts\http\v1\generated\zod.gen.ts.
-Strictified 144 generated Zod object schemas in <TEMP>\shipwithali-contract-a-X1Km09\src\contracts\http\owner\v1\generated\zod.gen.ts.
-Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-X1Km09
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-B9i61N\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-a-B9i61N\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 237ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-B9i61N\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 144 generated Zod object schemas in <TEMP>\shipwithali-contract-a-B9i61N\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-B9i61N
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-D2nX8T
 … Phase 2 gate: phase1-toolchain, phase1-contract-drift, phase1-contract-compatibility, phase1-contract-and-strict-validator-tests still running
-Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-CFUMCN
 validating openapi\public-v1\openapi.yaml...
 openapi\public-v1\openapi.yaml: validated in 65ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\public-v1\openapi.yaml...
-📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-CFUMCN\openapi\generated\public-v1.json 30ms.
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-D2nX8T\openapi\generated\public-v1.json 24ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-CFUMCN\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-b-CFUMCN\src\contracts\http\v1\generated[39m [90m· 3 files · 104ms[39m
-Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-CFUMCN
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-D2nX8T\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-b-D2nX8T\src\contracts\http\v1\generated[39m [90m· 3 files · 100ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-D2nX8T
 validating openapi\owner-v1\openapi.yaml...
-openapi\owner-v1\openapi.yaml: validated in 119ms
+openapi\owner-v1\openapi.yaml: validated in 116ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\owner-v1\openapi.yaml...
-📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-CFUMCN\openapi\generated\owner-v1.json 80ms.
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-D2nX8T\openapi\generated\owner-v1.json 59ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-CFUMCN\openapi\generated\owner-v1.json
-… Phase 2 gate: phase1-toolchain, phase1-contract-drift, phase1-contract-compatibility, phase1-contract-and-strict-validator-tests still running
-[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-b-CFUMCN\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 305ms[39m
-Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-CFUMCN\src\contracts\http\v1\generated\zod.gen.ts.
-Strictified 144 generated Zod object schemas in <TEMP>\shipwithali-contract-b-CFUMCN\src\contracts\http\owner\v1\generated\zod.gen.ts.
-Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-CFUMCN
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-D2nX8T\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./..\..\..\..\AppData\Local\Temp\shipwithali-contract-b-D2nX8T\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 247ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-D2nX8T\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 144 generated Zod object schemas in <TEMP>\shipwithali-contract-b-D2nX8T\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-D2nX8T
 ✓ both clean generations are byte-for-byte deterministic
 ✓ committed bundles and generated transport artifacts contain no drift
 ✓ generated output is limited to transport types and validators; no server stubs exist
@@ -93,12 +92,12 @@ Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-CFUMC
    ▲ Next.js 15.5.25
 
    Creating an optimized production build ...
- ✓ Compiled successfully in 1007ms
+ ✓ Compiled successfully in 883ms
    Linting and checking validity of types ...
 
  ⚠ The Next.js plugin was not detected in your ESLint configuration. See https://nextjs.org/docs/app/api-reference/config/eslint#migrating-existing-config
-… Phase 2 gate: production-build still running
    Collecting page data ...
+… Phase 2 gate: production-build still running
    Generating static pages (0/4) ...
    Generating static pages (1/4)
    Generating static pages (2/4)
@@ -129,6 +128,7 @@ Route (pages)                                Size  First Load JS
 ✓ production-build — passed
 
 ── Architecture check: src/ ──
+… Phase 2 gate: strict-typecheck, deterministic-lint, architecture still running
 ✔ no dependency violations found (151 modules, 409 dependencies cruised)
 ✓ Architecture check passed: no forbidden dependencies in src/
 
@@ -152,6 +152,7 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 1 dependencies crui
 ✓ Generated-code leakage fixture correctly rejected with rule: no-generated-code-leakage
 
 ── Testing fixture rejection: Deep cross-module import fixture ──
+… Phase 2 gate: strict-typecheck, deterministic-lint, architecture still running
 error no-deep-cross-module-import: tests/fixtures/invalid-deps/deep-cross-module-import/modules/gamma/application/deep.ts → tests/fixtures/invalid-deps/deep-cross-module-import/modules/delta/domain/index.ts
     Cross-module imports must go through the module barrel (index.ts), not into
     sub-folders.
@@ -213,9 +214,6 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 ✓ route-inventory — passed
 ✓ contract-to-adapter-matrix — passed
 
-
- RUN  v3.2.4 <WORKSPACE>
-
  RUN  v3.2.4 <WORKSPACE>
 
 
@@ -224,52 +222,55 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/runtime/configuration.test.ts (17 tests) 17ms
+
+ RUN  v3.2.4 <WORKSPACE>
+
+ ✓ tests/runtime/configuration.test.ts (17 tests) 14ms
 
  Test Files  1 passed (1)
       Tests  17 passed (17)
-   Start at  18:26:10
-   Duration  453ms (transform 120ms, setup 0ms, collect 141ms, tests 17ms, environment 0ms, prepare 120ms)
+   Start at  18:47:36
+   Duration  470ms (transform 141ms, setup 0ms, collect 149ms, tests 14ms, environment 0ms, prepare 126ms)
 
- ✓ tests/runtime/problem.test.ts (11 tests) 19ms
+ ✓ tests/runtime/problem.test.ts (11 tests) 16ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 107ms
 
  Test Files  1 passed (1)
       Tests  11 passed (11)
-   Start at  18:26:10
-   Duration  491ms (transform 130ms, setup 0ms, collect 166ms, tests 19ms, environment 0ms, prepare 123ms)
+   Start at  18:47:36
+   Duration  476ms (transform 142ms, setup 0ms, collect 173ms, tests 16ms, environment 0ms, prepare 124ms)
 
- ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 115ms
- ✓ tests/runtime/livez.test.ts (4 tests) 4ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 106ms
+ ✓ tests/runtime/livez.test.ts (4 tests) 5ms
 
  Test Files  2 passed (2)
       Tests  16 passed (16)
-   Start at  18:26:10
-   Duration  517ms (transform 166ms, setup 0ms, collect 107ms, tests 119ms, environment 0ms, prepare 123ms)
+   Start at  18:47:36
+   Duration  523ms (transform 167ms, setup 0ms, collect 106ms, tests 111ms, environment 0ms, prepare 128ms)
 
- ✓ tests/runtime/owner-media.test.ts (68 tests) 59ms
- ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 44ms
- ✓ tests/runtime/owner-cv.test.ts (55 tests) 24ms
- ✓ tests/runtime/owner-publication.test.ts (36 tests) 20ms
- ✓ tests/runtime/owner-moderation.test.ts (32 tests) 19ms
- ✓ tests/runtime/owner-project.test.ts (35 tests) 18ms
- ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 16ms
- ✓ tests/runtime/owner-analytics.test.ts (32 tests) 16ms
- ✓ tests/runtime/owner-configuration.test.ts (31 tests) 15ms
- ✓ tests/runtime/owner-export.test.ts (35 tests) 16ms
+ ✓ tests/runtime/owner-media.test.ts (68 tests) 38ms
+ ✓ tests/runtime/owner-cv.test.ts (55 tests) 22ms
+ ✓ tests/runtime/owner-moderation.test.ts (32 tests) 18ms
+ ✓ tests/runtime/owner-publication.test.ts (36 tests) 16ms
+ ✓ tests/runtime/owner-project.test.ts (35 tests) 16ms
+ ✓ tests/runtime/owner-export.test.ts (35 tests) 14ms
+ ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 14ms
+ ✓ tests/runtime/owner-analytics.test.ts (32 tests) 13ms
+ ✓ tests/runtime/owner-configuration.test.ts (31 tests) 11ms
  ✓ tests/runtime/public-event.test.ts (19 tests) 8ms
+ ✓ tests/runtime/feedback.test.ts (20 tests) 8ms
+ ✓ tests/runtime/rating.test.ts (21 tests) 7ms
  ✓ tests/runtime/configuration.test.ts (17 tests) 8ms
- ✓ tests/runtime/feedback.test.ts (20 tests) 9ms
- ✓ tests/runtime/current-cv.test.ts (13 tests) 8ms
- ✓ tests/runtime/rating.test.ts (21 tests) 11ms
  ✓ tests/runtime/reaction.test.ts (19 tests) 9ms
- ✓ tests/runtime/runtime-ports.test.ts (6 tests) 6ms
+ ✓ tests/runtime/current-cv.test.ts (13 tests) 6ms
+ ✓ tests/runtime/runtime-ports.test.ts (6 tests) 4ms
  ✓ tests/runtime/livez.test.ts (4 tests) 3ms
- ✓ tests/runtime/problem.test.ts (11 tests) 6ms
+ ✓ tests/runtime/problem.test.ts (11 tests) 3ms
 
  Test Files  19 passed (19)
       Tests  501 passed (501)
-   Start at  18:26:10
-   Duration  1.62s (transform 627ms, setup 0ms, collect 941ms, tests 314ms, environment 0ms, prepare 127ms)
+   Start at  18:47:36
+   Duration  1.49s (transform 594ms, setup 0ms, collect 824ms, tests 325ms, environment 0ms, prepare 123ms)
 
 ✓ configuration-negative-tests — passed
 ✓ http-adapter-tests — passed

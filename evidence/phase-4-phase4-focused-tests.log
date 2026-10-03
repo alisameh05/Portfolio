@@ -1,22 +1,22 @@
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/phase4/phase-context.test.ts (8 tests) 1946ms
-   ✓ Phase 4 completion gate (#90) > preserves provider seams and runtime boundaries  980ms
-   ✓ Phase 4 completion gate (#90) > rejects Phase 4 negative fixtures for leakage, routes, writes, frontend, and later-phase activation  321ms
-   ✓ Phase 4 completion gate (#90) > confines placeholder privileged actors to explicit production files, never via fixture exceptions  408ms
- ✓ tests/phase4/identity-configuration-contracts.test.ts (11 tests) 240ms
- ✓ tests/phase4/owner-session-auth.test.ts (13 tests) 23ms
- ✓ tests/phase4/pseudonymous-identity.test.ts (8 tests) 9ms
- ✓ tests/phase4/portfolio-settings-service.test.ts (22 tests) 14ms
- ✓ tests/phase4/portfolio-contact-channels-command.test.ts (21 tests) 9ms
- ✓ tests/phase4/owner-request-security.test.ts (20 tests) 8ms
- ✓ tests/phase4/portfolio-cta-command.test.ts (14 tests) 9ms
+ ✓ tests/phase4/phase-context.test.ts (8 tests) 1903ms
+   ✓ Phase 4 completion gate (#90) > preserves provider seams and runtime boundaries  961ms
+   ✓ Phase 4 completion gate (#90) > rejects Phase 4 negative fixtures for leakage, routes, writes, frontend, and later-phase activation  325ms
+   ✓ Phase 4 completion gate (#90) > confines placeholder privileged actors to explicit production files, never via fixture exceptions  384ms
+ ✓ tests/phase4/identity-configuration-contracts.test.ts (11 tests) 228ms
+ ✓ tests/phase4/owner-session-auth.test.ts (13 tests) 16ms
+ ✓ tests/phase4/portfolio-settings-service.test.ts (22 tests) 9ms
+ ✓ tests/phase4/pseudonymous-identity.test.ts (8 tests) 8ms
+ ✓ tests/phase4/portfolio-contact-channels-command.test.ts (21 tests) 7ms
+ ✓ tests/phase4/owner-request-security.test.ts (20 tests) 7ms
+ ✓ tests/phase4/portfolio-cta-command.test.ts (14 tests) 4ms
  ✓ tests/phase4/portfolio-profile-command.test.ts (6 tests) 3ms
- ✓ tests/phase4/owner-operation-policy.test.ts (11 tests) 2ms
- ✓ tests/phase4/functional-identity-orchestration.test.ts (3 tests) 2ms
+ ✓ tests/phase4/owner-operation-policy.test.ts (11 tests) 1ms
+ ✓ tests/phase4/functional-identity-orchestration.test.ts (3 tests) 1ms
 
  Test Files  11 passed (11)
       Tests  137 passed (137)
-   Start at  18:27:30
-   Duration  3.06s (transform 343ms, setup 0ms, collect 509ms, tests 2.26s, environment 0ms, prepare 98ms)
+   Start at  18:48:53
+   Duration  2.88s (transform 309ms, setup 0ms, collect 423ms, tests 2.19s, environment 0ms, prepare 103ms)
