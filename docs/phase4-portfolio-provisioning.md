@@ -77,8 +77,16 @@ With the pinned Node/npm environment and Docker Desktop running, execute:
 npm run phase4:focus:settings
 ```
 
-The runner starts a disposable Supabase project with the repository's
-production migrations and a loopback-only Docker network on ports 57320–57329.
-It verifies generated database types, runs provisioning and restricted-role
-checks with no skipped tests, and stops/removes only resources created by that
+The runner starts two disposable Supabase projects with loopback-only Docker
+networks on ports 57320–57349. One applies all migrations from an empty reset;
+the other applies the committed Phase 3 migration snapshot, records prior
+operations rows, then upgrades through the Phase 4 migrations. It compares
+normalized schema, constraints, grants, policies, object definitions, and
+migration ledgers, verifies the Phase 3 rows survived, checks generated
+database types, and runs provisioning and restricted-principal checks with no
+skipped tests. The runner stops and removes only resources created by that
 run. It does not use or reset the normal development database.
+
+The checked Phase 3 migration names and normalized SHA-256 checksums are
+recorded in `supabase/baselines/phase3.json`. The sanitized result is written to
+`evidence/phase-4-database-integrity.json` and is required by `phase4:gate`.

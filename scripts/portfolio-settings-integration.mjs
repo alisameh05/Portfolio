@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { randomBytes, randomUUID } from "node:crypto";
-import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Client } from "pg";
+import { migrationSha256 } from "./migration-checksum.mjs";
+import {
+  assertPhase3OperationsContractPreserved,
+  assertPhase3OperationsRls,
+  assertPhase4SnapshotsEquivalent,
+  snapshotPhase4Database,
+  validatePhase3MigrationSnapshot,
+} from "./phase4-migration-integrity.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
@@ -40,16 +49,16 @@ function requireDocker() {
   });
 }
 
-export function isolatedConfig(source, projectId) {
+export function isolatedConfig(source, projectId, basePort = 57320) {
   let config = source.replace(/^project_id = .*$/m, `project_id = "${projectId}"`);
   const replacements = new Map([
-    ["port = 54320", "port = 57320"],
-    ["port = 54321", "port = 57321"],
-    ["port = 54322", "port = 57322"],
-    ["port = 54323", "port = 57323"],
-    ["port = 54324", "port = 57324"],
-    ["port = 54327", "port = 57327"],
-    ["port = 54329", "port = 57329"],
+    ["port = 54320", `port = ${basePort}`],
+    ["port = 54321", `port = ${basePort + 1}`],
+    ["port = 54322", `port = ${basePort + 2}`],
+    ["port = 54323", `port = ${basePort + 3}`],
+    ["port = 54324", `port = ${basePort + 4}`],
+    ["port = 54327", `port = ${basePort + 7}`],
+    ["port = 54329", `port = ${basePort + 9}`],
   ]);
   for (const [from, to] of replacements) {
     if (!config.includes(from)) throw new Error("PORTFOLIO_SETTINGS_PORT_LAYOUT_CHANGED");
@@ -58,7 +67,7 @@ export function isolatedConfig(source, projectId) {
   return config;
 }
 
-function readDatabaseUrl(workdir) {
+function readDatabaseUrl(workdir, expectedPort) {
   const output = run(process.execPath, [CLI, "--workdir", workdir, "status", "--output", "json"], {
     timeout: 30_000,
     errorCode: "PORTFOLIO_SETTINGS_STATUS_FAILED",
@@ -70,7 +79,7 @@ function readDatabaseUrl(workdir) {
   const connectionString = status.DB_URL ?? status.db_url;
   if (typeof connectionString !== "string") throw new Error("PORTFOLIO_SETTINGS_DB_URL_MISSING");
   const url = new URL(connectionString);
-  if (!["127.0.0.1", "localhost", "::1"].includes(url.hostname) || url.port !== "57322") {
+  if (!["127.0.0.1", "localhost", "::1"].includes(url.hostname) || url.port !== String(expectedPort)) {
     throw new Error("PORTFOLIO_SETTINGS_DB_NOT_ISOLATED");
   }
   return connectionString;
@@ -84,54 +93,216 @@ export function requireExecutedTests(report) {
   ) throw new Error("PORTFOLIO_SETTINGS_TEST_FAILED: no missing or skipped database evidence is accepted.");
 }
 
-export function main() {
-  requireDocker();
+function migrationSources() {
+  const directory = join(ROOT, "supabase/migrations");
+  const sqlFiles = readdirSync(directory).filter((name) => name.endsWith(".sql")).sort();
+  const files = sqlFiles.filter((name) => /^\d{14}_[a-z0-9_]+\.sql$/.test(name));
+  if (files.length !== sqlFiles.length) throw new Error("PORTFOLIO_SETTINGS_MIGRATION_NAME_INVALID");
+  const contents = new Map(files.map((name) => [name, readFileSync(join(directory, name), "utf8")]));
+  const snapshot = JSON.parse(readFileSync(join(ROOT, "supabase/baselines/phase3.json"), "utf8"));
+  const phase3Files = validatePhase3MigrationSnapshot(snapshot, Object.keys(snapshot.migrations), contents);
+  for (const file of files.filter((name) => !phase3Files.includes(name))) {
+    const source = contents.get(file).toLowerCase();
+    if (
+      file.localeCompare(phase3Files.at(-1)) <= 0 ||
+      !source.includes("set lock_timeout = '5s'") ||
+      !source.includes("-- rollback:")
+    ) throw new Error("PORTFOLIO_SETTINGS_EXPANSION_MIGRATION_POLICY_INVALID");
+  }
+  return {
+    files,
+    contents,
+    phase3Files,
+    checksums: files.map((file) => ({ file, sha256: migrationSha256(contents.get(file)) })),
+  };
+}
+
+function createProject(name, basePort, migrations) {
+  const projectId = `shipwithali-${name}-${process.pid}-${randomBytes(4).toString("hex")}`;
+  const workdir = mkdtempSync(join(tmpdir(), `${projectId}-`));
+  const project = { projectId, workdir, network: `${projectId}-loopback`, basePort, networkCreated: false, attemptedStart: false };
+  try {
+    const supabase = join(workdir, "supabase");
+    mkdirSync(join(supabase, "migrations"), { recursive: true });
+    writeFileSync(join(supabase, "config.toml"), isolatedConfig(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId, basePort));
+    copyFileSync(join(ROOT, "supabase/seed.sql"), join(supabase, "seed.sql"));
+    for (const file of migrations) copyFileSync(join(ROOT, "supabase/migrations", file), join(supabase, "migrations", file));
+    return project;
+  } catch (error) {
+    rmSync(workdir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function invokeProject(project, args, env) {
+  return run(process.execPath, [CLI, "--workdir", project.workdir, ...args], {
+    env,
+    errorCode: "PORTFOLIO_SETTINGS_SUPABASE_FAILED",
+  });
+}
+
+function startProject(project, env) {
+  run("docker", ["network", "create", "-o", "com.docker.network.bridge.host_binding_ipv4=127.0.0.1", project.network], {
+    timeout: 20_000, env, errorCode: "PORTFOLIO_SETTINGS_NETWORK_CREATE_FAILED",
+  });
+  project.networkCreated = true;
+  project.attemptedStart = true;
+  invokeProject(project, ["start", "--network-id", project.network], env);
+  invokeProject(project, ["db", "reset", "--local"], env);
+  return readDatabaseUrl(project.workdir, project.basePort + 2);
+}
+
+async function seedAndCapturePhase3Operations(connectionString) {
+  const admin = new Client({ connectionString });
+  const logins = [];
+  const clients = [];
+  await admin.connect();
+  let rows;
+  let primaryError;
+  let cleanupFailed = false;
+  try {
+    const urls = new Map();
+    for (const role of ["shipwithali_application", "shipwithali_worker"]) {
+      const login = `phase4_seed_${process.pid}_${randomBytes(4).toString("hex")}`;
+      const password = randomBytes(32).toString("hex");
+      await admin.query(`create role "${login}" login password '${password}' nosuperuser nocreatedb nocreaterole noreplication nobypassrls`);
+      logins.push({ login, role });
+      await admin.query(`grant ${role} to "${login}"`);
+      const url = new URL(connectionString);
+      url.username = login;
+      url.password = password;
+      urls.set(role, url.toString());
+    }
+    const application = new Client({ connectionString: urls.get("shipwithali_application") });
+    const worker = new Client({ connectionString: urls.get("shipwithali_worker") });
+    clients.push(application, worker);
+    await Promise.all(clients.map((client) => client.connect()));
+    await application.query(`
+      insert into operations.idempotency_records (
+        operation_scope, actor_scope, key_hash, request_hash, status, expires_at
+      ) values (
+        'phase4.migration.preservation', 'phase3-seed', repeat('a', 64), repeat('b', 64),
+        'reserved', transaction_timestamp() + interval '1 day'
+      )
+    `);
+    await application.query(`
+      insert into operations.outbox_events (
+        event_id, event_type, schema_version, aggregate_id, aggregate_version,
+        payload, correlation_id, occurred_at, available_at
+      ) values (
+        '018f4f7d-5000-7000-8000-000000000004', 'phase4.migration.preservation', 1,
+        '018f4f7d-5000-7000-8000-000000000005', 1, '{}'::jsonb,
+        'phase3-seed', transaction_timestamp(), transaction_timestamp()
+      )
+    `);
+    await worker.query(`
+      insert into operations.jobs (job_id, job_type, payload_version, payload, available_at)
+      values ('018f4f7d-5000-7000-8000-000000000006', 'phase4.migration.preservation', 1,
+              '{}'::jsonb, transaction_timestamp())
+    `);
+    rows = await phase3OperationsRows(admin);
+  } catch (error) {
+    primaryError = error;
+  } finally {
+    for (const client of clients) {
+      try { await client.end(); } catch { cleanupFailed = true; }
+    }
+    for (const { login, role } of [...logins].reverse()) {
+      for (const statement of [
+        `revoke ${role} from "${login}"`,
+        `alter role "${login}" nologin`,
+        `drop role if exists "${login}"`,
+      ]) {
+        try { await admin.query(statement); } catch { cleanupFailed = true; }
+      }
+    }
+    try { await admin.end(); } catch { cleanupFailed = true; }
+  }
+  if (cleanupFailed) throw new Error("PORTFOLIO_SETTINGS_PHASE3_PROBE_CLEANUP_FAILED");
+  if (primaryError) throw primaryError;
+  return rows;
+}
+
+async function phase3OperationsRows(client) {
+  const idempotency = await client.query("select to_jsonb(record) as row from operations.idempotency_records record where operation_scope = 'phase4.migration.preservation'");
+  const outbox = await client.query("select to_jsonb(record) as row from operations.outbox_events record where event_type = 'phase4.migration.preservation'");
+  const jobs = await client.query("select to_jsonb(record) as row from operations.jobs record where job_type = 'phase4.migration.preservation'");
+  return { idempotency: idempotency.rows, outbox: outbox.rows, jobs: jobs.rows };
+}
+
+async function assertPhase3OperationsPreserved(connectionString, expected) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const actual = await phase3OperationsRows(client);
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error("PORTFOLIO_SETTINGS_PHASE3_OPERATIONS_NOT_PRESERVED");
+    return actual;
+  } finally {
+    await client.end();
+  }
+}
+
+export async function main() {
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
     throw new Error("PORTFOLIO_SETTINGS_CLI_PIN_MISMATCH");
   }
 
-  const projectId = `shipwithali-settings-${process.pid}-${randomBytes(4).toString("hex")}`;
-  const workdir = mkdtempSync(join(tmpdir(), `${projectId}-`));
-  const network = `${projectId}-loopback`;
+  const migrations = migrationSources();
+  const phase4Files = migrations.files.filter((file) => !migrations.phase3Files.includes(file));
+  if (phase4Files.length === 0) throw new Error("PORTFOLIO_SETTINGS_PHASE4_MIGRATIONS_MISSING");
+  requireDocker();
   const env = localEnvironment();
-  let networkCreated = false;
-  let attemptedStart = false;
+  const projects = [];
+  let cleanProject;
+  let upgradeProject;
   let failure;
-  const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], {
-    timeout,
-    env,
-    errorCode: "PORTFOLIO_SETTINGS_SUPABASE_FAILED",
-  });
 
   try {
-    const supabase = join(workdir, "supabase");
-    mkdirSync(supabase);
-    writeFileSync(
-      join(supabase, "config.toml"),
-      isolatedConfig(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId),
-    );
-    cpSync(join(ROOT, "supabase/migrations"), join(supabase, "migrations"), { recursive: true });
-    copyFileSync(join(ROOT, "supabase/seed.sql"), join(supabase, "seed.sql"));
-    run("docker", ["network", "create", "-o", "com.docker.network.bridge.host_binding_ipv4=127.0.0.1", network], {
-      timeout: 20_000,
-      env,
-      errorCode: "PORTFOLIO_SETTINGS_NETWORK_CREATE_FAILED",
-    });
-    networkCreated = true;
-    attemptedStart = true;
-    console.log("Starting isolated loopback PostgreSQL with production migrations.");
-    invoke(["start", "--network-id", network]);
+    cleanProject = createProject("settings-clean", 57320, migrations.files);
+    projects.push(cleanProject);
+    upgradeProject = createProject("settings-upgrade", 57340, migrations.phase3Files);
+    projects.push(upgradeProject);
+    console.log("Starting isolated loopback PostgreSQL clean and Phase 3 upgrade projects.");
+    const cleanUrl = startProject(cleanProject, env);
+    const upgradeUrl = startProject(upgradeProject, env);
+    console.log("Isolated PostgreSQL projects are healthy; clean and Phase 3 upgrade migrations are applied.");
 
-    const databaseUrl = readDatabaseUrl(workdir);
-    const databaseEnv = { ...env, PHASE4_SETTINGS_DATABASE_URL: databaseUrl };
+    const phase3Snapshot = await snapshotPhase4Database(upgradeUrl);
+    assertPhase3OperationsRls(phase3Snapshot);
+    const phase3Rows = await seedAndCapturePhase3Operations(upgradeUrl);
+    console.log("Captured the Phase 3 operations contract and seeded rows through restricted capability roles.");
+    for (const file of phase4Files) {
+      copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
+    }
+    invokeProject(upgradeProject, ["migration", "up", "--local"], env);
+    console.log("Applied Phase 4 migrations to the Phase 3 upgrade database.");
+    const cleanSnapshot = await snapshotPhase4Database(cleanUrl);
+    console.log("Captured the clean-install normalized database state.");
+    const upgradeSnapshot = await snapshotPhase4Database(upgradeUrl);
+    console.log("Captured the upgraded normalized database state.");
+    assertPhase3OperationsRls(upgradeSnapshot);
+    assertPhase3OperationsContractPreserved(phase3Snapshot, upgradeSnapshot);
+    console.log("Verified Phase 3 operations grants, policies, and schema objects were preserved.");
+    assertPhase4SnapshotsEquivalent(cleanSnapshot, upgradeSnapshot);
+    console.log("Clean and upgraded normalized schemas, grants, constraints, and policies match.");
+    if (JSON.stringify(cleanSnapshot.migrationLedger) !== JSON.stringify(
+      migrations.files.map((file) => ({ version: file.slice(0, 14), name: file.slice(15, -4) })),
+    )) throw new Error("PORTFOLIO_SETTINGS_MIGRATION_LEDGER_MISMATCH");
+    invokeProject(cleanProject, ["migration", "up", "--local"], env);
+    invokeProject(upgradeProject, ["migration", "up", "--local"], env);
+    assertPhase4SnapshotsEquivalent(cleanSnapshot, await snapshotPhase4Database(cleanUrl));
+    assertPhase4SnapshotsEquivalent(upgradeSnapshot, await snapshotPhase4Database(upgradeUrl));
+    const preservedRows = await assertPhase3OperationsPreserved(upgradeUrl, phase3Rows);
+
+    const databaseEnv = { ...env, PHASE4_SETTINGS_DATABASE_URL: cleanUrl };
     const generationArgs = [
       CODEGEN,
       "--dialect", "postgres",
       "--url", "env(PHASE4_SETTINGS_DATABASE_URL)",
-      "--default-schema", "operations,portfolio_config",
-      "--include-pattern", "{operations,portfolio_config}.*",
+      "--default-schema", "identity_access,operations,portfolio_config",
+      "--include-pattern", "{identity_access,operations,portfolio_config}.*",
       "--date-parser", "timestamp",
       "--out-file", GENERATED,
       "--log-level", "error",
@@ -143,7 +314,10 @@ export function main() {
         ? "PORTFOLIO_SETTINGS_TYPE_GENERATION_FAILED"
         : "PORTFOLIO_SETTINGS_TYPE_DRIFT",
     });
-    const reportPath = join(workdir, "test-report.json");
+    console.log(process.argv.includes("--refresh-types")
+      ? "Generated database types from the clean PostgreSQL schema."
+      : "Generated database types match the clean PostgreSQL schema.");
+    const reportPath = join(cleanProject.workdir, "test-report.json");
     const result = spawnSync(process.execPath, [
       join(ROOT, "node_modules/vitest/vitest.mjs"),
       "run",
@@ -162,27 +336,113 @@ export function main() {
     if (result.error || result.status !== 0) {
       const messages = report.testResults?.flatMap((suite) => suite.assertionResults?.flatMap((test) => test.failureMessages ?? []) ?? []).join("\n") ?? "";
       const code = messages.match(/PORTFOLIO_SETTINGS_[A-Z_]+/)?.[0] ?? "assertion";
-      throw new Error(`PORTFOLIO_SETTINGS_TEST_FAILED:${code}`);
+      const failedTests = report.testResults?.flatMap((suite) => suite.assertionResults
+        ?.filter((test) => test.status === "failed")
+        .map((test) => [...(test.ancestorTitles ?? []), test.title].join(" > ")) ?? []) ?? [];
+      const safeDetail = messages
+        .replace(/postgres(?:ql)?:\/\/[^\s"']+/gi, "[database connection redacted]")
+        .replace(/password\s*[=:]\s*[^\s,;]+/gi, "password=[redacted]")
+        .replace(/\s+/g, " ")
+        .slice(0, 800);
+      throw new Error(`PORTFOLIO_SETTINGS_TEST_FAILED:${code}:${failedTests.join(" | ")}:${safeDetail}`);
     }
     requireExecutedTests(report);
     console.log(`Portfolio settings real PostgreSQL integration: ${report.numPassedTests} passed, 0 skipped.`);
+
+    const evidence = {
+      ticket: 88,
+      parent: 77,
+      scope: "phase4-migration-equivalence-restricted-principal-and-pooled-isolation",
+      phase3Snapshot: "supabase/baselines/phase3.json",
+      phase3MigrationFiles: migrations.phase3Files,
+      migrationChecksums: migrations.checksums,
+      migrationLedger: cleanSnapshot.migrationLedger,
+      migrationSafety: {
+        ticketIntroducedMigrations: [],
+        phase4ExpansionSourceChecks: {
+          boundedLockTimeout: "set lock_timeout = '5s'",
+          rollbackNotes: true,
+        },
+        rollbackForwardFix: "No migration DDL is introduced by this ticket. Roll back the application release; correct migration defects with a later reviewed timestamped expansion migration.",
+        remoteWrites: false,
+      },
+      cleanUpgradeEquivalent: true,
+      migrationReplayNoop: true,
+      normalizedCleanUpgradeDiff: [],
+      normalizedStateSha256: createHash("sha256").update(JSON.stringify(cleanSnapshot)).digest("hex"),
+      normalizedDatabaseState: {
+        schemas: cleanSnapshot.schemas,
+        roles: cleanSnapshot.roles,
+        roleMemberships: cleanSnapshot.roleMemberships,
+        objects: cleanSnapshot.objects,
+        columns: cleanSnapshot.columns,
+        constraints: cleanSnapshot.constraints,
+        grants: cleanSnapshot.grants,
+        defaultPrivileges: cleanSnapshot.defaultPrivileges,
+        policies: cleanSnapshot.policies,
+        indexes: cleanSnapshot.indexes,
+        functions: cleanSnapshot.functions,
+        triggers: cleanSnapshot.triggers,
+        types: cleanSnapshot.types,
+      },
+      schemaCount: cleanSnapshot.schemas.length,
+      constraintCount: cleanSnapshot.constraints.length,
+      grantCount: cleanSnapshot.grants.length,
+      policyCount: cleanSnapshot.policies.length,
+      applicationTablesWithForcedRls: [
+        "identity_access.owner_links", "portfolio_config.contact_channels", "portfolio_config.settings",
+      ],
+      phase3OperationsRowsPreserved: {
+        idempotencyRecords: preservedRows.idempotency.length === 1,
+        outboxEvents: preservedRows.outbox.length === 1,
+        jobs: preservedRows.jobs.length === 1,
+      },
+      generatedTypeDrift: false,
+      restrictedPrincipalMatrix: [
+        { principal: "shipwithali_application login", settings: "allow", ownerIdentityMap: "allow", bypassRls: false },
+        { principal: "anon Visitor login", settings: "deny", ownerIdentityMap: "deny", bypassRls: false },
+        { principal: "authenticated non-Owner login", settings: "deny", ownerIdentityMap: "deny", bypassRls: false },
+        { principal: "shipwithali_worker login", settings: "deny", ownerIdentityMap: "deny", bypassRls: false },
+        { principal: "PUBLIC", settings: "deny by grants and forced RLS", ownerIdentityMap: "deny by grants and forced RLS" },
+        { principal: "application login with another Portfolio", settings: "not found", ownerIdentityMap: "not probed" },
+      ],
+      databaseIntegrationTestsPassed: report.numPassedTests,
+      skippedCases: 0,
+      isolatedLoopbackProjects: true,
+      credentialsRecorded: false,
+      secretValuesRecorded: false,
+    };
+    if (!Object.values(evidence.phase3OperationsRowsPreserved).every(Boolean)) {
+      throw new Error("PORTFOLIO_SETTINGS_PHASE3_OPERATIONS_NOT_PRESERVED");
+    }
+    const serializedEvidence = `${JSON.stringify(evidence, null, 2)}\n`;
+    if (
+      /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
+    ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
+    const evidencePath = join(ROOT, "evidence/phase-4-database-integrity.json");
+    mkdirSync(join(ROOT, "evidence"), { recursive: true });
+    writeFileSync(evidencePath, serializedEvidence, "utf8");
   } catch (error) {
     failure = error;
   } finally {
     let cleanupFailed = false;
-    if (attemptedStart) {
-      try { invoke(["stop", "--no-backup"], 90_000); } catch { cleanupFailed = true; }
-    }
-    if (networkCreated) {
-      const result = spawnSync("docker", ["network", "rm", network], {
-        env, encoding: "utf8", timeout: 20_000, stdio: "ignore",
-      });
-      if (result.error || result.status !== 0) cleanupFailed = true;
-    }
-    const absoluteWorkdir = resolve(workdir);
-    const tempRoot = resolve(tmpdir());
-    if (absoluteWorkdir.startsWith(`${tempRoot}\\`) || absoluteWorkdir.startsWith(`${tempRoot}/`)) {
-      rmSync(absoluteWorkdir, { recursive: true, force: true });
+    for (const project of [...projects].reverse()) {
+      let projectCleanupFailed = false;
+      if (project.attemptedStart) {
+        try { invokeProject(project, ["stop", "--no-backup"], env); } catch { projectCleanupFailed = true; }
+      }
+      if (project.networkCreated) {
+        const result = spawnSync("docker", ["network", "rm", project.network], {
+          env, encoding: "utf8", timeout: 20_000, stdio: "ignore",
+        });
+        if (result.error || result.status !== 0) projectCleanupFailed = true;
+      }
+      const absoluteWorkdir = resolve(project.workdir);
+      const tempRoot = resolve(tmpdir());
+      if (!projectCleanupFailed && (absoluteWorkdir.startsWith(`${tempRoot}\\`) || absoluteWorkdir.startsWith(`${tempRoot}/`))) {
+        rmSync(absoluteWorkdir, { recursive: true, force: true });
+      }
+      cleanupFailed ||= projectCleanupFailed;
     }
     if (cleanupFailed) failure = new Error("PORTFOLIO_SETTINGS_CLEANUP_FAILED: isolated database resources need recovery.");
   }
@@ -192,7 +452,7 @@ export function main() {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    main();
+    await main();
   } catch (error) {
     console.error(error instanceof Error && error.message.startsWith("PORTFOLIO_SETTINGS_")
       ? error.message

@@ -75,6 +75,13 @@ jobs:
         run: npm run setup:validation
       - name: Require real migration, restricted-role, and settings verification with zero skips
         run: npm run phase4:focus:settings
+      - name: Publish sanitized Phase 4 database evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase4-database-integrity
+          path: evidence/phase-4-database-integrity.json
+          if-no-files-found: error
+          retention-days: 14
 
   cloud-bootstrap:
     name: Cloud bootstrap from Node 20

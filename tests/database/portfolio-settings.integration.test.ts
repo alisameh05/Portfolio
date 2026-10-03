@@ -62,6 +62,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
   let applicationUrl: string;
   let loginRole: string;
   let database: ReturnType<typeof createPostgresRuntimeDatabase>;
+  const restrictedLogins = new Map<string, string>();
   const repository = createPostgresPortfolioSettingsRepository();
 
   beforeAll(async () => {
@@ -76,16 +77,33 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     url.password = password;
     applicationUrl = url.toString();
     database = createPostgresRuntimeDatabase(applicationUrl, { max: 5 });
+    for (const role of ["anon", "authenticated", "shipwithali_worker", "shipwithali_backup"] as const) {
+      const restrictedLogin = `phase4_settings_${role}_${process.pid}_${randomBytes(3).toString("hex")}`;
+      const restrictedPassword = randomBytes(32).toString("hex");
+      await admin.query(`create role ${quoteIdentifier(restrictedLogin)} login password '${restrictedPassword}' nosuperuser nocreatedb nocreaterole noreplication nobypassrls`);
+      const restrictedUrl = new URL(DATABASE_URL!);
+      restrictedUrl.username = restrictedLogin;
+      restrictedUrl.password = restrictedPassword;
+      restrictedLogins.set(role, restrictedUrl.toString());
+      await admin.query(`grant ${role} to ${quoteIdentifier(restrictedLogin)}`);
+    }
   }, 30_000);
 
   afterAll(async () => {
     if (database !== undefined) await database.resource.close();
     if (admin !== undefined) {
+      let cleanupFailed = false;
       try {
-        await admin.query(`drop role if exists ${quoteIdentifier(loginRole)}`);
+        for (const [role, url] of restrictedLogins) {
+          const login = new URL(url).username;
+          try { await admin.query(`alter role ${quoteIdentifier(login)} nologin`); } catch { cleanupFailed = true; }
+          try { await admin.query(`drop role if exists ${quoteIdentifier(login)}`); } catch { cleanupFailed = true; }
+        }
+        try { await admin.query(`drop role if exists ${quoteIdentifier(loginRole)}`); } catch { cleanupFailed = true; }
       } finally {
         await admin.end();
       }
+      if (cleanupFailed) throw new Error("PORTFOLIO_SETTINGS_RESTRICTED_ROLE_CLEANUP_FAILED");
     }
   });
 
@@ -219,6 +237,65 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
         can_update_profile: false, can_update_cta: false, can_update_identity: false,
       });
     }
+  });
+
+  it("proves only the restricted application login can reach configured settings and private identity mappings", async () => {
+    const scope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+    const service = createPortfolioSettingsService({ repository, transactions: database.transactions, scope });
+    await service.provision(values);
+    const claims = JSON.stringify({ role: "authenticated", sub: createStableId("Owner") });
+    const privilege = await admin.query(`
+      select login.rolname, login.rolsuper, login.rolbypassrls,
+             array_remove(array_agg(granted.rolname::text order by granted.rolname::text), null::text) as memberships
+        from pg_roles login
+        left join pg_auth_members membership on membership.member = login.oid
+        left join pg_roles granted on granted.oid = membership.roleid
+       where login.rolname = any($1::text[])
+       group by login.rolname, login.rolsuper, login.rolbypassrls
+       order by login.rolname
+    `, [[...restrictedLogins.values()].map((url) => new URL(url).username).concat(loginRole)]);
+    expect(privilege.rows).toHaveLength(restrictedLogins.size + 1);
+    expect(privilege.rows.every((row) => row.rolsuper === false && row.rolbypassrls === false)).toBe(true);
+    const expectedMemberships = new Map([
+      [loginRole, ["shipwithali_application"]],
+      ...[...restrictedLogins].map(([role, url]) => [new URL(url).username, [role]] as const),
+    ]);
+    for (const row of privilege.rows) expect(row.memberships).toEqual(expectedMemberships.get(row.rolname));
+
+    const allowedIdentityRead = new Client({ connectionString: applicationUrl });
+    await allowedIdentityRead.connect();
+    try {
+      await allowedIdentityRead.query(
+        "insert into identity_access.owner_links (github_subject, owner_id) values ($1, $2::uuid)",
+        ["phase4-restricted-principal-probe", scope.ownerId],
+      );
+      const mapping = await allowedIdentityRead.query(
+        "select owner_id::text from identity_access.owner_links where github_subject = $1",
+        ["phase4-restricted-principal-probe"],
+      );
+      expect(mapping.rows).toEqual([{ owner_id: scope.ownerId }]);
+      const identity = await allowedIdentityRead.query("select session_user, current_user");
+      expect(identity.rows[0]).toEqual({ session_user: loginRole, current_user: loginRole });
+    } finally {
+      await allowedIdentityRead.end();
+    }
+
+    for (const role of ["anon", "authenticated", "shipwithali_worker"] as const) {
+      const untrusted = new Client({ connectionString: restrictedLogins.get(role)! });
+      await untrusted.connect();
+      try {
+        await untrusted.query("select set_config('shipwithali.portfolio_id', $1, false), set_config('shipwithali.owner_id', $2, false), set_config('request.jwt.claims', $3, false)", [scope.portfolioId, scope.ownerId, claims]);
+        await expect(untrusted.query("select count(*) from portfolio_config.settings")).rejects.toBeDefined();
+        await expect(untrusted.query("select count(*) from identity_access.owner_links")).rejects.toBeDefined();
+      } finally {
+        await untrusted.end();
+      }
+    }
+
+    const wrongPortfolio = await database.transactions.run((context) => repository.getSettings(
+      { ...scope, portfolioId: createStableId("Portfolio") }, context,
+    ));
+    expect(wrongPortfolio).toEqual(err({ kind: "not_found", code: "PORTFOLIO_SETTINGS_NOT_CONFIGURED" }));
   });
 
   it("rolls back the profile policy and every column-level update grant", async () => {

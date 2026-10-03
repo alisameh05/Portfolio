@@ -6,16 +6,20 @@ import {
   requireExecutedTests,
 } from "../../scripts/portfolio-settings-integration.mjs";
 
-test("the settings runner isolates Supabase ports and binds its project id", () => {
-  const config = isolatedConfig(
-    'project_id = "shipwithali-portfolio"\n[api]\nport = 54321\n[db]\nport = 54322\nshadow_port = 54320\n[studio]\nport = 54323\n[local_smtp]\nport = 54324\n[analytics]\nport = 54327\n[db.pooler]\nport = 54329\n',
-    "shipwithali-settings-test",
-  );
+test("the settings runner isolates both Supabase projects to distinct loopback port ranges", () => {
+  const source = 'project_id = "shipwithali-portfolio"\n[api]\nport = 54321\n[db]\nport = 54322\nshadow_port = 54320\n[studio]\nport = 54323\n[local_smtp]\nport = 54324\n[analytics]\nport = 54327\n[db.pooler]\nport = 54329\n';
+  const config = isolatedConfig(source, "shipwithali-settings-test");
   assert.match(config, /project_id = "shipwithali-settings-test"/);
   assert.match(config, /port = 57321/);
   assert.match(config, /port = 57322/);
   assert.match(config, /shadow_port = 57320/);
   assert.match(config, /port = 57323/);
+  const upgradeConfig = isolatedConfig(source, "shipwithali-upgrade-test", 57340);
+  assert.match(upgradeConfig, /project_id = "shipwithali-upgrade-test"/);
+  assert.match(upgradeConfig, /port = 57340/);
+  assert.match(upgradeConfig, /port = 57342/);
+  assert.match(upgradeConfig, /shadow_port = 57340/);
+  assert.notEqual(config, upgradeConfig);
 });
 
 test("the settings runner removes inherited provider credentials", () => {

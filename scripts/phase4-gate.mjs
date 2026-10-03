@@ -16,6 +16,9 @@
  *   - Historical Phase 2 fake-only and Phase 3 infrastructure-only
  *     restrictions are evaluated against original fixtures/baselines; the
  *     current-phase context explicitly permits only Spec #77 activation.
+ *   - Phase 4 database acceptance verifies the committed Phase 3 migration
+ *     snapshot, clean/upgrade equivalence, generated types, and restricted
+ *     principals against disposable loopback PostgreSQL services.
  *
  * No live GitHub exchange, production secrets, remote writes, or deployed
  * services required. Deterministic, offline after install.
@@ -77,8 +80,7 @@ function run(name, entry, args, { env = {}, evidence, failOnSkipped = false, req
       }
       const missingService =
         requiresService !== null &&
-        (/LOCAL_DB_UNAVAILABLE|LOCAL_DB_URL_MISSING|PHASE3_DATABASE_URL_REQUIRED|ECONNREFUSED|database.*unavailable/i.test(stripped) ||
-          code !== 0);
+        (/LOCAL_DB_UNAVAILABLE|LOCAL_DB_URL_MISSING|PHASE3_DATABASE_URL_REQUIRED|PORTFOLIO_SETTINGS_DOCKER_UNAVAILABLE|ECONNREFUSED|failed to connect to the docker API|database.*unavailable/i.test(stripped));
       if (requiresService !== null && missingService) {
         console.error(`✗ ${name}: required local service ${requiresService} unavailable — gate cannot pass`);
       }
@@ -187,11 +189,14 @@ try {
       failOnSkipped: true,
     }),
   );
-  // Required local-service probe: documents loopback database availability
-  // without requiring it for the prefactor verdict. When later tickets add
-  // real PostgreSQL/RLS/concurrency checks with requiresService set, any
-  // LOCAL_DB_UNAVAILABLE or missing-service output fails the gate instead of
-  // passing vacuously. Stale evidence likewise fails below.
+  results.push(
+    await run("phase4-database-integrity", "scripts/portfolio-settings-integration.mjs", [], {
+      evidence: "evidence/phase-4-database-integrity.log",
+      failOnSkipped: true,
+      requiresService: "disposable loopback PostgreSQL and Docker",
+    }),
+  );
+  // Retain a separate toolchain probe for repository-local database commands.
   results.push(
     await run("local-service-probe", "scripts/check-database-toolchain.mjs", [], {
       evidence: "evidence/phase-4-local-service-probe.log",
@@ -204,6 +209,7 @@ try {
 
 const requiredEvidence = [
   "evidence/phase-4-context.json",
+  "evidence/phase-4-database-integrity.json",
   ...results.flatMap((result) => (result.evidence ? [result.evidence] : [])),
 ];
 const evidence = requiredEvidence.map((file) => ({ file, fresh: fresh(file) }));

@@ -1,0 +1,8 @@
+{
+  "release": "phase-3",
+  "migrations": {
+    "20260922170000_prepare_migration_capability.sql": "f626df30438e644254fd6c5af015118be117ef5090fbc976bb0762593ac481fe",
+    "20260922171906_establish_database_security_baseline.sql": "1406e77b9a2505ec684ef350170545558217ca2bf345675f67eb723a735f6be3",
+    "20260922203000_create_operations_primitives.sql": "adad38103c83693de591f1691fe4eaabbe7da90423b3e68a02d7b7aa9b76cb98"
+  }
+}
