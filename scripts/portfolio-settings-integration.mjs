@@ -271,6 +271,28 @@ export async function main() {
 
     const phase3Snapshot = await snapshotPhase4Database(upgradeUrl);
     assertPhase3OperationsRls(phase3Snapshot);
+    const predecessorTestFiles = [
+      "tests/database/postgres-transaction-runner.test.ts",
+      "tests/database/postgres-integration.test.ts",
+      "tests/database/optimistic-concurrency.test.ts",
+      "tests/database/idempotency.test.ts",
+      "tests/database/outbox.test.ts",
+      "tests/database/leased-jobs.test.ts",
+      "tests/database/role-rls-matrix.test.ts",
+    ];
+    const predecessorOutput = run(process.execPath, [
+      join(ROOT, "scripts/phase3-database-tests.mjs"),
+      ...predecessorTestFiles,
+    ], {
+      env: { ...env, PHASE3_DATABASE_URL: upgradeUrl, PHASE3_REQUIRE_DATABASE: "1" },
+      timeout: 180_000,
+      errorCode: "PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED",
+    });
+    const predecessorTestCount = Number(predecessorOutput.match(/Tests\s+(\d+) passed/)?.[1] ?? 0);
+    if (predecessorTestCount < 1 || /\b[1-9]\d*\s+skipped\b/i.test(predecessorOutput)) {
+      throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_EVIDENCE_INVALID");
+    }
+    console.log(`Phase 3 historical database invariants: ${predecessorTestCount} passed, 0 skipped before Phase 4 migrations.`);
     const phase3Rows = await seedAndCapturePhase3Operations(upgradeUrl);
     console.log("Captured the Phase 3 operations contract and seeded rows through restricted capability roles.");
     for (const file of phase4Files) {
@@ -354,6 +376,12 @@ export async function main() {
       parent: 77,
       scope: "phase4-migration-equivalence-restricted-principal-and-pooled-isolation",
       phase3Snapshot: "supabase/baselines/phase3.json",
+      predecessorDatabaseTests: {
+        context: "Phase 3 schema snapshot before Phase 4 migrations",
+        testFiles: predecessorTestFiles,
+        passed: predecessorTestCount,
+        skipped: 0,
+      },
       phase3MigrationFiles: migrations.phase3Files,
       migrationChecksums: migrations.checksums,
       migrationLedger: cleanSnapshot.migrationLedger,
@@ -398,6 +426,24 @@ export async function main() {
         jobs: preservedRows.jobs.length === 1,
       },
       generatedTypeDrift: false,
+      sanitizedAuditExamples: [
+        {
+          verifiedBy: "tests/database/portfolio-settings.integration.test.ts",
+          eventType: "portfolio_configuration.channels_updated.v1",
+          schemaVersion: 1,
+          aggregateVersion: 2,
+          payload: {
+            channelCount: 6,
+            channelTypes: ["email", "instagram", "linkedin", "other", "phone", "whatsapp"],
+            ownerScope: "[redacted stable Owner digest]",
+          },
+          privateContactDestinationsIncluded: false,
+        },
+      ],
+      databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
+        name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
+        status: test.status,
+      })),
       restrictedPrincipalMatrix: [
         { principal: "shipwithali_application login", settings: "allow", ownerIdentityMap: "allow", bypassRls: false },
         { principal: "anon Visitor login", settings: "deny", ownerIdentityMap: "deny", bypassRls: false },

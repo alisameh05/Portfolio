@@ -1,255 +1,338 @@
 #!/usr/bin/env node
-/**
- * phase4-gate.mjs — Phase 4 prefactor gate (#78).
- *
- * Prefactor verdict: predecessor invariant coverage runs in its appropriate
- * historical/current phase context plus the new Phase 4 context check. Full
- * Phase 4 business, Auth, RLS, concurrency, and migration-equivalence checks
- * land in tickets #79-#90; this gate already enforces the failure semantics
- * they will rely on:
- *
- *   - Every constituent remains independently runnable via package.json.
- *   - A single failure, absent required local service, missing/skipped or
- *     partial result, obsolete phase restriction, or stale evidence fails
- *     the verdict. Required local-service unavailability never produces a
- *     passing result (LOCAL_DB_UNAVAILABLE / required-service failure).
- *   - Historical Phase 2 fake-only and Phase 3 infrastructure-only
- *     restrictions are evaluated against original fixtures/baselines; the
- *     current-phase context explicitly permits only Spec #77 activation.
- *   - Phase 4 database acceptance verifies the committed Phase 3 migration
- *     snapshot, clean/upgrade equivalence, generated types, and restricted
- *     principals against disposable loopback PostgreSQL services.
- *
- * No live GitHub exchange, production secrets, remote writes, or deployed
- * services required. Deterministic, offline after install.
- */
 
-import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  classifyCheckResult,
+  databaseEvidenceShapeErrors,
+  evaluateGate,
+  REQUIRED_PHASE4_CHECK_NAMES,
+  sanitizeEvidenceOutput,
+} from "./phase4-gate-support.mjs";
+
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const REPORT = join(ROOT, "evidence", "phase-4-gate-report.json");
 const startedAt = Date.now();
+const runId = randomUUID();
+const revision = gitRevision();
 
-function sanitize(value) {
-  return value
-    .replaceAll(ROOT, "<WORKSPACE>")
-    .replaceAll(ROOT.split("\\").join("/"), "<WORKSPACE>")
-    .replaceAll(tmpdir(), "<TEMP>")
-    .replace(/postgres(?:ql)?:\/\/[^\s"']+/gi, "[redacted-database-url]")
-    .replace(/(?:password|token|secret|idempotency[-_]?key)\s*[=:]\s*[^\s,;]+/gi, "$1=[redacted]");
+const checks = [
+  { name: "validation-ready", npmScript: "validation:ready", args: [] },
+  {
+    name: "predecessor-phase1",
+    entry: "scripts/phase1-gate.mjs",
+    args: [],
+    env: { SHIPWITHALI_PHASE: "phase1" },
+    failOnSkipped: true,
+  },
+  {
+    name: "predecessor-phase2",
+    entry: "scripts/phase2-gate.mjs",
+    args: [],
+    env: { SHIPWITHALI_PHASE: "phase2" },
+    failOnSkipped: true,
+  },
+  {
+    name: "predecessor-phase3-source",
+    entry: "scripts/check-phase3-database.mjs",
+    args: ["--source-only"],
+    env: { SHIPWITHALI_PHASE: "phase4" },
+    failOnSkipped: true,
+  },
+  { name: "exact-toolchain", entry: "scripts/check-toolchain.mjs", args: [] },
+  { name: "contract-verification", npmScript: "contract:verify", args: [] },
+  { name: "tooling-tests", npmScript: "test:setup", args: [] },
+  { name: "typecheck", entry: "node_modules/typescript/bin/tsc", args: ["--noEmit"] },
+  { name: "lint", entry: "node_modules/eslint/bin/eslint.js", args: ["."] },
+  { name: "production-build", entry: "node_modules/next/dist/bin/next", args: ["build"] },
+  { name: "architecture", entry: "scripts/architecture-check.mjs", args: [] },
+  { name: "route-inventory", entry: "scripts/check-route-inventory.mjs", args: [] },
+  { name: "runtime-boundary", entry: "scripts/check-runtime-boundary.mjs", args: [] },
+  { name: "runtime-architecture", entry: "scripts/check-runtime-architecture.mjs", args: [] },
+  { name: "phase4-context", entry: "scripts/check-phase4-context.mjs", args: [], failOnSkipped: true },
+  {
+    name: "phase4-focused-tests",
+    entry: "node_modules/vitest/vitest.mjs",
+    args: ["run", "tests/phase4", "--exclude", "tests/phase4/local-auth-token.integration.test.ts"],
+    failOnSkipped: true,
+  },
+  {
+    name: "phase4-migration-integrity-tests",
+    entry: "node_modules/vitest/vitest.mjs",
+    args: ["run", "tests/database/phase4-migration-integrity.test.ts"],
+    failOnSkipped: true,
+  },
+  {
+    name: "phase4-local-auth-real-token",
+    entry: "scripts/local-auth-integration.mjs",
+    args: [],
+    failOnSkipped: true,
+    requiresService: "disposable loopback Supabase Auth and Docker",
+  },
+  {
+    name: "phase4-database-integrity",
+    entry: "scripts/portfolio-settings-integration.mjs",
+    args: [],
+    failOnSkipped: true,
+    requiresService: "disposable loopback PostgreSQL and Docker",
+  },
+];
+
+function gitRevision() {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: fileURLToPath(new URL("../", import.meta.url)),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "unknown";
+  }
 }
 
-function run(name, entry, args, { env = {}, evidence, failOnSkipped = false, requiresService = null } = {}) {
+function sanitize(value) {
+  const secrets = Object.entries(process.env)
+    .filter(([name, secret]) => /(?:TOKEN|SECRET|PASSWORD|PRIVATE_KEY|SERVICE_ROLE_KEY)/i.test(name) && secret.length >= 6)
+    .map(([, secret]) => secret);
+  return sanitizeEvidenceOutput(value, { workspace: ROOT, temporary: tmpdir(), secrets });
+}
+
+function npmCommand(script, args) {
+  if (process.env.npm_execpath) {
+    return { entry: process.execPath, args: [process.env.npm_execpath, "run", script, ...args] };
+  }
+  return {
+    entry: process.platform === "win32" ? "npm.cmd" : "npm",
+    args: ["run", script, ...args],
+    shell: process.platform === "win32",
+  };
+}
+
+function run(check) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [entry, ...args], {
+    const command = check.npmScript
+      ? npmCommand(check.npmScript, check.args)
+      : { entry: process.execPath, args: [check.entry, ...check.args] };
+    const child = spawn(command.entry, command.args, {
       cwd: ROOT,
-      env: { ...process.env, ...env, CI: "1", SHIPWITHALI_PHASE: "phase4" },
+      env: { ...process.env, CI: "1", SHIPWITHALI_PHASE: "phase4", ...check.env },
+      shell: command.shell ?? false,
       stdio: ["ignore", "pipe", "pipe"],
     });
     const chunks = [];
-    child.stdout.on("data", (chunk) => {
-      chunks.push(chunk);
-      process.stdout.write(sanitize(chunk.toString("utf8")));
-    });
-    child.stderr.on("data", (chunk) => {
-      chunks.push(chunk);
-      process.stderr.write(sanitize(chunk.toString("utf8")));
-    });
+    child.stdout.on("data", (chunk) => chunks.push(chunk));
+    child.stderr.on("data", (chunk) => chunks.push(chunk));
     let spawnError;
-    child.on("error", (error) => {
-      spawnError = error;
-    });
-    const heartbeat = setInterval(() => console.log(`… ${name} still running`), 10_000);
+    child.on("error", (error) => { spawnError = error; });
+    const heartbeat = setInterval(() => console.log(`… ${check.name} still running`), 10_000);
     child.on("close", (code) => {
       clearInterval(heartbeat);
-      const raw = Buffer.concat(chunks).toString("utf8");
-      const output = `${sanitize(raw).trimEnd()}\n`;
-      if (evidence) {
-        const path = join(ROOT, evidence);
-        mkdirSync(dirname(path), { recursive: true });
-        writeFileSync(path, output, "utf8");
-      }
-      const stripped = output.replaceAll(/\u001B\[[0-9;]*m/g, "");
-      const skipped = failOnSkipped && /[1-9]\d*\s+skipped|\bskipped\b.*[1-9]|missing.*service|partial/i.test(stripped);
-      if (skipped) {
-        console.error(`✗ ${name}: skipped, missing-service, or partial result is a failing verdict, never success`);
-      }
-      const missingService =
-        requiresService !== null &&
-        (/LOCAL_DB_UNAVAILABLE|LOCAL_DB_URL_MISSING|PHASE3_DATABASE_URL_REQUIRED|PORTFOLIO_SETTINGS_DOCKER_UNAVAILABLE|ECONNREFUSED|failed to connect to the docker API|database.*unavailable/i.test(stripped));
-      if (requiresService !== null && missingService) {
-        console.error(`✗ ${name}: required local service ${requiresService} unavailable — gate cannot pass`);
-      }
-      resolve({
-        name,
-        passed: code === 0 && spawnError === undefined && !skipped && !(requiresService !== null && missingService),
-        exitCode: skipped || (requiresService !== null && missingService) ? 1 : (code ?? 1),
-        evidence,
+      const output = sanitize(Buffer.concat(chunks).toString("utf8"))
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .join("\n")
+        .trimEnd();
+      const evidence = `evidence/phase-4-${check.name}.log`;
+      const evidencePath = join(ROOT, evidence);
+      mkdirSync(dirname(evidencePath), { recursive: true });
+      writeFileSync(evidencePath, `${output}\n`, "utf8");
+      if (output) process.stdout.write(`${output}\n`);
+
+      const classified = classifyCheckResult({
+        code: code ?? 1,
+        spawnError,
+        output,
+        failOnSkipped: check.failOnSkipped ?? false,
+        requiresService: check.requiresService ?? null,
       });
+      if (classified.failure) {
+        console.error(`✗ ${check.name}: ${classified.failure}`);
+      }
+      resolve({ name: check.name, ...classified, evidence });
     });
   });
 }
 
-function fresh(path) {
-  const full = join(ROOT, path);
-  return existsSync(full) && statSync(full).mtimeMs >= startedAt - 1_000;
+function evidenceRecord(file) {
+  const path = join(ROOT, file);
+  const present = existsSync(path);
+  const fresh = present && statSync(path).mtimeMs >= startedAt;
+  return {
+    file,
+    runId,
+    revision,
+    fresh,
+    sha256: present ? createHash("sha256").update(readFileSync(path)).digest("hex") : null,
+  };
 }
 
-console.log("═══════════════════════════════════════════════");
-console.log("  Phase 4 Prefactor Gate (#78)");
-console.log("═══════════════════════════════════════════════");
-
-const results = [];
-try {
-  results.push(
-    await run("phase2-gate-predecessor", "scripts/phase2-gate.mjs", [], {
-      evidence: "evidence/phase-4-phase2-gate.log",
-      failOnSkipped: true,
-    }),
-  );
-  results.push(
-    await run("database-toolchain", "scripts/check-database-toolchain.mjs", [], {
-      evidence: "evidence/phase-4-database-toolchain.log",
-    }),
-  );
-  results.push(
-    await run("migration-baseline-source", "scripts/check-database-baseline.mjs", ["--source-only"], {
-      evidence: "evidence/phase-4-migration-baseline-source.log",
-    }),
-  );
-  results.push(
-    await run("phase3-database-source", "scripts/check-phase3-database.mjs", ["--source-only"], {
-      evidence: "evidence/phase-4-phase3-database-source.log",
-    }),
-  );
-  results.push(
-    await run("toolchain", "scripts/check-toolchain.mjs", [], {
-      evidence: "evidence/phase-4-toolchain.log",
-    }),
-  );
-  results.push(
-    await run("contract-drift", "scripts/check-contract-drift.mjs", [], {
-      evidence: "evidence/phase-4-contract-drift.log",
-    }),
-  );
-  results.push(
-    await run("contract-compatibility", "scripts/check-contract-compatibility.mjs", [], {
-      evidence: "evidence/phase-4-contract-compatibility.log",
-    }),
-  );
-  results.push(
-    await run("contract-tests", "node_modules/vitest/vitest.mjs", ["run", "tests/contracts"], {
-      evidence: "evidence/phase-4-contract-tests.log",
-      failOnSkipped: true,
-    }),
-  );
-  results.push(
-    await run("strict-typecheck", "node_modules/typescript/bin/tsc", ["--noEmit"], {
-      evidence: "evidence/phase-4-typecheck.log",
-    }),
-  );
-  results.push(
-    await run("deterministic-lint", "node_modules/eslint/bin/eslint.js", ["."], {
-      evidence: "evidence/phase-4-lint.log",
-    }),
-  );
-  results.push(
-    await run("architecture", "scripts/architecture-check.mjs", [], {
-      evidence: "evidence/phase-4-architecture.log",
-    }),
-  );
-  results.push(
-    await run("route-inventory", "scripts/check-route-inventory.mjs", [], {
-      evidence: "evidence/phase-4-route-inventory.log",
-    }),
-  );
-  results.push(
-    await run("runtime-boundary", "scripts/check-runtime-boundary.mjs", [], {
-      evidence: "evidence/phase-4-runtime-boundary.log",
-    }),
-  );
-  results.push(
-    await run("runtime-architecture", "scripts/check-runtime-architecture.mjs", [], {
-      evidence: "evidence/phase-4-runtime-architecture.log",
-    }),
-  );
-  results.push(
-    await run("phase4-context", "scripts/check-phase4-context.mjs", [], {
-      evidence: "evidence/phase-4-context-check.log",
-      failOnSkipped: true,
-    }),
-  );
-  results.push(
-    await run("phase4-focused-tests", "node_modules/vitest/vitest.mjs", ["run", "tests/phase4"], {
-      evidence: "evidence/phase-4-focused-tests.log",
-      failOnSkipped: true,
-    }),
-  );
-  results.push(
-    await run("phase4-database-integrity", "scripts/portfolio-settings-integration.mjs", [], {
-      evidence: "evidence/phase-4-database-integrity.log",
-      failOnSkipped: true,
-      requiresService: "disposable loopback PostgreSQL and Docker",
-    }),
-  );
-  // Retain a separate toolchain probe for repository-local database commands.
-  results.push(
-    await run("local-service-probe", "scripts/check-database-toolchain.mjs", [], {
-      evidence: "evidence/phase-4-local-service-probe.log",
-    }),
-  );
-} catch (error) {
-  const code = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "PHASE4_GATE_FAILED";
-  console.error(`✗ ${code}`);
+function readJson(path) {
+  try {
+    return JSON.parse(readFileSync(join(ROOT, path), "utf8"));
+  } catch {
+    return null;
+  }
 }
 
-const requiredEvidence = [
-  "evidence/phase-4-context.json",
-  "evidence/phase-4-database-integrity.json",
-  ...results.flatMap((result) => (result.evidence ? [result.evidence] : [])),
-];
-const evidence = requiredEvidence.map((file) => ({ file, fresh: fresh(file) }));
-const failed = results.filter((result) => !result.passed);
-const stale = evidence.filter((item) => !item.fresh);
-const verdict =
-  results.length >= 10 && failed.length === 0 && stale.length === 0 ? "pass" : "fail";
-mkdirSync(dirname(REPORT), { recursive: true });
-writeFileSync(
-  REPORT,
-  `${JSON.stringify(
-    {
-      ticket: 78,
-      parent: 77,
-      scope: "phase-4-verification-prefactor-gate",
-      node: process.version,
-      verdict,
-      checks: results,
-      evidence,
-      guarantees: {
-        predecessor: "complete Phase 2 gate plus Phase 3 source baselines run first in phase4 context",
-        historical: "phase2 fake-only and phase3 infrastructure-only restrictions evaluated against original fixtures/baselines",
-        current: "only Spec #77 identity-access and portfolio-configuration activation permitted",
-        failureSemantics: "single failure, absent required local service (LOCAL_DB_UNAVAILABLE), missing/skipped/partial result, or stale evidence fails the verdict",
-        remoteCredentialsRequired: false,
-        secretValuesRecorded: false,
-      },
+function packageVersions() {
+  const packageJson = readJson("package.json") ?? {};
+  const userAgent = process.env.npm_config_user_agent ?? "";
+  const npm = userAgent.match(/(?:^|\s)npm\/([^\s]+)/)?.[1] ?? "unknown";
+  return {
+    node: process.version,
+    npm,
+    requiredNode: packageJson.engines?.node ?? null,
+    requiredNpm: packageJson.engines?.npm ?? null,
+    packageManager: packageJson.packageManager ?? null,
+  };
+}
+
+function phase4Coverage(database) {
+  const databaseState = database?.normalizedDatabaseState;
+  const validDatabaseState = databaseEvidenceShapeErrors(database).length === 0;
+  const phase4Schema = new Set(["identity_access", "portfolio_config"]);
+  return {
+    authentication: {
+      deterministicTests: "tests/phase4/owner-session-auth.test.ts",
+      realAdapter: "tests/phase4/local-auth-token.integration.test.ts",
+      realTokenRunner: "scripts/local-auth-integration.mjs",
+      localFixtureOnly: true,
+      liveGitHubExchange: false,
+      productionOrStagingCredentials: false,
+      scenarios: ["valid Owner", "missing or malformed token", "signature and key", "issuer and audience", "expiry", "revocation", "non-GitHub", "non-Owner", "allowlist removal", "provider unavailable"],
     },
-    null,
-    2,
-  )}\n`,
-  "utf8",
-);
-
-if (verdict === "pass") {
-  console.log(`✓ Phase 4 prefactor gate: ALL ${results.length} CHECKS PASSED`);
-  process.exitCode = 0;
-} else {
-  console.error(
-    `✗ Phase 4 prefactor gate: ${failed.length} checks failed, ${stale.length} stale/missing evidence — missing services, skipped checks, and stale evidence cannot produce a passing result`,
-  );
-  process.exitCode = 1;
+    authorizationCsrfCookiesAndPrivacy: {
+      testFiles: ["tests/phase4/owner-operation-policy.test.ts", "tests/phase4/owner-request-security.test.ts"],
+      scenarios: ["Owner and unsupported-operation policy", "cookie flags", "same-origin", "CSRF proof", "forged forwarded host", "rate limits", "denied-request no-effects", "safe Problem Details and redaction"],
+    },
+    independentIdentitiesAndConsent: {
+      testFiles: ["tests/phase4/pseudonymous-identity.test.ts", "tests/phase4/functional-identity-orchestration.test.ts"],
+      scenarios: ["separate keys and subjects", "affirmative consent", "denied and unknown consent", "withdrawal", "purpose substitution", "expiry", "key rotation", "no cross-purpose persistence or private log fields"],
+    },
+    settingsContracts: {
+      testFiles: ["tests/phase4/portfolio-profile-command.test.ts", "tests/phase4/portfolio-contact-channels-command.test.ts", "tests/phase4/portfolio-cta-command.test.ts", "tests/phase4/portfolio-settings-service.test.ts", "tests/phase4/identity-configuration-contracts.test.ts"],
+      realPostgresIntegration: "tests/database/portfolio-settings.integration.test.ts",
+      generatedTypeDrift: database?.generatedTypeDrift === false,
+    },
+    database: database === null ? null : {
+      migrationSnapshot: database.phase3Snapshot,
+      predecessorDatabaseTests: database.predecessorDatabaseTests,
+      migrationIdsAndChecksums: database.migrationChecksums,
+      migrationLedger: database.migrationLedger,
+      cleanUpgradeEquivalent: database.cleanUpgradeEquivalent,
+      migrationReplayNoop: database.migrationReplayNoop,
+      normalizedCleanUpgradeDiff: database.normalizedCleanUpgradeDiff,
+      schemaStateSha256: database.normalizedStateSha256,
+      forcedRlsTables: database.applicationTablesWithForcedRls,
+      grants: validDatabaseState ? databaseState.grants.filter((grant) => phase4Schema.has(grant.schema)) : null,
+      policies: validDatabaseState ? databaseState.policies.filter((policy) => phase4Schema.has(policy.schema)) : null,
+      restrictedPrincipalMatrix: database.restrictedPrincipalMatrix,
+      phase3OperationsRowsPreserved: database.phase3OperationsRowsPreserved,
+      generatedTypeDrift: database.generatedTypeDrift,
+      databaseIntegrationTestsPassed: database.databaseIntegrationTestsPassed,
+      databaseTestResults: database.databaseTestResults,
+      skippedCases: database.skippedCases,
+      sanitizedAuditExamples: database.sanitizedAuditExamples,
+      evidenceFile: "evidence/phase-4-database-integrity.json",
+    },
+    architectureContractsAndBuild: {
+      publicOperations: 5,
+      backendOnly: true,
+      providerSeamsChecked: true,
+      contractGenerationDriftAndCompatibility: true,
+      checkNames: ["architecture", "route-inventory", "runtime-boundary", "runtime-architecture", "contract-verification", "production-build"],
+    },
+  };
 }
+
+async function main() {
+  console.log("═══════════════════════════════════════════════");
+  console.log("  Phase 4 Completion Gate (#90)");
+  console.log(`  Run ${runId} · ${revision}`);
+  console.log("═══════════════════════════════════════════════");
+
+  const results = [];
+  let validationReady = true;
+  for (const check of checks) {
+    if (!validationReady && check.name !== "validation-ready") {
+      const evidence = `evidence/phase-4-${check.name}.log`;
+      writeFileSync(join(ROOT, evidence), "Not run because validation:ready failed.\n", "utf8");
+      results.push({ name: check.name, passed: false, exitCode: 1, failure: "validation-not-ready", evidence });
+      continue;
+    }
+    const result = await run(check);
+    results.push(result);
+    if (check.name === "validation-ready" && !result.passed) validationReady = false;
+  }
+
+  const requiredEvidence = [
+    ...results.map((result) => result.evidence),
+    "evidence/phase-1-gate-report.json",
+    "evidence/phase-2-gate-report.json",
+    "evidence/phase-4-context.json",
+    "evidence/phase-4-database-integrity.json",
+  ];
+  const evidence = requiredEvidence.map(evidenceRecord);
+  const gate = evaluateGate({
+    checks: results,
+    requiredCheckNames: REQUIRED_PHASE4_CHECK_NAMES,
+    evidence,
+    runId,
+    revision,
+  });
+  const database = readJson("evidence/phase-4-database-integrity.json");
+  const evidenceValidationErrors = databaseEvidenceShapeErrors(database);
+  const allPassed =
+    gate.verdict === "pass" &&
+    revision !== "unknown" &&
+    database !== null &&
+    evidenceValidationErrors.length === 0 &&
+    database.skippedCases === 0 &&
+    database.generatedTypeDrift === false;
+  const report = {
+    ticket: 90,
+    parent: 77,
+    scope: "phase-4-completion-gate-and-reproducible-evidence",
+    runId,
+    generatedAt: new Date().toISOString(),
+    revision,
+    toolVersions: packageVersions(),
+    verdict: allPassed ? "pass" : "fail",
+    checks: results,
+    missingChecks: gate.missingChecks,
+    duplicateChecks: gate.duplicateChecks,
+    failedChecks: gate.failedChecks,
+    staleOrMissingEvidence: gate.staleEvidence,
+    evidenceValidationErrors,
+    evidence,
+    coverage: phase4Coverage(database),
+    guarantees: {
+      predecessorInvariantCoverage: "Phase 1 and Phase 2 historical gates, Phase 3 source and database invariants on the Phase 3 migration snapshot, and Phase 3 migration preservation through current Phase 4 upgrade/RLS checks",
+      currentPhase: "Phase 4 context check and focused checks",
+      localServices: "only isolated disposable loopback Auth/PostgreSQL projects",
+      remoteCredentialsRequired: false,
+      liveGitHubExchangeRequired: false,
+      remoteMigrationsOrAuthConfiguration: false,
+      deployedServicesRequired: false,
+      secretsAndRawPrivatePayloadsRecorded: false,
+      missingSkippedPartialConstituentOrStaleEvidenceFails: true,
+    },
+  };
+  mkdirSync(dirname(REPORT), { recursive: true });
+  writeFileSync(REPORT, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+
+  if (report.verdict === "pass") {
+    console.log(`✓ Phase 4 gate: ALL ${results.length} CHECKS PASSED`);
+    process.exitCode = 0;
+  } else {
+    console.error(`✗ Phase 4 gate: ${gate.failedChecks.length} constituent failures, ${gate.missingChecks.length} missing checks, ${gate.staleEvidence.length} stale/missing evidence items, ${evidenceValidationErrors.length} invalid evidence fields`);
+    process.exitCode = 1;
+  }
+}
+
+await main();

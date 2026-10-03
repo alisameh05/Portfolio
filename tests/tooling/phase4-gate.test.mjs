@@ -1,0 +1,118 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  classifyCheckResult,
+  databaseEvidenceShapeErrors,
+  evaluateGate,
+  REQUIRED_PHASE4_CHECK_NAMES,
+  sanitizeEvidenceOutput,
+} from "../../scripts/phase4-gate-support.mjs";
+
+test("the required checklist includes every predecessor and Phase 4 acceptance runner", () => {
+  assert.deepEqual(REQUIRED_PHASE4_CHECK_NAMES, [
+    "predecessor-phase1",
+    "predecessor-phase2",
+    "predecessor-phase3-source",
+    "validation-ready",
+    "exact-toolchain",
+    "contract-verification",
+    "tooling-tests",
+    "typecheck",
+    "lint",
+    "production-build",
+    "architecture",
+    "route-inventory",
+    "runtime-boundary",
+    "runtime-architecture",
+    "phase4-context",
+    "phase4-focused-tests",
+    "phase4-migration-integrity-tests",
+    "phase4-local-auth-real-token",
+    "phase4-database-integrity",
+  ]);
+});
+
+test("a passing constituent passes only when it exits cleanly", () => {
+  assert.deepEqual(
+    classifyCheckResult({ code: 0, output: "All assertions passed", failOnSkipped: true }),
+    { passed: true, exitCode: 0, failure: null },
+  );
+});
+
+test("a required local service cannot pass when unavailable even with exit code zero", () => {
+  assert.deepEqual(
+    classifyCheckResult({
+      code: 0,
+      output: "LOCAL_DB_UNAVAILABLE",
+      requiresService: "loopback PostgreSQL",
+    }),
+    { passed: false, exitCode: 1, failure: "required-service-unavailable" },
+  );
+});
+
+test("skipped and partial required results fail", () => {
+  for (const output of ["2 skipped", "partial result: 1 check missing"]) {
+    assert.deepEqual(
+      classifyCheckResult({ code: 0, output, failOnSkipped: true }),
+      { passed: false, exitCode: 1, failure: "skipped-or-partial" },
+    );
+  }
+});
+
+test("evidence redacts database credentials, bearer tokens, and private payload fields", () => {
+  const output = sanitizeEvidenceOutput(
+    'postgres://user:db-secret@127.0.0.1/db Authorization: Bearer signed-token password=app-secret githubSubject=gh-private-123 eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwcml2YXRlIn0.signature123456 eyJhbGciOiJub25lIn0.e30. {"email":"owner@example.test","access_token":"access-secret","sessionId":"session-secret","githubSubject":"gh-private-456","github_subject":"gh-private-789","provider-user-subject":"provider-secret-123","provider_user_subject":"provider-secret-456","external_subject":"external-secret-123"}',
+    { workspace: "C:\\repo", temporary: "C:\\temp", secrets: ["app-secret"] },
+  );
+
+  for (const secret of ["db-secret", "signed-token", "app-secret", "owner@example.test", "access-secret", "session-secret", "gh-private-123", "gh-private-456", "gh-private-789", "provider-secret-123", "provider-secret-456", "external-secret-123", "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwcml2YXRlIn0.signature123456", "eyJhbGciOiJub25lIn0.e30."]) {
+    assert.equal(output.includes(secret), false);
+  }
+});
+
+test("malformed database evidence is reported without crashing the gate", () => {
+  assert.deepEqual(databaseEvidenceShapeErrors({ normalizedDatabaseState: { grants: [] } }), [
+    "normalizedDatabaseState.policies must be an array",
+  ]);
+  assert.deepEqual(databaseEvidenceShapeErrors({ normalizedDatabaseState: { grants: [null], policies: [] } }), [
+    "normalizedDatabaseState.grants contains an invalid entry",
+  ]);
+  assert.deepEqual(databaseEvidenceShapeErrors({ normalizedDatabaseState: { grants: [], policies: [] } }), []);
+});
+
+test("a successful gate requires every named constituent exactly once", () => {
+  const evidence = [{ file: "evidence/phase-4-focused-tests.log", runId: "run-1", revision: "abc", fresh: true }];
+  const result = evaluateGate({
+    checks: [{ name: "phase4-focused-tests", passed: true }],
+    requiredCheckNames: ["phase4-focused-tests", "phase4-local-auth"],
+    evidence,
+    runId: "run-1",
+    revision: "abc",
+  });
+
+  assert.equal(result.verdict, "fail");
+  assert.deepEqual(result.missingChecks, ["phase4-local-auth"]);
+});
+
+test("missing, stale, or duplicate evidence and failed constituents fail the verdict", () => {
+  const result = evaluateGate({
+    checks: [
+      { name: "contracts", passed: true },
+      { name: "contracts", passed: true },
+      { name: "phase4-settings", passed: false },
+    ],
+    requiredCheckNames: ["contracts", "phase4-settings"],
+    evidence: [
+      { file: "evidence/current.json", runId: "run-old", revision: "old", fresh: true },
+      { file: "evidence/missing.json", runId: "run-1", revision: "abc", fresh: false },
+    ],
+    runId: "run-1",
+    revision: "abc",
+  });
+
+  assert.equal(result.verdict, "fail");
+  assert.deepEqual(result.duplicateChecks, ["contracts"]);
+  assert.deepEqual(result.failedChecks, ["phase4-settings"]);
+  assert.deepEqual(result.staleEvidence, ["evidence/current.json", "evidence/missing.json"]);
+});
