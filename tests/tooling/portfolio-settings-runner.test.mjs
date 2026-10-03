@@ -4,6 +4,7 @@ import {
   isolatedConfig,
   localEnvironment,
   requireExecutedTests,
+  requirePredecessorTests,
 } from "../../scripts/portfolio-settings-integration.mjs";
 
 test("the settings runner isolates both Supabase projects to distinct loopback port ranges", () => {
@@ -55,5 +56,25 @@ test("the settings runner rejects missing, partial, failed, or skipped database 
     { ...passed, testResults: [{ status: "failed" }] },
   ]) {
     assert.throws(() => requireExecutedTests(report), /PORTFOLIO_SETTINGS_TEST_FAILED/);
+  }
+});
+
+test("Phase 3 predecessor evidence requires every historical suite to pass without skips", () => {
+  const files = ["transaction.test.ts", "rls.test.ts"];
+  const passed = {
+    success: true,
+    numPassedTests: 8,
+    numFailedTests: 0,
+    numPendingTests: 0,
+    numTodoTests: 0,
+    testResults: [{ status: "passed" }, { status: "passed" }],
+  };
+  assert.equal(requirePredecessorTests(passed, files), 8);
+  for (const report of [
+    { ...passed, numPendingTests: 1 },
+    { ...passed, testResults: [{ status: "passed" }] },
+    { ...passed, testResults: [{ status: "passed" }, { status: "failed" }] },
+  ]) {
+    assert.throws(() => requirePredecessorTests(report, files), /PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED/);
   }
 });

@@ -93,6 +93,16 @@ export function requireExecutedTests(report) {
   ) throw new Error("PORTFOLIO_SETTINGS_TEST_FAILED: no missing or skipped database evidence is accepted.");
 }
 
+export function requirePredecessorTests(report, expectedFiles) {
+  if (
+    report.success !== true || report.numPassedTests < 1 || report.numFailedTests !== 0 ||
+    report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
+    report.testResults?.length !== expectedFiles.length ||
+    report.testResults.some((suite) => suite.status !== "passed")
+  ) throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED");
+  return report.numPassedTests;
+}
+
 function migrationSources() {
   const directory = join(ROOT, "supabase/migrations");
   const sqlFiles = readdirSync(directory).filter((name) => name.endsWith(".sql")).sort();
@@ -280,18 +290,30 @@ export async function main() {
       "tests/database/leased-jobs.test.ts",
       "tests/database/role-rls-matrix.test.ts",
     ];
-    const predecessorOutput = run(process.execPath, [
-      join(ROOT, "scripts/phase3-database-tests.mjs"),
+    const predecessorReportPath = join(upgradeProject.workdir, "phase3-test-report.json");
+    const predecessorResult = spawnSync(process.execPath, [
+      join(ROOT, "node_modules/vitest/vitest.mjs"),
+      "run",
       ...predecessorTestFiles,
+      "--reporter=json",
+      `--outputFile=${predecessorReportPath}`,
     ], {
+      cwd: ROOT,
       env: { ...env, PHASE3_DATABASE_URL: upgradeUrl, PHASE3_REQUIRE_DATABASE: "1" },
+      encoding: "utf8",
       timeout: 180_000,
-      errorCode: "PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED",
+      stdio: ["ignore", "pipe", "pipe"],
     });
-    const predecessorTestCount = Number(predecessorOutput.match(/Tests\s+(\d+) passed/)?.[1] ?? 0);
-    if (predecessorTestCount < 1 || /\b[1-9]\d*\s+skipped\b/i.test(predecessorOutput)) {
-      throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_EVIDENCE_INVALID");
+    let predecessorReport;
+    try {
+      predecessorReport = JSON.parse(readFileSync(predecessorReportPath, "utf8"));
+    } catch {
+      throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_REPORT_MISSING");
     }
+    if (predecessorResult.error || predecessorResult.status !== 0) {
+      throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED");
+    }
+    const predecessorTestCount = requirePredecessorTests(predecessorReport, predecessorTestFiles);
     console.log(`Phase 3 historical database invariants: ${predecessorTestCount} passed, 0 skipped before Phase 4 migrations.`);
     const phase3Rows = await seedAndCapturePhase3Operations(upgradeUrl);
     console.log("Captured the Phase 3 operations contract and seeded rows through restricted capability roles.");
