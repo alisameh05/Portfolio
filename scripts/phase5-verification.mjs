@@ -78,6 +78,22 @@ export function verifyRequiredDependency(result) {
   };
 }
 
+export function verifyRestrictedPrincipalMatrix(roles) {
+  if (!Array.isArray(roles)) return false;
+  const byPrincipal = new Map(roles.map((role) => [role?.principal, role]));
+  const isDenied = (value) => typeof value === "string" && /^deny(?: by grants and forced RLS)?$/i.test(value);
+  const checks = [
+    { principal: "anon Visitor login", requireNoBypass: true },
+    { principal: "shipwithali_worker login", requireNoBypass: true },
+    { principal: "PUBLIC", requireNoBypass: false },
+  ];
+  return checks.every(({ principal, requireNoBypass }) => {
+    const role = byPrincipal.get(principal);
+    return role !== undefined && isDenied(role.settings) && isDenied(role.ownerIdentityMap) &&
+      (!requireNoBypass || role.bypassRls === false);
+  });
+}
+
 export function localVerificationEnvironment(source = process.env) {
   const env = { ...source, CI: "1" };
   for (const key of Object.keys(env)) {
@@ -229,8 +245,7 @@ function runSmoke({ suite = "smoke", reproduction = ["npm run phase5:smoke"] } =
     const passedTests = databaseReport?.databaseIntegrationTestsPassed ?? 0;
     const skipped = databaseReport?.skippedCases ?? 0;
     const roles = Array.isArray(databaseReport?.restrictedPrincipalMatrix) ? databaseReport.restrictedPrincipalMatrix : [];
-    const expectedPrincipals = ["anon Visitor login", "shipwithali_worker login", "PUBLIC"];
-    const restrictedRolesVerified = expectedPrincipals.every((principal) => roles.some((role) => role.principal === principal));
+    const restrictedRolesVerified = verifyRestrictedPrincipalMatrix(roles);
     const evidenceComplete = databaseReport?.isolatedLoopbackProjects === true && databaseReport?.credentialsRecorded === false &&
       databaseReport?.secretValuesRecorded === false && passedTests > 0 && skipped === 0 && restrictedRolesVerified;
     result = {

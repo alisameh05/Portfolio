@@ -25,6 +25,7 @@ type VerificationModule = {
   };
   sanitizeVerificationText: (value: string, source?: NodeJS.ProcessEnv) => string;
   verifyRequiredDependency: (result: { available: boolean; code: string }) => { passed: boolean; code: string };
+  verifyRestrictedPrincipalMatrix: (roles: unknown[]) => boolean;
 };
 
 describe("Phase 5 verification preparation (#107)", () => {
@@ -110,6 +111,15 @@ describe("Phase 5 verification preparation (#107)", () => {
     expect(harness.verifyRequiredDependency({ available: false, code: "DOCKER_UNAVAILABLE" })).toMatchObject({
       passed: false, code: "DOCKER_UNAVAILABLE",
     });
+    const restrictedMatrix = [
+      { principal: "anon Visitor login", settings: "deny", ownerIdentityMap: "deny", bypassRls: false },
+      { principal: "shipwithali_worker login", settings: "deny", ownerIdentityMap: "deny", bypassRls: false },
+      { principal: "PUBLIC", settings: "deny by grants and forced RLS", ownerIdentityMap: "deny by grants and forced RLS" },
+    ];
+    expect(harness.verifyRestrictedPrincipalMatrix(restrictedMatrix)).toBe(true);
+    expect(harness.verifyRestrictedPrincipalMatrix([
+      ...restrictedMatrix.slice(0, 2), { ...restrictedMatrix[2], settings: "allow" },
+    ])).toBe(false);
     const report = harness.makeVerificationReport({
       runId: "run-1",
       sourceRevision: "a".repeat(40),
