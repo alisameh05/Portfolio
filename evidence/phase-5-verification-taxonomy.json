@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "runId": "c69a1799-bcc6-47db-9725-f97087624e5f",
+  "sourceRevision": "b9b3cb34272045b3c63f954cbd921a081d1bb228",
+  "suite": "taxonomy",
+  "startedAt": "2026-10-04T21:44:58.724Z",
+  "verdict": "pass",
+  "scenarioAcceptance": false,
+  "suiteAvailable": false,
+  "counts": {
+    "executed": 0,
+    "failed": 0,
+    "skipped": 0,
+    "total": 0
+  },
+  "partial": false,
+  "dependency": {
+    "required": false,
+    "available": true,
+    "code": "NOT_REQUIRED"
+  },
+  "cleanup": {
+    "attempted": false,
+    "passed": true
+  },
+  "reproduction": [
+    "npm run phase5:focus:taxonomy-status-relationships-discovery"
+  ],
+  "details": {
+    "message": "no Phase 5 business scenarios are implemented in this suite yet"
+  }
+}

@@ -69,7 +69,19 @@
     "prephase4:focus:settings": "npm run validation:ready",
     "phase4:focus:settings": "node scripts/portfolio-settings-integration.mjs",
     "phase4:focus:local-auth": "node scripts/local-auth-integration.mjs",
-    "test:local-auth-runner": "node --test tests/tooling/local-auth-integration.test.mjs"
+    "test:local-auth-runner": "node --test tests/tooling/local-auth-integration.test.mjs",
+    "prephase5:context": "npm run validation:ready",
+    "phase5:context": "node scripts/check-phase5-context.mjs",
+    "prephase5:smoke": "npm run validation:ready",
+    "phase5:smoke": "node scripts/phase5-verification.mjs --smoke",
+    "prephase5:focus:authoring-review-publication-routes": "npm run validation:ready",
+    "phase5:focus:authoring-review-publication-routes": "node scripts/phase5-verification.mjs --suite authoring",
+    "prephase5:focus:taxonomy-status-relationships-discovery": "npm run validation:ready",
+    "phase5:focus:taxonomy-status-relationships-discovery": "node scripts/phase5-verification.mjs --suite taxonomy",
+    "prephase5:focus:database-rls-migrations-concurrency": "npm run validation:ready",
+    "phase5:focus:database-rls-migrations-concurrency": "node scripts/phase5-verification.mjs --suite database",
+    "prephase5:focus:owner-adapters-composition": "npm run validation:ready",
+    "phase5:focus:owner-adapters-composition": "node scripts/phase5-verification.mjs --suite owner"
   },
   "dependencies": {
     "kysely": "0.29.6",

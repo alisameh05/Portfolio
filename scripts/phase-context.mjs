@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * phase-context.mjs — Phase 4 prefactor (#78) shared phase definitions.
+ * phase-context.mjs — shared phase definitions, extended by Phase 4 #78 and Phase 5 #107.
  *
  * Historical Phase 2 fake-only and Phase 3 infrastructure-only restrictions
- * remain enforceable against their original fixtures and baselines. Current
- * Phase 4 checks explicitly permit only Spec #77 (Identity and Access plus
- * Portfolio Configuration) activation — no later-phase business behavior,
- * product routes, frontend presentation, or Lab surfaces.
+ * remain enforceable against their original fixtures and baselines. The
+ * current activation policy is phase-specific: Phase 4 permits Identity and
+ * Access plus Portfolio Configuration; Phase 5 permits Content and Publishing
+ * plus Taxonomy and Discovery.
  *
  * No database, network, credentials, or running application required.
  * Pure definition module; deterministic and side-effect free on import.
@@ -16,6 +16,7 @@ export const PHASES = Object.freeze({
   PHASE2: "phase2",
   PHASE3: "phase3",
   PHASE4: "phase4",
+  PHASE5: "phase5",
 });
 
 export const HISTORICAL_RESTRICTIONS = Object.freeze({
@@ -28,6 +29,10 @@ export const PHASE3_ALLOWED = Object.freeze(["operations-infra", "fail-closed-bu
 export const PHASE4_ALLOWED_ACTIVATION = Object.freeze([
   "identity-access",
   "portfolio-configuration",
+]);
+export const PHASE5_ALLOWED_ACTIVATION = Object.freeze([
+  "content-and-publishing",
+  "taxonomy-and-discovery",
 ]);
 
 export const EXPECTED_PUBLIC_OPERATIONS = 5;
@@ -99,6 +104,8 @@ export function allowedActivationsFor(phase) {
       return [...PHASE3_ALLOWED];
     case PHASES.PHASE4:
       return [...PHASE4_ALLOWED_ACTIVATION];
+    case PHASES.PHASE5:
+      return [...PHASE5_ALLOWED_ACTIVATION];
     default:
       throw new Error(`UNKNOWN_PHASE_${String(phase)}`);
   }
@@ -107,7 +114,7 @@ export function allowedActivationsFor(phase) {
 export function getPhaseContext(env = process.env) {
   const raw = env["SHIPWITHALI_PHASE"];
   if (raw === undefined || raw === "") return PHASES.PHASE4;
-  if (raw === PHASES.PHASE2 || raw === PHASES.PHASE3 || raw === PHASES.PHASE4) return raw;
+  if (raw === PHASES.PHASE2 || raw === PHASES.PHASE3 || raw === PHASES.PHASE4 || raw === PHASES.PHASE5) return raw;
   throw new Error(`INVALID_PHASE_${String(raw)}`);
 }
 
