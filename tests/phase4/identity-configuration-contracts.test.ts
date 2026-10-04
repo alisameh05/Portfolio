@@ -119,7 +119,7 @@ describe("Phase 4 #79: Identity and Configuration contract reconciliation", () =
     }
   });
 
-  it("remains fail closed with no new HTTP operation", async () => {
+  it("keeps the new Owner contracts fail-closed without activating runtime routes", async () => {
     const { execFileSync } = await import("node:child_process");
     execFileSync(process.execPath, ["scripts/check-route-inventory.mjs"], { cwd: ROOT, stdio: "pipe" });
     const report = JSON.parse(readFileSync(join(ROOT, "evidence", "phase-1-route-inventory.json"), "utf8")) as {
@@ -127,6 +127,6 @@ describe("Phase 4 #79: Identity and Configuration contract reconciliation", () =
       ownerOperations: string[];
     };
     expect(report.publicOperations).toHaveLength(5);
-    expect(report.ownerOperations).toHaveLength(39);
+    expect(report.ownerOperations).toHaveLength(48);
   });
 });

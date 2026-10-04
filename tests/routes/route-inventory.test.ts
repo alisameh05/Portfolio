@@ -87,14 +87,17 @@ describe("Phase 1 route and source inventory (#11)", () => {
     ]);
   });
 
-  it("reconciles the full Owner operation surface with no generic patch or Lab entry", () => {
+  it("reconciles the full Owner contract surface with no generic patch or Lab entry", () => {
     const bundle = loadBundle("openapi/generated/owner-v1.json");
     const actual = listOperations(bundle);
-    // 39 command-oriented operations + narrow queries; no generic PATCH, no Lab.
-    expect(actual).toHaveLength(39);
+    // 39 active operations plus 9 Phase 5 contracts that remain fail-closed.
+    expect(actual).toHaveLength(48);
     expect(actual).toContain("PUT /api/owner/v1/configuration/profile");
     expect(actual).toContain("POST /api/owner/v1/exports");
     expect(actual).toContain("GET /api/owner/v1/exports/{exportId}/download");
+    expect(actual).toContain("POST /api/owner/v1/content");
+    expect(actual).toContain("GET /api/owner/v1/content/{contentId}/history");
+    expect(actual).toContain("POST /api/owner/v1/project-status-values/{valueId}/commands/retire");
     expect(JSON.stringify(bundle.paths)).not.toMatch(/\blab\b/i);
     expect(actual.some((op) => op.startsWith("PATCH "))).toBe(false);
   });

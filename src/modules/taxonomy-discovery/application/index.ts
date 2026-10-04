@@ -1,9 +1,16 @@
 export type {
-  AssignTaxonomyValueCommand,
   RenameTaxonomyValueCommand,
   RetireTaxonomyValueCommand,
   MergeTaxonomyValueCommand,
   ValidateAssignmentsQuery,
   GetPublicDiscoveryQuery,
+  ProjectStatusHistoryQuery,
+  ProjectStatusHistoryPage,
+  ValidateProjectAssignmentQuery,
+  ProjectAssignmentEligibilityPort,
+  TaxonomyMergeCoordinator,
+  CreateProjectStatusValueCommand,
+  RenameProjectStatusValueCommand,
+  RetireProjectStatusValueCommand,
   TaxonomyDiscoveryService,
 } from "./service.js";

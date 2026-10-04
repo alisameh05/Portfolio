@@ -1,3 +1,60 @@
+create:
+  post:
+    operationId: createOwnerContent
+    summary: Create Draft content with its initial Revision
+    description: >-
+      Creates exactly one Project, Achievement, or Testimonial in Draft. The
+      initial Revision is incomplete and private; creation grants no public
+      route or publication entitlement.
+    tags: [Publication]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/content.yaml#/schemas/CreateContentRequest }
+          examples:
+            project:
+              value:
+                contentType: project
+                locale: en
+                title: Atlas Search
+                summary: A bounded search workflow.
+                body: Draft overview.
+                candidateSlug: atlas-search
+            achievement:
+              value:
+                contentType: achievement
+                locale: en
+                title: Research award
+                summary: Recognition for applied research.
+                body: Draft achievement.
+                achievedOn: '2025-04-12'
+            testimonial:
+              value:
+                contentType: testimonial
+                locale: ar
+                title: Testimonial
+                summary: Stored quote.
+                body: Draft testimonial.
+                authorName: Reviewer
+                quote: A concise stored quote.
+    responses:
+      '201':
+        description: Draft identity and safe creation receipt.
+        content:
+          application/json:
+            schema: { $ref: ../components/content.yaml#/schemas/CreateContentReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
 content:
   parameters:
     - { $ref: ../components/common.yaml#/parameters/ContentId }
@@ -56,6 +113,109 @@ revisions:
       '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
       '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
       '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+previewRevision:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ContentId }
+    - { $ref: ../components/common.yaml#/parameters/RevisionId }
+  get:
+    operationId: previewOwnerContentRevision
+    summary: Read a private immutable Revision preview
+    description: >-
+      Returns one Owner-authorized snapshot. The response is non-cacheable and
+      non-indexable and cannot establish a public route.
+    tags: [Publication]
+    responses:
+      '200':
+        description: Private Revision preview.
+        headers:
+          Cache-Control:
+            required: true
+            schema: { type: string, const: no-store }
+          X-Robots-Tag:
+            required: true
+            schema: { type: string, const: 'noindex, nofollow' }
+        content:
+          application/json:
+            schema: { $ref: ../components/content.yaml#/schemas/PrivateRevisionPreview }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+reviewRevision:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ContentId }
+    - { $ref: ../components/common.yaml#/parameters/RevisionId }
+  post:
+    operationId: reviewOwnerContentRevision
+    summary: Record an explicit review of an immutable Revision
+    description: Review history is append-only and bound to this exact locale, Revision, and evidence snapshot.
+    tags: [Publication]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/content.yaml#/schemas/ReviewRevisionCommand }
+          examples:
+            accepted:
+              value: { decision: accepted, findings: [] }
+    responses:
+      '200':
+        description: Safe review receipt.
+        content:
+          application/json:
+            schema: { $ref: ../components/content.yaml#/schemas/ReviewRevisionReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+history:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ContentId }
+  get:
+    operationId: getOwnerContentHistory
+    summary: Read bounded private content history
+    tags: [Publication]
+    parameters:
+      - name: locale
+        in: query
+        required: false
+        schema: { $ref: ../components/common.yaml#/schemas/Locale }
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      - name: cursor
+        in: query
+        required: false
+        schema: { type: string, minLength: 1, maxLength: 512 }
+    responses:
+      '200':
+        description: One bounded page of Owner-only history.
+        content:
+          application/json:
+            schema: { $ref: ../components/content.yaml#/schemas/ContentHistoryPage }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
       '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
       '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
       '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }

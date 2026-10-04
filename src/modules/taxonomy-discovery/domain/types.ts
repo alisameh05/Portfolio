@@ -23,11 +23,40 @@ export interface TaxonomyAssignment {
 
 export interface ProjectDiscoveryCard {
   readonly projectId: StableId<"Project">;
+  readonly locale: "en" | "ar";
   readonly title: string;
   readonly slug: string;
-  readonly publishedAt: string;
-  readonly taxonomyValues: readonly TaxonomyValue[];
+  readonly firstPublishedAt: string;
+  readonly taxonomyValues: readonly Pick<TaxonomyValue, "id" | "taxonomyId" | "slug" | "label">[];
   readonly isFeatured: boolean;
+}
+
+export interface PublicDiscoveryCriteria {
+  readonly locale: "en" | "ar";
+  readonly taxonomyValueIds?: readonly StableId<"TaxonomyValue">[];
+  /** Clamp to 1..100 before querying; default to 25. */
+  readonly limit: number;
+  readonly cursor?: string;
+}
+
+export interface ProjectStatusValueView {
+  readonly valueId: StableId<"ProjectStatusValue">;
+  readonly label: string;
+  readonly state: "active" | "retired";
+}
+
+export interface ProjectStatusValueReceipt extends ProjectStatusValueView {
+  readonly aggregateVersion: number;
+  readonly outcome:
+    | "project-status-value-created"
+    | "project-status-value-renamed"
+    | "project-status-value-retired";
+}
+
+export interface ProjectStatusHistoryEntry {
+  readonly previousValueId: StableId<"ProjectStatusValue"> | null;
+  readonly currentValueId: StableId<"ProjectStatusValue">;
+  readonly changedAt: string;
 }
 
 // Domain events

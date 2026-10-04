@@ -2,17 +2,16 @@ import type { StableId, DomainEvent } from "@shared/domain";
 
 export type PublicLifecycle = "draft" | "published" | "hidden" | "archived";
 
-/**
- * ProjectStatus represents the maturity or work-state of a Project.
- * Note: 'archived' is forbidden as a ProjectStatus because lifecycle is separate.
- */
-export type ProjectStatus =
-  | "shipped"
-  | "active"
-  | "in_progress"
-  | "experimental"
-  | "research"
-  | "open_source";
+/** Stable identity for an Owner-managed maturity value, independent of lifecycle. */
+export type ProjectStatus = StableId<"ProjectStatusValue">;
+
+export type ContentKind = "project" | "achievement" | "testimonial";
+
+export interface ProjectStatusValue {
+  readonly valueId: ProjectStatus;
+  readonly label: string;
+  readonly state: "active" | "retired";
+}
 
 export type SupportedLocale = "en" | "ar";
 
@@ -44,7 +43,103 @@ export interface LocalizedRevision {
   readonly summary: string;
   readonly caseStudyBody: string;
   readonly evidencePackage: EvidencePackage;
-  readonly version: number;
+  readonly aggregateVersion: number;
+  readonly sequence: number;
+  readonly evidenceSnapshotVersion: number;
+  readonly savedAt: string;
+}
+
+export interface LanguagePublication {
+  readonly locale: SupportedLocale;
+  readonly currentRevisionId: StableId<"Revision">;
+  readonly exactReviewId: StableId<"ContentReview">;
+  readonly aggregateVersion: number;
+  readonly publishedAt: string;
+}
+
+export interface ReviewRecord {
+  readonly reviewId: StableId<"ContentReview">;
+  readonly contentId: StableId<string>;
+  readonly revisionId: StableId<"Revision">;
+  readonly locale: SupportedLocale;
+  readonly decision: "accepted" | "rejected";
+  readonly findings: readonly string[];
+  readonly reviewerId: StableId<"Owner">;
+  readonly reviewedAt: string;
+  readonly evidenceVersion: number;
+}
+
+export interface DraftContentPayload {
+  readonly locale: SupportedLocale;
+  readonly title: string;
+  readonly summary: string;
+  readonly body: string;
+}
+
+export interface ProjectDraftPayload extends DraftContentPayload {
+  readonly contentType: "project";
+  readonly candidateSlug: string;
+  readonly caseStudy?: {
+    readonly problem?: string;
+    readonly ownerRole?: string;
+    readonly contributions?: readonly string[];
+    readonly outcomes?: readonly string[];
+    readonly lessons?: string;
+  };
+}
+
+export interface AchievementDraftPayload extends DraftContentPayload {
+  readonly contentType: "achievement";
+  readonly achievedOn?: string;
+  readonly evidence?: EvidencePackage;
+}
+
+export interface TestimonialDraftPayload extends DraftContentPayload {
+  readonly contentType: "testimonial";
+  readonly authorName?: string;
+  readonly quote?: string;
+  readonly relatedProjectId?: StableId<"Project">;
+}
+
+export type CreateDraftPayload =
+  | ProjectDraftPayload
+  | AchievementDraftPayload
+  | TestimonialDraftPayload;
+
+export interface PublicLocalizedContentDto {
+  readonly contentId: StableId<string>;
+  readonly contentType: ContentKind;
+  readonly locale: SupportedLocale;
+  readonly revisionId: StableId<"Revision">;
+  readonly title: string;
+  readonly summary: string;
+  readonly body: string;
+  readonly firstPublishedAt: string;
+}
+
+export interface PrivateRevisionPreview {
+  readonly contentId: StableId<string>;
+  readonly revisionId: StableId<"Revision">;
+  readonly locale: SupportedLocale;
+  readonly sequence: number;
+  readonly title: string;
+  readonly summary: string;
+  readonly body: string;
+  readonly review: Pick<ReviewRecord, "decision" | "findings" | "reviewedAt"> | null;
+}
+
+export interface ContentHistoryEntry {
+  readonly revisionId: StableId<"Revision">;
+  readonly locale: SupportedLocale;
+  readonly sequence: number;
+  readonly savedAt: string;
+  readonly note?: string;
+  readonly reviewDecision?: ReviewRecord["decision"];
+}
+
+export interface ContentHistoryPage {
+  readonly entries: readonly ContentHistoryEntry[];
+  readonly nextCursor: string | null;
 }
 
 export interface ExternalLink {
@@ -55,9 +150,10 @@ export interface ExternalLink {
 }
 
 export interface PublicRoute {
-  readonly routeIdentity: StableId<"PublicRoute">;
-  readonly currentSlug: string;
+  readonly routeIdentity: StableId<"PublicRoute"> | null;
+  readonly currentSlug: string | null;
   readonly redirects: readonly string[];
+  readonly firstPublishedAt: string | null;
 }
 
 export interface Project {
@@ -65,8 +161,10 @@ export interface Project {
   readonly lifecycle: PublicLifecycle;
   readonly status: ProjectStatus;
   readonly isFeatured: boolean;
-  readonly routeIdentity: StableId<"PublicRoute">;
-  readonly currentSlug: string;
+  readonly candidateSlug: string;
+  readonly publicRoute: PublicRoute;
+  readonly firstPublishedAt: string | null;
+  readonly publications: readonly LanguagePublication[];
   readonly revisions: readonly LocalizedRevision[];
   readonly relatedProjectIds: readonly StableId<"Project">[];
   readonly externalLinks: readonly ExternalLink[];
@@ -155,4 +253,25 @@ export type PublicRouteChangedEvent = DomainEvent<
     readonly previousSlug: string;
     readonly newSlug: string;
   }
+>;
+
+export type ContentCreatedEvent = DomainEvent<
+  "content.created.v1",
+  { readonly contentId: StableId<string>; readonly contentType: ContentKind }
+>;
+
+export type RevisionReviewedEvent = DomainEvent<
+  "content.revision_reviewed.v1",
+  {
+    readonly contentId: StableId<string>;
+    readonly revisionId: StableId<"Revision">;
+    readonly reviewId: StableId<"ContentReview">;
+    readonly locale: SupportedLocale;
+    readonly decision: ReviewRecord["decision"];
+  }
+>;
+
+export type ProjectsRelatedEvent = DomainEvent<
+  "content.projects_related.v1",
+  { readonly projectId: StableId<"Project">; readonly relatedProjectId: StableId<"Project"> }
 >;

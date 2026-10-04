@@ -19,6 +19,8 @@ export const zCommandReceipt = z.strictObject({
     outcome: z.enum([
         'configuration-updated',
         'revision-saved',
+        'content-created',
+        'revision-reviewed',
         'language-published',
         'content-hidden',
         'content-archived',
@@ -26,12 +28,16 @@ export const zCommandReceipt = z.strictObject({
         'project-status-changed',
         'project-featured-changed',
         'public-slug-changed',
+        'candidate-slug-corrected',
         'project-related',
         'taxonomy-value-created',
         'taxonomy-value-renamed',
         'taxonomy-value-retired',
         'taxonomy-value-merged',
         'taxonomy-value-assigned',
+        'project-status-value-created',
+        'project-status-value-renamed',
+        'project-status-value-retired',
         'media-processing-recorded',
         'media-accepted',
         'media-rejected',
@@ -131,6 +137,64 @@ export const zContentAggregateView = z.strictObject({
     revisions: z.array(zRevisionHistoryEntry)
 });
 
+export const zCreateProjectRequest = z.strictObject({
+    contentType: z.literal('project'),
+    locale: zLocale,
+    title: z.string().min(1).max(160),
+    summary: z.string().min(1).max(500),
+    body: z.string().min(1).max(50000),
+    candidateSlug: z.string().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    caseStudy: z.strictObject({
+        problem: z.string().max(5000).optional(),
+        ownerRole: z.string().max(2000).optional(),
+        contributions: z.array(z.string().max(2000)).max(50).optional(),
+        outcomes: z.array(z.string().max(2000)).max(50).optional(),
+        lessons: z.string().max(5000).optional()
+    }).optional()
+});
+
+export const zEvidencePackageDraft = z.strictObject({
+    claims: z.array(z.strictObject({
+        claimId: zStableId,
+        text: z.string().max(2000),
+        artifactIds: z.array(zStableId).max(100)
+    })).max(100).optional()
+});
+
+export const zCreateAchievementRequest = z.strictObject({
+    contentType: z.literal('achievement'),
+    locale: zLocale,
+    title: z.string().min(1).max(160),
+    summary: z.string().min(1).max(500),
+    body: z.string().min(1).max(50000),
+    achievedOn: z.string().date().optional(),
+    evidence: zEvidencePackageDraft.optional()
+});
+
+export const zCreateTestimonialRequest = z.strictObject({
+    contentType: z.literal('testimonial'),
+    locale: zLocale,
+    title: z.string().min(1).max(160),
+    summary: z.string().min(1).max(500),
+    body: z.string().min(1).max(50000),
+    authorName: z.string().max(200).optional(),
+    quote: z.string().max(10000).optional(),
+    relatedProjectId: zStableId.optional()
+});
+
+export const zCreateContentRequest = z.discriminatedUnion('contentType', [
+    zCreateProjectRequest,
+    zCreateAchievementRequest,
+    zCreateTestimonialRequest
+]);
+
+export const zCreateContentReceipt = z.strictObject({
+    contentId: zStableId,
+    aggregateVersion: z.number().int().gte(1),
+    revisionId: zStableId,
+    outcome: z.literal('content-created')
+});
+
 export const zSaveRevisionRequest = z.strictObject({
     locale: zLocale,
     title: z.string().min(1).max(160),
@@ -143,6 +207,50 @@ export const zSaveRevisionReceipt = z.strictObject({
     aggregateVersion: z.number().int().gte(1),
     outcome: z.literal('revision-saved'),
     revisionId: zStableId
+});
+
+export const zRevisionReviewView = z.strictObject({
+    decision: z.enum(['accepted', 'rejected']),
+    findings: z.array(z.string().max(1000)).max(100),
+    reviewedAt: z.string().datetime()
+});
+
+export const zPrivateRevisionPreview = z.strictObject({
+    contentId: zStableId,
+    revisionId: zStableId,
+    locale: zLocale,
+    sequence: z.number().int().gte(1),
+    title: z.string().min(1).max(160),
+    summary: z.string().min(1).max(500),
+    body: z.string().min(1).max(50000),
+    review: zRevisionReviewView.nullable()
+});
+
+export const zReviewRevisionCommand = z.strictObject({
+    decision: z.enum(['accepted', 'rejected']),
+    findings: z.array(z.string().min(1).max(1000)).max(100)
+});
+
+export const zReviewRevisionReceipt = z.strictObject({
+    aggregateId: zStableId,
+    aggregateVersion: z.number().int().gte(1),
+    outcome: z.literal('revision-reviewed'),
+    revisionId: zStableId,
+    reviewId: zStableId
+});
+
+export const zContentHistoryEntry = z.strictObject({
+    revisionId: zStableId,
+    locale: zLocale,
+    sequence: z.number().int().gte(1),
+    savedAt: z.string().datetime(),
+    note: z.string().max(500).optional(),
+    reviewDecision: z.enum(['accepted', 'rejected']).optional()
+});
+
+export const zContentHistoryPage = z.strictObject({
+    entries: z.array(zContentHistoryEntry).max(100),
+    nextCursor: z.string().min(1).max(512).nullable()
 });
 
 export const zPublishLanguageCommand = z.strictObject({
@@ -196,6 +304,10 @@ export const zSetFeaturedCommand = z.strictObject({
 
 export const zChangeSlugCommand = z.strictObject({
     slug: z.string().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+});
+
+export const zCorrectCandidateSlugCommand = z.strictObject({
+    candidateSlug: z.string().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
 });
 
 export const zRelateProjectCommand = z.strictObject({
@@ -257,6 +369,40 @@ export const zMergeTaxonomyValueCommand = z.strictObject({
 
 export const zAssignTaxonomyValueCommand = z.strictObject({
     valueId: zStableId
+});
+
+export const zProjectStatusValueView = z.strictObject({
+    valueId: zStableId,
+    label: z.string().min(1).max(100),
+    state: z.enum(['active', 'retired'])
+});
+
+export const zProjectStatusValueList = z.strictObject({
+    values: z.array(zProjectStatusValueView).max(100)
+});
+
+export const zCreateProjectStatusValueRequest = z.strictObject({
+    label: z.string().min(1).max(100)
+});
+
+export const zProjectStatusValueReceipt = z.strictObject({
+    valueId: zStableId,
+    label: z.string().min(1).max(100),
+    state: z.enum(['active', 'retired']),
+    aggregateVersion: z.number().int().gte(1),
+    outcome: z.enum([
+        'project-status-value-created',
+        'project-status-value-renamed',
+        'project-status-value-retired'
+    ])
+});
+
+export const zRenameProjectStatusValueCommand = z.strictObject({
+    label: z.string().min(1).max(100)
+});
+
+export const zRetireProjectStatusValueCommand = z.strictObject({
+    reason: z.string().min(1).max(500).optional()
 });
 
 export const zMediaKind = z.enum([
@@ -778,6 +924,8 @@ export const zIfMatch = z.string().regex(/^"[1-9][0-9]*"$/);
 
 export const zContentId = zStableId;
 
+export const zRevisionId = zStableId;
+
 export const zProjectId = zStableId;
 
 export const zTaxonomyId = zStableId;
@@ -839,6 +987,17 @@ export const zGetOwnerContentAggregatePath = z.strictObject({
  */
 export const zGetOwnerContentAggregateResponse = zContentAggregateView;
 
+export const zCreateOwnerContentBody = zCreateContentRequest;
+
+export const zCreateOwnerContentHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/)
+});
+
+/**
+ * Draft identity and safe creation receipt.
+ */
+export const zCreateOwnerContentResponse = zCreateContentReceipt;
+
 export const zSaveOwnerContentRevisionBody = zSaveRevisionRequest;
 
 export const zSaveOwnerContentRevisionHeaders = z.strictObject({
@@ -854,6 +1013,48 @@ export const zSaveOwnerContentRevisionPath = z.strictObject({
  * Immutable Revision saved; publication state is unchanged.
  */
 export const zSaveOwnerContentRevisionResponse = zSaveRevisionReceipt;
+
+export const zPreviewOwnerContentRevisionPath = z.strictObject({
+    contentId: zStableId,
+    revisionId: zStableId
+});
+
+/**
+ * Private Revision preview.
+ */
+export const zPreviewOwnerContentRevisionResponse = zPrivateRevisionPreview;
+
+export const zReviewOwnerContentRevisionBody = zReviewRevisionCommand;
+
+export const zReviewOwnerContentRevisionHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zReviewOwnerContentRevisionPath = z.strictObject({
+    contentId: zStableId,
+    revisionId: zStableId
+});
+
+/**
+ * Safe review receipt.
+ */
+export const zReviewOwnerContentRevisionResponse = zReviewRevisionReceipt;
+
+export const zGetOwnerContentHistoryPath = z.strictObject({
+    contentId: zStableId
+});
+
+export const zGetOwnerContentHistoryQuery = z.strictObject({
+    locale: zLocale.optional(),
+    limit: z.number().int().gte(1).lte(100).optional().default(25),
+    cursor: z.string().min(1).max(512).optional()
+});
+
+/**
+ * One bounded page of Owner-only history.
+ */
+export const zGetOwnerContentHistoryResponse = zContentHistoryPage;
 
 export const zPublishOwnerContentLanguageBody = zPublishLanguageCommand;
 
@@ -976,6 +1177,22 @@ export const zChangeOwnerProjectPublicSlugPath = z.strictObject({
  */
 export const zChangeOwnerProjectPublicSlugResponse = zCommandReceipt;
 
+export const zCorrectOwnerProjectCandidateSlugBody = zCorrectCandidateSlugCommand;
+
+export const zCorrectOwnerProjectCandidateSlugHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zCorrectOwnerProjectCandidateSlugPath = z.strictObject({
+    projectId: zStableId
+});
+
+/**
+ * Safe candidate slug correction receipt.
+ */
+export const zCorrectOwnerProjectCandidateSlugResponse = zCommandReceipt;
+
 export const zRelateOwnerProjectsBody = zRelateProjectCommand;
 
 export const zRelateOwnerProjectsHeaders = z.strictObject({
@@ -1080,6 +1297,54 @@ export const zAssignOwnerProjectTaxonomyValuePath = z.strictObject({
  * Taxonomy value assigned to the Project.
  */
 export const zAssignOwnerProjectTaxonomyValueResponse = zCommandReceipt;
+
+/**
+ * Active and retired Project status identities.
+ */
+export const zListOwnerProjectStatusValuesResponse = zProjectStatusValueList;
+
+export const zCreateOwnerProjectStatusValueBody = zCreateProjectStatusValueRequest;
+
+export const zCreateOwnerProjectStatusValueHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/)
+});
+
+/**
+ * Status value created with stable identity.
+ */
+export const zCreateOwnerProjectStatusValueResponse = zProjectStatusValueReceipt;
+
+export const zRenameOwnerProjectStatusValueBody = zRenameProjectStatusValueCommand;
+
+export const zRenameOwnerProjectStatusValueHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zRenameOwnerProjectStatusValuePath = z.strictObject({
+    valueId: zStableId
+});
+
+/**
+ * Status label changed without changing status identity or lifecycle.
+ */
+export const zRenameOwnerProjectStatusValueResponse = zProjectStatusValueReceipt;
+
+export const zRetireOwnerProjectStatusValueBody = zRetireProjectStatusValueCommand;
+
+export const zRetireOwnerProjectStatusValueHeaders = z.strictObject({
+    'Idempotency-Key': z.string().min(1).max(128).regex(/^[\x21-\x7E]+$/),
+    'If-Match': z.string().regex(/^"[1-9][0-9]*"$/)
+});
+
+export const zRetireOwnerProjectStatusValuePath = z.strictObject({
+    valueId: zStableId
+});
+
+/**
+ * Status value retired with history retained.
+ */
+export const zRetireOwnerProjectStatusValueResponse = zProjectStatusValueReceipt;
 
 export const zGetOwnerMediaAggregatePath = z.strictObject({
     mediaId: zStableId

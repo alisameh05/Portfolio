@@ -10,6 +10,7 @@ type PhaseContextModule = {
   PHASE4_ALLOWED_ACTIVATION: string[];
   EXPECTED_PUBLIC_OPERATIONS: number;
   EXPECTED_OWNER_OPERATIONS: number;
+  EXPECTED_ACTIVE_OWNER_OPERATIONS: number;
   PHASE4_NEGATIVE_FIXTURES: Array<{ name: string; path: string; expectedRule: string }>;
   allowedActivationsFor: (phase: string) => string[];
   getPhaseContext: (env?: NodeJS.ProcessEnv) => string;
@@ -35,7 +36,8 @@ describe("Phase 4 completion gate (#90)", () => {
       expect.arrayContaining(["identity-access", "portfolio-configuration"]),
     );
     expect(mod.EXPECTED_PUBLIC_OPERATIONS).toBe(5);
-    expect(mod.EXPECTED_OWNER_OPERATIONS).toBe(39);
+    expect(mod.EXPECTED_OWNER_OPERATIONS).toBe(48);
+    expect(mod.EXPECTED_ACTIVE_OWNER_OPERATIONS).toBe(39);
     expect(mod.allowedActivationsFor("phase2")).toEqual(expect.arrayContaining(["fakes"]));
     expect(mod.allowedActivationsFor("phase4")).toEqual(
       expect.arrayContaining(["identity-access", "portfolio-configuration"]),
@@ -54,7 +56,7 @@ describe("Phase 4 completion gate (#90)", () => {
     expect(existsSync(join(ROOT, "scripts", "phase4-gate.mjs"))).toBe(true);
   });
 
-  it("keeps exactly five public and thirty-nine Owner operations", async () => {
+  it("keeps five public operations and fail-closed future Owner contracts", async () => {
     const { execFileSync } = await import("node:child_process");
     execFileSync(process.execPath, ["scripts/check-route-inventory.mjs"], {
       cwd: ROOT,
@@ -64,7 +66,7 @@ describe("Phase 4 completion gate (#90)", () => {
       readFileSync(join(ROOT, "evidence", "phase-1-route-inventory.json"), "utf8"),
     ) as { publicOperations: string[]; ownerOperations: string[]; forbiddenFindings: unknown[] };
     expect(report.publicOperations).toHaveLength(5);
-    expect(report.ownerOperations).toHaveLength(39);
+    expect(report.ownerOperations).toHaveLength(48);
     expect(report.forbiddenFindings).toEqual([]);
   });
 

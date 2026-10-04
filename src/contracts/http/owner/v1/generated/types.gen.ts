@@ -34,7 +34,7 @@ export type StableId = string;
 export type CommandReceipt = {
     aggregateId: StableId;
     aggregateVersion: number;
-    outcome: 'configuration-updated' | 'revision-saved' | 'language-published' | 'content-hidden' | 'content-archived' | 'content-restored' | 'project-status-changed' | 'project-featured-changed' | 'public-slug-changed' | 'project-related' | 'taxonomy-value-created' | 'taxonomy-value-renamed' | 'taxonomy-value-retired' | 'taxonomy-value-merged' | 'taxonomy-value-assigned' | 'media-processing-recorded' | 'media-accepted' | 'media-rejected' | 'cv-version-accepted' | 'current-cv-activated' | 'feedback-approved' | 'feedback-rejected' | 'feedback-suppressed' | 'analytics-goal-version-activated';
+    outcome: 'configuration-updated' | 'revision-saved' | 'content-created' | 'revision-reviewed' | 'language-published' | 'content-hidden' | 'content-archived' | 'content-restored' | 'project-status-changed' | 'project-featured-changed' | 'public-slug-changed' | 'candidate-slug-corrected' | 'project-related' | 'taxonomy-value-created' | 'taxonomy-value-renamed' | 'taxonomy-value-retired' | 'taxonomy-value-merged' | 'taxonomy-value-assigned' | 'project-status-value-created' | 'project-status-value-renamed' | 'project-status-value-retired' | 'media-processing-recorded' | 'media-accepted' | 'media-rejected' | 'cv-version-accepted' | 'current-cv-activated' | 'feedback-approved' | 'feedback-rejected' | 'feedback-suppressed' | 'analytics-goal-version-activated';
 };
 
 export type FieldError = {
@@ -100,6 +100,66 @@ export type ContentAggregateView = {
     revisions: Array<RevisionHistoryEntry>;
 };
 
+export type CreateProjectRequest = {
+    contentType: 'project';
+    locale: Locale;
+    title: string;
+    summary: string;
+    body: string;
+    candidateSlug: string;
+    caseStudy?: {
+        problem?: string;
+        ownerRole?: string;
+        contributions?: Array<string>;
+        outcomes?: Array<string>;
+        lessons?: string;
+    };
+};
+
+export type EvidencePackageDraft = {
+    claims?: Array<{
+        claimId: StableId;
+        text: string;
+        artifactIds: Array<StableId>;
+    }>;
+};
+
+export type CreateAchievementRequest = {
+    contentType: 'achievement';
+    locale: Locale;
+    title: string;
+    summary: string;
+    body: string;
+    achievedOn?: string;
+    evidence?: EvidencePackageDraft;
+};
+
+export type CreateTestimonialRequest = {
+    contentType: 'testimonial';
+    locale: Locale;
+    title: string;
+    summary: string;
+    body: string;
+    authorName?: string;
+    quote?: string;
+    relatedProjectId?: StableId;
+};
+
+export type CreateContentRequest = ({
+    contentType: 'project';
+} & CreateProjectRequest) | ({
+    contentType: 'achievement';
+} & CreateAchievementRequest) | ({
+    contentType: 'testimonial';
+} & CreateTestimonialRequest);
+
+export type CreateContentReceipt = {
+    contentId: StableId;
+    aggregateVersion: number;
+    revisionId: StableId;
+    outcome: 'content-created';
+};
+
 export type SaveRevisionRequest = {
     locale: Locale;
     title: string;
@@ -112,6 +172,50 @@ export type SaveRevisionReceipt = {
     aggregateVersion: number;
     outcome: 'revision-saved';
     revisionId: StableId;
+};
+
+export type RevisionReviewView = {
+    decision: 'accepted' | 'rejected';
+    findings: Array<string>;
+    reviewedAt: string;
+};
+
+export type PrivateRevisionPreview = {
+    contentId: StableId;
+    revisionId: StableId;
+    locale: Locale;
+    sequence: number;
+    title: string;
+    summary: string;
+    body: string;
+    review: RevisionReviewView | null;
+};
+
+export type ReviewRevisionCommand = {
+    decision: 'accepted' | 'rejected';
+    findings: Array<string>;
+};
+
+export type ReviewRevisionReceipt = {
+    aggregateId: StableId;
+    aggregateVersion: number;
+    outcome: 'revision-reviewed';
+    revisionId: StableId;
+    reviewId: StableId;
+};
+
+export type ContentHistoryEntry = {
+    revisionId: StableId;
+    locale: Locale;
+    sequence: number;
+    savedAt: string;
+    note?: string;
+    reviewDecision?: 'accepted' | 'rejected';
+};
+
+export type ContentHistoryPage = {
+    entries: Array<ContentHistoryEntry>;
+    nextCursor: string | null;
 };
 
 export type PublishLanguageCommand = {
@@ -163,6 +267,10 @@ export type SetFeaturedCommand = {
 
 export type ChangeSlugCommand = {
     slug: string;
+};
+
+export type CorrectCandidateSlugCommand = {
+    candidateSlug: string;
 };
 
 export type RelateProjectCommand = {
@@ -221,6 +329,36 @@ export type MergeTaxonomyValueCommand = {
 
 export type AssignTaxonomyValueCommand = {
     valueId: StableId;
+};
+
+export type ProjectStatusValueView = {
+    valueId: StableId;
+    label: string;
+    state: 'active' | 'retired';
+};
+
+export type ProjectStatusValueList = {
+    values: Array<ProjectStatusValueView>;
+};
+
+export type CreateProjectStatusValueRequest = {
+    label: string;
+};
+
+export type ProjectStatusValueReceipt = {
+    valueId: StableId;
+    label: string;
+    state: 'active' | 'retired';
+    aggregateVersion: number;
+    outcome: 'project-status-value-created' | 'project-status-value-renamed' | 'project-status-value-retired';
+};
+
+export type RenameProjectStatusValueCommand = {
+    label: string;
+};
+
+export type RetireProjectStatusValueCommand = {
+    reason?: string;
 };
 
 export type MediaKind = 'image' | 'video' | 'document';
@@ -704,6 +842,8 @@ export type IfMatch = string;
 
 export type ContentId = StableId;
 
+export type RevisionId = StableId;
+
 export type ProjectId = StableId;
 
 export type TaxonomyId = StableId;
@@ -984,6 +1124,65 @@ export type GetOwnerContentAggregateResponses = {
 
 export type GetOwnerContentAggregateResponse = GetOwnerContentAggregateResponses[keyof GetOwnerContentAggregateResponses];
 
+export type CreateOwnerContentData = {
+    body: CreateContentRequest;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/owner/v1/content';
+};
+
+export type CreateOwnerContentErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type CreateOwnerContentError = CreateOwnerContentErrors[keyof CreateOwnerContentErrors];
+
+export type CreateOwnerContentResponses = {
+    /**
+     * Draft identity and safe creation receipt.
+     */
+    201: CreateContentReceipt;
+};
+
+export type CreateOwnerContentResponse = CreateOwnerContentResponses[keyof CreateOwnerContentResponses];
+
 export type SaveOwnerContentRevisionData = {
     body: SaveRevisionRequest;
     headers: {
@@ -1056,6 +1255,187 @@ export type SaveOwnerContentRevisionResponses = {
 };
 
 export type SaveOwnerContentRevisionResponse = SaveOwnerContentRevisionResponses[keyof SaveOwnerContentRevisionResponses];
+
+export type PreviewOwnerContentRevisionData = {
+    body?: never;
+    path: {
+        contentId: StableId;
+        revisionId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/content/{contentId}/revisions/{revisionId}/preview';
+};
+
+export type PreviewOwnerContentRevisionErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type PreviewOwnerContentRevisionError = PreviewOwnerContentRevisionErrors[keyof PreviewOwnerContentRevisionErrors];
+
+export type PreviewOwnerContentRevisionResponses = {
+    /**
+     * Private Revision preview.
+     */
+    200: PrivateRevisionPreview;
+};
+
+export type PreviewOwnerContentRevisionResponse = PreviewOwnerContentRevisionResponses[keyof PreviewOwnerContentRevisionResponses];
+
+export type ReviewOwnerContentRevisionData = {
+    body: ReviewRevisionCommand;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        contentId: StableId;
+        revisionId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/content/{contentId}/revisions/{revisionId}/review';
+};
+
+export type ReviewOwnerContentRevisionErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type ReviewOwnerContentRevisionError = ReviewOwnerContentRevisionErrors[keyof ReviewOwnerContentRevisionErrors];
+
+export type ReviewOwnerContentRevisionResponses = {
+    /**
+     * Safe review receipt.
+     */
+    200: ReviewRevisionReceipt;
+};
+
+export type ReviewOwnerContentRevisionResponse = ReviewOwnerContentRevisionResponses[keyof ReviewOwnerContentRevisionResponses];
+
+export type GetOwnerContentHistoryData = {
+    body?: never;
+    path: {
+        contentId: StableId;
+    };
+    query?: {
+        locale?: Locale;
+        limit?: number;
+        cursor?: string;
+    };
+    url: '/api/owner/v1/content/{contentId}/history';
+};
+
+export type GetOwnerContentHistoryErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type GetOwnerContentHistoryError = GetOwnerContentHistoryErrors[keyof GetOwnerContentHistoryErrors];
+
+export type GetOwnerContentHistoryResponses = {
+    /**
+     * One bounded page of Owner-only history.
+     */
+    200: ContentHistoryPage;
+};
+
+export type GetOwnerContentHistoryResponse = GetOwnerContentHistoryResponses[keyof GetOwnerContentHistoryResponses];
 
 export type PublishOwnerContentLanguageData = {
     body: PublishLanguageCommand;
@@ -1619,6 +1999,79 @@ export type ChangeOwnerProjectPublicSlugResponses = {
 
 export type ChangeOwnerProjectPublicSlugResponse = ChangeOwnerProjectPublicSlugResponses[keyof ChangeOwnerProjectPublicSlugResponses];
 
+export type CorrectOwnerProjectCandidateSlugData = {
+    body: CorrectCandidateSlugCommand;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        projectId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/projects/{projectId}/commands/correct-candidate-slug';
+};
+
+export type CorrectOwnerProjectCandidateSlugErrors = {
+    /**
+     * The transport input is malformed or violates its declared shape.
+     */
+    400: Problem;
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type CorrectOwnerProjectCandidateSlugError = CorrectOwnerProjectCandidateSlugErrors[keyof CorrectOwnerProjectCandidateSlugErrors];
+
+export type CorrectOwnerProjectCandidateSlugResponses = {
+    /**
+     * Safe candidate slug correction receipt.
+     */
+    200: CommandReceipt;
+};
+
+export type CorrectOwnerProjectCandidateSlugResponse = CorrectOwnerProjectCandidateSlugResponses[keyof CorrectOwnerProjectCandidateSlugResponses];
+
 export type RelateOwnerProjectsData = {
     body: RelateProjectCommand;
     headers: {
@@ -2107,6 +2560,240 @@ export type AssignOwnerProjectTaxonomyValueResponses = {
 };
 
 export type AssignOwnerProjectTaxonomyValueResponse = AssignOwnerProjectTaxonomyValueResponses[keyof AssignOwnerProjectTaxonomyValueResponses];
+
+export type ListOwnerProjectStatusValuesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/owner/v1/project-status-values';
+};
+
+export type ListOwnerProjectStatusValuesErrors = {
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type ListOwnerProjectStatusValuesError = ListOwnerProjectStatusValuesErrors[keyof ListOwnerProjectStatusValuesErrors];
+
+export type ListOwnerProjectStatusValuesResponses = {
+    /**
+     * Active and retired Project status identities.
+     */
+    200: ProjectStatusValueList;
+};
+
+export type ListOwnerProjectStatusValuesResponse = ListOwnerProjectStatusValuesResponses[keyof ListOwnerProjectStatusValuesResponses];
+
+export type CreateOwnerProjectStatusValueData = {
+    body: CreateProjectStatusValueRequest;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/owner/v1/project-status-values';
+};
+
+export type CreateOwnerProjectStatusValueErrors = {
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type CreateOwnerProjectStatusValueError = CreateOwnerProjectStatusValueErrors[keyof CreateOwnerProjectStatusValueErrors];
+
+export type CreateOwnerProjectStatusValueResponses = {
+    /**
+     * Status value created with stable identity.
+     */
+    201: ProjectStatusValueReceipt;
+};
+
+export type CreateOwnerProjectStatusValueResponse = CreateOwnerProjectStatusValueResponses[keyof CreateOwnerProjectStatusValueResponses];
+
+export type RenameOwnerProjectStatusValueData = {
+    body: RenameProjectStatusValueCommand;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        valueId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/project-status-values/{valueId}/commands/rename';
+};
+
+export type RenameOwnerProjectStatusValueErrors = {
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type RenameOwnerProjectStatusValueError = RenameOwnerProjectStatusValueErrors[keyof RenameOwnerProjectStatusValueErrors];
+
+export type RenameOwnerProjectStatusValueResponses = {
+    /**
+     * Status label changed without changing status identity or lifecycle.
+     */
+    200: ProjectStatusValueReceipt;
+};
+
+export type RenameOwnerProjectStatusValueResponse = RenameOwnerProjectStatusValueResponses[keyof RenameOwnerProjectStatusValueResponses];
+
+export type RetireOwnerProjectStatusValueData = {
+    body: RetireProjectStatusValueCommand;
+    headers: {
+        /**
+         * Visible-ASCII client value scoped by operation and Owner. Exact replay returns the original safe result; conflicting reuse returns 409.
+         */
+        'Idempotency-Key': string;
+        /**
+         * Quoted expected aggregate version used for optimistic concurrency.
+         */
+        'If-Match': string;
+    };
+    path: {
+        valueId: StableId;
+    };
+    query?: never;
+    url: '/api/owner/v1/project-status-values/{valueId}/commands/retire';
+};
+
+export type RetireOwnerProjectStatusValueErrors = {
+    /**
+     * The Owner session is missing, invalid, or expired.
+     */
+    401: Problem;
+    /**
+     * The authenticated actor is not in the configured Owner allowlist.
+     */
+    403: Problem;
+    /**
+     * The requested aggregate does not exist.
+     */
+    404: Problem;
+    /**
+     * The intent conflicts with identity, state, or idempotency history.
+     */
+    409: Problem;
+    /**
+     * If-Match does not match the current aggregate version.
+     */
+    412: Problem;
+    /**
+     * Valid transport input failed a publication, evidence, or domain rule.
+     */
+    422: Problem;
+    /**
+     * The Owner operation exceeded its rate limit.
+     */
+    429: Problem;
+    /**
+     * An unexpected failure occurred without exposing internal detail.
+     */
+    500: Problem;
+    /**
+     * A required dependency is temporarily unavailable.
+     */
+    503: Problem;
+};
+
+export type RetireOwnerProjectStatusValueError = RetireOwnerProjectStatusValueErrors[keyof RetireOwnerProjectStatusValueErrors];
+
+export type RetireOwnerProjectStatusValueResponses = {
+    /**
+     * Status value retired with history retained.
+     */
+    200: ProjectStatusValueReceipt;
+};
+
+export type RetireOwnerProjectStatusValueResponse = RetireOwnerProjectStatusValueResponses[keyof RetireOwnerProjectStatusValueResponses];
 
 export type GetOwnerMediaAggregateData = {
     body?: never;

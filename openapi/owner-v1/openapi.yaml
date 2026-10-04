@@ -45,8 +45,16 @@ paths:
     $ref: ./paths/configuration.yaml#/projectCta
   /api/owner/v1/content/{contentId}:
     $ref: ./paths/content.yaml#/content
+  /api/owner/v1/content:
+    $ref: ./paths/content.yaml#/create
   /api/owner/v1/content/{contentId}/revisions:
     $ref: ./paths/content.yaml#/revisions
+  /api/owner/v1/content/{contentId}/revisions/{revisionId}/preview:
+    $ref: ./paths/content.yaml#/previewRevision
+  /api/owner/v1/content/{contentId}/revisions/{revisionId}/review:
+    $ref: ./paths/content.yaml#/reviewRevision
+  /api/owner/v1/content/{contentId}/history:
+    $ref: ./paths/content.yaml#/history
   /api/owner/v1/content/{contentId}/commands/publish-language:
     $ref: ./paths/content.yaml#/publishLanguage
   /api/owner/v1/content/{contentId}/commands/hide:
@@ -63,6 +71,8 @@ paths:
     $ref: ./paths/projects.yaml#/setFeatured
   /api/owner/v1/projects/{projectId}/commands/change-slug:
     $ref: ./paths/projects.yaml#/changeSlug
+  /api/owner/v1/projects/{projectId}/commands/correct-candidate-slug:
+    $ref: ./paths/projects.yaml#/correctCandidateSlug
   /api/owner/v1/projects/{projectId}/commands/relate-project:
     $ref: ./paths/projects.yaml#/relateProject
   /api/owner/v1/taxonomies/{taxonomyId}:
@@ -77,6 +87,12 @@ paths:
     $ref: ./paths/taxonomy.yaml#/mergeValue
   /api/owner/v1/projects/{projectId}/commands/assign-taxonomy-value:
     $ref: ./paths/taxonomy.yaml#/assignValue
+  /api/owner/v1/project-status-values:
+    $ref: ./paths/taxonomy.yaml#/projectStatusValues
+  /api/owner/v1/project-status-values/{valueId}/commands/rename:
+    $ref: ./paths/taxonomy.yaml#/renameProjectStatusValue
+  /api/owner/v1/project-status-values/{valueId}/commands/retire:
+    $ref: ./paths/taxonomy.yaml#/retireProjectStatusValue
   /api/owner/v1/media/{mediaId}:
     $ref: ./paths/media.yaml#/media
   /api/owner/v1/media/upload-intents:
