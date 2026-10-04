@@ -28,6 +28,52 @@ schemas:
     required: [valueId]
     properties:
       valueId: { $ref: ./common.yaml#/schemas/StableId }
+  CreateProjectStatusValueRequest:
+    type: object
+    additionalProperties: false
+    required: [label]
+    properties:
+      label: { type: string, minLength: 1, maxLength: 100 }
+  RenameProjectStatusValueCommand:
+    type: object
+    additionalProperties: false
+    required: [label]
+    properties:
+      label: { type: string, minLength: 1, maxLength: 100 }
+  RetireProjectStatusValueCommand:
+    type: object
+    additionalProperties: false
+    properties:
+      reason: { type: string, minLength: 1, maxLength: 500 }
+  ProjectStatusValueView:
+    type: object
+    additionalProperties: false
+    required: [valueId, label, state]
+    properties:
+      valueId: { $ref: ./common.yaml#/schemas/StableId }
+      label: { type: string, minLength: 1, maxLength: 100 }
+      state: { type: string, enum: [active, retired] }
+  ProjectStatusValueReceipt:
+    type: object
+    additionalProperties: false
+    required: [valueId, label, state, aggregateVersion, outcome]
+    properties:
+      valueId: { $ref: ./common.yaml#/schemas/StableId }
+      label: { type: string, minLength: 1, maxLength: 100 }
+      state: { type: string, enum: [active, retired] }
+      aggregateVersion: { type: integer, minimum: 1 }
+      outcome:
+        type: string
+        enum: [project-status-value-created, project-status-value-renamed, project-status-value-retired]
+  ProjectStatusValueList:
+    type: object
+    additionalProperties: false
+    required: [values]
+    properties:
+      values:
+        type: array
+        maxItems: 100
+        items: { $ref: '#/schemas/ProjectStatusValueView' }
   ActiveTaxonomyValueView:
     type: object
     additionalProperties: false

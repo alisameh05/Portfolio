@@ -36,7 +36,8 @@ export const PHASE5_ALLOWED_ACTIVATION = Object.freeze([
 ]);
 
 export const EXPECTED_PUBLIC_OPERATIONS = 5;
-export const EXPECTED_OWNER_OPERATIONS = 39;
+export const EXPECTED_OWNER_OPERATIONS = 48;
+export const EXPECTED_ACTIVE_OWNER_OPERATIONS = 39;
 
 /**
  * Phase 4 negative fixtures. Each entry must be rejected by the

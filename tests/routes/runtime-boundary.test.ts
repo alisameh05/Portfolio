@@ -14,19 +14,25 @@ import {
   contractOperations,
   discoverExportedHandlerNames,
   discoverRuntimeAdapterExports,
+  FAIL_CLOSED_OWNER_OPERATION_IDS,
 } from "../../scripts/check-runtime-boundary.mjs";
 import { forbiddenSourceReasons } from "../../scripts/runtime-source-policy.mjs";
 
 const ROOT = process.cwd();
 
 describe("Phase 2 contract-to-adapter runtime boundary (#33)", () => {
-  it("maps every public and Owner operation identifier to exactly one adapter", () => {
+  it("maps active operations once and leaves planned Owner contracts without adapters", () => {
     const report = buildRuntimeBoundary(ROOT);
 
-    expect(report.matrix).toHaveLength(44);
+    expect(report.matrix).toHaveLength(53);
     expect(report.matrix.filter((entry) => entry.surface === "public")).toHaveLength(5);
-    expect(report.matrix.filter((entry) => entry.surface === "owner")).toHaveLength(39);
-    expect(report.matrix.every((entry) => entry.matches.length === 1)).toBe(true);
+    expect(report.matrix.filter((entry) => entry.surface === "owner")).toHaveLength(48);
+    expect(report.matrix.filter((entry) => entry.activation === "active")).toHaveLength(44);
+    expect(report.matrix.filter((entry) => entry.activation === "fail-closed")).toHaveLength(9);
+    expect(report.matrix.filter((entry) => entry.activation === "active").every((entry) => entry.matches.length === 1)).toBe(true);
+    expect(report.matrix.filter((entry) => entry.activation === "fail-closed").every((entry) => entry.matches.length === 0)).toBe(true);
+    expect(report.matrix.filter((entry) => entry.activation === "fail-closed").map((entry) => entry.operationId).sort()).toEqual([...FAIL_CLOSED_OWNER_OPERATION_IDS].sort());
+    expect(report.checks.find((check) => check.name === "unfinished-owner-operations-fail-closed")?.passed).toBe(true);
   });
 
   it("rejects adapters that are not declared by either contract", () => {
@@ -176,6 +182,6 @@ describe("Phase 2 contract-to-adapter runtime boundary (#33)", () => {
       matrix: unknown[];
     };
     expect(report.verdict).toBe("pass");
-    expect(report.matrix).toHaveLength(44);
+    expect(report.matrix).toHaveLength(53);
   });
 });

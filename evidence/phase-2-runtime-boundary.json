@@ -12,17 +12,22 @@
     {
       "name": "owner-operation-count",
       "passed": true,
-      "detail": "exactly thirty-nine Owner operations"
+      "detail": "39 active Owner operations and 9 explicitly fail-closed Phase 5 contracts"
     },
     {
       "name": "unique-operation-identifiers",
       "passed": true,
-      "detail": "44 unique operation identifiers"
+      "detail": "53 unique operation identifiers"
     },
     {
       "name": "one-adapter-per-operation",
       "passed": true,
-      "detail": "44/44 resolved exactly once"
+      "detail": "44/44 active operations resolve once; deferred operations have no adapter"
+    },
+    {
+      "name": "unfinished-owner-operations-fail-closed",
+      "passed": true,
+      "detail": "9 declared Phase 5 operations have no runtime adapter"
     },
     {
       "name": "no-undeclared-product-adapters",
@@ -47,6 +52,7 @@
       "path": "/api/v1/cv/current",
       "operationId": "getCurrentCv",
       "expectedExport": "handleGetCurrentCv",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleGetCurrentCv",
@@ -61,6 +67,7 @@
       "path": "/api/v1/projects/{projectId}/feedback",
       "operationId": "postProjectFeedback",
       "expectedExport": "handlePostProjectFeedback",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handlePostProjectFeedback",
@@ -75,6 +82,7 @@
       "path": "/api/v1/events",
       "operationId": "postPublicEvent",
       "expectedExport": "handlePostPublicEvent",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handlePostPublicEvent",
@@ -89,6 +97,7 @@
       "path": "/api/v1/projects/{projectId}/rating",
       "operationId": "putProjectRating",
       "expectedExport": "handlePutProjectRating",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handlePutProjectRating",
@@ -103,6 +112,7 @@
       "path": "/api/v1/projects/{projectId}/reaction",
       "operationId": "putProjectReaction",
       "expectedExport": "handlePutProjectReaction",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handlePutProjectReaction",
@@ -117,6 +127,7 @@
       "path": "/api/owner/v1/cv/versions/{versionId}/commands/accept",
       "operationId": "acceptOwnerCvVersion",
       "expectedExport": "handleAcceptOwnerCvVersion",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleAcceptOwnerCvVersion",
@@ -131,6 +142,7 @@
       "path": "/api/owner/v1/media/{mediaId}/commands/accept",
       "operationId": "acceptOwnerMediaAsset",
       "expectedExport": "handleAcceptOwnerMediaAsset",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleAcceptOwnerMediaAsset",
@@ -145,6 +157,7 @@
       "path": "/api/owner/v1/analytics-goals/{goalId}/commands/activate-version",
       "operationId": "activateOwnerAnalyticsGoalVersion",
       "expectedExport": "handleActivateOwnerAnalyticsGoalVersion",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleActivateOwnerAnalyticsGoalVersion",
@@ -159,6 +172,7 @@
       "path": "/api/owner/v1/cv/versions/{versionId}/commands/activate",
       "operationId": "activateOwnerCvVersion",
       "expectedExport": "handleActivateOwnerCvVersion",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleActivateOwnerCvVersion",
@@ -173,6 +187,7 @@
       "path": "/api/owner/v1/feedback/{feedbackId}/commands/approve",
       "operationId": "approveOwnerFeedback",
       "expectedExport": "handleApproveOwnerFeedback",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleApproveOwnerFeedback",
@@ -187,6 +202,7 @@
       "path": "/api/owner/v1/content/{contentId}/commands/archive",
       "operationId": "archiveOwnerContent",
       "expectedExport": "handleArchiveOwnerContent",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleArchiveOwnerContent",
@@ -201,6 +217,7 @@
       "path": "/api/owner/v1/projects/{projectId}/commands/assign-taxonomy-value",
       "operationId": "assignOwnerProjectTaxonomyValue",
       "expectedExport": "handleAssignOwnerProjectTaxonomyValue",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleAssignOwnerProjectTaxonomyValue",
@@ -215,6 +232,7 @@
       "path": "/api/owner/v1/projects/{projectId}/commands/change-slug",
       "operationId": "changeOwnerProjectPublicSlug",
       "expectedExport": "handleChangeOwnerProjectPublicSlug",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleChangeOwnerProjectPublicSlug",
@@ -229,6 +247,7 @@
       "path": "/api/owner/v1/projects/{projectId}/commands/change-status",
       "operationId": "changeOwnerProjectStatus",
       "expectedExport": "handleChangeOwnerProjectStatus",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleChangeOwnerProjectStatus",
@@ -240,9 +259,19 @@
     {
       "surface": "owner",
       "method": "POST",
+      "path": "/api/owner/v1/projects/{projectId}/commands/correct-candidate-slug",
+      "operationId": "correctOwnerProjectCandidateSlug",
+      "expectedExport": "handleCorrectOwnerProjectCandidateSlug",
+      "activation": "fail-closed",
+      "matches": []
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
       "path": "/api/owner/v1/analytics-goals/{goalId}/versions",
       "operationId": "createOwnerAnalyticsGoalVersion",
       "expectedExport": "handleCreateOwnerAnalyticsGoalVersion",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleCreateOwnerAnalyticsGoalVersion",
@@ -254,9 +283,19 @@
     {
       "surface": "owner",
       "method": "POST",
+      "path": "/api/owner/v1/content",
+      "operationId": "createOwnerContent",
+      "expectedExport": "handleCreateOwnerContent",
+      "activation": "fail-closed",
+      "matches": []
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
       "path": "/api/owner/v1/media/upload-intents",
       "operationId": "createOwnerMediaUploadIntent",
       "expectedExport": "handleCreateOwnerMediaUploadIntent",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleCreateOwnerMediaUploadIntent",
@@ -268,9 +307,19 @@
     {
       "surface": "owner",
       "method": "POST",
+      "path": "/api/owner/v1/project-status-values",
+      "operationId": "createOwnerProjectStatusValue",
+      "expectedExport": "handleCreateOwnerProjectStatusValue",
+      "activation": "fail-closed",
+      "matches": []
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
       "path": "/api/owner/v1/taxonomies/{taxonomyId}/values",
       "operationId": "createOwnerTaxonomyValue",
       "expectedExport": "handleCreateOwnerTaxonomyValue",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleCreateOwnerTaxonomyValue",
@@ -285,6 +334,7 @@
       "path": "/api/owner/v1/exports/{exportId}/download",
       "operationId": "downloadOwnerExport",
       "expectedExport": "handleDownloadOwnerExport",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleDownloadOwnerExport",
@@ -299,6 +349,7 @@
       "path": "/api/owner/v1/analytics-goals/{goalId}",
       "operationId": "getOwnerAnalyticsGoal",
       "expectedExport": "handleGetOwnerAnalyticsGoal",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleGetOwnerAnalyticsGoal",
@@ -313,6 +364,7 @@
       "path": "/api/owner/v1/content/{contentId}",
       "operationId": "getOwnerContentAggregate",
       "expectedExport": "handleGetOwnerContentAggregate",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleGetOwnerContentAggregate",
@@ -324,9 +376,19 @@
     {
       "surface": "owner",
       "method": "GET",
+      "path": "/api/owner/v1/content/{contentId}/history",
+      "operationId": "getOwnerContentHistory",
+      "expectedExport": "handleGetOwnerContentHistory",
+      "activation": "fail-closed",
+      "matches": []
+    },
+    {
+      "surface": "owner",
+      "method": "GET",
       "path": "/api/owner/v1/cv",
       "operationId": "getOwnerCvPortfolio",
       "expectedExport": "handleGetOwnerCvPortfolio",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleGetOwnerCvPortfolio",
@@ -341,6 +403,7 @@
       "path": "/api/owner/v1/exports/{exportId}",
       "operationId": "getOwnerExport",
       "expectedExport": "handleGetOwnerExport",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleGetOwnerExport",
@@ -355,6 +418,7 @@
       "path": "/api/owner/v1/feedback/{feedbackId}",
       "operationId": "getOwnerFeedbackModeration",
       "expectedExport": "handleGetOwnerFeedbackModeration",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleGetOwnerFeedbackModeration",
@@ -369,6 +433,7 @@
       "path": "/api/owner/v1/media/{mediaId}",
       "operationId": "getOwnerMediaAggregate",
       "expectedExport": "handleGetOwnerMediaAggregate",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleGetOwnerMediaAggregate",
@@ -383,6 +448,7 @@
       "path": "/api/owner/v1/projects/{projectId}",
       "operationId": "getOwnerProjectAggregate",
       "expectedExport": "handleGetOwnerProjectAggregate",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleGetOwnerProjectAggregate",
@@ -397,6 +463,7 @@
       "path": "/api/owner/v1/taxonomies/{taxonomyId}",
       "operationId": "getOwnerTaxonomyAggregate",
       "expectedExport": "handleGetOwnerTaxonomyAggregate",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleGetOwnerTaxonomyAggregate",
@@ -411,6 +478,7 @@
       "path": "/api/owner/v1/content/{contentId}/commands/hide",
       "operationId": "hideOwnerContent",
       "expectedExport": "handleHideOwnerContent",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleHideOwnerContent",
@@ -421,10 +489,20 @@
     },
     {
       "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/project-status-values",
+      "operationId": "listOwnerProjectStatusValues",
+      "expectedExport": "handleListOwnerProjectStatusValues",
+      "activation": "fail-closed",
+      "matches": []
+    },
+    {
+      "surface": "owner",
       "method": "POST",
       "path": "/api/owner/v1/taxonomy-values/{valueId}/commands/merge",
       "operationId": "mergeOwnerTaxonomyValue",
       "expectedExport": "handleMergeOwnerTaxonomyValue",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleMergeOwnerTaxonomyValue",
@@ -435,10 +513,20 @@
     },
     {
       "surface": "owner",
+      "method": "GET",
+      "path": "/api/owner/v1/content/{contentId}/revisions/{revisionId}/preview",
+      "operationId": "previewOwnerContentRevision",
+      "expectedExport": "handlePreviewOwnerContentRevision",
+      "activation": "fail-closed",
+      "matches": []
+    },
+    {
+      "surface": "owner",
       "method": "POST",
       "path": "/api/owner/v1/content/{contentId}/commands/publish-language",
       "operationId": "publishOwnerContentLanguage",
       "expectedExport": "handlePublishOwnerContentLanguage",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handlePublishOwnerContentLanguage",
@@ -453,6 +541,7 @@
       "path": "/api/owner/v1/media/{mediaId}/commands/record-processing",
       "operationId": "recordOwnerMediaProcessing",
       "expectedExport": "handleRecordOwnerMediaProcessing",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleRecordOwnerMediaProcessing",
@@ -467,6 +556,7 @@
       "path": "/api/owner/v1/cv/versions",
       "operationId": "registerOwnerCvVersion",
       "expectedExport": "handleRegisterOwnerCvVersion",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleRegisterOwnerCvVersion",
@@ -481,6 +571,7 @@
       "path": "/api/owner/v1/feedback/{feedbackId}/commands/reject",
       "operationId": "rejectOwnerFeedback",
       "expectedExport": "handleRejectOwnerFeedback",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleRejectOwnerFeedback",
@@ -495,6 +586,7 @@
       "path": "/api/owner/v1/media/{mediaId}/commands/reject",
       "operationId": "rejectOwnerMediaAsset",
       "expectedExport": "handleRejectOwnerMediaAsset",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleRejectOwnerMediaAsset",
@@ -509,6 +601,7 @@
       "path": "/api/owner/v1/projects/{projectId}/commands/relate-project",
       "operationId": "relateOwnerProjects",
       "expectedExport": "handleRelateOwnerProjects",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleRelateOwnerProjects",
@@ -520,9 +613,19 @@
     {
       "surface": "owner",
       "method": "POST",
+      "path": "/api/owner/v1/project-status-values/{valueId}/commands/rename",
+      "operationId": "renameOwnerProjectStatusValue",
+      "expectedExport": "handleRenameOwnerProjectStatusValue",
+      "activation": "fail-closed",
+      "matches": []
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
       "path": "/api/owner/v1/taxonomy-values/{valueId}/commands/rename",
       "operationId": "renameOwnerTaxonomyValue",
       "expectedExport": "handleRenameOwnerTaxonomyValue",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleRenameOwnerTaxonomyValue",
@@ -537,6 +640,7 @@
       "path": "/api/owner/v1/exports",
       "operationId": "requestOwnerExport",
       "expectedExport": "handleRequestOwnerExport",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleRequestOwnerExport",
@@ -551,6 +655,7 @@
       "path": "/api/owner/v1/content/{contentId}/commands/restore",
       "operationId": "restoreOwnerContent",
       "expectedExport": "handleRestoreOwnerContent",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleRestoreOwnerContent",
@@ -562,9 +667,19 @@
     {
       "surface": "owner",
       "method": "POST",
+      "path": "/api/owner/v1/project-status-values/{valueId}/commands/retire",
+      "operationId": "retireOwnerProjectStatusValue",
+      "expectedExport": "handleRetireOwnerProjectStatusValue",
+      "activation": "fail-closed",
+      "matches": []
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
       "path": "/api/owner/v1/taxonomy-values/{valueId}/commands/retire",
       "operationId": "retireOwnerTaxonomyValue",
       "expectedExport": "handleRetireOwnerTaxonomyValue",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleRetireOwnerTaxonomyValue",
@@ -576,9 +691,19 @@
     {
       "surface": "owner",
       "method": "POST",
+      "path": "/api/owner/v1/content/{contentId}/revisions/{revisionId}/review",
+      "operationId": "reviewOwnerContentRevision",
+      "expectedExport": "handleReviewOwnerContentRevision",
+      "activation": "fail-closed",
+      "matches": []
+    },
+    {
+      "surface": "owner",
+      "method": "POST",
       "path": "/api/owner/v1/content/{contentId}/revisions",
       "operationId": "saveOwnerContentRevision",
       "expectedExport": "handleSaveOwnerContentRevision",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleSaveOwnerContentRevision",
@@ -593,6 +718,7 @@
       "path": "/api/owner/v1/projects/{projectId}/commands/set-featured",
       "operationId": "setOwnerProjectFeatured",
       "expectedExport": "handleSetOwnerProjectFeatured",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleSetOwnerProjectFeatured",
@@ -607,6 +733,7 @@
       "path": "/api/owner/v1/feedback/{feedbackId}/commands/suppress",
       "operationId": "suppressOwnerFeedback",
       "expectedExport": "handleSuppressOwnerFeedback",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleSuppressOwnerFeedback",
@@ -621,6 +748,7 @@
       "path": "/api/owner/v1/configuration/contact-channels",
       "operationId": "updateOwnerContactChannels",
       "expectedExport": "handleUpdateOwnerContactChannels",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleUpdateOwnerContactChannels",
@@ -635,6 +763,7 @@
       "path": "/api/owner/v1/configuration/project-cta",
       "operationId": "updateOwnerGlobalProjectCta",
       "expectedExport": "handleUpdateOwnerGlobalProjectCta",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleUpdateOwnerGlobalProjectCta",
@@ -649,6 +778,7 @@
       "path": "/api/owner/v1/configuration/profile",
       "operationId": "updateOwnerProfileConfiguration",
       "expectedExport": "handleUpdateOwnerProfileConfiguration",
+      "activation": "active",
       "matches": [
         {
           "exportName": "handleUpdateOwnerProfileConfiguration",

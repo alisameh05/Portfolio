@@ -2,8 +2,8 @@ import type { StableId, Result, Rejection } from "@shared/domain";
 import type {
   Taxonomy,
   TaxonomyValue,
-  TaxonomyAssignment,
   ProjectDiscoveryCard,
+  PublicDiscoveryCriteria,
 } from "../domain/index.js";
 
 export interface TaxonomyRepositoryPort {
@@ -19,13 +19,7 @@ export interface TaxonomyRepositoryPort {
     value: TaxonomyValue,
   ): Promise<Result<TaxonomyValue, Rejection>>;
 
-  getAssignmentsForTarget(
-    targetId: StableId<string>,
-  ): Promise<Result<readonly TaxonomyAssignment[], Rejection>>;
-
-  saveAssignment(
-    assignment: TaxonomyAssignment,
-  ): Promise<Result<TaxonomyAssignment, Rejection>>;
-
-  getDiscoveryProjects(): Promise<Result<readonly ProjectDiscoveryCard[], Rejection>>;
+  getDiscoveryProjects(
+    query: PublicDiscoveryCriteria,
+  ): Promise<Result<readonly ProjectDiscoveryCard[], Rejection>>;
 }

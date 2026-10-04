@@ -34,11 +34,15 @@ const document = JSON.parse(
 const httpMethods = new Set(["get", "post", "put", "patch", "delete"]);
 
 const expectedOperations = [
+  ["/api/owner/v1/content", "post"],
   ["/api/owner/v1/configuration/profile", "put"],
   ["/api/owner/v1/configuration/contact-channels", "put"],
   ["/api/owner/v1/configuration/project-cta", "put"],
   ["/api/owner/v1/content/{contentId}", "get"],
   ["/api/owner/v1/content/{contentId}/revisions", "post"],
+  ["/api/owner/v1/content/{contentId}/revisions/{revisionId}/preview", "get"],
+  ["/api/owner/v1/content/{contentId}/revisions/{revisionId}/review", "post"],
+  ["/api/owner/v1/content/{contentId}/history", "get"],
   ["/api/owner/v1/content/{contentId}/commands/publish-language", "post"],
   ["/api/owner/v1/content/{contentId}/commands/hide", "post"],
   ["/api/owner/v1/content/{contentId}/commands/archive", "post"],
@@ -47,7 +51,12 @@ const expectedOperations = [
   ["/api/owner/v1/projects/{projectId}/commands/change-status", "post"],
   ["/api/owner/v1/projects/{projectId}/commands/set-featured", "post"],
   ["/api/owner/v1/projects/{projectId}/commands/change-slug", "post"],
+  ["/api/owner/v1/projects/{projectId}/commands/correct-candidate-slug", "post"],
   ["/api/owner/v1/projects/{projectId}/commands/relate-project", "post"],
+  ["/api/owner/v1/project-status-values", "get"],
+  ["/api/owner/v1/project-status-values", "post"],
+  ["/api/owner/v1/project-status-values/{valueId}/commands/rename", "post"],
+  ["/api/owner/v1/project-status-values/{valueId}/commands/retire", "post"],
   ["/api/owner/v1/taxonomies/{taxonomyId}", "get"],
   ["/api/owner/v1/taxonomies/{taxonomyId}/values", "post"],
   ["/api/owner/v1/taxonomy-values/{valueId}/commands/rename", "post"],
@@ -76,6 +85,8 @@ const expectedOperations = [
 ] as const;
 
 const aggregateCreationOperations = new Set([
+  "createOwnerContent",
+  "createOwnerProjectStatusValue",
   "createOwnerMediaUploadIntent",
   "requestOwnerExport",
 ]);
@@ -93,7 +104,7 @@ const resolveResponse = (response: Response) => {
 };
 
 describe("Owner v1 contract", () => {
-  it("contains exactly the implemented command and narrow-query surface", () => {
+  it("contains exactly the declared command and narrow-query surface", () => {
     const actual = Object.entries(document.paths).flatMap(([path, pathItem]) =>
       Object.keys(pathItem)
         .filter((method) => httpMethods.has(method))
@@ -286,5 +297,40 @@ describe("Owner v1 contract", () => {
         });
       }
     }
+  });
+
+  it("defines strict creation, review, and bounded-history contracts without broadening public HTTP", () => {
+    expect(document.components.schemas["CreateContentRequest"]).toMatchObject({
+      oneOf: expect.arrayContaining([
+        { $ref: "#/components/schemas/CreateProjectRequest" },
+        { $ref: "#/components/schemas/CreateAchievementRequest" },
+        { $ref: "#/components/schemas/CreateTestimonialRequest" },
+      ]),
+      discriminator: { propertyName: "contentType" },
+    });
+    for (const name of ["CreateProjectRequest", "CreateAchievementRequest", "CreateTestimonialRequest"]) {
+      expect(document.components.schemas[name]).toMatchObject({
+        additionalProperties: false,
+        required: expect.arrayContaining(["contentType", "locale", "title", "summary", "body"]),
+      });
+    }
+    expect(document.components.schemas["CreateProjectRequest"]).toMatchObject({
+      required: expect.arrayContaining(["candidateSlug"]),
+      properties: { candidateSlug: { type: "string" } },
+    });
+    expect(document.components.schemas["ReviewRevisionCommand"]).toMatchObject({
+      additionalProperties: false,
+      required: ["decision", "findings"],
+    });
+    expect(document.components.schemas["ContentHistoryPage"]).toMatchObject({
+      additionalProperties: false,
+      required: ["entries", "nextCursor"],
+    });
+    expect(document.components.schemas["ProjectStatusValueReceipt"]).toMatchObject({
+      additionalProperties: false,
+      required: ["valueId", "label", "state", "aggregateVersion", "outcome"],
+    });
+    expect(document.paths["/api/v1"]).toBeUndefined();
+    expect(JSON.stringify(document.paths)).not.toMatch(/\/api\/v1\/.*(content|discovery)/);
   });
 });

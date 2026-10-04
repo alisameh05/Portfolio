@@ -1,4 +1,176 @@
 schemas:
+  CreateContentRequest:
+    oneOf:
+      - { $ref: '#/schemas/CreateProjectRequest' }
+      - { $ref: '#/schemas/CreateAchievementRequest' }
+      - { $ref: '#/schemas/CreateTestimonialRequest' }
+    discriminator:
+      propertyName: contentType
+      mapping:
+        project: '#/schemas/CreateProjectRequest'
+        achievement: '#/schemas/CreateAchievementRequest'
+        testimonial: '#/schemas/CreateTestimonialRequest'
+  DraftTextFields:
+    type: object
+    required: [locale, title, summary, body]
+    properties:
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      title: { type: string, minLength: 1, maxLength: 160 }
+      summary: { type: string, minLength: 1, maxLength: 500 }
+      body: { type: string, minLength: 1, maxLength: 50000 }
+  CreateProjectRequest:
+    type: object
+    additionalProperties: false
+    required: [contentType, locale, title, summary, body, candidateSlug]
+    properties:
+      contentType: { type: string, const: project }
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      title: { type: string, minLength: 1, maxLength: 160 }
+      summary: { type: string, minLength: 1, maxLength: 500 }
+      body: { type: string, minLength: 1, maxLength: 50000 }
+      candidateSlug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+      caseStudy:
+        type: object
+        additionalProperties: false
+        properties:
+          problem: { type: string, maxLength: 5000 }
+          ownerRole: { type: string, maxLength: 2000 }
+          contributions: { type: array, maxItems: 50, items: { type: string, maxLength: 2000 } }
+          outcomes: { type: array, maxItems: 50, items: { type: string, maxLength: 2000 } }
+          lessons: { type: string, maxLength: 5000 }
+  CreateAchievementRequest:
+    type: object
+    additionalProperties: false
+    required: [contentType, locale, title, summary, body]
+    properties:
+      contentType: { type: string, const: achievement }
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      title: { type: string, minLength: 1, maxLength: 160 }
+      summary: { type: string, minLength: 1, maxLength: 500 }
+      body: { type: string, minLength: 1, maxLength: 50000 }
+      achievedOn: { type: string, format: date }
+      evidence: { $ref: '#/schemas/EvidencePackageDraft' }
+  CreateTestimonialRequest:
+    type: object
+    additionalProperties: false
+    required: [contentType, locale, title, summary, body]
+    properties:
+      contentType: { type: string, const: testimonial }
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      title: { type: string, minLength: 1, maxLength: 160 }
+      summary: { type: string, minLength: 1, maxLength: 500 }
+      body: { type: string, minLength: 1, maxLength: 50000 }
+      authorName: { type: string, maxLength: 200 }
+      quote: { type: string, maxLength: 10000 }
+      relatedProjectId: { $ref: ./common.yaml#/schemas/StableId }
+  EvidencePackageDraft:
+    type: object
+    additionalProperties: false
+    properties:
+      claims:
+        type: array
+        maxItems: 100
+        items:
+          type: object
+          additionalProperties: false
+          required: [claimId, text, artifactIds]
+          properties:
+            claimId: { $ref: ./common.yaml#/schemas/StableId }
+            text: { type: string, maxLength: 2000 }
+            artifactIds: { type: array, maxItems: 100, uniqueItems: true, items: { $ref: ./common.yaml#/schemas/StableId } }
+  CreateContentReceipt:
+    type: object
+    additionalProperties: false
+    required: [contentId, aggregateVersion, revisionId, outcome]
+    properties:
+      contentId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, minimum: 1 }
+      revisionId: { $ref: ./common.yaml#/schemas/StableId }
+      outcome: { type: string, const: content-created }
+  ReviewRevisionCommand:
+    type: object
+    additionalProperties: false
+    required: [decision, findings]
+    properties:
+      decision: { type: string, enum: [accepted, rejected] }
+      findings: { type: array, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
+  ReviewRevisionReceipt:
+    type: object
+    additionalProperties: false
+    required: [aggregateId, aggregateVersion, outcome, revisionId, reviewId]
+    properties:
+      aggregateId: { $ref: ./common.yaml#/schemas/StableId }
+      aggregateVersion: { type: integer, minimum: 1 }
+      outcome: { type: string, const: revision-reviewed }
+      revisionId: { $ref: ./common.yaml#/schemas/StableId }
+      reviewId: { $ref: ./common.yaml#/schemas/StableId }
+  PrivateRevisionPreview:
+    type: object
+    additionalProperties: false
+    required: [contentId, revisionId, locale, sequence, title, summary, body, review]
+    properties:
+      contentId: { $ref: ./common.yaml#/schemas/StableId }
+      revisionId: { $ref: ./common.yaml#/schemas/StableId }
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      sequence: { type: integer, minimum: 1 }
+      title: { type: string, minLength: 1, maxLength: 160 }
+      summary: { type: string, minLength: 1, maxLength: 500 }
+      body: { type: string, minLength: 1, maxLength: 50000 }
+      review:
+        oneOf:
+          - { $ref: '#/schemas/RevisionReviewView' }
+          - { type: 'null' }
+  RevisionReviewView:
+    type: object
+    additionalProperties: false
+    required: [decision, findings, reviewedAt]
+    properties:
+      decision: { type: string, enum: [accepted, rejected] }
+      findings: { type: array, maxItems: 100, items: { type: string, maxLength: 1000 } }
+      reviewedAt: { type: string, format: date-time }
+  ContentHistoryPage:
+    type: object
+    additionalProperties: false
+    required: [entries, nextCursor]
+    properties:
+      entries:
+        type: array
+        maxItems: 100
+        items: { $ref: '#/schemas/ContentHistoryEntry' }
+      nextCursor:
+        oneOf:
+          - { type: string, minLength: 1, maxLength: 512 }
+          - { type: 'null' }
+  ContentHistoryEntry:
+    type: object
+    additionalProperties: false
+    required: [revisionId, locale, sequence, savedAt]
+    properties:
+      revisionId: { $ref: ./common.yaml#/schemas/StableId }
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      sequence: { type: integer, minimum: 1 }
+      savedAt: { type: string, format: date-time }
+      note: { type: string, maxLength: 500 }
+      reviewDecision: { type: string, enum: [accepted, rejected] }
+  MediaAcceptanceFact:
+    type: object
+    additionalProperties: false
+    required: [mediaAssetId, ownerId, accepted, safe, suitable, accessible, version]
+    properties:
+      mediaAssetId: { $ref: ./common.yaml#/schemas/StableId }
+      ownerId: { $ref: ./common.yaml#/schemas/StableId }
+      accepted: { type: boolean }
+      safe: { type: boolean }
+      suitable: { type: boolean }
+      accessible: { type: boolean }
+      version: { type: integer, minimum: 1 }
+  MediaAcceptanceBatch:
+    type: object
+    additionalProperties: false
+    required: [consistencyVersion, facts]
+    properties:
+      consistencyVersion: { type: string, minLength: 1, maxLength: 128 }
+      facts: { type: array, maxItems: 100, items: { $ref: '#/schemas/MediaAcceptanceFact' } }
   SaveRevisionRequest:
     type: object
     additionalProperties: false

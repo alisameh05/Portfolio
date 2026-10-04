@@ -122,6 +122,39 @@ changeSlug:
       '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
       '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
 
+correctCandidateSlug:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ProjectId }
+  post:
+    operationId: correctOwnerProjectCandidateSlug
+    summary: Correct a private candidate Project slug
+    description: Corrects a Draft candidate without reserving or changing a public route.
+    tags: [Projects]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/projects.yaml#/schemas/CorrectCandidateSlugCommand }
+    responses:
+      '200':
+        description: Safe candidate slug correction receipt.
+        content:
+          application/json:
+            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+      '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
 relateProject:
   parameters:
     - { $ref: ../components/common.yaml#/parameters/ProjectId }

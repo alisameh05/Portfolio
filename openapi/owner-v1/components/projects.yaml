@@ -21,6 +21,16 @@ schemas:
         minLength: 1
         maxLength: 120
         pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+  CorrectCandidateSlugCommand:
+    type: object
+    additionalProperties: false
+    required: [candidateSlug]
+    properties:
+      candidateSlug:
+        type: string
+        minLength: 1
+        maxLength: 120
+        pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
   RelateProjectCommand:
     type: object
     additionalProperties: false

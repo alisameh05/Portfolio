@@ -4,11 +4,16 @@ import { describe, expect, it } from "vitest";
 import {
   zChangeOwnerProjectPublicSlugBody,
   zContentAggregateView,
+  zCreateOwnerContentBody,
+  zCreateOwnerProjectStatusValueBody,
   zCreateOwnerTaxonomyValueBody,
+  zCorrectOwnerProjectCandidateSlugBody,
   zProjectAggregateView,
+  zProjectStatusValueReceipt,
   zPublishOwnerContentLanguageBody,
   zPublishOwnerContentLanguageHeaders,
   zPublishOwnerContentLanguagePath,
+  zReviewOwnerContentRevisionBody,
   zSaveOwnerContentRevisionBody,
   zSaveOwnerContentRevisionResponse,
   zTaxonomyAggregateView,
@@ -40,6 +45,11 @@ const ids = {
 
 describe("generated Owner v1 validators", () => {
   it("accepts every declared request example", () => {
+    for (const kind of ["project", "achievement", "testimonial"]) {
+      expect(zCreateOwnerContentBody.safeParse(requestExample(
+        "/api/owner/v1/content", "post", kind,
+      )).success).toBe(true);
+    }
     expect(zUpdateOwnerProfileConfigurationBody.safeParse(requestExample(
       "/api/owner/v1/configuration/profile", "put", "profile",
     )).success).toBe(true);
@@ -58,8 +68,14 @@ describe("generated Owner v1 validators", () => {
     expect(zChangeOwnerProjectPublicSlugBody.safeParse(requestExample(
       "/api/owner/v1/projects/{projectId}/commands/change-slug", "post", "canonical",
     )).success).toBe(true);
+    expect(zReviewOwnerContentRevisionBody.safeParse(requestExample(
+      "/api/owner/v1/content/{contentId}/revisions/{revisionId}/review", "post", "accepted",
+    )).success).toBe(true);
     expect(zCreateOwnerTaxonomyValueBody.safeParse(requestExample(
       "/api/owner/v1/taxonomies/{taxonomyId}/values", "post", "technology",
+    )).success).toBe(true);
+    expect(zCreateOwnerProjectStatusValueBody.safeParse(requestExample(
+      "/api/owner/v1/project-status-values", "post", "shipped",
     )).success).toBe(true);
   });
 
@@ -97,6 +113,15 @@ describe("generated Owner v1 validators", () => {
   });
 
   it("rejects unknown and provider-shaped command properties", () => {
+    expect(zCreateOwnerContentBody.safeParse({
+      contentType: "project",
+      locale: "en",
+      title: "Atlas Search",
+      summary: "A bounded search workflow.",
+      body: "Draft overview.",
+      candidateSlug: "atlas-search",
+      supabaseProjectId: "private",
+    }).success).toBe(false);
     expect(zUpdateOwnerProfileConfigurationBody.safeParse({
       displayName: "Ali Sameh",
       headline: "Engineer",
@@ -117,6 +142,25 @@ describe("generated Owner v1 validators", () => {
       revisionId: ids.revision,
       publishArabicToo: true,
     }).success).toBe(false);
+  });
+
+  it("rejects mismatched content kinds and unsupported locales in strict Draft payloads", () => {
+    const base = {
+      contentType: "project",
+      locale: "en",
+      title: "Atlas Search",
+      summary: "A bounded search workflow.",
+      body: "Draft overview.",
+      candidateSlug: "atlas-search",
+    };
+    expect(zCreateOwnerContentBody.safeParse({ ...base, locale: "fr" }).success).toBe(false);
+    expect(zCreateOwnerContentBody.safeParse({
+      ...base,
+      testimonial: { authorName: "A", quote: "B" },
+    }).success).toBe(false);
+    expect(zCorrectOwnerProjectCandidateSlugBody.safeParse({ candidateSlug: "draft-2" }).success).toBe(true);
+    expect(zCorrectOwnerProjectCandidateSlugBody.safeParse({ candidateSlug: "Draft 2" }).success).toBe(false);
+    expect(zCreateOwnerProjectStatusValueBody.safeParse({ label: "Shipped", privateNote: "leak" }).success).toBe(false);
   });
 
   it("validates narrow aggregate views without table or provider fields", () => {
@@ -158,6 +202,21 @@ describe("generated Owner v1 validators", () => {
       outcome: "revision-saved",
       revisionId: ids.revision,
     }).success).toBe(true);
+    expect(zProjectStatusValueReceipt.safeParse({
+      valueId: ids.status,
+      label: "Shipped",
+      state: "active",
+      aggregateVersion: 2,
+      outcome: "project-status-value-created",
+    }).success).toBe(true);
+    expect(zProjectStatusValueReceipt.safeParse({
+      valueId: ids.status,
+      label: "Shipped",
+      state: "active",
+      aggregateVersion: 2,
+      outcome: "project-status-value-created",
+      ownerEmail: "private@example.test",
+    }).success).toBe(false);
     expect(zProjectAggregateView.safeParse({
       projectId: ids.content,
       aggregateVersion: 7,

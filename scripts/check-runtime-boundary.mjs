@@ -2,8 +2,9 @@
  * Contract-driven Phase 2 runtime boundary check (#33).
  *
  * Reads both canonical OpenAPI bundles, derives the expected handwritten
- * adapter export from each operationId, and proves that every operation has
- * exactly one adapter while every exported product adapter is declared.
+ * adapter export from each operationId, and proves active operations resolve
+ * exactly once while explicitly deferred Owner operations have no adapter.
+ * Every exported product adapter must still be declared.
  */
 
 import {
@@ -33,6 +34,21 @@ const EXPECTED_OPERATIONAL_ROUTES = [
   "src/app/livez/route.ts",
   "src/app/readyz/route.ts",
 ];
+
+// Phase 5 contracts are visible before their vertical slices are active.
+// Keep these explicitly allowlisted and adapter-free until their tickets add
+// authenticated handlers, persistence, and negative behavior together.
+export const FAIL_CLOSED_OWNER_OPERATION_IDS = Object.freeze([
+  "createOwnerContent",
+  "previewOwnerContentRevision",
+  "reviewOwnerContentRevision",
+  "getOwnerContentHistory",
+  "correctOwnerProjectCandidateSlug",
+  "listOwnerProjectStatusValues",
+  "createOwnerProjectStatusValue",
+  "renameOwnerProjectStatusValue",
+  "retireOwnerProjectStatusValue",
+]);
 
 function toPosix(path) {
   return path.split("\\").join("/");
@@ -200,9 +216,13 @@ export function buildRuntimeBoundary(root = DEFAULT_ROOT) {
     .sort();
   const matrix = operations.map((operation) => {
     const expectedExport = handlerNameFor(operation.operationId);
+    const failClosed =
+      operation.surface === "owner" &&
+      FAIL_CLOSED_OWNER_OPERATION_IDS.includes(operation.operationId);
     return {
       ...operation,
       expectedExport,
+      activation: failClosed ? "fail-closed" : "active",
       matches: adapters.filter((adapter) => adapter.exportName === expectedExport),
     };
   });
@@ -220,6 +240,10 @@ export function buildRuntimeBoundary(root = DEFAULT_ROOT) {
   const missingOperationalRoutes = EXPECTED_OPERATIONAL_ROUTES.filter(
     (file) => !routeFiles.includes(file),
   );
+  const failClosedOwnerOperations = matrix.filter(
+    (entry) => entry.activation === "fail-closed",
+  );
+  const activeOperations = matrix.filter((entry) => entry.activation === "active");
 
   const checks = [
     {
@@ -229,8 +253,11 @@ export function buildRuntimeBoundary(root = DEFAULT_ROOT) {
     },
     {
       name: "owner-operation-count",
-      passed: matrix.filter((entry) => entry.surface === "owner").length === 39,
-      detail: "exactly thirty-nine Owner operations",
+      passed:
+        matrix.filter((entry) => entry.surface === "owner").length === 48 &&
+        activeOperations.filter((entry) => entry.surface === "owner").length === 39 &&
+        failClosedOwnerOperations.length === FAIL_CLOSED_OWNER_OPERATION_IDS.length,
+      detail: "39 active Owner operations and 9 explicitly fail-closed Phase 5 contracts",
     },
     {
       name: "unique-operation-identifiers",
@@ -239,8 +266,17 @@ export function buildRuntimeBoundary(root = DEFAULT_ROOT) {
     },
     {
       name: "one-adapter-per-operation",
-      passed: matrix.every((entry) => entry.matches.length === 1),
-      detail: `${matrix.filter((entry) => entry.matches.length === 1).length}/${matrix.length} resolved exactly once`,
+      passed:
+        activeOperations.every((entry) => entry.matches.length === 1) &&
+        failClosedOwnerOperations.every((entry) => entry.matches.length === 0),
+      detail: `${activeOperations.filter((entry) => entry.matches.length === 1).length}/${activeOperations.length} active operations resolve once; deferred operations have no adapter`,
+    },
+    {
+      name: "unfinished-owner-operations-fail-closed",
+      passed:
+        failClosedOwnerOperations.length === FAIL_CLOSED_OWNER_OPERATION_IDS.length &&
+        failClosedOwnerOperations.every((entry) => entry.matches.length === 0),
+      detail: `${failClosedOwnerOperations.length} declared Phase 5 operations have no runtime adapter`,
     },
     {
       name: "no-undeclared-product-adapters",
@@ -311,7 +347,7 @@ export function main(root = DEFAULT_ROOT) {
     }
     return 1;
   }
-  console.log("✓ runtime boundary: 5 public + 39 Owner operations resolve exactly once");
+  console.log("✓ runtime boundary: 5 public + 39 active Owner operations resolve exactly once; 9 Phase 5 contracts fail closed");
   return 0;
 }
 

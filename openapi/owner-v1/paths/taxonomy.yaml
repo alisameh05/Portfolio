@@ -1,3 +1,109 @@
+projectStatusValues:
+  get:
+    operationId: listOwnerProjectStatusValues
+    summary: List Owner-defined Project status values
+    tags: [Projects]
+    responses:
+      '200':
+        description: Active and retired Project status identities.
+        content:
+          application/json:
+            schema: { $ref: ../components/taxonomy.yaml#/schemas/ProjectStatusValueList }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+  post:
+    operationId: createOwnerProjectStatusValue
+    summary: Create an Owner-defined Project status value
+    tags: [Projects]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/taxonomy.yaml#/schemas/CreateProjectStatusValueRequest }
+          examples:
+            shipped: { value: { label: Shipped } }
+    responses:
+      '201':
+        description: Status value created with stable identity.
+        content:
+          application/json:
+            schema: { $ref: ../components/taxonomy.yaml#/schemas/ProjectStatusValueReceipt }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+renameProjectStatusValue:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ValueId }
+  post:
+    operationId: renameOwnerProjectStatusValue
+    summary: Rename an Owner-defined Project status value
+    tags: [Projects]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/taxonomy.yaml#/schemas/RenameProjectStatusValueCommand }
+    responses:
+      '200':
+        description: Status label changed without changing status identity or lifecycle.
+        content:
+          application/json:
+            schema: { $ref: ../components/taxonomy.yaml#/schemas/ProjectStatusValueReceipt }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
+retireProjectStatusValue:
+  parameters:
+    - { $ref: ../components/common.yaml#/parameters/ValueId }
+  post:
+    operationId: retireOwnerProjectStatusValue
+    summary: Retire an Owner-defined Project status value
+    description: Retains existing Project references and blocks future selection.
+    tags: [Projects]
+    parameters:
+      - { $ref: ../components/common.yaml#/parameters/IdempotencyKey }
+      - { $ref: ../components/common.yaml#/parameters/IfMatch }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: ../components/taxonomy.yaml#/schemas/RetireProjectStatusValueCommand }
+    responses:
+      '200':
+        description: Status value retired with history retained.
+        content:
+          application/json:
+            schema: { $ref: ../components/taxonomy.yaml#/schemas/ProjectStatusValueReceipt }
+      '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
+      '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }
+      '404': { $ref: ../components/common.yaml#/responses/NotFoundProblem }
+      '409': { $ref: ../components/common.yaml#/responses/ConflictProblem }
+      '412': { $ref: ../components/common.yaml#/responses/FailedPreconditionProblem }
+      '422': { $ref: ../components/common.yaml#/responses/UnprocessableProblem }
+      '429': { $ref: ../components/common.yaml#/responses/RateLimitedProblem }
+      '500': { $ref: ../components/common.yaml#/responses/InternalProblem }
+      '503': { $ref: ../components/common.yaml#/responses/TemporarilyUnavailableProblem }
+
 taxonomy:
   parameters:
     - { $ref: ../components/common.yaml#/parameters/TaxonomyId }

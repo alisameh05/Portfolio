@@ -10,8 +10,10 @@
  * No database, network, credentials, or running application required.
  *
  * Checks (each fails the verdict when violated):
- *   1. Exactly five public and thirty-nine Owner operations preserved.
- *   2. Runtime boundary: one adapter per operation, only operational routes.
+ *   1. Five public operations, thirty-nine active Owner operations, and
+ *      nine explicitly fail-closed Phase 5 Owner contracts are preserved.
+ *   2. Runtime boundary: one adapter per active operation; deferred contracts
+ *      have none, and only operational routes execute.
  *   3. Runtime architecture: provider/generated/transaction seams preserved.
  *   4. No forbidden source surface (Lab, frontend, stubs, leakage).
  *   5. Phase 4 negative fixtures rejected (provider/generated leakage,
@@ -340,7 +342,7 @@ function main() {
   writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
   if (result.failures.length === 0) {
-    console.log("✓ phase4 context: 5 public + 39 owner, seams preserved, 6 negative fixtures rejected, 0 placeholders confined");
+    console.log("✓ phase4 context: 5 public + 39 active Owner + 9 fail-closed Phase 5 contracts, seams preserved, 6 negative fixtures rejected, 0 placeholders confined");
     return 0;
   }
   for (const failure of result.failures) console.error(`✗ phase4 context: ${failure}`);

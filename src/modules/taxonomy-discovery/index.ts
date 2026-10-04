@@ -10,6 +10,10 @@ export type {
   TaxonomyValue,
   TaxonomyAssignment,
   ProjectDiscoveryCard,
+  PublicDiscoveryCriteria,
+  ProjectStatusValueView,
+  ProjectStatusValueReceipt,
+  ProjectStatusHistoryEntry,
   TaxonomyValueAssignedEvent,
   TaxonomyValueRenamedEvent,
   TaxonomyValueRetiredEvent,
@@ -17,12 +21,19 @@ export type {
 } from "./domain/index.js";
 
 export type {
-  AssignTaxonomyValueCommand,
   RenameTaxonomyValueCommand,
   RetireTaxonomyValueCommand,
   MergeTaxonomyValueCommand,
   ValidateAssignmentsQuery,
   GetPublicDiscoveryQuery,
+  ProjectStatusHistoryQuery,
+  ProjectStatusHistoryPage,
+  ValidateProjectAssignmentQuery,
+  ProjectAssignmentEligibilityPort,
+  TaxonomyMergeCoordinator,
+  CreateProjectStatusValueCommand,
+  RenameProjectStatusValueCommand,
+  RetireProjectStatusValueCommand,
   TaxonomyDiscoveryService,
 } from "./application/index.js";
 
