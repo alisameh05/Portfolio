@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { migrationSha256 } from "./migration-checksum.mjs";
@@ -101,6 +101,18 @@ export function requirePredecessorTests(report, expectedFiles) {
     report.testResults.some((suite) => suite.status !== "passed")
   ) throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED");
   return report.numPassedTests;
+}
+
+export function evidenceOutputPath(candidate = process.env.PORTFOLIO_SETTINGS_EVIDENCE_PATH) {
+  if (candidate === undefined || candidate === "") return join(ROOT, "evidence/phase-4-database-integrity.json");
+  const resolved = resolve(candidate);
+  const relativePath = relative(resolve(tmpdir()), resolved);
+  const name = basename(resolved);
+  if (
+    relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath) ||
+    !name.startsWith("shipwithali-phase5-smoke-") || !name.endsWith(".json")
+  ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_PATH_INVALID");
+  return resolved;
 }
 
 function migrationSources() {
@@ -488,8 +500,8 @@ export async function main() {
     if (
       /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
     ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
-    const evidencePath = join(ROOT, "evidence/phase-4-database-integrity.json");
-    mkdirSync(join(ROOT, "evidence"), { recursive: true });
+    const evidencePath = evidenceOutputPath();
+    mkdirSync(dirname(evidencePath), { recursive: true });
     writeFileSync(evidencePath, serializedEvidence, "utf8");
   } catch (error) {
     failure = error;

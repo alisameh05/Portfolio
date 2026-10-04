@@ -1,0 +1,279 @@
+#!/usr/bin/env node
+
+import { randomUUID } from "node:crypto";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+
+const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
+const VITEST = join(ROOT, "node_modules", "vitest", "vitest.mjs");
+const EVIDENCE_DIR = join(ROOT, "evidence");
+
+export const FOCUS_SUITES = Object.freeze({
+  authoring: "authoring",
+  taxonomy: "taxonomy",
+  database: "database",
+  owner: "owner",
+});
+export const FOCUS_ENTRYPOINTS = Object.freeze({
+  authoring: "authoring-review-publication-routes",
+  taxonomy: "taxonomy-status-relationships-discovery",
+  database: "database-rls-migrations-concurrency",
+  owner: "owner-adapters-composition",
+});
+
+function filesUnder(directory) {
+  if (!existsSync(directory)) return [];
+  const files = [];
+  for (const entry of readdirSync(directory).sort()) {
+    const full = join(directory, entry);
+    const stat = statSync(full);
+    if (stat.isDirectory()) files.push(...filesUnder(full));
+    else if (/\.test\.(?:ts|tsx|js|mjs|mts)$/.test(entry)) files.push(full);
+  }
+  return files.sort();
+}
+
+export function sanitizeVerificationText(value) {
+  return String(value)
+    .replaceAll(ROOT, "<WORKSPACE>")
+    .replaceAll(ROOT.split("\\").join("/"), "<WORKSPACE>")
+    .replaceAll(tmpdir(), "<TEMP>")
+    .replace(/postgres(?:ql)?:\/\/[^\s"']+/gi, "[redacted-database-url]")
+    .replace(/(password|token|secret|idempotency[-_]?key)(\s*[=:]\s*)[^\s,;]+/gi, "$1$2[redacted]");
+}
+
+export function parseVitestReport(report) {
+  const shape = report && typeof report === "object" ? report : {};
+  const testResults = Array.isArray(shape.testResults) ? shape.testResults : [];
+  const assertions = testResults.flatMap((file) => Array.isArray(file?.assertionResults) ? file.assertionResults : []);
+  const passed = Number.isSafeInteger(shape.numPassedTests) ? shape.numPassedTests : 0;
+  const failed = Number.isSafeInteger(shape.numFailedTests) ? shape.numFailedTests : 0;
+  const declaredSkipped = (Number.isSafeInteger(shape.numPendingTests) ? shape.numPendingTests : 0) +
+    (Number.isSafeInteger(shape.numTodoTests) ? shape.numTodoTests : 0);
+  const observedSkipped = assertions.filter((test) => ["pending", "skipped", "todo"].includes(test?.status)).length;
+  const skipped = Math.max(declaredSkipped, observedSkipped);
+  const total = Number.isSafeInteger(shape.numTotalTests) ? shape.numTotalTests : passed + failed + skipped;
+  const executed = passed + failed;
+  const partial = total <= 0 || testResults.length === 0 || executed + skipped !== total;
+  const valid = shape.success === true && passed > 0 && failed === 0 && skipped === 0 && !partial &&
+    testResults.every((file) => file?.status === "passed") && assertions.every((test) => test?.status === "passed");
+  return {
+    executed,
+    failed,
+    skipped,
+    total,
+    partial,
+    verdict: valid ? "pass" : "fail",
+    scenarioAcceptance: valid,
+  };
+}
+
+export function verifyRequiredDependency(result) {
+  return {
+    passed: result?.available === true,
+    code: typeof result?.code === "string" ? result.code : "REQUIRED_DEPENDENCY_UNAVAILABLE",
+  };
+}
+
+export function localVerificationEnvironment(source = process.env) {
+  const env = { ...source, CI: "1" };
+  for (const key of Object.keys(env)) {
+    if (/^(?:SUPABASE_|PHASE4_|DATABASE_|OWNER_GITHUB_)/.test(key)) delete env[key];
+  }
+  return env;
+}
+
+export function makeVerificationReport({
+  runId = randomUUID(),
+  sourceRevision,
+  suite,
+  result,
+  dependency = { required: false, available: true, code: "NOT_REQUIRED" },
+  cleanup = { attempted: false, passed: true },
+  suiteAvailable = true,
+  reproduction = [],
+  details = {},
+}) {
+  const dependencyResult = verifyRequiredDependency(dependency);
+  const passed = result?.verdict === "pass" && dependencyResult.passed &&
+    (cleanup?.attempted !== true || cleanup?.passed === true) && suiteAvailable === true;
+  const complete = passed && result?.scenarioAcceptance === true;
+  let safeDetails = details;
+  try { safeDetails = JSON.parse(sanitizeVerificationText(JSON.stringify(details))); } catch { safeDetails = "[redacted-details]"; }
+  return {
+    schemaVersion: 1,
+    runId,
+    sourceRevision,
+    suite,
+    startedAt: new Date().toISOString(),
+    verdict: passed ? "pass" : "fail",
+    scenarioAcceptance: complete,
+    suiteAvailable,
+    counts: {
+      executed: result?.executed ?? 0,
+      failed: result?.failed ?? 0,
+      skipped: result?.skipped ?? 0,
+      total: result?.total ?? result?.executed ?? 0,
+    },
+    partial: result?.partial === true,
+    dependency: { required: dependency?.required === true, available: dependencyResult.passed, code: dependencyResult.code },
+    cleanup: { attempted: cleanup?.attempted === true, passed: cleanup?.passed === true },
+    reproduction: reproduction.map((line) => sanitizeVerificationText(line)),
+    details: safeDetails,
+  };
+}
+
+export function dockerDependencyResult(probe = spawnSync) {
+  const result = probe("docker", ["info", "--format", "{{.ServerVersion}}"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 20_000,
+  });
+  if (result.error || result.status !== 0 || !String(result.stdout ?? "").trim()) {
+    return { available: false, code: "PHASE5_REQUIRED_DATABASE_UNAVAILABLE" };
+  }
+  return { available: true, code: "PHASE5_REQUIRED_DATABASE_AVAILABLE" };
+}
+
+function sourceRevision() {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
+function writeReport(report) {
+  mkdirSync(EVIDENCE_DIR, { recursive: true });
+  const path = join(EVIDENCE_DIR, `phase-5-verification-${report.suite}.json`);
+  writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  return path;
+}
+
+function readReport(path) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function runFocus(suite) {
+  const directory = join(ROOT, "tests", "phase5", suite);
+  const files = filesUnder(directory);
+  let dependency = { required: suite === "database", available: true, code: suite === "database" ? "NOT_PROBED" : "NOT_REQUIRED" };
+  let result = { executed: 0, failed: 0, skipped: 0, total: 0, partial: true, verdict: "fail", scenarioAcceptance: false };
+  let suiteAvailable = files.length > 0;
+  let output = "";
+  let cleanup = { attempted: false, passed: true };
+
+  if (suite === "database") dependency = { required: true, ...dockerDependencyResult() };
+  if (suiteAvailable && (!dependency.required || dependency.available)) {
+    const reportPath = join(tmpdir(), `shipwithali-phase5-${suite}-${process.pid}-${randomUUID()}.json`);
+    cleanup = { attempted: true, passed: true };
+    const run = spawnSync(process.execPath, [VITEST, "run", ...files.map((path) => relative(ROOT, path)), "--reporter=json", `--outputFile=${reportPath}`], {
+      cwd: ROOT,
+      env: { ...localVerificationEnvironment(), PHASE5_REQUIRE_DATABASE: suite === "database" ? "1" : "0" },
+      encoding: "utf8",
+      timeout: 600_000,
+    });
+    output = `${run.stdout ?? ""}\n${run.stderr ?? ""}`;
+    result = parseVitestReport(readReport(reportPath));
+    if (run.error || run.status !== 0) {
+      result.verdict = "fail";
+      result.scenarioAcceptance = false;
+      result.failed = Math.max(1, result.failed);
+    }
+    try { unlinkSync(reportPath); } catch { if (existsSync(reportPath)) cleanup.passed = false; }
+  }
+
+  const report = makeVerificationReport({
+    sourceRevision: sourceRevision(),
+    suite,
+    result,
+    dependency,
+    suiteAvailable,
+    cleanup,
+    reproduction: [`npm run phase5:focus:${FOCUS_ENTRYPOINTS[suite]}`],
+    details: { message: suiteAvailable ? "focused suite executed" : "no Phase 5 business scenarios are implemented in this suite yet" },
+  });
+  const path = writeReport(report);
+  if (output) process.stdout.write(sanitizeVerificationText(output));
+  console.log(JSON.stringify({ ...report, evidence: relative(ROOT, path) }, null, 2));
+  return report.verdict === "pass" ? 0 : 1;
+}
+
+function runSmoke() {
+  const dependency = { required: true, ...dockerDependencyResult() };
+  let result = { executed: 0, failed: 0, skipped: 0, total: 0, partial: true, verdict: "fail", scenarioAcceptance: false };
+  let cleanup = { attempted: false, passed: true };
+  let output = "";
+  let smokeDetails = { workflow: "existing real PostgreSQL Owner Configuration fixture used only to prove disposable DB harness behavior", phase5ScenariosAccepted: false };
+  if (dependency.available) {
+    const integrationEvidencePath = join(tmpdir(), `shipwithali-phase5-smoke-${process.pid}-${randomUUID()}.json`);
+    const child = spawnSync(process.execPath, [join(ROOT, "scripts", "portfolio-settings-integration.mjs")], {
+      cwd: ROOT,
+      env: { ...localVerificationEnvironment(), PORTFOLIO_SETTINGS_EVIDENCE_PATH: integrationEvidencePath },
+      encoding: "utf8",
+      timeout: 900_000,
+    });
+    output = `${child.stdout ?? ""}\n${child.stderr ?? ""}`;
+    const databaseReport = readReport(integrationEvidencePath);
+    const passedTests = databaseReport?.databaseIntegrationTestsPassed ?? 0;
+    const skipped = databaseReport?.skippedCases ?? 0;
+    const roles = Array.isArray(databaseReport?.restrictedPrincipalMatrix) ? databaseReport.restrictedPrincipalMatrix : [];
+    const expectedPrincipals = ["anon Visitor login", "shipwithali_worker login", "PUBLIC"];
+    const restrictedRolesVerified = expectedPrincipals.every((principal) => roles.some((role) => role.principal === principal));
+    const evidenceComplete = databaseReport?.isolatedLoopbackProjects === true && databaseReport?.credentialsRecorded === false &&
+      databaseReport?.secretValuesRecorded === false && passedTests > 0 && skipped === 0 && restrictedRolesVerified;
+    result = {
+      executed: passedTests,
+      failed: child.status === 0 && evidenceComplete ? 0 : 1,
+      skipped,
+      total: passedTests + skipped,
+      partial: !evidenceComplete,
+      verdict: child.status === 0 && evidenceComplete ? "pass" : "fail",
+      scenarioAcceptance: false,
+    };
+    cleanup = { attempted: true, passed: child.status === 0 && !/CLEANUP_FAILED/.test(output) };
+    smokeDetails = {
+      workflow: "existing real PostgreSQL Owner Configuration fixture used only to prove disposable DB harness behavior",
+      phase5ScenariosAccepted: false,
+      isolatedLoopback: databaseReport?.isolatedLoopbackProjects === true,
+      restrictedPrincipalCount: roles.length,
+      restrictedRolesVerified,
+      credentialsRecorded: databaseReport?.credentialsRecorded === true,
+      secretValuesRecorded: databaseReport?.secretValuesRecorded === true,
+    };
+    try { unlinkSync(integrationEvidencePath); } catch { if (existsSync(integrationEvidencePath)) cleanup.passed = false; }
+    if (child.error || child.status !== 0) result.verdict = "fail";
+  }
+  const report = makeVerificationReport({
+    sourceRevision: sourceRevision(),
+    suite: "smoke",
+    result,
+    dependency,
+    cleanup,
+    reproduction: ["npm run phase5:smoke"],
+    details: smokeDetails,
+  });
+  const path = writeReport(report);
+  if (output) process.stdout.write(sanitizeVerificationText(output));
+  console.log(JSON.stringify({ ...report, evidence: relative(ROOT, path) }, null, 2));
+  return report.verdict === "pass" ? 0 : 1;
+}
+
+const invokedDirectly = process.argv[1]?.replaceAll("\\", "/").endsWith("scripts/phase5-verification.mjs");
+if (invokedDirectly) {
+  const [action, suite] = process.argv.slice(2);
+  if (action === "--suite" && Object.hasOwn(FOCUS_SUITES, suite)) process.exitCode = runFocus(suite);
+  else if (action === "--smoke") process.exitCode = runSmoke();
+  else {
+    console.error("PHASE5_VERIFICATION_USAGE: use --suite authoring|taxonomy|database|owner or --smoke");
+    process.exitCode = 2;
+  }
+}
