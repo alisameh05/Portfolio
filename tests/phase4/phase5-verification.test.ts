@@ -120,6 +120,11 @@ describe("Phase 5 verification preparation (#107)", () => {
     expect(harness.verifyRestrictedPrincipalMatrix([
       ...restrictedMatrix.slice(0, 2), { ...restrictedMatrix[2], settings: "allow" },
     ])).toBe(false);
+    expect(harness.verifyRestrictedPrincipalMatrix([
+      { ...restrictedMatrix[0], settings: "allow" },
+      restrictedMatrix[0],
+      ...restrictedMatrix.slice(1),
+    ])).toBe(false);
     const report = harness.makeVerificationReport({
       runId: "run-1",
       sourceRevision: "a".repeat(40),

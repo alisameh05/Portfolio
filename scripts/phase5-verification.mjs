@@ -80,6 +80,9 @@ export function verifyRequiredDependency(result) {
 
 export function verifyRestrictedPrincipalMatrix(roles) {
   if (!Array.isArray(roles)) return false;
+  const principals = roles.map((role) => role?.principal);
+  if (principals.some((principal) => typeof principal !== "string" || principal.trim() === "") ||
+    new Set(principals).size !== principals.length) return false;
   const byPrincipal = new Map(roles.map((role) => [role?.principal, role]));
   const isDenied = (value) => typeof value === "string" && /^deny(?: by grants and forced RLS)?$/i.test(value);
   const checks = [
