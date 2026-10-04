@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync,
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const VITEST = join(ROOT, "node_modules", "vitest", "vitest.mjs");
@@ -36,13 +37,12 @@ function filesUnder(directory) {
   return files.sort();
 }
 
-export function sanitizeVerificationText(value) {
-  return String(value)
-    .replaceAll(ROOT, "<WORKSPACE>")
-    .replaceAll(ROOT.split("\\").join("/"), "<WORKSPACE>")
-    .replaceAll(tmpdir(), "<TEMP>")
-    .replace(/postgres(?:ql)?:\/\/[^\s"']+/gi, "[redacted-database-url]")
-    .replace(/(password|token|secret|idempotency[-_]?key)(\s*[=:]\s*)[^\s,;]+/gi, "$1$2[redacted]");
+export function sanitizeVerificationText(value, source = process.env) {
+  const secrets = Object.entries(source)
+    .filter(([name, secret]) => /(?:TOKEN|SECRET|PASSWORD|PRIVATE_KEY|SERVICE_ROLE_KEY)/i.test(name) && typeof secret === "string" && secret.length >= 6)
+    .map(([, secret]) => secret);
+  return sanitizeEvidenceOutput(String(value), { workspace: ROOT, temporary: tmpdir(), secrets })
+    .replace(/\btoken\s*[=:]\s*[^\s,;]+/gi, "token=[redacted]");
 }
 
 export function parseVitestReport(report) {
@@ -99,8 +99,8 @@ export function makeVerificationReport({
 }) {
   const dependencyResult = verifyRequiredDependency(dependency);
   const passed = result?.verdict === "pass" && dependencyResult.passed &&
-    (cleanup?.attempted !== true || cleanup?.passed === true) && suiteAvailable === true;
-  const complete = passed && result?.scenarioAcceptance === true;
+    (cleanup?.attempted !== true || cleanup?.passed === true);
+  const complete = passed && suiteAvailable === true && result?.scenarioAcceptance === true;
   let safeDetails = details;
   try { safeDetails = JSON.parse(sanitizeVerificationText(JSON.stringify(details))); } catch { safeDetails = "[redacted-details]"; }
   return {
@@ -163,21 +163,24 @@ function readReport(path) {
 }
 
 function runFocus(suite) {
+  if (suite === "database") return runSmoke({ suite, reproduction: [`npm run phase5:focus:${FOCUS_ENTRYPOINTS[suite]}`] });
+
   const directory = join(ROOT, "tests", "phase5", suite);
   const files = filesUnder(directory);
-  let dependency = { required: suite === "database", available: true, code: suite === "database" ? "NOT_PROBED" : "NOT_REQUIRED" };
-  let result = { executed: 0, failed: 0, skipped: 0, total: 0, partial: true, verdict: "fail", scenarioAcceptance: false };
+  const dependency = { required: false, available: true, code: "NOT_REQUIRED" };
+  let result = files.length === 0
+    ? { executed: 0, failed: 0, skipped: 0, total: 0, partial: false, verdict: "pass", scenarioAcceptance: false }
+    : { executed: 0, failed: 0, skipped: 0, total: 0, partial: true, verdict: "fail", scenarioAcceptance: false };
   let suiteAvailable = files.length > 0;
   let output = "";
   let cleanup = { attempted: false, passed: true };
 
-  if (suite === "database") dependency = { required: true, ...dockerDependencyResult() };
-  if (suiteAvailable && (!dependency.required || dependency.available)) {
+  if (suiteAvailable) {
     const reportPath = join(tmpdir(), `shipwithali-phase5-${suite}-${process.pid}-${randomUUID()}.json`);
     cleanup = { attempted: true, passed: true };
     const run = spawnSync(process.execPath, [VITEST, "run", ...files.map((path) => relative(ROOT, path)), "--reporter=json", `--outputFile=${reportPath}`], {
       cwd: ROOT,
-      env: { ...localVerificationEnvironment(), PHASE5_REQUIRE_DATABASE: suite === "database" ? "1" : "0" },
+      env: { ...localVerificationEnvironment(), PHASE5_REQUIRE_DATABASE: "0" },
       encoding: "utf8",
       timeout: 600_000,
     });
@@ -207,7 +210,7 @@ function runFocus(suite) {
   return report.verdict === "pass" ? 0 : 1;
 }
 
-function runSmoke() {
+function runSmoke({ suite = "smoke", reproduction = ["npm run phase5:smoke"] } = {}) {
   const dependency = { required: true, ...dockerDependencyResult() };
   let result = { executed: 0, failed: 0, skipped: 0, total: 0, partial: true, verdict: "fail", scenarioAcceptance: false };
   let cleanup = { attempted: false, passed: true };
@@ -254,11 +257,12 @@ function runSmoke() {
   }
   const report = makeVerificationReport({
     sourceRevision: sourceRevision(),
-    suite: "smoke",
+    suite,
     result,
     dependency,
     cleanup,
-    reproduction: ["npm run phase5:smoke"],
+    suiteAvailable: suite === "smoke" ? true : filesUnder(join(ROOT, "tests", "phase5", suite)).length > 0,
+    reproduction,
     details: smokeDetails,
   });
   const path = writeReport(report);

@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createFailureInjector, mediaAcceptanceFacts } from "../phase5/fixtures/failure-injection.js";
+import {
+  createBarrier,
+  createDeterministicFixture,
+  createFailureInjector,
+  createIndependentConnections,
+  mediaAcceptanceFacts,
+} from "../phase5/fixtures/failure-injection.js";
 
 type VerificationModule = {
   FOCUS_SUITES: Record<string, string>;
@@ -17,7 +23,7 @@ type VerificationModule = {
     verdict: string;
     scenarioAcceptance: boolean;
   };
-  sanitizeVerificationText: (value: string) => string;
+  sanitizeVerificationText: (value: string, source?: NodeJS.ProcessEnv) => string;
   verifyRequiredDependency: (result: { available: boolean; code: string }) => { passed: boolean; code: string };
 };
 
@@ -118,6 +124,41 @@ describe("Phase 5 verification preparation (#107)", () => {
     });
     expect(harness.sanitizeVerificationText("postgresql://owner:secret@127.0.0.1:5432/db token=abc"))
       .toBe("[redacted-database-url] token=[redacted]");
+    const sensitiveOutput = harness.sanitizeVerificationText(
+      'Bearer signed-token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwcml2YXRlIn0.signature123456 {"email":"owner@example.test","sessionId":"session-secret"} private_key=environment-secret',
+      { PHASE5_PRIVATE_KEY: "environment-secret" },
+    );
+    for (const secret of ["signed-token", "eyJhbGciOiJIUzI1NiJ9", "owner@example.test", "session-secret", "environment-secret"]) {
+      expect(sensitiveOutput).not.toContain(secret);
+    }
+    const prepOnly = harness.makeVerificationReport({
+      suite: "authoring",
+      suiteAvailable: false,
+      result: { executed: 0, failed: 0, skipped: 0, total: 0, partial: false, verdict: "pass", scenarioAcceptance: false },
+    });
+    expect(prepOnly).toMatchObject({ verdict: "pass", suiteAvailable: false, scenarioAcceptance: false });
+  });
+
+  it("provides deterministic clocks, seeded IDs, independent connections and race barriers", async () => {
+    const first = createDeterministicFixture("ticket-107");
+    const replay = createDeterministicFixture("ticket-107");
+    expect(first.now().toISOString()).toBe("2026-01-01T00:00:00.000Z");
+    expect(first.nextId("project")).toBe(replay.nextId("project"));
+    expect(first.nextId("project")).not.toBe(first.nextId("project"));
+
+    let connectionNumber = 0;
+    const connections = await createIndependentConnections(async () => ({ id: ++connectionNumber }));
+    expect(connections).toHaveLength(2);
+    expect(connections[0]).not.toBe(connections[1]);
+
+    const barrier = createBarrier(2);
+    let firstReleased = false;
+    const firstWaiter = barrier.wait().then(() => { firstReleased = true; });
+    await Promise.resolve();
+    expect(firstReleased).toBe(false);
+    await barrier.wait();
+    await firstWaiter;
+    expect(firstReleased).toBe(true);
   });
 
   it("injects transaction, projection, outbox and receipt failures using provider-neutral Media facts", () => {
