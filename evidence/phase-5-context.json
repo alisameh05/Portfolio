@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "ticket": 107,
+  "parent": 106,
+  "runId": "010951bb-7d02-416a-b691-5f1ebd4e7898",
+  "sourceRevision": "b9b3cb34272045b3c63f954cbd921a081d1bb228",
+  "scope": "phase-5-verification-context",
+  "verdict": "pass",
+  "scenarioAcceptance": false,
+  "phase": "phase5",
+  "failures": [],
+  "operations": {
+    "public": 5,
+    "owner": 39,
+    "forbiddenFindings": 0
+  },
+  "runtimeBoundary": "pass",
+  "runtimeArchitecture": "pass",
+  "historicalPolicies": {
+    "phase2": "fake-only runtime: production composition fails closed, deterministic fakes only",
+    "phase3": "infrastructure-only database: operations ledger/outbox/jobs primitives only, no business tables",
+    "phase4Activation": [
+      "identity-access",
+      "portfolio-configuration"
+    ]
+  },
+  "currentActivation": [
+    "content-and-publishing",
+    "taxonomy-and-discovery"
+  ],
+  "guarantees": {
+    "predecessor": "Phase 3 gate #55 and Phase 4 gate #90 are planning prerequisites; this command does not claim they ran in this invocation",
+    "current": "Phase 5 may activate Content and Publishing plus Taxonomy and Discovery only",
+    "publicBoundary": "five public and thirty-nine Owner HTTP operations remain unchanged",
+    "laterPhaseLimits": "no Lab/frontend executable surface, provider leakage, or extra public route is admitted"
+  }
+}

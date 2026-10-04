@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "runId": "4e7b0476-d158-44e0-90df-a51119de072e",
+  "sourceRevision": "b9b3cb34272045b3c63f954cbd921a081d1bb228",
+  "suite": "database",
+  "startedAt": "2026-10-04T21:47:27.315Z",
+  "verdict": "pass",
+  "scenarioAcceptance": false,
+  "suiteAvailable": false,
+  "counts": {
+    "executed": 24,
+    "failed": 0,
+    "skipped": 0,
+    "total": 24
+  },
+  "partial": false,
+  "dependency": {
+    "required": true,
+    "available": true,
+    "code": "PHASE5_REQUIRED_DATABASE_AVAILABLE"
+  },
+  "cleanup": {
+    "attempted": true,
+    "passed": true
+  },
+  "reproduction": [
+    "npm run phase5:focus:database-rls-migrations-concurrency"
+  ],
+  "details": {
+    "workflow": "existing real PostgreSQL Owner Configuration fixture used only to prove disposable DB harness behavior",
+    "phase5ScenariosAccepted": false,
+    "isolatedLoopback": true,
+    "restrictedPrincipalCount": 7,
+    "restrictedRolesVerified": true,
+    "credentialsRecorded": false,
+    "secretValuesRecorded": false
+  }
+}
