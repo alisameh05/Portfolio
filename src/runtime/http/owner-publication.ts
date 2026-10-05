@@ -19,10 +19,10 @@
  * boundary (`./owner-security.js`): every operation requires a verified
  * Owner session, owner-scoped authorization, and (for mutations) exact
  * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
- * translation is exercised through fakes. Revisions, Language-version
- * publication, lifecycle decisions, Taxonomy evolution, evidence, routes,
- * persistence, and authorization rules remain unimplemented
- * provider-neutral application behavior.
+ * translation is exercised through fakes. Language-version publication,
+ * lifecycle decisions, Taxonomy evolution, evidence review, and public route
+ * changes remain later provider-neutral application behavior. Draft creation
+ * and Revision saves use the Phase 5 Content authoring facade when available.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application
@@ -61,6 +61,8 @@ import type {
   Result,
   StableId,
 } from "../../shared/domain/index.js";
+import type { ContentAuthoringService } from "../../modules/content-publishing/application/authoring.js";
+import type { LocalizedDraftData } from "../../modules/content-publishing/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
@@ -88,6 +90,8 @@ export interface SaveOwnerContentRevisionApplicationCommand {
   readonly title: string;
   readonly summary: string;
   readonly body: string;
+  readonly correlationId?: string;
+  readonly draftData?: LocalizedDraftData;
 }
 
 export interface PublishOwnerContentLanguageApplicationCommand {
@@ -186,6 +190,7 @@ export interface OwnerPublicationApplicationService {
 
 export interface OwnerPublicationAdapterDeps {
   service: OwnerPublicationApplicationService;
+  readonly contentAuthoring?: ContentAuthoringService;
   security: OwnerRequestSecurity;
   logger?: Logger;
 }
@@ -284,7 +289,9 @@ export async function handleGetOwnerContentAggregate(
     };
     let result: Awaited<ReturnType<typeof deps.service.getOwnerContentAggregate>>;
     try {
-      result = await deps.service.getOwnerContentAggregate(query);
+      result = deps.contentAuthoring === undefined
+        ? await deps.service.getOwnerContentAggregate(query)
+        : await deps.contentAuthoring.getOwnerContentAggregate(query);
     } catch (error) {
       return internalErrorProblem(error, traceId, instance, logger);
     }
@@ -332,6 +339,7 @@ async function handleContentCommand(
     readonly contentId: StableId<string>;
     readonly idempotencyKey: IdempotencyKey;
     readonly expectedVersion: number;
+    readonly correlationId: string;
     readonly body: Record<string, unknown>;
   }) => unknown,
   call: (
@@ -385,6 +393,7 @@ async function handleContentCommand(
       contentId: pathResult.data.contentId as StableId<string>,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
+      correlationId: traceId,
       body: bodyResult.data,
     });
     let result: Result<{ readonly aggregateId: StableId<string>; readonly aggregateVersion: number; readonly [key: string]: unknown }, Rejection>;
@@ -433,17 +442,37 @@ export async function handleSaveOwnerContentRevision(
       response: zSaveOwnerContentRevisionResponse,
     },
     201,
-    ({ actor, contentId, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, contentId, idempotencyKey, expectedVersion, correlationId, body }) => ({
       actor,
       idempotencyKey,
       expectedVersion,
       contentId,
+      correlationId,
+      ...(body["draftData"] === undefined ? {} : { draftData: body["draftData"] as LocalizedDraftData }),
       locale: body["locale"] as "en" | "ar",
       title: body["title"] as string,
       summary: body["summary"] as string,
       body: body["body"] as string,
     }) as SaveOwnerContentRevisionApplicationCommand,
-    (command) => deps.service.saveOwnerContentRevision(command),
+    async (rawCommand) => {
+      const command = rawCommand as SaveOwnerContentRevisionApplicationCommand;
+      if (deps.contentAuthoring === undefined) return await deps.service.saveOwnerContentRevision(command);
+      const result = await deps.contentAuthoring.saveRevision({
+        actor: command.actor,
+        idempotencyKey: command.idempotencyKey,
+        expectedVersion: command.expectedVersion,
+        contentId: command.contentId,
+        locale: command.locale,
+        title: command.title,
+        summary: command.summary,
+        body: command.body,
+        correlationId: command.correlationId ?? command.idempotencyKey,
+        ...(command.draftData === undefined ? {} : { draftData: command.draftData }),
+      });
+      return result.ok
+        ? { ok: true as const, value: { ...result.value, revisionId: result.value.revisionId as StableId<string> } }
+        : result;
+    },
     (value) => ({
       aggregateId: value.aggregateId,
       aggregateVersion: value.aggregateVersion,

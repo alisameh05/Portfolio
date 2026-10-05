@@ -186,6 +186,13 @@ function runFocus(suite) {
 
   const directory = join(ROOT, "tests", "phase5", suite);
   const files = filesUnder(directory);
+  if (suite === "authoring") {
+    files.push(
+      join(ROOT, "tests", "runtime", "owner-content-authoring.test.ts"),
+      join(ROOT, "tests", "runtime", "owner-content-http.test.ts"),
+    );
+    files.sort();
+  }
   const dependency = { required: false, available: true, code: "NOT_REQUIRED" };
   let result = files.length === 0
     ? { executed: 0, failed: 0, skipped: 0, total: 0, partial: false, verdict: "pass", scenarioAcceptance: false }

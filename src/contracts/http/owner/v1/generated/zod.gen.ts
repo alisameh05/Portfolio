@@ -143,7 +143,7 @@ export const zCreateProjectRequest = z.strictObject({
     title: z.string().min(1).max(160),
     summary: z.string().min(1).max(500),
     body: z.string().min(1).max(50000),
-    candidateSlug: z.string().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    candidateSlug: z.string().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
     caseStudy: z.strictObject({
         problem: z.string().max(5000).optional(),
         ownerRole: z.string().max(2000).optional(),
@@ -195,11 +195,42 @@ export const zCreateContentReceipt = z.strictObject({
     outcome: z.literal('content-created')
 });
 
+export const zProjectDraftData = z.strictObject({
+    contentType: z.literal('project'),
+    caseStudy: z.strictObject({
+        problem: z.string().max(5000).optional(),
+        ownerRole: z.string().max(2000).optional(),
+        contributions: z.array(z.string().max(2000)).max(50).optional(),
+        outcomes: z.array(z.string().max(2000)).max(50).optional(),
+        lessons: z.string().max(5000).optional()
+    }).optional()
+});
+
+export const zAchievementDraftData = z.strictObject({
+    contentType: z.literal('achievement'),
+    achievedOn: z.string().date().optional(),
+    evidence: zEvidencePackageDraft.optional()
+});
+
+export const zTestimonialDraftData = z.strictObject({
+    contentType: z.literal('testimonial'),
+    authorName: z.string().max(200).optional(),
+    quote: z.string().max(10000).optional(),
+    relatedProjectId: zStableId.optional()
+});
+
+export const zLocalizedDraftData = z.discriminatedUnion('contentType', [
+    zProjectDraftData,
+    zAchievementDraftData,
+    zTestimonialDraftData
+]);
+
 export const zSaveRevisionRequest = z.strictObject({
     locale: zLocale,
     title: z.string().min(1).max(160),
     summary: z.string().min(1).max(500),
-    body: z.string().min(1).max(50000)
+    body: z.string().min(1).max(50000),
+    draftData: zLocalizedDraftData.optional()
 });
 
 export const zSaveRevisionReceipt = z.strictObject({

@@ -106,7 +106,7 @@ export type CreateProjectRequest = {
     title: string;
     summary: string;
     body: string;
-    candidateSlug: string;
+    candidateSlug?: string;
     caseStudy?: {
         problem?: string;
         ownerRole?: string;
@@ -160,11 +160,44 @@ export type CreateContentReceipt = {
     outcome: 'content-created';
 };
 
+export type ProjectDraftData = {
+    contentType: 'project';
+    caseStudy?: {
+        problem?: string;
+        ownerRole?: string;
+        contributions?: Array<string>;
+        outcomes?: Array<string>;
+        lessons?: string;
+    };
+};
+
+export type AchievementDraftData = {
+    contentType: 'achievement';
+    achievedOn?: string;
+    evidence?: EvidencePackageDraft;
+};
+
+export type TestimonialDraftData = {
+    contentType: 'testimonial';
+    authorName?: string;
+    quote?: string;
+    relatedProjectId?: StableId;
+};
+
+export type LocalizedDraftData = ({
+    contentType: 'project';
+} & ProjectDraftData) | ({
+    contentType: 'achievement';
+} & AchievementDraftData) | ({
+    contentType: 'testimonial';
+} & TestimonialDraftData);
+
 export type SaveRevisionRequest = {
     locale: Locale;
     title: string;
     summary: string;
     body: string;
+    draftData?: LocalizedDraftData;
 };
 
 export type SaveRevisionReceipt = {

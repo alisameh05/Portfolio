@@ -78,7 +78,7 @@ export interface DraftContentPayload {
 
 export interface ProjectDraftPayload extends DraftContentPayload {
   readonly contentType: "project";
-  readonly candidateSlug: string;
+  readonly candidateSlug?: string;
   readonly caseStudy?: {
     readonly problem?: string;
     readonly ownerRole?: string;
@@ -88,10 +88,36 @@ export interface ProjectDraftPayload extends DraftContentPayload {
   };
 }
 
+export interface ProjectDraftData {
+  readonly contentType: "project";
+  readonly caseStudy?: ProjectDraftPayload["caseStudy"];
+}
+
+export interface AchievementDraftData {
+  readonly contentType: "achievement";
+  readonly achievedOn?: string;
+  readonly evidence?: AchievementDraftPayload["evidence"];
+}
+
+export interface TestimonialDraftData {
+  readonly contentType: "testimonial";
+  readonly authorName?: string;
+  readonly quote?: string;
+  readonly relatedProjectId?: StableId<"Project">;
+}
+
+export type LocalizedDraftData = ProjectDraftData | AchievementDraftData | TestimonialDraftData;
+
 export interface AchievementDraftPayload extends DraftContentPayload {
   readonly contentType: "achievement";
   readonly achievedOn?: string;
-  readonly evidence?: EvidencePackage;
+  readonly evidence?: {
+    readonly claims: readonly {
+      readonly claimId: StableId<"EvidenceClaim">;
+      readonly text: string;
+      readonly artifactIds: readonly StableId<"SupportingArtifact">[];
+    }[];
+  };
 }
 
 export interface TestimonialDraftPayload extends DraftContentPayload {
@@ -99,6 +125,10 @@ export interface TestimonialDraftPayload extends DraftContentPayload {
   readonly authorName?: string;
   readonly quote?: string;
   readonly relatedProjectId?: StableId<"Project">;
+  /** Persisted association is explicit even when the Owner selects the profile. */
+  readonly association?:
+    | { readonly type: "profile" }
+    | { readonly type: "project"; readonly projectId: StableId<"Project"> };
 }
 
 export type CreateDraftPayload =

@@ -24,3 +24,19 @@ export type {
   GetPublicContentQuery,
   ContentPublishingService,
 } from "./service.js";
+export {
+  createContentAuthoringService,
+  type AppendContentRevisionInput,
+  type ContentAuthoringRecord,
+  type ContentAuthoringRepository,
+  type ContentAuthoringRevision,
+  type ContentAuthoringScope,
+  type ContentAuthoringService,
+  type CreateContentPersistenceInput,
+  type CreateContentReceipt,
+  type CreateOwnerContentCommand,
+  type GetOwnerContentAggregateQuery,
+  type OwnerContentAggregateView,
+  type SaveContentRevisionCommand,
+  type SaveContentRevisionReceipt,
+} from "./authoring.js";

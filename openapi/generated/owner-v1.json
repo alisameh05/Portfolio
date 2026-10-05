@@ -3885,8 +3885,7 @@
           "locale",
           "title",
           "summary",
-          "body",
-          "candidateSlug"
+          "body"
         ],
         "properties": {
           "contentType": {
@@ -4124,6 +4123,118 @@
           }
         }
       },
+      "ProjectDraftData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contentType"
+        ],
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "const": "project"
+          },
+          "caseStudy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "problem": {
+                "type": "string",
+                "maxLength": 5000
+              },
+              "ownerRole": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "contributions": {
+                "type": "array",
+                "maxItems": 50,
+                "items": {
+                  "type": "string",
+                  "maxLength": 2000
+                }
+              },
+              "outcomes": {
+                "type": "array",
+                "maxItems": 50,
+                "items": {
+                  "type": "string",
+                  "maxLength": 2000
+                }
+              },
+              "lessons": {
+                "type": "string",
+                "maxLength": 5000
+              }
+            }
+          }
+        }
+      },
+      "AchievementDraftData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contentType"
+        ],
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "const": "achievement"
+          },
+          "achievedOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/EvidencePackageDraft"
+          }
+        }
+      },
+      "TestimonialDraftData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contentType"
+        ],
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "const": "testimonial"
+          },
+          "authorName": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "quote": {
+            "type": "string",
+            "maxLength": 10000
+          },
+          "relatedProjectId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "LocalizedDraftData": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ProjectDraftData"
+          },
+          {
+            "$ref": "#/components/schemas/AchievementDraftData"
+          },
+          {
+            "$ref": "#/components/schemas/TestimonialDraftData"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "contentType",
+          "mapping": {
+            "project": "#/components/schemas/ProjectDraftData",
+            "achievement": "#/components/schemas/AchievementDraftData",
+            "testimonial": "#/components/schemas/TestimonialDraftData"
+          }
+        }
+      },
       "SaveRevisionRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -4151,6 +4262,9 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 50000
+          },
+          "draftData": {
+            "$ref": "#/components/schemas/LocalizedDraftData"
           }
         }
       },

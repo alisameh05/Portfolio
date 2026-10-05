@@ -21,7 +21,7 @@ schemas:
   CreateProjectRequest:
     type: object
     additionalProperties: false
-    required: [contentType, locale, title, summary, body, candidateSlug]
+    required: [contentType, locale, title, summary, body]
     properties:
       contentType: { type: string, const: project }
       locale: { $ref: ./common.yaml#/schemas/Locale }
@@ -180,6 +180,50 @@ schemas:
       title: { type: string, minLength: 1, maxLength: 160 }
       summary: { type: string, minLength: 1, maxLength: 500 }
       body: { type: string, minLength: 1, maxLength: 50000 }
+      draftData: { $ref: '#/schemas/LocalizedDraftData' }
+  LocalizedDraftData:
+    oneOf:
+      - { $ref: '#/schemas/ProjectDraftData' }
+      - { $ref: '#/schemas/AchievementDraftData' }
+      - { $ref: '#/schemas/TestimonialDraftData' }
+    discriminator:
+      propertyName: contentType
+      mapping:
+        project: '#/schemas/ProjectDraftData'
+        achievement: '#/schemas/AchievementDraftData'
+        testimonial: '#/schemas/TestimonialDraftData'
+  ProjectDraftData:
+    type: object
+    additionalProperties: false
+    required: [contentType]
+    properties:
+      contentType: { type: string, const: project }
+      caseStudy:
+        type: object
+        additionalProperties: false
+        properties:
+          problem: { type: string, maxLength: 5000 }
+          ownerRole: { type: string, maxLength: 2000 }
+          contributions: { type: array, maxItems: 50, items: { type: string, maxLength: 2000 } }
+          outcomes: { type: array, maxItems: 50, items: { type: string, maxLength: 2000 } }
+          lessons: { type: string, maxLength: 5000 }
+  AchievementDraftData:
+    type: object
+    additionalProperties: false
+    required: [contentType]
+    properties:
+      contentType: { type: string, const: achievement }
+      achievedOn: { type: string, format: date }
+      evidence: { $ref: '#/schemas/EvidencePackageDraft' }
+  TestimonialDraftData:
+    type: object
+    additionalProperties: false
+    required: [contentType]
+    properties:
+      contentType: { type: string, const: testimonial }
+      authorName: { type: string, maxLength: 200 }
+      quote: { type: string, maxLength: 10000 }
+      relatedProjectId: { $ref: ./common.yaml#/schemas/StableId }
   PublishLanguageCommand:
     type: object
     additionalProperties: false

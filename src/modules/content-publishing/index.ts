@@ -24,6 +24,10 @@ export type {
   ProjectDraftPayload,
   AchievementDraftPayload,
   TestimonialDraftPayload,
+  ProjectDraftData,
+  AchievementDraftData,
+  TestimonialDraftData,
+  LocalizedDraftData,
   CreateDraftPayload,
   PublicLocalizedContentDto,
   PrivateRevisionPreview,
@@ -70,5 +74,22 @@ export type {
   GetPublicContentQuery,
   ContentPublishingService,
 } from "./application/index.js";
+
+export {
+  createContentAuthoringService,
+  type AppendContentRevisionInput,
+  type ContentAuthoringRecord,
+  type ContentAuthoringRepository,
+  type ContentAuthoringRevision,
+  type ContentAuthoringScope,
+  type ContentAuthoringService,
+  type CreateContentPersistenceInput,
+  type CreateContentReceipt,
+  type CreateOwnerContentCommand,
+  type GetOwnerContentAggregateQuery,
+  type OwnerContentAggregateView,
+  type SaveContentRevisionCommand,
+  type SaveContentRevisionReceipt,
+} from "./application/authoring.js";
 
 export type { ContentRepositoryPort } from "./ports/index.js";

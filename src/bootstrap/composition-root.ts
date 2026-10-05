@@ -24,6 +24,7 @@ import {
 import { RuntimeConfigError } from "./configuration.js";
 import type { OperationsPersistencePorts } from "../modules/portability-operations/application/index.js";
 import type { OwnerConfigurationApplicationService } from "../runtime/http/owner-configuration.js";
+import type { ContentAuthoringService } from "../modules/content-publishing/application/authoring.js";
 import type { LifecycleResource, ReadinessCheck } from "../runtime/ports.js";
 import { parseStableId } from "../shared/domain/index.js";
 
@@ -32,6 +33,7 @@ export type { RuntimeConfig } from "./configuration.js";
 let current: RuntimeConfig | undefined;
 let currentOperations: OperationsPersistencePorts | undefined;
 let currentOwnerConfiguration: OwnerConfigurationApplicationService | undefined;
+let currentContentAuthoring: ContentAuthoringService | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -57,6 +59,7 @@ export interface DatabaseRuntimeState extends RuntimeConfig {
 export interface DatabaseRuntimeDependencies {
   readonly operations: OperationsPersistencePorts;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
+  readonly contentAuthoring?: ContentAuthoringService;
   readonly resource: LifecycleResource;
   readonly readiness: ReadinessCheck;
 }
@@ -113,6 +116,7 @@ export async function initializeDatabaseRuntime(
         const database = createPostgresRuntimeDatabase(databaseUrl);
         const operations = createPostgresOperationsPersistence(database.database);
         let ownerConfiguration: OwnerConfigurationApplicationService | undefined;
+        let contentAuthoring: ContentAuthoringService | undefined;
         if (runtimeKind === "application") {
           if (configuredScope === undefined || !configuredScope.portfolioId.ok || !configuredScope.ownerId.ok) {
             throw new RuntimeConfigError("PORTFOLIO_ID", "must be configured for Owner configuration commands");
@@ -152,10 +156,23 @@ export async function initializeDatabaseRuntime(
             ctaCommands,
             configuredScope.portfolioId.value,
           );
+          const [
+            { createPostgresContentAuthoringRepository },
+            { createContentAuthoringService },
+          ] = await Promise.all([
+            import("../modules/content-publishing/adapters/postgres-authoring.js"),
+            import("../modules/content-publishing/application/authoring.js"),
+          ]);
+          contentAuthoring = createContentAuthoringService({
+            repository: createPostgresContentAuthoringRepository(),
+            operations,
+            scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
+          });
         }
         return {
           operations,
           ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
+          ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
           resource: database.resource,
           readiness: database.readiness,
         };
@@ -176,6 +193,7 @@ export async function initializeDatabaseRuntime(
     current = config;
     currentOperations = dependencies.operations;
     currentOwnerConfiguration = dependencies.ownerConfiguration;
+    currentContentAuthoring = dependencies.contentAuthoring;
     lifecycle.markReady();
     return Object.freeze({ ...config, runtimeKind });
   } catch (error) {
@@ -198,6 +216,13 @@ export async function getOwnerConfigurationApplicationService(): Promise<OwnerCo
   return createProductionOwnerConfigurationService();
 }
 
+/** Only the configured PostgreSQL application assembly can activate content authoring. */
+export async function getContentAuthoringApplicationService(): Promise<ContentAuthoringService> {
+  if (currentContentAuthoring !== undefined) return currentContentAuthoring;
+  const { createProductionContentAuthoringService } = await import("../runtime/fakes/content-authoring.js");
+  return createProductionContentAuthoringService();
+}
+
 export function getRuntimeConfig(): RuntimeConfig {
   if (current === undefined) {
     throw new Error("Runtime is not initialized: call initializeRuntime first.");
@@ -214,5 +239,6 @@ export function resetRuntimeForTests(): void {
   current = undefined;
   currentOperations = undefined;
   currentOwnerConfiguration = undefined;
+  currentContentAuthoring = undefined;
   resetLifecycleForTests();
 }
