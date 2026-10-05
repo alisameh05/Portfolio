@@ -188,6 +188,20 @@ export const zCreateAchievementRequest = z.strictObject({
     evidence: zEvidencePackageDraft.optional()
 });
 
+export const zProfileAssociationDraft = z.strictObject({
+    type: z.literal('profile')
+});
+
+export const zProjectAssociationDraft = z.strictObject({
+    type: z.literal('project'),
+    projectId: zStableId
+});
+
+export const zTestimonialAssociation = z.discriminatedUnion('type', [
+    zProfileAssociationDraft,
+    zProjectAssociationDraft
+]);
+
 export const zCreateTestimonialRequest = z.strictObject({
     contentType: z.literal('testimonial'),
     locale: zLocale,
@@ -196,7 +210,8 @@ export const zCreateTestimonialRequest = z.strictObject({
     body: z.string().min(1).max(50000),
     authorName: z.string().max(200).optional(),
     quote: z.string().max(10000).optional(),
-    relatedProjectId: zStableId.optional()
+    relatedProjectId: zStableId.optional(),
+    association: zTestimonialAssociation.optional()
 });
 
 export const zCreateContentRequest = z.discriminatedUnion('contentType', [
@@ -235,7 +250,8 @@ export const zTestimonialDraftData = z.strictObject({
     contentType: z.literal('testimonial'),
     authorName: z.string().max(200).optional(),
     quote: z.string().max(10000).optional(),
-    relatedProjectId: zStableId.optional()
+    relatedProjectId: zStableId.optional(),
+    association: zTestimonialAssociation.optional()
 });
 
 export const zLocalizedDraftData = z.discriminatedUnion('contentType', [

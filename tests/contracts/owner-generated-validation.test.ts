@@ -186,6 +186,9 @@ describe("generated Owner v1 validators", () => {
       contentType: "project", locale: "en", title: "Atlas", summary: "Draft", body: "Draft body",
       evidence: { artifacts: [{ ...artifact, mediaAssetId: "not-an-id" }] },
     }).success).toBe(false);
+    expect(zCreateOwnerContentBody.safeParse({ contentType: "testimonial", locale: "en", title: "Quote", summary: "Draft", body: "Stored quote", association: { type: "profile" } }).success).toBe(true);
+    expect(zCreateOwnerContentBody.safeParse({ contentType: "testimonial", locale: "en", title: "Quote", summary: "Draft", body: "Stored quote", association: { type: "project", projectId: ids.related } }).success).toBe(true);
+    expect(zCreateOwnerContentBody.safeParse({ contentType: "testimonial", locale: "en", title: "Quote", summary: "Draft", body: "Stored quote", association: { type: "workspace" } }).success).toBe(false);
   });
 
   it("validates narrow aggregate views without table or provider fields", () => {

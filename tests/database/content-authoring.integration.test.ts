@@ -173,6 +173,22 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     });
   }, 30_000);
 
+  it("persists an explicitly selected profile association for a Testimonial", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const created = await content.createContent({
+      actor: actor(scope.ownerId), idempotencyKey: key("explicit-profile-testimonial"), correlationId: "explicit-profile-testimonial",
+      payload: { contentType: "testimonial", locale: "en", title: "Profile feedback", summary: "Draft.", body: "Stored quote.", association: { type: "profile" } },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const persisted = await admin.query(
+      "select payload->'association' as association from content.revisions where content_id = $1::uuid and portfolio_id = $2::uuid",
+      [created.value.contentId, scope.portfolioId],
+    );
+    expect(persisted.rows).toEqual([{ association: { type: "profile" } }]);
+  }, 30_000);
+
   it("serializes same-key and stale-version races and preserves the original replay receipt", async () => {
     const scope = await configuredScope();
     const content = service(scope);

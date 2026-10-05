@@ -40,6 +40,8 @@ create:
                 body: Draft testimonial.
                 authorName: Reviewer
                 quote: A concise stored quote.
+                association:
+                  type: profile
     responses:
       '201':
         description: Draft identity and safe creation receipt.

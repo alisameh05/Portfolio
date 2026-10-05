@@ -178,7 +178,7 @@ describe("Content authoring application service", () => {
     const { service, records } = createHarness();
     const created = await service.createContent({
       actor: ACTOR, idempotencyKey: "profile-testimonial" as never, correlationId: "profile-testimonial",
-      payload: { contentType: "testimonial", locale: "en", title: "Profile feedback", summary: "Draft.", body: "Private." },
+      payload: { contentType: "testimonial", locale: "en", title: "Profile feedback", summary: "Draft.", body: "Private.", association: { type: "profile" } },
     });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
@@ -218,6 +218,24 @@ describe("Content authoring application service", () => {
     expect(first).toEqual(replay);
     expect(records.size).toBe(1);
     if (first.ok) expect(records.get(first.value.contentId)?.candidateSlug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  });
+
+  it("requires an explicit Testimonial association and persists the selected Profile choice", async () => {
+    const { service, records } = createHarness();
+    const omitted = await service.createContent({
+      actor: ACTOR, idempotencyKey: "testimonial-association-missing" as never, correlationId: "testimonial-association-missing",
+      payload: { contentType: "testimonial", locale: "en", title: "Feedback", summary: "Draft.", body: "Stored quote." },
+    });
+    expect(omitted).toEqual({ ok: false, error: { kind: "validation", code: "INVALID_CONTENT_DRAFT" } });
+    expect(records.size).toBe(0);
+
+    const selected = await service.createContent({
+      actor: ACTOR, idempotencyKey: "testimonial-profile-association" as never, correlationId: "testimonial-profile-association",
+      payload: { contentType: "testimonial", locale: "en", title: "Feedback", summary: "Draft.", body: "Stored quote.", association: { type: "profile" } },
+    });
+    expect(selected.ok).toBe(true);
+    if (selected.ok) expect(records.get(selected.value.contentId)?.revisions[0]?.payload).toMatchObject({ association: { type: "profile" } });
+    expect(records.size).toBe(1);
   });
 
   it.each([

@@ -258,8 +258,16 @@ function payloadIsValid(payload: CreateDraftPayload): boolean {
     const dateValid = date === undefined || typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(`${date}T00:00:00Z`)) && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
     return dateValid && evidencePackageIsValid(payload.evidence);
   }
+  const association = payload.association ?? (payload.relatedProjectId === undefined
+    ? undefined
+    : { type: "project" as const, projectId: payload.relatedProjectId });
+  const associationIsValid = isRecord(association) && (association["type"] === "profile"
+    ? payload.relatedProjectId === undefined
+    : association["type"] === "project" && typeof association["projectId"] === "string" &&
+      parseStableId("Project", association["projectId"]).ok &&
+      (payload.relatedProjectId === undefined || payload.relatedProjectId === association["projectId"]));
   return (payload.authorName === undefined || isCleanText(payload.authorName, 200)) &&
-    (payload.quote === undefined || isCleanText(payload.quote, 10_000)) &&
+    (payload.quote === undefined || isCleanText(payload.quote, 10_000)) && associationIsValid &&
     (payload.relatedProjectId === undefined || parseStableId("Project", payload.relatedProjectId).ok);
 }
 
@@ -271,10 +279,10 @@ function candidateFromTitle(title: string, contentId: StableId<string>): string 
 
 function snapshotPayload(payload: CreateDraftPayload): CreateDraftPayload {
   if (payload.contentType === "testimonial") {
-    const association = payload.relatedProjectId === undefined
-      ? { type: "profile" as const }
-      : { type: "project" as const, projectId: payload.relatedProjectId };
-    return Object.freeze({ ...payload, association });
+    const association = payload.association ?? (payload.relatedProjectId === undefined
+      ? undefined
+      : { type: "project" as const, projectId: payload.relatedProjectId });
+    return Object.freeze({ ...payload, ...(association === undefined ? {} : { association }) });
   }
   return Object.freeze({ ...payload });
 }
@@ -355,8 +363,8 @@ export function createContentAuthoringService(input: {
       const candidateSlug = payload.contentType === "project" ? payload.candidateSlug ?? null : null;
       const savedAt = clock.now();
       const effect = async (context: TransactionContext): Promise<SafeResultEnvelope> => {
-        if (payload.contentType === "testimonial" && payload.relatedProjectId !== undefined &&
-            !await input.repository.projectExists(payload.relatedProjectId, input.scope, context)) {
+        if (payload.contentType === "testimonial" && payload.association?.type === "project" &&
+            !await input.repository.projectExists(payload.association.projectId, input.scope, context)) {
           return rejectionOutcome({ kind: "validation", code: "RELATED_PROJECT_UNAVAILABLE" });
         }
         const created = await input.repository.create({
@@ -461,9 +469,14 @@ export function createContentAuthoringService(input: {
           const prior = previous?.payload.contentType === "testimonial" ? previous.payload : undefined;
           const authorName = draftData?.contentType === "testimonial" ? draftData.authorName : prior?.authorName;
           const quote = draftData?.contentType === "testimonial" ? draftData.quote : prior?.quote;
-          const relatedProjectId = draftData?.contentType === "testimonial" ? draftData.relatedProjectId : prior?.relatedProjectId;
-          payload = snapshotPayload({ contentType: "testimonial", ...common, ...(authorName === undefined ? {} : { authorName }), ...(quote === undefined ? {} : { quote }), ...(relatedProjectId === undefined ? {} : { relatedProjectId }) });
-          if (relatedProjectId !== undefined && !await input.repository.projectExists(relatedProjectId, input.scope, context)) {
+          const explicitAssociation = draftData?.contentType === "testimonial" ? draftData.association : undefined;
+          const legacyRelatedProjectId = draftData?.contentType === "testimonial" ? draftData.relatedProjectId : undefined;
+          const association = explicitAssociation ?? (legacyRelatedProjectId === undefined
+            ? prior?.association ?? (prior?.relatedProjectId === undefined ? undefined : { type: "project" as const, projectId: prior.relatedProjectId })
+            : { type: "project" as const, projectId: legacyRelatedProjectId });
+          payload = snapshotPayload({ contentType: "testimonial", ...common, ...(authorName === undefined ? {} : { authorName }),
+            ...(quote === undefined ? {} : { quote }), ...(association === undefined ? {} : { association }) });
+          if (association?.type === "project" && !await input.repository.projectExists(association.projectId, input.scope, context)) {
             return rejectionOutcome({ kind: "validation", code: "RELATED_PROJECT_UNAVAILABLE" });
           }
         }

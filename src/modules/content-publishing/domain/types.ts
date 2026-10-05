@@ -107,6 +107,8 @@ export interface TestimonialDraftData {
   readonly contentType: "testimonial";
   readonly authorName?: string;
   readonly quote?: string;
+  readonly association?: TestimonialAssociation;
+  /** Compatibility input for callers selecting a Project association. */
   readonly relatedProjectId?: StableId<"Project">;
 }
 
@@ -132,12 +134,14 @@ export interface TestimonialDraftPayload extends DraftContentPayload {
   readonly contentType: "testimonial";
   readonly authorName?: string;
   readonly quote?: string;
+  readonly association?: TestimonialAssociation;
+  /** Compatibility input for callers selecting a Project association. */
   readonly relatedProjectId?: StableId<"Project">;
-  /** Persisted association is explicit even when the Owner selects the profile. */
-  readonly association?:
-    | { readonly type: "profile" }
-    | { readonly type: "project"; readonly projectId: StableId<"Project"> };
 }
+
+export type TestimonialAssociation =
+  | { readonly type: "profile" }
+  | { readonly type: "project"; readonly projectId: StableId<"Project"> };
 
 export type CreateDraftPayload =
   | ProjectDraftPayload

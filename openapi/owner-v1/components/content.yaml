@@ -68,6 +68,7 @@ schemas:
       authorName: { type: string, maxLength: 200 }
       quote: { type: string, maxLength: 10000 }
       relatedProjectId: { $ref: ./common.yaml#/schemas/StableId }
+      association: { $ref: '#/schemas/TestimonialAssociation' }
   EvidencePackageDraft:
     type: object
     additionalProperties: false
@@ -105,6 +106,28 @@ schemas:
       label: { type: string, minLength: 1, maxLength: 120 }
       destination: { type: string, format: uri, maxLength: 2048 }
       isAvailableInArabic: { type: boolean }
+  TestimonialAssociation:
+    oneOf:
+      - { $ref: '#/schemas/ProfileAssociationDraft' }
+      - { $ref: '#/schemas/ProjectAssociationDraft' }
+    discriminator:
+      propertyName: type
+      mapping:
+        profile: '#/schemas/ProfileAssociationDraft'
+        project: '#/schemas/ProjectAssociationDraft'
+  ProfileAssociationDraft:
+    type: object
+    additionalProperties: false
+    required: [type]
+    properties:
+      type: { type: string, const: profile }
+  ProjectAssociationDraft:
+    type: object
+    additionalProperties: false
+    required: [type, projectId]
+    properties:
+      type: { type: string, const: project }
+      projectId: { $ref: ./common.yaml#/schemas/StableId }
   CreateContentReceipt:
     type: object
     additionalProperties: false
@@ -256,6 +279,7 @@ schemas:
       authorName: { type: string, maxLength: 200 }
       quote: { type: string, maxLength: 10000 }
       relatedProjectId: { $ref: ./common.yaml#/schemas/StableId }
+      association: { $ref: '#/schemas/TestimonialAssociation' }
   PublishLanguageCommand:
     type: object
     additionalProperties: false

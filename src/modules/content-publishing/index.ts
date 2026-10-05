@@ -25,6 +25,7 @@ export type {
   ProjectDraftPayload,
   AchievementDraftPayload,
   TestimonialDraftPayload,
+  TestimonialAssociation,
   ProjectDraftData,
   AchievementDraftData,
   TestimonialDraftData,

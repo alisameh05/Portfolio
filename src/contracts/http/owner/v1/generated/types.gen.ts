@@ -151,6 +151,21 @@ export type CreateAchievementRequest = {
     evidence?: EvidencePackageDraft;
 };
 
+export type ProfileAssociationDraft = {
+    type: 'profile';
+};
+
+export type ProjectAssociationDraft = {
+    type: 'project';
+    projectId: StableId;
+};
+
+export type TestimonialAssociation = ({
+    type: 'profile';
+} & ProfileAssociationDraft) | ({
+    type: 'project';
+} & ProjectAssociationDraft);
+
 export type CreateTestimonialRequest = {
     contentType: 'testimonial';
     locale: Locale;
@@ -160,6 +175,7 @@ export type CreateTestimonialRequest = {
     authorName?: string;
     quote?: string;
     relatedProjectId?: StableId;
+    association?: TestimonialAssociation;
 };
 
 export type CreateContentRequest = ({
@@ -201,6 +217,7 @@ export type TestimonialDraftData = {
     authorName?: string;
     quote?: string;
     relatedProjectId?: StableId;
+    association?: TestimonialAssociation;
 };
 
 export type LocalizedDraftData = ({

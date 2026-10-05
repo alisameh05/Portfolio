@@ -401,7 +401,10 @@
                     "summary": "Stored quote.",
                     "body": "Draft testimonial.",
                     "authorName": "Reviewer",
-                    "quote": "A concise stored quote."
+                    "quote": "A concise stored quote.",
+                    "association": {
+                      "type": "profile"
+                    }
                   }
                 }
               }
@@ -4101,6 +4104,53 @@
           }
         }
       },
+      "ProfileAssociationDraft": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "profile"
+          }
+        }
+      },
+      "ProjectAssociationDraft": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "projectId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "project"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "TestimonialAssociation": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ProfileAssociationDraft"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectAssociationDraft"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "profile": "#/components/schemas/ProfileAssociationDraft",
+            "project": "#/components/schemas/ProjectAssociationDraft"
+          }
+        }
+      },
       "CreateTestimonialRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -4144,6 +4194,9 @@
           },
           "relatedProjectId": {
             "$ref": "#/components/schemas/StableId"
+          },
+          "association": {
+            "$ref": "#/components/schemas/TestimonialAssociation"
           }
         }
       },
@@ -4292,6 +4345,9 @@
           },
           "relatedProjectId": {
             "$ref": "#/components/schemas/StableId"
+          },
+          "association": {
+            "$ref": "#/components/schemas/TestimonialAssociation"
           }
         }
       },
