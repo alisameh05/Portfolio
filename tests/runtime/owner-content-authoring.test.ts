@@ -196,4 +196,21 @@ describe("Content authoring application service", () => {
     expect(unauthorized).toEqual({ ok: false, error: { kind: "forbidden", code: "OWNER_REQUIRED" } });
     expect(records.size).toBe(1);
   });
+
+  it("replays an Arabic-only Project create when its candidate slug is generated", async () => {
+    const { service, records } = createHarness();
+    const command = {
+      actor: ACTOR,
+      idempotencyKey: "arabic-project-replay" as never,
+      correlationId: "arabic-project-replay",
+      payload: { contentType: "project" as const, locale: "ar" as const, title: "مشروع جديد", summary: "مسودة", body: "محتوى المشروع" },
+    };
+
+    const first = await service.createContent(command);
+    const replay = await service.createContent(command);
+
+    expect(first).toEqual(replay);
+    expect(records.size).toBe(1);
+    if (first.ok) expect(records.get(first.value.contentId)?.candidateSlug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  });
 });

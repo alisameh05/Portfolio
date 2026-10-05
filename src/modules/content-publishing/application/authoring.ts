@@ -333,7 +333,7 @@ export function createContentAuthoringService(input: {
         operationScope: CREATE_SCOPE,
         actor: command.actor,
         key: command.idempotencyKey,
-        request: payload,
+        request: command.payload,
         effect,
       });
       return execution;
