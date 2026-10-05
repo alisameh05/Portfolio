@@ -69,8 +69,12 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     return scope;
   }
 
-  function service(scope: { portfolioId: StableId<"Portfolio">; ownerId: StableId<"Owner"> }, selectedOperations = operations) {
-    return createContentAuthoringService({ repository, operations: selectedOperations, scope });
+  function service(
+    scope: { portfolioId: StableId<"Portfolio">; ownerId: StableId<"Owner"> },
+    selectedOperations = operations,
+    clock?: { now(): string },
+  ) {
+    return createContentAuthoringService({ repository, operations: selectedOperations, scope, ...(clock === undefined ? {} : { clock }) });
   }
   const key = (value: string) => value as IdempotencyKey;
   const actor = (ownerId: StableId<"Owner">) => ({ kind: "owner" as const, ownerId, sessionId: "authoring-integration" });
@@ -187,6 +191,56 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       [created.value.contentId, scope.portfolioId],
     );
     expect(persisted.rows).toEqual([{ association: { type: "profile" } }]);
+  }, 30_000);
+
+  it("orders revision history by locale stream sequence when saved timestamps regress", async () => {
+    const scope = await configuredScope();
+    const timestamps = ["2026-10-07T00:00:00.000Z", "2026-10-03T00:00:00.000Z", "2026-10-04T00:00:00.000Z"];
+    const content = service(scope, operations, { now: () => timestamps.shift() ?? "2026-10-04T00:00:00.000Z" });
+    const artifactId = createStableId("SupportingArtifact");
+    const created = await content.createContent({
+      actor: actor(scope.ownerId), idempotencyKey: key("revision-order-create"), correlationId: "revision-order-create",
+      payload: {
+        contentType: "project", locale: "en", title: "Revision order", summary: "Initial.", body: "Initial.",
+        evidence: { artifacts: [{ id: artifactId, title: "First evidence" }] },
+      },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const second = await content.saveRevision({
+      actor: actor(scope.ownerId), contentId: created.value.contentId, expectedVersion: 1,
+      idempotencyKey: key("revision-order-second"), correlationId: "revision-order-second",
+      locale: "en", title: "Revision two", summary: "Updated.", body: "Updated.",
+      draftData: { contentType: "project", evidence: { artifacts: [{ id: artifactId, title: "Latest evidence" }] } },
+    });
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+
+    const beforeThird = await content.getOwnerContentAggregate({ actor: actor(scope.ownerId), contentId: created.value.contentId });
+    expect(beforeThird).toMatchObject({
+      ok: true,
+      value: { revisions: [{ sequence: 1 }, { sequence: 2 }] },
+    });
+
+    const third = await content.saveRevision({
+      actor: actor(scope.ownerId), contentId: created.value.contentId, expectedVersion: 2,
+      idempotencyKey: key("revision-order-third"), correlationId: "revision-order-third",
+      locale: "en", title: "Revision three", summary: "Updated again.", body: "Updated again.",
+    });
+    expect(third.ok).toBe(true);
+    if (!third.ok) return;
+    const afterThird = await content.getOwnerContentAggregate({ actor: actor(scope.ownerId), contentId: created.value.contentId });
+    expect(afterThird).toMatchObject({
+      ok: true,
+      value: { revisions: [{ sequence: 1 }, { sequence: 2 }, { sequence: 3 }] },
+    });
+    const latestSnapshot = await admin.query(
+      "select payload from content.revisions where content_id = $1::uuid and locale = 'en' and stream_sequence = 3",
+      [created.value.contentId],
+    );
+    expect(latestSnapshot.rows[0]?.payload).toMatchObject({
+      evidence: { artifacts: [{ id: artifactId, title: "Latest evidence" }] },
+    });
   }, 30_000);
 
   it("serializes same-key and stale-version races and preserves the original replay receipt", async () => {

@@ -167,6 +167,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Object.keys(value).every((key) => allowed.includes(key));
+}
+
 function isCleanText(value: unknown, max: number): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= max && !CONTROL_CHARS.test(value) && !EXECUTABLE_MARKUP.test(value);
 }
@@ -195,10 +199,10 @@ function safeWebDestination(value: unknown): value is string {
 
 function evidencePackageIsValid(value: unknown): boolean {
   if (value === undefined) return true;
-  if (!isRecord(value)) return false;
+  if (!isRecord(value) || !hasOnlyKeys(value, ["claims", "artifacts"])) return false;
   const claims = value["claims"];
   if (claims !== undefined && (!Array.isArray(claims) || claims.length > 100 || !claims.every((claim) => {
-    if (!isRecord(claim)) return false;
+    if (!isRecord(claim) || !hasOnlyKeys(claim, ["claimId", "text", "artifactIds"])) return false;
     const claimId = claim["claimId"];
     const claimText = claim["text"];
     const artifactIds = claim["artifactIds"];
@@ -211,7 +215,7 @@ function evidencePackageIsValid(value: unknown): boolean {
   if (!Array.isArray(artifacts) || artifacts.length > 100) return false;
   const artifactIds = new Set<string>();
   return artifacts.every((artifact) => {
-    if (!isRecord(artifact)) return false;
+    if (!isRecord(artifact) || !hasOnlyKeys(artifact, ["id", "title", "destinationUrl", "mediaAssetId"])) return false;
     const id = artifact["id"];
     const title = artifact["title"];
     const destinationUrl = artifact["destinationUrl"];
@@ -229,7 +233,7 @@ function externalLinksAreValid(value: unknown): boolean {
   if (!Array.isArray(value) || value.length > 50) return false;
   const linkIds = new Set<string>();
   return value.every((link) => {
-    if (!isRecord(link)) return false;
+    if (!isRecord(link) || !hasOnlyKeys(link, ["id", "label", "destination", "isAvailableInArabic"])) return false;
     const id = link["id"];
     const label = link["label"];
     const destination = link["destination"];
@@ -243,12 +247,18 @@ function externalLinksAreValid(value: unknown): boolean {
 
 function payloadIsValid(payload: CreateDraftPayload): boolean {
   if (!isRecord(payload) || (payload.contentType !== "project" && payload.contentType !== "achievement" && payload.contentType !== "testimonial")) return false;
+  const variantKeys = payload.contentType === "project"
+    ? ["candidateSlug", "caseStudy", "evidence", "externalLinks"]
+    : payload.contentType === "achievement"
+      ? ["achievedOn", "evidence"]
+      : ["authorName", "quote", "association", "relatedProjectId"];
+  if (!hasOnlyKeys(payload, ["contentType", "locale", "title", "summary", "body", ...variantKeys])) return false;
   if (payload.locale !== "en" && payload.locale !== "ar") return false;
   if (!isCleanText(payload.title, 160) || !isCleanText(payload.summary, 500) || !isCleanText(payload.body, 50_000)) return false;
   if (payload.contentType === "project") {
     if (payload.candidateSlug !== undefined && (typeof payload.candidateSlug !== "string" || payload.candidateSlug.length > 120 || !SLUG_PATTERN.test(payload.candidateSlug))) return false;
     const study = payload.caseStudy;
-    return (study === undefined || isRecord(study) &&
+    return (study === undefined || isRecord(study) && hasOnlyKeys(study, ["problem", "ownerRole", "contributions", "outcomes", "lessons"]) &&
       optionalTextIsValid(study.problem, 5_000) && optionalTextIsValid(study.ownerRole, 2_000) &&
       optionalTextIsValid(study.lessons, 5_000) && optionalTextListIsValid(study.contributions, 50, 2_000) &&
       optionalTextListIsValid(study.outcomes, 50, 2_000)) && evidencePackageIsValid(payload.evidence) && externalLinksAreValid(payload.externalLinks);
@@ -262,13 +272,23 @@ function payloadIsValid(payload: CreateDraftPayload): boolean {
     ? undefined
     : { type: "project" as const, projectId: payload.relatedProjectId });
   const associationIsValid = isRecord(association) && (association["type"] === "profile"
-    ? payload.relatedProjectId === undefined
-    : association["type"] === "project" && typeof association["projectId"] === "string" &&
+    ? hasOnlyKeys(association, ["type"]) && payload.relatedProjectId === undefined
+    : association["type"] === "project" && hasOnlyKeys(association, ["type", "projectId"]) && typeof association["projectId"] === "string" &&
       parseStableId("Project", association["projectId"]).ok &&
       (payload.relatedProjectId === undefined || payload.relatedProjectId === association["projectId"]));
   return (payload.authorName === undefined || isCleanText(payload.authorName, 200)) &&
     (payload.quote === undefined || isCleanText(payload.quote, 10_000)) && associationIsValid &&
     (payload.relatedProjectId === undefined || parseStableId("Project", payload.relatedProjectId).ok);
+}
+
+function draftDataHasOnlyExpectedKeys(value: unknown): boolean {
+  if (!isRecord(value) || (value["contentType"] !== "project" && value["contentType"] !== "achievement" && value["contentType"] !== "testimonial")) return false;
+  const keys = value["contentType"] === "project"
+    ? ["contentType", "caseStudy", "evidence", "externalLinks"]
+    : value["contentType"] === "achievement"
+      ? ["contentType", "achievedOn", "evidence"]
+      : ["contentType", "authorName", "quote", "association", "relatedProjectId"];
+  return hasOnlyKeys(value, keys);
 }
 
 function candidateFromTitle(title: string, contentId: StableId<string>): string {
@@ -440,6 +460,9 @@ export function createContentAuthoringService(input: {
       const effect = async (context: TransactionContext): Promise<SafeResultEnvelope> => {
         const existing = await input.repository.get(command.contentId, input.scope, context);
         if (!existing.ok) return rejectionOutcome(existing.error);
+        if (command.draftData !== undefined && !draftDataHasOnlyExpectedKeys(command.draftData)) {
+          return rejectionOutcome({ kind: "validation", code: "INVALID_CONTENT_DRAFT" });
+        }
         if (command.draftData !== undefined && command.draftData.contentType !== existing.value.contentType) {
           return rejectionOutcome({ kind: "validation", code: "CONTENT_DRAFT_TYPE_MISMATCH" });
         }

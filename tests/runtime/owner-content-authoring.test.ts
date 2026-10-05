@@ -174,6 +174,25 @@ describe("Content authoring application service", () => {
     expect(inspected).toMatchObject({ ok: true, value: { localizedStreams: { en: { revisionCount: 1 }, ar: { revisionCount: 1 } }, revisions: [{ locale: "en", sequence: 1 }, { locale: "ar", sequence: 1 }] } });
   });
 
+  it("rejects unknown Save draft-data keys before appending a Revision", async () => {
+    const { service, records } = createHarness();
+    const created = await service.createContent({
+      actor: ACTOR, idempotencyKey: "strict-save-create" as never, correlationId: "strict-save-create",
+      payload: { contentType: "project", locale: "en", title: "Project", summary: "Draft.", body: "Private." },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const result = await service.saveRevision({
+      actor: ACTOR, contentId: created.value.contentId, expectedVersion: 1,
+      idempotencyKey: "strict-save-unknown-key" as never, correlationId: "strict-save-unknown-key",
+      locale: "en", title: "Updated", summary: "Updated.", body: "Private.",
+      draftData: { contentType: "project", unexpected: "must not be dropped" } as never,
+    });
+    expect(result).toEqual({ ok: false, error: { kind: "validation", code: "INVALID_CONTENT_DRAFT" } });
+    expect(records.get(created.value.contentId)?.aggregateVersion).toBe(1);
+    expect(records.get(created.value.contentId)?.revisions).toHaveLength(1);
+  });
+
   it("records an explicit profile association when a Testimonial has no Project", async () => {
     const { service, records } = createHarness();
     const created = await service.createContent({
@@ -245,6 +264,12 @@ describe("Content authoring application service", () => {
     ["malformed evidence claim", { contentType: "achievement", evidence: { claims: [{ claimId: uuid(90), text: "Claim", artifactIds: "bad" }] } }],
     ["malformed media identity", { contentType: "project", evidence: { artifacts: [{ id: uuid(90), title: "Bad asset", mediaAssetId: "not-a-stable-id" }] } }],
     ["unsafe external link", { contentType: "project", externalLinks: [{ id: uuid(90), label: "Run this", destination: "javascript:alert(1)", isAvailableInArabic: true }] }],
+    ["unknown Project payload key", { contentType: "project", executable: { run: true } }],
+    ["unknown case study key", { contentType: "project", caseStudy: { problem: "Problem.", extra: "unsafe snapshot data" } }],
+    ["unknown evidence claim key", { contentType: "achievement", evidence: { claims: [{ claimId: uuid(90), text: "Claim", artifactIds: [], injected: true }] } }],
+    ["unknown evidence artifact key", { contentType: "achievement", evidence: { artifacts: [{ id: uuid(90), title: "Proof", command: "run" }] } }],
+    ["unknown external link key", { contentType: "project", externalLinks: [{ id: uuid(90), label: "Link", destination: "https://example.com", isAvailableInArabic: true, script: "run" }] }],
+    ["unknown Testimonial association key", { contentType: "testimonial", association: { type: "profile", extra: "unexpected" } }],
   ])("rejects %s at the application boundary before persistence", async (_label, typedData) => {
     const { service, records } = createHarness();
     const result = await service.createContent({

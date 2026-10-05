@@ -115,7 +115,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
          and item.portfolio_id = revision.portfolio_id
        where revision.content_id = ${contentId}::uuid
          and revision.portfolio_id = ${scope.portfolioId}::uuid
-       order by revision.saved_at, revision.locale, revision.stream_sequence
+       order by revision.locale, revision.stream_sequence
     `.execute(executor);
     return {
       ok: true,
