@@ -305,7 +305,7 @@ export function createContentAuthoringService(input: {
         };
         const ownerHash = await actorScope;
         for (const [type, eventId] of [
-          ["content.content_created.v1", ids.generate("DomainEvent")],
+          ["content.created.v1", ids.generate("DomainEvent")],
           ["content.revision_saved.v1", ids.generate("DomainEvent")],
         ] as const) {
           await input.operations.outbox.append(context, {

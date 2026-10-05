@@ -133,8 +133,14 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(persisted.rows.find((row) => row.content_type === "achievement")?.snapshots[1].payload.evidence.claims).toHaveLength(1);
     expect(persisted.rows.find((row) => row.content_type === "testimonial")?.snapshots[1].payload.association)
       .toEqual({ type: "project", projectId: receipts[0]?.contentId });
-    const events = await admin.query("select count(*)::int as count from operations.outbox_events where aggregate_id = any($1::uuid[])", [receipts.map((receipt) => receipt.contentId)]);
-    expect(events.rows[0].count).toBe(9);
+    const events = await admin.query(
+      "select event_type, count(*)::int as count from operations.outbox_events where aggregate_id = any($1::uuid[]) group by event_type",
+      [receipts.map((receipt) => receipt.contentId)],
+    );
+    expect(Object.fromEntries(events.rows.map((row) => [row.event_type, row.count]))).toEqual({
+      "content.created.v1": 3,
+      "content.revision_saved.v1": 6,
+    });
   }, 30_000);
 
   it("serializes same-key and stale-version races and preserves the original replay receipt", async () => {
