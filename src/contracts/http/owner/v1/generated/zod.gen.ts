@@ -137,20 +137,18 @@ export const zContentAggregateView = z.strictObject({
     revisions: z.array(zRevisionHistoryEntry)
 });
 
-export const zCreateProjectRequest = z.strictObject({
-    contentType: z.literal('project'),
-    locale: zLocale,
-    title: z.string().min(1).max(160),
-    summary: z.string().min(1).max(500),
-    body: z.string().min(1).max(50000),
-    candidateSlug: z.string().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
-    caseStudy: z.strictObject({
-        problem: z.string().max(5000).optional(),
-        ownerRole: z.string().max(2000).optional(),
-        contributions: z.array(z.string().max(2000)).max(50).optional(),
-        outcomes: z.array(z.string().max(2000)).max(50).optional(),
-        lessons: z.string().max(5000).optional()
-    }).optional()
+export const zExternalLinkDraft = z.strictObject({
+    id: zStableId,
+    label: z.string().min(1).max(120),
+    destination: z.string().url().max(2048),
+    isAvailableInArabic: z.boolean()
+});
+
+export const zSupportingArtifactDraft = z.strictObject({
+    id: zStableId,
+    title: z.string().min(1).max(200),
+    destinationUrl: z.string().url().max(2048).optional(),
+    mediaAssetId: zStableId.optional()
 });
 
 export const zEvidencePackageDraft = z.strictObject({
@@ -158,7 +156,26 @@ export const zEvidencePackageDraft = z.strictObject({
         claimId: zStableId,
         text: z.string().max(2000),
         artifactIds: z.array(zStableId).max(100)
-    })).max(100).optional()
+    })).max(100).optional(),
+    artifacts: z.array(zSupportingArtifactDraft).max(100).optional()
+});
+
+export const zCreateProjectRequest = z.strictObject({
+    contentType: z.literal('project'),
+    locale: zLocale,
+    title: z.string().min(1).max(160),
+    summary: z.string().min(1).max(500),
+    body: z.string().min(1).max(50000),
+    candidateSlug: z.string().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
+    externalLinks: z.array(zExternalLinkDraft).max(50).optional(),
+    caseStudy: z.strictObject({
+        problem: z.string().max(5000).optional(),
+        ownerRole: z.string().max(2000).optional(),
+        contributions: z.array(z.string().max(2000)).max(50).optional(),
+        outcomes: z.array(z.string().max(2000)).max(50).optional(),
+        lessons: z.string().max(5000).optional()
+    }).optional(),
+    evidence: zEvidencePackageDraft.optional()
 });
 
 export const zCreateAchievementRequest = z.strictObject({
@@ -203,7 +220,9 @@ export const zProjectDraftData = z.strictObject({
         contributions: z.array(z.string().max(2000)).max(50).optional(),
         outcomes: z.array(z.string().max(2000)).max(50).optional(),
         lessons: z.string().max(5000).optional()
-    }).optional()
+    }).optional(),
+    evidence: zEvidencePackageDraft.optional(),
+    externalLinks: z.array(zExternalLinkDraft).max(50).optional()
 });
 
 export const zAchievementDraftData = z.strictObject({

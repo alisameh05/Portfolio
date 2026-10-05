@@ -79,14 +79,34 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     const scope = await configuredScope();
     const content = service(scope);
     const owner = actor(scope.ownerId);
+    const projectArtifactId = createStableId("SupportingArtifact");
+    const projectMediaId = createStableId("MediaAsset");
+    const projectLinkId = createStableId("ExternalLink");
+    const achievementArtifactId = createStableId("SupportingArtifact");
+    const achievementMediaId = createStableId("MediaAsset");
     const cases = [
       {
         type: "project" as const, key: "all-project",
-        payload: { contentType: "project" as const, locale: "en" as const, title: "Atlas Search", summary: "Search rollout.", body: "English project body.", caseStudy: { problem: "Discovery was slow.", outcomes: ["Found items faster."] } },
+        payload: {
+          contentType: "project" as const, locale: "en" as const, title: "Atlas Search", summary: "Search rollout.", body: "English project body.",
+          caseStudy: { problem: "Discovery was slow.", outcomes: ["Found items faster."] },
+          evidence: { claims: [{ claimId: createStableId("EvidenceClaim"), text: "The demo supports the rollout.", artifactIds: [projectArtifactId] }],
+            artifacts: [{ id: projectArtifactId, title: "Project demo", mediaAssetId: projectMediaId, destinationUrl: "https://example.com/demo" }] },
+          externalLinks: [{ id: projectLinkId, label: "Live demo", destination: "https://example.com/project", isAvailableInArabic: true }],
+        },
+        draftData: {
+          contentType: "project" as const,
+          evidence: { artifacts: [{ id: projectArtifactId, title: "Arabic project demo", mediaAssetId: projectMediaId }] },
+          externalLinks: [{ id: projectLinkId, label: "النسخة التجريبية", destination: "https://example.com/project-ar", isAvailableInArabic: true }],
+        },
       },
       {
         type: "achievement" as const, key: "all-achievement",
-        payload: { contentType: "achievement" as const, locale: "en" as const, title: "Service milestone", summary: "Reduced errors.", body: "English achievement body.", achievedOn: "2026-09-15", evidence: { claims: [{ claimId: createStableId("EvidenceClaim"), text: "Error rate fell.", artifactIds: [createStableId("SupportingArtifact")] }] } },
+        payload: { contentType: "achievement" as const, locale: "en" as const, title: "Service milestone", summary: "Reduced errors.", body: "English achievement body.", achievedOn: "2026-09-15", evidence: {
+          claims: [{ claimId: createStableId("EvidenceClaim"), text: "Error rate fell.", artifactIds: [achievementArtifactId] }],
+          artifacts: [{ id: achievementArtifactId, title: "Internal evidence", mediaAssetId: achievementMediaId, destinationUrl: "https://example.com/evidence" }],
+        } },
+        draftData: { contentType: "achievement" as const, evidence: { artifacts: [{ id: achievementArtifactId, title: "الدليل الداخلي", mediaAssetId: achievementMediaId }] } },
       },
       {
         type: "testimonial" as const, key: "all-testimonial",
@@ -107,6 +127,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
         actor: owner, contentId: created.value.contentId, expectedVersion: 1,
         idempotencyKey: key(item.key + "-ar"), correlationId: item.key + "-ar",
         locale: "ar", title: "مسودة", summary: "ملخص أولي", body: "نص عربي أولي",
+        ...(item.type === "testimonial" ? {} : { draftData: item.draftData }),
       });
       expect(saved).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
       const aggregate = await content.getOwnerContentAggregate({ actor: owner, contentId: created.value.contentId });
@@ -130,7 +151,16 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       expect(row.snapshots.every((snapshot: { reviewed: boolean }) => !snapshot.reviewed)).toBe(true);
     }
     expect(persisted.rows.find((row) => row.content_type === "project")?.candidate_slug).toBe("atlas-search");
-    expect(persisted.rows.find((row) => row.content_type === "achievement")?.snapshots[1].payload.evidence.claims).toHaveLength(1);
+    const projectSnapshots = persisted.rows.find((row) => row.content_type === "project")?.snapshots;
+    expect(projectSnapshots?.find((snapshot: { locale: string }) => snapshot.locale === "en")?.payload)
+      .toMatchObject({ evidence: { claims: [{ artifactIds: [projectArtifactId] }], artifacts: [{ mediaAssetId: projectMediaId }] }, externalLinks: [{ id: projectLinkId }] });
+    expect(projectSnapshots?.find((snapshot: { locale: string }) => snapshot.locale === "ar")?.payload)
+      .toMatchObject({ evidence: { artifacts: [{ mediaAssetId: projectMediaId }] }, externalLinks: [{ destination: "https://example.com/project-ar" }] });
+    const achievementSnapshots = persisted.rows.find((row) => row.content_type === "achievement")?.snapshots;
+    expect(achievementSnapshots?.find((snapshot: { locale: string }) => snapshot.locale === "en")?.payload.evidence)
+      .toMatchObject({ claims: [{ artifactIds: [achievementArtifactId] }], artifacts: [{ mediaAssetId: achievementMediaId }] });
+    expect(achievementSnapshots?.find((snapshot: { locale: string }) => snapshot.locale === "ar")?.payload.evidence.artifacts)
+      .toMatchObject([{ mediaAssetId: achievementMediaId }]);
     expect(persisted.rows.find((row) => row.content_type === "testimonial")?.snapshots[1].payload.association)
       .toEqual({ type: "project", projectId: receipts[0]?.contentId });
     const events = await admin.query(

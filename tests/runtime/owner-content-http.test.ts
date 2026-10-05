@@ -54,11 +54,15 @@ describe("Owner content authoring HTTP adapters", () => {
   it("creates Draft content without an If-Match header and dispatches one validated command", async () => {
     const fake = createService();
     const response = await handleCreateOwnerContent(
-      request("POST", { contentType: "project", locale: "en", title: "Atlas Search", summary: "A draft.", body: "Draft only.", candidateSlug: "atlas-search" }, { "idempotency-key": "create-project-1" }),
+      request("POST", { contentType: "project", locale: "en", title: "Atlas Search", summary: "A draft.", body: "Draft only.", candidateSlug: "atlas-search",
+        evidence: { artifacts: [{ id: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea3", title: "Demo", mediaAssetId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4" }] },
+        externalLinks: [{ id: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea5", label: "Project site", destination: "https://example.com/project", isAvailableInArabic: true }],
+      }, { "idempotency-key": "create-project-1" }),
       { service: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(response.status).toBe(201);
     expect(fake.calls.create).toHaveLength(1);
+    expect(fake.calls.create[0]).toMatchObject({ payload: { evidence: { artifacts: [{ mediaAssetId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4" }] }, externalLinks: [{ destination: "https://example.com/project" }] } });
     expect(await response.json()).toEqual({ contentId: CONTENT_ID, aggregateVersion: 1, revisionId: REVISION_ID, outcome: "content-created" });
   });
 
@@ -83,12 +87,16 @@ describe("Owner content authoring HTTP adapters", () => {
     expect(get.status).toBe(200);
     expect(fake.calls.get).toHaveLength(1);
     const save = await handleSaveOwnerContentRevision(
-      request("POST", { locale: "ar", title: "بحث", summary: "مسودة", body: "نص أولي", draftData: { contentType: "project", caseStudy: { outcomes: ["مخرجات"] } } }, { "idempotency-key": "save-1", "if-match": '"1"' }),
+      request("POST", { locale: "ar", title: "بحث", summary: "مسودة", body: "نص أولي", draftData: { contentType: "project", caseStudy: { outcomes: ["مخرجات"] },
+        evidence: { artifacts: [{ id: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea3", title: "Arabic demo", mediaAssetId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4" }] },
+        externalLinks: [{ id: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea5", label: "موقع المشروع", destination: "https://example.com/project-ar", isAvailableInArabic: true }],
+      } }, { "idempotency-key": "save-1", "if-match": '"1"' }),
       { contentId: CONTENT_ID },
       { service: publicationFake, contentAuthoring: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(save.status).toBe(201);
     expect(fake.calls.save).toHaveLength(1);
-    expect(fake.calls.save[0]).toMatchObject({ expectedVersion: 1, locale: "ar", body: "نص أولي", draftData: { contentType: "project", caseStudy: { outcomes: ["مخرجات"] } } });
+    expect(fake.calls.save[0]).toMatchObject({ expectedVersion: 1, locale: "ar", body: "نص أولي", draftData: { contentType: "project", caseStudy: { outcomes: ["مخرجات"] },
+      evidence: { artifacts: [{ mediaAssetId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4" }] }, externalLinks: [{ destination: "https://example.com/project-ar" }] } });
   });
 });

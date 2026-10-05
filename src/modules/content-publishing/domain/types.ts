@@ -79,6 +79,7 @@ export interface DraftContentPayload {
 export interface ProjectDraftPayload extends DraftContentPayload {
   readonly contentType: "project";
   readonly candidateSlug?: string;
+  readonly externalLinks?: readonly ExternalLink[];
   readonly caseStudy?: {
     readonly problem?: string;
     readonly ownerRole?: string;
@@ -86,11 +87,14 @@ export interface ProjectDraftPayload extends DraftContentPayload {
     readonly outcomes?: readonly string[];
     readonly lessons?: string;
   };
+  readonly evidence?: EvidencePackageDraft;
 }
 
 export interface ProjectDraftData {
   readonly contentType: "project";
   readonly caseStudy?: ProjectDraftPayload["caseStudy"];
+  readonly evidence?: ProjectDraftPayload["evidence"];
+  readonly externalLinks?: ProjectDraftPayload["externalLinks"];
 }
 
 export interface AchievementDraftData {
@@ -111,13 +115,17 @@ export type LocalizedDraftData = ProjectDraftData | AchievementDraftData | Testi
 export interface AchievementDraftPayload extends DraftContentPayload {
   readonly contentType: "achievement";
   readonly achievedOn?: string;
-  readonly evidence?: {
-    readonly claims: readonly {
-      readonly claimId: StableId<"EvidenceClaim">;
-      readonly text: string;
-      readonly artifactIds: readonly StableId<"SupportingArtifact">[];
-    }[];
-  };
+  readonly evidence?: EvidencePackageDraft;
+}
+
+/** Incomplete revision evidence references accepted before publication review. */
+export interface EvidencePackageDraft {
+  readonly claims?: readonly {
+    readonly claimId: StableId<"EvidenceClaim">;
+    readonly text: string;
+    readonly artifactIds: readonly StableId<"SupportingArtifact">[];
+  }[];
+  readonly artifacts?: readonly SupportingArtifact[];
 }
 
 export interface TestimonialDraftPayload extends DraftContentPayload {

@@ -315,9 +315,9 @@ describe("Owner v1 contract", () => {
       });
     }
     expect(document.components.schemas["CreateProjectRequest"]).toMatchObject({
-      required: expect.arrayContaining(["candidateSlug"]),
       properties: { candidateSlug: { type: "string" } },
     });
+    expect(document.components.schemas["CreateProjectRequest"]?.["required"]).not.toContain("candidateSlug");
     expect(document.components.schemas["ReviewRevisionCommand"]).toMatchObject({
       additionalProperties: false,
       required: ["decision", "findings"],

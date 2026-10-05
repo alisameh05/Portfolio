@@ -29,6 +29,10 @@ schemas:
       summary: { type: string, minLength: 1, maxLength: 500 }
       body: { type: string, minLength: 1, maxLength: 50000 }
       candidateSlug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+      externalLinks:
+        type: array
+        maxItems: 50
+        items: { $ref: '#/schemas/ExternalLinkDraft' }
       caseStudy:
         type: object
         additionalProperties: false
@@ -38,6 +42,7 @@ schemas:
           contributions: { type: array, maxItems: 50, items: { type: string, maxLength: 2000 } }
           outcomes: { type: array, maxItems: 50, items: { type: string, maxLength: 2000 } }
           lessons: { type: string, maxLength: 5000 }
+      evidence: { $ref: '#/schemas/EvidencePackageDraft' }
   CreateAchievementRequest:
     type: object
     additionalProperties: false
@@ -78,6 +83,28 @@ schemas:
             claimId: { $ref: ./common.yaml#/schemas/StableId }
             text: { type: string, maxLength: 2000 }
             artifactIds: { type: array, maxItems: 100, uniqueItems: true, items: { $ref: ./common.yaml#/schemas/StableId } }
+      artifacts:
+        type: array
+        maxItems: 100
+        items: { $ref: '#/schemas/SupportingArtifactDraft' }
+  SupportingArtifactDraft:
+    type: object
+    additionalProperties: false
+    required: [id, title]
+    properties:
+      id: { $ref: ./common.yaml#/schemas/StableId }
+      title: { type: string, minLength: 1, maxLength: 200 }
+      destinationUrl: { type: string, format: uri, maxLength: 2048 }
+      mediaAssetId: { $ref: ./common.yaml#/schemas/StableId }
+  ExternalLinkDraft:
+    type: object
+    additionalProperties: false
+    required: [id, label, destination, isAvailableInArabic]
+    properties:
+      id: { $ref: ./common.yaml#/schemas/StableId }
+      label: { type: string, minLength: 1, maxLength: 120 }
+      destination: { type: string, format: uri, maxLength: 2048 }
+      isAvailableInArabic: { type: boolean }
   CreateContentReceipt:
     type: object
     additionalProperties: false
@@ -207,6 +234,11 @@ schemas:
           contributions: { type: array, maxItems: 50, items: { type: string, maxLength: 2000 } }
           outcomes: { type: array, maxItems: 50, items: { type: string, maxLength: 2000 } }
           lessons: { type: string, maxLength: 5000 }
+      evidence: { $ref: '#/schemas/EvidencePackageDraft' }
+      externalLinks:
+        type: array
+        maxItems: 50
+        items: { $ref: '#/schemas/ExternalLinkDraft' }
   AchievementDraftData:
     type: object
     additionalProperties: false

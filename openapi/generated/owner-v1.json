@@ -3877,6 +3877,103 @@
           }
         }
       },
+      "ExternalLinkDraft": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "destination",
+          "isAvailableInArabic"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "destination": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "isAvailableInArabic": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SupportingArtifactDraft": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "destinationUrl": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "mediaAssetId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "EvidencePackageDraft": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "claims": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "claimId",
+                "text",
+                "artifactIds"
+              ],
+              "properties": {
+                "claimId": {
+                  "$ref": "#/components/schemas/StableId"
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                "artifactIds": {
+                  "type": "array",
+                  "maxItems": 100,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/components/schemas/StableId"
+                  }
+                }
+              }
+            }
+          },
+          "artifacts": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/SupportingArtifactDraft"
+            }
+          }
+        }
+      },
       "CreateProjectRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -3916,6 +4013,13 @@
             "maxLength": 120,
             "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
           },
+          "externalLinks": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/ExternalLinkDraft"
+            }
+          },
           "caseStudy": {
             "type": "object",
             "additionalProperties": false,
@@ -3949,42 +4053,9 @@
                 "maxLength": 5000
               }
             }
-          }
-        }
-      },
-      "EvidencePackageDraft": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "claims": {
-            "type": "array",
-            "maxItems": 100,
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "claimId",
-                "text",
-                "artifactIds"
-              ],
-              "properties": {
-                "claimId": {
-                  "$ref": "#/components/schemas/StableId"
-                },
-                "text": {
-                  "type": "string",
-                  "maxLength": 2000
-                },
-                "artifactIds": {
-                  "type": "array",
-                  "maxItems": 100,
-                  "uniqueItems": true,
-                  "items": {
-                    "$ref": "#/components/schemas/StableId"
-                  }
-                }
-              }
-            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/EvidencePackageDraft"
           }
         }
       },
@@ -4166,6 +4237,16 @@
                 "type": "string",
                 "maxLength": 5000
               }
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/EvidencePackageDraft"
+          },
+          "externalLinks": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/ExternalLinkDraft"
             }
           }
         }

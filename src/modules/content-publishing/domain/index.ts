@@ -8,6 +8,7 @@ export type {
   SupportingArtifact,
   EvidenceClaim,
   EvidencePackage,
+  EvidencePackageDraft,
   ExternalLink,
   PublicRoute,
   LocalizedRevision,

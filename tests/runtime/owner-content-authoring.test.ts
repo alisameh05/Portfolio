@@ -116,8 +116,8 @@ function createHarness() {
 
 describe("Content authoring application service", () => {
   it.each([
-    ["project", { contentType: "project", candidateSlug: "atlas-search", caseStudy: { problem: "A draft problem." } }],
-    ["achievement", { contentType: "achievement", achievedOn: "2025-04-12", evidence: { claims: [{ claimId: unsafeStableId<"EvidenceClaim">(uuid(90)), text: "A draft claim.", artifactIds: [] }] } }],
+    ["project", { contentType: "project", candidateSlug: "atlas-search", caseStudy: { problem: "A draft problem." }, evidence: { artifacts: [{ id: unsafeStableId<"SupportingArtifact">(uuid(92)), title: "Demo", mediaAssetId: unsafeStableId<"MediaAsset">(uuid(93)) }] }, externalLinks: [{ id: unsafeStableId<"ExternalLink">(uuid(94)), label: "Project site", destination: "https://example.com/project", isAvailableInArabic: true }] }],
+    ["achievement", { contentType: "achievement", achievedOn: "2025-04-12", evidence: { claims: [{ claimId: unsafeStableId<"EvidenceClaim">(uuid(90)), text: "A draft claim.", artifactIds: [] }], artifacts: [{ id: unsafeStableId<"SupportingArtifact">(uuid(92)), title: "Proof", mediaAssetId: unsafeStableId<"MediaAsset">(uuid(93)) }] } }],
     ["testimonial", { contentType: "testimonial", authorName: "Reviewer", quote: "A draft quote.", relatedProjectId: unsafeStableId<"Project">(uuid(91)) }],
   ] as const)("creates a private %s Draft with its typed initial Revision", async (kind, details) => {
     const { service, records, events } = createHarness();
@@ -135,6 +135,12 @@ describe("Content authoring application service", () => {
     expect(record?.revisions[0]?.payload).toMatchObject(payload);
     if (kind === "testimonial") {
       expect(record?.revisions[0]?.payload).toMatchObject({ association: { type: "project", projectId: uuid(91) } });
+    }
+    if (kind === "project") {
+      expect(record?.revisions[0]?.payload).toMatchObject({ evidence: { artifacts: [{ mediaAssetId: uuid(93) }] }, externalLinks: [{ destination: "https://example.com/project" }] });
+    }
+    if (kind === "achievement") {
+      expect(record?.revisions[0]?.payload).toMatchObject({ evidence: { artifacts: [{ mediaAssetId: uuid(93) }] } });
     }
     expect(record?.candidateSlug).toBe(kind === "project" ? "atlas-search" : null);
     expect(events).toHaveLength(2);
@@ -219,6 +225,8 @@ describe("Content authoring application service", () => {
     ["malformed Project case study", { contentType: "project", caseStudy: "bad" }],
     ["malformed Achievement evidence", { contentType: "achievement", evidence: "bad" }],
     ["malformed evidence claim", { contentType: "achievement", evidence: { claims: [{ claimId: uuid(90), text: "Claim", artifactIds: "bad" }] } }],
+    ["malformed media identity", { contentType: "project", evidence: { artifacts: [{ id: uuid(90), title: "Bad asset", mediaAssetId: "not-a-stable-id" }] } }],
+    ["unsafe external link", { contentType: "project", externalLinks: [{ id: uuid(90), label: "Run this", destination: "javascript:alert(1)", isAvailableInArabic: true }] }],
   ])("rejects %s at the application boundary before persistence", async (_label, typedData) => {
     const { service, records } = createHarness();
     const result = await service.createContent({

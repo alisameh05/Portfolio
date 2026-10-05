@@ -2,7 +2,7 @@ import { err, parseStableId, type ActorContext, type IdempotencyKey, type Reject
 import type { Clock, StableIdGenerator, TransactionContext } from "../../../runtime/ports.js";
 import { createSystemClock, createSystemIdGenerator } from "../../../runtime/ports.js";
 import { hashCanonicalRequest } from "../../../shared/application/idempotency.js";
-import type { OperationsPersistencePorts, SafeResultEnvelope } from "../../portability-operations/application/persistence.js";
+import type { OperationsPersistencePorts, SafeResultEnvelope } from "../../portability-operations/index.js";
 import type { ContentKind, CreateDraftPayload, LocalizedDraftData, SupportedLocale } from "../domain/index.js";
 
 export interface ContentAuthoringScope {
@@ -180,6 +180,67 @@ function optionalTextListIsValid(value: unknown, maxItems: number, maxLength: nu
     typeof item === "string" && item.length <= maxLength && !CONTROL_CHARS.test(item) && !EXECUTABLE_MARKUP.test(item));
 }
 
+function safeWebDestination(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 2_048 || /[\s\u0000-\u001f\u007f]/.test(value)) return false;
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    return url.protocol === "https:" && url.username === "" && url.password === "" && url.port === "" &&
+      host !== "localhost" && !host.endsWith(".localhost") && !host.endsWith(".local") &&
+      !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) && !host.startsWith("[");
+  } catch {
+    return false;
+  }
+}
+
+function evidencePackageIsValid(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value)) return false;
+  const claims = value["claims"];
+  if (claims !== undefined && (!Array.isArray(claims) || claims.length > 100 || !claims.every((claim) => {
+    if (!isRecord(claim)) return false;
+    const claimId = claim["claimId"];
+    const claimText = claim["text"];
+    const artifactIds = claim["artifactIds"];
+    return typeof claimId === "string" && parseStableId("EvidenceClaim", claimId).ok && isCleanText(claimText, 2_000) &&
+      Array.isArray(artifactIds) && artifactIds.length <= 100 && artifactIds.every((id) => parseStableId("SupportingArtifact", id).ok) &&
+      new Set(artifactIds).size === artifactIds.length;
+  }))) return false;
+  const artifacts = value["artifacts"];
+  if (artifacts === undefined) return true;
+  if (!Array.isArray(artifacts) || artifacts.length > 100) return false;
+  const artifactIds = new Set<string>();
+  return artifacts.every((artifact) => {
+    if (!isRecord(artifact)) return false;
+    const id = artifact["id"];
+    const title = artifact["title"];
+    const destinationUrl = artifact["destinationUrl"];
+    const mediaAssetId = artifact["mediaAssetId"];
+    if (typeof id !== "string" || !parseStableId("SupportingArtifact", id).ok || artifactIds.has(id) || !isCleanText(title, 200) ||
+        (destinationUrl !== undefined && !safeWebDestination(destinationUrl)) ||
+        (mediaAssetId !== undefined && (typeof mediaAssetId !== "string" || !parseStableId("MediaAsset", mediaAssetId).ok))) return false;
+    artifactIds.add(id);
+    return true;
+  });
+}
+
+function externalLinksAreValid(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!Array.isArray(value) || value.length > 50) return false;
+  const linkIds = new Set<string>();
+  return value.every((link) => {
+    if (!isRecord(link)) return false;
+    const id = link["id"];
+    const label = link["label"];
+    const destination = link["destination"];
+    const isAvailableInArabic = link["isAvailableInArabic"];
+    if (typeof id !== "string" || !parseStableId("ExternalLink", id).ok || linkIds.has(id) || !isCleanText(label, 120) ||
+        !safeWebDestination(destination) || typeof isAvailableInArabic !== "boolean") return false;
+    linkIds.add(id);
+    return true;
+  });
+}
+
 function payloadIsValid(payload: CreateDraftPayload): boolean {
   if (!isRecord(payload) || (payload.contentType !== "project" && payload.contentType !== "achievement" && payload.contentType !== "testimonial")) return false;
   if (payload.locale !== "en" && payload.locale !== "ar") return false;
@@ -187,25 +248,15 @@ function payloadIsValid(payload: CreateDraftPayload): boolean {
   if (payload.contentType === "project") {
     if (payload.candidateSlug !== undefined && (typeof payload.candidateSlug !== "string" || payload.candidateSlug.length > 120 || !SLUG_PATTERN.test(payload.candidateSlug))) return false;
     const study = payload.caseStudy;
-    return study === undefined || isRecord(study) &&
+    return (study === undefined || isRecord(study) &&
       optionalTextIsValid(study.problem, 5_000) && optionalTextIsValid(study.ownerRole, 2_000) &&
       optionalTextIsValid(study.lessons, 5_000) && optionalTextListIsValid(study.contributions, 50, 2_000) &&
-      optionalTextListIsValid(study.outcomes, 50, 2_000);
+      optionalTextListIsValid(study.outcomes, 50, 2_000)) && evidencePackageIsValid(payload.evidence) && externalLinksAreValid(payload.externalLinks);
   }
   if (payload.contentType === "achievement") {
     const date = payload.achievedOn;
     const dateValid = date === undefined || typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(`${date}T00:00:00Z`)) && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
-    const evidence = payload.evidence;
-    if (evidence === undefined) return dateValid;
-    if (!isRecord(evidence) || !Array.isArray(evidence.claims) || evidence.claims.length > 100) return false;
-    return dateValid && evidence.claims.every((claim) => {
-      if (!isRecord(claim)) return false;
-      const claimId = claim["claimId"];
-      const claimText = claim["text"];
-      const artifactIds = claim["artifactIds"];
-      return typeof claimId === "string" && parseStableId("EvidenceClaim", claimId).ok && isCleanText(claimText, 2_000) &&
-        Array.isArray(artifactIds) && artifactIds.length <= 100 && artifactIds.every((id) => parseStableId("SupportingArtifact", id).ok);
-    });
+    return dateValid && evidencePackageIsValid(payload.evidence);
   }
   return (payload.authorName === undefined || isCleanText(payload.authorName, 200)) &&
     (payload.quote === undefined || isCleanText(payload.quote, 10_000)) &&
@@ -394,9 +445,13 @@ export function createContentAuthoringService(input: {
         const common = { locale: command.locale, title: command.title, summary: command.summary, body: command.body };
         if (existing.value.contentType === "project") {
           const prior = previous?.payload.contentType === "project" ? previous.payload : undefined;
-          const caseStudy = draftData?.contentType === "project" ? draftData.caseStudy : prior?.caseStudy;
+          const projectData = draftData?.contentType === "project" ? draftData : undefined;
+          const caseStudy = projectData?.caseStudy ?? prior?.caseStudy;
+          const evidence = projectData?.evidence ?? prior?.evidence;
+          const externalLinks = projectData?.externalLinks ?? prior?.externalLinks;
           payload = { contentType: "project", ...(existing.value.candidateSlug === null ? {} : { candidateSlug: existing.value.candidateSlug }), ...common,
-            ...(caseStudy === undefined ? {} : { caseStudy }) };
+            ...(caseStudy === undefined ? {} : { caseStudy }), ...(evidence === undefined ? {} : { evidence }),
+            ...(externalLinks === undefined ? {} : { externalLinks }) };
         } else if (existing.value.contentType === "achievement") {
           const prior = previous?.payload.contentType === "achievement" ? previous.payload : undefined;
           const achievedOn = draftData?.contentType === "achievement" ? draftData.achievedOn : prior?.achievedOn;

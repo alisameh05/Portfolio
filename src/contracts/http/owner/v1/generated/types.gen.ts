@@ -100,20 +100,18 @@ export type ContentAggregateView = {
     revisions: Array<RevisionHistoryEntry>;
 };
 
-export type CreateProjectRequest = {
-    contentType: 'project';
-    locale: Locale;
+export type ExternalLinkDraft = {
+    id: StableId;
+    label: string;
+    destination: string;
+    isAvailableInArabic: boolean;
+};
+
+export type SupportingArtifactDraft = {
+    id: StableId;
     title: string;
-    summary: string;
-    body: string;
-    candidateSlug?: string;
-    caseStudy?: {
-        problem?: string;
-        ownerRole?: string;
-        contributions?: Array<string>;
-        outcomes?: Array<string>;
-        lessons?: string;
-    };
+    destinationUrl?: string;
+    mediaAssetId?: StableId;
 };
 
 export type EvidencePackageDraft = {
@@ -122,6 +120,25 @@ export type EvidencePackageDraft = {
         text: string;
         artifactIds: Array<StableId>;
     }>;
+    artifacts?: Array<SupportingArtifactDraft>;
+};
+
+export type CreateProjectRequest = {
+    contentType: 'project';
+    locale: Locale;
+    title: string;
+    summary: string;
+    body: string;
+    candidateSlug?: string;
+    externalLinks?: Array<ExternalLinkDraft>;
+    caseStudy?: {
+        problem?: string;
+        ownerRole?: string;
+        contributions?: Array<string>;
+        outcomes?: Array<string>;
+        lessons?: string;
+    };
+    evidence?: EvidencePackageDraft;
 };
 
 export type CreateAchievementRequest = {
@@ -169,6 +186,8 @@ export type ProjectDraftData = {
         outcomes?: Array<string>;
         lessons?: string;
     };
+    evidence?: EvidencePackageDraft;
+    externalLinks?: Array<ExternalLinkDraft>;
 };
 
 export type AchievementDraftData = {
