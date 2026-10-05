@@ -213,4 +213,22 @@ describe("Content authoring application service", () => {
     expect(records.size).toBe(1);
     if (first.ok) expect(records.get(first.value.contentId)?.candidateSlug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });
+
+  it.each([
+    ["unknown content kind", { contentType: "bogus" }],
+    ["malformed Project case study", { contentType: "project", caseStudy: "bad" }],
+    ["malformed Achievement evidence", { contentType: "achievement", evidence: "bad" }],
+    ["malformed evidence claim", { contentType: "achievement", evidence: { claims: [{ claimId: uuid(90), text: "Claim", artifactIds: "bad" }] } }],
+  ])("rejects %s at the application boundary before persistence", async (_label, typedData) => {
+    const { service, records } = createHarness();
+    const result = await service.createContent({
+      actor: ACTOR,
+      idempotencyKey: "malformed-authoring" as never,
+      correlationId: "malformed-authoring",
+      payload: { ...typedData, locale: "en", title: "Valid title", summary: "Valid summary", body: "Valid body" } as unknown as CreateDraftPayload,
+    });
+
+    expect(result).toEqual({ ok: false, error: { kind: "validation", code: "INVALID_CONTENT_DRAFT" } });
+    expect(records.size).toBe(0);
+  });
 });

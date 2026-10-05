@@ -163,28 +163,49 @@ function readReceipt<T>(result: SafeResultEnvelope): Result<T, Rejection> {
   return { ok: true, value: result["receipt"] as T };
 }
 
-function isCleanText(value: string, max: number): boolean {
-  return value.trim().length > 0 && value.length <= max && !CONTROL_CHARS.test(value) && !EXECUTABLE_MARKUP.test(value);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isCleanText(value: unknown, max: number): value is string {
+  return typeof value === "string" && value.trim().length > 0 && value.length <= max && !CONTROL_CHARS.test(value) && !EXECUTABLE_MARKUP.test(value);
+}
+
+function optionalTextIsValid(value: unknown, max: number): boolean {
+  return value === undefined || typeof value === "string" && value.length <= max && !CONTROL_CHARS.test(value) && !EXECUTABLE_MARKUP.test(value);
+}
+
+function optionalTextListIsValid(value: unknown, maxItems: number, maxLength: number): boolean {
+  return value === undefined || Array.isArray(value) && value.length <= maxItems && value.every((item) =>
+    typeof item === "string" && item.length <= maxLength && !CONTROL_CHARS.test(item) && !EXECUTABLE_MARKUP.test(item));
 }
 
 function payloadIsValid(payload: CreateDraftPayload): boolean {
+  if (!isRecord(payload) || (payload.contentType !== "project" && payload.contentType !== "achievement" && payload.contentType !== "testimonial")) return false;
   if (payload.locale !== "en" && payload.locale !== "ar") return false;
   if (!isCleanText(payload.title, 160) || !isCleanText(payload.summary, 500) || !isCleanText(payload.body, 50_000)) return false;
   if (payload.contentType === "project") {
-    if (payload.candidateSlug !== undefined && (payload.candidateSlug.length > 120 || !SLUG_PATTERN.test(payload.candidateSlug))) return false;
+    if (payload.candidateSlug !== undefined && (typeof payload.candidateSlug !== "string" || payload.candidateSlug.length > 120 || !SLUG_PATTERN.test(payload.candidateSlug))) return false;
     const study = payload.caseStudy;
-    return study === undefined ||
-      ((study.problem === undefined || study.problem.length <= 5_000 && !CONTROL_CHARS.test(study.problem) && !EXECUTABLE_MARKUP.test(study.problem)) &&
-      (study.ownerRole === undefined || study.ownerRole.length <= 2_000 && !CONTROL_CHARS.test(study.ownerRole) && !EXECUTABLE_MARKUP.test(study.ownerRole)) &&
-      (study.lessons === undefined || study.lessons.length <= 5_000 && !CONTROL_CHARS.test(study.lessons) && !EXECUTABLE_MARKUP.test(study.lessons)) &&
-      [study.contributions ?? [], study.outcomes ?? []].every((items) => items.length <= 50 && items.every((item) => item.length <= 2_000 && !CONTROL_CHARS.test(item) && !EXECUTABLE_MARKUP.test(item))));
+    return study === undefined || isRecord(study) &&
+      optionalTextIsValid(study.problem, 5_000) && optionalTextIsValid(study.ownerRole, 2_000) &&
+      optionalTextIsValid(study.lessons, 5_000) && optionalTextListIsValid(study.contributions, 50, 2_000) &&
+      optionalTextListIsValid(study.outcomes, 50, 2_000);
   }
   if (payload.contentType === "achievement") {
-    const dateValid = payload.achievedOn === undefined || /^\d{4}-\d{2}-\d{2}$/.test(payload.achievedOn) && Number.isFinite(Date.parse(`${payload.achievedOn}T00:00:00Z`)) && new Date(`${payload.achievedOn}T00:00:00Z`).toISOString().slice(0, 10) === payload.achievedOn;
-    const claims = payload.evidence?.claims;
-    return dateValid && (claims === undefined || claims.length <= 100 && claims.every((claim) =>
-      parseStableId("EvidenceClaim", claim.claimId).ok && isCleanText(claim.text, 2_000) && claim.artifactIds.length <= 100 &&
-      claim.artifactIds.every((id) => parseStableId("SupportingArtifact", id).ok)));
+    const date = payload.achievedOn;
+    const dateValid = date === undefined || typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(`${date}T00:00:00Z`)) && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+    const evidence = payload.evidence;
+    if (evidence === undefined) return dateValid;
+    if (!isRecord(evidence) || !Array.isArray(evidence.claims) || evidence.claims.length > 100) return false;
+    return dateValid && evidence.claims.every((claim) => {
+      if (!isRecord(claim)) return false;
+      const claimId = claim["claimId"];
+      const claimText = claim["text"];
+      const artifactIds = claim["artifactIds"];
+      return typeof claimId === "string" && parseStableId("EvidenceClaim", claimId).ok && isCleanText(claimText, 2_000) &&
+        Array.isArray(artifactIds) && artifactIds.length <= 100 && artifactIds.every((id) => parseStableId("SupportingArtifact", id).ok);
+    });
   }
   return (payload.authorName === undefined || isCleanText(payload.authorName, 200)) &&
     (payload.quote === undefined || isCleanText(payload.quote, 10_000)) &&
