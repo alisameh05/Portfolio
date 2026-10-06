@@ -195,7 +195,11 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
 
   it("orders revision history by locale stream sequence when saved timestamps regress", async () => {
     const scope = await configuredScope();
-    const timestamps = ["2026-10-07T00:00:00.000Z", "2026-10-03T00:00:00.000Z", "2026-10-04T00:00:00.000Z"];
+    const timestamps = [
+      "2026-10-07T00:00:00.000Z", "2026-10-07T00:00:00.000Z",
+      "2026-10-03T00:00:00.000Z", "2026-10-07T00:00:00.000Z",
+      "2026-10-04T00:00:00.000Z", "2026-10-07T00:00:00.000Z",
+    ];
     const content = service(scope, operations, { now: () => timestamps.shift() ?? "2026-10-04T00:00:00.000Z" });
     const artifactId = createStableId("SupportingArtifact");
     const created = await content.createContent({
