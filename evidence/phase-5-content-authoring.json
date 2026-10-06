@@ -97,6 +97,14 @@
       "status": "passed"
     },
     {
+      "name": "Content authoring production PostgreSQL invariants > persists an explicitly selected profile association for a Testimonial",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > orders revision history by locale stream sequence when saved timestamps regress",
+      "status": "passed"
+    },
+    {
       "name": "Content authoring production PostgreSQL invariants > serializes same-key and stale-version races and preserves the original replay receipt",
       "status": "passed"
     },
@@ -113,7 +121,7 @@
       "status": "passed"
     }
   ],
-  "databaseIntegrationTestsPassed": 5,
+  "databaseIntegrationTestsPassed": 7,
   "skippedCases": 0,
   "isolatedLoopbackProjects": true,
   "credentialsRecorded": false,
