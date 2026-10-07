@@ -10,6 +10,11 @@ import {
   handleGetOwnerContentAggregate,
   handleSaveOwnerContentRevision,
 } from "../../src/runtime/http/owner-publication.js";
+import {
+  handleGetOwnerContentHistory,
+  handlePreviewOwnerContentRevision,
+  handleReviewOwnerContentRevision,
+} from "../../src/runtime/http/owner-content-review.js";
 import { ownerTestSecurity, withOwnerTestAuth } from "./owner-test-auth.js";
 
 const CONTENT_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea1";
@@ -24,7 +29,7 @@ const CONTENT = {
 };
 
 function createService() {
-  const calls: { create: unknown[]; get: unknown[]; save: unknown[] } = { create: [], get: [], save: [] };
+  const calls: { create: unknown[]; get: unknown[]; save: unknown[]; preview: unknown[]; review: unknown[]; history: unknown[] } = { create: [], get: [], save: [], preview: [], review: [], history: [] };
   const service: ContentAuthoringService = {
     async createContent(command) {
       calls.create.push(command);
@@ -37,6 +42,18 @@ function createService() {
     async saveRevision(command) {
       calls.save.push(command);
       return { ok: true, value: { aggregateId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 2, revisionId: unsafeStableId<"Revision">(REVISION_ID), outcome: "revision-saved" } };
+    },
+    async previewRevision(query) {
+      calls.preview.push(query);
+      return { ok: true, value: { contentId: unsafeStableId<string>(CONTENT_ID), revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: "en", sequence: 1, title: "Atlas", summary: "Private", body: "Private preview", snapshotHash: "a".repeat(64), evidenceVersion: 1, review: null } };
+    },
+    async reviewRevision(command) {
+      calls.review.push(command);
+      return { ok: true, value: { aggregateId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 2, outcome: "revision-reviewed", revisionId: unsafeStableId<"Revision">(REVISION_ID), reviewId: unsafeStableId<"ContentReview">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea3") } };
+    },
+    async getContentHistory(query) {
+      calls.history.push(query);
+      return { ok: true, value: { entries: [{ revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: "en", sequence: 1, savedAt: "2026-10-05T08:00:00.000Z", reviewDecision: "accepted" }], nextCursor: null } };
     },
   };
   return { calls, service };
@@ -98,5 +115,49 @@ describe("Owner content authoring HTTP adapters", () => {
     expect(fake.calls.save).toHaveLength(1);
     expect(fake.calls.save[0]).toMatchObject({ expectedVersion: 1, locale: "ar", body: "نص أولي", draftData: { contentType: "project", caseStudy: { outcomes: ["مخرجات"] },
       evidence: { artifacts: [{ mediaAssetId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4" }] }, externalLinks: [{ destination: "https://example.com/project-ar" }] } });
+  });
+
+  it("serves private non-indexable previews and returns a bounded Owner history page", async () => {
+    const fake = createService();
+    const logger = createTestLogger();
+    const preview = await handlePreviewOwnerContentRevision(
+      request("GET"), { contentId: CONTENT_ID, revisionId: REVISION_ID },
+      { service: fake.service, security: ownerTestSecurity(), logger },
+    );
+    expect(preview.status).toBe(200);
+    expect(preview.headers.get("cache-control")).toBe("private, no-store");
+    expect(preview.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(await preview.json()).toMatchObject({ snapshotHash: "a".repeat(64), evidenceVersion: 1, review: null });
+    expect(fake.calls.preview).toHaveLength(1);
+
+    const history = await handleGetOwnerContentHistory(
+      request("GET", undefined, { accept: "application/json" }), { contentId: CONTENT_ID },
+      { service: fake.service, security: ownerTestSecurity(), logger },
+    );
+    expect(history.status).toBe(200);
+    expect(await history.json()).toMatchObject({ entries: [{ revisionId: REVISION_ID, reviewDecision: "accepted" }], nextCursor: null });
+    expect(fake.calls.history[0]).toMatchObject({ limit: 25 });
+    expect(JSON.stringify(logger.records)).not.toContain("Private preview");
+  });
+
+  it("records an exact-snapshot review through strict contract and concurrency validation", async () => {
+    const fake = createService();
+    const logger = createTestLogger();
+    const review = await handleReviewOwnerContentRevision(
+      request("POST", { locale: "en", snapshotHash: "a".repeat(64), evidenceVersion: 1, decision: "accepted", findings: ["Keep review notes private."] }, { "idempotency-key": "review-1", "if-match": '"1"' }),
+      { contentId: CONTENT_ID, revisionId: REVISION_ID },
+      { service: fake.service, security: ownerTestSecurity(), logger },
+    );
+    expect(review.status).toBe(200);
+    expect(await review.json()).toMatchObject({ aggregateVersion: 2, outcome: "revision-reviewed" });
+    expect(fake.calls.review[0]).toMatchObject({ expectedVersion: 1, locale: "en", snapshotHash: "a".repeat(64), evidenceVersion: 1, decision: "accepted" });
+    const malformed = await handleReviewOwnerContentRevision(
+      request("POST", { locale: "en", snapshotHash: "wrong", evidenceVersion: 1, decision: "accepted", findings: [] }, { "idempotency-key": "review-2", "if-match": '"1"' }),
+      { contentId: CONTENT_ID, revisionId: REVISION_ID },
+      { service: fake.service, security: ownerTestSecurity(), logger },
+    );
+    expect(malformed.status).toBe(400);
+    expect(fake.calls.review).toHaveLength(1);
+    expect(JSON.stringify(logger.records)).not.toContain("Keep review notes private.");
   });
 });

@@ -42,6 +42,8 @@ export interface ReviewRevisionCommand extends ExistingContentCommandContext {
   readonly contentId: StableId<string>;
   readonly revisionId: StableId<"Revision">;
   readonly locale: SupportedLocale;
+  readonly snapshotHash: string;
+  readonly evidenceVersion: number;
   readonly decision: "accepted" | "rejected";
   readonly findings: readonly string[];
 }

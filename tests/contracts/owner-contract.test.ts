@@ -320,7 +320,7 @@ describe("Owner v1 contract", () => {
     expect(document.components.schemas["CreateProjectRequest"]?.["required"]).not.toContain("candidateSlug");
     expect(document.components.schemas["ReviewRevisionCommand"]).toMatchObject({
       additionalProperties: false,
-      required: ["decision", "findings"],
+      required: ["locale", "snapshotHash", "evidenceVersion", "decision", "findings"],
     });
     expect(document.components.schemas["ContentHistoryPage"]).toMatchObject({
       additionalProperties: false,

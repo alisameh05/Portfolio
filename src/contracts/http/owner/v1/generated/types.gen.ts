@@ -244,9 +244,12 @@ export type SaveRevisionReceipt = {
 };
 
 export type RevisionReviewView = {
+    reviewId: StableId;
     decision: 'accepted' | 'rejected';
     findings: Array<string>;
     reviewedAt: string;
+    snapshotHash: string;
+    evidenceVersion: number;
 };
 
 export type PrivateRevisionPreview = {
@@ -257,10 +260,15 @@ export type PrivateRevisionPreview = {
     title: string;
     summary: string;
     body: string;
+    snapshotHash: string;
+    evidenceVersion: number;
     review: RevisionReviewView | null;
 };
 
 export type ReviewRevisionCommand = {
+    locale: Locale;
+    snapshotHash: string;
+    evidenceVersion: number;
     decision: 'accepted' | 'rejected';
     findings: Array<string>;
 };

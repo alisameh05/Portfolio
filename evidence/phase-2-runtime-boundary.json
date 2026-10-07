@@ -12,7 +12,7 @@
     {
       "name": "owner-operation-count",
       "passed": true,
-      "detail": "39 active Owner operations and 9 explicitly fail-closed Phase 5 contracts"
+      "detail": "43 active Owner operations and 5 explicitly fail-closed Phase 5 contracts"
     },
     {
       "name": "unique-operation-identifiers",
@@ -22,22 +22,22 @@
     {
       "name": "one-adapter-per-operation",
       "passed": true,
-      "detail": "44/44 active operations resolve once; deferred operations have no adapter"
+      "detail": "48/48 active operations resolve once; deferred operations have no adapter"
     },
     {
       "name": "unfinished-owner-operations-fail-closed",
       "passed": true,
-      "detail": "9 declared Phase 5 operations have no runtime adapter"
+      "detail": "5 declared Phase 5 operations have no runtime adapter"
     },
     {
       "name": "no-undeclared-product-adapters",
       "passed": true,
-      "detail": "44 adapter exports declared by a contract"
+      "detail": "48 adapter exports declared by a contract"
     },
     {
       "name": "only-callable-runtime-adapters",
       "passed": true,
-      "detail": "44/44 handler exports are callable runtime values"
+      "detail": "48/48 handler exports are callable runtime values"
     },
     {
       "name": "only-operational-routes",
@@ -286,8 +286,14 @@
       "path": "/api/owner/v1/content",
       "operationId": "createOwnerContent",
       "expectedExport": "handleCreateOwnerContent",
-      "activation": "fail-closed",
-      "matches": []
+      "activation": "active",
+      "matches": [
+        {
+          "exportName": "handleCreateOwnerContent",
+          "file": "src/runtime/http/owner-content-authoring.ts",
+          "callable": true
+        }
+      ]
     },
     {
       "surface": "owner",
@@ -379,8 +385,14 @@
       "path": "/api/owner/v1/content/{contentId}/history",
       "operationId": "getOwnerContentHistory",
       "expectedExport": "handleGetOwnerContentHistory",
-      "activation": "fail-closed",
-      "matches": []
+      "activation": "active",
+      "matches": [
+        {
+          "exportName": "handleGetOwnerContentHistory",
+          "file": "src/runtime/http/owner-content-review.ts",
+          "callable": true
+        }
+      ]
     },
     {
       "surface": "owner",
@@ -517,8 +529,14 @@
       "path": "/api/owner/v1/content/{contentId}/revisions/{revisionId}/preview",
       "operationId": "previewOwnerContentRevision",
       "expectedExport": "handlePreviewOwnerContentRevision",
-      "activation": "fail-closed",
-      "matches": []
+      "activation": "active",
+      "matches": [
+        {
+          "exportName": "handlePreviewOwnerContentRevision",
+          "file": "src/runtime/http/owner-content-review.ts",
+          "callable": true
+        }
+      ]
     },
     {
       "surface": "owner",
@@ -694,8 +712,14 @@
       "path": "/api/owner/v1/content/{contentId}/revisions/{revisionId}/review",
       "operationId": "reviewOwnerContentRevision",
       "expectedExport": "handleReviewOwnerContentRevision",
-      "activation": "fail-closed",
-      "matches": []
+      "activation": "active",
+      "matches": [
+        {
+          "exportName": "handleReviewOwnerContentRevision",
+          "file": "src/runtime/http/owner-content-review.ts",
+          "callable": true
+        }
+      ]
     },
     {
       "surface": "owner",
@@ -840,6 +864,11 @@
       "callable": true
     },
     {
+      "exportName": "handleCreateOwnerContent",
+      "file": "src/runtime/http/owner-content-authoring.ts",
+      "callable": true
+    },
+    {
       "exportName": "handleCreateOwnerMediaUploadIntent",
       "file": "src/runtime/http/owner-media.ts",
       "callable": true
@@ -867,6 +896,11 @@
     {
       "exportName": "handleGetOwnerContentAggregate",
       "file": "src/runtime/http/owner-publication.ts",
+      "callable": true
+    },
+    {
+      "exportName": "handleGetOwnerContentHistory",
+      "file": "src/runtime/http/owner-content-review.ts",
       "callable": true
     },
     {
@@ -917,6 +951,11 @@
     {
       "exportName": "handlePostPublicEvent",
       "file": "src/runtime/http/public-event.ts",
+      "callable": true
+    },
+    {
+      "exportName": "handlePreviewOwnerContentRevision",
+      "file": "src/runtime/http/owner-content-review.ts",
       "callable": true
     },
     {
@@ -977,6 +1016,11 @@
     {
       "exportName": "handleRetireOwnerTaxonomyValue",
       "file": "src/runtime/http/owner-taxonomy.ts",
+      "callable": true
+    },
+    {
+      "exportName": "handleReviewOwnerContentRevision",
+      "file": "src/runtime/http/owner-content-review.ts",
       "callable": true
     },
     {

@@ -274,6 +274,147 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(aggregate).toMatchObject({ ok: true, value: { aggregateVersion: 2, revisions: [{}, {}] } });
   }, 30_000);
 
+  it("persists immutable exact-snapshot reviews atomically and does not transfer them to later Revisions", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const owner = actor(scope.ownerId);
+    const created = await content.createContent({
+      actor: owner, idempotencyKey: key("review-integration-create"), correlationId: "review-integration-create",
+      payload: { contentType: "achievement", locale: "en", title: "Award", summary: "Private review.", body: "Evidence is internal." },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const preview = await content.previewRevision({ actor: owner, contentId: created.value.contentId, revisionId: created.value.revisionId });
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    const command = {
+      actor: owner, contentId: created.value.contentId, revisionId: created.value.revisionId,
+      expectedVersion: 1, idempotencyKey: key("review-integration-accept"), correlationId: "review-integration-accept",
+      locale: "en" as const, snapshotHash: preview.value.snapshotHash, evidenceVersion: preview.value.evidenceVersion,
+      decision: "accepted" as const, findings: ["Internal evidence checked."],
+    };
+    const reviewed = await content.reviewRevision(command);
+    expect(reviewed).toMatchObject({ ok: true, value: { aggregateVersion: 2, outcome: "revision-reviewed" } });
+    expect(await content.reviewRevision(command)).toEqual(reviewed);
+    expect(await content.reviewRevision({ ...command, decision: "rejected", findings: ["Different intent."] }))
+      .toMatchObject({ ok: false, error: { kind: "conflict", code: "IDEMPOTENCY_KEY_REUSED" } });
+    if (!reviewed.ok) return;
+    const selected = await admin.query(
+      "select review_id::text, content_type, locale, review_sequence, snapshot_hash, evidence_version, reviewer_id::text, decision, findings, reviewed_at " +
+      "from content.revision_reviews where review_id = $1::uuid",
+      [reviewed.value.reviewId],
+    );
+    expect(selected.rows).toMatchObject([{
+      review_id: reviewed.value.reviewId,
+      content_type: "achievement", locale: "en", review_sequence: 1,
+      snapshot_hash: preview.value.snapshotHash, evidence_version: 1, reviewer_id: scope.ownerId,
+      decision: "accepted", findings: ["Internal evidence checked."],
+    }]);
+    await expect(admin.query(
+      "insert into content.revision_reviews (review_id, content_id, portfolio_id, content_type, revision_id, locale, review_sequence, snapshot_hash, evidence_version, reviewer_id, decision, findings, reviewed_at) " +
+      "values ($1::uuid, $2::uuid, $3::uuid, 'achievement', $4::uuid, 'ar', 3, $5, 1, $6::uuid, 'accepted', '[]'::jsonb, now())",
+      [createStableId("ContentReview"), created.value.contentId, scope.portfolioId, created.value.revisionId, preview.value.snapshotHash, scope.ownerId],
+    )).rejects.toMatchObject({ code: "23503" });
+    await expect(admin.query("update content.revision_reviews set decision = 'rejected' where review_id = $1::uuid", [reviewed.value.reviewId]))
+      .rejects.toMatchObject({ code: "55000" });
+    await expect(admin.query("delete from content.revision_reviews where review_id = $1::uuid", [reviewed.value.reviewId]))
+      .rejects.toMatchObject({ code: "55000" });
+    const secondReview = await content.reviewRevision({
+      ...command, expectedVersion: 2, idempotencyKey: key("review-integration-reject"), correlationId: "review-integration-reject",
+      decision: "rejected", findings: ["Needs more evidence."],
+    });
+    expect(secondReview).toMatchObject({ ok: true, value: { aggregateVersion: 3 } });
+    const staleReview = await content.reviewRevision({
+      ...command, expectedVersion: 2, idempotencyKey: key("review-integration-stale"), correlationId: "review-integration-stale",
+      decision: "accepted", findings: ["Stale decision."],
+    });
+    expect(staleReview).toMatchObject({ ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: 3 } });
+    const foreignOwnerId = createStableId("Owner");
+    expect(await content.previewRevision({ actor: actor(foreignOwnerId), contentId: created.value.contentId, revisionId: created.value.revisionId }))
+      .toMatchObject({ ok: false, error: { kind: "forbidden", code: "OWNER_REQUIRED" } });
+    expect(await content.reviewRevision({
+      ...command, actor: actor(foreignOwnerId), idempotencyKey: key("review-integration-foreign"), correlationId: "review-integration-foreign",
+    })).toMatchObject({ ok: false, error: { kind: "forbidden", code: "OWNER_REQUIRED" } });
+    const reviewHistory = await admin.query(
+      "select review_sequence, decision from content.revision_reviews where revision_id = $1::uuid order by review_sequence",
+      [created.value.revisionId],
+    );
+    expect(reviewHistory.rows).toEqual([{ review_sequence: 1, decision: "accepted" }, { review_sequence: 2, decision: "rejected" }]);
+    await database.database.transaction().execute(async (transaction) => {
+      await sql`
+        select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
+               set_config('shipwithali.owner_id', ${foreignOwnerId}, true)
+      `.execute(transaction);
+      const hidden = await sql<{ review_id: string }>`
+        select review_id::text from content.revision_reviews where review_id = ${reviewed.value.reviewId}::uuid
+      `.execute(transaction);
+      expect(hidden.rows).toHaveLength(0);
+    });
+    const visible = await content.previewRevision({ actor: owner, contentId: created.value.contentId, revisionId: created.value.revisionId });
+    expect(visible).toMatchObject({ ok: true, value: { review: { decision: "rejected", findings: ["Needs more evidence."], snapshotHash: preview.value.snapshotHash } } });
+    const outbox = await admin.query(
+      "select payload from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.revision_reviewed.v1'",
+      [created.value.contentId],
+    );
+    expect(outbox.rows).toHaveLength(2);
+    expect(JSON.stringify(outbox.rows[0]?.payload)).not.toContain("Internal evidence checked.");
+
+    const saved = await content.saveRevision({
+      actor: owner, contentId: created.value.contentId, expectedVersion: 3,
+      idempotencyKey: key("review-integration-save"), correlationId: "review-integration-save",
+      locale: "en", title: "Award updated", summary: "New snapshot.", body: "New evidence is not approved.",
+    });
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    expect(await content.previewRevision({ actor: owner, contentId: created.value.contentId, revisionId: saved.value.revisionId }))
+      .toMatchObject({ ok: true, value: { evidenceVersion: 4, review: null } });
+    const wrongHash = await content.reviewRevision({
+      ...command, revisionId: saved.value.revisionId, expectedVersion: 4,
+      idempotencyKey: key("review-integration-wrong-hash"), correlationId: "review-integration-wrong-hash",
+    });
+    expect(wrongHash).toMatchObject({ ok: false, error: { kind: "conflict", code: "REVISION_SNAPSHOT_MISMATCH" } });
+    const grants = await admin.query(
+      "select has_table_privilege('anon', 'content.revision_reviews', 'select') anon_read, " +
+      "has_table_privilege('authenticated', 'content.revision_reviews', 'select') authenticated_read, " +
+      "has_table_privilege('shipwithali_worker', 'content.revision_reviews', 'select') worker_read",
+    );
+    expect(grants.rows[0]).toEqual({ anon_read: false, authenticated_read: false, worker_read: false });
+  }, 30_000);
+
+  it("rolls back the aggregate version, review, idempotency receipt, and event when review outbox append fails", async () => {
+    const scope = await configuredScope();
+    const created = await service(scope).createContent({
+      actor: actor(scope.ownerId), idempotencyKey: key("review-rollback-create"), correlationId: "review-rollback-create",
+      payload: { contentType: "achievement", locale: "en", title: "Rollback review", summary: "Review atomically.", body: "No false review." },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const content = service(scope);
+    const preview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: created.value.contentId, revisionId: created.value.revisionId });
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    const failingOperations = {
+      ...operations,
+      outbox: { ...operations.outbox, async append() { throw new Error("simulated review event failure"); } },
+    };
+    const failingReview = createContentAuthoringService({ repository, operations: failingOperations, scope });
+    await expect(failingReview.reviewRevision({
+      actor: actor(scope.ownerId), contentId: created.value.contentId, revisionId: created.value.revisionId,
+      expectedVersion: 1, idempotencyKey: key("review-rollback-key"), correlationId: "review-rollback-key",
+      locale: "en", snapshotHash: preview.value.snapshotHash, evidenceVersion: preview.value.evidenceVersion,
+      decision: "accepted", findings: ["Must roll back."],
+    })).rejects.toThrow();
+    const keyHash = createHash("sha256").update("review-rollback-key").digest("hex");
+    const persisted = await admin.query(
+      "select (select aggregate_version from content.items where content_id = $1::uuid) aggregate_version, " +
+      "(select count(*)::int from content.revision_reviews where content_id = $1::uuid) reviews, " +
+      "(select count(*)::int from operations.idempotency_records where key_hash = $2) receipts, " +
+      "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.revision_reviewed.v1') review_events",
+      [created.value.contentId, keyHash],
+    );
+    expect(persisted.rows[0]).toEqual({ aggregate_version: 1, reviews: 0, receipts: 0, review_events: 0 });
+  }, 30_000);
+
   it("does not allow a Testimonial association to disclose or reference another Portfolio's Project", async () => {
     const portfolio = await configuredScope();
     const otherPortfolio = await configuredScope();

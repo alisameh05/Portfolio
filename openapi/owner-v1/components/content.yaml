@@ -140,8 +140,11 @@ schemas:
   ReviewRevisionCommand:
     type: object
     additionalProperties: false
-    required: [decision, findings]
+    required: [locale, snapshotHash, evidenceVersion, decision, findings]
     properties:
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      snapshotHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+      evidenceVersion: { type: integer, minimum: 1 }
       decision: { type: string, enum: [accepted, rejected] }
       findings: { type: array, maxItems: 100, items: { type: string, minLength: 1, maxLength: 1000 } }
   ReviewRevisionReceipt:
@@ -157,7 +160,7 @@ schemas:
   PrivateRevisionPreview:
     type: object
     additionalProperties: false
-    required: [contentId, revisionId, locale, sequence, title, summary, body, review]
+    required: [contentId, revisionId, locale, sequence, title, summary, body, snapshotHash, evidenceVersion, review]
     properties:
       contentId: { $ref: ./common.yaml#/schemas/StableId }
       revisionId: { $ref: ./common.yaml#/schemas/StableId }
@@ -166,6 +169,8 @@ schemas:
       title: { type: string, minLength: 1, maxLength: 160 }
       summary: { type: string, minLength: 1, maxLength: 500 }
       body: { type: string, minLength: 1, maxLength: 50000 }
+      snapshotHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+      evidenceVersion: { type: integer, minimum: 1 }
       review:
         oneOf:
           - { $ref: '#/schemas/RevisionReviewView' }
@@ -173,11 +178,14 @@ schemas:
   RevisionReviewView:
     type: object
     additionalProperties: false
-    required: [decision, findings, reviewedAt]
+    required: [reviewId, decision, findings, reviewedAt, snapshotHash, evidenceVersion]
     properties:
+      reviewId: { $ref: ./common.yaml#/schemas/StableId }
       decision: { type: string, enum: [accepted, rejected] }
       findings: { type: array, maxItems: 100, items: { type: string, maxLength: 1000 } }
       reviewedAt: { type: string, format: date-time }
+      snapshotHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+      evidenceVersion: { type: integer, minimum: 1 }
   ContentHistoryPage:
     type: object
     additionalProperties: false

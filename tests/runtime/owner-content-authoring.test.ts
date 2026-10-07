@@ -34,6 +34,7 @@ function createHarness() {
         locale: input.payload.locale,
         sequence: 1,
         aggregateVersion: 1,
+        evidenceSnapshotVersion: 1,
         title: input.payload.title,
         summary: input.payload.summary,
         body: input.payload.body,
@@ -75,6 +76,7 @@ function createHarness() {
         locale: input.payload.locale,
         sequence,
         aggregateVersion: prior.aggregateVersion + 1,
+        evidenceSnapshotVersion: prior.aggregateVersion + 1,
         title: input.payload.title,
         summary: input.payload.summary,
         body: input.payload.body,
@@ -85,6 +87,33 @@ function createHarness() {
       const updated = { ...prior, aggregateVersion: prior.aggregateVersion + 1, revisions: [...prior.revisions, revision] };
       records.set(input.contentId, updated);
       return { ok: true, value: { record: updated, revision } };
+    },
+    async appendReview(input) {
+      const prior = records.get(input.contentId);
+      if (!prior) return { ok: false, error: { kind: "not_found", code: "CONTENT_NOT_FOUND" } };
+      if (prior.aggregateVersion !== input.expectedVersion) return { ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: prior.aggregateVersion } };
+      const revisions = prior.revisions.map((revision) => revision.revisionId === input.revisionId
+        ? { ...revision, reviewed: true, reviewDecision: input.decision, latestReview: {
+          reviewId: input.reviewId, revisionId: input.revisionId, contentId: input.contentId, contentType: prior.contentType,
+          locale: input.locale, snapshotHash: input.snapshotHash, evidenceVersion: input.evidenceVersion,
+          reviewerId: input.reviewerId, reviewSequence: 1, decision: input.decision, findings: input.findings, reviewedAt: input.reviewedAt,
+        } }
+        : revision);
+      records.set(input.contentId, { ...prior, aggregateVersion: prior.aggregateVersion + 1, revisions });
+      return { ok: true, value: { aggregateVersion: prior.aggregateVersion + 1 } };
+    },
+    async listHistory(input) {
+      const record = records.get(input.contentId);
+      if (!record || record.portfolioId !== input.scope.portfolioId || record.ownerId !== input.scope.ownerId) {
+        return { ok: false, error: { kind: "not_found", code: "CONTENT_NOT_FOUND" } };
+      }
+      const selected = record.revisions.filter((revision) =>
+        (input.locale === undefined || revision.locale === input.locale) &&
+        (input.after === undefined || revision.locale > input.after.locale || revision.locale === input.after.locale && revision.sequence > input.after.sequence));
+      return { ok: true, value: {
+        entries: selected.slice(0, input.limit).map((revision) => ({ revisionId: revision.revisionId, locale: revision.locale, sequence: revision.sequence, savedAt: revision.savedAt, ...(revision.reviewDecision === undefined ? {} : { reviewDecision: revision.reviewDecision }) })),
+        hasMore: selected.length > input.limit,
+      } };
     },
   };
 
@@ -115,6 +144,117 @@ function createHarness() {
 }
 
 describe("Content authoring application service", () => {
+  it("reviews the exact immutable Revision snapshot, replays safely, and keeps a saved Revision unreviewed", async () => {
+    const { service, records, events } = createHarness();
+    const created = await service.createContent({
+      actor: ACTOR,
+      idempotencyKey: "review-create" as never,
+      correlationId: "review-create",
+      payload: { contentType: "project", locale: "en", title: "Reviewed", summary: "Exact snapshot.", body: "Private evidence review." },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const initial = records.get(created.value.contentId)?.revisions[0];
+    if (initial === undefined) throw new Error("expected initial Revision");
+    const preview = await service.previewRevision({ actor: ACTOR, contentId: created.value.contentId, revisionId: initial.revisionId });
+    expect(preview).toMatchObject({ ok: true, value: { locale: "en", evidenceVersion: 1, title: "Reviewed", review: null } });
+    if (!preview.ok) return;
+    expect(preview.value.snapshotHash).toMatch(/^[0-9a-f]{64}$/);
+
+    const command = {
+      actor: ACTOR, contentId: created.value.contentId, revisionId: initial.revisionId,
+      expectedVersion: 1, idempotencyKey: "review-once" as never, correlationId: "review-once",
+      locale: "en" as const, snapshotHash: preview.value.snapshotHash, evidenceVersion: preview.value.evidenceVersion,
+      decision: "accepted" as const, findings: ["Evidence checked privately."],
+    };
+    const reviewed = await service.reviewRevision(command);
+    expect(reviewed).toMatchObject({ ok: true, value: { aggregateVersion: 2, outcome: "revision-reviewed", revisionId: initial.revisionId } });
+    expect(events.at(-1)).toMatchObject({ payload: { type: "content.revision_reviewed.v1", value: { decision: "accepted" } } });
+    if (!reviewed.ok) return;
+    expect(await service.reviewRevision(command)).toEqual(reviewed);
+    expect(events.filter((event) => (event as { payload?: { type?: string } }).payload?.type === "content.revision_reviewed.v1")).toHaveLength(1);
+    const inspected = await service.previewRevision({ actor: ACTOR, contentId: created.value.contentId, revisionId: initial.revisionId });
+    expect(inspected).toMatchObject({ ok: true, value: { review: { reviewId: reviewed.value.reviewId, decision: "accepted", findings: ["Evidence checked privately."] } } });
+    const reviewedRecord = records.get(created.value.contentId);
+    if (reviewedRecord === undefined) throw new Error("expected reviewed content");
+    records.set(created.value.contentId, {
+      ...reviewedRecord,
+      revisions: reviewedRecord.revisions.map((revision) => revision.revisionId === initial.revisionId
+        ? { ...revision, latestReview: { ...revision.latestReview!, evidenceVersion: revision.evidenceSnapshotVersion + 1 } }
+        : revision),
+    });
+    expect(await service.previewRevision({ actor: ACTOR, contentId: created.value.contentId, revisionId: initial.revisionId }))
+      .toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "CONTENT_REVIEW_INTEGRITY_FAILED" } });
+    records.set(created.value.contentId, reviewedRecord);
+
+    const saved = await service.saveRevision({
+      actor: ACTOR, contentId: created.value.contentId, expectedVersion: 2,
+      idempotencyKey: "review-followup-save" as never, correlationId: "review-followup-save",
+      locale: "en", title: "Updated", summary: "New snapshot.", body: "This does not inherit approval.",
+    });
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    const nextPreview = await service.previewRevision({ actor: ACTOR, contentId: created.value.contentId, revisionId: saved.value.revisionId });
+    expect(nextPreview).toMatchObject({ ok: true, value: { title: "Updated", evidenceVersion: 3, review: null } });
+    expect(records.get(created.value.contentId)?.revisions.map((revision) => revision.reviewed)).toEqual([true, false]);
+  });
+
+  it("rejects a wrong snapshot hash, locale, or stale root version without recording a review", async () => {
+    const { service, records, events } = createHarness();
+    const created = await service.createContent({
+      actor: ACTOR, idempotencyKey: "review-invalid-create" as never, correlationId: "review-invalid-create",
+      payload: { contentType: "achievement", locale: "en", title: "Review target", summary: "Draft.", body: "Private." },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const revision = records.get(created.value.contentId)?.revisions[0];
+    if (revision === undefined) throw new Error("expected initial Revision");
+    const preview = await service.previewRevision({ actor: ACTOR, contentId: created.value.contentId, revisionId: revision.revisionId });
+    if (!preview.ok) throw new Error("expected Owner preview");
+    const base = {
+      actor: ACTOR, contentId: created.value.contentId, revisionId: revision.revisionId,
+      expectedVersion: 1, idempotencyKey: "review-invalid" as never, correlationId: "review-invalid",
+      locale: "en" as const, snapshotHash: preview.value.snapshotHash, evidenceVersion: preview.value.evidenceVersion,
+      decision: "rejected" as const, findings: ["Needs more evidence."],
+    };
+    expect(await service.reviewRevision({ ...base, snapshotHash: "0".repeat(64) })).toMatchObject({ ok: false, error: { kind: "conflict", code: "REVISION_SNAPSHOT_MISMATCH" } });
+    expect(await service.reviewRevision({ ...base, idempotencyKey: "review-invalid-locale" as never, locale: "ar" })).toMatchObject({ ok: false, error: { kind: "validation", code: "REVISION_LOCALE_MISMATCH" } });
+    expect(records.get(created.value.contentId)?.aggregateVersion).toBe(1);
+    expect(events.some((event) => (event as { payload?: { type?: string } }).payload?.type === "content.revision_reviewed.v1")).toBe(false);
+    expect(await service.previewRevision({ actor: { kind: "visitor", consent: "unknown" }, contentId: created.value.contentId, revisionId: revision.revisionId }))
+      .toMatchObject({ ok: false, error: { kind: "forbidden", code: "OWNER_REQUIRED" } });
+    expect(await service.previewRevision({ actor: ACTOR, contentId: created.value.contentId, revisionId: unsafeStableId<"Revision">(uuid(99)) }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "REVISION_NOT_FOUND" } });
+  });
+
+  it("returns bounded history pages with stable locale-sequence cursors and current review facts", async () => {
+    const { service } = createHarness();
+    const created = await service.createContent({
+      actor: ACTOR, idempotencyKey: "history-create" as never, correlationId: "history-create",
+      payload: { contentType: "project", locale: "en", title: "History one", summary: "First.", body: "First." },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    let expectedVersion = 1;
+    for (const [index, title] of ["History two", "History three"].entries()) {
+      const saved = await service.saveRevision({
+        actor: ACTOR, contentId: created.value.contentId, expectedVersion,
+        idempotencyKey: `history-save-${index}` as never, correlationId: `history-save-${index}`,
+        locale: "en", title, summary: `Revision ${index + 2}.`, body: `Body ${index + 2}.`,
+      });
+      expect(saved.ok).toBe(true);
+      if (!saved.ok) return;
+      expectedVersion = saved.value.aggregateVersion;
+    }
+    const first = await service.getContentHistory({ actor: ACTOR, contentId: created.value.contentId, locale: "en", limit: 1 });
+    expect(first).toMatchObject({ ok: true, value: { entries: [{ locale: "en", sequence: 1 }], nextCursor: "en:1" } });
+    if (!first.ok || first.value.nextCursor === null) return;
+    const second = await service.getContentHistory({ actor: ACTOR, contentId: created.value.contentId, locale: "en", limit: 1, cursor: first.value.nextCursor });
+    expect(second).toMatchObject({ ok: true, value: { entries: [{ locale: "en", sequence: 2 }], nextCursor: "en:2" } });
+    expect(await service.getContentHistory({ actor: ACTOR, contentId: created.value.contentId, locale: "ar", limit: 1, cursor: "en:1" }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "CONTENT_HISTORY_CURSOR_SCOPE_MISMATCH" } });
+  });
+
   it.each([
     ["project", { contentType: "project", candidateSlug: "atlas-search", caseStudy: { problem: "A draft problem." }, evidence: { artifacts: [{ id: unsafeStableId<"SupportingArtifact">(uuid(92)), title: "Demo", mediaAssetId: unsafeStableId<"MediaAsset">(uuid(93)) }] }, externalLinks: [{ id: unsafeStableId<"ExternalLink">(uuid(94)), label: "Project site", destination: "https://example.com/project", isAvailableInArabic: true }] }],
     ["achievement", { contentType: "achievement", achievedOn: "2025-04-12", evidence: { claims: [{ claimId: unsafeStableId<"EvidenceClaim">(uuid(90)), text: "A draft claim.", artifactIds: [] }], artifacts: [{ id: unsafeStableId<"SupportingArtifact">(uuid(92)), title: "Proof", mediaAssetId: unsafeStableId<"MediaAsset">(uuid(93)) }] } }],

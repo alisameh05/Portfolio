@@ -8,5 +8,8 @@ export function createProductionContentAuthoringService(): ContentAuthoringServi
     async createContent() { return unavailable; },
     async getOwnerContentAggregate() { return unavailable; },
     async saveRevision() { return unavailable; },
+    async previewRevision() { return unavailable; },
+    async reviewRevision() { return unavailable; },
+    async getContentHistory() { return unavailable; },
   };
 }
