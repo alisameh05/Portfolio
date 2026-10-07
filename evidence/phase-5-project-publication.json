@@ -1,4 +1,5 @@
 {
+  "sourceRevision": "a1c6c5dd57beec53d1982119f60ee411e16cc0fd",
   "ticket": 111,
   "parent": 106,
   "scope": "reviewed-project-publication-routes-safe-projections-and-atomic-replay",
@@ -46,7 +47,7 @@
     },
     {
       "file": "20261007170000_add_project_publication_routes.sql",
-      "sha256": "1dbdc54245d4688728adbeb4b029c6f784d876a1e05ec4ee6b3745568106516c"
+      "sha256": "f8350ab8c96e51d79319fe7c5d31f4cb8bd7ef623535c8e852b3b913b5d38e03"
     }
   ],
   "migrationLedger": [
@@ -111,7 +112,8 @@
     "content.public_route_reservations",
     "content.language_publications",
     "content.publication_history",
-    "content.public_project_locales"
+    "content.public_project_locales",
+    "taxonomy.project_discovery_locales"
   ],
   "databaseTestResults": [
     {

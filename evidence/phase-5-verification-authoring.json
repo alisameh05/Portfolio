@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "runId": "e384eaba-a6fa-4018-95c0-b38859ad4c69",
-  "sourceRevision": "8986a7675b41606bfad1e836ed8c1f46dbf24cb4",
+  "runId": "630017a8-bc0a-4264-95a9-2bea9a565370",
+  "sourceRevision": "a1c6c5dd57beec53d1982119f60ee411e16cc0fd",
   "suite": "authoring",
-  "startedAt": "2026-10-07T16:31:09.685Z",
+  "startedAt": "2026-10-07T17:08:31.416Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,
