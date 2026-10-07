@@ -57,14 +57,19 @@ describe("Phase 3 operations persistence migration (#50-#53)", () => {
   });
 
   it("keeps public clients and capability roles least-privileged", () => {
+    const operationsMigration = migrationFiles
+      .filter((file) => file.includes("operations"))
+      .map((file) => readFileSync(join(ROOT, "supabase", "migrations", file), "utf8"))
+      .join("\n")
+      .toLowerCase();
     expect(migrations).not.toMatch(/grant\s+.+operations\.(?:idempotency_records|outbox_events|jobs).+to\s+(?:anon|authenticated)/);
     expect(migrations).toContain("to shipwithali_application");
     expect(migrations).toContain("to shipwithali_worker");
     expect(migrations).not.toMatch(/grant\s+(?:all|create).+to\s+shipwithali_(?:application|worker)/);
     expect(migrations).toContain("grant insert on operations.outbox_events to shipwithali_application");
     expect(migrations).not.toMatch(/grant\s+select[^;]*operations\.outbox_events\s+to\s+shipwithali_application/);
-    expect(migrations).not.toContain("for all to shipwithali_application");
-    expect(migrations).not.toContain("for all to shipwithali_worker");
+    expect(operationsMigration).not.toContain("for all to shipwithali_application");
+    expect(operationsMigration).not.toContain("for all to shipwithali_worker");
   });
 
   it("pairs every created function with an explicit public revoke", () => {

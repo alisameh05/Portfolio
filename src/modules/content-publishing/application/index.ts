@@ -45,7 +45,10 @@ export {
   type SaveContentRevisionReceipt,
   type ReviewRevisionReceipt,
   type PublishProjectLanguageInput,
+  type PublishAchievementLanguageInput,
   type PublishProjectLanguageResult,
+  type PublishAchievementLanguageResult,
+  type PublicAchievementTimelineEntry,
   type PublicProjectContentView,
   type ProjectDiscoveryProjectionPort,
 } from "./authoring.js";

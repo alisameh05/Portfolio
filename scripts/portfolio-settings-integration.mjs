@@ -282,8 +282,9 @@ export async function main() {
   const ticket109 = process.argv.includes("--ticket-109");
   const ticket110 = process.argv.includes("--ticket-110");
   const ticket111 = process.argv.includes("--ticket-111");
-  if ([ticket109, ticket110, ticket111].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
-  const contentAuthoringTicket = ticket109 || ticket110 || ticket111;
+  const ticket112 = process.argv.includes("--ticket-112");
+  if ([ticket109, ticket110, ticket111, ticket112].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
+  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -435,9 +436,11 @@ export async function main() {
 
     const evidence = contentAuthoringTicket ? {
       sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
-      ticket: ticket111 ? 111 : ticket110 ? 110 : 109,
+      ticket: ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
       parent: 106,
-      scope: ticket111
+      scope: ticket112
+        ? "achievement-publication-private-verification-and-chronological-timeline"
+        : ticket111
         ? "reviewed-project-publication-routes-safe-projections-and-atomic-replay"
         : ticket110
         ? "exact-revision-review-private-preview-history-and-atomic-idempotent-audit"
@@ -453,8 +456,10 @@ export async function main() {
         outboxEvents: preservedRows.outbox.length === 1,
         jobs: preservedRows.jobs.length === 1,
       },
-      authoringTablesWithForcedRls: ["content.items", "content.revisions", ...(ticket110 || ticket111 ? ["content.revision_reviews"] : []),
-        ...(ticket111 ? ["content.public_routes", "content.public_route_reservations", "content.language_publications", "content.publication_history", "content.public_project_locales", "taxonomy.project_discovery_locales"] : [])],
+      authoringTablesWithForcedRls: ["content.items", "content.revisions", ...(ticket110 || ticket111 || ticket112 ? ["content.revision_reviews"] : []),
+        ...(ticket111 || ticket112 ? ["content.language_publications", "content.publication_history"] : []),
+        ...(ticket111 ? ["content.public_routes", "content.public_route_reservations", "content.public_project_locales", "taxonomy.project_discovery_locales"] : []),
+        ...(ticket112 ? ["content.public_achievement_locales"] : [])],
       databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
         status: test.status,
@@ -559,7 +564,9 @@ export async function main() {
     if (
       /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
     ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
-    const evidencePath = ticket111
+    const evidencePath = ticket112
+      ? join(ROOT, "evidence/phase-5-achievement-timeline-postgres.json")
+      : ticket111
       ? join(ROOT, "evidence/phase-5-project-publication.json")
       : ticket110
       ? join(ROOT, "evidence/phase-5-content-revision-review.json")
