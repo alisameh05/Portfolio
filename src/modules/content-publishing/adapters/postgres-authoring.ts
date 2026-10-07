@@ -454,7 +454,6 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
           select route_identity::text, current_slug, first_published_at
             from content.public_routes
            where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
-           for update
         `.execute(executor);
         let routeIdentity: StableId<"PublicRoute">;
         let currentSlug: string;

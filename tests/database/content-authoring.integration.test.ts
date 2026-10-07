@@ -666,7 +666,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     if (!preview.ok) return;
     const review = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: initial.contentId,
       revisionId: saved.value.revisionId, expectedVersion: saved.value.aggregateVersion,
-      idempotencyKey: key("publication-last-valid-review"), correlationId: "publication-last-valid-review",
+      idempotencyKey: key("publication-last-valid-replacement-review"), correlationId: "publication-last-valid-replacement-review",
       locale: "en", snapshotHash: preview.value.snapshotHash, evidenceVersion: preview.value.evidenceVersion,
       decision: "accepted", findings: [] });
     expect(review.ok).toBe(true);
