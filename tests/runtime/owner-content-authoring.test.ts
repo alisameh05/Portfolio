@@ -10,6 +10,7 @@ import {
 } from "../../src/modules/content-publishing/application/authoring.js";
 import type { CreateDraftPayload } from "../../src/modules/content-publishing/domain/index.js";
 import type { PublicProjectContentView } from "../../src/modules/content-publishing/application/authoring.js";
+import type { PublicAchievementTimelineEntry } from "../../src/modules/content-publishing/application/authoring.js";
 
 const OWNER_ID = unsafeStableId<"Owner">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea1");
 const PORTFOLIO_ID = unsafeStableId<"Portfolio">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2");
@@ -22,6 +23,7 @@ function uuid(index: number): string {
 function createHarness() {
   const records = new Map<string, ContentAuthoringRecord>();
   const publicProjects = new Map<string, PublicProjectContentView>();
+  const publicAchievements = new Map<string, PublicAchievementTimelineEntry>();
   const events: unknown[] = [];
   let id = 10;
   const repository: ContentAuthoringRepository = {
@@ -127,11 +129,39 @@ function createHarness() {
       return { ok: true, value: { aggregateVersion: prior.aggregateVersion + 1, revisionId: input.revisionId, locale: input.locale,
         routeIdentity: input.routeIdentity, currentSlug, firstPublishedAt: publishedAt, publishedAt } };
     },
+    async publishAchievementLanguage(input) {
+      const prior = records.get(input.contentId);
+      if (!prior) return { ok: false, error: { kind: "not_found", code: "CONTENT_NOT_FOUND" } };
+      if (prior.aggregateVersion !== input.expectedVersion) return { ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: prior.aggregateVersion } };
+      const publishedAt = "2026-10-07T12:00:00.000Z";
+      const artifactById = new Map((input.payload.evidence?.artifacts ?? []).map((artifact) => [artifact.id, artifact]));
+      const artifacts = [...new Map((input.payload.evidence?.claims ?? []).flatMap((claim) => claim.artifactIds.map((artifactId) => {
+        const artifact = artifactById.get(artifactId)!;
+        return [JSON.stringify({ title: artifact.title, ...(artifact.destinationUrl === undefined ? {} : { destinationUrl: artifact.destinationUrl }),
+          ...(artifact.mediaAssetId === undefined ? {} : { mediaAssetId: artifact.mediaAssetId }) }),
+        { title: artifact.title, ...(artifact.destinationUrl === undefined ? {} : { destinationUrl: artifact.destinationUrl }),
+          ...(artifact.mediaAssetId === undefined ? {} : { mediaAssetId: artifact.mediaAssetId }) }] as const;
+      })))].map(([, artifact]) => artifact);
+      publicAchievements.set(`${input.contentId}:${input.locale}`, {
+        contentId: input.contentId as PublicAchievementTimelineEntry["contentId"], locale: input.locale,
+        revisionId: input.revisionId, achievedOn: input.payload.achievedOn!, title: input.payload.title,
+        summary: input.payload.summary, body: input.payload.body, artifacts,
+      });
+      records.set(input.contentId, { ...prior, lifecycle: "published", aggregateVersion: prior.aggregateVersion + 1,
+        publications: [...(prior.publications ?? []).filter((publication) => publication.locale !== input.locale), { locale: input.locale, revisionId: input.revisionId, publishedAt }] });
+      return { ok: true, value: { aggregateVersion: prior.aggregateVersion + 1, revisionId: input.revisionId,
+        locale: input.locale, firstPublishedAt: publishedAt, publishedAt } };
+    },
     async getPublicProjectBySlug(input) {
       const project = publicProjects.get(`${input.slug}:${input.locale}`);
       return project === undefined
         ? { ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } }
         : { ok: true, value: project };
+    },
+    async getPublicAchievementTimeline(input) {
+      const entries = [...publicAchievements.values()].filter((entry) => entry.locale === input.locale)
+        .sort((left, right) => left.achievedOn.localeCompare(right.achievedOn) || left.contentId.localeCompare(right.contentId));
+      return { ok: true, value: entries.slice(0, input.limit) };
     },
     async listHistory(input) {
       const record = records.get(input.contentId);
@@ -470,6 +500,33 @@ describe("Content authoring application service", () => {
     expect(records.get(created.value.contentId)).toMatchObject({ lifecycle: "published", aggregateVersion: 3,
       publications: [{ locale: "en", revisionId: created.value.revisionId }] });
     expect(events.filter((event) => (event as { payload?: { type?: string } }).payload?.type === "content.language_version_published.v1")).toHaveLength(1);
+  });
+
+  it("publishes reviewed Achievements into a private-note-free, locale-specific chronological Timeline", async () => {
+    const { service, events } = createHarness();
+    const first = await service.createContent({ actor: ACTOR, idempotencyKey: "achievement-one" as never, correlationId: "achievement-one",
+      payload: { contentType: "achievement", locale: "en", title: "First milestone", summary: "A milestone.", body: "A public account.", achievedOn: "2025-03-01" } });
+    const second = await service.createContent({ actor: ACTOR, idempotencyKey: "achievement-two" as never, correlationId: "achievement-two",
+      payload: { contentType: "achievement", locale: "en", title: "Second milestone", summary: "Another milestone.", body: "Another public account.", achievedOn: "2025-03-01" } });
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    for (const [receipt, key, findings] of [[first.value, "achievement-one-review", ["Private verification note."]], [second.value, "achievement-two-review", []]] as const) {
+      const preview = await service.previewRevision({ actor: ACTOR, contentId: receipt.contentId, revisionId: receipt.revisionId });
+      if (!preview.ok) throw new Error("ACHIEVEMENT_PREVIEW_FAILED");
+      const review = await service.reviewRevision({ actor: ACTOR, contentId: receipt.contentId, revisionId: receipt.revisionId,
+        expectedVersion: 1, idempotencyKey: key as never, correlationId: key, locale: "en", snapshotHash: preview.value.snapshotHash,
+        evidenceVersion: preview.value.evidenceVersion, decision: "accepted", findings });
+      expect(review.ok).toBe(true);
+      const publication = await service.publishLanguageVersion({ actor: ACTOR, contentId: receipt.contentId, expectedVersion: 2,
+        idempotencyKey: `${key}-publish` as never, correlationId: `${key}-publish`, locale: "en", revisionId: receipt.revisionId });
+      expect(publication).toMatchObject({ ok: true, value: { aggregateVersion: 3, currentSlug: null, routeIdentity: null } });
+    }
+    expect(await service.getPublicAchievementTimeline({ locale: "ar", limit: 20 })).toMatchObject({ ok: true, value: [] });
+    const timeline = await service.getPublicAchievementTimeline({ locale: "en", limit: 20 });
+    expect(timeline).toMatchObject({ ok: true, value: [{ title: "First milestone" }, { title: "Second milestone" }] });
+    expect(JSON.stringify(timeline)).not.toMatch(/Private verification note|findings|reviewerId|decision/);
+    expect(events.filter((event) => (event as { payload?: { type?: string } }).payload?.type === "content.language_version_published.v1")).toHaveLength(2);
+    expect(await service.getPublicAchievementTimeline({ locale: "en", limit: 101 })).toMatchObject({ ok: false, error: { code: "INVALID_ACHIEVEMENT_TIMELINE_QUERY" } });
   });
 
   it("fails closed for unresolved Media facts and rejects reviewed placeholder evidence without public side effects", async () => {
