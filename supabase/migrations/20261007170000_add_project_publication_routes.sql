@@ -155,7 +155,7 @@ alter table content.public_project_locales force row level security;
 alter table taxonomy.project_discovery_locales enable row level security;
 alter table taxonomy.project_discovery_locales force row level security;
 
-grant select, insert, update (current_slug) on content.public_routes to shipwithali_application;
+grant select, insert on content.public_routes to shipwithali_application;
 grant select, insert on content.public_route_reservations to shipwithali_application;
 grant select, insert, update (revision_id, review_id, route_identity, publication_sequence, published_at, media_facts_version)
   on content.language_publications to shipwithali_application;

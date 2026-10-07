@@ -12,6 +12,7 @@ import { createStableId, type IdempotencyKey, type StableId } from "../../src/sh
 import { createSystemIdGenerator } from "../../src/runtime/ports.js";
 import { sql } from "kysely";
 import { resolvePostgresTransaction } from "../../src/shared/adapters/postgres/runtime.js";
+import type { ProjectDraftPayload } from "../../src/modules/content-publishing/domain/index.js";
 
 const DATABASE_URL = process.env["PHASE5_CONTENT_AUTHORING_DATABASE_URL"];
 if (process.env["PHASE5_REQUIRE_CONTENT_AUTHORING"] === "1" && !DATABASE_URL) {
@@ -88,11 +89,17 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     title: string,
     idempotencyPrefix: string,
     locale: "en" | "ar" = "en",
-    options: { readonly slug?: string; readonly mediaAssetId?: StableId<"MediaAsset">; readonly service?: ReturnType<typeof service> } = {},
+    options: {
+      readonly slug?: string;
+      readonly mediaAssetId?: StableId<"MediaAsset">;
+      readonly service?: ReturnType<typeof service>;
+      readonly reviewDecision?: "accepted" | "rejected";
+      readonly transformPayload?: (payload: ProjectDraftPayload) => ProjectDraftPayload;
+    } = {},
   ) {
     const content = options.service ?? service(scope);
     const artifactId = createStableId("SupportingArtifact");
-    const payload = {
+    const basePayload: ProjectDraftPayload = {
       contentType: "project" as const, locale, title, summary: `${title} summary`, body: `${title} public body`,
       ...(options.slug === undefined ? {} : { candidateSlug: options.slug }),
       caseStudy: { problem: "A clear problem statement.", ownerRole: "Led the implementation.",
@@ -103,6 +110,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       externalLinks: [{ id: createStableId("ExternalLink"), label: locale === "en" ? "English demo" : "Arabic demo",
         destination: locale === "en" ? "https://example.com/en" : "https://example.com/ar", isAvailableInArabic: locale === "ar" }],
     };
+    const payload = options.transformPayload?.(basePayload) ?? basePayload;
     const created = await content.createContent({ actor: actor(scope.ownerId), idempotencyKey: key(`${idempotencyPrefix}-create`),
       correlationId: `${idempotencyPrefix}-create`, payload });
     if (!created.ok) throw new Error(`PROJECT_CREATE_FAILED:${created.error.code}`);
@@ -111,7 +119,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     const reviewed = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: created.value.contentId,
       revisionId: created.value.revisionId, expectedVersion: created.value.aggregateVersion, idempotencyKey: key(`${idempotencyPrefix}-review`),
       correlationId: `${idempotencyPrefix}-review`, locale, snapshotHash: preview.value.snapshotHash, evidenceVersion: preview.value.evidenceVersion,
-      decision: "accepted", findings: [] });
+      decision: options.reviewDecision ?? "accepted", findings: [] });
     if (!reviewed.ok) throw new Error(`PROJECT_REVIEW_FAILED:${reviewed.error.code}`);
     return { content, contentId: created.value.contentId, revisionId: created.value.revisionId,
       aggregateVersion: reviewed.value.aggregateVersion, payload };
@@ -550,6 +558,138 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     ]);
   }, 30_000);
 
+  it("rejects invalid evidence, review, and Media facts without creating public state", async () => {
+    const scope = await configuredScope();
+    const rejectedMediaFacts = {
+      async getAcceptanceFacts(query: { ownerId: StableId<"Owner">; mediaAssetIds: readonly StableId<"MediaAsset">[] }) {
+        return { ok: true as const, value: { consistencyVersion: "media-rejected-1", facts: query.mediaAssetIds.map((mediaAssetId) => ({
+          mediaAssetId, ownerId: query.ownerId, accepted: false, safe: true, suitable: true, accessible: true, version: 1,
+        })) } };
+      },
+    };
+    const cases: readonly {
+      readonly name: string;
+      readonly options?: Parameters<typeof createReviewedProject>[4];
+      readonly expected: { readonly kind: string; readonly code: string };
+    }[] = [
+      {
+        name: "dangling evidence reference",
+        options: { transformPayload: (payload) => ({
+          ...payload,
+          evidence: { ...payload.evidence!, claims: payload.evidence!.claims!.map((claim) => ({
+            ...claim, artifactIds: [createStableId("SupportingArtifact")],
+          })) },
+        }) },
+        expected: { kind: "validation", code: "PROJECT_PUBLICATION_REQUIREMENTS_NOT_MET" },
+      },
+      {
+        name: "unsupported artifact",
+        options: { transformPayload: (payload) => ({
+          ...payload,
+          evidence: { ...payload.evidence!, artifacts: payload.evidence!.artifacts!.map(({ id, title }) => ({ id, title })) },
+        }) },
+        expected: { kind: "validation", code: "PROJECT_PUBLICATION_REQUIREMENTS_NOT_MET" },
+      },
+      {
+        name: "fabricated placeholder",
+        options: { transformPayload: (payload) => ({ ...payload,
+          caseStudy: { ...payload.caseStudy!, problem: "TODO: add the actual project problem" } }) },
+        expected: { kind: "validation", code: "PROJECT_PUBLICATION_REQUIREMENTS_NOT_MET" },
+      },
+      {
+        name: "rejected owner review",
+        options: { reviewDecision: "rejected" },
+        expected: { kind: "validation", code: "ACCEPTED_REVISION_REVIEW_REQUIRED" },
+      },
+      {
+        name: "unresolved Media facts",
+        options: { mediaAssetId: createStableId("MediaAsset") },
+        expected: { kind: "temporarily_unavailable", code: "MEDIA_ACCEPTANCE_UNAVAILABLE" },
+      },
+      {
+        name: "rejected Media facts",
+        options: { mediaAssetId: createStableId("MediaAsset"), service: service(scope, operations, undefined, rejectedMediaFacts) },
+        expected: { kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      },
+    ];
+
+    for (const [index, testCase] of cases.entries()) {
+      const prefix = `publication-rejected-case-${index}`;
+      const project = await createReviewedProject(scope, `Rejected case ${index}`, prefix, "en", testCase.options);
+      const result = await project.content.publishLanguageVersion({
+        actor: actor(scope.ownerId), contentId: project.contentId, expectedVersion: project.aggregateVersion,
+        idempotencyKey: key(`${prefix}-publish`), correlationId: `${prefix}-publish`, locale: "en", revisionId: project.revisionId,
+      });
+      expect(result, testCase.name).toMatchObject({ ok: false, error: testCase.expected });
+      const keyHash = createHash("sha256").update(`${prefix}-publish`).digest("hex");
+      const state = await admin.query(
+        "select (select lifecycle from content.items where content_id = $1::uuid) lifecycle, " +
+        "(select count(*)::int from content.public_routes where content_id = $1::uuid) routes, " +
+        "(select count(*)::int from content.language_publications where content_id = $1::uuid) pointers, " +
+        "(select count(*)::int from content.publication_history where content_id = $1::uuid) history, " +
+        "(select count(*)::int from content.public_project_locales where content_id = $1::uuid) content_projection, " +
+        "(select count(*)::int from taxonomy.project_discovery_locales where content_id = $1::uuid) discovery_projection, " +
+        "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.language_version_published.v1') events, " +
+        "(select result_envelope->'receipt' from operations.idempotency_records where key_hash = $2) receipt",
+        [project.contentId, keyHash],
+      );
+      expect(state.rows[0], testCase.name).toEqual({
+        lifecycle: "draft", routes: 0, pointers: 0, history: 0, content_projection: 0,
+        discovery_projection: 0, events: 0, receipt: null,
+      });
+    }
+  }, 30_000);
+
+  it("preserves the last valid locale and both projections when a replacement is rejected", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const initial = await createReviewedProject(scope, "Last valid project", "publication-last-valid", "en", { service: content });
+    const first = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: initial.contentId,
+      expectedVersion: initial.aggregateVersion, idempotencyKey: key("publication-last-valid-first"),
+      correlationId: "publication-last-valid-first", locale: "en", revisionId: initial.revisionId });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const priorPublic = await content.getPublicProject({ slug: "last-valid-project", locale: "en" });
+    const priorDiscovery = await admin.query(
+      "select revision_id::text, title, slug from taxonomy.project_discovery_locales where content_id = $1::uuid and locale = 'en'",
+      [initial.contentId],
+    );
+    const saved = await content.saveRevision({ actor: actor(scope.ownerId), contentId: initial.contentId,
+      expectedVersion: first.value.aggregateVersion, idempotencyKey: key("publication-last-valid-save"),
+      correlationId: "publication-last-valid-save", locale: "en", title: "Unpublishable replacement",
+      summary: "New summary candidate", body: "New body candidate",
+      draftData: { contentType: "project", caseStudy: { ...initial.payload.caseStudy!, problem: "TODO: replace before publication" },
+        evidence: initial.payload.evidence, externalLinks: initial.payload.externalLinks } });
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    const preview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: initial.contentId, revisionId: saved.value.revisionId });
+    if (!preview.ok) return;
+    const review = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: initial.contentId,
+      revisionId: saved.value.revisionId, expectedVersion: saved.value.aggregateVersion,
+      idempotencyKey: key("publication-last-valid-review"), correlationId: "publication-last-valid-review",
+      locale: "en", snapshotHash: preview.value.snapshotHash, evidenceVersion: preview.value.evidenceVersion,
+      decision: "accepted", findings: [] });
+    expect(review.ok).toBe(true);
+    if (!review.ok) return;
+    const rejected = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: initial.contentId,
+      expectedVersion: review.value.aggregateVersion, idempotencyKey: key("publication-last-valid-rejected"),
+      correlationId: "publication-last-valid-rejected", locale: "en", revisionId: saved.value.revisionId });
+    expect(rejected).toMatchObject({ ok: false, error: { kind: "validation", code: "PROJECT_PUBLICATION_REQUIREMENTS_NOT_MET" } });
+    expect(await content.getPublicProject({ slug: "last-valid-project", locale: "en" })).toEqual(priorPublic);
+    const current = await admin.query(
+      "select publication.revision_id::text as published_revision, projection.revision_id::text as content_revision, " +
+      "discovery.revision_id::text as discovery_revision, projection.title as content_title, discovery.title as discovery_title " +
+      "from content.language_publications publication " +
+      "join content.public_project_locales projection using (content_id, portfolio_id, locale) " +
+      "join taxonomy.project_discovery_locales discovery using (content_id, portfolio_id, locale) " +
+      "where publication.content_id = $1::uuid and publication.locale = 'en'",
+      [initial.contentId],
+    );
+    expect(current.rows).toEqual([{ published_revision: initial.revisionId, content_revision: initial.revisionId,
+      discovery_revision: initial.revisionId, content_title: "Last valid project", discovery_title: "Last valid project" }]);
+    expect(priorDiscovery.rows).toEqual([{ revision_id: initial.revisionId, title: "Last valid project", slug: "last-valid-project" }]);
+  }, 30_000);
+
   it("reserves a first Project route atomically when two content items race for the same slug", async () => {
     const scope = await configuredScope();
     const content = service(scope);
@@ -754,11 +894,13 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "has_table_privilege('shipwithali_backup', 'content.items', 'select') backup_root, " +
       "has_table_privilege('anon', 'content.public_project_locales', 'select') anon_projection, " +
       "has_table_privilege('anon', 'taxonomy.project_discovery_locales', 'select') anon_discovery_projection, " +
+      "has_column_privilege('shipwithali_application', 'content.public_routes', 'current_slug', 'UPDATE') app_route_slug_update, " +
       "has_table_privilege('authenticated', 'content.public_routes', 'select') authenticated_routes, " +
       "has_table_privilege('shipwithali_worker', 'content.language_publications', 'select') worker_publication",
     );
     expect(grants.rows[0]).toEqual({ anon_root: false, anon_revision: false, authenticated_root: false, worker_revision: false,
-      backup_root: false, anon_projection: false, anon_discovery_projection: false, authenticated_routes: false, worker_publication: false });
+      backup_root: false, anon_projection: false, anon_discovery_projection: false, app_route_slug_update: false,
+      authenticated_routes: false, worker_publication: false });
     const unscoped = await database.transactions.run((context) => sql.raw(
       "select (select count(*)::integer from content.items) roots, (select count(*)::integer from content.revisions) revisions",
     ).execute(resolvePostgresTransaction(context)));
