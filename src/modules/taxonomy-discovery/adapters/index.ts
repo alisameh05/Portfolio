@@ -8,6 +8,8 @@ import type {
   ProjectDiscoveryCard,
 } from "../domain/index.js";
 
+export { createPostgresProjectDiscoveryProjectionWriter } from "./postgres-project-discovery.js";
+
 /**
  * Stub repository adapter for Phase 1 skeleton.
  * Business implementation and persistence are deferred to later phases.

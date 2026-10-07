@@ -135,6 +135,7 @@ export interface MediaAcceptanceQuery {
 export interface MediaAcceptancePort {
   getAcceptanceFacts(
     query: MediaAcceptanceQuery,
+    transaction: TransactionContext,
   ): Promise<Result<MediaAcceptanceBatch, Rejection>>;
 }
 

@@ -38,6 +38,70 @@ export interface ContentItems {
   updated_at: Generated<Timestamp>;
 }
 
+export interface ContentLanguagePublications {
+  content_id: string;
+  content_type: string;
+  locale: string;
+  media_facts_version: string | null;
+  portfolio_id: string;
+  publication_sequence: number;
+  published_at: Timestamp;
+  review_id: string;
+  revision_id: string;
+  route_identity: string;
+}
+
+export interface ContentPublicationHistory {
+  content_id: string;
+  content_type: string;
+  locale: string;
+  media_facts_version: string | null;
+  portfolio_id: string;
+  publication_sequence: number;
+  published_at: Timestamp;
+  review_id: string;
+  revision_id: string;
+  route_identity: string;
+}
+
+export interface ContentPublicProjectLocales {
+  body: string;
+  case_study: Json;
+  claims: Json;
+  content_id: string;
+  content_type: Generated<string>;
+  external_links: Json;
+  first_published_at: Timestamp;
+  locale: string;
+  portfolio_id: string;
+  published_at: Timestamp;
+  revision_id: string;
+  route_identity: string;
+  summary: string;
+  title: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface ContentPublicRouteReservations {
+  content_id: string;
+  content_type: string;
+  is_current: boolean;
+  normalized_slug: string;
+  portfolio_id: string;
+  reserved_at: Generated<Timestamp>;
+  route_identity: string;
+}
+
+export interface ContentPublicRoutes {
+  content_id: string;
+  content_type: string;
+  created_at: Generated<Timestamp>;
+  current_slug: string;
+  first_published_at: Timestamp;
+  portfolio_id: string;
+  route_identity: string;
+}
+
 export interface ContentRevisionReviews {
   content_id: string;
   content_type: string;
@@ -160,6 +224,11 @@ export interface PortfolioConfigSettings {
 
 export interface DB {
   "content.items": ContentItems;
+  "content.language_publications": ContentLanguagePublications;
+  "content.public_project_locales": ContentPublicProjectLocales;
+  "content.public_route_reservations": ContentPublicRouteReservations;
+  "content.public_routes": ContentPublicRoutes;
+  "content.publication_history": ContentPublicationHistory;
   "content.revision_reviews": ContentRevisionReviews;
   "content.revisions": ContentRevisions;
   "identity_access.owner_links": IdentityAccessOwnerLinks;

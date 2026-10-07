@@ -158,14 +158,17 @@ export async function initializeDatabaseRuntime(
           );
           const [
             { createPostgresContentAuthoringRepository },
+            { createPostgresProjectDiscoveryProjectionWriter },
             { createContentAuthoringService },
           ] = await Promise.all([
             import("../modules/content-publishing/adapters/postgres-authoring.js"),
+            import("../modules/taxonomy-discovery/adapters/index.js"),
             import("../modules/content-publishing/application/authoring.js"),
           ]);
           contentAuthoring = createContentAuthoringService({
             repository: createPostgresContentAuthoringRepository(),
             operations,
+            discoveryProjection: createPostgresProjectDiscoveryProjectionWriter(),
             scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
           });
         }

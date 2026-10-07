@@ -83,6 +83,8 @@ export {
   type AppendContentRevisionInput,
   type ContentAuthoringReview,
   type ContentAuthoringRecord,
+  type ContentAuthoringPublication,
+  type ContentAuthoringPublicationReceipt,
   type ContentAuthoringRepository,
   type ContentAuthoringRevision,
   type ContentAuthoringScope,
@@ -95,6 +97,10 @@ export {
   type SaveContentRevisionCommand,
   type SaveContentRevisionReceipt,
   type ReviewRevisionReceipt,
+  type PublishProjectLanguageInput,
+  type PublishProjectLanguageResult,
+  type PublicProjectContentView,
+  type ProjectDiscoveryProjectionPort,
 } from "./application/index.js";
 
 export type { ContentRepositoryPort } from "./ports/index.js";

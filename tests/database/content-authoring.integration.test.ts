@@ -3,6 +3,7 @@ import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createContentAuthoringService } from "../../src/modules/content-publishing/application/authoring.js";
 import { createPostgresContentAuthoringRepository } from "../../src/modules/content-publishing/adapters/postgres-authoring.js";
+import { createPostgresProjectDiscoveryProjectionWriter } from "../../src/modules/taxonomy-discovery/adapters/index.js";
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
@@ -11,6 +12,7 @@ import { createStableId, type IdempotencyKey, type StableId } from "../../src/sh
 import { createSystemIdGenerator } from "../../src/runtime/ports.js";
 import { sql } from "kysely";
 import { resolvePostgresTransaction } from "../../src/shared/adapters/postgres/runtime.js";
+import type { ProjectDraftPayload } from "../../src/modules/content-publishing/domain/index.js";
 
 const DATABASE_URL = process.env["PHASE5_CONTENT_AUTHORING_DATABASE_URL"];
 if (process.env["PHASE5_REQUIRE_CONTENT_AUTHORING"] === "1" && !DATABASE_URL) {
@@ -73,11 +75,55 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     scope: { portfolioId: StableId<"Portfolio">; ownerId: StableId<"Owner"> },
     selectedOperations = operations,
     clock?: { now(): string },
+    mediaAcceptance?: import("../../src/modules/content-publishing/application/service.js").MediaAcceptancePort,
   ) {
-    return createContentAuthoringService({ repository, operations: selectedOperations, scope, ...(clock === undefined ? {} : { clock }) });
+    return createContentAuthoringService({ repository, operations: selectedOperations, scope,
+      discoveryProjection: createPostgresProjectDiscoveryProjectionWriter(), ...(clock === undefined ? {} : { clock }),
+      ...(mediaAcceptance === undefined ? {} : { mediaAcceptance }) });
   }
   const key = (value: string) => value as IdempotencyKey;
   const actor = (ownerId: StableId<"Owner">) => ({ kind: "owner" as const, ownerId, sessionId: "authoring-integration" });
+
+  async function createReviewedProject(
+    scope: { portfolioId: StableId<"Portfolio">; ownerId: StableId<"Owner"> },
+    title: string,
+    idempotencyPrefix: string,
+    locale: "en" | "ar" = "en",
+    options: {
+      readonly slug?: string;
+      readonly mediaAssetId?: StableId<"MediaAsset">;
+      readonly service?: ReturnType<typeof service>;
+      readonly reviewDecision?: "accepted" | "rejected";
+      readonly transformPayload?: (payload: ProjectDraftPayload) => ProjectDraftPayload;
+    } = {},
+  ) {
+    const content = options.service ?? service(scope);
+    const artifactId = createStableId("SupportingArtifact");
+    const basePayload: ProjectDraftPayload = {
+      contentType: "project" as const, locale, title, summary: `${title} summary`, body: `${title} public body`,
+      ...(options.slug === undefined ? {} : { candidateSlug: options.slug }),
+      caseStudy: { problem: "A clear problem statement.", ownerRole: "Led the implementation.",
+        contributions: ["Built the service."], outcomes: ["Qualitative user feedback improved."], lessons: "Measure the user workflow." },
+      evidence: { claims: [{ claimId: createStableId("EvidenceClaim"), text: "The supporting demo shows this workflow.", artifactIds: [artifactId] }],
+        artifacts: [{ id: artifactId, title: "Project demo", destinationUrl: "https://example.com/demo",
+          ...(options.mediaAssetId === undefined ? {} : { mediaAssetId: options.mediaAssetId }) }] },
+      externalLinks: [{ id: createStableId("ExternalLink"), label: locale === "en" ? "English demo" : "Arabic demo",
+        destination: locale === "en" ? "https://example.com/en" : "https://example.com/ar", isAvailableInArabic: locale === "ar" }],
+    };
+    const payload = options.transformPayload?.(basePayload) ?? basePayload;
+    const created = await content.createContent({ actor: actor(scope.ownerId), idempotencyKey: key(`${idempotencyPrefix}-create`),
+      correlationId: `${idempotencyPrefix}-create`, payload });
+    if (!created.ok) throw new Error(`PROJECT_CREATE_FAILED:${created.error.code}`);
+    const preview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: created.value.contentId, revisionId: created.value.revisionId });
+    if (!preview.ok) throw new Error(`PROJECT_PREVIEW_FAILED:${preview.error.code}`);
+    const reviewed = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: created.value.contentId,
+      revisionId: created.value.revisionId, expectedVersion: created.value.aggregateVersion, idempotencyKey: key(`${idempotencyPrefix}-review`),
+      correlationId: `${idempotencyPrefix}-review`, locale, snapshotHash: preview.value.snapshotHash, evidenceVersion: preview.value.evidenceVersion,
+      decision: options.reviewDecision ?? "accepted", findings: [] });
+    if (!reviewed.ok) throw new Error(`PROJECT_REVIEW_FAILED:${reviewed.error.code}`);
+    return { content, contentId: created.value.contentId, revisionId: created.value.revisionId,
+      aggregateVersion: reviewed.value.aggregateVersion, payload };
+  }
 
   it("creates all Draft kinds, saves both locales, and keeps typed snapshots private and unreviewed", async () => {
     const scope = await configuredScope();
@@ -397,7 +443,8 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       ...operations,
       outbox: { ...operations.outbox, async append() { throw new Error("simulated review event failure"); } },
     };
-    const failingReview = createContentAuthoringService({ repository, operations: failingOperations, scope });
+    const failingReview = createContentAuthoringService({ repository, operations: failingOperations, scope,
+      discoveryProjection: createPostgresProjectDiscoveryProjectionWriter() });
     await expect(failingReview.reviewRevision({
       actor: actor(scope.ownerId), contentId: created.value.contentId, revisionId: created.value.revisionId,
       expectedVersion: 1, idempotencyKey: key("review-rollback-key"), correlationId: "review-rollback-key",
@@ -436,6 +483,358 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(roots.rows[0].count).toBe(0);
   }, 30_000);
 
+  it("publishes English and Arabic independently, preserves first publication time, history, and the last valid projection", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const english = await createReviewedProject(scope, "English first project", "publication-locales", "en", { service: content });
+    const firstCommand = { actor: actor(scope.ownerId), contentId: english.contentId,
+      expectedVersion: english.aggregateVersion, idempotencyKey: key("publication-en-first"), correlationId: "publication-en-first",
+      locale: "en" as const, revisionId: english.revisionId };
+    const first = await content.publishLanguageVersion(firstCommand);
+    expect(first).toMatchObject({ ok: true, value: { aggregateVersion: 3, currentSlug: "english-first-project" } });
+    if (!first.ok) return;
+    expect(await content.getPublicProject({ slug: "english-first-project", locale: "ar" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } });
+
+    const arabicDraft = await content.saveRevision({ actor: actor(scope.ownerId), contentId: english.contentId,
+      expectedVersion: first.value.aggregateVersion, idempotencyKey: key("publication-ar-save"), correlationId: "publication-ar-save",
+      locale: "ar", title: "مشروع البحث", summary: "ملخص عربي", body: "دراسة حالة عربية",
+      draftData: { contentType: "project", caseStudy: english.payload.caseStudy, evidence: english.payload.evidence,
+        externalLinks: (english.payload.externalLinks ?? []).map((link) => ({ ...link, label: "Arabic demo", destination: "https://example.com/ar", isAvailableInArabic: true })) } });
+    expect(arabicDraft.ok).toBe(true);
+    if (!arabicDraft.ok) return;
+    const arabicPreview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: english.contentId, revisionId: arabicDraft.value.revisionId });
+    expect(arabicPreview.ok).toBe(true);
+    if (!arabicPreview.ok) return;
+    const arabicReview = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: english.contentId,
+      revisionId: arabicDraft.value.revisionId, expectedVersion: arabicDraft.value.aggregateVersion, idempotencyKey: key("publication-ar-review"),
+      correlationId: "publication-ar-review", locale: "ar", snapshotHash: arabicPreview.value.snapshotHash,
+      evidenceVersion: arabicPreview.value.evidenceVersion, decision: "accepted", findings: [] });
+    expect(arabicReview.ok).toBe(true);
+    if (!arabicReview.ok) return;
+    const second = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: english.contentId,
+      expectedVersion: arabicReview.value.aggregateVersion, idempotencyKey: key("publication-ar-first"), correlationId: "publication-ar-first",
+      locale: "ar", revisionId: arabicDraft.value.revisionId });
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.value.firstPublishedAt).toBe(first.value.firstPublishedAt);
+    expect(await content.getPublicProject({ slug: "english-first-project", locale: "ar" }))
+      .toMatchObject({ ok: true, value: { title: "مشروع البحث", externalLinks: [{ label: "Arabic demo" }] } });
+
+    const nextEnglish = await content.saveRevision({ actor: actor(scope.ownerId), contentId: english.contentId,
+      expectedVersion: second.value.aggregateVersion, idempotencyKey: key("publication-en-replacement-save"), correlationId: "publication-en-replacement-save",
+      locale: "en", title: "English replacement", summary: "New summary", body: "New body",
+      draftData: { contentType: "project", caseStudy: english.payload.caseStudy, evidence: english.payload.evidence, externalLinks: english.payload.externalLinks } });
+    expect(nextEnglish.ok).toBe(true);
+    if (!nextEnglish.ok) return;
+    const beforeReplacement = await content.getPublicProject({ slug: "english-first-project", locale: "en" });
+    expect(beforeReplacement).toMatchObject({ ok: true, value: { title: "English first project" } });
+    const nextPreview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: english.contentId, revisionId: nextEnglish.value.revisionId });
+    if (!nextPreview.ok) return;
+    const nextReview = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: english.contentId, revisionId: nextEnglish.value.revisionId,
+      expectedVersion: nextEnglish.value.aggregateVersion, idempotencyKey: key("publication-en-replacement-review"), correlationId: "publication-en-replacement-review",
+      locale: "en", snapshotHash: nextPreview.value.snapshotHash, evidenceVersion: nextPreview.value.evidenceVersion, decision: "accepted", findings: [] });
+    if (!nextReview.ok) return;
+    const replacement = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: english.contentId,
+      expectedVersion: nextReview.value.aggregateVersion, idempotencyKey: key("publication-en-replacement"), correlationId: "publication-en-replacement",
+      locale: "en", revisionId: nextEnglish.value.revisionId });
+    expect(replacement.ok).toBe(true);
+    if (!replacement.ok) return;
+    expect(replacement.value.routeIdentity).toBe(first.value.routeIdentity);
+    expect(replacement.value.firstPublishedAt).toBe(first.value.firstPublishedAt);
+    expect(await content.getPublicProject({ slug: "english-first-project", locale: "en" }))
+      .toMatchObject({ ok: true, value: { title: "English replacement", summary: "New summary" } });
+    expect(await content.publishLanguageVersion(firstCommand)).toEqual(first);
+    const history = await admin.query("select locale, count(*)::int as publications from content.publication_history where content_id = $1::uuid group by locale order by locale", [english.contentId]);
+    expect(history.rows).toEqual([{ locale: "ar", publications: 1 }, { locale: "en", publications: 2 }]);
+    const discovery = await admin.query(
+      "select locale, title, slug, first_published_at = $2::timestamptz as shared_first_publish_time " +
+      "from taxonomy.project_discovery_locales where content_id = $1::uuid order by locale",
+      [english.contentId, first.value.firstPublishedAt],
+    );
+    expect(discovery.rows).toEqual([
+      { locale: "ar", title: "مشروع البحث", slug: "english-first-project", shared_first_publish_time: true },
+      { locale: "en", title: "English replacement", slug: "english-first-project", shared_first_publish_time: true },
+    ]);
+  }, 30_000);
+
+  it("rejects invalid evidence, review, and Media facts without creating public state", async () => {
+    const scope = await configuredScope();
+    const rejectedMediaFacts = {
+      async getAcceptanceFacts(query: { ownerId: StableId<"Owner">; mediaAssetIds: readonly StableId<"MediaAsset">[] }) {
+        return { ok: true as const, value: { consistencyVersion: "media-rejected-1", facts: query.mediaAssetIds.map((mediaAssetId) => ({
+          mediaAssetId, ownerId: query.ownerId, accepted: false, safe: true, suitable: true, accessible: true, version: 1,
+        })) } };
+      },
+    };
+    const cases: readonly {
+      readonly name: string;
+      readonly options?: Parameters<typeof createReviewedProject>[4];
+      readonly expected: { readonly kind: string; readonly code: string };
+    }[] = [
+      {
+        name: "dangling evidence reference",
+        options: { transformPayload: (payload) => ({
+          ...payload,
+          evidence: { ...payload.evidence!, claims: payload.evidence!.claims!.map((claim) => ({
+            ...claim, artifactIds: [createStableId("SupportingArtifact")],
+          })) },
+        }) },
+        expected: { kind: "validation", code: "PROJECT_PUBLICATION_REQUIREMENTS_NOT_MET" },
+      },
+      {
+        name: "unsupported artifact",
+        options: { transformPayload: (payload) => ({
+          ...payload,
+          evidence: { ...payload.evidence!, artifacts: payload.evidence!.artifacts!.map(({ id, title }) => ({ id, title })) },
+        }) },
+        expected: { kind: "validation", code: "PROJECT_PUBLICATION_REQUIREMENTS_NOT_MET" },
+      },
+      {
+        name: "fabricated placeholder",
+        options: { transformPayload: (payload) => ({ ...payload,
+          caseStudy: { ...payload.caseStudy!, problem: "TODO: add the actual project problem" } }) },
+        expected: { kind: "validation", code: "PROJECT_PUBLICATION_REQUIREMENTS_NOT_MET" },
+      },
+      {
+        name: "rejected owner review",
+        options: { reviewDecision: "rejected" },
+        expected: { kind: "validation", code: "ACCEPTED_REVISION_REVIEW_REQUIRED" },
+      },
+      {
+        name: "unresolved Media facts",
+        options: { mediaAssetId: createStableId("MediaAsset") },
+        expected: { kind: "temporarily_unavailable", code: "MEDIA_ACCEPTANCE_UNAVAILABLE" },
+      },
+      {
+        name: "rejected Media facts",
+        options: { mediaAssetId: createStableId("MediaAsset"), service: service(scope, operations, undefined, rejectedMediaFacts) },
+        expected: { kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      },
+    ];
+
+    for (const [index, testCase] of cases.entries()) {
+      const prefix = `publication-rejected-case-${index}`;
+      const project = await createReviewedProject(scope, `Rejected case ${index}`, prefix, "en", testCase.options);
+      const result = await project.content.publishLanguageVersion({
+        actor: actor(scope.ownerId), contentId: project.contentId, expectedVersion: project.aggregateVersion,
+        idempotencyKey: key(`${prefix}-publish`), correlationId: `${prefix}-publish`, locale: "en", revisionId: project.revisionId,
+      });
+      expect(result, testCase.name).toMatchObject({ ok: false, error: testCase.expected });
+      const keyHash = createHash("sha256").update(`${prefix}-publish`).digest("hex");
+      const state = await admin.query(
+        "select (select lifecycle from content.items where content_id = $1::uuid) lifecycle, " +
+        "(select count(*)::int from content.public_routes where content_id = $1::uuid) routes, " +
+        "(select count(*)::int from content.language_publications where content_id = $1::uuid) pointers, " +
+        "(select count(*)::int from content.publication_history where content_id = $1::uuid) history, " +
+        "(select count(*)::int from content.public_project_locales where content_id = $1::uuid) content_projection, " +
+        "(select count(*)::int from taxonomy.project_discovery_locales where content_id = $1::uuid) discovery_projection, " +
+        "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.language_version_published.v1') events, " +
+        "(select result_envelope->'receipt' from operations.idempotency_records where key_hash = $2) receipt",
+        [project.contentId, keyHash],
+      );
+      expect(state.rows[0], testCase.name).toEqual({
+        lifecycle: "draft", routes: 0, pointers: 0, history: 0, content_projection: 0,
+        discovery_projection: 0, events: 0, receipt: null,
+      });
+    }
+  }, 30_000);
+
+  it("preserves the last valid locale and both projections when a replacement is rejected", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const initial = await createReviewedProject(scope, "Last valid project", "publication-last-valid", "en", { service: content });
+    const first = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: initial.contentId,
+      expectedVersion: initial.aggregateVersion, idempotencyKey: key("publication-last-valid-first"),
+      correlationId: "publication-last-valid-first", locale: "en", revisionId: initial.revisionId });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const priorPublic = await content.getPublicProject({ slug: "last-valid-project", locale: "en" });
+    const priorDiscovery = await admin.query(
+      "select revision_id::text, title, slug from taxonomy.project_discovery_locales where content_id = $1::uuid and locale = 'en'",
+      [initial.contentId],
+    );
+    const saved = await content.saveRevision({ actor: actor(scope.ownerId), contentId: initial.contentId,
+      expectedVersion: first.value.aggregateVersion, idempotencyKey: key("publication-last-valid-save"),
+      correlationId: "publication-last-valid-save", locale: "en", title: "Unpublishable replacement",
+      summary: "New summary candidate", body: "New body candidate",
+      draftData: { contentType: "project", caseStudy: { ...initial.payload.caseStudy!, problem: "TODO: replace before publication" },
+        evidence: initial.payload.evidence, externalLinks: initial.payload.externalLinks } });
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    const preview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: initial.contentId, revisionId: saved.value.revisionId });
+    if (!preview.ok) return;
+    const review = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: initial.contentId,
+      revisionId: saved.value.revisionId, expectedVersion: saved.value.aggregateVersion,
+      idempotencyKey: key("publication-last-valid-replacement-review"), correlationId: "publication-last-valid-replacement-review",
+      locale: "en", snapshotHash: preview.value.snapshotHash, evidenceVersion: preview.value.evidenceVersion,
+      decision: "accepted", findings: [] });
+    expect(review.ok).toBe(true);
+    if (!review.ok) return;
+    const rejected = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: initial.contentId,
+      expectedVersion: review.value.aggregateVersion, idempotencyKey: key("publication-last-valid-rejected"),
+      correlationId: "publication-last-valid-rejected", locale: "en", revisionId: saved.value.revisionId });
+    expect(rejected).toMatchObject({ ok: false, error: { kind: "validation", code: "PROJECT_PUBLICATION_REQUIREMENTS_NOT_MET" } });
+    expect(await content.getPublicProject({ slug: "last-valid-project", locale: "en" })).toEqual(priorPublic);
+    const current = await admin.query(
+      "select publication.revision_id::text as published_revision, projection.revision_id::text as content_revision, " +
+      "discovery.revision_id::text as discovery_revision, projection.title as content_title, discovery.title as discovery_title " +
+      "from content.language_publications publication " +
+      "join content.public_project_locales projection using (content_id, portfolio_id, locale) " +
+      "join taxonomy.project_discovery_locales discovery using (content_id, portfolio_id, locale) " +
+      "where publication.content_id = $1::uuid and publication.locale = 'en'",
+      [initial.contentId],
+    );
+    expect(current.rows).toEqual([{ published_revision: initial.revisionId, content_revision: initial.revisionId,
+      discovery_revision: initial.revisionId, content_title: "Last valid project", discovery_title: "Last valid project" }]);
+    expect(priorDiscovery.rows).toEqual([{ revision_id: initial.revisionId, title: "Last valid project", slug: "last-valid-project" }]);
+  }, 30_000);
+
+  it("reserves a first Project route atomically when two content items race for the same slug", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const left = await createReviewedProject(scope, "Race left", "publication-route-race-left", "en", { slug: "shared-project-route", service: content });
+    const right = await createReviewedProject(scope, "Race right", "publication-route-race-right", "en", { slug: "shared-project-route", service: content });
+    const publish = (project: typeof left, keySuffix: string) => content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key(`publication-route-race-${keySuffix}`), correlationId: `publication-route-race-${keySuffix}`,
+      locale: "en", revisionId: project.revisionId });
+    const results = await Promise.all([publish(left, "left"), publish(right, "right")]);
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.filter((result) => !result.ok)).toMatchObject([{ error: { kind: "conflict", code: "PUBLIC_SLUG_CONFLICT" } }]);
+    const routeCounts = await admin.query(
+      "select (select count(*)::int from content.public_routes where current_slug = 'shared-project-route') routes, " +
+      "(select count(*)::int from content.public_route_reservations where normalized_slug = 'shared-project-route') reservations, " +
+      "(select count(*)::int from content.public_project_locales where content_id in ($1::uuid, $2::uuid)) projections, " +
+      "(select count(*)::int from taxonomy.project_discovery_locales where content_id in ($1::uuid, $2::uuid)) discovery",
+      [left.contentId, right.contentId],
+    );
+    expect(routeCounts.rows[0]).toEqual({ routes: 1, reservations: 1, projections: 1, discovery: 1 });
+    const loser = results[0]?.ok ? right : left;
+    const loserKey = results[0]?.ok ? "publication-route-race-right" : "publication-route-race-left";
+    const loserKeyHash = createHash("sha256").update(loserKey).digest("hex");
+    const loserState = await admin.query(
+      "select (select count(*)::int from content.public_routes where content_id = $1::uuid) routes, " +
+      "(select count(*)::int from content.public_route_reservations where content_id = $1::uuid) reservations, " +
+      "(select count(*)::int from content.public_project_locales where content_id = $1::uuid) content_projection, " +
+      "(select count(*)::int from taxonomy.project_discovery_locales where content_id = $1::uuid) discovery_projection, " +
+      "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.language_version_published.v1') events, " +
+      "(select result_envelope from operations.idempotency_records where key_hash = $2) outcome",
+      [loser.contentId, loserKeyHash],
+    );
+    expect(loserState.rows[0]).toEqual({
+      routes: 0, reservations: 0, content_projection: 0, discovery_projection: 0, events: 0,
+      outcome: { status: "rejected", kind: "conflict", code: "PUBLIC_SLUG_CONFLICT" },
+    });
+  }, 30_000);
+
+  it("serializes simultaneous locale publication on one aggregate and allows the other locale to publish next", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const english = await createReviewedProject(scope, "Locale race", "publication-locale-race", "en", { service: content });
+    const arabicDraft = await content.saveRevision({ actor: actor(scope.ownerId), contentId: english.contentId,
+      expectedVersion: english.aggregateVersion, idempotencyKey: key("publication-locale-race-ar-save"), correlationId: "publication-locale-race-ar-save",
+      locale: "ar", title: "سباق اللغة", summary: "ملخص", body: "دراسة حالة",
+      draftData: { contentType: "project", caseStudy: english.payload.caseStudy, evidence: english.payload.evidence,
+        externalLinks: (english.payload.externalLinks ?? []).map((link) => ({ ...link, isAvailableInArabic: true })) } });
+    expect(arabicDraft.ok).toBe(true);
+    if (!arabicDraft.ok) return;
+    const enPreview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: english.contentId, revisionId: english.revisionId });
+    if (!enPreview.ok) return;
+    const enReview = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: english.contentId, revisionId: english.revisionId,
+      expectedVersion: arabicDraft.value.aggregateVersion, idempotencyKey: key("publication-locale-race-en-review"), correlationId: "publication-locale-race-en-review",
+      locale: "en", snapshotHash: enPreview.value.snapshotHash, evidenceVersion: enPreview.value.evidenceVersion, decision: "accepted", findings: [] });
+    if (!enReview.ok) return;
+    const arPreview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: english.contentId, revisionId: arabicDraft.value.revisionId });
+    if (!arPreview.ok) return;
+    const arReview = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: english.contentId, revisionId: arabicDraft.value.revisionId,
+      expectedVersion: enReview.value.aggregateVersion, idempotencyKey: key("publication-locale-race-ar-review"), correlationId: "publication-locale-race-ar-review",
+      locale: "ar", snapshotHash: arPreview.value.snapshotHash, evidenceVersion: arPreview.value.evidenceVersion, decision: "accepted", findings: [] });
+    if (!arReview.ok) return;
+    const publish = (locale: "en" | "ar", revisionId: StableId<"Revision">, keySuffix: string) => content.publishLanguageVersion({
+      actor: actor(scope.ownerId), contentId: english.contentId, expectedVersion: arReview.value.aggregateVersion,
+      idempotencyKey: key(`publication-locale-race-${keySuffix}`), correlationId: `publication-locale-race-${keySuffix}`, locale, revisionId,
+    });
+    const attempts = await Promise.all([publish("en", english.revisionId, "en"), publish("ar", arabicDraft.value.revisionId, "ar")]);
+    expect(attempts.filter((result) => result.ok)).toHaveLength(1);
+    expect(attempts.filter((result) => !result.ok)).toMatchObject([{ error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH" } }]);
+    const winnerIndex = attempts.findIndex((result) => result.ok);
+    const loserLocale = winnerIndex === 0 ? "ar" : "en";
+    const loserRevision = winnerIndex === 0 ? arabicDraft.value.revisionId : english.revisionId;
+    const winner = attempts[winnerIndex];
+    if (!winner?.ok) return;
+    const retried = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: english.contentId,
+      expectedVersion: winner.value.aggregateVersion, idempotencyKey: key("publication-locale-race-retry"), correlationId: "publication-locale-race-retry",
+      locale: loserLocale, revisionId: loserRevision });
+    expect(retried.ok).toBe(true);
+    if (retried.ok) expect(retried.value.firstPublishedAt).toBe(winner.value.firstPublishedAt);
+    expect(await content.getPublicProject({ slug: "locale-race", locale: "en" })).toMatchObject({ ok: true });
+    expect(await content.getPublicProject({ slug: "locale-race", locale: "ar" })).toMatchObject({ ok: true });
+  }, 30_000);
+
+  it("rolls back route, pointer, projection, success receipt, and event after injected writes fail", async () => {
+    const scope = await configuredScope();
+    const project = await createReviewedProject(scope, "Publication rollback", "publication-rollback");
+    const schema = "phase5_publication_failure_probe";
+    await admin.query(`create schema ${schema}`);
+    try {
+      await admin.query(`create table ${schema}.targets (table_name text primary key)`);
+      await admin.query(`create function ${schema}.fail_write() returns trigger language plpgsql security definer set search_path = pg_catalog, ${schema} as $$ begin
+        if exists (select 1 from ${schema}.targets where table_name = tg_table_name) then
+          raise exception 'SIMULATED_PUBLICATION_WRITE_FAILURE';
+        end if;
+        return new;
+      end $$`);
+      for (const table of ["language_publications", "public_project_locales", "project_discovery_locales", "idempotency_records", "outbox_events"]) {
+        const qualified = table === "idempotency_records" || table === "outbox_events" ? `operations.${table}`
+          : table === "project_discovery_locales" ? `taxonomy.${table}` : `content.${table}`;
+        const event = table === "idempotency_records" ? "before update" : "before insert or update";
+        await admin.query(`create trigger fail_publication_write_${table} ${event} on ${qualified} for each row execute function ${schema}.fail_write()`);
+      }
+      for (const [index, table] of ["language_publications", "public_project_locales", "project_discovery_locales", "outbox_events", "idempotency_records"].entries()) {
+        const keyValue = `publication-rollback-${table}`;
+        await admin.query(`insert into ${schema}.targets (table_name) values ($1)`, [table]);
+        await expect(service(scope).publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+          expectedVersion: project.aggregateVersion, idempotencyKey: key(keyValue), correlationId: keyValue,
+          locale: "en", revisionId: project.revisionId })).rejects.toThrow();
+        await admin.query(`delete from ${schema}.targets where table_name = $1`, [table]);
+        const keyHash = createHash("sha256").update(keyValue).digest("hex");
+        const state = await admin.query(
+          "select (select lifecycle from content.items where content_id = $1::uuid) lifecycle, " +
+          "(select count(*)::int from content.public_routes where content_id = $1::uuid) routes, " +
+          "(select count(*)::int from content.language_publications where content_id = $1::uuid) pointers, " +
+          "(select count(*)::int from content.publication_history where content_id = $1::uuid) history, " +
+          "(select count(*)::int from content.public_project_locales where content_id = $1::uuid) projections, " +
+          "(select count(*)::int from taxonomy.project_discovery_locales where content_id = $1::uuid) discovery, " +
+          "(select count(*)::int from operations.idempotency_records where key_hash = $2) receipts, " +
+          "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.language_version_published.v1') events",
+          [project.contentId, keyHash],
+        );
+        expect(state.rows[0], `failure injection ${index}: ${table}`).toEqual({ lifecycle: "draft", routes: 0, pointers: 0, history: 0, projections: 0, discovery: 0, receipts: 0, events: 0 });
+      }
+    } finally {
+      await admin.query(`drop schema if exists ${schema} cascade`);
+    }
+  }, 30_000);
+
+  it("uses fixture-only accepted Media facts and fails closed when production facts are unresolved", async () => {
+    const scope = await configuredScope();
+    const mediaId = createStableId("MediaAsset");
+    const fixturePort = { async getAcceptanceFacts(query: { ownerId: StableId<"Owner">; mediaAssetIds: readonly StableId<"MediaAsset">[] }) {
+      return { ok: true as const, value: { consistencyVersion: "media-snapshot-17", facts: query.mediaAssetIds.map((mediaAssetId) => ({
+        mediaAssetId, ownerId: query.ownerId, accepted: true, safe: true, suitable: true, accessible: true, version: 17,
+      })) } };
+    } };
+    const fixtureService = service(scope, operations, undefined, fixturePort);
+    const project = await createReviewedProject(scope, "Media fixture", "publication-media-fixture", "en", { mediaAssetId: mediaId, service: fixtureService });
+    const published = await fixtureService.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key("publication-media-fixture-publish"), correlationId: "publication-media-fixture-publish",
+      locale: "en", revisionId: project.revisionId });
+    expect(published.ok).toBe(true);
+    if (!published.ok) return;
+    const persistedFacts = await admin.query("select media_facts_version from content.publication_history where content_id = $1::uuid", [project.contentId]);
+    expect(persistedFacts.rows).toEqual([{ media_facts_version: "media-snapshot-17" }]);
+  }, 30_000);
+
   it("rolls back the root, Revision, receipt, and outbox when the event append fails", async () => {
     const scope = await configuredScope();
     const generated: string[] = [];
@@ -445,7 +844,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       outbox: { ...operations.outbox, async append() { throw new Error("simulated outbox failure"); } },
     };
     const content = createContentAuthoringService({
-      repository, operations: failingOperations, scope,
+      repository, operations: failingOperations, scope, discoveryProjection: createPostgresProjectDiscoveryProjectionWriter(),
       ids: { generate(kind) { const id = ids.generate(kind); if (kind === "Content") generated.push(id); return id; } },
     });
     await expect(content.createContent({
@@ -492,9 +891,16 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "has_table_privilege('anon', 'content.revisions', 'select') anon_revision, " +
       "has_table_privilege('authenticated', 'content.items', 'select') authenticated_root, " +
       "has_table_privilege('shipwithali_worker', 'content.revisions', 'select') worker_revision, " +
-      "has_table_privilege('shipwithali_backup', 'content.items', 'select') backup_root",
+      "has_table_privilege('shipwithali_backup', 'content.items', 'select') backup_root, " +
+      "has_table_privilege('anon', 'content.public_project_locales', 'select') anon_projection, " +
+      "has_table_privilege('anon', 'taxonomy.project_discovery_locales', 'select') anon_discovery_projection, " +
+      "has_column_privilege('shipwithali_application', 'content.public_routes', 'current_slug', 'UPDATE') app_route_slug_update, " +
+      "has_table_privilege('authenticated', 'content.public_routes', 'select') authenticated_routes, " +
+      "has_table_privilege('shipwithali_worker', 'content.language_publications', 'select') worker_publication",
     );
-    expect(grants.rows[0]).toEqual({ anon_root: false, anon_revision: false, authenticated_root: false, worker_revision: false, backup_root: false });
+    expect(grants.rows[0]).toEqual({ anon_root: false, anon_revision: false, authenticated_root: false, worker_revision: false,
+      backup_root: false, anon_projection: false, anon_discovery_projection: false, app_route_slug_update: false,
+      authenticated_routes: false, worker_publication: false });
     const unscoped = await database.transactions.run((context) => sql.raw(
       "select (select count(*)::integer from content.items) roots, (select count(*)::integer from content.revisions) revisions",
     ).execute(resolvePostgresTransaction(context)));
