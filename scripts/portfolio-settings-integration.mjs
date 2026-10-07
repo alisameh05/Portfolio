@@ -282,8 +282,9 @@ export async function main() {
   const ticket109 = process.argv.includes("--ticket-109");
   const ticket110 = process.argv.includes("--ticket-110");
   const ticket111 = process.argv.includes("--ticket-111");
-  if ([ticket109, ticket110, ticket111].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
-  const contentAuthoringTicket = ticket109 || ticket110 || ticket111;
+  const ticket113 = process.argv.includes("--ticket-113");
+  if ([ticket109, ticket110, ticket111, ticket113].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
+  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket113;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -435,9 +436,11 @@ export async function main() {
 
     const evidence = contentAuthoringTicket ? {
       sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
-      ticket: ticket111 ? 111 : ticket110 ? 110 : 109,
+      ticket: ticket113 ? 113 : ticket111 ? 111 : ticket110 ? 110 : 109,
       parent: 106,
-      scope: ticket111
+      scope: ticket113
+        ? "testimonial-review-publication-history-safe-profile-project-projections-and-atomic-replay"
+        : ticket111
         ? "reviewed-project-publication-routes-safe-projections-and-atomic-replay"
         : ticket110
         ? "exact-revision-review-private-preview-history-and-atomic-idempotent-audit"

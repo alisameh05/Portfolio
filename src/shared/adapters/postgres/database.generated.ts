@@ -102,6 +102,21 @@ export interface ContentPublicRoutes {
   route_identity: string;
 }
 
+export interface ContentPublicTestimonialLocales {
+  association_type: string;
+  author_name: string;
+  content_id: string;
+  content_type: Generated<string>;
+  locale: string;
+  portfolio_id: string;
+  project_content_type: Generated<string>;
+  project_id: string | null;
+  published_at: Timestamp;
+  quote: string;
+  revision_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface ContentRevisionReviews {
   content_id: string;
   content_type: string;
@@ -135,6 +150,28 @@ export interface ContentRevisions {
   stream_sequence: number;
   summary: string;
   title: string;
+}
+
+export interface ContentTestimonialLanguagePublications {
+  content_id: string;
+  content_type: Generated<string>;
+  locale: string;
+  portfolio_id: string;
+  publication_sequence: number;
+  published_at: Timestamp;
+  review_id: string;
+  revision_id: string;
+}
+
+export interface ContentTestimonialPublicationHistory {
+  content_id: string;
+  content_type: Generated<string>;
+  locale: string;
+  portfolio_id: string;
+  publication_sequence: number;
+  published_at: Timestamp;
+  review_id: string;
+  revision_id: string;
 }
 
 export interface IdentityAccessOwnerLinks {
@@ -228,9 +265,12 @@ export interface DB {
   "content.public_project_locales": ContentPublicProjectLocales;
   "content.public_route_reservations": ContentPublicRouteReservations;
   "content.public_routes": ContentPublicRoutes;
+  "content.public_testimonial_locales": ContentPublicTestimonialLocales;
   "content.publication_history": ContentPublicationHistory;
   "content.revision_reviews": ContentRevisionReviews;
   "content.revisions": ContentRevisions;
+  "content.testimonial_language_publications": ContentTestimonialLanguagePublications;
+  "content.testimonial_publication_history": ContentTestimonialPublicationHistory;
   "identity_access.owner_links": IdentityAccessOwnerLinks;
   "operations.idempotency_records": OperationsIdempotencyRecords;
   "operations.jobs": OperationsJobs;

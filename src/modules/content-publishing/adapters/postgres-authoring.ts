@@ -3,6 +3,7 @@ import { err, type Rejection, type Result, type StableId } from "@shared/domain"
 import type { TransactionContext } from "../../../runtime/ports.js";
 import { PostgresInfrastructureError, resolvePostgresTransaction } from "../../../shared/adapters/postgres/runtime.js";
 import type { ContentKind, CreateDraftPayload, SupportedLocale } from "../domain/index.js";
+import type { PublishTestimonialLanguageInput } from "../application/authoring.js";
 import type {
   AppendContentRevisionInput,
   ContentAuthoringRecord,
@@ -584,6 +585,206 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
           firstPublishedAt: updated.first_published_at instanceof Date ? updated.first_published_at.toISOString() : new Date(updated.first_published_at).toISOString(),
           publishedAt: publishedAt instanceof Date ? publishedAt.toISOString() : new Date(publishedAt).toISOString(),
         } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async publishTestimonialLanguage(input: PublishTestimonialLanguageInput, context: TransactionContext) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const selectedRoot = await sql<{
+          content_type: string; lifecycle: string; aggregate_version: number; first_published_at: Date | string | null;
+        }>`
+          select content_type, lifecycle, aggregate_version, first_published_at
+            from content.items
+           where content_id = ${input.contentId}::uuid
+             and portfolio_id = ${input.scope.portfolioId}::uuid
+           for update
+        `.execute(executor);
+        const root = selectedRoot.rows[0];
+        if (root === undefined) return err({ kind: "not_found", code: "CONTENT_NOT_FOUND" });
+        if (root.aggregate_version !== input.expectedVersion) {
+          return err({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: root.aggregate_version });
+        }
+        if (root.content_type !== "testimonial") return err({ kind: "validation", code: "CONTENT_TYPE_NOT_PUBLISHABLE" });
+        if (root.lifecycle !== "draft" && root.lifecycle !== "published") return err({ kind: "validation", code: "CONTENT_LIFECYCLE_NOT_PUBLISHABLE" });
+
+        const selected = await sql<{ review_id: string; snapshot_hash: string; decision: string; reviewer_id: string }>`
+          select review.review_id::text, review.snapshot_hash, review.decision, review.reviewer_id::text
+            from content.revisions revision
+            join lateral (
+              select review_id, snapshot_hash, decision, reviewer_id
+                from content.revision_reviews review
+               where review.revision_id = revision.revision_id
+                 and review.content_id = revision.content_id
+                 and review.portfolio_id = revision.portfolio_id
+               order by review.review_sequence desc
+               limit 1
+            ) review on true
+           where revision.revision_id = ${input.revisionId}::uuid
+             and revision.content_id = ${input.contentId}::uuid
+             and revision.portfolio_id = ${input.scope.portfolioId}::uuid
+             and revision.content_type = 'testimonial'
+             and revision.locale = ${input.locale}
+        `.execute(executor);
+        const review = selected.rows[0];
+        if (review === undefined) return err({ kind: "not_found", code: "REVISION_NOT_FOUND" });
+        if (review.review_id !== input.reviewId || review.decision !== "accepted" || review.reviewer_id !== input.scope.ownerId ||
+            review.snapshot_hash !== input.snapshotHash) return err({ kind: "validation", code: "ACCEPTED_REVISION_REVIEW_REQUIRED" });
+
+        const updatedRoot = await sql<{ aggregate_version: number; first_published_at: Date | string }>`
+          update content.items
+             set lifecycle = 'published',
+                 first_published_at = coalesce(first_published_at, transaction_timestamp()),
+                 aggregate_version = aggregate_version + 1,
+                 updated_at = transaction_timestamp()
+           where content_id = ${input.contentId}::uuid
+             and portfolio_id = ${input.scope.portfolioId}::uuid
+             and aggregate_version = ${input.expectedVersion}
+          returning aggregate_version, first_published_at
+        `.execute(executor);
+        const updated = updatedRoot.rows[0];
+        if (updated === undefined) throw new PostgresInfrastructureError();
+        const pointer = await sql<{ publication_sequence: number }>`
+          select coalesce(max(publication_sequence), 0)::integer + 1 as publication_sequence
+            from content.testimonial_publication_history
+           where content_id = ${input.contentId}::uuid and locale = ${input.locale}
+        `.execute(executor);
+        const sequence = pointer.rows[0]?.publication_sequence;
+        if (sequence === undefined) throw new PostgresInfrastructureError();
+
+        await sql`
+          insert into content.testimonial_publication_history (
+            content_id, portfolio_id, content_type, locale, publication_sequence,
+            revision_id, review_id, published_at
+          ) values (
+            ${input.contentId}::uuid, ${input.scope.portfolioId}::uuid, 'testimonial', ${input.locale}, ${sequence},
+            ${input.revisionId}::uuid, ${input.reviewId}::uuid, transaction_timestamp()
+          )
+        `.execute(executor);
+        await sql`
+          insert into content.testimonial_language_publications (
+            content_id, portfolio_id, content_type, locale, revision_id, review_id,
+            publication_sequence, published_at
+          ) values (
+            ${input.contentId}::uuid, ${input.scope.portfolioId}::uuid, 'testimonial', ${input.locale},
+            ${input.revisionId}::uuid, ${input.reviewId}::uuid, ${sequence}, transaction_timestamp()
+          )
+          on conflict (content_id, locale) do update set
+            revision_id = excluded.revision_id,
+            review_id = excluded.review_id,
+            publication_sequence = excluded.publication_sequence,
+            published_at = excluded.published_at
+        `.execute(executor);
+
+        const association = input.payload.association ?? (input.payload.relatedProjectId === undefined
+          ? { type: "profile" as const }
+          : { type: "project" as const, projectId: input.payload.relatedProjectId });
+        await sql`
+          insert into content.public_testimonial_locales (
+            content_id, portfolio_id, content_type, locale, revision_id, author_name, quote,
+            association_type, project_id, published_at, updated_at
+          ) values (
+            ${input.contentId}::uuid, ${input.scope.portfolioId}::uuid, 'testimonial', ${input.locale},
+            ${input.revisionId}::uuid, ${input.payload.authorName}, ${input.payload.quote},
+            ${association.type}, ${association.type === "project" ? association.projectId : null}::uuid,
+            transaction_timestamp(), transaction_timestamp()
+          )
+          on conflict (content_id, locale) do update set
+            revision_id = excluded.revision_id,
+            author_name = excluded.author_name,
+            quote = excluded.quote,
+            association_type = excluded.association_type,
+            project_id = excluded.project_id,
+            published_at = excluded.published_at,
+            updated_at = transaction_timestamp()
+        `.execute(executor);
+        const published = await sql<{ published_at: Date | string }>`
+          select published_at from content.testimonial_language_publications
+           where content_id = ${input.contentId}::uuid and locale = ${input.locale}
+        `.execute(executor);
+        const publishedAt = published.rows[0]?.published_at;
+        if (publishedAt === undefined) throw new PostgresInfrastructureError();
+        return { ok: true, value: {
+          aggregateVersion: updated.aggregate_version,
+          revisionId: input.revisionId,
+          locale: input.locale,
+          firstPublishedAt: updated.first_published_at instanceof Date ? updated.first_published_at.toISOString() : new Date(updated.first_published_at).toISOString(),
+          publishedAt: publishedAt instanceof Date ? publishedAt.toISOString() : new Date(publishedAt).toISOString(),
+        } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async getPublicTestimonials(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const testimonialPublicationJoin = sql`
+          from content.testimonial_language_publications publication
+          join content.items item
+            on item.content_id = publication.content_id and item.portfolio_id = publication.portfolio_id
+           and item.content_type = 'testimonial' and item.lifecycle = 'published'
+          join content.public_testimonial_locales projection
+            on projection.content_id = publication.content_id and projection.portfolio_id = publication.portfolio_id
+           and projection.locale = publication.locale and projection.revision_id = publication.revision_id
+        `;
+        const result = input.association.type === "profile"
+          ? await sql<{
+              content_id: string; revision_id: string; locale: string; author_name: string; quote: string; project_id: string | null; published_at: Date | string;
+            }>`
+              select item.content_id::text, publication.revision_id::text, publication.locale,
+                     projection.author_name, projection.quote, null::text as project_id, publication.published_at
+                ${testimonialPublicationJoin}
+               where publication.portfolio_id = ${input.scope.portfolioId}::uuid
+                 and publication.locale = ${input.locale}
+                 and projection.association_type = 'profile' and projection.project_id is null
+               order by publication.published_at desc, item.content_id
+            `.execute(executor)
+          : await sql<{
+              content_id: string; revision_id: string; locale: string; author_name: string; quote: string; project_id: string | null; published_at: Date | string;
+            }>`
+              select item.content_id::text, publication.revision_id::text, publication.locale,
+                     projection.author_name, projection.quote, projection.project_id::text, publication.published_at
+                ${testimonialPublicationJoin}
+                join content.public_project_locales project_locale
+                  on project_locale.content_id = projection.project_id and project_locale.portfolio_id = projection.portfolio_id
+                 and project_locale.locale = publication.locale
+                join content.items project
+                  on project.content_id = project_locale.content_id and project.portfolio_id = project_locale.portfolio_id
+                 and project.content_type = 'project' and project.lifecycle = 'published'
+                join content.language_publications project_publication
+                  on project_publication.content_id = project_locale.content_id and project_publication.portfolio_id = project_locale.portfolio_id
+                 and project_publication.locale = project_locale.locale and project_publication.revision_id = project_locale.revision_id
+               where publication.portfolio_id = ${input.scope.portfolioId}::uuid
+                 and publication.locale = ${input.locale}
+                 and projection.association_type = 'project' and projection.project_id = ${input.association.projectId}::uuid
+               order by publication.published_at desc, item.content_id
+            `.execute(executor);
+        const entries = result.rows.map((row) => {
+          if (!isLocale(row.locale)) throw new PostgresInfrastructureError();
+          const publishedAt = row.published_at instanceof Date ? row.published_at.toISOString() : new Date(row.published_at).toISOString();
+          if (!Number.isFinite(Date.parse(publishedAt))) throw new PostgresInfrastructureError();
+          const projectId = row.project_id ?? undefined;
+          if (input.association.type === "project" && typeof projectId !== "string") throw new PostgresInfrastructureError();
+          return {
+            contentId: row.content_id as StableId<string>,
+            revisionId: row.revision_id as StableId<"Revision">,
+            locale: row.locale,
+            authorName: row.author_name,
+            quote: row.quote,
+            association: input.association.type === "profile"
+              ? { type: "profile" as const }
+              : { type: "project" as const, projectId: projectId as StableId<"Project"> },
+            publishedAt,
+          };
+        });
+        return { ok: true, value: entries };
       } catch (error) {
         if (error instanceof PostgresInfrastructureError) throw error;
         throw new PostgresInfrastructureError();

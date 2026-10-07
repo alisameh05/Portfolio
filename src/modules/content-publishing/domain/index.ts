@@ -33,6 +33,7 @@ export type {
   Testimonial,
   RevisionSavedEvent,
   LanguageVersionPublishedEvent,
+  TestimonialLanguageVersionPublishedEvent,
   ContentHiddenEvent,
   ContentArchivedEvent,
   ContentRestoredEvent,

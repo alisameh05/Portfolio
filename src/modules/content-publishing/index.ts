@@ -39,6 +39,7 @@ export type {
   Testimonial,
   RevisionSavedEvent,
   LanguageVersionPublishedEvent,
+  TestimonialLanguageVersionPublishedEvent,
   ContentHiddenEvent,
   ContentArchivedEvent,
   ContentRestoredEvent,
@@ -99,6 +100,10 @@ export {
   type ReviewRevisionReceipt,
   type PublishProjectLanguageInput,
   type PublishProjectLanguageResult,
+  type PublishTestimonialLanguageInput,
+  type PublishTestimonialLanguageResult,
+  type PublicTestimonialView,
+  type PublicTestimonialAssociationQuery,
   type PublicProjectContentView,
   type ProjectDiscoveryProjectionPort,
 } from "./application/index.js";

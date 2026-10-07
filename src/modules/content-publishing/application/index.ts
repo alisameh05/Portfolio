@@ -46,6 +46,10 @@ export {
   type ReviewRevisionReceipt,
   type PublishProjectLanguageInput,
   type PublishProjectLanguageResult,
+  type PublishTestimonialLanguageInput,
+  type PublishTestimonialLanguageResult,
+  type PublicTestimonialView,
+  type PublicTestimonialAssociationQuery,
   type PublicProjectContentView,
   type ProjectDiscoveryProjectionPort,
 } from "./authoring.js";

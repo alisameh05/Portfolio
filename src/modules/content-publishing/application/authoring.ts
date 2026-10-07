@@ -105,6 +105,39 @@ export interface PublishProjectLanguageResult {
   readonly publishedAt: string;
 }
 
+export interface PublishTestimonialLanguageInput {
+  readonly contentId: StableId<string>;
+  readonly scope: ContentAuthoringScope;
+  readonly expectedVersion: number;
+  readonly locale: SupportedLocale;
+  readonly revisionId: StableId<"Revision">;
+  readonly reviewId: StableId<"ContentReview">;
+  readonly snapshotHash: string;
+  readonly payload: Extract<CreateDraftPayload, { contentType: "testimonial" }>;
+}
+
+export interface PublishTestimonialLanguageResult {
+  readonly aggregateVersion: number;
+  readonly revisionId: StableId<"Revision">;
+  readonly locale: SupportedLocale;
+  readonly firstPublishedAt: string;
+  readonly publishedAt: string;
+}
+
+export interface PublicTestimonialView {
+  readonly contentId: StableId<string>;
+  readonly revisionId: StableId<"Revision">;
+  readonly locale: SupportedLocale;
+  readonly authorName: string;
+  readonly quote: string;
+  readonly association: { readonly type: "profile" } | { readonly type: "project"; readonly projectId: StableId<"Project"> };
+  readonly publishedAt: string;
+}
+
+export type PublicTestimonialAssociationQuery =
+  | { readonly type: "profile" }
+  | { readonly type: "project"; readonly projectId: StableId<"Project"> };
+
 export interface PublicProjectContentView {
   readonly contentId: StableId<string>;
   readonly contentType: "project";
@@ -161,6 +194,8 @@ export interface ContentAuthoringRepository {
   appendRevision(input: AppendContentRevisionInput, context: TransactionContext): Promise<Result<{ readonly record: ContentAuthoringRecord; readonly revision: ContentAuthoringRevision }, Rejection>>;
   appendReview(input: AppendContentReviewInput, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
   publishProjectLanguage(input: PublishProjectLanguageInput, context: TransactionContext): Promise<Result<PublishProjectLanguageResult, Rejection>>;
+  publishTestimonialLanguage(input: PublishTestimonialLanguageInput, context: TransactionContext): Promise<Result<PublishTestimonialLanguageResult, Rejection>>;
+  getPublicTestimonials(input: { readonly scope: ContentAuthoringScope; readonly locale: SupportedLocale; readonly association: PublicTestimonialAssociationQuery }, context: TransactionContext): Promise<Result<readonly PublicTestimonialView[], Rejection>>;
   getPublicProjectBySlug(input: { readonly slug: string; readonly locale: SupportedLocale; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<PublicProjectContentView, Rejection>>;
   listHistory(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly locale?: SupportedLocale; readonly after?: { readonly locale: SupportedLocale; readonly sequence: number }; readonly limit: number }, context: TransactionContext): Promise<Result<{ readonly entries: readonly ContentHistoryEntry[]; readonly hasMore: boolean }, Rejection>>;
 }
@@ -245,6 +280,7 @@ export interface ContentAuthoringService {
   reviewRevision(command: ReviewRevisionCommand): Promise<Result<ReviewRevisionReceipt, Rejection>>;
   publishLanguageVersion(command: PublishLanguageVersionCommand): Promise<Result<ContentAuthoringPublicationReceipt, Rejection>>;
   getPublicProject(query: { readonly slug: string; readonly locale: SupportedLocale }): Promise<Result<PublicProjectContentView, Rejection>>;
+  getPublicTestimonials(query: { readonly locale: SupportedLocale; readonly association: PublicTestimonialAssociationQuery }): Promise<Result<readonly PublicTestimonialView[], Rejection>>;
   getContentHistory(query: { readonly actor: ActorContext; readonly contentId: StableId<string>; readonly locale?: SupportedLocale; readonly limit: number; readonly cursor?: string }): Promise<Result<ContentHistoryPage, Rejection>>;
 }
 
@@ -254,8 +290,8 @@ export interface ContentAuthoringPublicationReceipt {
   readonly outcome: "language-published";
   readonly revisionId: StableId<"Revision">;
   readonly locale: SupportedLocale;
-  readonly currentSlug: string;
-  readonly routeIdentity: StableId<"PublicRoute">;
+  readonly currentSlug?: string;
+  readonly routeIdentity?: StableId<"PublicRoute">;
   readonly firstPublishedAt: string;
   readonly publishedAt: string;
 }
@@ -519,6 +555,16 @@ function publishableProjectPayload(payload: CreateDraftPayload): payload is Extr
       return artifact !== undefined && (artifact.destinationUrl !== undefined || artifact.mediaAssetId !== undefined) &&
         !PLACEHOLDER_TEXT.test(artifact.title);
     }));
+}
+
+function publishableTestimonialPayload(payload: CreateDraftPayload): payload is Extract<CreateDraftPayload, { contentType: "testimonial" }> {
+  if (payload.contentType !== "testimonial" || !payloadIsValid(payload) ||
+      !isCleanText(payload.authorName, 200) || !isCleanText(payload.quote, 10_000)) return false;
+  const association = payload.association ?? (payload.relatedProjectId === undefined
+    ? undefined
+    : { type: "project" as const, projectId: payload.relatedProjectId });
+  return association !== undefined && (association.type === "profile" ||
+    association.type === "project" && parseStableId("Project", association.projectId).ok);
 }
 
 export function createContentAuthoringService(input: {
@@ -870,8 +916,6 @@ export function createContentAuthoringService(input: {
           (command.locale !== "en" && command.locale !== "ar") || !parseStableId("Revision", command.revisionId).ok) {
         return err({ kind: "validation", code: "INVALID_CONTENT_PUBLICATION" });
       }
-      const routeIdentity = parseStableId("PublicRoute", ids.generate("PublicRoute"));
-      if (!routeIdentity.ok) throw new Error("Stable ID generator returned an invalid public route identity.");
       const publishedAt = clock.now();
       const effect = async (context: TransactionContext): Promise<SafeResultEnvelope> => {
         const existing = await input.repository.get(command.contentId, input.scope, context);
@@ -879,13 +923,61 @@ export function createContentAuthoringService(input: {
         if (existing.value.aggregateVersion !== command.expectedVersion) {
           return rejectionOutcome({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: existing.value.aggregateVersion });
         }
-        if (existing.value.contentType !== "project") return rejectionOutcome({ kind: "validation", code: "CONTENT_TYPE_NOT_PUBLISHABLE" });
         if (existing.value.lifecycle !== "draft" && existing.value.lifecycle !== "published") {
           return rejectionOutcome({ kind: "validation", code: "CONTENT_LIFECYCLE_NOT_PUBLISHABLE" });
         }
         const revision = existing.value.revisions.find((entry) => entry.revisionId === command.revisionId);
         if (revision === undefined) return rejectionOutcome({ kind: "not_found", code: "REVISION_NOT_FOUND" });
         if (revision.locale !== command.locale) return rejectionOutcome({ kind: "validation", code: "REVISION_LOCALE_MISMATCH" });
+        if (existing.value.contentType === "testimonial") {
+          if (!publishableTestimonialPayload(revision.payload)) {
+            return rejectionOutcome({ kind: "validation", code: "TESTIMONIAL_PUBLICATION_REQUIREMENTS_NOT_MET" });
+          }
+          const snapshotHash = await revisionSnapshotHash(revision);
+          const review = revision.latestReview;
+          if (review === undefined || review.decision !== "accepted" || review.revisionId !== revision.revisionId ||
+              review.contentId !== revision.contentId || review.contentType !== "testimonial" || review.locale !== command.locale ||
+              review.reviewerId !== input.scope.ownerId || review.snapshotHash !== snapshotHash ||
+              review.evidenceVersion !== revision.evidenceSnapshotVersion) {
+            return rejectionOutcome({ kind: "validation", code: "ACCEPTED_REVISION_REVIEW_REQUIRED" });
+          }
+          const published = await input.repository.publishTestimonialLanguage({
+            contentId: command.contentId,
+            scope: input.scope,
+            expectedVersion: command.expectedVersion,
+            locale: command.locale,
+            revisionId: revision.revisionId,
+            reviewId: review.reviewId,
+            snapshotHash,
+            payload: revision.payload,
+          }, context);
+          if (!published.ok) return rejectionOutcome(published.error);
+          const ownerHash = await actorScope;
+          await input.operations.outbox.append(context, {
+            eventId: ids.generate("DomainEvent"),
+            payload: { type: "content.testimonial_language_version_published.v1", version: 1, value: {
+              contentId: command.contentId,
+              locale: command.locale,
+              revisionId: revision.revisionId,
+              ownerScope: ownerHash,
+            } },
+            aggregateId: command.contentId,
+            aggregateVersion: published.value.aggregateVersion,
+            correlationId: command.correlationId,
+            occurredAt: published.value.publishedAt,
+            availableAt: published.value.publishedAt,
+          });
+          return { status: "completed", receipt: {
+            aggregateId: command.contentId,
+            aggregateVersion: published.value.aggregateVersion,
+            outcome: "language-published",
+            revisionId: published.value.revisionId,
+            locale: published.value.locale,
+            firstPublishedAt: published.value.firstPublishedAt,
+            publishedAt: published.value.publishedAt,
+          } };
+        }
+        if (existing.value.contentType !== "project") return rejectionOutcome({ kind: "validation", code: "CONTENT_TYPE_NOT_PUBLISHABLE" });
         if (!publishableProjectPayload(revision.payload)) return rejectionOutcome({ kind: "validation", code: "PROJECT_PUBLICATION_REQUIREMENTS_NOT_MET" });
         const snapshotHash = await revisionSnapshotHash(revision);
         const review = revision.latestReview;
@@ -916,6 +1008,8 @@ export function createContentAuthoringService(input: {
               })) return rejectionOutcome({ kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" });
           mediaFactsVersion = facts.value.consistencyVersion;
         }
+        const routeIdentity = parseStableId("PublicRoute", ids.generate("PublicRoute"));
+        if (!routeIdentity.ok) throw new Error("Stable ID generator returned an invalid public route identity.");
         const published = await input.repository.publishProjectLanguage({
           contentId: command.contentId,
           scope: input.scope,
@@ -988,6 +1082,18 @@ export function createContentAuthoringService(input: {
         slug: query.slug,
         locale: query.locale,
         scope: input.scope,
+      }, context));
+    },
+
+    async getPublicTestimonials(query) {
+      if ((query.locale !== "en" && query.locale !== "ar") ||
+          (query.association.type === "project" && !parseStableId("Project", query.association.projectId).ok)) {
+        return err({ kind: "validation", code: "INVALID_PUBLIC_TESTIMONIAL_QUERY" });
+      }
+      return await input.operations.transactions.run((context) => input.repository.getPublicTestimonials({
+        scope: input.scope,
+        locale: query.locale,
+        association: query.association,
       }, context));
     },
 
