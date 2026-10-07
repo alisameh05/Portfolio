@@ -620,7 +620,8 @@ export function createContentAuthoringService(input: {
         if (revision === undefined) return err({ kind: "not_found", code: "REVISION_NOT_FOUND" });
         const snapshotHash = await revisionSnapshotHash(revision);
         const latest = revision.latestReview;
-        if (latest !== undefined && latest.snapshotHash !== snapshotHash) {
+        if (latest !== undefined &&
+            (latest.snapshotHash !== snapshotHash || latest.evidenceVersion !== revision.evidenceSnapshotVersion)) {
           return err({ kind: "temporarily_unavailable", code: "CONTENT_REVIEW_INTEGRITY_FAILED" });
         }
         return {

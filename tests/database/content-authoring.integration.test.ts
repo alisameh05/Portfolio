@@ -319,11 +319,32 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       decision: "rejected", findings: ["Needs more evidence."],
     });
     expect(secondReview).toMatchObject({ ok: true, value: { aggregateVersion: 3 } });
+    const staleReview = await content.reviewRevision({
+      ...command, expectedVersion: 2, idempotencyKey: key("review-integration-stale"), correlationId: "review-integration-stale",
+      decision: "accepted", findings: ["Stale decision."],
+    });
+    expect(staleReview).toMatchObject({ ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: 3 } });
+    const foreignOwnerId = createStableId("Owner");
+    expect(await content.previewRevision({ actor: actor(foreignOwnerId), contentId: created.value.contentId, revisionId: created.value.revisionId }))
+      .toMatchObject({ ok: false, error: { kind: "forbidden", code: "OWNER_REQUIRED" } });
+    expect(await content.reviewRevision({
+      ...command, actor: actor(foreignOwnerId), idempotencyKey: key("review-integration-foreign"), correlationId: "review-integration-foreign",
+    })).toMatchObject({ ok: false, error: { kind: "forbidden", code: "OWNER_REQUIRED" } });
     const reviewHistory = await admin.query(
       "select review_sequence, decision from content.revision_reviews where revision_id = $1::uuid order by review_sequence",
       [created.value.revisionId],
     );
     expect(reviewHistory.rows).toEqual([{ review_sequence: 1, decision: "accepted" }, { review_sequence: 2, decision: "rejected" }]);
+    await database.database.transaction().execute(async (transaction) => {
+      await sql`
+        select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
+               set_config('shipwithali.owner_id', ${foreignOwnerId}, true)
+      `.execute(transaction);
+      const hidden = await sql<{ review_id: string }>`
+        select review_id::text from content.revision_reviews where review_id = ${reviewed.value.reviewId}::uuid
+      `.execute(transaction);
+      expect(hidden.rows).toHaveLength(0);
+    });
     const visible = await content.previewRevision({ actor: owner, contentId: created.value.contentId, revisionId: created.value.revisionId });
     expect(visible).toMatchObject({ ok: true, value: { review: { decision: "rejected", findings: ["Needs more evidence."], snapshotHash: preview.value.snapshotHash } } });
     const outbox = await admin.query(

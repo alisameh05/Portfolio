@@ -135,6 +135,19 @@ async function setTrustedScope(context: TransactionContext, scope: ContentAuthor
   `.execute(executor);
 }
 
+function latestReviewForRevision() {
+  return sql`
+    select review_id, review_sequence, snapshot_hash, evidence_version, reviewer_id,
+           decision, findings, reviewed_at
+      from content.revision_reviews review
+     where review.revision_id = revision.revision_id
+       and review.content_id = revision.content_id
+       and review.portfolio_id = revision.portfolio_id
+     order by review.review_sequence desc
+     limit 1
+  `;
+}
+
 export function createPostgresContentAuthoringRepository(): ContentAuthoringRepository {
   async function getRecord(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>> {
     const executor = resolvePostgresTransaction(context);
@@ -166,16 +179,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         join content.items item
           on item.content_id = revision.content_id
          and item.portfolio_id = revision.portfolio_id
-        left join lateral (
-          select review_id, review_sequence, snapshot_hash, evidence_version, reviewer_id,
-                 decision, findings, reviewed_at
-            from content.revision_reviews review
-           where review.revision_id = revision.revision_id
-             and review.content_id = revision.content_id
-             and review.portfolio_id = revision.portfolio_id
-           order by review.review_sequence desc
-           limit 1
-        ) latest on true
+        left join lateral (${latestReviewForRevision()}) latest on true
        where revision.content_id = ${contentId}::uuid
          and revision.portfolio_id = ${scope.portfolioId}::uuid
        order by revision.locale, revision.stream_sequence
@@ -392,14 +396,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
           select revision.revision_id::text, revision.locale, revision.stream_sequence, revision.saved_at,
                  latest.decision as review_decision
             from content.revisions revision
-            left join lateral (
-              select decision from content.revision_reviews review
-               where review.revision_id = revision.revision_id
-                 and review.content_id = revision.content_id
-                 and review.portfolio_id = revision.portfolio_id
-               order by review.review_sequence desc
-               limit 1
-            ) latest on true
+            left join lateral (${latestReviewForRevision()}) latest on true
            where revision.content_id = ${input.contentId}::uuid
              and revision.portfolio_id = ${input.scope.portfolioId}::uuid
              and (${input.locale ?? null}::text is null or revision.locale = ${input.locale ?? null})

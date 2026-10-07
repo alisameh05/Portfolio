@@ -175,6 +175,17 @@ describe("Content authoring application service", () => {
     expect(events.filter((event) => (event as { payload?: { type?: string } }).payload?.type === "content.revision_reviewed.v1")).toHaveLength(1);
     const inspected = await service.previewRevision({ actor: ACTOR, contentId: created.value.contentId, revisionId: initial.revisionId });
     expect(inspected).toMatchObject({ ok: true, value: { review: { reviewId: reviewed.value.reviewId, decision: "accepted", findings: ["Evidence checked privately."] } } });
+    const reviewedRecord = records.get(created.value.contentId);
+    if (reviewedRecord === undefined) throw new Error("expected reviewed content");
+    records.set(created.value.contentId, {
+      ...reviewedRecord,
+      revisions: reviewedRecord.revisions.map((revision) => revision.revisionId === initial.revisionId
+        ? { ...revision, latestReview: { ...revision.latestReview!, evidenceVersion: revision.evidenceSnapshotVersion + 1 } }
+        : revision),
+    });
+    expect(await service.previewRevision({ actor: ACTOR, contentId: created.value.contentId, revisionId: initial.revisionId }))
+      .toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "CONTENT_REVIEW_INTEGRITY_FAILED" } });
+    records.set(created.value.contentId, reviewedRecord);
 
     const saved = await service.saveRevision({
       actor: ACTOR, contentId: created.value.contentId, expectedVersion: 2,
