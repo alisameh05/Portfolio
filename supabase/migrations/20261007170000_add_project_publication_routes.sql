@@ -6,6 +6,7 @@ set lock_timeout = '5s';
 
 grant shipwithali_migration to current_user;
 set role shipwithali_migration;
+grant usage on schema taxonomy to shipwithali_application;
 
 create table content.public_routes (
   route_identity uuid primary key
@@ -107,6 +108,27 @@ create table content.public_project_locales (
     references content.public_routes (route_identity, content_id, portfolio_id)
 );
 
+create table taxonomy.project_discovery_locales (
+  content_id uuid not null,
+  portfolio_id uuid not null,
+  locale text not null check (locale in ('en', 'ar')),
+  revision_id uuid not null,
+  route_identity uuid not null,
+  title text not null,
+  slug text not null check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(slug) <= 120),
+  first_published_at timestamptz not null,
+  published_at timestamptz not null,
+  primary key (content_id, locale),
+  foreign key (content_id, portfolio_id)
+    references content.items (content_id, portfolio_id) on delete cascade,
+  foreign key (revision_id, content_id, portfolio_id, locale)
+    references content.revisions (revision_id, content_id, portfolio_id, locale),
+  foreign key (route_identity, content_id, portfolio_id)
+    references content.public_routes (route_identity, content_id, portfolio_id),
+  foreign key (content_id, locale)
+    references content.language_publications (content_id, locale) on delete cascade
+);
+
 create function content.reject_publication_history_mutation() returns trigger
 language plpgsql
 set search_path = pg_catalog
@@ -130,6 +152,8 @@ alter table content.publication_history enable row level security;
 alter table content.publication_history force row level security;
 alter table content.public_project_locales enable row level security;
 alter table content.public_project_locales force row level security;
+alter table taxonomy.project_discovery_locales enable row level security;
+alter table taxonomy.project_discovery_locales force row level security;
 
 grant select, insert, update (current_slug) on content.public_routes to shipwithali_application;
 grant select, insert on content.public_route_reservations to shipwithali_application;
@@ -138,6 +162,8 @@ grant select, insert, update (revision_id, review_id, route_identity, publicatio
 grant select, insert on content.publication_history to shipwithali_application;
 grant select, insert, update (revision_id, route_identity, title, summary, body, case_study, claims, external_links, first_published_at, published_at, updated_at)
   on content.public_project_locales to shipwithali_application;
+grant select, insert, update (revision_id, route_identity, title, slug, first_published_at, published_at)
+  on taxonomy.project_discovery_locales to shipwithali_application;
 grant update (lifecycle, first_published_at, aggregate_version, updated_at) on content.items to shipwithali_application;
 
 create policy public_routes_application_scope on content.public_routes
@@ -198,10 +224,35 @@ create policy public_project_locales_application_scope on content.public_project
     and exists (select 1 from portfolio_config.settings settings
       where settings.portfolio_id = public_project_locales.portfolio_id
         and settings.owner_id::text = current_setting('shipwithali.owner_id', true)));
+create policy project_discovery_locales_application_scope on taxonomy.project_discovery_locales
+  for all to shipwithali_application
+  using (portfolio_id::text = current_setting('shipwithali.portfolio_id', true)
+    and exists (select 1 from content.items item
+      where item.content_id = project_discovery_locales.content_id
+        and item.portfolio_id = project_discovery_locales.portfolio_id
+        and item.content_type = 'project' and item.lifecycle = 'published')
+    and exists (select 1 from portfolio_config.settings settings
+      where settings.portfolio_id = project_discovery_locales.portfolio_id
+        and settings.owner_id::text = current_setting('shipwithali.owner_id', true)))
+  with check (portfolio_id::text = current_setting('shipwithali.portfolio_id', true)
+    and exists (select 1 from content.items item
+      where item.content_id = project_discovery_locales.content_id
+        and item.portfolio_id = project_discovery_locales.portfolio_id
+        and item.content_type = 'project' and item.lifecycle = 'published')
+    and exists (select 1 from content.language_publications publication
+      where publication.content_id = project_discovery_locales.content_id
+        and publication.portfolio_id = project_discovery_locales.portfolio_id
+        and publication.locale = project_discovery_locales.locale
+        and publication.revision_id = project_discovery_locales.revision_id
+        and publication.route_identity = project_discovery_locales.route_identity)
+    and exists (select 1 from portfolio_config.settings settings
+      where settings.portfolio_id = project_discovery_locales.portfolio_id
+        and settings.owner_id::text = current_setting('shipwithali.owner_id', true)));
 
 revoke all on content.public_routes, content.public_route_reservations,
   content.language_publications, content.publication_history, content.public_project_locales
   from public, anon, authenticated, shipwithali_worker, shipwithali_backup;
+revoke all on taxonomy.project_discovery_locales from public, anon, authenticated, shipwithali_worker, shipwithali_backup;
 revoke all on function content.reject_publication_history_mutation() from public, anon, authenticated,
   shipwithali_application, shipwithali_worker, shipwithali_backup;
 

@@ -47,4 +47,5 @@ export {
   type PublishProjectLanguageInput,
   type PublishProjectLanguageResult,
   type PublicProjectContentView,
+  type ProjectDiscoveryProjectionPort,
 } from "./authoring.js";

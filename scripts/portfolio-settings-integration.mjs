@@ -434,6 +434,7 @@ export async function main() {
       " real PostgreSQL integration: " + report.numPassedTests + " passed, 0 skipped.");
 
     const evidence = contentAuthoringTicket ? {
+      sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
       ticket: ticket111 ? 111 : ticket110 ? 110 : 109,
       parent: 106,
       scope: ticket111
@@ -453,7 +454,7 @@ export async function main() {
         jobs: preservedRows.jobs.length === 1,
       },
       authoringTablesWithForcedRls: ["content.items", "content.revisions", ...(ticket110 || ticket111 ? ["content.revision_reviews"] : []),
-        ...(ticket111 ? ["content.public_routes", "content.public_route_reservations", "content.language_publications", "content.publication_history", "content.public_project_locales"] : [])],
+        ...(ticket111 ? ["content.public_routes", "content.public_route_reservations", "content.language_publications", "content.publication_history", "content.public_project_locales", "taxonomy.project_discovery_locales"] : [])],
       databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
         status: test.status,

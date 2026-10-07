@@ -168,6 +168,7 @@ function createHarness() {
     repository,
     operations,
     scope: { ownerId: OWNER_ID, portfolioId: PORTFOLIO_ID },
+    discoveryProjection: { async writePublishedProjectLocale() {} },
     clock: { now: () => "2026-10-05T08:00:00.000Z" },
     ids: { generate: () => uuid(id++) },
   });

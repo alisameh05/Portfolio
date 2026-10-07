@@ -38,3 +38,4 @@ export type {
 } from "./application/index.js";
 
 export type { TaxonomyRepositoryPort } from "./ports/index.js";
+export { createPostgresProjectDiscoveryProjectionWriter } from "./adapters/index.js";

@@ -100,6 +100,7 @@ export {
   type PublishProjectLanguageInput,
   type PublishProjectLanguageResult,
   type PublicProjectContentView,
+  type ProjectDiscoveryProjectionPort,
 } from "./application/index.js";
 
 export type { ContentRepositoryPort } from "./ports/index.js";

@@ -11,6 +11,25 @@ export interface ContentAuthoringScope {
   readonly ownerId: StableId<"Owner">;
 }
 
+/** Narrow cross-module seam for the Discovery card write in the publish transaction. */
+export interface ProjectDiscoveryProjectionPort {
+  writePublishedProjectLocale(
+    input: {
+      readonly contentId: StableId<"Project">;
+      readonly portfolioId: StableId<"Portfolio">;
+      readonly ownerId: StableId<"Owner">;
+      readonly locale: SupportedLocale;
+      readonly revisionId: StableId<"Revision">;
+      readonly routeIdentity: StableId<"PublicRoute">;
+      readonly title: string;
+      readonly slug: string;
+      readonly firstPublishedAt: string;
+      readonly publishedAt: string;
+    },
+    transaction: TransactionContext,
+  ): Promise<void>;
+}
+
 export interface ContentAuthoringRevision {
   readonly revisionId: StableId<"Revision">;
   readonly contentId: StableId<string>;
@@ -506,6 +525,7 @@ export function createContentAuthoringService(input: {
   readonly repository: ContentAuthoringRepository;
   readonly operations: OperationsPersistencePorts;
   readonly scope: ContentAuthoringScope;
+  readonly discoveryProjection: ProjectDiscoveryProjectionPort;
   readonly clock?: Clock;
   readonly ids?: StableIdGenerator;
   /** Test seam for authoritative Media facts; production intentionally has no Media acceptance adapter yet. */
@@ -910,6 +930,18 @@ export function createContentAuthoringService(input: {
           mediaFactsVersion,
         }, context);
         if (!published.ok) return rejectionOutcome(published.error);
+        await input.discoveryProjection.writePublishedProjectLocale({
+          contentId: command.contentId as StableId<"Project">,
+          portfolioId: input.scope.portfolioId,
+          ownerId: input.scope.ownerId,
+          locale: command.locale,
+          revisionId: published.value.revisionId,
+          routeIdentity: published.value.routeIdentity,
+          title: revision.title,
+          slug: published.value.currentSlug,
+          firstPublishedAt: published.value.firstPublishedAt,
+          publishedAt: published.value.publishedAt,
+        }, context);
         const ownerHash = await actorScope;
         await input.operations.outbox.append(context, {
           eventId: ids.generate("DomainEvent"),

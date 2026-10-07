@@ -3,6 +3,7 @@ import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createContentAuthoringService } from "../../src/modules/content-publishing/application/authoring.js";
 import { createPostgresContentAuthoringRepository } from "../../src/modules/content-publishing/adapters/postgres-authoring.js";
+import { createPostgresProjectDiscoveryProjectionWriter } from "../../src/modules/taxonomy-discovery/adapters/index.js";
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
@@ -75,7 +76,8 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     clock?: { now(): string },
     mediaAcceptance?: import("../../src/modules/content-publishing/application/service.js").MediaAcceptancePort,
   ) {
-    return createContentAuthoringService({ repository, operations: selectedOperations, scope, ...(clock === undefined ? {} : { clock }),
+    return createContentAuthoringService({ repository, operations: selectedOperations, scope,
+      discoveryProjection: createPostgresProjectDiscoveryProjectionWriter(), ...(clock === undefined ? {} : { clock }),
       ...(mediaAcceptance === undefined ? {} : { mediaAcceptance }) });
   }
   const key = (value: string) => value as IdempotencyKey;
@@ -433,7 +435,8 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       ...operations,
       outbox: { ...operations.outbox, async append() { throw new Error("simulated review event failure"); } },
     };
-    const failingReview = createContentAuthoringService({ repository, operations: failingOperations, scope });
+    const failingReview = createContentAuthoringService({ repository, operations: failingOperations, scope,
+      discoveryProjection: createPostgresProjectDiscoveryProjectionWriter() });
     await expect(failingReview.reviewRevision({
       actor: actor(scope.ownerId), contentId: created.value.contentId, revisionId: created.value.revisionId,
       expectedVersion: 1, idempotencyKey: key("review-rollback-key"), correlationId: "review-rollback-key",
@@ -536,6 +539,15 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(await content.publishLanguageVersion(firstCommand)).toEqual(first);
     const history = await admin.query("select locale, count(*)::int as publications from content.publication_history where content_id = $1::uuid group by locale order by locale", [english.contentId]);
     expect(history.rows).toEqual([{ locale: "ar", publications: 1 }, { locale: "en", publications: 2 }]);
+    const discovery = await admin.query(
+      "select locale, title, slug, first_published_at = $2::timestamptz as shared_first_publish_time " +
+      "from taxonomy.project_discovery_locales where content_id = $1::uuid order by locale",
+      [english.contentId, first.value.firstPublishedAt],
+    );
+    expect(discovery.rows).toEqual([
+      { locale: "ar", title: "مشروع البحث", slug: "english-first-project", shared_first_publish_time: true },
+      { locale: "en", title: "English replacement", slug: "english-first-project", shared_first_publish_time: true },
+    ]);
   }, 30_000);
 
   it("reserves a first Project route atomically when two content items race for the same slug", async () => {
@@ -552,10 +564,27 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     const routeCounts = await admin.query(
       "select (select count(*)::int from content.public_routes where current_slug = 'shared-project-route') routes, " +
       "(select count(*)::int from content.public_route_reservations where normalized_slug = 'shared-project-route') reservations, " +
-      "(select count(*)::int from content.public_project_locales where content_id in ($1::uuid, $2::uuid)) projections",
+      "(select count(*)::int from content.public_project_locales where content_id in ($1::uuid, $2::uuid)) projections, " +
+      "(select count(*)::int from taxonomy.project_discovery_locales where content_id in ($1::uuid, $2::uuid)) discovery",
       [left.contentId, right.contentId],
     );
-    expect(routeCounts.rows[0]).toEqual({ routes: 1, reservations: 1, projections: 1 });
+    expect(routeCounts.rows[0]).toEqual({ routes: 1, reservations: 1, projections: 1, discovery: 1 });
+    const loser = results[0]?.ok ? right : left;
+    const loserKey = results[0]?.ok ? "publication-route-race-right" : "publication-route-race-left";
+    const loserKeyHash = createHash("sha256").update(loserKey).digest("hex");
+    const loserState = await admin.query(
+      "select (select count(*)::int from content.public_routes where content_id = $1::uuid) routes, " +
+      "(select count(*)::int from content.public_route_reservations where content_id = $1::uuid) reservations, " +
+      "(select count(*)::int from content.public_project_locales where content_id = $1::uuid) content_projection, " +
+      "(select count(*)::int from taxonomy.project_discovery_locales where content_id = $1::uuid) discovery_projection, " +
+      "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.language_version_published.v1') events, " +
+      "(select result_envelope from operations.idempotency_records where key_hash = $2) outcome",
+      [loser.contentId, loserKeyHash],
+    );
+    expect(loserState.rows[0]).toEqual({
+      routes: 0, reservations: 0, content_projection: 0, discovery_projection: 0, events: 0,
+      outcome: { status: "rejected", kind: "conflict", code: "PUBLIC_SLUG_CONFLICT" },
+    });
   }, 30_000);
 
   it("serializes simultaneous locale publication on one aggregate and allows the other locale to publish next", async () => {
@@ -615,12 +644,13 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
         end if;
         return new;
       end $$`);
-      for (const table of ["language_publications", "public_project_locales", "idempotency_records", "outbox_events"]) {
-        const qualified = table === "idempotency_records" || table === "outbox_events" ? `operations.${table}` : `content.${table}`;
+      for (const table of ["language_publications", "public_project_locales", "project_discovery_locales", "idempotency_records", "outbox_events"]) {
+        const qualified = table === "idempotency_records" || table === "outbox_events" ? `operations.${table}`
+          : table === "project_discovery_locales" ? `taxonomy.${table}` : `content.${table}`;
         const event = table === "idempotency_records" ? "before update" : "before insert or update";
         await admin.query(`create trigger fail_publication_write_${table} ${event} on ${qualified} for each row execute function ${schema}.fail_write()`);
       }
-      for (const [index, table] of ["language_publications", "public_project_locales", "outbox_events", "idempotency_records"].entries()) {
+      for (const [index, table] of ["language_publications", "public_project_locales", "project_discovery_locales", "outbox_events", "idempotency_records"].entries()) {
         const keyValue = `publication-rollback-${table}`;
         await admin.query(`insert into ${schema}.targets (table_name) values ($1)`, [table]);
         await expect(service(scope).publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
@@ -634,11 +664,12 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
           "(select count(*)::int from content.language_publications where content_id = $1::uuid) pointers, " +
           "(select count(*)::int from content.publication_history where content_id = $1::uuid) history, " +
           "(select count(*)::int from content.public_project_locales where content_id = $1::uuid) projections, " +
+          "(select count(*)::int from taxonomy.project_discovery_locales where content_id = $1::uuid) discovery, " +
           "(select count(*)::int from operations.idempotency_records where key_hash = $2) receipts, " +
           "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.language_version_published.v1') events",
           [project.contentId, keyHash],
         );
-        expect(state.rows[0], `failure injection ${index}: ${table}`).toEqual({ lifecycle: "draft", routes: 0, pointers: 0, history: 0, projections: 0, receipts: 0, events: 0 });
+        expect(state.rows[0], `failure injection ${index}: ${table}`).toEqual({ lifecycle: "draft", routes: 0, pointers: 0, history: 0, projections: 0, discovery: 0, receipts: 0, events: 0 });
       }
     } finally {
       await admin.query(`drop schema if exists ${schema} cascade`);
@@ -673,7 +704,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       outbox: { ...operations.outbox, async append() { throw new Error("simulated outbox failure"); } },
     };
     const content = createContentAuthoringService({
-      repository, operations: failingOperations, scope,
+      repository, operations: failingOperations, scope, discoveryProjection: createPostgresProjectDiscoveryProjectionWriter(),
       ids: { generate(kind) { const id = ids.generate(kind); if (kind === "Content") generated.push(id); return id; } },
     });
     await expect(content.createContent({
@@ -722,11 +753,12 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "has_table_privilege('shipwithali_worker', 'content.revisions', 'select') worker_revision, " +
       "has_table_privilege('shipwithali_backup', 'content.items', 'select') backup_root, " +
       "has_table_privilege('anon', 'content.public_project_locales', 'select') anon_projection, " +
+      "has_table_privilege('anon', 'taxonomy.project_discovery_locales', 'select') anon_discovery_projection, " +
       "has_table_privilege('authenticated', 'content.public_routes', 'select') authenticated_routes, " +
       "has_table_privilege('shipwithali_worker', 'content.language_publications', 'select') worker_publication",
     );
     expect(grants.rows[0]).toEqual({ anon_root: false, anon_revision: false, authenticated_root: false, worker_revision: false,
-      backup_root: false, anon_projection: false, authenticated_routes: false, worker_publication: false });
+      backup_root: false, anon_projection: false, anon_discovery_projection: false, authenticated_routes: false, worker_publication: false });
     const unscoped = await database.transactions.run((context) => sql.raw(
       "select (select count(*)::integer from content.items) roots, (select count(*)::integer from content.revisions) revisions",
     ).execute(resolvePostgresTransaction(context)));
