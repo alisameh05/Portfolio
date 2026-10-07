@@ -1,5 +1,5 @@
 {
-  "sourceRevision": "a1c6c5dd57beec53d1982119f60ee411e16cc0fd",
+  "sourceRevision": "4eca01b9db2425f147d7c731f3b16c1e8694e23b",
   "ticket": 111,
   "parent": 106,
   "scope": "reviewed-project-publication-routes-safe-projections-and-atomic-replay",
@@ -47,7 +47,7 @@
     },
     {
       "file": "20261007170000_add_project_publication_routes.sql",
-      "sha256": "f8350ab8c96e51d79319fe7c5d31f4cb8bd7ef623535c8e852b3b913b5d38e03"
+      "sha256": "a1fccbc91c732890ff8e0d0e5f754385abc927a70008e2017e6bf0b4a462c896"
     }
   ],
   "migrationLedger": [
@@ -149,6 +149,14 @@
       "status": "passed"
     },
     {
+      "name": "Content authoring production PostgreSQL invariants > rejects invalid evidence, review, and Media facts without creating public state",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > preserves the last valid locale and both projections when a replacement is rejected",
+      "status": "passed"
+    },
+    {
       "name": "Content authoring production PostgreSQL invariants > reserves a first Project route atomically when two content items race for the same slug",
       "status": "passed"
     },
@@ -173,7 +181,7 @@
       "status": "passed"
     }
   ],
-  "databaseIntegrationTestsPassed": 14,
+  "databaseIntegrationTestsPassed": 16,
   "skippedCases": 0,
   "isolatedLoopbackProjects": true,
   "credentialsRecorded": false,
