@@ -558,7 +558,7 @@
                 "required": true,
                 "schema": {
                   "type": "string",
-                  "const": "no-store"
+                  "const": "private, no-store"
                 }
               },
               "X-Robots-Tag": {
@@ -635,6 +635,9 @@
               "examples": {
                 "accepted": {
                   "value": {
+                    "locale": "en",
+                    "snapshotHash": "0000000000000000000000000000000000000000000000000000000000000000",
+                    "evidenceVersion": 1,
                     "decision": "accepted",
                     "findings": []
                   }
@@ -4435,11 +4438,17 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "reviewId",
           "decision",
           "findings",
-          "reviewedAt"
+          "reviewedAt",
+          "snapshotHash",
+          "evidenceVersion"
         ],
         "properties": {
+          "reviewId": {
+            "$ref": "#/components/schemas/StableId"
+          },
           "decision": {
             "type": "string",
             "enum": [
@@ -4458,6 +4467,14 @@
           "reviewedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "snapshotHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "evidenceVersion": {
+            "type": "integer",
+            "minimum": 1
           }
         }
       },
@@ -4472,6 +4489,8 @@
           "title",
           "summary",
           "body",
+          "snapshotHash",
+          "evidenceVersion",
           "review"
         ],
         "properties": {
@@ -4503,6 +4522,14 @@
             "minLength": 1,
             "maxLength": 50000
           },
+          "snapshotHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "evidenceVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
           "review": {
             "oneOf": [
               {
@@ -4519,10 +4546,24 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "locale",
+          "snapshotHash",
+          "evidenceVersion",
           "decision",
           "findings"
         ],
         "properties": {
+          "locale": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "snapshotHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "evidenceVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
           "decision": {
             "type": "string",
             "enum": [

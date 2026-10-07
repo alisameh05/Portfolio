@@ -29,7 +29,15 @@ function run(command, args, options = {}) {
     env: options.env ?? localEnvironment(),
   });
   if (result.error || result.status !== 0) {
-    throw new Error(options.errorCode ?? "PORTFOLIO_SETTINGS_COMMAND_FAILED");
+    const diagnostic = `${result.stderr ?? ""}\n${result.stdout ?? ""}`
+      .replace(/postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@/gi, "postgres://[redacted]@")
+      .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted jwt]")
+      .replace(/(\b(?:ANON_KEY|SERVICE_ROLE_KEY|JWT_SECRET|SUPABASE_ACCESS_TOKEN)\b\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
+      .replace(/((?:anon|service_role)\s+key|jwt\s+secret|password|secret|token)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(-1_500);
+    throw new Error(`${options.errorCode ?? "PORTFOLIO_SETTINGS_COMMAND_FAILED"}${diagnostic === "" ? "" : `:${diagnostic}`}`);
   }
   return result.stdout;
 }
@@ -159,7 +167,13 @@ function createProject(name, basePort, migrations) {
 function invokeProject(project, args, env) {
   return run(process.execPath, [CLI, "--workdir", project.workdir, ...args], {
     env,
-    errorCode: "PORTFOLIO_SETTINGS_SUPABASE_FAILED",
+    errorCode: args[0] === "start"
+      ? "PORTFOLIO_SETTINGS_SUPABASE_START_FAILED"
+      : args[0] === "db"
+        ? "PORTFOLIO_SETTINGS_SUPABASE_RESET_FAILED"
+        : args[0] === "migration"
+          ? "PORTFOLIO_SETTINGS_SUPABASE_MIGRATION_FAILED"
+          : "PORTFOLIO_SETTINGS_SUPABASE_COMMAND_FAILED",
   });
 }
 
@@ -266,6 +280,9 @@ async function assertPhase3OperationsPreserved(connectionString, expected) {
 
 export async function main() {
   const ticket109 = process.argv.includes("--ticket-109");
+  const ticket110 = process.argv.includes("--ticket-110");
+  if (ticket109 && ticket110) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
+  const contentAuthoringTicket = ticket109 || ticket110;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -374,7 +391,7 @@ export async function main() {
     console.log(process.argv.includes("--refresh-types")
       ? "Generated database types from the clean PostgreSQL schema."
       : "Generated database types match the clean PostgreSQL schema.");
-    const testFile = ticket109
+    const testFile = contentAuthoringTicket
       ? "tests/database/content-authoring.integration.test.ts"
       : "tests/database/portfolio-settings.integration.test.ts";
     const reportPath = join(cleanProject.workdir, ticket109 ? "content-authoring-test-report.json" : "test-report.json");
@@ -386,7 +403,7 @@ export async function main() {
       `--outputFile=${reportPath}`,
     ], {
       cwd: ROOT,
-      env: ticket109
+      env: contentAuthoringTicket
         ? { ...databaseEnv, PHASE5_CONTENT_AUTHORING_DATABASE_URL: cleanUrl, PHASE5_REQUIRE_CONTENT_AUTHORING: "1" }
         : { ...databaseEnv, PHASE4_REQUIRE_SETTINGS: "1" },
       encoding: "utf8",
@@ -409,13 +426,15 @@ export async function main() {
       throw new Error(`PORTFOLIO_SETTINGS_TEST_FAILED:${code}:${failedTests.join(" | ")}:${safeDetail}`);
     }
     requireExecutedTests(report);
-    console.log((ticket109 ? "Content authoring" : "Portfolio settings") +
+    console.log((contentAuthoringTicket ? "Content authoring" : "Portfolio settings") +
       " real PostgreSQL integration: " + report.numPassedTests + " passed, 0 skipped.");
 
-    const evidence = ticket109 ? {
-      ticket: 109,
+    const evidence = contentAuthoringTicket ? {
+      ticket: ticket110 ? 110 : 109,
       parent: 106,
-      scope: "content-authoring-clean-upgrade-rls-immutability-concurrency-and-atomic-rollback",
+      scope: ticket110
+        ? "exact-revision-review-private-preview-history-and-atomic-idempotent-audit"
+        : "content-authoring-clean-upgrade-rls-immutability-concurrency-and-atomic-rollback",
       predecessorSnapshot: "supabase/baselines/phase3.json",
       migrationChecksums: migrations.checksums,
       migrationLedger: cleanSnapshot.migrationLedger,
@@ -427,7 +446,7 @@ export async function main() {
         outboxEvents: preservedRows.outbox.length === 1,
         jobs: preservedRows.jobs.length === 1,
       },
-      authoringTablesWithForcedRls: ["content.items", "content.revisions"],
+      authoringTablesWithForcedRls: ["content.items", "content.revisions", ...(ticket110 ? ["content.revision_reviews"] : [])],
       databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
         status: test.status,
@@ -532,8 +551,10 @@ export async function main() {
     if (
       /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
     ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
-    const evidencePath = ticket109
-      ? join(ROOT, "evidence/phase-5-content-authoring.json")
+    const evidencePath = ticket110
+      ? join(ROOT, "evidence/phase-5-content-revision-review.json")
+      : ticket109
+        ? join(ROOT, "evidence/phase-5-content-authoring.json")
       : evidenceOutputPath();
     mkdirSync(dirname(evidencePath), { recursive: true });
     writeFileSync(evidencePath, serializedEvidence, "utf8");

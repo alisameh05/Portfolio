@@ -136,7 +136,7 @@ previewRevision:
         headers:
           Cache-Control:
             required: true
-            schema: { type: string, const: no-store }
+            schema: { type: string, const: 'private, no-store' }
           X-Robots-Tag:
             required: true
             schema: { type: string, const: 'noindex, nofollow' }
@@ -170,7 +170,7 @@ reviewRevision:
           schema: { $ref: ../components/content.yaml#/schemas/ReviewRevisionCommand }
           examples:
             accepted:
-              value: { decision: accepted, findings: [] }
+              value: { locale: en, snapshotHash: '0000000000000000000000000000000000000000000000000000000000000000', evidenceVersion: 1, decision: accepted, findings: [] }
     responses:
       '200':
         description: Safe review receipt.

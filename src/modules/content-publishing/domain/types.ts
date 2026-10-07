@@ -67,6 +67,7 @@ export interface ReviewRecord {
   readonly reviewerId: StableId<"Owner">;
   readonly reviewedAt: string;
   readonly evidenceVersion: number;
+  readonly snapshotHash: string;
 }
 
 export interface DraftContentPayload {
@@ -167,7 +168,9 @@ export interface PrivateRevisionPreview {
   readonly title: string;
   readonly summary: string;
   readonly body: string;
-  readonly review: Pick<ReviewRecord, "decision" | "findings" | "reviewedAt"> | null;
+  readonly snapshotHash: string;
+  readonly evidenceVersion: number;
+  readonly review: Pick<ReviewRecord, "reviewId" | "decision" | "findings" | "reviewedAt" | "snapshotHash" | "evidenceVersion"> | null;
 }
 
 export interface ContentHistoryEntry {

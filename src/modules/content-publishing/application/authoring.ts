@@ -3,7 +3,8 @@ import type { Clock, StableIdGenerator, TransactionContext } from "../../../runt
 import { createSystemClock, createSystemIdGenerator } from "../../../runtime/ports.js";
 import { hashCanonicalRequest } from "../../../shared/application/idempotency.js";
 import type { OperationsPersistencePorts, SafeResultEnvelope } from "../../portability-operations/index.js";
-import type { ContentKind, CreateDraftPayload, LocalizedDraftData, SupportedLocale } from "../domain/index.js";
+import type { ContentHistoryEntry, ContentHistoryPage, ContentKind, CreateDraftPayload, LocalizedDraftData, PrivateRevisionPreview, SupportedLocale } from "../domain/index.js";
+import type { ReviewRevisionCommand } from "./service.js";
 
 export interface ContentAuthoringScope {
   readonly portfolioId: StableId<"Portfolio">;
@@ -17,12 +18,30 @@ export interface ContentAuthoringRevision {
   readonly locale: SupportedLocale;
   readonly sequence: number;
   readonly aggregateVersion: number;
+  readonly evidenceSnapshotVersion: number;
   readonly title: string;
   readonly summary: string;
   readonly body: string;
   readonly payload: CreateDraftPayload;
   readonly savedAt: string;
   readonly reviewed: boolean;
+  readonly reviewDecision?: "accepted" | "rejected";
+  readonly latestReview?: ContentAuthoringReview;
+}
+
+export interface ContentAuthoringReview {
+  readonly reviewId: StableId<"ContentReview">;
+  readonly revisionId: StableId<"Revision">;
+  readonly contentId: StableId<string>;
+  readonly contentType: ContentKind;
+  readonly locale: SupportedLocale;
+  readonly snapshotHash: string;
+  readonly evidenceVersion: number;
+  readonly reviewerId: StableId<"Owner">;
+  readonly reviewSequence: number;
+  readonly decision: "accepted" | "rejected";
+  readonly findings: readonly string[];
+  readonly reviewedAt: string;
 }
 
 export interface ContentAuthoringRecord {
@@ -60,6 +79,23 @@ export interface ContentAuthoringRepository {
   create(input: CreateContentPersistenceInput, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
   get(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
   appendRevision(input: AppendContentRevisionInput, context: TransactionContext): Promise<Result<{ readonly record: ContentAuthoringRecord; readonly revision: ContentAuthoringRevision }, Rejection>>;
+  appendReview(input: AppendContentReviewInput, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
+  listHistory(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly locale?: SupportedLocale; readonly after?: { readonly locale: SupportedLocale; readonly sequence: number }; readonly limit: number }, context: TransactionContext): Promise<Result<{ readonly entries: readonly ContentHistoryEntry[]; readonly hasMore: boolean }, Rejection>>;
+}
+
+export interface AppendContentReviewInput {
+  readonly contentId: StableId<string>;
+  readonly scope: ContentAuthoringScope;
+  readonly revisionId: StableId<"Revision">;
+  readonly locale: SupportedLocale;
+  readonly expectedVersion: number;
+  readonly reviewId: StableId<"ContentReview">;
+  readonly snapshotHash: string;
+  readonly evidenceVersion: number;
+  readonly reviewerId: StableId<"Owner">;
+  readonly decision: "accepted" | "rejected";
+  readonly findings: readonly string[];
+  readonly reviewedAt: string;
 }
 
 export interface SaveContentRevisionCommand {
@@ -115,6 +151,7 @@ export interface OwnerContentAggregateView {
     readonly locale: SupportedLocale;
     readonly sequence: number;
     readonly reviewed: boolean;
+    readonly reviewDecision?: "accepted" | "rejected";
   }[];
 }
 
@@ -122,11 +159,23 @@ export interface ContentAuthoringService {
   createContent(command: CreateOwnerContentCommand): Promise<Result<CreateContentReceipt, Rejection>>;
   getOwnerContentAggregate(query: GetOwnerContentAggregateQuery): Promise<Result<OwnerContentAggregateView, Rejection>>;
   saveRevision(command: SaveContentRevisionCommand): Promise<Result<SaveContentRevisionReceipt, Rejection>>;
+  previewRevision(query: { readonly actor: ActorContext; readonly contentId: StableId<string>; readonly revisionId: StableId<"Revision"> }): Promise<Result<PrivateRevisionPreview, Rejection>>;
+  reviewRevision(command: ReviewRevisionCommand): Promise<Result<ReviewRevisionReceipt, Rejection>>;
+  getContentHistory(query: { readonly actor: ActorContext; readonly contentId: StableId<string>; readonly locale?: SupportedLocale; readonly limit: number; readonly cursor?: string }): Promise<Result<ContentHistoryPage, Rejection>>;
+}
+
+export interface ReviewRevisionReceipt {
+  readonly aggregateId: StableId<string>;
+  readonly aggregateVersion: number;
+  readonly outcome: "revision-reviewed";
+  readonly revisionId: StableId<"Revision">;
+  readonly reviewId: StableId<"ContentReview">;
 }
 
 const IDEMPOTENCY_RETENTION_MS = 24 * 60 * 60 * 1_000;
 const CREATE_SCOPE = "content-publishing.create-owner-content";
 const SAVE_SCOPE = "content-publishing.save-owner-content-revision";
+const REVIEW_SCOPE = "content-publishing.review-owner-content-revision";
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 const EXECUTABLE_MARKUP = /<\s*(?:script|iframe|object|embed|svg|math)\b|\bon[a-z]{2,}\s*=|(?:javascript|vbscript)\s*:|data\s*:\s*text\/html/i;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -327,8 +376,26 @@ function view(record: ContentAuthoringRecord): OwnerContentAggregateView {
     contentType: record.contentType,
     lifecycle: record.lifecycle,
     localizedStreams,
-    revisions: record.revisions.map(({ revisionId, locale, sequence, reviewed }) => ({ revisionId, locale, sequence, reviewed })),
+    revisions: record.revisions.map(({ revisionId, locale, sequence, reviewed, reviewDecision }) => ({
+      revisionId, locale, sequence, reviewed, ...(reviewDecision === undefined ? {} : { reviewDecision }),
+    })),
   };
+}
+
+async function revisionSnapshotHash(revision: ContentAuthoringRevision): Promise<string> {
+  return await hashCanonicalRequest({
+    revisionId: revision.revisionId,
+    contentId: revision.contentId,
+    contentType: revision.contentType,
+    locale: revision.locale,
+    sequence: revision.sequence,
+    aggregateVersion: revision.aggregateVersion,
+    evidenceVersion: revision.evidenceSnapshotVersion,
+    title: revision.title,
+    summary: revision.summary,
+    body: revision.body,
+    payload: revision.payload as unknown as import("../../../shared/application/idempotency.js").CanonicalValue,
+  });
 }
 
 export function createContentAuthoringService(input: {
@@ -541,6 +608,165 @@ export function createContentAuthoringService(input: {
         key: command.idempotencyKey,
         request: { contentId: command.contentId, expectedVersion: command.expectedVersion, locale: command.locale, title: command.title, summary: command.summary, body: command.body, draftData: command.draftData ?? null },
         effect,
+      });
+    },
+
+    async previewRevision(query) {
+      if (!ownerAuthorized(query.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      return await input.operations.transactions.run(async (context) => {
+        const record = await input.repository.get(query.contentId, input.scope, context);
+        if (!record.ok) return record;
+        const revision = record.value.revisions.find((entry) => entry.revisionId === query.revisionId);
+        if (revision === undefined) return err({ kind: "not_found", code: "REVISION_NOT_FOUND" });
+        const snapshotHash = await revisionSnapshotHash(revision);
+        const latest = revision.latestReview;
+        if (latest !== undefined && latest.snapshotHash !== snapshotHash) {
+          return err({ kind: "temporarily_unavailable", code: "CONTENT_REVIEW_INTEGRITY_FAILED" });
+        }
+        return {
+          ok: true as const,
+          value: {
+            contentId: revision.contentId,
+            revisionId: revision.revisionId,
+            locale: revision.locale,
+            sequence: revision.sequence,
+            title: revision.title,
+            summary: revision.summary,
+            body: revision.body,
+            snapshotHash,
+            evidenceVersion: revision.evidenceSnapshotVersion,
+            review: latest === undefined ? null : {
+              reviewId: latest.reviewId,
+              decision: latest.decision,
+              findings: latest.findings,
+              reviewedAt: latest.reviewedAt,
+              snapshotHash: latest.snapshotHash,
+              evidenceVersion: latest.evidenceVersion,
+            },
+          },
+        };
+      });
+    },
+
+    async reviewRevision(command) {
+      if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      if (!validCorrelation(command.correlationId) || !Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1 ||
+          (command.locale !== "en" && command.locale !== "ar") || !/^[0-9a-f]{64}$/.test(command.snapshotHash) ||
+          !Number.isSafeInteger(command.evidenceVersion) || command.evidenceVersion < 1 ||
+          (command.decision !== "accepted" && command.decision !== "rejected") || !Array.isArray(command.findings) ||
+          command.findings.length > 100 || !command.findings.every((finding) => isCleanText(finding, 1_000))) {
+        return err({ kind: "validation", code: "INVALID_REVISION_REVIEW" });
+      }
+      const reviewId = parseStableId("ContentReview", ids.generate("ContentReview"));
+      if (!reviewId.ok) throw new Error("Stable ID generator returned an invalid review identity.");
+      const reviewedAt = clock.now();
+      const effect = async (context: TransactionContext): Promise<SafeResultEnvelope> => {
+        const existing = await input.repository.get(command.contentId, input.scope, context);
+        if (!existing.ok) return rejectionOutcome(existing.error);
+        if (existing.value.aggregateVersion !== command.expectedVersion) {
+          return rejectionOutcome({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: existing.value.aggregateVersion });
+        }
+        const revision = existing.value.revisions.find((entry) => entry.revisionId === command.revisionId);
+        if (revision === undefined) return rejectionOutcome({ kind: "not_found", code: "REVISION_NOT_FOUND" });
+        if (revision.locale !== command.locale) return rejectionOutcome({ kind: "validation", code: "REVISION_LOCALE_MISMATCH" });
+        const actualHash = await revisionSnapshotHash(revision);
+        if (actualHash !== command.snapshotHash || revision.evidenceSnapshotVersion !== command.evidenceVersion) {
+          return rejectionOutcome({ kind: "conflict", code: "REVISION_SNAPSHOT_MISMATCH" });
+        }
+        const appended = await input.repository.appendReview({
+          contentId: command.contentId,
+          scope: input.scope,
+          revisionId: command.revisionId,
+          locale: command.locale,
+          expectedVersion: command.expectedVersion,
+          reviewId: reviewId.value,
+          snapshotHash: actualHash,
+          evidenceVersion: revision.evidenceSnapshotVersion,
+          reviewerId: input.scope.ownerId,
+          decision: command.decision,
+          findings: command.findings,
+          reviewedAt,
+        }, context);
+        if (!appended.ok) return rejectionOutcome(appended.error);
+        const receipt: ReviewRevisionReceipt = {
+          aggregateId: command.contentId,
+          aggregateVersion: appended.value.aggregateVersion,
+          outcome: "revision-reviewed",
+          revisionId: command.revisionId,
+          reviewId: reviewId.value,
+        };
+        await input.operations.outbox.append(context, {
+          eventId: ids.generate("DomainEvent"),
+          payload: { type: "content.revision_reviewed.v1", version: 1, value: {
+            contentId: command.contentId,
+            revisionId: command.revisionId,
+            reviewId: reviewId.value,
+            locale: command.locale,
+            decision: command.decision,
+            ownerScope: await actorScope,
+          } },
+          aggregateId: command.contentId,
+          aggregateVersion: appended.value.aggregateVersion,
+          correlationId: command.correlationId,
+          occurredAt: reviewedAt,
+          availableAt: reviewedAt,
+        });
+        return { status: "completed", receipt: {
+          aggregateId: receipt.aggregateId,
+          aggregateVersion: receipt.aggregateVersion,
+          outcome: receipt.outcome,
+          revisionId: receipt.revisionId,
+          reviewId: receipt.reviewId,
+        } };
+      };
+      return await executeIdempotently<ReviewRevisionReceipt>({
+        operationScope: REVIEW_SCOPE,
+        actor: command.actor,
+        key: command.idempotencyKey as IdempotencyKey,
+        request: {
+          contentId: command.contentId,
+          revisionId: command.revisionId,
+          expectedVersion: command.expectedVersion,
+          locale: command.locale,
+          snapshotHash: command.snapshotHash,
+          evidenceVersion: command.evidenceVersion,
+          decision: command.decision,
+          findings: command.findings,
+        },
+        effect,
+      });
+    },
+
+    async getContentHistory(query) {
+      if (!ownerAuthorized(query.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 100 ||
+          (query.locale !== undefined && query.locale !== "en" && query.locale !== "ar")) {
+        return err({ kind: "validation", code: "INVALID_CONTENT_HISTORY_QUERY" });
+      }
+      let after: { locale: SupportedLocale; sequence: number } | undefined;
+      if (query.cursor !== undefined) {
+        const match = /^(en|ar):([1-9][0-9]*)$/.exec(query.cursor);
+        if (match === null || !Number.isSafeInteger(Number(match[2]))) return err({ kind: "validation", code: "INVALID_CONTENT_HISTORY_CURSOR" });
+        after = { locale: match[1] as SupportedLocale, sequence: Number(match[2]) };
+      }
+      return await input.operations.transactions.run(async (context) => {
+        if (after !== undefined && query.locale !== undefined && after.locale !== query.locale) {
+          return err({ kind: "validation", code: "CONTENT_HISTORY_CURSOR_SCOPE_MISMATCH" });
+        }
+        const listed = await input.repository.listHistory({
+          contentId: query.contentId,
+          scope: input.scope,
+          ...(query.locale === undefined ? {} : { locale: query.locale }),
+          ...(after === undefined ? {} : { after }),
+          limit: query.limit,
+        }, context);
+        if (!listed.ok) return listed;
+        const entries = listed.value.entries;
+        const last = entries.at(-1);
+        return { ok: true as const, value: {
+          entries,
+          nextCursor: listed.value.hasMore && last !== undefined ? `${last.locale}:${last.sequence}` : null,
+        } };
       });
     },
   };

@@ -124,7 +124,16 @@
     }
   ],
   "runtimeRoutes": [],
-  "declaredContractReferences": [],
+  "declaredContractReferences": [
+    {
+      "file": "src/runtime/http/owner-content-authoring.ts",
+      "reason": "declared-contract-path-literal:\"/api/owner/v1/content"
+    },
+    {
+      "file": "src/runtime/http/owner-content-review.ts",
+      "reason": "declared-contract-path-literal:\"/api/owner/v1/content"
+    }
+  ],
   "undeclaredHttpSurface": [],
   "forbiddenFindings": [],
   "checks": [

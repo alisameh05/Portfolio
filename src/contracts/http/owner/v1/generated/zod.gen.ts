@@ -276,9 +276,12 @@ export const zSaveRevisionReceipt = z.strictObject({
 });
 
 export const zRevisionReviewView = z.strictObject({
+    reviewId: zStableId,
     decision: z.enum(['accepted', 'rejected']),
     findings: z.array(z.string().max(1000)).max(100),
-    reviewedAt: z.string().datetime()
+    reviewedAt: z.string().datetime(),
+    snapshotHash: z.string().regex(/^[0-9a-f]{64}$/),
+    evidenceVersion: z.number().int().gte(1)
 });
 
 export const zPrivateRevisionPreview = z.strictObject({
@@ -289,10 +292,15 @@ export const zPrivateRevisionPreview = z.strictObject({
     title: z.string().min(1).max(160),
     summary: z.string().min(1).max(500),
     body: z.string().min(1).max(50000),
+    snapshotHash: z.string().regex(/^[0-9a-f]{64}$/),
+    evidenceVersion: z.number().int().gte(1),
     review: zRevisionReviewView.nullable()
 });
 
 export const zReviewRevisionCommand = z.strictObject({
+    locale: zLocale,
+    snapshotHash: z.string().regex(/^[0-9a-f]{64}$/),
+    evidenceVersion: z.number().int().gte(1),
     decision: z.enum(['accepted', 'rejected']),
     findings: z.array(z.string().min(1).max(1000)).max(100)
 });

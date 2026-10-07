@@ -27,6 +27,8 @@ export type {
 export {
   createContentAuthoringService,
   type AppendContentRevisionInput,
+  type AppendContentReviewInput,
+  type ContentAuthoringReview,
   type ContentAuthoringRecord,
   type ContentAuthoringRepository,
   type ContentAuthoringRevision,
@@ -39,4 +41,5 @@ export {
   type OwnerContentAggregateView,
   type SaveContentRevisionCommand,
   type SaveContentRevisionReceipt,
+  type ReviewRevisionReceipt,
 } from "./authoring.js";

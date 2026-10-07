@@ -38,6 +38,25 @@ export interface ContentItems {
   updated_at: Generated<Timestamp>;
 }
 
+export interface ContentRevisionReviews {
+  content_id: string;
+  content_type: string;
+  decision: string;
+  evidence_version: number;
+  /**
+   * Private bounded editorial notes; never copied into public projections or outbox payloads.
+   */
+  findings: Generated<Json>;
+  locale: string;
+  portfolio_id: string;
+  review_id: string;
+  review_sequence: number;
+  reviewed_at: Timestamp;
+  reviewer_id: string;
+  revision_id: string;
+  snapshot_hash: string;
+}
+
 export interface ContentRevisions {
   aggregate_version: number;
   body: string;
@@ -141,6 +160,7 @@ export interface PortfolioConfigSettings {
 
 export interface DB {
   "content.items": ContentItems;
+  "content.revision_reviews": ContentRevisionReviews;
   "content.revisions": ContentRevisions;
   "identity_access.owner_links": IdentityAccessOwnerLinks;
   "operations.idempotency_records": OperationsIdempotencyRecords;
