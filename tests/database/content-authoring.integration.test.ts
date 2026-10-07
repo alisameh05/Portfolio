@@ -156,6 +156,35 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       aggregateVersion: reviewed.value.aggregateVersion, payload };
   }
 
+  async function createReviewedAchievement(
+    scope: { portfolioId: StableId<"Portfolio">; ownerId: StableId<"Owner"> },
+    title: string,
+    achievedOn: string,
+    idempotencyPrefix: string,
+    proof?: { artifactId: StableId<"SupportingArtifact">; destinationUrl: string },
+  ) {
+    const content = service(scope);
+    const payload = {
+      contentType: "achievement" as const, locale: "en" as const, title,
+      summary: "A career milestone.", body: `Public account of ${title}.`, achievedOn,
+      ...(proof === undefined ? {} : { evidence: {
+        claims: [{ claimId: createStableId("EvidenceClaim"), text: `${title} is supported by its public record.`, artifactIds: [proof.artifactId] }],
+        artifacts: [{ id: proof.artifactId, title: `${title} public record`, destinationUrl: proof.destinationUrl }],
+      } }),
+    };
+    const created = await content.createContent({ actor: actor(scope.ownerId), idempotencyKey: key(`${idempotencyPrefix}-create`),
+      correlationId: `${idempotencyPrefix}-create`, payload });
+    if (!created.ok) throw new Error(`ACHIEVEMENT_CREATE_FAILED:${created.error.code}`);
+    const preview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: created.value.contentId, revisionId: created.value.revisionId });
+    if (!preview.ok) throw new Error(`ACHIEVEMENT_PREVIEW_FAILED:${preview.error.code}`);
+    const reviewed = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: created.value.contentId,
+      revisionId: created.value.revisionId, expectedVersion: 1, idempotencyKey: key(`${idempotencyPrefix}-review`),
+      correlationId: `${idempotencyPrefix}-review`, locale: "en", snapshotHash: preview.value.snapshotHash,
+      evidenceVersion: preview.value.evidenceVersion, decision: "accepted", findings: ["Private internal verification notes must remain owner-only."] });
+    if (!reviewed.ok) throw new Error(`ACHIEVEMENT_REVIEW_FAILED:${reviewed.error.code}`);
+    return { content, contentId: created.value.contentId, revisionId: created.value.revisionId, aggregateVersion: reviewed.value.aggregateVersion, payload };
+  }
+
   it("creates all Draft kinds, saves both locales, and keeps typed snapshots private and unreviewed", async () => {
     const scope = await configuredScope();
     const content = service(scope);
@@ -734,6 +763,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
         actor: actor(scope.ownerId), contentId: project.contentId, expectedVersion: project.aggregateVersion,
         idempotencyKey: key(`${prefix}-publish`), correlationId: `${prefix}-publish`, locale: "en", revisionId: project.revisionId,
       });
+
       expect(result, testCase.name).toMatchObject({ ok: false, error: testCase.expected });
       const keyHash = createHash("sha256").update(`${prefix}-publish`).digest("hex");
       const state = await admin.query(
@@ -751,6 +781,125 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
         lifecycle: "draft", routes: 0, pointers: 0, history: 0, content_projection: 0,
         discovery_projection: 0, events: 0, receipt: null,
       });
+    }
+  }, 30_000);
+
+  it("publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const internal = await createReviewedAchievement(scope, "Internal milestone", "2025-04-15", "timeline-internal");
+    const publicProof = await createReviewedAchievement(scope, "Public milestone", "2025-04-15", "timeline-public", {
+      artifactId: createStableId("SupportingArtifact"), destinationUrl: "https://example.com/achievement-proof",
+    });
+    const later = await createReviewedAchievement(scope, "Later milestone", "2026-01-02", "timeline-later");
+    for (const [achievement, prefix] of [[internal, "timeline-internal"], [publicProof, "timeline-public"], [later, "timeline-later"]] as const) {
+      const command = { actor: actor(scope.ownerId), contentId: achievement.contentId,
+        expectedVersion: achievement.aggregateVersion, idempotencyKey: key(`${prefix}-publish`), correlationId: `${prefix}-publish`,
+        locale: "en" as const, revisionId: achievement.revisionId };
+      const published = await achievement.content.publishLanguageVersion(command);
+      expect(published).toMatchObject({ ok: true, value: { aggregateVersion: achievement.aggregateVersion + 1, currentSlug: null, routeIdentity: null } });
+      expect(await achievement.content.publishLanguageVersion(command)).toEqual(published);
+      const stale = await achievement.content.publishLanguageVersion({ ...command, idempotencyKey: key(`${prefix}-stale`),
+        correlationId: `${prefix}-stale` });
+      expect(stale).toMatchObject({ ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH" } });
+    }
+
+    expect(await content.getPublicAchievementTimeline({ locale: "ar", limit: 10 })).toEqual({ ok: true, value: [] });
+    const english = await content.getPublicAchievementTimeline({ locale: "en", limit: 10 });
+    expect(english.ok).toBe(true);
+    if (!english.ok) return;
+    expect(english.value.map((entry) => entry.title)).toEqual(["Internal milestone", "Public milestone", "Later milestone"]);
+    expect(english.value.slice(0, 2).map((entry) => entry.contentId)).toEqual([internal.contentId, publicProof.contentId].sort());
+    expect(english.value[0]).toMatchObject({ achievedOn: "2025-04-15", artifacts: [] });
+    expect(english.value[1]?.artifacts).toEqual([{ title: "Public milestone public record", destinationUrl: "https://example.com/achievement-proof" }]);
+    expect(JSON.stringify(english.value)).not.toMatch(/Private internal verification notes|findings|reviewerId|decision|verified_internal/i);
+
+    const saved = await content.saveRevision({ actor: actor(scope.ownerId), contentId: internal.contentId, expectedVersion: 3,
+      idempotencyKey: key("timeline-internal-save"), correlationId: "timeline-internal-save", locale: "en",
+      title: "Internal milestone revised", summary: "A newer draft.", body: "This newer draft must remain private." });
+    expect(saved).toMatchObject({ ok: true, value: { aggregateVersion: 4 } });
+    if (!saved.ok) return;
+    const afterDraft = await content.getPublicAchievementTimeline({ locale: "en", limit: 10 });
+    expect(afterDraft.ok).toBe(true);
+    if (!afterDraft.ok) return;
+    const unchanged = afterDraft.value.find((entry) => entry.contentId === internal.contentId);
+    expect(unchanged).toMatchObject({ revisionId: internal.revisionId, body: "Public account of Internal milestone." });
+
+    const preview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: internal.contentId, revisionId: saved.value.revisionId });
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    const reviewed = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: internal.contentId, revisionId: saved.value.revisionId,
+      expectedVersion: saved.value.aggregateVersion, idempotencyKey: key("timeline-internal-replacement-review"),
+      correlationId: "timeline-internal-replacement-review", locale: "en", snapshotHash: preview.value.snapshotHash,
+      evidenceVersion: preview.value.evidenceVersion, decision: "accepted", findings: ["Private replacement review note."] });
+    expect(reviewed.ok).toBe(true);
+    if (!reviewed.ok) return;
+    const replacement = { actor: actor(scope.ownerId), contentId: internal.contentId, expectedVersion: reviewed.value.aggregateVersion,
+      idempotencyKey: key("timeline-internal-replacement-publish"), correlationId: "timeline-internal-replacement-publish",
+      locale: "en" as const, revisionId: saved.value.revisionId };
+    const replaced = await content.publishLanguageVersion(replacement);
+    expect(replaced).toMatchObject({ ok: true, value: { aggregateVersion: 6 } });
+    expect(await content.publishLanguageVersion(replacement)).toEqual(replaced);
+    const updatedTimeline = await content.getPublicAchievementTimeline({ locale: "en", limit: 10 });
+    expect(updatedTimeline.ok).toBe(true);
+    if (!updatedTimeline.ok) return;
+    expect(updatedTimeline.value.find((entry) => entry.contentId === internal.contentId)).toMatchObject({
+      revisionId: saved.value.revisionId, title: "Internal milestone revised", body: "This newer draft must remain private.",
+    });
+    const history = await admin.query(
+      "select count(*)::int as count, count(route_identity)::int as routed from content.publication_history where content_id = $1::uuid and locale = 'en'",
+      [internal.contentId],
+    );
+    expect(history.rows[0]).toEqual({ count: 2, routed: 0 });
+    const project = await createReviewedProject(scope, "Timeline route invariant", "timeline-project-route");
+    const projectPublication = await project.content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key("timeline-project-route-publish"),
+      correlationId: "timeline-project-route-publish", locale: "en", revisionId: project.revisionId });
+    expect(projectPublication.ok).toBe(true);
+    if (!projectPublication.ok) return;
+    await expect(admin.query(
+      "update content.language_publications set route_identity = null where content_id = $1::uuid and locale = 'en'",
+      [project.contentId],
+    )).rejects.toMatchObject({ code: "23514" });
+    await expect(admin.query(
+      "insert into content.publication_history (content_id, portfolio_id, content_type, locale, publication_sequence, revision_id, review_id, route_identity, published_at, media_facts_version) " +
+        "select content_id, portfolio_id, content_type, locale, publication_sequence + 1, revision_id, review_id, null, published_at, media_facts_version " +
+        "from content.publication_history where content_id = $1::uuid and locale = 'en' limit 1",
+      [project.contentId],
+    )).rejects.toMatchObject({ code: "23514" });
+    const projectRoute = await admin.query(
+      "select count(route_identity)::int as pointers from content.language_publications where content_id = $1::uuid",
+      [project.contentId],
+    );
+    expect(projectRoute.rows[0]).toEqual({ pointers: 1 });
+    expect(await content.getPublicAchievementTimeline({ locale: "en", limit: 101 })).toMatchObject({
+      ok: false, error: { code: "INVALID_ACHIEVEMENT_TIMELINE_QUERY" },
+    });
+  });
+
+  it("rejects placeholder text in every public Achievement field before publication", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const cases = [
+      { field: "title", text: "TODO: verify this milestone" },
+      { field: "summary", text: "Fake metric: 100% improvement" },
+      { field: "body", text: "TBD pending real evidence" },
+    ] as const;
+    for (const [index, testCase] of cases.entries()) {
+      const prefix = `achievement-placeholder-${index}`;
+      const created = await content.createContent({ actor: actor(scope.ownerId), idempotencyKey: key(`${prefix}-create`),
+        correlationId: `${prefix}-create`, payload: { contentType: "achievement", locale: "en",
+          title: testCase.field === "title" ? testCase.text : `Milestone ${index}`,
+          summary: testCase.field === "summary" ? testCase.text : "A career milestone.",
+          body: testCase.field === "body" ? testCase.text : "A public account of the milestone.", achievedOn: "2025-04-15" } });
+      expect(created.ok).toBe(true);
+      if (!created.ok) continue;
+      const publication = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: created.value.contentId,
+        expectedVersion: 1, idempotencyKey: key(`${prefix}-publish`), correlationId: `${prefix}-publish`,
+        locale: "en", revisionId: created.value.revisionId });
+      expect(publication, testCase.field).toMatchObject({ ok: false, error: {
+        kind: "validation", code: "ACHIEVEMENT_PUBLICATION_REQUIREMENTS_NOT_MET",
+      } });
     }
   }, 30_000);
 
@@ -1013,6 +1162,10 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "has_table_privilege('shipwithali_backup', 'content.public_testimonial_locales', 'select') backup_testimonial_projection, " +
       "has_table_privilege('shipwithali_application', 'content.public_testimonial_locales', 'select') app_testimonial_projection, " +
       "has_column_privilege('shipwithali_application', 'content.public_testimonial_locales', 'quote', 'UPDATE') app_testimonial_quote_update, " +
+      "has_table_privilege('anon', 'content.public_achievement_locales', 'select') anon_achievement_projection, " +
+      "has_table_privilege('authenticated', 'content.public_achievement_locales', 'select') authenticated_achievement_projection, " +
+      "has_table_privilege('shipwithali_worker', 'content.public_achievement_locales', 'select') worker_achievement_projection, " +
+      "has_table_privilege('shipwithali_backup', 'content.public_achievement_locales', 'select') backup_achievement_projection, " +
       "has_table_privilege('anon', 'taxonomy.project_discovery_locales', 'select') anon_discovery_projection, " +
       "has_column_privilege('shipwithali_application', 'content.public_routes', 'current_slug', 'UPDATE') app_route_slug_update, " +
       "has_table_privilege('authenticated', 'content.public_routes', 'select') authenticated_routes, " +
@@ -1022,6 +1175,8 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       backup_root: false, anon_projection: false, anon_testimonial_projection: false, authenticated_testimonial_publication: false,
       worker_testimonial_history: false, backup_testimonial_projection: false, app_testimonial_projection: true,
       app_testimonial_quote_update: true, anon_discovery_projection: false, app_route_slug_update: false,
+      anon_achievement_projection: false, authenticated_achievement_projection: false,
+      worker_achievement_projection: false, backup_achievement_projection: false,
       authenticated_routes: false, worker_publication: false });
     const unscoped = await database.transactions.run((context) => sql.raw(
       "select (select count(*)::integer from content.items) roots, (select count(*)::integer from content.revisions) revisions",

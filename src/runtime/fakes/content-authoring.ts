@@ -13,6 +13,7 @@ export function createProductionContentAuthoringService(): ContentAuthoringServi
     async publishLanguageVersion() { return unavailable; },
     async getPublicProject() { return unavailable; },
     async getPublicTestimonials() { return unavailable; },
+    async getPublicAchievementTimeline() { return unavailable; },
     async getContentHistory() { return unavailable; },
   };
 }

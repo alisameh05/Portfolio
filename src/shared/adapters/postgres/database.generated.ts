@@ -48,7 +48,23 @@ export interface ContentLanguagePublications {
   published_at: Timestamp;
   review_id: string;
   revision_id: string;
-  route_identity: string;
+  route_identity: string | null;
+}
+
+export interface ContentPublicAchievementLocales {
+  achieved_on: Timestamp;
+  artifacts: Generated<Json>;
+  body: string;
+  content_id: string;
+  content_type: Generated<string>;
+  first_published_at: Timestamp;
+  locale: string;
+  portfolio_id: string;
+  published_at: Timestamp;
+  revision_id: string;
+  summary: string;
+  title: string;
+  updated_at: Generated<Timestamp>;
 }
 
 export interface ContentPublicationHistory {
@@ -61,7 +77,7 @@ export interface ContentPublicationHistory {
   published_at: Timestamp;
   review_id: string;
   revision_id: string;
-  route_identity: string;
+  route_identity: string | null;
 }
 
 export interface ContentPublicProjectLocales {
@@ -262,6 +278,7 @@ export interface PortfolioConfigSettings {
 export interface DB {
   "content.items": ContentItems;
   "content.language_publications": ContentLanguagePublications;
+  "content.public_achievement_locales": ContentPublicAchievementLocales;
   "content.public_project_locales": ContentPublicProjectLocales;
   "content.public_route_reservations": ContentPublicRouteReservations;
   "content.public_routes": ContentPublicRoutes;

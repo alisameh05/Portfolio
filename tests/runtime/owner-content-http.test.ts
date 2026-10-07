@@ -61,6 +61,7 @@ function createService() {
     },
     async getPublicProject() { return { ok: false as const, error: { kind: "not_found" as const, code: "PUBLIC_CONTENT_NOT_FOUND" } }; },
     async getPublicTestimonials() { return { ok: true as const, value: [] }; },
+    async getPublicAchievementTimeline() { return { ok: true as const, value: [] }; },
     async getContentHistory(query) {
       calls.history.push(query);
       return { ok: true, value: { entries: [{ revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: "en", sequence: 1, savedAt: "2026-10-05T08:00:00.000Z", reviewDecision: "accepted" }], nextCursor: null } };

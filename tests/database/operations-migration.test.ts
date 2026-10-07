@@ -57,6 +57,11 @@ describe("Phase 3 operations persistence migration (#50-#53)", () => {
   });
 
   it("keeps public clients and capability roles least-privileged", () => {
+    const operationsMigration = migrationFiles
+      .filter((file) => file.includes("operations"))
+      .map((file) => readFileSync(join(ROOT, "supabase", "migrations", file), "utf8"))
+      .join("\n")
+      .toLowerCase();
     expect(migrations).not.toMatch(/grant\s+.+operations\.(?:idempotency_records|outbox_events|jobs).+to\s+(?:anon|authenticated)/);
     expect(migrations).toContain("to shipwithali_application");
     expect(migrations).toContain("to shipwithali_worker");

@@ -82,6 +82,8 @@
       "phase5:focus:project-publication-postgres": "node scripts/portfolio-settings-integration.mjs --ticket-111",
       "prephase5:focus:testimonial-postgres": "npm run validation:ready",
       "phase5:focus:testimonial-postgres": "node scripts/portfolio-settings-integration.mjs --ticket-113",
+      "prephase5:focus:achievement-timeline-postgres": "npm run validation:ready",
+      "phase5:focus:achievement-timeline-postgres": "node scripts/portfolio-settings-integration.mjs --ticket-112",
     "prephase5:focus:taxonomy-status-relationships-discovery": "npm run validation:ready",
     "phase5:focus:taxonomy-status-relationships-discovery": "node scripts/phase5-verification.mjs --suite taxonomy",
     "prephase5:focus:database-rls-migrations-concurrency": "npm run validation:ready",
