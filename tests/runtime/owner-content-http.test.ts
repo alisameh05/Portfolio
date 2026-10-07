@@ -60,6 +60,7 @@ function createService() {
         firstPublishedAt: "2026-10-07T12:00:00.000Z", publishedAt: "2026-10-07T12:00:00.000Z" } };
     },
     async getPublicProject() { return { ok: false as const, error: { kind: "not_found" as const, code: "PUBLIC_CONTENT_NOT_FOUND" } }; },
+    async getPublicTestimonials() { return { ok: true as const, value: [] }; },
     async getPublicAchievementTimeline() { return { ok: true as const, value: [] }; },
     async getContentHistory(query) {
       calls.history.push(query);
@@ -91,6 +92,21 @@ describe("Owner content authoring HTTP adapters", () => {
     expect(fake.calls.create).toHaveLength(1);
     expect(fake.calls.create[0]).toMatchObject({ payload: { evidence: { artifacts: [{ mediaAssetId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4" }] }, externalLinks: [{ destination: "https://example.com/project" }] } });
     expect(await response.json()).toEqual({ contentId: CONTENT_ID, aggregateVersion: 1, revisionId: REVISION_ID, outcome: "content-created" });
+  });
+
+  it("dispatches a minimal Testimonial through the existing strict Owner content boundary", async () => {
+    const fake = createService();
+    const response = await handleCreateOwnerContent(
+      request("POST", { contentType: "testimonial", locale: "en", title: "Stored feedback", summary: "A reviewed quote.",
+        body: "The release clarified our workflow.", authorName: "Product lead", quote: "The release clarified our workflow.",
+        association: { type: "profile" } }, { "idempotency-key": "create-testimonial-1" }),
+      { service: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
+    );
+    expect(response.status).toBe(201);
+    expect(fake.calls.create).toHaveLength(1);
+    expect(fake.calls.create[0]).toMatchObject({
+      payload: { contentType: "testimonial", authorName: "Product lead", quote: "The release clarified our workflow.", association: { type: "profile" } },
+    });
   });
 
   it("rejects unknown draft fields before dispatch", async () => {

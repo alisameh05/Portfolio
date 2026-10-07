@@ -129,6 +129,17 @@ function createHarness() {
       return { ok: true, value: { aggregateVersion: prior.aggregateVersion + 1, revisionId: input.revisionId, locale: input.locale,
         routeIdentity: input.routeIdentity, currentSlug, firstPublishedAt: publishedAt, publishedAt } };
     },
+    async publishTestimonialLanguage(input) {
+      const prior = records.get(input.contentId);
+      if (!prior) return { ok: false, error: { kind: "not_found", code: "CONTENT_NOT_FOUND" } };
+      if (prior.aggregateVersion !== input.expectedVersion) return { ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: prior.aggregateVersion } };
+      const publishedAt = "2026-10-07T12:00:00.000Z";
+      records.set(input.contentId, { ...prior, lifecycle: "published", aggregateVersion: prior.aggregateVersion + 1,
+        publications: [...(prior.publications ?? []).filter((publication) => publication.locale !== input.locale), { locale: input.locale, revisionId: input.revisionId, publishedAt }] });
+      return { ok: true, value: { aggregateVersion: prior.aggregateVersion + 1, revisionId: input.revisionId, locale: input.locale,
+        firstPublishedAt: publishedAt, publishedAt } };
+    },
+    async getPublicTestimonials() { return { ok: true, value: [] }; },
     async publishAchievementLanguage(input) {
       const prior = records.get(input.contentId);
       if (!prior) return { ok: false, error: { kind: "not_found", code: "CONTENT_NOT_FOUND" } };

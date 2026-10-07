@@ -125,6 +125,37 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       aggregateVersion: reviewed.value.aggregateVersion, payload };
   }
 
+  async function createReviewedTestimonial(
+    scope: { portfolioId: StableId<"Portfolio">; ownerId: StableId<"Owner"> },
+    idempotencyPrefix: string,
+    association: { readonly type: "profile" } | { readonly type: "project"; readonly projectId: StableId<"Project"> },
+    options: { readonly authorName?: string | null; readonly quote?: string | null; readonly reviewDecision?: "accepted" | "rejected" } = {},
+  ) {
+    const content = service(scope);
+    const payload = {
+      contentType: "testimonial" as const,
+      locale: "en" as const,
+      title: "Stored testimonial",
+      summary: "Owner reviewed quote.",
+      body: "The stored quote remains the only public claim.",
+      ...(options.authorName === null ? {} : { authorName: options.authorName ?? "Product lead" }),
+      ...(options.quote === null ? {} : { quote: options.quote ?? "The release clarified our workflow." }),
+      association,
+    };
+    const created = await content.createContent({ actor: actor(scope.ownerId), idempotencyKey: key(`${idempotencyPrefix}-create`),
+      correlationId: `${idempotencyPrefix}-create`, payload });
+    if (!created.ok) throw new Error(`TESTIMONIAL_CREATE_FAILED:${created.error.code}`);
+    const preview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: created.value.contentId, revisionId: created.value.revisionId });
+    if (!preview.ok) throw new Error(`TESTIMONIAL_PREVIEW_FAILED:${preview.error.code}`);
+    const reviewed = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: created.value.contentId,
+      revisionId: created.value.revisionId, expectedVersion: created.value.aggregateVersion, idempotencyKey: key(`${idempotencyPrefix}-review`),
+      correlationId: `${idempotencyPrefix}-review`, locale: "en", snapshotHash: preview.value.snapshotHash,
+      evidenceVersion: preview.value.evidenceVersion, decision: options.reviewDecision ?? "accepted", findings: [] });
+    if (!reviewed.ok) throw new Error(`TESTIMONIAL_REVIEW_FAILED:${reviewed.error.code}`);
+    return { content, contentId: created.value.contentId, revisionId: created.value.revisionId,
+      aggregateVersion: reviewed.value.aggregateVersion, payload };
+  }
+
   async function createReviewedAchievement(
     scope: { portfolioId: StableId<"Portfolio">; ownerId: StableId<"Owner"> },
     title: string,
@@ -587,6 +618,89 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     ]);
   }, 30_000);
 
+  it("publishes minimal Testimonials with explicit associations, localized review, and visibility-safe projections", async () => {
+    const scope = await configuredScope();
+    const profile = await createReviewedTestimonial(scope, "profile-testimonial", { type: "profile" });
+    const profilePublished = await profile.content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: profile.contentId,
+      expectedVersion: profile.aggregateVersion, idempotencyKey: key("profile-testimonial-publish"), correlationId: "profile-testimonial-publish",
+      locale: "en", revisionId: profile.revisionId });
+    expect(profilePublished).toMatchObject({ ok: true, value: { aggregateVersion: 3, outcome: "language-published" } });
+    if (!profilePublished.ok) return;
+    expect(profilePublished.value).not.toHaveProperty("routeIdentity");
+    expect(profilePublished.value).not.toHaveProperty("currentSlug");
+    const profileEntries = await profile.content.getPublicTestimonials({ locale: "en", association: { type: "profile" } });
+    expect(profileEntries).toMatchObject({ ok: true, value: [{ authorName: "Product lead", quote: "The release clarified our workflow.", association: { type: "profile" } }] });
+    if (profileEntries.ok) {
+      expect(Object.keys(profileEntries.value[0] ?? {}).sort()).toEqual(["association", "authorName", "contentId", "locale", "publishedAt", "quote", "revisionId"]);
+    }
+    expect(await profile.content.getPublicTestimonials({ locale: "ar", association: { type: "profile" } }))
+      .toMatchObject({ ok: true, value: [] });
+
+    const incomplete = await createReviewedTestimonial(scope, "incomplete-testimonial", { type: "profile" }, { authorName: null, quote: null });
+    const incompletePublication = await incomplete.content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: incomplete.contentId,
+      expectedVersion: incomplete.aggregateVersion, idempotencyKey: key("incomplete-testimonial-publish"), correlationId: "incomplete-testimonial-publish",
+      locale: "en", revisionId: incomplete.revisionId });
+    expect(incompletePublication).toMatchObject({ ok: false, error: { kind: "validation", code: "TESTIMONIAL_PUBLICATION_REQUIREMENTS_NOT_MET" } });
+    const incompleteState = await admin.query(
+      "select (select lifecycle from content.items where content_id = $1::uuid) lifecycle, " +
+      "(select count(*)::int from content.testimonial_language_publications where content_id = $1::uuid) pointers, " +
+      "(select count(*)::int from content.public_testimonial_locales where content_id = $1::uuid) projections",
+      [incomplete.contentId],
+    );
+    expect(incompleteState.rows[0]).toEqual({ lifecycle: "draft", pointers: 0, projections: 0 });
+
+    const project = await createReviewedProject(scope, "Unpublished associated project", "testimonial-associated-project");
+    const associated = await createReviewedTestimonial(scope, "project-testimonial", {
+      type: "project", projectId: project.contentId as StableId<"Project">,
+    });
+    const associatedPublished = await associated.content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: associated.contentId,
+      expectedVersion: associated.aggregateVersion, idempotencyKey: key("project-testimonial-publish"), correlationId: "project-testimonial-publish",
+      locale: "en", revisionId: associated.revisionId });
+    expect(associatedPublished.ok).toBe(true);
+    expect(await associated.content.getPublicTestimonials({ locale: "en", association: { type: "project", projectId: project.contentId as StableId<"Project"> } }))
+      .toMatchObject({ ok: true, value: [] });
+
+    const projectPublished = await project.content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key("testimonial-project-publish"), correlationId: "testimonial-project-publish",
+      locale: "en", revisionId: project.revisionId });
+    expect(projectPublished.ok).toBe(true);
+    const projectEntries = await associated.content.getPublicTestimonials({ locale: "en", association: { type: "project", projectId: project.contentId as StableId<"Project"> } });
+    expect(projectEntries).toMatchObject({ ok: true, value: [{ authorName: "Product lead", quote: "The release clarified our workflow.", association: { type: "project", projectId: project.contentId } }] });
+
+    const changed = await profile.content.saveRevision({ actor: actor(scope.ownerId), contentId: profile.contentId,
+      expectedVersion: profilePublished.value.aggregateVersion, idempotencyKey: key("profile-testimonial-change"), correlationId: "profile-testimonial-change",
+      locale: "en", title: "Updated quote", summary: "Changed stored text.", body: "A changed private body.",
+      draftData: { contentType: "testimonial", authorName: "Product lead", quote: "The updated release clarified our workflow.", association: { type: "profile" } } });
+    expect(changed.ok).toBe(true);
+    if (!changed.ok) return;
+    const unreviewedReplacement = await profile.content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: profile.contentId,
+      expectedVersion: changed.value.aggregateVersion, idempotencyKey: key("profile-testimonial-unreviewed-publish"),
+      correlationId: "profile-testimonial-unreviewed-publish", locale: "en", revisionId: changed.value.revisionId });
+    expect(unreviewedReplacement).toMatchObject({ ok: false, error: { kind: "validation", code: "ACCEPTED_REVISION_REVIEW_REQUIRED" } });
+    expect(await profile.content.getPublicTestimonials({ locale: "en", association: { type: "profile" } }))
+      .toMatchObject({ ok: true, value: [{ quote: "The release clarified our workflow." }] });
+    const changedPreview = await profile.content.previewRevision({ actor: actor(scope.ownerId), contentId: profile.contentId, revisionId: changed.value.revisionId });
+    if (!changedPreview.ok) return;
+    const changedReview = await profile.content.reviewRevision({ actor: actor(scope.ownerId), contentId: profile.contentId,
+      revisionId: changed.value.revisionId, expectedVersion: changed.value.aggregateVersion, idempotencyKey: key("profile-testimonial-change-review"),
+      correlationId: "profile-testimonial-change-review", locale: "en", snapshotHash: changedPreview.value.snapshotHash,
+      evidenceVersion: changedPreview.value.evidenceVersion, decision: "accepted", findings: [] });
+    if (!changedReview.ok) return;
+    const changedPublished = await profile.content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: profile.contentId,
+      expectedVersion: changedReview.value.aggregateVersion, idempotencyKey: key("profile-testimonial-change-publish"),
+      correlationId: "profile-testimonial-change-publish", locale: "en", revisionId: changed.value.revisionId });
+    expect(changedPublished.ok).toBe(true);
+    expect(await profile.content.getPublicTestimonials({ locale: "en", association: { type: "profile" } }))
+      .toMatchObject({ ok: true, value: [{ quote: "The updated release clarified our workflow." }] });
+    const audit = await admin.query(
+      "select count(*)::int as history, (select count(*)::int from content.testimonial_language_publications where content_id = $1::uuid) as pointers, " +
+      "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.testimonial_language_version_published.v1') as events " +
+      "from content.testimonial_publication_history where content_id = $1::uuid and locale = 'en'",
+      [profile.contentId],
+    );
+    expect(audit.rows[0]).toEqual({ history: 2, pointers: 1, events: 2 });
+  }, 30_000);
+
   it("rejects invalid evidence, review, and Media facts without creating public state", async () => {
     const scope = await configuredScope();
     const rejectedMediaFacts = {
@@ -1042,6 +1156,12 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "has_table_privilege('shipwithali_worker', 'content.revisions', 'select') worker_revision, " +
       "has_table_privilege('shipwithali_backup', 'content.items', 'select') backup_root, " +
       "has_table_privilege('anon', 'content.public_project_locales', 'select') anon_projection, " +
+      "has_table_privilege('anon', 'content.public_testimonial_locales', 'select') anon_testimonial_projection, " +
+      "has_table_privilege('authenticated', 'content.testimonial_language_publications', 'select') authenticated_testimonial_publication, " +
+      "has_table_privilege('shipwithali_worker', 'content.testimonial_publication_history', 'select') worker_testimonial_history, " +
+      "has_table_privilege('shipwithali_backup', 'content.public_testimonial_locales', 'select') backup_testimonial_projection, " +
+      "has_table_privilege('shipwithali_application', 'content.public_testimonial_locales', 'select') app_testimonial_projection, " +
+      "has_column_privilege('shipwithali_application', 'content.public_testimonial_locales', 'quote', 'UPDATE') app_testimonial_quote_update, " +
       "has_table_privilege('anon', 'content.public_achievement_locales', 'select') anon_achievement_projection, " +
       "has_table_privilege('authenticated', 'content.public_achievement_locales', 'select') authenticated_achievement_projection, " +
       "has_table_privilege('shipwithali_worker', 'content.public_achievement_locales', 'select') worker_achievement_projection, " +
@@ -1052,9 +1172,11 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "has_table_privilege('shipwithali_worker', 'content.language_publications', 'select') worker_publication",
     );
     expect(grants.rows[0]).toEqual({ anon_root: false, anon_revision: false, authenticated_root: false, worker_revision: false,
-      backup_root: false, anon_projection: false, anon_achievement_projection: false, authenticated_achievement_projection: false,
+      backup_root: false, anon_projection: false, anon_testimonial_projection: false, authenticated_testimonial_publication: false,
+      worker_testimonial_history: false, backup_testimonial_projection: false, app_testimonial_projection: true,
+      app_testimonial_quote_update: true, anon_discovery_projection: false, app_route_slug_update: false,
+      anon_achievement_projection: false, authenticated_achievement_projection: false,
       worker_achievement_projection: false, backup_achievement_projection: false,
-      anon_discovery_projection: false, app_route_slug_update: false,
       authenticated_routes: false, worker_publication: false });
     const unscoped = await database.transactions.run((context) => sql.raw(
       "select (select count(*)::integer from content.items) roots, (select count(*)::integer from content.revisions) revisions",

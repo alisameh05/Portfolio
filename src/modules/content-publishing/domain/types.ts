@@ -253,6 +253,15 @@ export type LanguageVersionPublishedEvent = DomainEvent<
   }
 >;
 
+export type TestimonialLanguageVersionPublishedEvent = DomainEvent<
+  "content.testimonial_language_version_published.v1",
+  {
+    readonly contentId: StableId<string>;
+    readonly locale: SupportedLocale;
+    readonly revisionId: StableId<"Revision">;
+  }
+>;
+
 export type ContentHiddenEvent = DomainEvent<
   "content.content_hidden.v1",
   {

@@ -13,6 +13,11 @@ describe("Phase 3 operations persistence migration (#50-#53)", () => {
     .map((file) => readFileSync(join(ROOT, "supabase", "migrations", file), "utf8"))
     .join("\n")
     .toLowerCase();
+  const operationsMigration = migrationFiles
+    .filter((file) => file.includes("create_operations_primitives"))
+    .map((file) => readFileSync(join(ROOT, "supabase", "migrations", file), "utf8"))
+    .join("\n")
+    .toLowerCase();
 
   it.each(["idempotency_records", "outbox_events", "jobs"])(
     "creates and force-protects operations.%s",
@@ -31,11 +36,6 @@ describe("Phase 3 operations persistence migration (#50-#53)", () => {
   });
 
   it("keeps leased-job identities application-supplied with database-enforced status invariants", () => {
-    const operationsMigration = migrationFiles
-      .filter((file) => file.includes("create_operations_primitives"))
-      .map((file) => readFileSync(join(ROOT, "supabase", "migrations", file), "utf8"))
-      .join("\n")
-      .toLowerCase();
     expect(operationsMigration).toContain("create table operations.jobs");
     expect(operationsMigration).toContain("job_id uuid primary key");
     expect(operationsMigration).not.toMatch(/job_id\s+uuid\s+(primary key\s+)?default/);

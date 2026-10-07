@@ -282,9 +282,10 @@ export async function main() {
   const ticket109 = process.argv.includes("--ticket-109");
   const ticket110 = process.argv.includes("--ticket-110");
   const ticket111 = process.argv.includes("--ticket-111");
+  const ticket113 = process.argv.includes("--ticket-113");
   const ticket112 = process.argv.includes("--ticket-112");
-  if ([ticket109, ticket110, ticket111, ticket112].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
-  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112;
+  if ([ticket109, ticket110, ticket111, ticket112, ticket113].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
+  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -436,9 +437,11 @@ export async function main() {
 
     const evidence = contentAuthoringTicket ? {
       sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
-      ticket: ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
+      ticket: ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
       parent: 106,
-      scope: ticket112
+      scope: ticket113
+        ? "testimonial-review-publication-history-safe-profile-project-projections-and-atomic-replay"
+        : ticket112
         ? "achievement-publication-private-verification-and-chronological-timeline"
         : ticket111
         ? "reviewed-project-publication-routes-safe-projections-and-atomic-replay"
