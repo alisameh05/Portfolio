@@ -7,6 +7,10 @@ set lock_timeout = '5s';
 grant shipwithali_migration to current_user;
 set role shipwithali_migration;
 
+alter table content.revisions
+  add constraint content_revisions_review_identity_locale_unique
+  unique (revision_id, content_id, portfolio_id, locale);
+
 create table content.revision_reviews (
   review_id uuid primary key
     check (review_id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
@@ -26,8 +30,8 @@ create table content.revision_reviews (
   unique (review_id, content_id, portfolio_id, revision_id),
   foreign key (content_id, portfolio_id, content_type)
     references content.items (content_id, portfolio_id, content_type) on delete cascade,
-  foreign key (revision_id, content_id, portfolio_id)
-    references content.revisions (revision_id, content_id, portfolio_id) on delete cascade,
+  foreign key (revision_id, content_id, portfolio_id, locale)
+    references content.revisions (revision_id, content_id, portfolio_id, locale) on delete cascade,
   check (reviewer_id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
 );
 

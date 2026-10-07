@@ -42,7 +42,7 @@
     },
     {
       "file": "20261007090000_add_immutable_content_revision_reviews.sql",
-      "sha256": "fb3d5f1b707e2bd0620dc684748f9d99ac411cbcb7195f609ca86ca33676bbdc"
+      "sha256": "787ce6c713d8c2c719878ed119d1e0095b7e852d13fa634544e73db27e861a02"
     }
   ],
   "migrationLedger": [

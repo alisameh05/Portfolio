@@ -310,6 +310,11 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       snapshot_hash: preview.value.snapshotHash, evidence_version: 1, reviewer_id: scope.ownerId,
       decision: "accepted", findings: ["Internal evidence checked."],
     }]);
+    await expect(admin.query(
+      "insert into content.revision_reviews (review_id, content_id, portfolio_id, content_type, revision_id, locale, review_sequence, snapshot_hash, evidence_version, reviewer_id, decision, findings, reviewed_at) " +
+      "values ($1::uuid, $2::uuid, $3::uuid, 'achievement', $4::uuid, 'ar', 3, $5, 1, $6::uuid, 'accepted', '[]'::jsonb, now())",
+      [createStableId("ContentReview"), created.value.contentId, scope.portfolioId, created.value.revisionId, preview.value.snapshotHash, scope.ownerId],
+    )).rejects.toMatchObject({ code: "23503" });
     await expect(admin.query("update content.revision_reviews set decision = 'rejected' where review_id = $1::uuid", [reviewed.value.reviewId]))
       .rejects.toMatchObject({ code: "55000" });
     await expect(admin.query("delete from content.revision_reviews where review_id = $1::uuid", [reviewed.value.reviewId]))

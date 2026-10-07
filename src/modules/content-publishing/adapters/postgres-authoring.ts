@@ -36,6 +36,8 @@ interface RevisionRow {
   readonly saved_at: Date | string;
   readonly reviewed: boolean;
   readonly latest_review_id: string | null;
+  readonly latest_review_content_type: string | null;
+  readonly latest_review_locale: string | null;
   readonly latest_review_sequence: number | null;
   readonly latest_review_snapshot_hash: string | null;
   readonly latest_review_evidence_version: number | null;
@@ -97,6 +99,7 @@ function mapRevision(row: RevisionRow): ContentAuthoringRevision {
 
 function mapReview(row: RevisionRow): ContentAuthoringReview {
   if (!isKind(row.content_type) || !isLocale(row.locale) || row.latest_review_id === null ||
+      row.latest_review_content_type !== row.content_type || row.latest_review_locale !== row.locale ||
       row.latest_review_sequence === null || row.latest_review_snapshot_hash === null ||
       row.latest_review_evidence_version === null || row.latest_review_reviewer_id === null ||
       (row.latest_review_decision !== "accepted" && row.latest_review_decision !== "rejected") || row.latest_reviewed_at === null) {
@@ -137,7 +140,7 @@ async function setTrustedScope(context: TransactionContext, scope: ContentAuthor
 
 function latestReviewForRevision() {
   return sql`
-    select review_id, review_sequence, snapshot_hash, evidence_version, reviewer_id,
+    select review_id, content_type, locale, review_sequence, snapshot_hash, evidence_version, reviewer_id,
            decision, findings, reviewed_at
       from content.revision_reviews review
      where review.revision_id = revision.revision_id
@@ -168,6 +171,8 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
              revision.body, revision.payload, revision.saved_at,
              (latest.review_id is not null) as reviewed,
              latest.review_id::text as latest_review_id,
+             latest.content_type as latest_review_content_type,
+             latest.locale as latest_review_locale,
              latest.review_sequence as latest_review_sequence,
              latest.snapshot_hash as latest_review_snapshot_hash,
              latest.evidence_version as latest_review_evidence_version,
