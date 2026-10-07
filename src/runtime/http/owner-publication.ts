@@ -101,6 +101,7 @@ export interface PublishOwnerContentLanguageApplicationCommand {
   readonly contentId: StableId<string>;
   readonly locale: "en" | "ar";
   readonly revisionId: StableId<"Revision">;
+  readonly correlationId?: string;
 }
 
 export interface HideOwnerContentApplicationCommand {
@@ -350,6 +351,7 @@ async function handleContentCommand(
     readonly aggregateVersion: number;
     readonly [key: string]: unknown;
   }) => Record<string, unknown>,
+  successHeaders?: (value: { readonly aggregateVersion: number }) => HeadersInit,
 ): Promise<Response> {
   const logger = deps.logger;
   const { traceId } = createCorrelation(
@@ -419,7 +421,8 @@ async function handleContentCommand(
       );
     }
     logger?.info("request.completed", { traceId, status: successStatus });
-    return Response.json(parsed.data, { status: successStatus });
+    const headers = successHeaders?.({ aggregateVersion: result.value.aggregateVersion });
+    return Response.json(parsed.data, { status: successStatus, ...(headers === undefined ? {} : { headers }) });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
@@ -499,20 +502,37 @@ export async function handlePublishOwnerContentLanguage(
       response: zPublishOwnerContentLanguageResponse,
     },
     200,
-    ({ actor, contentId, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, contentId, idempotencyKey, expectedVersion, correlationId, body }) => ({
       actor,
       idempotencyKey,
       expectedVersion,
       contentId,
       locale: body["locale"] as "en" | "ar",
       revisionId: body["revisionId"] as StableId<"Revision">,
+      correlationId,
     }) as PublishOwnerContentLanguageApplicationCommand,
-    (command) => deps.service.publishOwnerContentLanguage(command),
+    async (rawCommand) => {
+      const command = rawCommand as PublishOwnerContentLanguageApplicationCommand;
+      if (deps.contentAuthoring === undefined) return await deps.service.publishOwnerContentLanguage(command);
+      const result = await deps.contentAuthoring.publishLanguageVersion({
+        actor: command.actor,
+        idempotencyKey: command.idempotencyKey,
+        expectedVersion: command.expectedVersion,
+        contentId: command.contentId,
+        locale: command.locale,
+        revisionId: command.revisionId,
+        correlationId: command.correlationId ?? command.idempotencyKey,
+      });
+      return result.ok
+        ? { ok: true as const, value: { aggregateId: result.value.aggregateId, aggregateVersion: result.value.aggregateVersion, outcome: result.value.outcome } }
+        : result;
+    },
     (value) => ({
       aggregateId: value.aggregateId,
       aggregateVersion: value.aggregateVersion,
       outcome: value["outcome"],
     }),
+    (value) => ({ ETag: `"${value.aggregateVersion}"` }),
   );
 }
 

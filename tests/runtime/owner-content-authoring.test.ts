@@ -9,6 +9,7 @@ import {
   type ContentAuthoringRepository,
 } from "../../src/modules/content-publishing/application/authoring.js";
 import type { CreateDraftPayload } from "../../src/modules/content-publishing/domain/index.js";
+import type { PublicProjectContentView } from "../../src/modules/content-publishing/application/authoring.js";
 
 const OWNER_ID = unsafeStableId<"Owner">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea1");
 const PORTFOLIO_ID = unsafeStableId<"Portfolio">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2");
@@ -20,6 +21,7 @@ function uuid(index: number): string {
 
 function createHarness() {
   const records = new Map<string, ContentAuthoringRecord>();
+  const publicProjects = new Map<string, PublicProjectContentView>();
   const events: unknown[] = [];
   let id = 10;
   const repository: ContentAuthoringRepository = {
@@ -101,6 +103,35 @@ function createHarness() {
         : revision);
       records.set(input.contentId, { ...prior, aggregateVersion: prior.aggregateVersion + 1, revisions });
       return { ok: true, value: { aggregateVersion: prior.aggregateVersion + 1 } };
+    },
+    async publishProjectLanguage(input) {
+      const prior = records.get(input.contentId);
+      if (!prior) return { ok: false, error: { kind: "not_found", code: "CONTENT_NOT_FOUND" } };
+      if (prior.aggregateVersion !== input.expectedVersion) return { ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: prior.aggregateVersion } };
+      const publishedAt = "2026-10-07T12:00:00.000Z";
+      const currentSlug = prior.candidateSlug ?? "project";
+      const artifacts = new Map((input.payload.evidence?.artifacts ?? []).map((artifact) => [artifact.id, artifact]));
+      publicProjects.set(`${currentSlug}:${input.locale}`, {
+        contentId: input.contentId, contentType: "project", locale: input.locale, revisionId: input.revisionId,
+        routeIdentity: input.routeIdentity, currentSlug, title: input.payload.title, summary: input.payload.summary, body: input.payload.body,
+        firstPublishedAt: publishedAt, publishedAt,
+        caseStudy: input.payload.caseStudy as PublicProjectContentView["caseStudy"],
+        claims: (input.payload.evidence?.claims ?? []).map((claim) => ({ text: claim.text, artifacts: claim.artifactIds.map((id) => {
+          const artifact = artifacts.get(id)!;
+          return { title: artifact.title, ...(artifact.destinationUrl === undefined ? {} : { destinationUrl: artifact.destinationUrl }), ...(artifact.mediaAssetId === undefined ? {} : { mediaAssetId: artifact.mediaAssetId }) };
+        }) })),
+        externalLinks: (input.payload.externalLinks ?? []).filter((link) => input.locale === "en" || link.isAvailableInArabic).map(({ label, destination }) => ({ label, destination })),
+      });
+      records.set(input.contentId, { ...prior, lifecycle: "published", aggregateVersion: prior.aggregateVersion + 1,
+        publications: [...(prior.publications ?? []).filter((publication) => publication.locale !== input.locale), { locale: input.locale, revisionId: input.revisionId, publishedAt }] });
+      return { ok: true, value: { aggregateVersion: prior.aggregateVersion + 1, revisionId: input.revisionId, locale: input.locale,
+        routeIdentity: input.routeIdentity, currentSlug, firstPublishedAt: publishedAt, publishedAt } };
+    },
+    async getPublicProjectBySlug(input) {
+      const project = publicProjects.get(`${input.slug}:${input.locale}`);
+      return project === undefined
+        ? { ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } }
+        : { ok: true, value: project };
     },
     async listHistory(input) {
       const record = records.get(input.contentId);
@@ -395,6 +426,72 @@ describe("Content authoring application service", () => {
     expect(selected.ok).toBe(true);
     if (selected.ok) expect(records.get(selected.value.contentId)?.revisions[0]?.payload).toMatchObject({ association: { type: "profile" } });
     expect(records.size).toBe(1);
+  });
+
+  it("publishes only an accepted complete Project snapshot and serves the requested locale without fallback", async () => {
+    const { service, records, events } = createHarness();
+    const artifactId = unsafeStableId<"SupportingArtifact">(uuid(95));
+    const command = {
+      actor: ACTOR, idempotencyKey: "publish-project-create" as never, correlationId: "publish-project-create",
+      payload: {
+        contentType: "project" as const, locale: "en" as const, title: "Atlas Search", summary: "A published summary.", body: "Public case study.",
+        caseStudy: { problem: "Discovery took too long.", ownerRole: "Designed the search workflow.", contributions: ["Built the index."],
+          outcomes: ["Qualitative testing found items faster."], lessons: "Index quality matters." },
+        evidence: { claims: [{ claimId: unsafeStableId<"EvidenceClaim">(uuid(96)), text: "The demo shows the workflow.", artifactIds: [artifactId] }],
+          artifacts: [{ id: artifactId, title: "Public demo", destinationUrl: "https://example.com/demo" }] },
+        externalLinks: [
+          { id: unsafeStableId<"ExternalLink">(uuid(97)), label: "English demo", destination: "https://example.com/en", isAvailableInArabic: false },
+        ],
+      },
+    };
+    const created = await service.createContent(command);
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const preview = await service.previewRevision({ actor: ACTOR, contentId: created.value.contentId, revisionId: created.value.revisionId });
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    const reviewed = await service.reviewRevision({ actor: ACTOR, contentId: created.value.contentId, revisionId: created.value.revisionId,
+      expectedVersion: 1, idempotencyKey: "publish-project-review" as never, correlationId: "publish-project-review", locale: "en",
+      snapshotHash: preview.value.snapshotHash, evidenceVersion: preview.value.evidenceVersion, decision: "accepted", findings: [] });
+    expect(reviewed).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+    const publish = { actor: ACTOR, contentId: created.value.contentId, expectedVersion: 2,
+      idempotencyKey: "publish-project-language" as never, correlationId: "publish-project-language", locale: "en" as const, revisionId: created.value.revisionId };
+    const first = await service.publishLanguageVersion(publish);
+    expect(first).toMatchObject({ ok: true, value: { aggregateVersion: 3, outcome: "language-published", currentSlug: "atlas-search", locale: "en" } });
+    expect(await service.publishLanguageVersion(publish)).toEqual(first);
+    expect(await service.publishLanguageVersion({ ...publish, locale: "ar" })).toMatchObject({ ok: false, error: { kind: "conflict", code: "IDEMPOTENCY_KEY_REUSED" } });
+    expect(await service.getPublicProject({ slug: "atlas-search", locale: "ar" })).toMatchObject({ ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } });
+    const publicProject = await service.getPublicProject({ slug: "atlas-search", locale: "en" });
+    expect(publicProject).toMatchObject({ ok: true, value: { title: "Atlas Search", caseStudy: { problem: "Discovery took too long." },
+      claims: [{ text: "The demo shows the workflow.", artifacts: [{ title: "Public demo", destinationUrl: "https://example.com/demo" }] }],
+      externalLinks: [{ label: "English demo", destination: "https://example.com/en" }] } });
+    expect(JSON.stringify(publicProject)).not.toMatch(/review|findings|signedUrl|providerKey/i);
+    expect(records.get(created.value.contentId)).toMatchObject({ lifecycle: "published", aggregateVersion: 3,
+      publications: [{ locale: "en", revisionId: created.value.revisionId }] });
+    expect(events.filter((event) => (event as { payload?: { type?: string } }).payload?.type === "content.language_version_published.v1")).toHaveLength(1);
+  });
+
+  it("fails closed for unresolved Media facts and rejects reviewed placeholder evidence without public side effects", async () => {
+    const { service, records, events } = createHarness();
+    const artifactId = unsafeStableId<"SupportingArtifact">(uuid(98));
+    const mediaId = unsafeStableId<"MediaAsset">(uuid(99));
+    const created = await service.createContent({ actor: ACTOR, idempotencyKey: "publish-media-create" as never, correlationId: "publish-media-create",
+      payload: { contentType: "project", locale: "en", title: "Media case", summary: "Summary.", body: "Body.",
+        caseStudy: { problem: "Problem.", ownerRole: "Role.", contributions: ["Work."], outcomes: ["Qualitative outcome."], lessons: "Lesson." },
+        evidence: { claims: [{ claimId: unsafeStableId<"EvidenceClaim">(uuid(90)), text: "The clip demonstrates the result.", artifactIds: [artifactId] }],
+          artifacts: [{ id: artifactId, title: "Unresolved media", mediaAssetId: mediaId }] } } });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const preview = await service.previewRevision({ actor: ACTOR, contentId: created.value.contentId, revisionId: created.value.revisionId });
+    if (!preview.ok) return;
+    await service.reviewRevision({ actor: ACTOR, contentId: created.value.contentId, revisionId: created.value.revisionId, expectedVersion: 1,
+      idempotencyKey: "publish-media-review" as never, correlationId: "publish-media-review", locale: "en", snapshotHash: preview.value.snapshotHash,
+      evidenceVersion: preview.value.evidenceVersion, decision: "accepted", findings: [] });
+    const result = await service.publishLanguageVersion({ actor: ACTOR, contentId: created.value.contentId, expectedVersion: 2,
+      idempotencyKey: "publish-media-attempt" as never, correlationId: "publish-media-attempt", locale: "en", revisionId: created.value.revisionId });
+    expect(result).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_ACCEPTANCE_UNAVAILABLE" } });
+    expect(records.get(created.value.contentId)).toMatchObject({ lifecycle: "draft", aggregateVersion: 2 });
+    expect(events.filter((event) => (event as { payload?: { type?: string } }).payload?.type === "content.language_version_published.v1")).toHaveLength(0);
   });
 
   it.each([

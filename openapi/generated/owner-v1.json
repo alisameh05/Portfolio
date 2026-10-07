@@ -810,6 +810,16 @@
         "responses": {
           "200": {
             "description": "Language version published after current validation.",
+            "headers": {
+              "ETag": {
+                "required": true,
+                "description": "New aggregate version for the next If-Match command.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\"[1-9][0-9]*\"$"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {

@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "runId": "de83886f-f936-4d1c-8fc3-d92e3539b6a2",
-  "sourceRevision": "396d1b74643a555b9988b245903dcbfb66570a03",
+  "runId": "e384eaba-a6fa-4018-95c0-b38859ad4c69",
+  "sourceRevision": "8986a7675b41606bfad1e836ed8c1f46dbf24cb4",
   "suite": "authoring",
-  "startedAt": "2026-10-07T15:02:40.069Z",
+  "startedAt": "2026-10-07T16:31:09.685Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,
   "counts": {
-    "executed": 29,
+    "executed": 32,
     "failed": 0,
     "skipped": 0,
-    "total": 29
+    "total": 32
   },
   "partial": false,
   "dependency": {

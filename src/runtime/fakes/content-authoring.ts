@@ -10,6 +10,8 @@ export function createProductionContentAuthoringService(): ContentAuthoringServi
     async saveRevision() { return unavailable; },
     async previewRevision() { return unavailable; },
     async reviewRevision() { return unavailable; },
+    async publishLanguageVersion() { return unavailable; },
+    async getPublicProject() { return unavailable; },
     async getContentHistory() { return unavailable; },
   };
 }

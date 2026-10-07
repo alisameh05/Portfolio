@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { unsafeStableId } from "../../src/shared/domain/index.js";
+import type { PublishLanguageVersionCommand } from "../../src/modules/content-publishing/application/service.js";
 import { createTestLogger } from "../../src/runtime/ports.js";
 import { createOwnerPublicationTestFake } from "../../src/runtime/fakes/owner-publication.js";
 import type { ContentAuthoringService } from "../../src/modules/content-publishing/application/authoring.js";
@@ -8,6 +9,7 @@ import {
 } from "../../src/runtime/http/owner-content-authoring.js";
 import {
   handleGetOwnerContentAggregate,
+  handlePublishOwnerContentLanguage,
   handleSaveOwnerContentRevision,
 } from "../../src/runtime/http/owner-publication.js";
 import {
@@ -29,7 +31,7 @@ const CONTENT = {
 };
 
 function createService() {
-  const calls: { create: unknown[]; get: unknown[]; save: unknown[]; preview: unknown[]; review: unknown[]; history: unknown[] } = { create: [], get: [], save: [], preview: [], review: [], history: [] };
+  const calls: { create: unknown[]; get: unknown[]; save: unknown[]; preview: unknown[]; review: unknown[]; history: unknown[]; publish: unknown[] } = { create: [], get: [], save: [], preview: [], review: [], history: [], publish: [] };
   const service: ContentAuthoringService = {
     async createContent(command) {
       calls.create.push(command);
@@ -51,6 +53,13 @@ function createService() {
       calls.review.push(command);
       return { ok: true, value: { aggregateId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 2, outcome: "revision-reviewed", revisionId: unsafeStableId<"Revision">(REVISION_ID), reviewId: unsafeStableId<"ContentReview">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea3") } };
     },
+    async publishLanguageVersion(command: PublishLanguageVersionCommand) {
+      calls.publish.push(command);
+      return { ok: true as const, value: { aggregateId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 3, outcome: "language-published" as const,
+        revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: command.locale, currentSlug: "atlas", routeIdentity: unsafeStableId<"PublicRoute">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4"),
+        firstPublishedAt: "2026-10-07T12:00:00.000Z", publishedAt: "2026-10-07T12:00:00.000Z" } };
+    },
+    async getPublicProject() { return { ok: false as const, error: { kind: "not_found" as const, code: "PUBLIC_CONTENT_NOT_FOUND" } }; },
     async getContentHistory(query) {
       calls.history.push(query);
       return { ok: true, value: { entries: [{ revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: "en", sequence: 1, savedAt: "2026-10-05T08:00:00.000Z", reviewDecision: "accepted" }], nextCursor: null } };
@@ -115,6 +124,21 @@ describe("Owner content authoring HTTP adapters", () => {
     expect(fake.calls.save).toHaveLength(1);
     expect(fake.calls.save[0]).toMatchObject({ expectedVersion: 1, locale: "ar", body: "نص أولي", draftData: { contentType: "project", caseStudy: { outcomes: ["مخرجات"] },
       evidence: { artifacts: [{ mediaAssetId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4" }] }, externalLinks: [{ destination: "https://example.com/project-ar" }] } });
+  });
+
+  it("publishes through the PostgreSQL-backed Content facade and returns the new ETag", async () => {
+    const fake = createService();
+    const publicationFake = createOwnerPublicationTestFake({ type: "success" });
+    const response = await handlePublishOwnerContentLanguage(
+      request("POST", { locale: "en", revisionId: REVISION_ID }, { "idempotency-key": "publish-1", "if-match": '"2"' }),
+      { contentId: CONTENT_ID },
+      { service: publicationFake, contentAuthoring: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("etag")).toBe('"3"');
+    expect(await response.json()).toEqual({ aggregateId: CONTENT_ID, aggregateVersion: 3, outcome: "language-published" });
+    expect(fake.calls.publish).toMatchObject([{ contentId: CONTENT_ID, expectedVersion: 2, locale: "en", revisionId: REVISION_ID }]);
+    expect(publicationFake.calls.publishOwnerContentLanguage).toHaveLength(0);
   });
 
   it("serves private non-indexable previews and returns a bounded Owner history page", async () => {

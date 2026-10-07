@@ -281,8 +281,9 @@ async function assertPhase3OperationsPreserved(connectionString, expected) {
 export async function main() {
   const ticket109 = process.argv.includes("--ticket-109");
   const ticket110 = process.argv.includes("--ticket-110");
-  if (ticket109 && ticket110) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
-  const contentAuthoringTicket = ticket109 || ticket110;
+  const ticket111 = process.argv.includes("--ticket-111");
+  if ([ticket109, ticket110, ticket111].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
+  const contentAuthoringTicket = ticket109 || ticket110 || ticket111;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -394,7 +395,7 @@ export async function main() {
     const testFile = contentAuthoringTicket
       ? "tests/database/content-authoring.integration.test.ts"
       : "tests/database/portfolio-settings.integration.test.ts";
-    const reportPath = join(cleanProject.workdir, ticket109 ? "content-authoring-test-report.json" : "test-report.json");
+    const reportPath = join(cleanProject.workdir, contentAuthoringTicket ? "content-authoring-test-report.json" : "test-report.json");
     const result = spawnSync(process.execPath, [
       join(ROOT, "node_modules/vitest/vitest.mjs"),
       "run",
@@ -413,7 +414,10 @@ export async function main() {
     let report;
     try { report = JSON.parse(readFileSync(reportPath, "utf8")); } catch { throw new Error("PORTFOLIO_SETTINGS_TEST_REPORT_MISSING"); }
     if (result.error || result.status !== 0) {
-      const messages = report.testResults?.flatMap((suite) => suite.assertionResults?.flatMap((test) => test.failureMessages ?? []) ?? []).join("\n") ?? "";
+      const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults
+        ?.filter((test) => test.status === "failed")
+        .map((test) => `${[...(test.ancestorTitles ?? []), test.title].join(" > ")}: ${(test.failureMessages ?? []).join(" ")}`) ?? []) ?? [];
+      const messages = failedAssertions.join("\n");
       const code = messages.match(/PORTFOLIO_SETTINGS_[A-Z_]+/)?.[0] ?? "assertion";
       const failedTests = report.testResults?.flatMap((suite) => suite.assertionResults
         ?.filter((test) => test.status === "failed")
@@ -422,7 +426,7 @@ export async function main() {
         .replace(/postgres(?:ql)?:\/\/[^\s"']+/gi, "[database connection redacted]")
         .replace(/password\s*[=:]\s*[^\s,;]+/gi, "password=[redacted]")
         .replace(/\s+/g, " ")
-        .slice(0, 800);
+        .slice(0, 2_000);
       throw new Error(`PORTFOLIO_SETTINGS_TEST_FAILED:${code}:${failedTests.join(" | ")}:${safeDetail}`);
     }
     requireExecutedTests(report);
@@ -430,9 +434,11 @@ export async function main() {
       " real PostgreSQL integration: " + report.numPassedTests + " passed, 0 skipped.");
 
     const evidence = contentAuthoringTicket ? {
-      ticket: ticket110 ? 110 : 109,
+      ticket: ticket111 ? 111 : ticket110 ? 110 : 109,
       parent: 106,
-      scope: ticket110
+      scope: ticket111
+        ? "reviewed-project-publication-routes-safe-projections-and-atomic-replay"
+        : ticket110
         ? "exact-revision-review-private-preview-history-and-atomic-idempotent-audit"
         : "content-authoring-clean-upgrade-rls-immutability-concurrency-and-atomic-rollback",
       predecessorSnapshot: "supabase/baselines/phase3.json",
@@ -446,7 +452,8 @@ export async function main() {
         outboxEvents: preservedRows.outbox.length === 1,
         jobs: preservedRows.jobs.length === 1,
       },
-      authoringTablesWithForcedRls: ["content.items", "content.revisions", ...(ticket110 ? ["content.revision_reviews"] : [])],
+      authoringTablesWithForcedRls: ["content.items", "content.revisions", ...(ticket110 || ticket111 ? ["content.revision_reviews"] : []),
+        ...(ticket111 ? ["content.public_routes", "content.public_route_reservations", "content.language_publications", "content.publication_history", "content.public_project_locales"] : [])],
       databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
         status: test.status,
@@ -551,7 +558,9 @@ export async function main() {
     if (
       /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
     ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
-    const evidencePath = ticket110
+    const evidencePath = ticket111
+      ? join(ROOT, "evidence/phase-5-project-publication.json")
+      : ticket110
       ? join(ROOT, "evidence/phase-5-content-revision-review.json")
       : ticket109
         ? join(ROOT, "evidence/phase-5-content-authoring.json")

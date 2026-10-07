@@ -8,9 +8,13 @@ import type {
   ContentAuthoringRecord,
   ContentAuthoringRepository,
   ContentAuthoringReview,
+  ContentAuthoringPublication,
   ContentAuthoringRevision,
   ContentAuthoringScope,
   CreateContentPersistenceInput,
+  PublishProjectLanguageInput,
+  PublishProjectLanguageResult,
+  PublicProjectContentView,
 } from "../application/authoring.js";
 
 interface RootRow {
@@ -53,6 +57,10 @@ function isKind(value: string): value is ContentKind {
 
 function isLocale(value: string): value is SupportedLocale {
   return value === "en" || value === "ar";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parsePayload(value: unknown, row: RevisionRow): CreateDraftPayload {
@@ -189,6 +197,19 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
          and revision.portfolio_id = ${scope.portfolioId}::uuid
        order by revision.locale, revision.stream_sequence
     `.execute(executor);
+    const publications = await sql<{ locale: string; revision_id: string; published_at: Date | string }>`
+      select locale, revision_id::text, published_at
+        from content.language_publications
+       where content_id = ${contentId}::uuid
+         and portfolio_id = ${scope.portfolioId}::uuid
+       order by locale
+    `.execute(executor);
+    const mappedPublications: ContentAuthoringPublication[] = publications.rows.map((row) => {
+      if (!isLocale(row.locale)) throw new PostgresInfrastructureError();
+      const publishedAt = row.published_at instanceof Date ? row.published_at.toISOString() : new Date(row.published_at).toISOString();
+      if (!Number.isFinite(Date.parse(publishedAt))) throw new PostgresInfrastructureError();
+      return { locale: row.locale, revisionId: row.revision_id as StableId<"Revision">, publishedAt };
+    });
     return {
       ok: true,
       value: {
@@ -200,6 +221,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         candidateSlug: root.candidate_slug,
         aggregateVersion: root.aggregate_version,
         revisions: revisions.rows.map(mapRevision),
+        publications: mappedPublications,
       },
     };
   }
@@ -375,6 +397,240 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
           )
         `.execute(executor);
         return { ok: true, value: { aggregateVersion: root.aggregate_version } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async publishProjectLanguage(input: PublishProjectLanguageInput, context: TransactionContext) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const selectedRoot = await sql<{
+          content_type: string; lifecycle: string; candidate_slug: string | null;
+          aggregate_version: number; first_published_at: Date | string | null;
+        }>`
+          select content_type, lifecycle, candidate_slug, aggregate_version, first_published_at
+            from content.items
+           where content_id = ${input.contentId}::uuid
+             and portfolio_id = ${input.scope.portfolioId}::uuid
+           for update
+        `.execute(executor);
+        const root = selectedRoot.rows[0];
+        if (root === undefined) return err({ kind: "not_found", code: "CONTENT_NOT_FOUND" });
+        if (root.aggregate_version !== input.expectedVersion) {
+          return err({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: root.aggregate_version });
+        }
+        if (root.content_type !== "project") return err({ kind: "validation", code: "CONTENT_TYPE_NOT_PUBLISHABLE" });
+        if (root.lifecycle !== "draft" && root.lifecycle !== "published") return err({ kind: "validation", code: "CONTENT_LIFECYCLE_NOT_PUBLISHABLE" });
+        if (root.candidate_slug === null) return err({ kind: "validation", code: "PROJECT_CANDIDATE_SLUG_REQUIRED" });
+
+        const selected = await sql<{ review_id: string; snapshot_hash: string; evidence_version: number; decision: string; reviewer_id: string }>`
+          select review.review_id::text, review.snapshot_hash, review.evidence_version,
+                 review.decision, review.reviewer_id::text
+            from content.revisions revision
+            join lateral (
+              select review_id, snapshot_hash, evidence_version, decision, reviewer_id
+                from content.revision_reviews review
+               where review.revision_id = revision.revision_id
+                 and review.content_id = revision.content_id
+                 and review.portfolio_id = revision.portfolio_id
+               order by review.review_sequence desc
+               limit 1
+            ) review on true
+           where revision.revision_id = ${input.revisionId}::uuid
+             and revision.content_id = ${input.contentId}::uuid
+             and revision.portfolio_id = ${input.scope.portfolioId}::uuid
+             and revision.content_type = 'project'
+             and revision.locale = ${input.locale}
+        `.execute(executor);
+        const review = selected.rows[0];
+        if (review === undefined) return err({ kind: "not_found", code: "REVISION_NOT_FOUND" });
+        if (review.review_id !== input.reviewId || review.decision !== "accepted" || review.reviewer_id !== input.scope.ownerId ||
+            review.snapshot_hash !== input.snapshotHash) return err({ kind: "validation", code: "ACCEPTED_REVISION_REVIEW_REQUIRED" });
+
+        const existingRoute = await sql<{ route_identity: string; current_slug: string; first_published_at: Date | string }>`
+          select route_identity::text, current_slug, first_published_at
+            from content.public_routes
+           where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           for update
+        `.execute(executor);
+        let routeIdentity: StableId<"PublicRoute">;
+        let currentSlug: string;
+        let routeFirstPublishedAt: Date | string;
+        if (existingRoute.rows[0] !== undefined) {
+          routeIdentity = existingRoute.rows[0].route_identity as StableId<"PublicRoute">;
+          currentSlug = existingRoute.rows[0].current_slug;
+          routeFirstPublishedAt = existingRoute.rows[0].first_published_at;
+        } else {
+          routeIdentity = input.routeIdentity;
+          currentSlug = root.candidate_slug;
+          const transactionTime = await sql<{ value: Date | string }>`select transaction_timestamp() as value`.execute(executor);
+          const firstTime = root.first_published_at ?? transactionTime.rows[0]?.value;
+          if (firstTime === undefined) throw new PostgresInfrastructureError();
+          const reservation = await sql<{ normalized_slug: string }>`
+            insert into content.public_route_reservations (portfolio_id, content_type, normalized_slug, route_identity, content_id, is_current)
+            values (${input.scope.portfolioId}::uuid, 'project', ${currentSlug}, ${routeIdentity}::uuid, ${input.contentId}::uuid, true)
+            on conflict (portfolio_id, content_type, normalized_slug) do nothing
+            returning normalized_slug
+          `.execute(executor);
+          if (reservation.rows[0] === undefined) {
+            return err({ kind: "conflict", code: "PUBLIC_SLUG_CONFLICT" });
+          }
+          await sql`
+            insert into content.public_routes (route_identity, content_id, portfolio_id, content_type, current_slug, first_published_at)
+            values (${routeIdentity}::uuid, ${input.contentId}::uuid, ${input.scope.portfolioId}::uuid, 'project', ${currentSlug}, ${firstTime}::timestamptz)
+          `.execute(executor);
+          routeFirstPublishedAt = firstTime;
+        }
+        const firstPublishedAt = root.first_published_at ?? routeFirstPublishedAt;
+        const updatedRoot = await sql<{ aggregate_version: number; first_published_at: Date | string }>`
+          update content.items
+             set lifecycle = 'published',
+                 first_published_at = coalesce(first_published_at, transaction_timestamp()),
+                 aggregate_version = aggregate_version + 1,
+                 updated_at = transaction_timestamp()
+           where content_id = ${input.contentId}::uuid
+             and portfolio_id = ${input.scope.portfolioId}::uuid
+             and aggregate_version = ${input.expectedVersion}
+          returning aggregate_version, first_published_at
+        `.execute(executor);
+        const updated = updatedRoot.rows[0];
+        if (updated === undefined) throw new PostgresInfrastructureError();
+        const pointer = await sql<{ publication_sequence: number }>`
+          select coalesce(max(publication_sequence), 0)::integer + 1 as publication_sequence
+            from content.publication_history
+           where content_id = ${input.contentId}::uuid and locale = ${input.locale}
+        `.execute(executor);
+        const sequence = pointer.rows[0]?.publication_sequence;
+        if (sequence === undefined) throw new PostgresInfrastructureError();
+
+        await sql`
+          insert into content.publication_history (
+            content_id, portfolio_id, content_type, locale, publication_sequence,
+            revision_id, review_id, route_identity, published_at, media_facts_version
+          ) values (
+            ${input.contentId}::uuid, ${input.scope.portfolioId}::uuid, 'project', ${input.locale}, ${sequence},
+            ${input.revisionId}::uuid, ${input.reviewId}::uuid, ${routeIdentity}::uuid, transaction_timestamp(), ${input.mediaFactsVersion}
+          )
+        `.execute(executor);
+        await sql`
+          insert into content.language_publications (
+            content_id, portfolio_id, content_type, locale, revision_id, review_id,
+            route_identity, publication_sequence, published_at, media_facts_version
+          ) values (
+            ${input.contentId}::uuid, ${input.scope.portfolioId}::uuid, 'project', ${input.locale},
+            ${input.revisionId}::uuid, ${input.reviewId}::uuid, ${routeIdentity}::uuid, ${sequence}, transaction_timestamp(), ${input.mediaFactsVersion}
+          )
+          on conflict (content_id, locale) do update set
+            revision_id = excluded.revision_id,
+            review_id = excluded.review_id,
+            route_identity = excluded.route_identity,
+            publication_sequence = excluded.publication_sequence,
+            published_at = excluded.published_at,
+            media_facts_version = excluded.media_facts_version
+        `.execute(executor);
+        const artifactById = new Map((input.payload.evidence?.artifacts ?? []).map((artifact) => [artifact.id, artifact]));
+        const claims = (input.payload.evidence?.claims ?? []).map((claim) => ({
+          text: claim.text,
+          artifacts: claim.artifactIds.map((id) => {
+            const artifact = artifactById.get(id);
+            if (artifact === undefined) throw new PostgresInfrastructureError();
+            return {
+              title: artifact.title,
+              ...(artifact.destinationUrl === undefined ? {} : { destinationUrl: artifact.destinationUrl }),
+              ...(artifact.mediaAssetId === undefined ? {} : { mediaAssetId: artifact.mediaAssetId }),
+            };
+          }),
+        }));
+        const links = (input.payload.externalLinks ?? [])
+          .filter((link) => input.locale === "en" || link.isAvailableInArabic)
+          .map(({ label, destination }) => ({ label, destination }));
+        await sql`
+          insert into content.public_project_locales (
+            content_id, portfolio_id, content_type, locale, revision_id, route_identity,
+            title, summary, body, case_study, claims, external_links,
+            first_published_at, published_at, updated_at
+          ) values (
+            ${input.contentId}::uuid, ${input.scope.portfolioId}::uuid, 'project', ${input.locale},
+            ${input.revisionId}::uuid, ${routeIdentity}::uuid, ${input.payload.title}, ${input.payload.summary},
+            ${input.payload.body}, ${JSON.stringify(input.payload.caseStudy)}::jsonb, ${JSON.stringify(claims)}::jsonb,
+            ${JSON.stringify(links)}::jsonb, ${firstPublishedAt}::timestamptz, transaction_timestamp(), transaction_timestamp()
+          )
+          on conflict (content_id, locale) do update set
+            revision_id = excluded.revision_id,
+            route_identity = excluded.route_identity,
+            title = excluded.title,
+            summary = excluded.summary,
+            body = excluded.body,
+            case_study = excluded.case_study,
+            claims = excluded.claims,
+            external_links = excluded.external_links,
+            published_at = excluded.published_at,
+            updated_at = transaction_timestamp()
+        `.execute(executor);
+        const published = await sql<{ published_at: Date | string }>`
+          select published_at from content.language_publications
+           where content_id = ${input.contentId}::uuid and locale = ${input.locale}
+        `.execute(executor);
+        const publishedAt = published.rows[0]?.published_at;
+        if (publishedAt === undefined) throw new PostgresInfrastructureError();
+        return { ok: true, value: {
+          aggregateVersion: updated.aggregate_version,
+          revisionId: input.revisionId,
+          locale: input.locale,
+          routeIdentity,
+          currentSlug,
+          firstPublishedAt: updated.first_published_at instanceof Date ? updated.first_published_at.toISOString() : new Date(updated.first_published_at).toISOString(),
+          publishedAt: publishedAt instanceof Date ? publishedAt.toISOString() : new Date(publishedAt).toISOString(),
+        } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async getPublicProjectBySlug(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const result = await sql<{
+          content_id: string; revision_id: string; route_identity: string; current_slug: string;
+          title: string; summary: string; body: string; case_study: unknown; claims: unknown; external_links: unknown;
+          first_published_at: Date | string; published_at: Date | string;
+        }>`
+          select item.content_id::text, locale.revision_id::text, route.route_identity::text, route.current_slug,
+                 locale.title, locale.summary, locale.body, locale.case_study, locale.claims, locale.external_links,
+                 item.first_published_at, locale.published_at
+            from content.public_routes route
+            join content.items item on item.content_id = route.content_id and item.portfolio_id = route.portfolio_id
+            join content.language_publications publication
+              on publication.content_id = item.content_id and publication.portfolio_id = item.portfolio_id
+             and publication.locale = ${input.locale} and publication.route_identity = route.route_identity
+            join content.public_project_locales locale
+              on locale.content_id = publication.content_id and locale.portfolio_id = publication.portfolio_id
+             and locale.locale = publication.locale and locale.revision_id = publication.revision_id
+           where route.portfolio_id = ${input.scope.portfolioId}::uuid
+             and route.content_type = 'project' and route.current_slug = ${input.slug}
+             and item.lifecycle = 'published' and item.content_type = 'project'
+        `.execute(executor);
+        const row = result.rows[0];
+        if (row === undefined || row.first_published_at === null) return err({ kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" });
+        const firstPublishedAt = row.first_published_at instanceof Date ? row.first_published_at.toISOString() : new Date(row.first_published_at).toISOString();
+        const publishedAt = row.published_at instanceof Date ? row.published_at.toISOString() : new Date(row.published_at).toISOString();
+        const caseStudy = typeof row.case_study === "string" ? JSON.parse(row.case_study) as unknown : row.case_study;
+        const claims = typeof row.claims === "string" ? JSON.parse(row.claims) as unknown : row.claims;
+        const externalLinks = typeof row.external_links === "string" ? JSON.parse(row.external_links) as unknown : row.external_links;
+        if (!Number.isFinite(Date.parse(firstPublishedAt)) || !Number.isFinite(Date.parse(publishedAt)) ||
+            !isRecord(caseStudy) || !Array.isArray(claims) || !Array.isArray(externalLinks)) throw new PostgresInfrastructureError();
+        return { ok: true, value: {
+          contentId: row.content_id as StableId<string>, contentType: "project", locale: input.locale,
+          revisionId: row.revision_id as StableId<"Revision">, routeIdentity: row.route_identity as StableId<"PublicRoute">,
+          currentSlug: row.current_slug, title: row.title, summary: row.summary, body: row.body,
+          firstPublishedAt, publishedAt, caseStudy: caseStudy as PublicProjectContentView["caseStudy"],
+          claims: claims as PublicProjectContentView["claims"], externalLinks: externalLinks as PublicProjectContentView["externalLinks"],
+        } };
       } catch (error) {
         if (error instanceof PostgresInfrastructureError) throw error;
         throw new PostgresInfrastructureError();
