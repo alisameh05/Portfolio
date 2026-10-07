@@ -44,3 +44,5 @@ export class StubContentRepository implements ContentRepositoryPort {
     return err({ kind: "temporarily_unavailable", code: "PERSISTENCE_NOT_IMPLEMENTED" });
   }
 }
+
+export { createPostgresContentAuthoringRepository } from "./postgres-authoring.js";

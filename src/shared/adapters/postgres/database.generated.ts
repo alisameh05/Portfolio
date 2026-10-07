@@ -23,6 +23,37 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface ContentItems {
+  aggregate_version: Generated<number>;
+  /**
+   * Editable private candidate only; it never reserves or identifies a public route.
+   */
+  candidate_slug: string | null;
+  content_id: string;
+  content_type: string;
+  created_at: Generated<Timestamp>;
+  first_published_at: Timestamp | null;
+  lifecycle: Generated<string>;
+  portfolio_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface ContentRevisions {
+  aggregate_version: number;
+  body: string;
+  content_id: string;
+  content_type: string;
+  locale: string;
+  payload: Json;
+  portfolio_id: string;
+  reviewed: Generated<boolean>;
+  revision_id: string;
+  saved_at: Timestamp;
+  stream_sequence: number;
+  summary: string;
+  title: string;
+}
+
 export interface IdentityAccessOwnerLinks {
   created_at: Generated<Timestamp>;
   /**
@@ -109,6 +140,8 @@ export interface PortfolioConfigSettings {
 }
 
 export interface DB {
+  "content.items": ContentItems;
+  "content.revisions": ContentRevisions;
   "identity_access.owner_links": IdentityAccessOwnerLinks;
   "operations.idempotency_records": OperationsIdempotencyRecords;
   "operations.jobs": OperationsJobs;

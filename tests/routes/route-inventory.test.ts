@@ -90,7 +90,7 @@ describe("Phase 1 route and source inventory (#11)", () => {
   it("reconciles the full Owner contract surface with no generic patch or Lab entry", () => {
     const bundle = loadBundle("openapi/generated/owner-v1.json");
     const actual = listOperations(bundle);
-    // 39 active operations plus 9 Phase 5 contracts that remain fail-closed.
+    // 40 active operations plus 8 Phase 5 contracts that remain fail-closed.
     expect(actual).toHaveLength(48);
     expect(actual).toContain("PUT /api/owner/v1/configuration/profile");
     expect(actual).toContain("POST /api/owner/v1/exports");

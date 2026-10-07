@@ -401,7 +401,10 @@
                     "summary": "Stored quote.",
                     "body": "Draft testimonial.",
                     "authorName": "Reviewer",
-                    "quote": "A concise stored quote."
+                    "quote": "A concise stored quote.",
+                    "association": {
+                      "type": "profile"
+                    }
                   }
                 }
               }
@@ -3877,79 +3880,57 @@
           }
         }
       },
-      "CreateProjectRequest": {
+      "ExternalLinkDraft": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "contentType",
-          "locale",
-          "title",
-          "summary",
-          "body",
-          "candidateSlug"
+          "id",
+          "label",
+          "destination",
+          "isAvailableInArabic"
         ],
         "properties": {
-          "contentType": {
-            "type": "string",
-            "const": "project"
+          "id": {
+            "$ref": "#/components/schemas/StableId"
           },
-          "locale": {
-            "$ref": "#/components/schemas/Locale"
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "destination": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "isAvailableInArabic": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SupportingArtifactDraft": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/StableId"
           },
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 160
+            "maxLength": 200
           },
-          "summary": {
+          "destinationUrl": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 500
+            "format": "uri",
+            "maxLength": 2048
           },
-          "body": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 50000
-          },
-          "candidateSlug": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 120,
-            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-          },
-          "caseStudy": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "problem": {
-                "type": "string",
-                "maxLength": 5000
-              },
-              "ownerRole": {
-                "type": "string",
-                "maxLength": 2000
-              },
-              "contributions": {
-                "type": "array",
-                "maxItems": 50,
-                "items": {
-                  "type": "string",
-                  "maxLength": 2000
-                }
-              },
-              "outcomes": {
-                "type": "array",
-                "maxItems": 50,
-                "items": {
-                  "type": "string",
-                  "maxLength": 2000
-                }
-              },
-              "lessons": {
-                "type": "string",
-                "maxLength": 5000
-              }
-            }
+          "mediaAssetId": {
+            "$ref": "#/components/schemas/StableId"
           }
         }
       },
@@ -3986,6 +3967,98 @@
                 }
               }
             }
+          },
+          "artifacts": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/SupportingArtifactDraft"
+            }
+          }
+        }
+      },
+      "CreateProjectRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contentType",
+          "locale",
+          "title",
+          "summary",
+          "body"
+        ],
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "const": "project"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          },
+          "candidateSlug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "externalLinks": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/ExternalLinkDraft"
+            }
+          },
+          "caseStudy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "problem": {
+                "type": "string",
+                "maxLength": 5000
+              },
+              "ownerRole": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "contributions": {
+                "type": "array",
+                "maxItems": 50,
+                "items": {
+                  "type": "string",
+                  "maxLength": 2000
+                }
+              },
+              "outcomes": {
+                "type": "array",
+                "maxItems": 50,
+                "items": {
+                  "type": "string",
+                  "maxLength": 2000
+                }
+              },
+              "lessons": {
+                "type": "string",
+                "maxLength": 5000
+              }
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/EvidencePackageDraft"
           }
         }
       },
@@ -4028,6 +4101,53 @@
           },
           "evidence": {
             "$ref": "#/components/schemas/EvidencePackageDraft"
+          }
+        }
+      },
+      "ProfileAssociationDraft": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "profile"
+          }
+        }
+      },
+      "ProjectAssociationDraft": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "projectId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "project"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "TestimonialAssociation": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ProfileAssociationDraft"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectAssociationDraft"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "profile": "#/components/schemas/ProfileAssociationDraft",
+            "project": "#/components/schemas/ProjectAssociationDraft"
           }
         }
       },
@@ -4074,6 +4194,9 @@
           },
           "relatedProjectId": {
             "$ref": "#/components/schemas/StableId"
+          },
+          "association": {
+            "$ref": "#/components/schemas/TestimonialAssociation"
           }
         }
       },
@@ -4124,6 +4247,131 @@
           }
         }
       },
+      "ProjectDraftData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contentType"
+        ],
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "const": "project"
+          },
+          "caseStudy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "problem": {
+                "type": "string",
+                "maxLength": 5000
+              },
+              "ownerRole": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "contributions": {
+                "type": "array",
+                "maxItems": 50,
+                "items": {
+                  "type": "string",
+                  "maxLength": 2000
+                }
+              },
+              "outcomes": {
+                "type": "array",
+                "maxItems": 50,
+                "items": {
+                  "type": "string",
+                  "maxLength": 2000
+                }
+              },
+              "lessons": {
+                "type": "string",
+                "maxLength": 5000
+              }
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/EvidencePackageDraft"
+          },
+          "externalLinks": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/ExternalLinkDraft"
+            }
+          }
+        }
+      },
+      "AchievementDraftData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contentType"
+        ],
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "const": "achievement"
+          },
+          "achievedOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/EvidencePackageDraft"
+          }
+        }
+      },
+      "TestimonialDraftData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contentType"
+        ],
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "const": "testimonial"
+          },
+          "authorName": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "quote": {
+            "type": "string",
+            "maxLength": 10000
+          },
+          "relatedProjectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "association": {
+            "$ref": "#/components/schemas/TestimonialAssociation"
+          }
+        }
+      },
+      "LocalizedDraftData": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ProjectDraftData"
+          },
+          {
+            "$ref": "#/components/schemas/AchievementDraftData"
+          },
+          {
+            "$ref": "#/components/schemas/TestimonialDraftData"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "contentType",
+          "mapping": {
+            "project": "#/components/schemas/ProjectDraftData",
+            "achievement": "#/components/schemas/AchievementDraftData",
+            "testimonial": "#/components/schemas/TestimonialDraftData"
+          }
+        }
+      },
       "SaveRevisionRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -4151,6 +4399,9 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 50000
+          },
+          "draftData": {
+            "$ref": "#/components/schemas/LocalizedDraftData"
           }
         }
       },

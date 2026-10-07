@@ -100,20 +100,18 @@ export type ContentAggregateView = {
     revisions: Array<RevisionHistoryEntry>;
 };
 
-export type CreateProjectRequest = {
-    contentType: 'project';
-    locale: Locale;
+export type ExternalLinkDraft = {
+    id: StableId;
+    label: string;
+    destination: string;
+    isAvailableInArabic: boolean;
+};
+
+export type SupportingArtifactDraft = {
+    id: StableId;
     title: string;
-    summary: string;
-    body: string;
-    candidateSlug: string;
-    caseStudy?: {
-        problem?: string;
-        ownerRole?: string;
-        contributions?: Array<string>;
-        outcomes?: Array<string>;
-        lessons?: string;
-    };
+    destinationUrl?: string;
+    mediaAssetId?: StableId;
 };
 
 export type EvidencePackageDraft = {
@@ -122,6 +120,25 @@ export type EvidencePackageDraft = {
         text: string;
         artifactIds: Array<StableId>;
     }>;
+    artifacts?: Array<SupportingArtifactDraft>;
+};
+
+export type CreateProjectRequest = {
+    contentType: 'project';
+    locale: Locale;
+    title: string;
+    summary: string;
+    body: string;
+    candidateSlug?: string;
+    externalLinks?: Array<ExternalLinkDraft>;
+    caseStudy?: {
+        problem?: string;
+        ownerRole?: string;
+        contributions?: Array<string>;
+        outcomes?: Array<string>;
+        lessons?: string;
+    };
+    evidence?: EvidencePackageDraft;
 };
 
 export type CreateAchievementRequest = {
@@ -134,6 +151,21 @@ export type CreateAchievementRequest = {
     evidence?: EvidencePackageDraft;
 };
 
+export type ProfileAssociationDraft = {
+    type: 'profile';
+};
+
+export type ProjectAssociationDraft = {
+    type: 'project';
+    projectId: StableId;
+};
+
+export type TestimonialAssociation = ({
+    type: 'profile';
+} & ProfileAssociationDraft) | ({
+    type: 'project';
+} & ProjectAssociationDraft);
+
 export type CreateTestimonialRequest = {
     contentType: 'testimonial';
     locale: Locale;
@@ -143,6 +175,7 @@ export type CreateTestimonialRequest = {
     authorName?: string;
     quote?: string;
     relatedProjectId?: StableId;
+    association?: TestimonialAssociation;
 };
 
 export type CreateContentRequest = ({
@@ -160,11 +193,47 @@ export type CreateContentReceipt = {
     outcome: 'content-created';
 };
 
+export type ProjectDraftData = {
+    contentType: 'project';
+    caseStudy?: {
+        problem?: string;
+        ownerRole?: string;
+        contributions?: Array<string>;
+        outcomes?: Array<string>;
+        lessons?: string;
+    };
+    evidence?: EvidencePackageDraft;
+    externalLinks?: Array<ExternalLinkDraft>;
+};
+
+export type AchievementDraftData = {
+    contentType: 'achievement';
+    achievedOn?: string;
+    evidence?: EvidencePackageDraft;
+};
+
+export type TestimonialDraftData = {
+    contentType: 'testimonial';
+    authorName?: string;
+    quote?: string;
+    relatedProjectId?: StableId;
+    association?: TestimonialAssociation;
+};
+
+export type LocalizedDraftData = ({
+    contentType: 'project';
+} & ProjectDraftData) | ({
+    contentType: 'achievement';
+} & AchievementDraftData) | ({
+    contentType: 'testimonial';
+} & TestimonialDraftData);
+
 export type SaveRevisionRequest = {
     locale: Locale;
     title: string;
     summary: string;
     body: string;
+    draftData?: LocalizedDraftData;
 };
 
 export type SaveRevisionReceipt = {

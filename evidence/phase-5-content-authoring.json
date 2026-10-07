@@ -1,0 +1,129 @@
+{
+  "ticket": 109,
+  "parent": 106,
+  "scope": "content-authoring-clean-upgrade-rls-immutability-concurrency-and-atomic-rollback",
+  "predecessorSnapshot": "supabase/baselines/phase3.json",
+  "migrationChecksums": [
+    {
+      "file": "20260922170000_prepare_migration_capability.sql",
+      "sha256": "f626df30438e644254fd6c5af015118be117ef5090fbc976bb0762593ac481fe"
+    },
+    {
+      "file": "20260922171906_establish_database_security_baseline.sql",
+      "sha256": "1406e77b9a2505ec684ef350170545558217ca2bf345675f67eb723a735f6be3"
+    },
+    {
+      "file": "20260922203000_create_operations_primitives.sql",
+      "sha256": "adad38103c83693de591f1691fe4eaabbe7da90423b3e68a02d7b7aa9b76cb98"
+    },
+    {
+      "file": "20261001220000_create_identity_access_owner_links.sql",
+      "sha256": "caa742152a624883937f3204ca1ec2ee947c7c52a812e0760ba794d1195b1205"
+    },
+    {
+      "file": "20261002120000_create_portfolio_configuration_settings.sql",
+      "sha256": "55452f45d7b4b18720993ec5fe4d0e818652c331339bd97c7e15fed6fb6a9c90"
+    },
+    {
+      "file": "20261002130000_allow_versioned_portfolio_profile_updates.sql",
+      "sha256": "533e07ffcad2d12297337fd84a6b7beb29cc5254a8f1632e75024ad73a013fae"
+    },
+    {
+      "file": "20261002140000_allow_owner_contact_channel_replacement.sql",
+      "sha256": "046977710edcffca09133ea794e874dbdd9b68188526cdc548182b3c73843ca4"
+    },
+    {
+      "file": "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+      "sha256": "f05678c118b14daee3ccfaf34736169b3339720b32ed6c1a394366398ded605a"
+    },
+    {
+      "file": "20261005001318_create_content_authoring.sql",
+      "sha256": "9b83a3dfdeed012f5ff6a61a96d765f54ebd8280530a2be428ec0e11eb0c029e"
+    }
+  ],
+  "migrationLedger": [
+    {
+      "version": "20260922170000",
+      "name": "prepare_migration_capability"
+    },
+    {
+      "version": "20260922171906",
+      "name": "establish_database_security_baseline"
+    },
+    {
+      "version": "20260922203000",
+      "name": "create_operations_primitives"
+    },
+    {
+      "version": "20261001220000",
+      "name": "create_identity_access_owner_links"
+    },
+    {
+      "version": "20261002120000",
+      "name": "create_portfolio_configuration_settings"
+    },
+    {
+      "version": "20261002130000",
+      "name": "allow_versioned_portfolio_profile_updates"
+    },
+    {
+      "version": "20261002140000",
+      "name": "allow_owner_contact_channel_replacement"
+    },
+    {
+      "version": "20261002150000",
+      "name": "allow_versioned_portfolio_cta_updates"
+    },
+    {
+      "version": "20261005001318",
+      "name": "create_content_authoring"
+    }
+  ],
+  "cleanUpgradeEquivalent": true,
+  "migrationReplayNoop": true,
+  "generatedTypeDrift": false,
+  "phase3OperationsRowsPreserved": {
+    "idempotencyRecords": true,
+    "outboxEvents": true,
+    "jobs": true
+  },
+  "authoringTablesWithForcedRls": [
+    "content.items",
+    "content.revisions"
+  ],
+  "databaseTestResults": [
+    {
+      "name": "Content authoring production PostgreSQL invariants > creates all Draft kinds, saves both locales, and keeps typed snapshots private and unreviewed",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > persists an explicitly selected profile association for a Testimonial",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > orders revision history by locale stream sequence when saved timestamps regress",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > serializes same-key and stale-version races and preserves the original replay receipt",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > does not allow a Testimonial association to disclose or reference another Portfolio's Project",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back the root, Revision, receipt, and outbox when the event append fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects overwrite, duplicate sequencing, and cross-Portfolio reparenting while denying public roles",
+      "status": "passed"
+    }
+  ],
+  "databaseIntegrationTestsPassed": 7,
+  "skippedCases": 0,
+  "isolatedLoopbackProjects": true,
+  "credentialsRecorded": false,
+  "secretValuesRecorded": false
+}

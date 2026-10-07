@@ -265,6 +265,7 @@ async function assertPhase3OperationsPreserved(connectionString, expected) {
 }
 
 export async function main() {
+  const ticket109 = process.argv.includes("--ticket-109");
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -357,8 +358,8 @@ export async function main() {
       CODEGEN,
       "--dialect", "postgres",
       "--url", "env(PHASE4_SETTINGS_DATABASE_URL)",
-      "--default-schema", "identity_access,operations,portfolio_config",
-      "--include-pattern", "{identity_access,operations,portfolio_config}.*",
+      "--default-schema", "content,identity_access,operations,portfolio_config",
+      "--include-pattern", "{content,identity_access,operations,portfolio_config}.*",
       "--date-parser", "timestamp",
       "--out-file", GENERATED,
       "--log-level", "error",
@@ -373,16 +374,21 @@ export async function main() {
     console.log(process.argv.includes("--refresh-types")
       ? "Generated database types from the clean PostgreSQL schema."
       : "Generated database types match the clean PostgreSQL schema.");
-    const reportPath = join(cleanProject.workdir, "test-report.json");
+    const testFile = ticket109
+      ? "tests/database/content-authoring.integration.test.ts"
+      : "tests/database/portfolio-settings.integration.test.ts";
+    const reportPath = join(cleanProject.workdir, ticket109 ? "content-authoring-test-report.json" : "test-report.json");
     const result = spawnSync(process.execPath, [
       join(ROOT, "node_modules/vitest/vitest.mjs"),
       "run",
-      "tests/database/portfolio-settings.integration.test.ts",
+      testFile,
       "--reporter=json",
       `--outputFile=${reportPath}`,
     ], {
       cwd: ROOT,
-      env: { ...databaseEnv, PHASE4_REQUIRE_SETTINGS: "1" },
+      env: ticket109
+        ? { ...databaseEnv, PHASE5_CONTENT_AUTHORING_DATABASE_URL: cleanUrl, PHASE5_REQUIRE_CONTENT_AUTHORING: "1" }
+        : { ...databaseEnv, PHASE4_REQUIRE_SETTINGS: "1" },
       encoding: "utf8",
       timeout: 120_000,
       stdio: ["ignore", "pipe", "pipe"],
@@ -403,9 +409,35 @@ export async function main() {
       throw new Error(`PORTFOLIO_SETTINGS_TEST_FAILED:${code}:${failedTests.join(" | ")}:${safeDetail}`);
     }
     requireExecutedTests(report);
-    console.log(`Portfolio settings real PostgreSQL integration: ${report.numPassedTests} passed, 0 skipped.`);
+    console.log((ticket109 ? "Content authoring" : "Portfolio settings") +
+      " real PostgreSQL integration: " + report.numPassedTests + " passed, 0 skipped.");
 
-    const evidence = {
+    const evidence = ticket109 ? {
+      ticket: 109,
+      parent: 106,
+      scope: "content-authoring-clean-upgrade-rls-immutability-concurrency-and-atomic-rollback",
+      predecessorSnapshot: "supabase/baselines/phase3.json",
+      migrationChecksums: migrations.checksums,
+      migrationLedger: cleanSnapshot.migrationLedger,
+      cleanUpgradeEquivalent: true,
+      migrationReplayNoop: true,
+      generatedTypeDrift: false,
+      phase3OperationsRowsPreserved: {
+        idempotencyRecords: preservedRows.idempotency.length === 1,
+        outboxEvents: preservedRows.outbox.length === 1,
+        jobs: preservedRows.jobs.length === 1,
+      },
+      authoringTablesWithForcedRls: ["content.items", "content.revisions"],
+      databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
+        name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
+        status: test.status,
+      })),
+      databaseIntegrationTestsPassed: report.numPassedTests,
+      skippedCases: 0,
+      isolatedLoopbackProjects: true,
+      credentialsRecorded: false,
+      secretValuesRecorded: false,
+    } : {
       ticket: 88,
       parent: 77,
       scope: "phase4-migration-equivalence-restricted-principal-and-pooled-isolation",
@@ -500,7 +532,9 @@ export async function main() {
     if (
       /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
     ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
-    const evidencePath = evidenceOutputPath();
+    const evidencePath = ticket109
+      ? join(ROOT, "evidence/phase-5-content-authoring.json")
+      : evidenceOutputPath();
     mkdirSync(dirname(evidencePath), { recursive: true });
     writeFileSync(evidencePath, serializedEvidence, "utf8");
   } catch (error) {

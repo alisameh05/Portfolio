@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "runId": "bfd32278-f1ab-4813-b830-72ff9b9c9005",
-  "sourceRevision": "b9b3cb34272045b3c63f954cbd921a081d1bb228",
+  "runId": "0a5ad522-8a24-4a16-b532-6e0a22ba002d",
+  "sourceRevision": "106075875df72f60655124448f6fb3a24b64b8ce",
   "suite": "authoring",
-  "startedAt": "2026-10-04T21:45:01.511Z",
+  "startedAt": "2026-10-06T10:22:42.453Z",
   "verdict": "pass",
-  "scenarioAcceptance": false,
-  "suiteAvailable": false,
+  "scenarioAcceptance": true,
+  "suiteAvailable": true,
   "counts": {
-    "executed": 0,
+    "executed": 24,
     "failed": 0,
     "skipped": 0,
-    "total": 0
+    "total": 24
   },
   "partial": false,
   "dependency": {
@@ -20,13 +20,13 @@
     "code": "NOT_REQUIRED"
   },
   "cleanup": {
-    "attempted": false,
+    "attempted": true,
     "passed": true
   },
   "reproduction": [
     "npm run phase5:focus:authoring-review-publication-routes"
   ],
   "details": {
-    "message": "no Phase 5 business scenarios are implemented in this suite yet"
+    "message": "focused suite executed"
   }
 }

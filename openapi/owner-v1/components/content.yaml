@@ -21,7 +21,7 @@ schemas:
   CreateProjectRequest:
     type: object
     additionalProperties: false
-    required: [contentType, locale, title, summary, body, candidateSlug]
+    required: [contentType, locale, title, summary, body]
     properties:
       contentType: { type: string, const: project }
       locale: { $ref: ./common.yaml#/schemas/Locale }
@@ -29,6 +29,10 @@ schemas:
       summary: { type: string, minLength: 1, maxLength: 500 }
       body: { type: string, minLength: 1, maxLength: 50000 }
       candidateSlug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+      externalLinks:
+        type: array
+        maxItems: 50
+        items: { $ref: '#/schemas/ExternalLinkDraft' }
       caseStudy:
         type: object
         additionalProperties: false
@@ -38,6 +42,7 @@ schemas:
           contributions: { type: array, maxItems: 50, items: { type: string, maxLength: 2000 } }
           outcomes: { type: array, maxItems: 50, items: { type: string, maxLength: 2000 } }
           lessons: { type: string, maxLength: 5000 }
+      evidence: { $ref: '#/schemas/EvidencePackageDraft' }
   CreateAchievementRequest:
     type: object
     additionalProperties: false
@@ -63,6 +68,7 @@ schemas:
       authorName: { type: string, maxLength: 200 }
       quote: { type: string, maxLength: 10000 }
       relatedProjectId: { $ref: ./common.yaml#/schemas/StableId }
+      association: { $ref: '#/schemas/TestimonialAssociation' }
   EvidencePackageDraft:
     type: object
     additionalProperties: false
@@ -78,6 +84,50 @@ schemas:
             claimId: { $ref: ./common.yaml#/schemas/StableId }
             text: { type: string, maxLength: 2000 }
             artifactIds: { type: array, maxItems: 100, uniqueItems: true, items: { $ref: ./common.yaml#/schemas/StableId } }
+      artifacts:
+        type: array
+        maxItems: 100
+        items: { $ref: '#/schemas/SupportingArtifactDraft' }
+  SupportingArtifactDraft:
+    type: object
+    additionalProperties: false
+    required: [id, title]
+    properties:
+      id: { $ref: ./common.yaml#/schemas/StableId }
+      title: { type: string, minLength: 1, maxLength: 200 }
+      destinationUrl: { type: string, format: uri, maxLength: 2048 }
+      mediaAssetId: { $ref: ./common.yaml#/schemas/StableId }
+  ExternalLinkDraft:
+    type: object
+    additionalProperties: false
+    required: [id, label, destination, isAvailableInArabic]
+    properties:
+      id: { $ref: ./common.yaml#/schemas/StableId }
+      label: { type: string, minLength: 1, maxLength: 120 }
+      destination: { type: string, format: uri, maxLength: 2048 }
+      isAvailableInArabic: { type: boolean }
+  TestimonialAssociation:
+    oneOf:
+      - { $ref: '#/schemas/ProfileAssociationDraft' }
+      - { $ref: '#/schemas/ProjectAssociationDraft' }
+    discriminator:
+      propertyName: type
+      mapping:
+        profile: '#/schemas/ProfileAssociationDraft'
+        project: '#/schemas/ProjectAssociationDraft'
+  ProfileAssociationDraft:
+    type: object
+    additionalProperties: false
+    required: [type]
+    properties:
+      type: { type: string, const: profile }
+  ProjectAssociationDraft:
+    type: object
+    additionalProperties: false
+    required: [type, projectId]
+    properties:
+      type: { type: string, const: project }
+      projectId: { $ref: ./common.yaml#/schemas/StableId }
   CreateContentReceipt:
     type: object
     additionalProperties: false
@@ -180,6 +230,56 @@ schemas:
       title: { type: string, minLength: 1, maxLength: 160 }
       summary: { type: string, minLength: 1, maxLength: 500 }
       body: { type: string, minLength: 1, maxLength: 50000 }
+      draftData: { $ref: '#/schemas/LocalizedDraftData' }
+  LocalizedDraftData:
+    oneOf:
+      - { $ref: '#/schemas/ProjectDraftData' }
+      - { $ref: '#/schemas/AchievementDraftData' }
+      - { $ref: '#/schemas/TestimonialDraftData' }
+    discriminator:
+      propertyName: contentType
+      mapping:
+        project: '#/schemas/ProjectDraftData'
+        achievement: '#/schemas/AchievementDraftData'
+        testimonial: '#/schemas/TestimonialDraftData'
+  ProjectDraftData:
+    type: object
+    additionalProperties: false
+    required: [contentType]
+    properties:
+      contentType: { type: string, const: project }
+      caseStudy:
+        type: object
+        additionalProperties: false
+        properties:
+          problem: { type: string, maxLength: 5000 }
+          ownerRole: { type: string, maxLength: 2000 }
+          contributions: { type: array, maxItems: 50, items: { type: string, maxLength: 2000 } }
+          outcomes: { type: array, maxItems: 50, items: { type: string, maxLength: 2000 } }
+          lessons: { type: string, maxLength: 5000 }
+      evidence: { $ref: '#/schemas/EvidencePackageDraft' }
+      externalLinks:
+        type: array
+        maxItems: 50
+        items: { $ref: '#/schemas/ExternalLinkDraft' }
+  AchievementDraftData:
+    type: object
+    additionalProperties: false
+    required: [contentType]
+    properties:
+      contentType: { type: string, const: achievement }
+      achievedOn: { type: string, format: date }
+      evidence: { $ref: '#/schemas/EvidencePackageDraft' }
+  TestimonialDraftData:
+    type: object
+    additionalProperties: false
+    required: [contentType]
+    properties:
+      contentType: { type: string, const: testimonial }
+      authorName: { type: string, maxLength: 200 }
+      quote: { type: string, maxLength: 10000 }
+      relatedProjectId: { $ref: ./common.yaml#/schemas/StableId }
+      association: { $ref: '#/schemas/TestimonialAssociation' }
   PublishLanguageCommand:
     type: object
     additionalProperties: false

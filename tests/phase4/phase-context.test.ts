@@ -37,7 +37,7 @@ describe("Phase 4 completion gate (#90)", () => {
     );
     expect(mod.EXPECTED_PUBLIC_OPERATIONS).toBe(5);
     expect(mod.EXPECTED_OWNER_OPERATIONS).toBe(48);
-    expect(mod.EXPECTED_ACTIVE_OWNER_OPERATIONS).toBe(39);
+    expect(mod.EXPECTED_ACTIVE_OWNER_OPERATIONS).toBe(40);
     expect(mod.allowedActivationsFor("phase2")).toEqual(expect.arrayContaining(["fakes"]));
     expect(mod.allowedActivationsFor("phase4")).toEqual(
       expect.arrayContaining(["identity-access", "portfolio-configuration"]),
