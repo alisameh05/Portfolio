@@ -301,12 +301,13 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
 
   it("orders revision history by locale stream sequence when saved timestamps regress", async () => {
     const scope = await configuredScope();
+    const latest = Date.now() + 10 * 24 * 60 * 60 * 1_000;
     const timestamps = [
-      "2026-10-07T00:00:00.000Z", "2026-10-07T00:00:00.000Z",
-      "2026-10-03T00:00:00.000Z", "2026-10-07T00:00:00.000Z",
-      "2026-10-04T00:00:00.000Z", "2026-10-07T00:00:00.000Z",
-    ];
-    const content = service(scope, operations, { now: () => timestamps.shift() ?? "2026-10-04T00:00:00.000Z" });
+      latest, latest,
+      latest - 4 * 24 * 60 * 60 * 1_000, latest,
+      latest - 3 * 24 * 60 * 60 * 1_000, latest,
+    ].map((timestamp) => new Date(timestamp).toISOString());
+    const content = service(scope, operations, { now: () => timestamps.shift() ?? new Date(latest).toISOString() });
     const artifactId = createStableId("SupportingArtifact");
     const created = await content.createContent({
       actor: actor(scope.ownerId), idempotencyKey: key("revision-order-create"), correlationId: "revision-order-create",
@@ -1306,10 +1307,292 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(result.rows[0]).toEqual({ roots: 0, revisions: 0, receipts: 0, events: 0 });
   }, 30_000);
 
+  it("hides, archives, and restores all three content kinds through atomic owner lifecycle commands", async () => {
+    const scope = await configuredScope();
+    const owner = actor(scope.ownerId);
+
+    const project = await createReviewedProject(scope, "Lifecycle Project", "lifecycle-project");
+    const projectPublished = await project.content.publishLanguageVersion({ actor: owner, contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key("lifecycle-project-publish"), correlationId: "lifecycle-project-publish",
+      locale: "en", revisionId: project.revisionId });
+    expect(projectPublished.ok).toBe(true);
+    if (!projectPublished.ok) return;
+    const originalFirstPublishedAt = projectPublished.value.firstPublishedAt;
+    expect(await project.content.getPublicProject({ slug: "lifecycle-project", locale: "en" })).toMatchObject({ ok: true });
+    const projectHidden = await project.content.hideContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: projectPublished.value.aggregateVersion, idempotencyKey: key("lifecycle-project-hide"), correlationId: "lifecycle-project-hide",
+      reason: "Temporarily withdrawn for review." });
+    expect(projectHidden).toMatchObject({ ok: true, value: { aggregateVersion: 4, outcome: "content-hidden" } });
+    expect(await project.content.getPublicProject({ slug: "lifecycle-project", locale: "en" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } });
+    const projectArchived = await project.content.archiveContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: 4, idempotencyKey: key("lifecycle-project-archive"), correlationId: "lifecycle-project-archive" });
+    expect(projectArchived).toMatchObject({ ok: true, value: { aggregateVersion: 5, outcome: "content-archived" } });
+    const projectRestored = await project.content.restoreContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: 5, idempotencyKey: key("lifecycle-project-restore"), correlationId: "lifecycle-project-restore" });
+    expect(projectRestored).toMatchObject({ ok: true, value: { aggregateVersion: 6, outcome: "content-restored" } });
+    const projectAfterRestore = await project.content.getPublicProject({ slug: "lifecycle-project", locale: "en" });
+    expect(projectAfterRestore).toMatchObject({ ok: true, value: { title: "Lifecycle Project", firstPublishedAt: originalFirstPublishedAt } });
+    const projectHistory = await admin.query(
+      "select previous_lifecycle, lifecycle, aggregate_version, reason from content.lifecycle_history where content_id = $1::uuid order by transition_sequence",
+      [project.contentId],
+    );
+    expect(projectHistory.rows).toEqual([
+      { previous_lifecycle: "draft", lifecycle: "published", aggregate_version: 3, reason: null },
+      { previous_lifecycle: "published", lifecycle: "hidden", aggregate_version: 4, reason: "Temporarily withdrawn for review." },
+      { previous_lifecycle: "hidden", lifecycle: "archived", aggregate_version: 5, reason: null },
+      { previous_lifecycle: "archived", lifecycle: "published", aggregate_version: 6, reason: null },
+    ]);
+    const retainedProjectRows = await admin.query(
+      "select (select count(*)::int from content.publication_history where content_id = $1::uuid) publications, " +
+      "(select count(*)::int from content.public_routes where content_id = $1::uuid) routes, " +
+      "(select count(*)::int from content.public_route_reservations where content_id = $1::uuid) reservations, " +
+      "(select count(*)::int from taxonomy.project_discovery_locales where content_id = $1::uuid) discovery",
+      [project.contentId],
+    );
+    expect(retainedProjectRows.rows[0]).toEqual({ publications: 1, routes: 1, reservations: 1, discovery: 1 });
+
+    const achievement = await createReviewedAchievement(scope, "Lifecycle Achievement", "2026-10-01", "lifecycle-achievement");
+    const achievementPublished = await achievement.content.publishLanguageVersion({ actor: owner, contentId: achievement.contentId,
+      expectedVersion: achievement.aggregateVersion, idempotencyKey: key("lifecycle-achievement-publish"), correlationId: "lifecycle-achievement-publish",
+      locale: "en", revisionId: achievement.revisionId });
+    expect(achievementPublished.ok).toBe(true);
+    if (!achievementPublished.ok) return;
+    expect(await achievement.content.getPublicAchievementTimeline({ locale: "en", limit: 10 }))
+      .toMatchObject({ ok: true, value: expect.arrayContaining([expect.objectContaining({ contentId: achievement.contentId })]) });
+    const achievementHidden = await achievement.content.hideContent({ actor: owner, contentId: achievement.contentId,
+      expectedVersion: achievementPublished.value.aggregateVersion, idempotencyKey: key("lifecycle-achievement-hide"), correlationId: "lifecycle-achievement-hide" });
+    expect(achievementHidden.ok).toBe(true);
+    const hiddenTimeline = await achievement.content.getPublicAchievementTimeline({ locale: "en", limit: 10 });
+    expect(hiddenTimeline.ok && hiddenTimeline.value.some((entry) => entry.contentId === achievement.contentId)).toBe(false);
+    const achievementRestored = await achievement.content.restoreContent({ actor: owner, contentId: achievement.contentId,
+      expectedVersion: achievementHidden.ok ? achievementHidden.value.aggregateVersion : 0,
+      idempotencyKey: key("lifecycle-achievement-restore"), correlationId: "lifecycle-achievement-restore" });
+    expect(achievementRestored.ok).toBe(true);
+    expect(await achievement.content.getPublicAchievementTimeline({ locale: "en", limit: 10 }))
+      .toMatchObject({ ok: true, value: expect.arrayContaining([expect.objectContaining({ contentId: achievement.contentId })]) });
+
+    const testimonial = await createReviewedTestimonial(scope, "lifecycle-testimonial", { type: "profile" });
+    const testimonialPublished = await testimonial.content.publishLanguageVersion({ actor: owner, contentId: testimonial.contentId,
+      expectedVersion: testimonial.aggregateVersion, idempotencyKey: key("lifecycle-testimonial-publish"), correlationId: "lifecycle-testimonial-publish",
+      locale: "en", revisionId: testimonial.revisionId });
+    expect(testimonialPublished.ok).toBe(true);
+    if (!testimonialPublished.ok) return;
+    expect(await testimonial.content.getPublicTestimonials({ locale: "en", association: { type: "profile" } }))
+      .toMatchObject({ ok: true, value: expect.arrayContaining([expect.objectContaining({ contentId: testimonial.contentId })]) });
+    const testimonialHidden = await testimonial.content.hideContent({ actor: owner, contentId: testimonial.contentId,
+      expectedVersion: testimonialPublished.value.aggregateVersion, idempotencyKey: key("lifecycle-testimonial-hide"), correlationId: "lifecycle-testimonial-hide" });
+    expect(testimonialHidden.ok).toBe(true);
+    const hiddenTestimonials = await testimonial.content.getPublicTestimonials({ locale: "en", association: { type: "profile" } });
+    expect(hiddenTestimonials.ok && hiddenTestimonials.value.some((entry) => entry.contentId === testimonial.contentId)).toBe(false);
+    const testimonialArchived = await testimonial.content.archiveContent({ actor: owner, contentId: testimonial.contentId,
+      expectedVersion: testimonialHidden.ok ? testimonialHidden.value.aggregateVersion : 0,
+      idempotencyKey: key("lifecycle-testimonial-archive"), correlationId: "lifecycle-testimonial-archive" });
+    expect(testimonialArchived.ok).toBe(true);
+    const testimonialRestored = await testimonial.content.restoreContent({ actor: owner, contentId: testimonial.contentId,
+      expectedVersion: testimonialArchived.ok ? testimonialArchived.value.aggregateVersion : 0,
+      idempotencyKey: key("lifecycle-testimonial-restore"), correlationId: "lifecycle-testimonial-restore" });
+    expect(testimonialRestored.ok).toBe(true);
+    expect(await testimonial.content.getPublicTestimonials({ locale: "en", association: { type: "profile" } }))
+      .toMatchObject({ ok: true, value: expect.arrayContaining([expect.objectContaining({ contentId: testimonial.contentId })]) });
+
+    const lifecycleEvents = await admin.query(
+      "select event_type, count(*)::int as count from operations.outbox_events where aggregate_id = any($1::uuid[]) " +
+      "and event_type in ('content.content_hidden.v1', 'content.content_archived.v1', 'content.content_restored.v1') group by event_type",
+      [[project.contentId, achievement.contentId, testimonial.contentId]],
+    );
+    expect(Object.fromEntries(lifecycleEvents.rows.map((row) => [row.event_type, row.count]))).toEqual({
+      "content.content_archived.v1": 2,
+      "content.content_hidden.v1": 3,
+      "content.content_restored.v1": 3,
+    });
+  }, 60_000);
+
+  it("revalidates each exact locale publication before restore and changes none when one Media fact fails", async () => {
+    const scope = await configuredScope();
+    let invalidLocale: "en" | "ar" | null = null;
+    const mediaId = createStableId("MediaAsset");
+    const mediaAcceptance = {
+      async getAcceptanceFacts(query: { readonly ownerId: StableId<"Owner">; readonly mediaAssetIds: readonly StableId<"MediaAsset">[]; readonly locale: "en" | "ar" }) {
+        return { ok: true as const, value: {
+          consistencyVersion: `media-${query.locale}-v1`,
+          facts: query.mediaAssetIds.map((mediaAssetId) => ({ mediaAssetId, ownerId: query.ownerId,
+            accepted: query.locale !== invalidLocale, safe: true, suitable: true, accessible: true, version: 1 })),
+        } };
+      },
+    };
+    const content = service(scope, operations, undefined, mediaAcceptance);
+    const project = await createReviewedProject(scope, "Bilingual Lifecycle", "bilingual-lifecycle", "en", {
+      service: content, mediaAssetId: mediaId,
+    });
+    const englishPublished = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key("bilingual-lifecycle-en-publish"), correlationId: "bilingual-lifecycle-en-publish",
+      locale: "en", revisionId: project.revisionId });
+    expect(englishPublished.ok).toBe(true);
+    if (!englishPublished.ok) return;
+    const arabicDraft = await content.saveRevision({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: englishPublished.value.aggregateVersion, idempotencyKey: key("bilingual-lifecycle-ar-save"), correlationId: "bilingual-lifecycle-ar-save",
+      locale: "ar", title: "مشروع ثنائي اللغة", summary: "ملخص عربي", body: "دراسة الحالة العربية",
+      draftData: { contentType: "project", caseStudy: project.payload.caseStudy, evidence: project.payload.evidence } });
+    expect(arabicDraft.ok).toBe(true);
+    if (!arabicDraft.ok) return;
+    const arabicPreview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: project.contentId, revisionId: arabicDraft.value.revisionId });
+    expect(arabicPreview.ok).toBe(true);
+    if (!arabicPreview.ok) return;
+    const arabicReview = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: project.contentId,
+      revisionId: arabicDraft.value.revisionId, expectedVersion: arabicDraft.value.aggregateVersion,
+      idempotencyKey: key("bilingual-lifecycle-ar-review"), correlationId: "bilingual-lifecycle-ar-review", locale: "ar",
+      snapshotHash: arabicPreview.value.snapshotHash, evidenceVersion: arabicPreview.value.evidenceVersion, decision: "accepted", findings: [] });
+    expect(arabicReview.ok).toBe(true);
+    if (!arabicReview.ok) return;
+    const arabicPublished = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: arabicReview.value.aggregateVersion, idempotencyKey: key("bilingual-lifecycle-ar-publish"), correlationId: "bilingual-lifecycle-ar-publish",
+      locale: "ar", revisionId: arabicDraft.value.revisionId });
+    expect(arabicPublished.ok).toBe(true);
+    if (!arabicPublished.ok) return;
+
+    const originalEnglishPreview = await content.previewRevision({ actor: actor(scope.ownerId), contentId: project.contentId, revisionId: project.revisionId });
+    expect(originalEnglishPreview.ok).toBe(true);
+    if (!originalEnglishPreview.ok) return;
+    const newerRejectedReview = await content.reviewRevision({ actor: actor(scope.ownerId), contentId: project.contentId,
+      revisionId: project.revisionId, expectedVersion: arabicPublished.value.aggregateVersion,
+      idempotencyKey: key("bilingual-lifecycle-en-re-review"), correlationId: "bilingual-lifecycle-en-re-review", locale: "en",
+      snapshotHash: originalEnglishPreview.value.snapshotHash, evidenceVersion: originalEnglishPreview.value.evidenceVersion,
+      decision: "rejected", findings: ["Recheck before the next publication."] });
+    expect(newerRejectedReview.ok).toBe(true);
+    if (!newerRejectedReview.ok) return;
+    const newerDraft = await content.saveRevision({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: newerRejectedReview.value.aggregateVersion, idempotencyKey: key("bilingual-lifecycle-en-latest-draft"),
+      correlationId: "bilingual-lifecycle-en-latest-draft", locale: "en", title: "Later unpublished edit",
+      summary: "Not selected for restore.", body: "Restore must keep the accepted pointer.",
+      draftData: { contentType: "project", caseStudy: project.payload.caseStudy, evidence: project.payload.evidence } });
+    expect(newerDraft.ok).toBe(true);
+    if (!newerDraft.ok) return;
+    const hidden = await content.hideContent({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: newerDraft.value.aggregateVersion, idempotencyKey: key("bilingual-lifecycle-hide"), correlationId: "bilingual-lifecycle-hide" });
+    expect(hidden.ok).toBe(true);
+    if (!hidden.ok) return;
+
+    const unavailableMediaRestore = await service(scope).restoreContent({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: hidden.value.aggregateVersion, idempotencyKey: key("bilingual-lifecycle-restore-unavailable"),
+      correlationId: "bilingual-lifecycle-restore-unavailable" });
+    expect(unavailableMediaRestore).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_ACCEPTANCE_UNAVAILABLE" } });
+    expect(await content.getOwnerContentAggregate({ actor: actor(scope.ownerId), contentId: project.contentId }))
+      .toMatchObject({ ok: true, value: { lifecycle: "hidden", aggregateVersion: hidden.value.aggregateVersion } });
+
+    invalidLocale = "en";
+    const rejectedRestore = await content.restoreContent({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: hidden.value.aggregateVersion, idempotencyKey: key("bilingual-lifecycle-restore-rejected"),
+      correlationId: "bilingual-lifecycle-restore-rejected" });
+    expect(rejectedRestore).toMatchObject({ ok: false, error: { kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" } });
+    const afterRejectedRestore = await content.getOwnerContentAggregate({ actor: actor(scope.ownerId), contentId: project.contentId });
+    expect(afterRejectedRestore).toMatchObject({ ok: true, value: { lifecycle: "hidden", aggregateVersion: hidden.value.aggregateVersion } });
+    expect(await content.getPublicProject({ slug: "bilingual-lifecycle", locale: "en" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found" } });
+    expect(await content.getPublicProject({ slug: "bilingual-lifecycle", locale: "ar" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found" } });
+    const pointerRows = await admin.query("select locale, revision_id::text from content.language_publications where content_id = $1::uuid order by locale", [project.contentId]);
+    expect(pointerRows.rows).toEqual([
+      { locale: "ar", revision_id: arabicDraft.value.revisionId },
+      { locale: "en", revision_id: project.revisionId },
+    ]);
+
+    invalidLocale = null;
+    const restored = await content.restoreContent({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: hidden.value.aggregateVersion, idempotencyKey: key("bilingual-lifecycle-restore-valid"),
+      correlationId: "bilingual-lifecycle-restore-valid" });
+    expect(restored.ok).toBe(true);
+    expect(await content.getPublicProject({ slug: "bilingual-lifecycle", locale: "en" }))
+      .toMatchObject({ ok: true, value: { title: "Bilingual Lifecycle" } });
+    expect(await content.getPublicProject({ slug: "bilingual-lifecycle", locale: "ar" }))
+      .toMatchObject({ ok: true, value: { title: "مشروع ثنائي اللغة" } });
+    const aggregate = await content.getOwnerContentAggregate({ actor: actor(scope.ownerId), contentId: project.contentId });
+    expect(aggregate).toMatchObject({ ok: true, value: { lifecycle: "published", localizedStreams: {
+      en: { currentPublishedRevisionId: project.revisionId }, ar: { currentPublishedRevisionId: arabicDraft.value.revisionId },
+    } } });
+  }, 60_000);
+
+  it("rejects restore of never-published Archived content but allows explicit first publication and safe retries", async () => {
+    const scope = await configuredScope();
+    const project = await createReviewedProject(scope, "Explicit First Publication", "explicit-first-publication");
+    const owner = actor(scope.ownerId);
+    const archived = await project.content.archiveContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key("explicit-first-archive"), correlationId: "explicit-first-archive" });
+    expect(archived).toMatchObject({ ok: true, value: { aggregateVersion: 3, outcome: "content-archived" } });
+    if (!archived.ok) return;
+    const restoreNeverPublished = await project.content.restoreContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: archived.value.aggregateVersion, idempotencyKey: key("explicit-first-restore-rejected"), correlationId: "explicit-first-restore-rejected" });
+    expect(restoreNeverPublished).toMatchObject({ ok: false, error: { kind: "validation", code: "CONTENT_NOT_PREVIOUSLY_PUBLISHED" } });
+    const firstPublish = await project.content.publishLanguageVersion({ actor: owner, contentId: project.contentId,
+      expectedVersion: archived.value.aggregateVersion, idempotencyKey: key("explicit-first-publish"), correlationId: "explicit-first-publish",
+      locale: "en", revisionId: project.revisionId });
+    expect(firstPublish).toMatchObject({ ok: true, value: { aggregateVersion: 4, currentSlug: "explicit-first-publication" } });
+    if (!firstPublish.ok) return;
+    const hiddenCommand = { actor: owner, contentId: project.contentId, expectedVersion: firstPublish.value.aggregateVersion,
+      idempotencyKey: key("lifecycle-replay-hide"), correlationId: "lifecycle-replay-hide" };
+    const hidden = await project.content.hideContent(hiddenCommand);
+    expect(hidden).toMatchObject({ ok: true, value: { aggregateVersion: 5, outcome: "content-hidden" } });
+    if (!hidden.ok) return;
+    const archivedAgain = await project.content.archiveContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: hidden.value.aggregateVersion, idempotencyKey: key("lifecycle-replay-archive"), correlationId: "lifecycle-replay-archive" });
+    expect(archivedAgain).toMatchObject({ ok: true, value: { aggregateVersion: 6 } });
+    if (!archivedAgain.ok) return;
+    expect(await project.content.hideContent({ ...hiddenCommand, correlationId: "lifecycle-replay-hide-retry" })).toEqual(hidden);
+    const beforeNoop = await admin.query("select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.content_archived.v1'", [project.contentId]);
+    const archivedNoop = await project.content.archiveContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: archivedAgain.value.aggregateVersion, idempotencyKey: key("lifecycle-archive-noop"), correlationId: "lifecycle-archive-noop" });
+    expect(archivedNoop).toMatchObject({ ok: true, value: { aggregateVersion: archivedAgain.value.aggregateVersion, outcome: "content-archived" } });
+    const afterNoop = await admin.query("select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.content_archived.v1'", [project.contentId]);
+    expect(afterNoop.rows[0].count).toBe(beforeNoop.rows[0].count);
+    const hideArchived = await project.content.hideContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: archivedAgain.value.aggregateVersion, idempotencyKey: key("lifecycle-invalid-hide-archived"), correlationId: "lifecycle-invalid-hide-archived" });
+    expect(hideArchived).toMatchObject({ ok: false, error: { kind: "validation", code: "CONTENT_LIFECYCLE_TRANSITION_NOT_ALLOWED" } });
+    const restored = await project.content.restoreContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: archivedAgain.value.aggregateVersion, idempotencyKey: key("lifecycle-replay-restore"), correlationId: "lifecycle-replay-restore" });
+    expect(restored).toMatchObject({ ok: true, value: { aggregateVersion: 7, outcome: "content-restored" } });
+    const afterRestoreArchive = await project.content.archiveContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: restored.ok ? restored.value.aggregateVersion : 0, idempotencyKey: key("lifecycle-replay-archive-again"), correlationId: "lifecycle-replay-archive-again" });
+    expect(afterRestoreArchive.ok).toBe(true);
+    expect(await project.content.restoreContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: archivedAgain.value.aggregateVersion, idempotencyKey: key("lifecycle-replay-restore"), correlationId: "lifecycle-replay-restore-retry" })).toEqual(restored);
+  }, 60_000);
+
+  it("rolls back lifecycle state, history, and the receipt when the lifecycle outbox append fails", async () => {
+    const scope = await configuredScope();
+    const project = await createReviewedProject(scope, "Lifecycle Rollback", "lifecycle-rollback");
+    const published = await project.content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key("lifecycle-rollback-publish"), correlationId: "lifecycle-rollback-publish",
+      locale: "en", revisionId: project.revisionId });
+    expect(published.ok).toBe(true);
+    if (!published.ok) return;
+    const failingOutbox = {
+      ...operations.outbox,
+      async append(...args: Parameters<typeof operations.outbox.append>) {
+        const [, input] = args;
+        if (input.payload.type === "content.content_hidden.v1") throw new Error("simulated lifecycle outbox failure");
+        return await operations.outbox.append(...args);
+      },
+    };
+    const failingOperations = { ...operations, outbox: failingOutbox };
+    const failingService = service(scope, failingOperations);
+    await expect(failingService.hideContent({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: published.value.aggregateVersion, idempotencyKey: key("lifecycle-rollback-hide"), correlationId: "lifecycle-rollback-hide" })).rejects.toThrow();
+    const root = await admin.query("select lifecycle, aggregate_version from content.items where content_id = $1::uuid", [project.contentId]);
+    expect(root.rows[0]).toEqual({ lifecycle: "published", aggregate_version: published.value.aggregateVersion });
+    const hash = createHash("sha256").update("lifecycle-rollback-hide").digest("hex");
+    const savedReceipt = await admin.query("select count(*)::int as count from operations.idempotency_records where key_hash = $1", [hash]);
+    expect(savedReceipt.rows[0].count).toBe(0);
+    const history = await admin.query("select count(*)::int as count from content.lifecycle_history where content_id = $1::uuid and lifecycle = 'hidden'", [project.contentId]);
+    const events = await admin.query("select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.content_hidden.v1'", [project.contentId]);
+    expect(history.rows[0].count).toBe(0);
+    expect(events.rows[0].count).toBe(0);
+  }, 60_000);
+
   it("rejects overwrite, duplicate sequencing, and cross-Portfolio reparenting while denying public roles", async () => {
     const scope = await configuredScope();
     const otherScope = await configuredScope();
-    const created = await service(scope).createContent({
+    const content = service(scope);
+    const created = await content.createContent({
       actor: actor(scope.ownerId), idempotencyKey: key("immutable-create"), correlationId: "immutable-create",
       payload: { contentType: "achievement", locale: "en", title: "Immutable", summary: "Snapshot.", body: "Never rewritten." },
     });
@@ -1329,6 +1612,17 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "select $1::uuid, content_id, $2::uuid, content_type, locale, 2, aggregate_version, title, summary, body, payload, false, saved_at from content.revisions where revision_id = $3::uuid",
       [createStableId("Revision"), otherScope.portfolioId, created.value.revisionId],
     )).rejects.toMatchObject({ code: "23503" });
+    const archived = await content.archiveContent({ actor: actor(scope.ownerId), contentId: created.value.contentId,
+      expectedVersion: created.value.aggregateVersion, idempotencyKey: key("immutable-archive"), correlationId: "immutable-archive" });
+    expect(archived).toMatchObject({ ok: true, value: { aggregateVersion: 2, outcome: "content-archived" } });
+    await expect(admin.query(
+      "update content.lifecycle_history set reason = 'rewritten' where content_id = $1::uuid and transition_sequence = 1",
+      [created.value.contentId],
+    )).rejects.toMatchObject({ code: "55000" });
+    await expect(admin.query(
+      "delete from content.lifecycle_history where content_id = $1::uuid and transition_sequence = 1",
+      [created.value.contentId],
+    )).rejects.toMatchObject({ code: "55000" });
 
     const grants = await admin.query(
       "select has_table_privilege('anon', 'content.items', 'select') anon_root, " +
@@ -1342,6 +1636,14 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "has_table_privilege('shipwithali_worker', 'content.testimonial_publication_history', 'select') worker_testimonial_history, " +
       "has_table_privilege('shipwithali_backup', 'content.public_testimonial_locales', 'select') backup_testimonial_projection, " +
       "has_table_privilege('shipwithali_application', 'content.public_testimonial_locales', 'select') app_testimonial_projection, " +
+      "has_table_privilege('anon', 'content.lifecycle_history', 'select') anon_lifecycle_history, " +
+      "has_table_privilege('authenticated', 'content.lifecycle_history', 'select') authenticated_lifecycle_history, " +
+      "has_table_privilege('shipwithali_worker', 'content.lifecycle_history', 'select') worker_lifecycle_history, " +
+      "has_table_privilege('shipwithali_backup', 'content.lifecycle_history', 'select') backup_lifecycle_history, " +
+      "has_table_privilege('shipwithali_application', 'content.lifecycle_history', 'select') app_lifecycle_read, " +
+      "has_table_privilege('shipwithali_application', 'content.lifecycle_history', 'insert') app_lifecycle_insert, " +
+      "has_table_privilege('shipwithali_application', 'content.lifecycle_history', 'update') app_lifecycle_update, " +
+      "has_table_privilege('shipwithali_application', 'content.lifecycle_history', 'delete') app_lifecycle_delete, " +
       "has_column_privilege('shipwithali_application', 'content.public_testimonial_locales', 'quote', 'UPDATE') app_testimonial_quote_update, " +
       "has_table_privilege('anon', 'content.public_achievement_locales', 'select') anon_achievement_projection, " +
       "has_table_privilege('authenticated', 'content.public_achievement_locales', 'select') authenticated_achievement_projection, " +
@@ -1363,11 +1665,18 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       app_testimonial_quote_update: true, anon_discovery_projection: false, app_route_slug_update: true,
       anon_achievement_projection: false, authenticated_achievement_projection: false,
       worker_achievement_projection: false, backup_achievement_projection: false,
+      anon_lifecycle_history: false, authenticated_lifecycle_history: false, worker_lifecycle_history: false, backup_lifecycle_history: false,
+      app_lifecycle_read: true, app_lifecycle_insert: true, app_lifecycle_update: false, app_lifecycle_delete: false,
       authenticated_routes: false, worker_publication: false, app_routes: true, app_reservations: true,
       app_reservation_current_update: true, app_route_history: true, app_route_history_insert: true });
+    const lifecycleRls = await admin.query(
+      "select relrowsecurity, relforcerowsecurity from pg_class where oid = 'content.lifecycle_history'::regclass",
+    );
+    expect(lifecycleRls.rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
     const unscoped = await database.transactions.run((context) => sql.raw(
-      "select (select count(*)::integer from content.items) roots, (select count(*)::integer from content.revisions) revisions",
+      "select (select count(*)::integer from content.items) roots, (select count(*)::integer from content.revisions) revisions, " +
+        "(select count(*)::integer from content.lifecycle_history) lifecycle_history",
     ).execute(resolvePostgresTransaction(context)));
-    expect(unscoped.rows[0]).toEqual({ roots: 0, revisions: 0 });
+    expect(unscoped.rows[0]).toEqual({ roots: 0, revisions: 0, lifecycle_history: 0 });
   }, 30_000);
 });

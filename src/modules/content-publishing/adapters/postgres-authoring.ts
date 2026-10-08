@@ -202,20 +202,51 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
          and revision.portfolio_id = ${scope.portfolioId}::uuid
        order by revision.locale, revision.stream_sequence
     `.execute(executor);
-    const publications = await sql<{ locale: string; revision_id: string; published_at: Date | string }>`
-      select locale, revision_id::text, published_at
-        from content.language_publications
-       where content_id = ${contentId}::uuid
-         and portfolio_id = ${scope.portfolioId}::uuid
+    const publications = await sql<{
+      locale: string; revision_id: string; review_id: string; snapshot_hash: string; evidence_version: number;
+      reviewer_id: string; decision: string; media_facts_version: string | null; published_at: Date | string;
+    }>`
+      select publication.locale, publication.revision_id::text, publication.review_id::text,
+             review.snapshot_hash, review.evidence_version, review.reviewer_id::text, review.decision,
+             publication.media_facts_version, publication.published_at
+        from content.language_publications publication
+        join content.revision_reviews review
+          on review.review_id = publication.review_id
+         and review.content_id = publication.content_id
+         and review.portfolio_id = publication.portfolio_id
+       where publication.content_id = ${contentId}::uuid
+         and publication.portfolio_id = ${scope.portfolioId}::uuid
+      union all
+      select publication.locale, publication.revision_id::text, publication.review_id::text,
+             review.snapshot_hash, review.evidence_version, review.reviewer_id::text, review.decision,
+             null::text as media_facts_version, publication.published_at
+        from content.testimonial_language_publications publication
+        join content.revision_reviews review
+          on review.review_id = publication.review_id
+         and review.content_id = publication.content_id
+         and review.portfolio_id = publication.portfolio_id
+       where publication.content_id = ${contentId}::uuid
+         and publication.portfolio_id = ${scope.portfolioId}::uuid
        order by locale
     `.execute(executor);
     const mappedPublications: ContentAuthoringPublication[] = publications.rows.map((row) => {
-      if (!isLocale(row.locale)) throw new PostgresInfrastructureError();
+      if (!isLocale(row.locale) || row.decision !== "accepted" && row.decision !== "rejected" ||
+          !Number.isSafeInteger(row.evidence_version) || row.evidence_version < 1) throw new PostgresInfrastructureError();
       const publishedAt = row.published_at instanceof Date ? row.published_at.toISOString() : new Date(row.published_at).toISOString();
       if (!Number.isFinite(Date.parse(publishedAt))) throw new PostgresInfrastructureError();
-      return { locale: row.locale, revisionId: row.revision_id as StableId<"Revision">, publishedAt };
+      return {
+        locale: row.locale,
+        revisionId: row.revision_id as StableId<"Revision">,
+        reviewId: row.review_id as StableId<"ContentReview">,
+        snapshotHash: row.snapshot_hash,
+        evidenceVersion: row.evidence_version,
+        reviewerId: row.reviewer_id as StableId<"Owner">,
+        decision: row.decision,
+        mediaFactsVersion: row.media_facts_version,
+        publishedAt,
+      };
     });
-    const routeResult = root.content_type === "project" && mappedPublications.length > 0 ? await sql<{
+    const routeResult = root.content_type === "project" ? await sql<{
       route_identity: string; current_slug: string; normalized_slug: string; is_current: boolean;
     }>`
       select route.route_identity::text, route.current_slug, reservation.normalized_slug, reservation.is_current
@@ -444,6 +475,115 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
       }
     },
 
+    async changeLifecycle(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const selected = await sql<{
+          content_type: string; lifecycle: string; aggregate_version: number;
+        }>`
+          select content_type, lifecycle, aggregate_version
+            from content.items
+           where content_id = ${input.contentId}::uuid
+             and portfolio_id = ${input.scope.portfolioId}::uuid
+           for update
+        `.execute(executor);
+        const root = selected.rows[0];
+        if (root === undefined) return err({ kind: "not_found", code: "CONTENT_NOT_FOUND" });
+        if (!isKind(root.content_type) || !["draft", "published", "hidden", "archived"].includes(root.lifecycle) ||
+            !Number.isSafeInteger(root.aggregate_version) || root.aggregate_version < 1) throw new PostgresInfrastructureError();
+        const previousLifecycle = root.lifecycle as ContentAuthoringRecord["lifecycle"];
+        if (root.aggregate_version !== input.expectedVersion) {
+          return err({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: root.aggregate_version });
+        }
+        if (previousLifecycle === input.lifecycle) {
+          return { ok: true, value: {
+            aggregateVersion: root.aggregate_version,
+            lifecycle: input.lifecycle,
+            previousLifecycle,
+            changed: false,
+            changedAt: null,
+          } };
+        }
+        const allowed = input.lifecycle === "hidden"
+          ? previousLifecycle === "published"
+          : input.lifecycle === "archived"
+          ? previousLifecycle === "draft" || previousLifecycle === "published" || previousLifecycle === "hidden"
+          : previousLifecycle === "hidden" || previousLifecycle === "archived";
+        if (!allowed) return err({ kind: "validation", code: "CONTENT_LIFECYCLE_TRANSITION_NOT_ALLOWED" });
+        if (input.lifecycle === "published") {
+          const retainedPublication = await sql<{ exists: boolean }>`
+            select exists (
+              select 1 from content.language_publications
+               where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+              union all
+              select 1 from content.testimonial_language_publications
+               where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+            ) as exists
+          `.execute(executor);
+          if (retainedPublication.rows[0]?.exists !== true) {
+            return err({ kind: "validation", code: "CONTENT_NOT_PREVIOUSLY_PUBLISHED" });
+          }
+          if (root.content_type === "project") {
+            const retainedRoute = await sql<{ exists: boolean }>`
+              select exists (
+                select 1 from content.public_routes
+                 where content_id = ${input.contentId}::uuid
+                   and portfolio_id = ${input.scope.portfolioId}::uuid
+                   and content_type = 'project'
+              ) as exists
+            `.execute(executor);
+            if (retainedRoute.rows[0]?.exists !== true) {
+              return err({ kind: "validation", code: "PUBLIC_ROUTE_IDENTITY_UNAVAILABLE" });
+            }
+          }
+        }
+        const updated = await sql<{ aggregate_version: number; changed_at: Date | string }>`
+          update content.items
+             set lifecycle = ${input.lifecycle},
+                 aggregate_version = aggregate_version + 1,
+                 updated_at = transaction_timestamp()
+           where content_id = ${input.contentId}::uuid
+             and portfolio_id = ${input.scope.portfolioId}::uuid
+             and aggregate_version = ${input.expectedVersion}
+          returning aggregate_version, updated_at as changed_at
+        `.execute(executor);
+        const updatedRoot = updated.rows[0];
+        if (updatedRoot === undefined) throw new PostgresInfrastructureError();
+        const nextSequence = await sql<{ sequence: number }>`
+          select coalesce(max(transition_sequence), 0)::integer + 1 as sequence
+            from content.lifecycle_history
+           where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+        `.execute(executor);
+        const sequence = nextSequence.rows[0]?.sequence;
+        if (sequence === undefined) throw new PostgresInfrastructureError();
+        await sql`
+          insert into content.lifecycle_history (
+            content_id, portfolio_id, content_type, transition_sequence,
+            previous_lifecycle, lifecycle, aggregate_version, reason, changed_at
+          ) values (
+            ${input.contentId}::uuid, ${input.scope.portfolioId}::uuid, ${root.content_type}, ${sequence},
+            ${previousLifecycle}, ${input.lifecycle}, ${updatedRoot.aggregate_version}, ${input.reason ?? null},
+            transaction_timestamp()
+          )
+        `.execute(executor);
+        const changedAt = updatedRoot.changed_at instanceof Date
+          ? updatedRoot.changed_at.toISOString()
+          : new Date(updatedRoot.changed_at).toISOString();
+        if (!Number.isFinite(Date.parse(changedAt))) throw new PostgresInfrastructureError();
+        return { ok: true, value: {
+          aggregateVersion: updatedRoot.aggregate_version,
+          lifecycle: input.lifecycle,
+          previousLifecycle,
+          changed: true,
+          changedAt,
+        } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
     async appendRevision(input: AppendContentRevisionInput, context: TransactionContext) {
       const executor = resolvePostgresTransaction(context);
       try {
@@ -580,7 +720,8 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
           return err({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: root.aggregate_version });
         }
         if (root.content_type !== "project") return err({ kind: "validation", code: "CONTENT_TYPE_NOT_PUBLISHABLE" });
-        if (root.lifecycle !== "draft" && root.lifecycle !== "published") return err({ kind: "validation", code: "CONTENT_LIFECYCLE_NOT_PUBLISHABLE" });
+        if (root.lifecycle !== "draft" && root.lifecycle !== "published" &&
+            !(root.lifecycle === "archived" && root.first_published_at === null)) return err({ kind: "validation", code: "CONTENT_LIFECYCLE_NOT_PUBLISHABLE" });
         if (root.candidate_slug === null) return err({ kind: "validation", code: "PROJECT_CANDIDATE_SLUG_REQUIRED" });
 
         const selected = await sql<{ review_id: string; snapshot_hash: string; evidence_version: number; decision: string; reviewer_id: string }>`
@@ -654,6 +795,24 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         `.execute(executor);
         const updated = updatedRoot.rows[0];
         if (updated === undefined) throw new PostgresInfrastructureError();
+        if (root.lifecycle !== "published") {
+          const nextLifecycleSequence = await sql<{ sequence: number }>`
+            select coalesce(max(transition_sequence), 0)::integer + 1 as sequence
+              from content.lifecycle_history
+             where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+          `.execute(executor);
+          const lifecycleSequence = nextLifecycleSequence.rows[0]?.sequence;
+          if (lifecycleSequence === undefined) throw new PostgresInfrastructureError();
+          await sql`
+            insert into content.lifecycle_history (
+              content_id, portfolio_id, content_type, transition_sequence,
+              previous_lifecycle, lifecycle, aggregate_version, reason, changed_at
+            ) values (
+              ${input.contentId}::uuid, ${input.scope.portfolioId}::uuid, 'project', ${lifecycleSequence},
+              ${root.lifecycle}, 'published', ${updated.aggregate_version}, null, transaction_timestamp()
+            )
+          `.execute(executor);
+        }
         const pointer = await sql<{ publication_sequence: number }>`
           select coalesce(max(publication_sequence), 0)::integer + 1 as publication_sequence
             from content.publication_history
@@ -766,7 +925,8 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
           return err({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: root.aggregate_version });
         }
         if (root.content_type !== "testimonial") return err({ kind: "validation", code: "CONTENT_TYPE_NOT_PUBLISHABLE" });
-        if (root.lifecycle !== "draft" && root.lifecycle !== "published") return err({ kind: "validation", code: "CONTENT_LIFECYCLE_NOT_PUBLISHABLE" });
+        if (root.lifecycle !== "draft" && root.lifecycle !== "published" &&
+            !(root.lifecycle === "archived" && root.first_published_at === null)) return err({ kind: "validation", code: "CONTENT_LIFECYCLE_NOT_PUBLISHABLE" });
 
         const selected = await sql<{ review_id: string; snapshot_hash: string; decision: string; reviewer_id: string }>`
           select review.review_id::text, review.snapshot_hash, review.decision, review.reviewer_id::text
@@ -804,6 +964,24 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         `.execute(executor);
         const updated = updatedRoot.rows[0];
         if (updated === undefined) throw new PostgresInfrastructureError();
+        if (root.lifecycle !== "published") {
+          const nextLifecycleSequence = await sql<{ sequence: number }>`
+            select coalesce(max(transition_sequence), 0)::integer + 1 as sequence
+              from content.lifecycle_history
+             where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+          `.execute(executor);
+          const lifecycleSequence = nextLifecycleSequence.rows[0]?.sequence;
+          if (lifecycleSequence === undefined) throw new PostgresInfrastructureError();
+          await sql`
+            insert into content.lifecycle_history (
+              content_id, portfolio_id, content_type, transition_sequence,
+              previous_lifecycle, lifecycle, aggregate_version, reason, changed_at
+            ) values (
+              ${input.contentId}::uuid, ${input.scope.portfolioId}::uuid, 'testimonial', ${lifecycleSequence},
+              ${root.lifecycle}, 'published', ${updated.aggregate_version}, null, transaction_timestamp()
+            )
+          `.execute(executor);
+        }
         const pointer = await sql<{ publication_sequence: number }>`
           select coalesce(max(publication_sequence), 0)::integer + 1 as publication_sequence
             from content.testimonial_publication_history
@@ -891,7 +1069,8 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         if (root === undefined) return err({ kind: "not_found", code: "CONTENT_NOT_FOUND" });
         if (root.aggregate_version !== input.expectedVersion) return err({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: root.aggregate_version });
         if (root.content_type !== "achievement") return err({ kind: "validation", code: "CONTENT_TYPE_NOT_PUBLISHABLE" });
-        if (root.lifecycle !== "draft" && root.lifecycle !== "published") return err({ kind: "validation", code: "CONTENT_LIFECYCLE_NOT_PUBLISHABLE" });
+        if (root.lifecycle !== "draft" && root.lifecycle !== "published" &&
+            !(root.lifecycle === "archived" && root.first_published_at === null)) return err({ kind: "validation", code: "CONTENT_LIFECYCLE_NOT_PUBLISHABLE" });
 
         const selected = await sql<{ review_id: string; snapshot_hash: string; decision: string; reviewer_id: string }>`
           select review.review_id::text, review.snapshot_hash, review.decision, review.reviewer_id::text
@@ -929,6 +1108,24 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         `.execute(executor);
         const updated = updatedRoot.rows[0];
         if (updated === undefined) throw new PostgresInfrastructureError();
+        if (root.lifecycle !== "published") {
+          const nextLifecycleSequence = await sql<{ sequence: number }>`
+            select coalesce(max(transition_sequence), 0)::integer + 1 as sequence
+              from content.lifecycle_history
+             where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+          `.execute(executor);
+          const lifecycleSequence = nextLifecycleSequence.rows[0]?.sequence;
+          if (lifecycleSequence === undefined) throw new PostgresInfrastructureError();
+          await sql`
+            insert into content.lifecycle_history (
+              content_id, portfolio_id, content_type, transition_sequence,
+              previous_lifecycle, lifecycle, aggregate_version, reason, changed_at
+            ) values (
+              ${input.contentId}::uuid, ${input.scope.portfolioId}::uuid, 'achievement', ${lifecycleSequence},
+              ${root.lifecycle}, 'published', ${updated.aggregate_version}, null, transaction_timestamp()
+            )
+          `.execute(executor);
+        }
         const sequenceResult = await sql<{ publication_sequence: number }>`
           select coalesce(max(publication_sequence), 0)::integer + 1 as publication_sequence
             from content.publication_history where content_id = ${input.contentId}::uuid and locale = ${input.locale}
@@ -1079,10 +1276,6 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
                  locale.title, locale.summary, locale.body, locale.case_study, locale.claims, locale.external_links,
                  item.first_published_at, locale.published_at
             from content.public_routes route
-            join content.public_route_reservations reservation
-              on reservation.route_identity = route.route_identity
-             and reservation.content_id = route.content_id
-             and reservation.portfolio_id = route.portfolio_id
             join content.items item on item.content_id = route.content_id and item.portfolio_id = route.portfolio_id
             join content.language_publications publication
               on publication.content_id = item.content_id and publication.portfolio_id = item.portfolio_id
@@ -1091,7 +1284,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
               on locale.content_id = publication.content_id and locale.portfolio_id = publication.portfolio_id
              and locale.locale = publication.locale and locale.revision_id = publication.revision_id
            where route.portfolio_id = ${input.scope.portfolioId}::uuid
-             and route.content_type = 'project' and reservation.normalized_slug = ${input.slug}
+             and route.content_type = 'project' and route.current_slug = ${input.slug}
              and item.lifecycle = 'published' and item.content_type = 'project'
         `.execute(executor);
         const row = result.rows[0];

@@ -285,8 +285,9 @@ export async function main() {
   const ticket113 = process.argv.includes("--ticket-113");
   const ticket112 = process.argv.includes("--ticket-112");
   const ticket115 = process.argv.includes("--ticket-115");
-  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket115].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
-  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket115;
+  const ticket114 = process.argv.includes("--ticket-114");
+  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket114, ticket115].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
+  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket114 || ticket115;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -438,10 +439,12 @@ export async function main() {
 
     const evidence = contentAuthoringTicket ? {
       sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
-      ticket: ticket115 ? 115 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
+      ticket: ticket115 ? 115 : ticket114 ? 114 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
       parent: 106,
       scope: ticket115
         ? "candidate-slug-correction-durable-route-reservations-history-locale-safe-direct-redirects-and-atomic-replay"
+        : ticket114
+        ? "withdraw-archive-and-all-locale-restore-validation-with-atomic-projections-history-and-replay"
         : ticket113
         ? "testimonial-review-publication-history-safe-profile-project-projections-and-atomic-replay"
         : ticket112
@@ -462,11 +465,13 @@ export async function main() {
         outboxEvents: preservedRows.outbox.length === 1,
         jobs: preservedRows.jobs.length === 1,
       },
-      authoringTablesWithForcedRls: ["content.items", "content.revisions", ...(ticket110 || ticket111 || ticket112 || ticket115 ? ["content.revision_reviews"] : []),
-        ...(ticket111 || ticket112 ? ["content.language_publications", "content.publication_history"] : []),
+      authoringTablesWithForcedRls: ["content.items", "content.revisions", ...(ticket110 || ticket111 || ticket112 || ticket114 || ticket115 ? ["content.revision_reviews"] : []),
+        ...(ticket111 || ticket112 || ticket114 || ticket115 ? ["content.language_publications", "content.publication_history"] : []),
+        ...(ticket114 || ticket115 ? ["content.testimonial_language_publications", "content.testimonial_publication_history", "content.lifecycle_history"] : []),
         ...(ticket111 ? ["content.public_routes", "content.public_route_reservations", "content.public_project_locales", "taxonomy.project_discovery_locales"] : []),
-        ...(ticket115 ? ["content.public_routes", "content.public_route_reservations", "content.public_route_history", "content.language_publications", "content.publication_history", "content.public_project_locales", "taxonomy.project_discovery_locales"] : []),
-        ...(ticket112 ? ["content.public_achievement_locales"] : [])],
+        ...(ticket112 || ticket114 || ticket115 ? ["content.public_achievement_locales"] : []),
+        ...(ticket114 || ticket115 ? ["content.public_testimonial_locales", "content.public_routes", "content.public_route_reservations", "content.public_project_locales", "taxonomy.project_discovery_locales"] : []),
+        ...(ticket115 ? ["content.public_route_history"] : [])],
       databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
         status: test.status,
@@ -571,7 +576,9 @@ export async function main() {
     if (
       /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
     ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
-    const evidencePath = ticket112
+    const evidencePath = ticket114
+      ? join(ROOT, "evidence/phase-5-content-lifecycle.json")
+      : ticket112
       ? join(ROOT, "evidence/phase-5-achievement-timeline-postgres.json")
       : ticket111
       ? join(ROOT, "evidence/phase-5-project-publication.json")
