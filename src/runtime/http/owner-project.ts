@@ -82,6 +82,7 @@ export interface ChangeOwnerProjectStatusApplicationCommand {
   readonly expectedVersion: number;
   readonly projectId: StableId<"Project">;
   readonly statusValueId: StableId<string>;
+  readonly correlationId: string;
 }
 
 export interface SetOwnerProjectFeaturedApplicationCommand {
@@ -90,6 +91,7 @@ export interface SetOwnerProjectFeaturedApplicationCommand {
   readonly expectedVersion: number;
   readonly projectId: StableId<"Project">;
   readonly featured: boolean;
+  readonly correlationId: string;
 }
 
 export interface ChangeOwnerProjectPublicSlugApplicationCommand {
@@ -323,6 +325,7 @@ async function handleProjectCommand(
     readonly projectId: StableId<"Project">;
     readonly idempotencyKey: IdempotencyKey;
     readonly expectedVersion: number;
+    readonly correlationId: string;
     readonly body: Record<string, unknown>;
   }) => unknown,
   call: (command: never) => Promise<Result<OwnerProjectCommandReceipt, Rejection>>,
@@ -369,6 +372,7 @@ async function handleProjectCommand(
       projectId: pathResult.data.projectId as StableId<"Project">,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
+      correlationId: traceId,
       body: bodyResult.data,
     });
     let result: Result<OwnerProjectCommandReceipt, Rejection>;
@@ -417,12 +421,13 @@ export async function handleChangeOwnerProjectStatus(
       body: zChangeOwnerProjectStatusBody,
       response: zChangeOwnerProjectStatusResponse,
     },
-    ({ actor, projectId, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, projectId, idempotencyKey, expectedVersion, correlationId, body }) => ({
       actor,
       idempotencyKey,
       expectedVersion,
       projectId,
       statusValueId: body["statusValueId"] as StableId<string>,
+      correlationId,
     }) as ChangeOwnerProjectStatusApplicationCommand,
     (command) => deps.service.changeOwnerProjectStatus(command),
   );
@@ -444,12 +449,13 @@ export async function handleSetOwnerProjectFeatured(
       body: zSetOwnerProjectFeaturedBody,
       response: zSetOwnerProjectFeaturedResponse,
     },
-    ({ actor, projectId, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, projectId, idempotencyKey, expectedVersion, correlationId, body }) => ({
       actor,
       idempotencyKey,
       expectedVersion,
       projectId,
       featured: body["featured"] as boolean,
+      correlationId,
     }) as SetOwnerProjectFeaturedApplicationCommand,
     (command) => deps.service.setOwnerProjectFeatured(command),
   );

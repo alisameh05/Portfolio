@@ -40,10 +40,6 @@ const EXPECTED_OPERATIONAL_ROUTES = [
 // authenticated handlers, persistence, and negative behavior together.
 export const FAIL_CLOSED_OWNER_OPERATION_IDS = Object.freeze([
   "correctOwnerProjectCandidateSlug",
-  "listOwnerProjectStatusValues",
-  "createOwnerProjectStatusValue",
-  "renameOwnerProjectStatusValue",
-  "retireOwnerProjectStatusValue",
 ]);
 
 function toPosix(path) {
@@ -251,9 +247,9 @@ export function buildRuntimeBoundary(root = DEFAULT_ROOT) {
       name: "owner-operation-count",
       passed:
         matrix.filter((entry) => entry.surface === "owner").length === 48 &&
-        activeOperations.filter((entry) => entry.surface === "owner").length === 43 &&
+        activeOperations.filter((entry) => entry.surface === "owner").length === 47 &&
         failClosedOwnerOperations.length === FAIL_CLOSED_OWNER_OPERATION_IDS.length,
-      detail: "43 active Owner operations and 5 explicitly fail-closed Phase 5 contracts",
+      detail: "47 active Owner operations and 1 explicitly fail-closed Phase 5 contract",
     },
     {
       name: "unique-operation-identifiers",
@@ -343,7 +339,7 @@ export function main(root = DEFAULT_ROOT) {
     }
     return 1;
   }
-  console.log("✓ runtime boundary: 5 public + 43 active Owner operations resolve exactly once; 5 Phase 5 contracts fail closed");
+  console.log("✓ runtime boundary: 5 public + 47 active Owner operations resolve exactly once; 1 Phase 5 contract fails closed");
   return 0;
 }
 

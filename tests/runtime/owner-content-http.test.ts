@@ -79,6 +79,14 @@ function createService() {
       calls.history.push(query);
       return { ok: true, value: { entries: [{ revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: "en", sequence: 1, savedAt: "2026-10-05T08:00:00.000Z", reviewDecision: "accepted" }], nextCursor: null } };
     },
+    async listProjectStatusValues() { return { ok: true as const, value: [] }; },
+    async getProjectOwnerView() { return { ok: false as const, error: { kind: "not_found" as const, code: "PROJECT_NOT_FOUND" } }; },
+    async getProjectStatusHistory() { return { ok: true as const, value: [] }; },
+    async createProjectStatusValue() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "UNAVAILABLE" } }; },
+    async renameProjectStatusValue() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "UNAVAILABLE" } }; },
+    async retireProjectStatusValue() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "UNAVAILABLE" } }; },
+    async changeProjectStatus() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "UNAVAILABLE" } }; },
+    async setProjectFeatured() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "UNAVAILABLE" } }; },
   };
   return { calls, service };
 }

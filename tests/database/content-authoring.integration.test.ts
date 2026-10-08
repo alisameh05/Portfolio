@@ -1492,4 +1492,256 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     ).execute(resolvePostgresTransaction(context)));
     expect(unscoped.rows[0]).toEqual({ roots: 0, revisions: 0, lifecycle_history: 0 });
   }, 30_000);
+
+  it("keeps Project status identities, histories, Featured state, and published projections atomic", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const activeLabel = `Active ${randomBytes(4).toString("hex")}`;
+    const shippedLabel = `Shipped ${randomBytes(4).toString("hex")}`;
+    const researchLabel = `Research ${randomBytes(4).toString("hex")}`;
+    const status = await content.createProjectStatusValue({ actor: actor(scope.ownerId), label: `  ${activeLabel}  `, idempotencyKey: key("status-active"), correlationId: "status-active" });
+    expect(status).toMatchObject({ ok: true, value: { label: activeLabel, state: "active", aggregateVersion: 1 } });
+    if (!status.ok) return;
+    const duplicate = await content.createProjectStatusValue({ actor: actor(scope.ownerId), label: activeLabel.toLowerCase(), idempotencyKey: key("status-active-duplicate"), correlationId: "status-active-duplicate" });
+    expect(duplicate).toMatchObject({ ok: false, error: { kind: "conflict", code: "PROJECT_STATUS_LABEL_ALREADY_EXISTS" } });
+    const archived = await content.createProjectStatusValue({ actor: actor(scope.ownerId), label: "ARCHIVED", idempotencyKey: key("status-archived"), correlationId: "status-archived" });
+    expect(archived).toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_PROJECT_STATUS_LABEL" } });
+
+    const project = await createReviewedProject(scope, "Status lifecycle", "status-lifecycle", "en");
+    const initial = await content.getProjectOwnerView({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project"> });
+    expect(initial).toMatchObject({ ok: true, value: { aggregateVersion: 2, statusValueId: null, featured: false, publicRoute: null } });
+    const assigned = await content.changeProjectStatus({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+      statusValueId: status.value.valueId, expectedVersion: 2, idempotencyKey: key("status-select"), correlationId: "status-select" });
+    expect(assigned).toMatchObject({ ok: true, value: { aggregateVersion: 3, outcome: "project-status-changed" } });
+    const featured = await content.setProjectFeatured({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+      featured: true, expectedVersion: 3, idempotencyKey: key("status-feature"), correlationId: "status-feature" });
+    expect(featured).toMatchObject({ ok: true, value: { aggregateVersion: 4, outcome: "project-featured-changed" } });
+    const published = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+      locale: "en", revisionId: project.revisionId, expectedVersion: 4, idempotencyKey: key("status-publish"), correlationId: "status-publish" });
+    expect(published.ok).toBe(true);
+    if (!published.ok) return;
+    const publicationSnapshot = await admin.query(
+      "select item.first_published_at, public.first_published_at as projection_first_published_at, public.published_at as projection_published_at, " +
+      "publication.published_at as publication_published_at, publication.revision_id::text as publication_revision_id, " +
+      "(select count(*)::int from content.revisions where content_id = item.content_id) revision_count " +
+      "from content.items item join content.public_project_locales public using (content_id, portfolio_id) " +
+      "join content.language_publications publication using (content_id, portfolio_id) " +
+      "where item.content_id = $1::uuid and public.locale = 'en' and publication.locale = 'en'",
+      [project.contentId],
+    );
+    const nextStatus = await content.createProjectStatusValue({ actor: actor(scope.ownerId), label: `Published ${randomBytes(4).toString("hex")}`,
+      idempotencyKey: key("status-post-publish-create"), correlationId: "status-post-publish-create" });
+    expect(nextStatus.ok).toBe(true);
+    if (!nextStatus.ok) return;
+    const postPublishStatus = await content.changeProjectStatus({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+      statusValueId: nextStatus.value.valueId, expectedVersion: published.value.aggregateVersion,
+      idempotencyKey: key("status-post-publish-select"), correlationId: "status-post-publish-select" });
+    expect(postPublishStatus).toMatchObject({ ok: true, value: { aggregateVersion: published.value.aggregateVersion + 1 } });
+    const postPublishFeatured = await content.setProjectFeatured({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+      featured: false, expectedVersion: published.value.aggregateVersion + 1,
+      idempotencyKey: key("status-post-publish-feature"), correlationId: "status-post-publish-feature" });
+    expect(postPublishFeatured).toMatchObject({ ok: true, value: { aggregateVersion: published.value.aggregateVersion + 2 } });
+    const publicationAfterStatusChanges = await admin.query(
+      "select item.first_published_at, public.first_published_at as projection_first_published_at, public.published_at as projection_published_at, " +
+      "publication.published_at as publication_published_at, publication.revision_id::text as publication_revision_id, " +
+      "(select count(*)::int from content.revisions where content_id = item.content_id) revision_count " +
+      "from content.items item join content.public_project_locales public using (content_id, portfolio_id) " +
+      "join content.language_publications publication using (content_id, portfolio_id) " +
+      "where item.content_id = $1::uuid and public.locale = 'en' and publication.locale = 'en'",
+      [project.contentId],
+    );
+    expect(publicationAfterStatusChanges.rows[0]).toEqual(publicationSnapshot.rows[0]);
+
+    const projected = await database.transactions.run(async (context) => {
+      await sql`select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
+                       set_config('shipwithali.owner_id', ${scope.ownerId}, true)`.execute(resolvePostgresTransaction(context));
+      return await sql<{ status_value_id: string | null; featured: boolean; published_at: Date | string }>`
+        select status_value_id::text, featured, published_at from taxonomy.project_discovery_locales
+         where content_id = ${project.contentId}::uuid and portfolio_id = ${scope.portfolioId}::uuid and locale = 'en'
+      `.execute(resolvePostgresTransaction(context));
+    });
+    expect(projected.rows).toHaveLength(1);
+    expect(projected.rows[0]).toMatchObject({ status_value_id: nextStatus.value.valueId, featured: false });
+    const noPriorityOrdering = await database.transactions.run(async (context) => {
+      await sql`select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
+                       set_config('shipwithali.owner_id', ${scope.ownerId}, true)`.execute(resolvePostgresTransaction(context));
+      return await sql<{ status_value_id: string | null; featured: boolean }>`
+        select status_value_id::text, featured from content.items
+         where content_id = ${project.contentId}::uuid and portfolio_id = ${scope.portfolioId}::uuid
+      `.execute(resolvePostgresTransaction(context));
+    });
+    expect(noPriorityOrdering.rows[0]).toEqual({ status_value_id: nextStatus.value.valueId, featured: false });
+
+    const renamed = await content.renameProjectStatusValue({ actor: actor(scope.ownerId), valueId: status.value.valueId,
+      label: shippedLabel, expectedVersion: 1, idempotencyKey: key("status-rename"), correlationId: "status-rename" });
+    expect(renamed).toMatchObject({ ok: true, value: { valueId: status.value.valueId, label: shippedLabel, aggregateVersion: 2 } });
+    const retired = await content.retireProjectStatusValue({ actor: actor(scope.ownerId), valueId: status.value.valueId,
+      expectedVersion: 2, idempotencyKey: key("status-retire"), correlationId: "status-retire" });
+    expect(retired).toMatchObject({ ok: true, value: { valueId: status.value.valueId, state: "retired", aggregateVersion: 3 } });
+    const selectionAfterRetirement = await content.changeProjectStatus({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+      statusValueId: status.value.valueId, expectedVersion: published.value.aggregateVersion + 2,
+      idempotencyKey: key("status-select-retired"), correlationId: "status-select-retired" });
+    expect(selectionAfterRetirement).toMatchObject({ ok: false, error: { kind: "validation", code: "PROJECT_STATUS_VALUE_NOT_ACTIVE" } });
+    const retainedProject = await content.getProjectOwnerView({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project"> });
+    expect(retainedProject).toMatchObject({ ok: true, value: { aggregateVersion: published.value.aggregateVersion + 2,
+      statusValueId: nextStatus.value.valueId, featured: false } });
+    const statusHistory = await content.getProjectStatusHistory({ actor: actor(scope.ownerId), valueId: status.value.valueId });
+    expect(statusHistory).toMatchObject({ ok: true, value: [
+      { operation: "created", label: activeLabel, state: "active", aggregateVersion: 1 },
+      { operation: "renamed", previousLabel: activeLabel, label: shippedLabel, state: "active", aggregateVersion: 2 },
+      { operation: "retired", previousLabel: shippedLabel, label: shippedLabel, state: "retired", aggregateVersion: 3 },
+    ] });
+    const historyRows = await database.transactions.run(async (context) => {
+      await sql`select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
+                       set_config('shipwithali.owner_id', ${scope.ownerId}, true)`.execute(resolvePostgresTransaction(context));
+      return await sql<{ previous_value_id: string | null; current_value_id: string; aggregate_version: number }>`
+        select previous_value_id::text, current_value_id::text, aggregate_version from content.project_status_history
+         where content_id = ${project.contentId}::uuid and portfolio_id = ${scope.portfolioId}::uuid
+      `.execute(resolvePostgresTransaction(context));
+    });
+    expect(historyRows.rows).toEqual([
+      { previous_value_id: null, current_value_id: status.value.valueId, aggregate_version: 3 },
+      { previous_value_id: status.value.valueId, current_value_id: nextStatus.value.valueId, aggregate_version: published.value.aggregateVersion + 1 },
+    ]);
+
+    const replay = await content.setProjectFeatured({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+      featured: true, expectedVersion: 3, idempotencyKey: key("status-feature"), correlationId: "status-feature" });
+    expect(replay).toMatchObject({ ok: true, value: { aggregateVersion: 4, outcome: "project-featured-changed" } });
+
+    const research = await content.createProjectStatusValue({ actor: actor(scope.ownerId), label: researchLabel,
+      idempotencyKey: key("status-race-create"), correlationId: "status-race-create" });
+    expect(research.ok).toBe(true);
+    if (!research.ok) return;
+    const [selectedDuringRetirement, retiredDuringSelection] = await Promise.all([
+      content.changeProjectStatus({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+        statusValueId: research.value.valueId, expectedVersion: published.value.aggregateVersion + 2,
+        idempotencyKey: key("status-race-select"), correlationId: "status-race-select" }),
+      content.retireProjectStatusValue({ actor: actor(scope.ownerId), valueId: research.value.valueId, expectedVersion: 1,
+        idempotencyKey: key("status-race-retire"), correlationId: "status-race-retire" }),
+    ]);
+    expect(retiredDuringSelection).toMatchObject({ ok: true, value: { state: "retired", aggregateVersion: 2 } });
+    if (selectedDuringRetirement.ok) {
+      const racedOwnerView = await content.getProjectOwnerView({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project"> });
+      expect(racedOwnerView).toMatchObject({ ok: true, value: { aggregateVersion: published.value.aggregateVersion + 3, statusValueId: research.value.valueId } });
+    } else {
+      expect(selectedDuringRetirement).toMatchObject({ ok: false, error: { kind: "validation", code: "PROJECT_STATUS_VALUE_NOT_ACTIVE" } });
+      const unchangedOwnerView = await content.getProjectOwnerView({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project"> });
+      expect(unchangedOwnerView).toMatchObject({ ok: true, value: { aggregateVersion: published.value.aggregateVersion + 2,
+        statusValueId: nextStatus.value.valueId } });
+    }
+  }, 30_000);
+
+  it("keeps status and Featured mutations atomic when the outbox fails", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const status = await content.createProjectStatusValue({ actor: actor(scope.ownerId), label: "Atomic status",
+      idempotencyKey: key("status-rollback-create"), correlationId: "status-rollback-create" });
+    expect(status.ok).toBe(true);
+    if (!status.ok) return;
+    const project = await createReviewedProject(scope, "Atomic Project", "status-rollback-project");
+    const published = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+      locale: "en", revisionId: project.revisionId, expectedVersion: project.aggregateVersion,
+      idempotencyKey: key("status-rollback-publish"), correlationId: "status-rollback-publish" });
+    expect(published.ok).toBe(true);
+    if (!published.ok) return;
+    const failingOperations = {
+      ...operations,
+      outbox: { ...operations.outbox, async append() { throw new Error("simulated project status event failure"); } },
+    };
+    const failingContent = createContentAuthoringService({ repository, operations: failingOperations, scope,
+      discoveryProjection: createPostgresProjectDiscoveryProjectionWriter() });
+    await expect(failingContent.changeProjectStatus({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+      statusValueId: status.value.valueId, expectedVersion: published.value.aggregateVersion,
+      idempotencyKey: key("status-rollback-select"), correlationId: "status-rollback-select" })).rejects.toThrow();
+    await expect(failingContent.setProjectFeatured({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+      featured: true, expectedVersion: published.value.aggregateVersion,
+      idempotencyKey: key("status-rollback-feature"), correlationId: "status-rollback-feature" })).rejects.toThrow();
+
+    const persisted = await admin.query(
+      "select (select aggregate_version from content.items where content_id = $1::uuid) aggregate_version, " +
+      "(select status_value_id::text from content.items where content_id = $1::uuid) status_value_id, " +
+      "(select featured from content.items where content_id = $1::uuid) featured, " +
+      "(select status_value_id::text from taxonomy.project_discovery_locales where content_id = $1::uuid and locale = 'en') projected_status, " +
+      "(select featured from taxonomy.project_discovery_locales where content_id = $1::uuid and locale = 'en') projected_featured, " +
+      "(select count(*)::int from content.project_status_history where content_id = $1::uuid) status_history, " +
+      "(select count(*)::int from operations.idempotency_records where key_hash in ($2, $3)) receipts, " +
+      "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type in ('content.project_status_changed.v1', 'content.project_featured_changed.v1')) events",
+      [project.contentId, createHash("sha256").update("status-rollback-select").digest("hex"), createHash("sha256").update("status-rollback-feature").digest("hex")],
+    );
+    expect(persisted.rows[0]).toEqual({ aggregate_version: published.value.aggregateVersion, status_value_id: null,
+      featured: false, projected_status: null, projected_featured: false, status_history: 0, receipts: 0, events: 0 });
+  }, 30_000);
+
+  it("scopes all status tables to one Portfolio and rejects status or Featured writes on Achievements", async () => {
+    const scope = await configuredScope();
+    const otherScope = await configuredScope();
+    const content = service(scope);
+    const status = await content.createProjectStatusValue({ actor: actor(scope.ownerId), label: "Scoped status",
+      idempotencyKey: key("status-rls-create"), correlationId: "status-rls-create" });
+    expect(status.ok).toBe(true);
+    if (!status.ok) return;
+    const project = await createReviewedProject(scope, "Scoped Project", "status-rls-project");
+    const assigned = await content.changeProjectStatus({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+      statusValueId: status.value.valueId, expectedVersion: project.aggregateVersion,
+      idempotencyKey: key("status-rls-assign"), correlationId: "status-rls-assign" });
+    expect(assigned.ok).toBe(true);
+    const readUnscopedRows = await database.transactions.run(async (context) => {
+      await sql`select set_config('shipwithali.portfolio_id', ${otherScope.portfolioId}, true),
+                       set_config('shipwithali.owner_id', ${otherScope.ownerId}, true)`.execute(resolvePostgresTransaction(context));
+      return await sql<{ values: number; value_history: number; project_history: number }>`
+        select
+          (select count(*)::integer from content.project_status_values where value_id = ${status.value.valueId}::uuid) as values,
+          (select count(*)::integer from content.project_status_value_history where value_id = ${status.value.valueId}::uuid) as value_history,
+          (select count(*)::integer from content.project_status_history where content_id = ${project.contentId}::uuid) as project_history
+      `.execute(resolvePostgresTransaction(context));
+    });
+    expect(readUnscopedRows.rows[0]).toEqual({ values: 0, value_history: 0, project_history: 0 });
+
+    await expect(database.transactions.run(async (context) => {
+      await sql`select set_config('shipwithali.portfolio_id', ${otherScope.portfolioId}, true),
+                       set_config('shipwithali.owner_id', ${otherScope.ownerId}, true)`.execute(resolvePostgresTransaction(context));
+      await sql`insert into content.project_status_values (value_id, portfolio_id, label)
+        values (${createStableId("ProjectStatusValue")}::uuid, ${scope.portfolioId}::uuid, 'forged status')`
+        .execute(resolvePostgresTransaction(context));
+    })).rejects.toThrow();
+
+    const achievement = await createReviewedAchievement(scope, "Status must stay on Projects", "2026-10-08", "status-rls-achievement");
+    await expect(database.transactions.run(async (context) => {
+      await sql`select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
+                       set_config('shipwithali.owner_id', ${scope.ownerId}, true)`.execute(resolvePostgresTransaction(context));
+      await sql`update content.items set featured = true where content_id = ${achievement.contentId}::uuid`
+        .execute(resolvePostgresTransaction(context));
+    })).rejects.toThrow();
+    await expect(database.transactions.run(async (context) => {
+      await sql`select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
+                       set_config('shipwithali.owner_id', ${scope.ownerId}, true)`.execute(resolvePostgresTransaction(context));
+      await sql`update content.items set status_value_id = ${status.value.valueId}::uuid where content_id = ${achievement.contentId}::uuid`
+        .execute(resolvePostgresTransaction(context));
+    })).rejects.toThrow();
+    const restrictedGrants = await admin.query(
+      "select " + ["content.project_status_values", "content.project_status_value_history", "content.project_status_history"].flatMap((table, index) =>
+        ["anon", "authenticated", "shipwithali_worker", "shipwithali_backup"].map((role, roleIndex) =>
+          `has_table_privilege('${role}', '${table}', 'select') as t${index}_r${roleIndex}, has_table_privilege('${role}', '${table}', 'insert') as t${index}_w${roleIndex}`,
+        ),
+      ).join(", "),
+    );
+    expect(Object.values(restrictedGrants.rows[0] as Record<string, boolean>).every((allowed) => !allowed)).toBe(true);
+  }, 30_000);
+
+  it("keeps the status registry within the strict Owner list response limit", async () => {
+    const scope = await configuredScope();
+    const seedValues = Array.from({ length: 100 }, (_, index) => [
+      createStableId("ProjectStatusValue"), scope.portfolioId, `Status ${index}`,
+    ]);
+    const tuples = seedValues.map((_, index) => `($${index * 3 + 1}::uuid, $${index * 3 + 2}::uuid, $${index * 3 + 3})`).join(", ");
+    await admin.query(`insert into content.project_status_values (value_id, portfolio_id, label) values ${tuples}`, seedValues.flat());
+    const content = service(scope);
+    const listed = await content.listProjectStatusValues({ actor: actor(scope.ownerId) });
+    expect(listed).toMatchObject({ ok: true, value: expect.arrayContaining([expect.objectContaining({ state: "active" })]) });
+    if (!listed.ok) return;
+    expect(listed.value).toHaveLength(100);
+    const overflow = await content.createProjectStatusValue({ actor: actor(scope.ownerId), label: "Status 101",
+      idempotencyKey: key("status-limit-overflow"), correlationId: "status-limit-overflow" });
+    expect(overflow).toMatchObject({ ok: false, error: { kind: "conflict", code: "PROJECT_STATUS_VALUE_LIMIT_REACHED" } });
+  }, 30_000);
 });

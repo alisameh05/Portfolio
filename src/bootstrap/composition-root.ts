@@ -25,6 +25,7 @@ import { RuntimeConfigError } from "./configuration.js";
 import type { OperationsPersistencePorts } from "../modules/portability-operations/application/index.js";
 import type { OwnerConfigurationApplicationService } from "../runtime/http/owner-configuration.js";
 import type { ContentAuthoringService } from "../modules/content-publishing/application/authoring.js";
+import type { OwnerProjectApplicationService } from "../runtime/http/owner-project.js";
 import type { LifecycleResource, ReadinessCheck } from "../runtime/ports.js";
 import { parseStableId } from "../shared/domain/index.js";
 
@@ -224,6 +225,13 @@ export async function getContentAuthoringApplicationService(): Promise<ContentAu
   if (currentContentAuthoring !== undefined) return currentContentAuthoring;
   const { createProductionContentAuthoringService } = await import("../runtime/fakes/content-authoring.js");
   return createProductionContentAuthoringService();
+}
+
+/** The real Project status and Featured operations come from Content persistence. */
+export async function getOwnerProjectApplicationService(): Promise<OwnerProjectApplicationService> {
+  const contentAuthoring = await getContentAuthoringApplicationService();
+  const { createContentOwnerProjectService } = await import("../runtime/content-owner-project.js");
+  return createContentOwnerProjectService(contentAuthoring);
 }
 
 export function getRuntimeConfig(): RuntimeConfig {
