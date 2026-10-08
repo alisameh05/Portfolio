@@ -87,7 +87,7 @@ function createService() {
     async getPublicAchievementTimeline() { return { ok: true as const, value: [] }; },
     async getContentHistory(query) {
       calls.history.push(query);
-      return { ok: true, value: { entries: [{ revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: "en", sequence: 1, savedAt: "2026-10-05T08:00:00.000Z", reviewDecision: "accepted" }], nextCursor: null } };
+      return { ok: true, value: { entries: [{ revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: "en", sequence: 1, savedAt: "2026-10-05T08:00:00.000Z", reviewDecision: "accepted" }], routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current", changedAt: "2026-10-08T00:00:00.000Z" }], nextCursor: null } };
     },
   };
   return { calls, service };
@@ -219,7 +219,7 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: fake.service, security: ownerTestSecurity(), logger },
     );
     expect(history.status).toBe(200);
-    expect(await history.json()).toMatchObject({ entries: [{ revisionId: REVISION_ID, reviewDecision: "accepted" }], nextCursor: null });
+    expect(await history.json()).toMatchObject({ entries: [{ revisionId: REVISION_ID, reviewDecision: "accepted" }], routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current" }], nextCursor: null });
     expect(fake.calls.history[0]).toMatchObject({ limit: 25 });
     expect(JSON.stringify(logger.records)).not.toContain("Private preview");
   });

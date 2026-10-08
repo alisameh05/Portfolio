@@ -322,6 +322,10 @@ export type ContentHistoryEntry = {
 
 export type ContentHistoryPage = {
     entries: Array<ContentHistoryEntry>;
+    /**
+     * Immutable canonical slug changes ordered by sequence.
+     */
+    routeHistory: Array<PublicRouteHistoryEntry>;
     nextCursor: string | null;
 };
 

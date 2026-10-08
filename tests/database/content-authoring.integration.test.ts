@@ -666,6 +666,12 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       { sequence: 2, fromSlug: "route-b", toSlug: "route-c" },
       { sequence: 3, fromSlug: "route-c", toSlug: "route-a" },
     ] });
+    expect(await content.getContentHistory({ actor: owner, contentId: first.contentId, limit: 25 }))
+      .toMatchObject({ ok: true, value: { routeHistory: [
+        { sequence: 1, fromSlug: "route-a", toSlug: "route-b" },
+        { sequence: 2, fromSlug: "route-b", toSlug: "route-c" },
+        { sequence: 3, fromSlug: "route-c", toSlug: "route-a" },
+      ] } });
 
     const collision = await createReviewedProject(scope, "Candidate conflict", "route-candidate-collision", "en", { service: content, slug: "route-a" });
     const rejected = await content.publishLanguageVersion({ actor: owner, contentId: collision.contentId,
@@ -681,6 +687,23 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       expectedVersion: corrected.value.aggregateVersion, idempotencyKey: key("route-candidate-fixed-publish"), correlationId: "route-candidate-fixed-publish",
       locale: "en", revisionId: collision.revisionId });
     expect(correctedPublication).toMatchObject({ ok: true, value: { currentSlug: "route-candidate-fixed" } });
+
+    const neverPublished = await createReviewedProject(scope, "Archived candidate", "archived-candidate-original", "en", { service: content });
+    const archivedCandidate = await content.archiveContent({ actor: owner, contentId: neverPublished.contentId,
+      expectedVersion: neverPublished.aggregateVersion, idempotencyKey: key("route-archived-candidate-archive"),
+      correlationId: "route-archived-candidate-archive" });
+    expect(archivedCandidate).toMatchObject({ ok: true, value: { outcome: "content-archived" } });
+    if (!archivedCandidate.ok) return;
+    const archivedCorrection = await content.correctCandidateSlug({ actor: owner, projectId: neverPublished.contentId as StableId<"Project">,
+      expectedVersion: archivedCandidate.value.aggregateVersion, candidateSlug: "archived-candidate-corrected",
+      idempotencyKey: key("route-archived-candidate-correct"), correlationId: "route-archived-candidate-correct" });
+    expect(archivedCorrection).toMatchObject({ ok: true, value: { outcome: "candidate-slug-corrected", slug: "archived-candidate-corrected" } });
+    const archivedCandidateRows = await admin.query(
+      "select item.lifecycle, item.candidate_slug, (select count(*)::int from content.public_routes route where route.content_id = item.content_id) routes, " +
+      "(select count(*)::int from content.public_route_reservations reservation where reservation.content_id = item.content_id) reservations " +
+      "from content.items item where item.content_id = $1::uuid", [neverPublished.contentId],
+    );
+    expect(archivedCandidateRows.rows[0]).toEqual({ lifecycle: "archived", candidate_slug: "archived-candidate-corrected", routes: 0, reservations: 0 });
     const hijack = await content.changePublicSlug({ actor: owner, projectId: first.contentId as StableId<"Project">,
       expectedVersion: version, idempotencyKey: key("route-hijack"), correlationId: "route-hijack", newSlug: "route-candidate-fixed" });
     expect(hijack).toMatchObject({ ok: false, error: { kind: "conflict", code: "PUBLIC_SLUG_CONFLICT" } });
@@ -732,6 +755,46 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect([racePublish.ok, raceRename.ok].filter(Boolean)).toHaveLength(1);
     const failedRace = racePublish.ok ? raceRename : racePublish;
     expect(failedRace).toMatchObject({ ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH" } });
+  }, 30_000);
+
+  it.each(["hidden", "archived"] as const)("changes retained Project routes while %s and restores matching discovery", async (lifecycle) => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const owner = actor(scope.ownerId);
+    const project = await createReviewedProject(scope, `Route ${lifecycle}`, `route-retained-${lifecycle}`, "en", { service: content, slug: `route-${lifecycle}-before` });
+    const published = await content.publishLanguageVersion({ actor: owner, contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key(`route-retained-${lifecycle}-publish`),
+      correlationId: `route-retained-${lifecycle}-publish`, locale: "en", revisionId: project.revisionId });
+    expect(published.ok).toBe(true);
+    if (!published.ok) return;
+    const lifecycleChange = lifecycle === "hidden"
+      ? await content.hideContent({ actor: owner, contentId: project.contentId, expectedVersion: published.value.aggregateVersion,
+        idempotencyKey: key(`route-retained-${lifecycle}-hide`), correlationId: `route-retained-${lifecycle}-hide` })
+      : await content.archiveContent({ actor: owner, contentId: project.contentId, expectedVersion: published.value.aggregateVersion,
+        idempotencyKey: key(`route-retained-${lifecycle}-archive`), correlationId: `route-retained-${lifecycle}-archive` });
+    expect(lifecycleChange.ok).toBe(true);
+    if (!lifecycleChange.ok) return;
+    const changed = await content.changePublicSlug({ actor: owner, projectId: project.contentId as StableId<"Project">,
+      expectedVersion: lifecycleChange.value.aggregateVersion, idempotencyKey: key(`route-retained-${lifecycle}-rename`),
+      correlationId: `route-retained-${lifecycle}-rename`, newSlug: `route-${lifecycle}-after` });
+    expect(changed).toMatchObject({ ok: true, value: { outcome: "public-slug-changed", slug: `route-${lifecycle}-after` } });
+    if (!changed.ok) return;
+    expect(await content.resolvePublicProjectRoute({ slug: `route-${lifecycle}-before`, locale: "en" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } });
+    expect(await content.resolvePublicProjectRoute({ slug: `route-${lifecycle}-after`, locale: "en" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } });
+    const restored = await content.restoreContent({ actor: owner, contentId: project.contentId, expectedVersion: changed.value.aggregateVersion,
+      idempotencyKey: key(`route-retained-${lifecycle}-restore`), correlationId: `route-retained-${lifecycle}-restore` });
+    expect(restored.ok).toBe(true);
+    if (!restored.ok) return;
+    expect(await content.resolvePublicProjectRoute({ slug: `route-${lifecycle}-after`, locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "canonical", content: { currentSlug: `route-${lifecycle}-after` } } });
+    expect(await content.resolvePublicProjectRoute({ slug: `route-${lifecycle}-before`, locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "redirect", toSlug: `route-${lifecycle}-after` } });
+    const projection = await admin.query(
+      "select locale, slug from taxonomy.project_discovery_locales where content_id = $1::uuid order by locale", [project.contentId],
+    );
+    expect(projection.rows).toEqual([{ locale: "en", slug: `route-${lifecycle}-after` }]);
   }, 30_000);
 
   it("rolls back route reservations, immutable history, projections, receipt, and event when outbox append fails", async () => {

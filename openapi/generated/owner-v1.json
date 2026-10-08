@@ -4761,6 +4761,7 @@
         "additionalProperties": false,
         "required": [
           "entries",
+          "routeHistory",
           "nextCursor"
         ],
         "properties": {
@@ -4769,6 +4770,13 @@
             "maxItems": 100,
             "items": {
               "$ref": "#/components/schemas/ContentHistoryEntry"
+            }
+          },
+          "routeHistory": {
+            "type": "array",
+            "description": "Immutable canonical slug changes ordered by sequence.",
+            "items": {
+              "$ref": "#/components/schemas/PublicRouteHistoryEntry"
             }
           },
           "nextCursor": {

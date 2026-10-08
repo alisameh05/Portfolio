@@ -1422,9 +1422,7 @@ export function createContentAuthoringService(input: {
           contentId: command.projectId,
           routeIdentity: changed.value.routeIdentity,
           slug: command.newSlug,
-          expectedLocales: existing.value.lifecycle === "published"
-            ? (existing.value.publications ?? []).map((publication) => publication.locale)
-            : [],
+          expectedLocales: (existing.value.publications ?? []).map((publication) => publication.locale),
         }, context);
         const receipt: OwnerContentRouteChangeReceipt = {
           aggregateId: command.projectId, aggregateVersion: changed.value.aggregateVersion,
@@ -1535,10 +1533,13 @@ export function createContentAuthoringService(input: {
           limit: query.limit,
         }, context);
         if (!listed.ok) return listed;
+        const aggregate = await input.repository.get(query.contentId, input.scope, context);
+        if (!aggregate.ok) return aggregate;
         const entries = listed.value.entries;
         const last = entries.at(-1);
         return { ok: true as const, value: {
           entries,
+          routeHistory: aggregate.value.publicRoute?.history ?? [],
           nextCursor: listed.value.hasMore && last !== undefined ? `${last.locale}:${last.sequence}` : null,
         } };
       });

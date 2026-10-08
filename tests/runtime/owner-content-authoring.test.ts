@@ -384,7 +384,7 @@ describe("Content authoring application service", () => {
       expectedVersion = saved.value.aggregateVersion;
     }
     const first = await service.getContentHistory({ actor: ACTOR, contentId: created.value.contentId, locale: "en", limit: 1 });
-    expect(first).toMatchObject({ ok: true, value: { entries: [{ locale: "en", sequence: 1 }], nextCursor: "en:1" } });
+    expect(first).toMatchObject({ ok: true, value: { entries: [{ locale: "en", sequence: 1 }], routeHistory: [], nextCursor: "en:1" } });
     if (!first.ok || first.value.nextCursor === null) return;
     const second = await service.getContentHistory({ actor: ACTOR, contentId: created.value.contentId, locale: "en", limit: 1, cursor: first.value.nextCursor });
     expect(second).toMatchObject({ ok: true, value: { entries: [{ locale: "en", sequence: 2 }], nextCursor: "en:2" } });

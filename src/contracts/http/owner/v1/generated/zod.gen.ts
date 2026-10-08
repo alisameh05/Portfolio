@@ -345,6 +345,7 @@ export const zContentHistoryEntry = z.strictObject({
 
 export const zContentHistoryPage = z.strictObject({
     entries: z.array(zContentHistoryEntry).max(100),
+    routeHistory: z.array(zPublicRouteHistoryEntry),
     nextCursor: z.string().min(1).max(512).nullable()
 });
 
