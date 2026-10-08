@@ -26,6 +26,10 @@ import type {
   PublicAchievementTimelineEntry,
   PublicProjectContentView,
   ContentPublicRouteFacts,
+  RelateProjectsInput,
+  RelateProjectsResult,
+  OwnerProjectRelationshipsView,
+  PublicRelatedProjectView,
 } from "../application/authoring.js";
 
 interface RootRow {
@@ -487,6 +491,181 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         const aggregateVersion = updated.rows[0]?.aggregate_version;
         if (aggregateVersion === undefined) throw new PostgresInfrastructureError();
         return { ok: true, value: { aggregateVersion, previousSlug: current.current_slug, routeIdentity: current.route_identity as StableId<"PublicRoute"> } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async relateProjects(input: RelateProjectsInput, context: TransactionContext): Promise<Result<RelateProjectsResult, Rejection>> {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const ids = [input.projectId, input.relatedProjectId].sort();
+        const selected = await sql<{
+          content_id: string; content_type: string; aggregate_version: number;
+        }>`
+          select content_id::text, content_type, aggregate_version
+            from content.items
+           where content_id = any(${ids}::uuid[]) and portfolio_id = ${input.scope.portfolioId}::uuid
+           order by content_id
+           for update
+        `.execute(executor);
+        const byId = new Map(selected.rows.map((row) => [row.content_id, row]));
+        const initiating = byId.get(input.projectId);
+        if (initiating === undefined) return err({ kind: "not_found", code: "CONTENT_NOT_FOUND" });
+        const related = byId.get(input.relatedProjectId);
+        if (related === undefined) return err({ kind: "validation", code: "RELATED_PROJECT_UNAVAILABLE" });
+        if (initiating.content_type !== "project" || related.content_type !== "project") {
+          return err({ kind: "validation", code: "CONTENT_TYPE_NOT_PROJECT" });
+        }
+        if (initiating.aggregate_version !== input.expectedVersion) {
+          return err({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: initiating.aggregate_version });
+        }
+        const [leftId, rightId] = ids as [StableId<"Project">, StableId<"Project">];
+        const created = await sql<{ left_project_id: string }>`
+          insert into content.project_relationships (
+            portfolio_id, left_project_id, right_project_id, content_type, created_by
+          ) values (
+            ${input.scope.portfolioId}::uuid, ${leftId}::uuid, ${rightId}::uuid, 'project', ${input.scope.ownerId}::uuid
+          )
+          on conflict (portfolio_id, left_project_id, right_project_id) do nothing
+          returning left_project_id::text
+        `.execute(executor);
+        if (created.rows[0] === undefined) return err({ kind: "conflict", code: "PROJECT_RELATIONSHIP_ALREADY_EXISTS" });
+
+        const updatedVersions = new Map<string, number>();
+        for (const id of ids) {
+          const root = byId.get(id);
+          if (root === undefined) throw new PostgresInfrastructureError();
+          const updated = await sql<{ aggregate_version: number }>`
+            update content.items
+               set aggregate_version = aggregate_version + 1, updated_at = transaction_timestamp()
+             where content_id = ${id}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+               and aggregate_version = ${root.aggregate_version}
+            returning aggregate_version
+          `.execute(executor);
+          const version = updated.rows[0]?.aggregate_version;
+          if (version === undefined || !Number.isSafeInteger(version) || version < 1) throw new PostgresInfrastructureError();
+          updatedVersions.set(id, version);
+        }
+        const projectAggregateVersion = updatedVersions.get(input.projectId);
+        const relatedProjectAggregateVersion = updatedVersions.get(input.relatedProjectId);
+        if (projectAggregateVersion === undefined || relatedProjectAggregateVersion === undefined) throw new PostgresInfrastructureError();
+        await sql`
+          insert into content.project_relationship_views (
+            portfolio_id, project_id, related_project_id, left_project_id, right_project_id, content_type
+          ) values
+            (${input.scope.portfolioId}::uuid, ${input.projectId}::uuid, ${input.relatedProjectId}::uuid, ${leftId}::uuid, ${rightId}::uuid, 'project'),
+            (${input.scope.portfolioId}::uuid, ${input.relatedProjectId}::uuid, ${input.projectId}::uuid, ${leftId}::uuid, ${rightId}::uuid, 'project')
+        `.execute(executor);
+        const historySequence = await sql<{ sequence: number }>`
+          select coalesce(max(sequence), 0)::integer + 1 as sequence
+            from content.project_relationship_history
+           where portfolio_id = ${input.scope.portfolioId}::uuid
+             and left_project_id = ${leftId}::uuid and right_project_id = ${rightId}::uuid
+        `.execute(executor);
+        const sequence = historySequence.rows[0]?.sequence;
+        if (sequence !== 1) throw new PostgresInfrastructureError();
+        await sql`
+          insert into content.project_relationship_history (
+            portfolio_id, left_project_id, right_project_id, content_type, sequence, action,
+            initiating_project_id, related_project_id, initiating_aggregate_version,
+            related_aggregate_version, actor_id, occurred_at
+          ) values (
+            ${input.scope.portfolioId}::uuid, ${leftId}::uuid, ${rightId}::uuid, 'project', 1, 'related',
+            ${input.projectId}::uuid, ${input.relatedProjectId}::uuid, ${projectAggregateVersion},
+            ${relatedProjectAggregateVersion}, ${input.scope.ownerId}::uuid, transaction_timestamp()
+          )
+        `.execute(executor);
+        const timestamp = await sql<{ value: Date | string }>`select transaction_timestamp() as value`.execute(executor);
+        const relatedAt = timestamp.rows[0]?.value;
+        if (relatedAt === undefined) throw new PostgresInfrastructureError();
+        const occurredAt = relatedAt instanceof Date ? relatedAt.toISOString() : new Date(relatedAt).toISOString();
+        if (!Number.isFinite(Date.parse(occurredAt))) throw new PostgresInfrastructureError();
+        return { ok: true, value: { projectAggregateVersion, relatedProjectAggregateVersion, relatedAt: occurredAt } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async getOwnerProjectRelationships(input, context): Promise<Result<OwnerProjectRelationshipsView, Rejection>> {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        const record = await getRecord(input.projectId, input.scope, context);
+        if (!record.ok) return record;
+        if (record.value.contentType !== "project") return err({ kind: "validation", code: "CONTENT_TYPE_NOT_PROJECT" });
+        const related = await sql<{ project_id: string }>`
+          select related_project_id::text as project_id
+            from content.project_relationship_views
+           where portfolio_id = ${input.scope.portfolioId}::uuid
+             and project_id = ${input.projectId}::uuid
+           order by project_id
+        `.execute(executor);
+        return { ok: true, value: {
+          projectId: input.projectId,
+          aggregateVersion: record.value.aggregateVersion,
+          relatedProjectIds: related.rows.map((row) => row.project_id as StableId<"Project">),
+          publicRoute: record.value.publicRoute ?? null,
+        } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async getPublicRelatedProjects(input, context): Promise<Result<readonly PublicRelatedProjectView[], Rejection>> {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const rows = await sql<{
+          project_id: string; title: string; slug: string; first_published_at: Date | string;
+        }>`
+          with related_ids as (
+            select relationship.related_project_id as project_id
+              from content.project_relationship_views relationship
+             where relationship.portfolio_id = ${input.scope.portfolioId}::uuid
+               and relationship.project_id = ${input.projectId}::uuid
+          )
+          select related.content_id::text as project_id, discovery.title, discovery.slug,
+                 related.first_published_at
+            from related_ids relation
+            join content.items source
+              on source.content_id = ${input.projectId}::uuid
+             and source.portfolio_id = ${input.scope.portfolioId}::uuid
+             and source.content_type = 'project' and source.lifecycle = 'published'
+            join content.language_publications source_publication
+              on source_publication.content_id = source.content_id and source_publication.portfolio_id = source.portfolio_id
+             and source_publication.locale = ${input.locale}
+            join taxonomy.project_discovery_locales source_discovery
+              on source_discovery.content_id = source_publication.content_id
+             and source_discovery.portfolio_id = source_publication.portfolio_id
+             and source_discovery.locale = source_publication.locale
+             and source_discovery.revision_id = source_publication.revision_id
+            join content.items related
+              on related.content_id = relation.project_id
+             and related.portfolio_id = ${input.scope.portfolioId}::uuid
+             and related.content_type = 'project' and related.lifecycle = 'published'
+            join content.language_publications related_publication
+              on related_publication.content_id = related.content_id and related_publication.portfolio_id = related.portfolio_id
+             and related_publication.locale = ${input.locale}
+            join taxonomy.project_discovery_locales discovery
+              on discovery.content_id = related_publication.content_id
+             and discovery.portfolio_id = related_publication.portfolio_id
+             and discovery.locale = related_publication.locale
+             and discovery.revision_id = related_publication.revision_id
+           where related.first_published_at is not null
+           order by related.first_published_at desc, related.content_id desc
+           limit ${input.limit}
+        `.execute(executor);
+        return { ok: true, value: rows.rows.map((row) => {
+          const firstPublishedAt = row.first_published_at instanceof Date
+            ? row.first_published_at.toISOString()
+            : new Date(row.first_published_at).toISOString();
+          if (!Number.isFinite(Date.parse(firstPublishedAt))) throw new PostgresInfrastructureError();
+          return { projectId: row.project_id as StableId<"Project">, title: row.title, slug: row.slug, firstPublishedAt };
+        }) };
       } catch (error) {
         if (error instanceof PostgresInfrastructureError) throw error;
         throw new PostgresInfrastructureError();
@@ -1482,6 +1661,13 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
             return { sequence: entry.sequence, fromSlug: entry.from_slug, toSlug: entry.to_slug, changedAt };
           });
         }
+        const relatedProjects = await sql<{ project_id: string }>`
+          select related_project_id::text as project_id
+            from content.project_relationship_views
+           where portfolio_id = ${scope.portfolioId}::uuid
+             and project_id = ${projectId}::uuid
+           order by related_project_id
+        `.execute(executor);
         return { ok: true, value: {
           projectId: row.content_id as StableId<"Project">,
           aggregateVersion: row.aggregate_version,
@@ -1493,7 +1679,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
             redirects: redirects.map((redirect) => ({ fromSlug: redirect.fromSlug, toSlug: redirect.toSlug })),
             history: routeHistory,
           },
-          relatedProjectIds: [],
+          relatedProjectIds: relatedProjects.rows.map((related) => related.project_id as StableId<"Project">),
           taxonomyAssignments: [],
         } satisfies ContentProjectOwnerView };
       } catch (error) {

@@ -65,6 +65,40 @@ export interface ContentLifecycleHistory {
   transition_sequence: number;
 }
 
+export interface ContentProjectRelationshipHistory {
+  action: string;
+  actor_id: string;
+  content_type: Generated<string>;
+  initiating_aggregate_version: number;
+  initiating_project_id: string;
+  left_project_id: string;
+  occurred_at: Generated<Timestamp>;
+  portfolio_id: string;
+  related_aggregate_version: number;
+  related_project_id: string;
+  right_project_id: string;
+  sequence: number;
+}
+
+export interface ContentProjectRelationships {
+  content_type: Generated<string>;
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  left_project_id: string;
+  portfolio_id: string;
+  right_project_id: string;
+}
+
+export interface ContentProjectRelationshipViews {
+  content_type: Generated<string>;
+  created_at: Generated<Timestamp>;
+  left_project_id: string;
+  portfolio_id: string;
+  project_id: string;
+  related_project_id: string;
+  right_project_id: string;
+}
+
 export interface ContentProjectStatusHistory {
   aggregate_version: number;
   changed_at: Generated<Timestamp>;
@@ -336,6 +370,9 @@ export interface DB {
   "content.items": ContentItems;
   "content.language_publications": ContentLanguagePublications;
   "content.lifecycle_history": ContentLifecycleHistory;
+  "content.project_relationship_history": ContentProjectRelationshipHistory;
+  "content.project_relationship_views": ContentProjectRelationshipViews;
+  "content.project_relationships": ContentProjectRelationships;
   "content.project_status_history": ContentProjectStatusHistory;
   "content.project_status_value_history": ContentProjectStatusValueHistory;
   "content.project_status_values": ContentProjectStatusValues;

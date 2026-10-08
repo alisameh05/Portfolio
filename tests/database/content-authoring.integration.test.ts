@@ -1749,6 +1749,176 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(unscoped.rows[0]).toEqual({ roots: 0, revisions: 0, lifecycle_history: 0 });
   }, 30_000);
 
+  it("stores one canonical symmetric relationship, advances both roots, and replays its original safe receipt", async () => {
+    const scope = await configuredScope();
+    const left = await createReviewedProject(scope, "Relationship left", "relationship-left");
+    const right = await createReviewedProject(scope, "Relationship right", "relationship-right");
+    const command = { actor: actor(scope.ownerId), projectId: left.contentId as StableId<"Project">,
+      relatedProjectId: right.contentId as StableId<"Project">, expectedVersion: left.aggregateVersion,
+      idempotencyKey: key("relationship-left-right"), correlationId: "relationship-left-right" };
+    const related = await left.content.relateProjects(command);
+    expect(related).toMatchObject({ ok: true, value: { aggregateVersion: left.aggregateVersion + 1,
+      relatedProjectAggregateVersion: right.aggregateVersion + 1, outcome: "project-related" } });
+    if (!related.ok) return;
+
+    const leftView = await left.content.getOwnerProjectRelationships({ actor: actor(scope.ownerId), projectId: left.contentId as StableId<"Project"> });
+    const rightView = await right.content.getOwnerProjectRelationships({ actor: actor(scope.ownerId), projectId: right.contentId as StableId<"Project"> });
+    expect(leftView).toMatchObject({ ok: true, value: { relatedProjectIds: [right.contentId] } });
+    expect(rightView).toMatchObject({ ok: true, value: { relatedProjectIds: [left.contentId] } });
+    const projectAggregate = await left.content.getProjectOwnerView({ actor: actor(scope.ownerId), projectId: left.contentId as StableId<"Project"> });
+    expect(projectAggregate).toMatchObject({ ok: true, value: { relatedProjectIds: [right.contentId] } });
+    const [leftId, rightId] = [left.contentId, right.contentId].sort();
+    const pair = await admin.query("select left_project_id::text, right_project_id::text from content.project_relationships where portfolio_id = $1::uuid", [scope.portfolioId]);
+    expect(pair.rows).toEqual([{ left_project_id: leftId, right_project_id: rightId }]);
+    const views = await admin.query("select project_id::text, related_project_id::text from content.project_relationship_views where portfolio_id = $1::uuid order by project_id", [scope.portfolioId]);
+    expect(views.rows).toEqual([{ project_id: leftId, related_project_id: rightId }, { project_id: rightId, related_project_id: leftId }]);
+    const history = await admin.query("select action, initiating_project_id::text, related_project_id::text, initiating_aggregate_version, related_aggregate_version from content.project_relationship_history where portfolio_id = $1::uuid", [scope.portfolioId]);
+    expect(history.rows).toEqual([{ action: "related", initiating_project_id: left.contentId, related_project_id: right.contentId,
+      initiating_aggregate_version: related.value.aggregateVersion, related_aggregate_version: related.value.relatedProjectAggregateVersion }]);
+
+    const archived = await right.content.archiveContent({ actor: actor(scope.ownerId), contentId: right.contentId,
+      expectedVersion: related.value.relatedProjectAggregateVersion, idempotencyKey: key("relationship-archive-related"),
+      correlationId: "relationship-archive-related" });
+    expect(archived.ok).toBe(true);
+    expect(await left.content.relateProjects(command)).toEqual(related);
+    if (archived.ok) {
+      const inverseDuplicate = await right.content.relateProjects({ actor: actor(scope.ownerId), projectId: right.contentId as StableId<"Project">,
+        relatedProjectId: left.contentId as StableId<"Project">, expectedVersion: archived.value.aggregateVersion,
+        idempotencyKey: key("relationship-inverse-duplicate"), correlationId: "relationship-inverse-duplicate" });
+      expect(inverseDuplicate).toMatchObject({ ok: false, error: { kind: "conflict", code: "PROJECT_RELATIONSHIP_ALREADY_EXISTS" } });
+    }
+    const relationEvents = await admin.query("select event_type, payload from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.projects_related.v1'", [left.contentId]);
+    expect(relationEvents.rows).toHaveLength(1);
+    expect(relationEvents.rows[0]?.payload).toMatchObject({ projectId: left.contentId, relatedProjectId: right.contentId });
+    await expect(admin.query("update content.project_relationship_history set action = 'rewritten' where portfolio_id = $1::uuid", [scope.portfolioId]))
+      .rejects.toMatchObject({ code: "55000" });
+    await expect(admin.query("delete from content.project_relationship_views where portfolio_id = $1::uuid", [scope.portfolioId]))
+      .rejects.toMatchObject({ code: "55000" });
+    const access = await admin.query("select has_table_privilege('anon', 'content.project_relationships', 'select') anon_pair, " +
+      "has_table_privilege('authenticated', 'content.project_relationship_views', 'select') authenticated_view, " +
+      "has_table_privilege('shipwithali_worker', 'content.project_relationship_history', 'select') worker_history, " +
+      "has_table_privilege('shipwithali_application', 'content.project_relationship_views', 'select') app_view, " +
+      "has_table_privilege('shipwithali_application', 'content.project_relationship_views', 'insert') app_view_insert, " +
+      "has_table_privilege('shipwithali_application', 'content.project_relationship_views', 'update') app_view_update");
+    expect(access.rows[0]).toEqual({ anon_pair: false, authenticated_view: false, worker_history: false,
+      app_view: true, app_view_insert: true, app_view_update: false });
+    const rls = await admin.query("select relrowsecurity, relforcerowsecurity from pg_class where oid = 'content.project_relationship_views'::regclass");
+    expect(rls.rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
+  }, 30_000);
+
+  it("rejects self, foreign-scope, wrong-kind, and stale initiating Project relationships", async () => {
+    const scope = await configuredScope();
+    const otherScope = await configuredScope();
+    const initiating = await createReviewedProject(scope, "Relationship initiating", "relationship-validation-a");
+    const target = await createReviewedProject(scope, "Relationship target", "relationship-validation-b");
+    const foreign = await createReviewedProject(otherScope, "Foreign relationship target", "relationship-validation-foreign");
+    const self = await initiating.content.relateProjects({ actor: actor(scope.ownerId), projectId: initiating.contentId as StableId<"Project">,
+      relatedProjectId: initiating.contentId as StableId<"Project">, expectedVersion: initiating.aggregateVersion,
+      idempotencyKey: key("relationship-self"), correlationId: "relationship-self" });
+    expect(self).toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_PROJECT_RELATIONSHIP_COMMAND" } });
+    const foreignResult = await initiating.content.relateProjects({ actor: actor(scope.ownerId), projectId: initiating.contentId as StableId<"Project">,
+      relatedProjectId: foreign.contentId as StableId<"Project">, expectedVersion: initiating.aggregateVersion,
+      idempotencyKey: key("relationship-foreign"), correlationId: "relationship-foreign" });
+    expect(foreignResult).toMatchObject({ ok: false, error: { kind: "validation", code: "RELATED_PROJECT_UNAVAILABLE" } });
+    const testimonial = await createReviewedTestimonial(scope, "relationship-wrong-kind", { type: "profile" });
+    const wrongKind = await initiating.content.relateProjects({ actor: actor(scope.ownerId), projectId: initiating.contentId as StableId<"Project">,
+      relatedProjectId: testimonial.contentId as StableId<"Project">, expectedVersion: initiating.aggregateVersion,
+      idempotencyKey: key("relationship-wrong-kind"), correlationId: "relationship-wrong-kind" });
+    expect(wrongKind).toMatchObject({ ok: false, error: { kind: "validation", code: "CONTENT_TYPE_NOT_PROJECT" } });
+    const stale = await initiating.content.relateProjects({ actor: actor(scope.ownerId), projectId: initiating.contentId as StableId<"Project">,
+      relatedProjectId: target.contentId as StableId<"Project">, expectedVersion: initiating.aggregateVersion - 1,
+      idempotencyKey: key("relationship-stale"), correlationId: "relationship-stale" });
+    expect(stale).toMatchObject({ ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: initiating.aggregateVersion } });
+  }, 30_000);
+
+  it("serializes inverse relationship races and rolls back both roots if the second update fails", async () => {
+    const scope = await configuredScope();
+    const first = await createReviewedProject(scope, "Relationship race first", "relationship-race-first");
+    const second = await createReviewedProject(scope, "Relationship race second", "relationship-race-second");
+    const firstCommand = { actor: actor(scope.ownerId), projectId: first.contentId as StableId<"Project">,
+      relatedProjectId: second.contentId as StableId<"Project">, expectedVersion: first.aggregateVersion,
+      idempotencyKey: key("relationship-race-forward"), correlationId: "relationship-race-forward" };
+    const secondCommand = { actor: actor(scope.ownerId), projectId: second.contentId as StableId<"Project">,
+      relatedProjectId: first.contentId as StableId<"Project">, expectedVersion: second.aggregateVersion,
+      idempotencyKey: key("relationship-race-inverse"), correlationId: "relationship-race-inverse" };
+    const race = await Promise.all([first.content.relateProjects(firstCommand), second.content.relateProjects(secondCommand)]);
+    expect(race.filter((result) => result.ok)).toHaveLength(1);
+    expect(race.filter((result) => !result.ok)).toHaveLength(1);
+    const relationCount = await admin.query("select count(*)::integer as count from content.project_relationships where portfolio_id = $1::uuid", [scope.portfolioId]);
+    expect(relationCount.rows[0]?.count).toBe(1);
+
+    const rollbackFirst = await createReviewedProject(scope, "Relationship rollback first", "relationship-rollback-first");
+    const rollbackSecond = await createReviewedProject(scope, "Relationship rollback second", "relationship-rollback-second");
+    const failureId = [rollbackFirst.contentId, rollbackSecond.contentId].sort()[1]!;
+    await admin.query("create function content.fail_relationship_root_update() returns trigger language plpgsql as $$ begin raise exception 'injected relationship root update failure'; end $$");
+    await admin.query("create trigger fail_relationship_root_update before update on content.items for each row when (new.content_id = '" + failureId + "'::uuid) execute function content.fail_relationship_root_update()");
+    const before = await admin.query("select content_id::text, aggregate_version from content.items where content_id = any($1::uuid[]) order by content_id", [[rollbackFirst.contentId, rollbackSecond.contentId]]);
+    const failureCommand = { actor: actor(scope.ownerId), projectId: rollbackFirst.contentId as StableId<"Project">,
+      relatedProjectId: rollbackSecond.contentId as StableId<"Project">, expectedVersion: rollbackFirst.aggregateVersion,
+      idempotencyKey: key("relationship-rollback"), correlationId: "relationship-rollback" };
+    await expect(rollbackFirst.content.relateProjects(failureCommand)).rejects.toThrow();
+    await admin.query("drop trigger fail_relationship_root_update on content.items");
+    await admin.query("drop function content.fail_relationship_root_update()");
+    const after = await admin.query("select content_id::text, aggregate_version from content.items where content_id = any($1::uuid[]) order by content_id", [[rollbackFirst.contentId, rollbackSecond.contentId]]);
+    expect(after.rows).toEqual(before.rows);
+    const historyCount = await admin.query("select count(*)::integer as count from content.project_relationship_history where portfolio_id = $1::uuid", [scope.portfolioId]);
+    expect(historyCount.rows[0]?.count).toBe(1);
+    const rolledBackPair = await admin.query("select count(*)::integer as count from content.project_relationships where portfolio_id = $1::uuid and ((left_project_id = $2::uuid and right_project_id = $3::uuid) or (left_project_id = $3::uuid and right_project_id = $2::uuid))", [scope.portfolioId, rollbackFirst.contentId, rollbackSecond.contentId]);
+    expect(rolledBackPair.rows[0]?.count).toBe(0);
+    const rolledBackEvents = await admin.query("select count(*)::integer as count from operations.outbox_events where correlation_id = 'relationship-rollback' and event_type = 'content.projects_related.v1'");
+    expect(rolledBackEvents.rows[0]?.count).toBe(0);
+  }, 30_000);
+
+  it("returns only currently published related Projects in the requested locale, ordered and bounded", async () => {
+    const scope = await configuredScope();
+    const source = await createReviewedProject(scope, "Related source", "related-public-source");
+    const a = await createReviewedProject(scope, "Related A", "related-public-a");
+    const b = await createReviewedProject(scope, "Related B", "related-public-b");
+    const c = await createReviewedProject(scope, "Related C", "related-public-c");
+    async function publish(project: Awaited<ReturnType<typeof createReviewedProject>>, prefix: string) {
+      const result = await project.content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+        expectedVersion: project.aggregateVersion, idempotencyKey: key(`${prefix}-publish`), correlationId: `${prefix}-publish`,
+        locale: "en", revisionId: project.revisionId });
+      expect(result.ok).toBe(true);
+      return result;
+    }
+    const sourcePublication = await publish(source, "related-public-source");
+    const aPublication = await publish(a, "related-public-a");
+    await publish(b, "related-public-b");
+    await publish(c, "related-public-c");
+    expect(sourcePublication.ok && aPublication.ok).toBe(true);
+    if (!sourcePublication.ok || !aPublication.ok) return;
+
+    const firstRelation = await source.content.relateProjects({ actor: actor(scope.ownerId), projectId: source.contentId as StableId<"Project">,
+      relatedProjectId: a.contentId as StableId<"Project">, expectedVersion: sourcePublication.value.aggregateVersion,
+      idempotencyKey: key("related-public-link-a"), correlationId: "related-public-link-a" });
+    expect(firstRelation.ok).toBe(true);
+    if (!firstRelation.ok) return;
+    const secondRelation = await source.content.relateProjects({ actor: actor(scope.ownerId), projectId: source.contentId as StableId<"Project">,
+      relatedProjectId: b.contentId as StableId<"Project">, expectedVersion: firstRelation.value.aggregateVersion,
+      idempotencyKey: key("related-public-link-b"), correlationId: "related-public-link-b" });
+    expect(secondRelation.ok).toBe(true);
+    if (!secondRelation.ok) return;
+    const thirdRelation = await source.content.relateProjects({ actor: actor(scope.ownerId), projectId: source.contentId as StableId<"Project">,
+      relatedProjectId: c.contentId as StableId<"Project">, expectedVersion: secondRelation.value.aggregateVersion,
+      idempotencyKey: key("related-public-link-c"), correlationId: "related-public-link-c" });
+    expect(thirdRelation.ok).toBe(true);
+    if (!thirdRelation.ok) return;
+    const equalTime = "2026-10-08T12:00:00.000Z";
+    await admin.query("update content.items set first_published_at = $1::timestamptz where content_id = any($2::uuid[])",
+      [equalTime, [a.contentId, b.contentId, c.contentId]]);
+    const bounded = await source.content.getPublicRelatedProjects({ projectId: source.contentId as StableId<"Project">, locale: "en", limit: 2 });
+    expect(bounded).toMatchObject({ ok: true, value: [{ projectId: c.contentId }, { projectId: b.contentId }] });
+    const noArabicFallback = await source.content.getPublicRelatedProjects({ projectId: source.contentId as StableId<"Project">, locale: "ar" });
+    expect(noArabicFallback).toEqual({ ok: true, value: [] });
+    const hidden = await c.content.hideContent({ actor: actor(scope.ownerId), contentId: c.contentId,
+      expectedVersion: thirdRelation.value.relatedProjectAggregateVersion, idempotencyKey: key("related-public-hide"),
+      correlationId: "related-public-hide" });
+    expect(hidden.ok).toBe(true);
+    const afterWithdraw = await source.content.getPublicRelatedProjects({ projectId: source.contentId as StableId<"Project">, locale: "en", limit: 10 });
+    expect(afterWithdraw).toMatchObject({ ok: true, value: [{ projectId: b.contentId }, { projectId: a.contentId }] });
+  }, 30_000);
+
   it("keeps Project status identities, histories, Featured state, and published projections atomic", async () => {
     const scope = await configuredScope();
     const content = service(scope);

@@ -399,6 +399,13 @@ export const zRelateProjectCommand = z.strictObject({
     relatedProjectId: zStableId
 });
 
+export const zProjectRelationshipCommandReceipt = z.strictObject({
+    aggregateId: zStableId,
+    aggregateVersion: z.number().int().gte(1),
+    relatedProjectAggregateVersion: z.number().int().gte(1),
+    outcome: z.enum(['project-related'])
+});
+
 export const zActiveTaxonomyValueView = z.strictObject({
     valueId: zStableId,
     name: z.string().min(1).max(100),
@@ -1292,7 +1299,7 @@ export const zRelateOwnerProjectsPath = z.strictObject({
 /**
  * Project relationship created.
  */
-export const zRelateOwnerProjectsResponse = zCommandReceipt;
+export const zRelateOwnerProjectsResponse = zProjectRelationshipCommandReceipt;
 
 export const zGetOwnerTaxonomyAggregatePath = z.strictObject({
     taxonomyId: zStableId

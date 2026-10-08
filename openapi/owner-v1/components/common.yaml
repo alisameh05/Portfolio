@@ -86,6 +86,20 @@ schemas:
           - feedback-rejected
           - feedback-suppressed
           - analytics-goal-version-activated
+  ProjectRelationshipCommandReceipt:
+    type: object
+    additionalProperties: false
+    required: [aggregateId, aggregateVersion, relatedProjectAggregateVersion, outcome]
+    properties:
+      aggregateId: { $ref: '#/schemas/StableId' }
+      aggregateVersion: { type: integer, minimum: 1 }
+      relatedProjectAggregateVersion:
+        type: integer
+        minimum: 1
+        description: Version of the related Project after a successful symmetric relationship mutation.
+      outcome:
+        type: string
+        enum: [project-related]
 
 parameters:
   IdempotencyKey:

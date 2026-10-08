@@ -1478,7 +1478,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CommandReceipt"
+                  "$ref": "#/components/schemas/ProjectRelationshipCommandReceipt"
                 }
               }
             }
@@ -4967,6 +4967,36 @@
         "properties": {
           "relatedProjectId": {
             "$ref": "#/components/schemas/StableId"
+          }
+        }
+      },
+      "ProjectRelationshipCommandReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "aggregateId",
+          "aggregateVersion",
+          "relatedProjectAggregateVersion",
+          "outcome"
+        ],
+        "properties": {
+          "aggregateId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "relatedProjectAggregateVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Version of the related Project after a successful symmetric relationship mutation."
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "project-related"
+            ]
           }
         }
       },

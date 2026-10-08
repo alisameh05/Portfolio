@@ -374,6 +374,16 @@ export type RelateProjectCommand = {
     relatedProjectId: StableId;
 };
 
+export type ProjectRelationshipCommandReceipt = {
+    aggregateId: StableId;
+    aggregateVersion: number;
+    /**
+     * Version of the related Project after a successful symmetric relationship mutation.
+     */
+    relatedProjectAggregateVersion: number;
+    outcome: 'project-related';
+};
+
 export type ActiveTaxonomyValueView = {
     valueId: StableId;
     name: string;
@@ -2237,7 +2247,7 @@ export type RelateOwnerProjectsResponses = {
     /**
      * Project relationship created.
      */
-    200: CommandReceipt;
+    200: ProjectRelationshipCommandReceipt;
 };
 
 export type RelateOwnerProjectsResponse = RelateOwnerProjectsResponses[keyof RelateOwnerProjectsResponses];

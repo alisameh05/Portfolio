@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { unsafeStableId } from "../../src/shared/domain/index.js";
-import type { ContentAuthoringService, ContentProjectStatusValue } from "../../src/modules/content-publishing/application/authoring.js";
+import type { ContentAuthoringService, ContentProjectOwnerView, ContentProjectStatusValue } from "../../src/modules/content-publishing/application/authoring.js";
 import { createProductionContentAuthoringService } from "../../src/runtime/fakes/content-authoring.js";
+import { createContentOwnerProjectService } from "../../src/runtime/content-owner-project.js";
 import { createTestLogger } from "../../src/runtime/ports.js";
 import {
   handleCreateOwnerProjectStatusValue,
@@ -15,6 +16,39 @@ const VALUE_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2";
 const active: ContentProjectStatusValue = {
   valueId: unsafeStableId<"ProjectStatusValue">(VALUE_ID), label: "Shipped", state: "active", aggregateVersion: 1,
 };
+
+it("uses the Content Owner view as the source for the composed Project aggregate", async () => {
+  const projectId = unsafeStableId<"Project">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e8f");
+  const relatedProjectId = unsafeStableId<"Project">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e90");
+  const ownerView: ContentProjectOwnerView = {
+    projectId,
+    aggregateVersion: 8,
+    statusValueId: unsafeStableId<"ProjectStatusValue">(VALUE_ID),
+    featured: true,
+    publicRoute: {
+      identity: unsafeStableId<"PublicRoute">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e93"),
+      canonicalSlug: "project-route",
+      redirects: [{ fromSlug: "old-route", toSlug: "project-route" }],
+      history: [{ sequence: 1, fromSlug: "old-route", toSlug: "project-route", changedAt: "2026-10-08T10:00:00.000Z" }],
+    },
+    relatedProjectIds: [relatedProjectId],
+    taxonomyAssignments: [{
+      taxonomyId: unsafeStableId<"Taxonomy">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e94"),
+      taxonomyKind: "industry",
+      valueId: unsafeStableId<"TaxonomyValue">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e95"),
+    }],
+  };
+  const content: ContentAuthoringService = {
+    ...createProductionContentAuthoringService(),
+    async getProjectOwnerView() { return { ok: true, value: ownerView }; },
+  };
+  const service = createContentOwnerProjectService(content);
+  const result = await service.getOwnerProjectAggregate({
+    actor: { kind: "owner", ownerId: unsafeStableId<"Owner">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e96"), sessionId: "test-session" },
+    projectId,
+  });
+  expect(result).toEqual({ ok: true, value: ownerView });
+});
 
 function makeService() {
   const calls: string[] = [];

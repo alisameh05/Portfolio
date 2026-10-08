@@ -39,6 +39,33 @@ export interface ProjectDiscoveryProjectionPort {
   ): Promise<void>;
 }
 
+export interface RelateProjectsInput {
+  readonly projectId: StableId<"Project">;
+  readonly relatedProjectId: StableId<"Project">;
+  readonly scope: ContentAuthoringScope;
+  readonly expectedVersion: number;
+}
+
+export interface RelateProjectsResult {
+  readonly projectAggregateVersion: number;
+  readonly relatedProjectAggregateVersion: number;
+  readonly relatedAt: string;
+}
+
+export interface OwnerProjectRelationshipsView {
+  readonly projectId: StableId<"Project">;
+  readonly aggregateVersion: number;
+  readonly relatedProjectIds: readonly StableId<"Project">[];
+  readonly publicRoute: ContentPublicRouteFacts | null;
+}
+
+export interface PublicRelatedProjectView {
+  readonly projectId: StableId<"Project">;
+  readonly title: string;
+  readonly slug: string;
+  readonly firstPublishedAt: string;
+}
+
 export interface ContentAuthoringRevision {
   readonly revisionId: StableId<"Revision">;
   readonly contentId: StableId<string>;
@@ -337,6 +364,9 @@ export interface ContentAuthoringRepository {
   get(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
   correctCandidateSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
   changePublicSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number; readonly previousSlug: string; readonly routeIdentity: StableId<"PublicRoute"> }, Rejection>>;
+  relateProjects(input: RelateProjectsInput, context: TransactionContext): Promise<Result<RelateProjectsResult, Rejection>>;
+  getOwnerProjectRelationships(input: { readonly projectId: StableId<"Project">; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<OwnerProjectRelationshipsView, Rejection>>;
+  getPublicRelatedProjects(input: { readonly projectId: StableId<"Project">; readonly locale: SupportedLocale; readonly limit: number; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<readonly PublicRelatedProjectView[], Rejection>>;
   changeLifecycle(input: ChangeContentLifecycleInput, context: TransactionContext): Promise<Result<ChangeContentLifecycleResult, Rejection>>;
   appendRevision(input: AppendContentRevisionInput, context: TransactionContext): Promise<Result<{ readonly record: ContentAuthoringRecord; readonly revision: ContentAuthoringRevision }, Rejection>>;
   appendReview(input: AppendContentReviewInput, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
@@ -449,6 +479,9 @@ export interface ContentAuthoringService {
   publishLanguageVersion(command: PublishLanguageVersionCommand): Promise<Result<ContentAuthoringPublicationReceipt, Rejection>>;
   correctCandidateSlug(command: CorrectCandidateSlugCommand): Promise<Result<OwnerContentRouteChangeReceipt, Rejection>>;
   changePublicSlug(command: ChangePublicSlugCommand): Promise<Result<OwnerContentRouteChangeReceipt, Rejection>>;
+  relateProjects(command: RelateOwnerProjectsCommand): Promise<Result<RelateProjectsReceipt, Rejection>>;
+  getOwnerProjectRelationships(query: { readonly actor: ActorContext; readonly projectId: StableId<"Project"> }): Promise<Result<OwnerProjectRelationshipsView, Rejection>>;
+  getPublicRelatedProjects(query: { readonly projectId: StableId<"Project">; readonly locale: SupportedLocale; readonly limit?: number }): Promise<Result<readonly PublicRelatedProjectView[], Rejection>>;
   hideContent(command: ChangeContentLifecycleCommand): Promise<Result<ContentLifecycleReceipt, Rejection>>;
   archiveContent(command: ChangeContentLifecycleCommand): Promise<Result<ContentLifecycleReceipt, Rejection>>;
   restoreContent(command: ChangeContentLifecycleCommand): Promise<Result<ContentLifecycleReceipt, Rejection>>;
@@ -466,6 +499,22 @@ export interface ContentAuthoringService {
   retireProjectStatusValue(command: { readonly actor: ActorContext; readonly valueId: StableId<"ProjectStatusValue">; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ContentProjectStatusValue, Rejection>>;
   changeProjectStatus(command: { readonly actor: ActorContext; readonly projectId: StableId<"Project">; readonly statusValueId: StableId<"ProjectStatusValue">; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ProjectCommandReceipt, Rejection>>;
   setProjectFeatured(command: { readonly actor: ActorContext; readonly projectId: StableId<"Project">; readonly featured: boolean; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ProjectCommandReceipt, Rejection>>;
+}
+
+export interface RelateOwnerProjectsCommand {
+  readonly actor: ActorContext;
+  readonly projectId: StableId<"Project">;
+  readonly relatedProjectId: StableId<"Project">;
+  readonly expectedVersion: number;
+  readonly idempotencyKey: IdempotencyKey;
+  readonly correlationId: string;
+}
+
+export interface RelateProjectsReceipt {
+  readonly aggregateId: StableId<"Project">;
+  readonly aggregateVersion: number;
+  readonly relatedProjectAggregateVersion: number;
+  readonly outcome: "project-related";
 }
 
 export interface OwnerContentRouteChangeReceipt {
@@ -508,6 +557,7 @@ const REVIEW_SCOPE = "content-publishing.review-owner-content-revision";
 const PUBLISH_SCOPE = "content-publishing.publish-owner-project-language";
 const CANDIDATE_SLUG_SCOPE = "content-publishing.correct-project-candidate-slug";
 const PUBLIC_SLUG_SCOPE = "content-publishing.change-project-public-slug";
+const RELATE_PROJECTS_SCOPE = "content-publishing.relate-owner-projects";
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 const EXECUTABLE_MARKUP = /<\s*(?:script|iframe|object|embed|svg|math)\b|\bon[a-z]{2,}\s*=|(?:javascript|vbscript)\s*:|data\s*:\s*text\/html/i;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -1515,6 +1565,74 @@ export function createContentAuthoringService(input: {
         operationScope: PUBLIC_SLUG_SCOPE, actor: command.actor, key: command.idempotencyKey as IdempotencyKey,
         request: { projectId: command.projectId, expectedVersion: command.expectedVersion, slug: command.newSlug }, effect,
       });
+    },
+
+    async relateProjects(command) {
+      if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      if (!validCorrelation(command.correlationId) || !Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1 ||
+          !parseStableId("Project", command.projectId).ok || !parseStableId("Project", command.relatedProjectId).ok ||
+          command.projectId === command.relatedProjectId) {
+        return err({ kind: "validation", code: "INVALID_PROJECT_RELATIONSHIP_COMMAND" });
+      }
+      const effect = async (context: TransactionContext): Promise<SafeResultEnvelope> => {
+        const related = await input.repository.relateProjects({
+          projectId: command.projectId,
+          relatedProjectId: command.relatedProjectId,
+          scope: input.scope,
+          expectedVersion: command.expectedVersion,
+        }, context);
+        if (!related.ok) return rejectionOutcome(related.error);
+        const ownerHash = await actorScope;
+        await input.operations.outbox.append(context, {
+          eventId: ids.generate("DomainEvent"),
+          payload: { type: "content.projects_related.v1", version: 1, value: {
+            projectId: command.projectId,
+            relatedProjectId: command.relatedProjectId,
+            ownerScope: ownerHash,
+          } },
+          aggregateId: command.projectId,
+          aggregateVersion: related.value.projectAggregateVersion,
+          correlationId: command.correlationId,
+          occurredAt: related.value.relatedAt,
+          availableAt: related.value.relatedAt,
+        });
+        return { status: "completed", receipt: {
+          aggregateId: command.projectId,
+          aggregateVersion: related.value.projectAggregateVersion,
+          relatedProjectAggregateVersion: related.value.relatedProjectAggregateVersion,
+          outcome: "project-related",
+        } };
+      };
+      return await executeIdempotently<RelateProjectsReceipt>({
+        operationScope: RELATE_PROJECTS_SCOPE,
+        actor: command.actor,
+        key: command.idempotencyKey,
+        request: { projectId: command.projectId, relatedProjectId: command.relatedProjectId, expectedVersion: command.expectedVersion },
+        effect,
+      });
+    },
+
+    async getOwnerProjectRelationships(query) {
+      if (!ownerAuthorized(query.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      if (!parseStableId("Project", query.projectId).ok) return err({ kind: "validation", code: "INVALID_PROJECT_RELATIONSHIP_QUERY" });
+      return await input.operations.transactions.run((context) => input.repository.getOwnerProjectRelationships({
+        projectId: query.projectId,
+        scope: input.scope,
+      }, context));
+    },
+
+    async getPublicRelatedProjects(query) {
+      const limit = query.limit ?? 10;
+      if (!parseStableId("Project", query.projectId).ok || (query.locale !== "en" && query.locale !== "ar") ||
+          !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+        return err({ kind: "validation", code: "INVALID_PUBLIC_RELATED_PROJECTS_QUERY" });
+      }
+      return await input.operations.transactions.run((context) => input.repository.getPublicRelatedProjects({
+        projectId: query.projectId,
+        locale: query.locale,
+        limit,
+        scope: input.scope,
+      }, context));
     },
 
     async hideContent(command) {

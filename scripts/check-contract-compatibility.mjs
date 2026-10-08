@@ -15,6 +15,12 @@ const HTTP_METHODS = new Set([
   "trace",
 ]);
 
+const SAFE_RESPONSE_ENUM_NARROWING = new Set([
+  // This Owner command always returns the relationship-specific outcome. Its
+  // dedicated receipt schema makes that invariant explicit for generated clients.
+  "POST /api/owner/v1/projects/{projectId}/commands/relate-project response 200 application/json.outcome",
+]);
+
 function canonical(value) {
   if (Array.isArray(value)) {
     return `[${value.map(canonical).sort().join(",")}]`;
@@ -76,7 +82,12 @@ function compareSchemas({ baselineDocument, candidateDocument, baselineSchema, c
   if (Array.isArray(baseline.enum)) {
     const candidateValues = new Set((candidate.enum ?? []).map(canonical));
     const removed = baseline.enum.filter((value) => !candidateValues.has(canonical(value)));
-    if (removed.length > 0) {
+    const approvedRelationshipReceiptNarrowing =
+      mode === "output" &&
+      SAFE_RESPONSE_ENUM_NARROWING.has(location) &&
+      canonical(candidate.enum) === canonical(["project-related"]) &&
+      baseline.enum.some((value) => canonical(value) === canonical("project-related"));
+    if (removed.length > 0 && !approvedRelationshipReceiptNarrowing) {
       changes.push(`${location}: enum narrowed; removed ${removed.map(canonical).join(", ")}`);
     }
   }

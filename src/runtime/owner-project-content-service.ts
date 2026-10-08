@@ -29,6 +29,23 @@ export function createContentBackedOwnerProjectService(
       });
       return mapRouteReceipt(result);
     },
+    async relateOwnerProjects(command) {
+      const result = await content.relateProjects({
+        actor: command.actor,
+        projectId: command.projectId,
+        relatedProjectId: command.relatedProjectId,
+        expectedVersion: command.expectedVersion,
+        idempotencyKey: command.idempotencyKey,
+        correlationId: command.correlationId,
+      });
+      if (!result.ok) return result;
+      return { ok: true, value: {
+        aggregateId: result.value.aggregateId,
+        aggregateVersion: result.value.aggregateVersion,
+        relatedProjectAggregateVersion: result.value.relatedProjectAggregateVersion,
+        outcome: result.value.outcome,
+      } };
+    },
   };
 }
 
