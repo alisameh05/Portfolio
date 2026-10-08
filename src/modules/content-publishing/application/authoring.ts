@@ -78,7 +78,29 @@ export interface ContentAuthoringRecord {
 export interface ContentAuthoringPublication {
   readonly locale: "en" | "ar";
   readonly revisionId: StableId<"Revision">;
+  readonly reviewId: StableId<"ContentReview">;
+  readonly snapshotHash: string;
+  readonly evidenceVersion: number;
+  readonly reviewerId: StableId<"Owner">;
+  readonly decision: "accepted" | "rejected";
+  readonly mediaFactsVersion: string | null;
   readonly publishedAt: string;
+}
+
+export interface ChangeContentLifecycleInput {
+  readonly contentId: StableId<string>;
+  readonly scope: ContentAuthoringScope;
+  readonly expectedVersion: number;
+  readonly lifecycle: "hidden" | "archived" | "published";
+  readonly reason?: string;
+}
+
+export interface ChangeContentLifecycleResult {
+  readonly aggregateVersion: number;
+  readonly lifecycle: "hidden" | "archived" | "published";
+  readonly previousLifecycle: "draft" | "published" | "hidden" | "archived";
+  readonly changed: boolean;
+  readonly changedAt: string | null;
 }
 
 export interface PublishProjectLanguageInput {
@@ -227,6 +249,7 @@ export interface ContentAuthoringRepository {
   projectExists(projectId: StableId<"Project">, scope: ContentAuthoringScope, context: TransactionContext): Promise<boolean>;
   create(input: CreateContentPersistenceInput, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
   get(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
+  changeLifecycle(input: ChangeContentLifecycleInput, context: TransactionContext): Promise<Result<ChangeContentLifecycleResult, Rejection>>;
   appendRevision(input: AppendContentRevisionInput, context: TransactionContext): Promise<Result<{ readonly record: ContentAuthoringRecord; readonly revision: ContentAuthoringRevision }, Rejection>>;
   appendReview(input: AppendContentReviewInput, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
   publishProjectLanguage(input: PublishProjectLanguageInput, context: TransactionContext): Promise<Result<PublishProjectLanguageResult, Rejection>>;
@@ -278,6 +301,15 @@ export interface GetOwnerContentAggregateQuery {
   readonly contentId: StableId<string>;
 }
 
+export interface ChangeContentLifecycleCommand {
+  readonly actor: ActorContext;
+  readonly contentId: StableId<string>;
+  readonly expectedVersion: number;
+  readonly idempotencyKey: IdempotencyKey;
+  readonly correlationId: string;
+  readonly reason?: string;
+}
+
 export interface CreateContentReceipt {
   readonly contentId: StableId<string>;
   readonly aggregateVersion: number;
@@ -317,11 +349,20 @@ export interface ContentAuthoringService {
   previewRevision(query: { readonly actor: ActorContext; readonly contentId: StableId<string>; readonly revisionId: StableId<"Revision"> }): Promise<Result<PrivateRevisionPreview, Rejection>>;
   reviewRevision(command: ReviewRevisionCommand): Promise<Result<ReviewRevisionReceipt, Rejection>>;
   publishLanguageVersion(command: PublishLanguageVersionCommand): Promise<Result<ContentAuthoringPublicationReceipt, Rejection>>;
+  hideContent(command: ChangeContentLifecycleCommand): Promise<Result<ContentLifecycleReceipt, Rejection>>;
+  archiveContent(command: ChangeContentLifecycleCommand): Promise<Result<ContentLifecycleReceipt, Rejection>>;
+  restoreContent(command: ChangeContentLifecycleCommand): Promise<Result<ContentLifecycleReceipt, Rejection>>;
   getPublicProject(query: { readonly slug: string; readonly locale: SupportedLocale }): Promise<Result<PublicProjectContentView, Rejection>>;
   getPublicTestimonials(query: { readonly locale: SupportedLocale; readonly association: PublicTestimonialAssociationQuery }): Promise<Result<readonly PublicTestimonialView[], Rejection>>;
   /** Oldest achievement date first; ties use stable Achievement ID ascending. */
   getPublicAchievementTimeline(query: { readonly locale: SupportedLocale; readonly limit: number }): Promise<Result<readonly PublicAchievementTimelineEntry[], Rejection>>;
   getContentHistory(query: { readonly actor: ActorContext; readonly contentId: StableId<string>; readonly locale?: SupportedLocale; readonly limit: number; readonly cursor?: string }): Promise<Result<ContentHistoryPage, Rejection>>;
+}
+
+export interface ContentLifecycleReceipt {
+  readonly aggregateId: StableId<string>;
+  readonly aggregateVersion: number;
+  readonly outcome: "content-hidden" | "content-archived" | "content-restored";
 }
 
 export interface ContentAuthoringPublicationReceipt {
@@ -664,6 +705,115 @@ export function createContentAuthoringService(input: {
     return readReceipt<T>(execution.result);
   }
 
+  async function changeContentLifecycle(
+    command: ChangeContentLifecycleCommand,
+    lifecycle: ChangeContentLifecycleInput["lifecycle"],
+    operationScope: string,
+    outcome: ContentLifecycleReceipt["outcome"],
+    eventType: "content.content_hidden.v1" | "content.content_archived.v1" | "content.content_restored.v1",
+  ): Promise<Result<ContentLifecycleReceipt, Rejection>> {
+    if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+    if (!validCorrelation(command.correlationId) || !Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1 ||
+        (command.reason !== undefined && !isCleanText(command.reason, 500))) {
+      return err({ kind: "validation", code: "INVALID_CONTENT_LIFECYCLE_COMMAND" });
+    }
+    const effect = async (context: TransactionContext): Promise<SafeResultEnvelope> => {
+      const existing = await input.repository.get(command.contentId, input.scope, context);
+      if (!existing.ok) return rejectionOutcome(existing.error);
+      if (existing.value.aggregateVersion !== command.expectedVersion) {
+        return rejectionOutcome({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: existing.value.aggregateVersion });
+      }
+      if (lifecycle === "hidden" && existing.value.lifecycle !== "published" && existing.value.lifecycle !== "hidden" ||
+          lifecycle === "archived" && existing.value.lifecycle !== "draft" && existing.value.lifecycle !== "published" &&
+            existing.value.lifecycle !== "hidden" && existing.value.lifecycle !== "archived" ||
+          lifecycle === "published" && existing.value.lifecycle !== "hidden" && existing.value.lifecycle !== "archived" &&
+            existing.value.lifecycle !== "published") {
+        return rejectionOutcome({ kind: "validation", code: "CONTENT_LIFECYCLE_TRANSITION_NOT_ALLOWED" });
+      }
+      if (lifecycle === "published" && existing.value.lifecycle !== "published") {
+        const publications = existing.value.publications ?? [];
+        if (publications.length === 0) return rejectionOutcome({ kind: "validation", code: "CONTENT_NOT_PREVIOUSLY_PUBLISHED" });
+        for (const publication of publications) {
+          const revision = existing.value.revisions.find((entry) => entry.revisionId === publication.revisionId);
+          if (revision === undefined || revision.contentId !== existing.value.contentId || revision.contentType !== existing.value.contentType ||
+              revision.locale !== publication.locale || revision.payload.locale !== publication.locale ||
+              publication.decision !== "accepted" || publication.reviewerId !== input.scope.ownerId ||
+              publication.evidenceVersion !== revision.evidenceSnapshotVersion ||
+              publication.mediaFactsVersion !== null && !/^[\x21-\x7e]{1,128}$/.test(publication.mediaFactsVersion)) {
+            return rejectionOutcome({ kind: "validation", code: "RESTORE_PUBLICATION_SNAPSHOT_INVALID" });
+          }
+          const snapshotHash = await revisionSnapshotHash(revision);
+          if (publication.snapshotHash !== snapshotHash) {
+            return rejectionOutcome({ kind: "validation", code: "RESTORE_PUBLICATION_SNAPSHOT_INVALID" });
+          }
+          const publishable = existing.value.contentType === "project"
+            ? publishableProjectPayload(revision.payload)
+            : existing.value.contentType === "achievement"
+            ? publishableAchievementPayload(revision.payload)
+            : publishableTestimonialPayload(revision.payload);
+          if (!publishable) return rejectionOutcome({ kind: "validation", code: "RESTORE_PUBLICATION_REQUIREMENTS_NOT_MET" });
+          const evidenceArtifacts = revision.payload.contentType === "project" || revision.payload.contentType === "achievement"
+            ? revision.payload.evidence?.artifacts ?? []
+            : [];
+          const mediaAssetIds: StableId<"MediaAsset">[] = [...new Set(evidenceArtifacts
+            .flatMap((artifact) => artifact.mediaAssetId === undefined ? [] : [artifact.mediaAssetId]))];
+          if (mediaAssetIds.length === 0) {
+            if (publication.mediaFactsVersion !== null) return rejectionOutcome({ kind: "validation", code: "RESTORE_PUBLICATION_SNAPSHOT_INVALID" });
+            continue;
+          }
+          if (publication.mediaFactsVersion === null) return rejectionOutcome({ kind: "validation", code: "RESTORE_PUBLICATION_SNAPSHOT_INVALID" });
+          if (input.mediaAcceptance === undefined) return rejectionOutcome({ kind: "temporarily_unavailable", code: "MEDIA_ACCEPTANCE_UNAVAILABLE" });
+          const facts = await input.mediaAcceptance.getAcceptanceFacts({
+            ownerId: input.scope.ownerId,
+            mediaAssetIds,
+            intendedUse: existing.value.contentType === "project" ? "project-evidence" : "achievement-evidence",
+            locale: publication.locale,
+          }, context);
+          if (!facts.ok) return rejectionOutcome(facts.error);
+          const byId = new Map(facts.value.facts.map((fact) => [fact.mediaAssetId, fact]));
+          if (!/^[\x21-\x7e]{1,128}$/.test(facts.value.consistencyVersion) || byId.size !== mediaAssetIds.length ||
+              facts.value.facts.length !== mediaAssetIds.length || mediaAssetIds.some((id) => {
+                const fact = byId.get(id);
+                return fact === undefined || fact.ownerId !== input.scope.ownerId || !fact.accepted || !fact.safe ||
+                  !fact.suitable || !fact.accessible || !Number.isSafeInteger(fact.version) || fact.version < 1;
+              })) return rejectionOutcome({ kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" });
+        }
+      }
+      const changed = await input.repository.changeLifecycle({
+        contentId: command.contentId,
+        scope: input.scope,
+        expectedVersion: command.expectedVersion,
+        lifecycle,
+        ...(command.reason === undefined ? {} : { reason: command.reason }),
+      }, context);
+      if (!changed.ok) return rejectionOutcome(changed.error);
+      if (changed.value.changed) {
+        if (changed.value.changedAt === null) throw new Error("Lifecycle transition omitted its transaction timestamp.");
+        await input.operations.outbox.append(context, {
+          eventId: ids.generate("DomainEvent"),
+          payload: { type: eventType, version: 1, value: { contentId: command.contentId, ownerScope: await actorScope } },
+          aggregateId: command.contentId,
+          aggregateVersion: changed.value.aggregateVersion,
+          correlationId: command.correlationId,
+          occurredAt: changed.value.changedAt,
+          availableAt: changed.value.changedAt,
+        });
+      }
+      return { status: "completed", receipt: {
+        aggregateId: command.contentId,
+        aggregateVersion: changed.value.aggregateVersion,
+        outcome,
+      } };
+    };
+    return await executeIdempotently<ContentLifecycleReceipt>({
+      operationScope,
+      actor: command.actor,
+      key: command.idempotencyKey,
+      request: { contentId: command.contentId, expectedVersion: command.expectedVersion, reason: command.reason ?? null },
+      effect,
+    });
+  }
+
   return {
     async createContent(command) {
       if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
@@ -982,7 +1132,8 @@ export function createContentAuthoringService(input: {
           return rejectionOutcome({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: existing.value.aggregateVersion });
         }
         if (existing.value.contentType !== "project" && existing.value.contentType !== "achievement" && existing.value.contentType !== "testimonial") return rejectionOutcome({ kind: "validation", code: "CONTENT_TYPE_NOT_PUBLISHABLE" });
-        if (existing.value.lifecycle !== "draft" && existing.value.lifecycle !== "published") {
+        const explicitFirstPublishFromArchive = existing.value.lifecycle === "archived" && (existing.value.publications ?? []).length === 0;
+        if (existing.value.lifecycle !== "draft" && existing.value.lifecycle !== "published" && !explicitFirstPublishFromArchive) {
           return rejectionOutcome({ kind: "validation", code: "CONTENT_LIFECYCLE_NOT_PUBLISHABLE" });
         }
         const revision = existing.value.revisions.find((entry) => entry.revisionId === command.revisionId);
@@ -1156,6 +1307,24 @@ export function createContentAuthoringService(input: {
         request: { contentId: command.contentId, expectedVersion: command.expectedVersion, locale: command.locale, revisionId: command.revisionId },
         effect,
       });
+    },
+
+    async hideContent(command) {
+      return await changeContentLifecycle(
+        command, "hidden", "content-publishing.hide-owner-content", "content-hidden", "content.content_hidden.v1",
+      );
+    },
+
+    async archiveContent(command) {
+      return await changeContentLifecycle(
+        command, "archived", "content-publishing.archive-owner-content", "content-archived", "content.content_archived.v1",
+      );
+    },
+
+    async restoreContent(command) {
+      return await changeContentLifecycle(
+        command, "published", "content-publishing.restore-owner-content", "content-restored", "content.content_restored.v1",
+      );
     },
 
     async getPublicProject(query) {

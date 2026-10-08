@@ -9,6 +9,7 @@ import {
 } from "../../src/runtime/http/owner-content-authoring.js";
 import {
   handleGetOwnerContentAggregate,
+  handleHideOwnerContent,
   handlePublishOwnerContentLanguage,
   handleSaveOwnerContentRevision,
 } from "../../src/runtime/http/owner-publication.js";
@@ -31,7 +32,7 @@ const CONTENT = {
 };
 
 function createService() {
-  const calls: { create: unknown[]; get: unknown[]; save: unknown[]; preview: unknown[]; review: unknown[]; history: unknown[]; publish: unknown[] } = { create: [], get: [], save: [], preview: [], review: [], history: [], publish: [] };
+  const calls: { create: unknown[]; get: unknown[]; save: unknown[]; preview: unknown[]; review: unknown[]; history: unknown[]; publish: unknown[]; hide: unknown[]; archive: unknown[]; restore: unknown[] } = { create: [], get: [], save: [], preview: [], review: [], history: [], publish: [], hide: [], archive: [], restore: [] };
   const service: ContentAuthoringService = {
     async createContent(command) {
       calls.create.push(command);
@@ -58,6 +59,18 @@ function createService() {
       return { ok: true as const, value: { aggregateId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 3, outcome: "language-published" as const,
         revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: command.locale, currentSlug: "atlas", routeIdentity: unsafeStableId<"PublicRoute">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4"),
         firstPublishedAt: "2026-10-07T12:00:00.000Z", publishedAt: "2026-10-07T12:00:00.000Z" } };
+    },
+    async hideContent(command) {
+      calls.hide.push(command);
+      return { ok: true, value: { aggregateId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 4, outcome: "content-hidden" } };
+    },
+    async archiveContent(command) {
+      calls.archive.push(command);
+      return { ok: true, value: { aggregateId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 4, outcome: "content-archived" } };
+    },
+    async restoreContent(command) {
+      calls.restore.push(command);
+      return { ok: true, value: { aggregateId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 4, outcome: "content-restored" } };
     },
     async getPublicProject() { return { ok: false as const, error: { kind: "not_found" as const, code: "PUBLIC_CONTENT_NOT_FOUND" } }; },
     async getPublicTestimonials() { return { ok: true as const, value: [] }; },
@@ -156,6 +169,25 @@ describe("Owner content authoring HTTP adapters", () => {
     expect(await response.json()).toEqual({ aggregateId: CONTENT_ID, aggregateVersion: 3, outcome: "language-published" });
     expect(fake.calls.publish).toMatchObject([{ contentId: CONTENT_ID, expectedVersion: 2, locale: "en", revisionId: REVISION_ID }]);
     expect(publicationFake.calls.publishOwnerContentLanguage).toHaveLength(0);
+  });
+
+  it("passes the server trace ID to lifecycle events separately from the idempotency key", async () => {
+    const fake = createService();
+    const publicationFake = createOwnerPublicationTestFake({ type: "success" });
+    const logger = createTestLogger();
+    const response = await handleHideOwnerContent(
+      request("POST", { reason: "Temporary review." }, {
+        "idempotency-key": "hide-key-1", "if-match": '"3"', "x-request-id": "inbound-trace-1",
+      }),
+      { contentId: CONTENT_ID },
+      { service: publicationFake, contentAuthoring: fake.service, security: ownerTestSecurity(), logger },
+    );
+    expect(response.status).toBe(200);
+    const command = fake.calls.hide[0] as { readonly correlationId: string; readonly idempotencyKey: string };
+    expect(command.idempotencyKey).toBe("hide-key-1");
+    expect(command.correlationId).not.toBe(command.idempotencyKey);
+    expect(logger.records.find((record) => record.event === "request.completed")?.fields["traceId"])
+      .toBe(command.correlationId);
   });
 
   it("serves private non-indexable previews and returns a bounded Owner history page", async () => {

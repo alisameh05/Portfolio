@@ -109,6 +109,7 @@ export interface HideOwnerContentApplicationCommand {
   readonly idempotencyKey: IdempotencyKey;
   readonly expectedVersion: number;
   readonly contentId: StableId<string>;
+  readonly correlationId?: string;
   readonly reason?: string;
 }
 
@@ -117,6 +118,7 @@ export interface ArchiveOwnerContentApplicationCommand {
   readonly idempotencyKey: IdempotencyKey;
   readonly expectedVersion: number;
   readonly contentId: StableId<string>;
+  readonly correlationId?: string;
   readonly reason?: string;
 }
 
@@ -125,6 +127,7 @@ export interface RestoreOwnerContentApplicationCommand {
   readonly idempotencyKey: IdempotencyKey;
   readonly expectedVersion: number;
   readonly contentId: StableId<string>;
+  readonly correlationId?: string;
   readonly reason?: string;
 }
 
@@ -548,6 +551,35 @@ function lifecyclePayload(value: {
   };
 }
 
+async function runOwnerLifecycleCommand(
+  command: HideOwnerContentApplicationCommand | ArchiveOwnerContentApplicationCommand | RestoreOwnerContentApplicationCommand,
+  deps: OwnerPublicationAdapterDeps,
+  operation: "hideContent" | "archiveContent" | "restoreContent",
+): Promise<Result<OwnerPublicationCommandReceipt, Rejection>> {
+  if (deps.contentAuthoring === undefined) {
+    return operation === "hideContent"
+      ? await deps.service.hideOwnerContent(command as HideOwnerContentApplicationCommand)
+      : operation === "archiveContent"
+      ? await deps.service.archiveOwnerContent(command as ArchiveOwnerContentApplicationCommand)
+      : await deps.service.restoreOwnerContent(command as RestoreOwnerContentApplicationCommand);
+  }
+  const result = await deps.contentAuthoring[operation]({
+    actor: command.actor,
+    idempotencyKey: command.idempotencyKey,
+    expectedVersion: command.expectedVersion,
+    contentId: command.contentId,
+    correlationId: command.correlationId ?? command.idempotencyKey,
+    ...(command.reason === undefined ? {} : { reason: command.reason }),
+  });
+  return result.ok
+    ? { ok: true, value: {
+      aggregateId: result.value.aggregateId,
+      aggregateVersion: result.value.aggregateVersion,
+      outcome: result.value.outcome,
+    } }
+    : result;
+}
+
 export async function handleHideOwnerContent(
   request: Request,
   params: { contentId: string },
@@ -565,14 +597,15 @@ export async function handleHideOwnerContent(
       response: zHideOwnerContentResponse,
     },
     200,
-    ({ actor, contentId, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, contentId, idempotencyKey, expectedVersion, correlationId, body }) => ({
       actor,
       idempotencyKey,
       expectedVersion,
       contentId,
+      correlationId,
       ...(typeof body["reason"] === "string" ? { reason: body["reason"] as string } : {}),
     }) as HideOwnerContentApplicationCommand,
-    (command) => deps.service.hideOwnerContent(command),
+    (command) => runOwnerLifecycleCommand(command, deps, "hideContent"),
     lifecyclePayload,
   );
 }
@@ -594,14 +627,15 @@ export async function handleArchiveOwnerContent(
       response: zArchiveOwnerContentResponse,
     },
     200,
-    ({ actor, contentId, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, contentId, idempotencyKey, expectedVersion, correlationId, body }) => ({
       actor,
       idempotencyKey,
       expectedVersion,
       contentId,
+      correlationId,
       ...(typeof body["reason"] === "string" ? { reason: body["reason"] as string } : {}),
     }) as ArchiveOwnerContentApplicationCommand,
-    (command) => deps.service.archiveOwnerContent(command),
+    (command) => runOwnerLifecycleCommand(command, deps, "archiveContent"),
     lifecyclePayload,
   );
 }
@@ -623,14 +657,15 @@ export async function handleRestoreOwnerContent(
       response: zRestoreOwnerContentResponse,
     },
     200,
-    ({ actor, contentId, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, contentId, idempotencyKey, expectedVersion, correlationId, body }) => ({
       actor,
       idempotencyKey,
       expectedVersion,
       contentId,
+      correlationId,
       ...(typeof body["reason"] === "string" ? { reason: body["reason"] as string } : {}),
     }) as RestoreOwnerContentApplicationCommand,
-    (command) => deps.service.restoreOwnerContent(command),
+    (command) => runOwnerLifecycleCommand(command, deps, "restoreContent"),
     lifecyclePayload,
   );
 }
