@@ -26,6 +26,7 @@ import type { OperationsPersistencePorts } from "../modules/portability-operatio
 import type { OwnerConfigurationApplicationService } from "../runtime/http/owner-configuration.js";
 import type { ContentAuthoringService } from "../modules/content-publishing/application/authoring.js";
 import type { OwnerProjectApplicationService } from "../runtime/http/owner-project.js";
+import type { OwnerTaxonomyApplicationService } from "../runtime/http/owner-taxonomy.js";
 import type { LifecycleResource, ReadinessCheck } from "../runtime/ports.js";
 import { parseStableId } from "../shared/domain/index.js";
 
@@ -35,6 +36,7 @@ let current: RuntimeConfig | undefined;
 let currentOperations: OperationsPersistencePorts | undefined;
 let currentOwnerConfiguration: OwnerConfigurationApplicationService | undefined;
 let currentContentAuthoring: ContentAuthoringService | undefined;
+let currentOwnerTaxonomy: OwnerTaxonomyApplicationService | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -61,6 +63,7 @@ export interface DatabaseRuntimeDependencies {
   readonly operations: OperationsPersistencePorts;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
   readonly contentAuthoring?: ContentAuthoringService;
+  readonly ownerTaxonomy?: OwnerTaxonomyApplicationService;
   readonly resource: LifecycleResource;
   readonly readiness: ReadinessCheck;
 }
@@ -118,6 +121,7 @@ export async function initializeDatabaseRuntime(
         const operations = createPostgresOperationsPersistence(database.database);
         let ownerConfiguration: OwnerConfigurationApplicationService | undefined;
         let contentAuthoring: ContentAuthoringService | undefined;
+        let ownerTaxonomy: OwnerTaxonomyApplicationService | undefined;
         if (runtimeKind === "application") {
           if (configuredScope === undefined || !configuredScope.portfolioId.ok || !configuredScope.ownerId.ok) {
             throw new RuntimeConfigError("PORTFOLIO_ID", "must be configured for Owner configuration commands");
@@ -166,17 +170,31 @@ export async function initializeDatabaseRuntime(
             import("../modules/taxonomy-discovery/adapters/index.js"),
             import("../modules/content-publishing/application/authoring.js"),
           ]);
+          const discoveryProjection = createPostgresProjectDiscoveryProjectionWriter();
           contentAuthoring = createContentAuthoringService({
             repository: createPostgresContentAuthoringRepository(),
             operations,
-            discoveryProjection: createPostgresProjectDiscoveryProjectionWriter(),
+            discoveryProjection,
+            taxonomyAssignments: discoveryProjection,
             scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
           });
+          const [{ createPostgresTaxonomyOwnerRepository }, { createTaxonomyOwnerService }, { createContentBackedOwnerTaxonomyService }, { createProductionOwnerTaxonomyService }] = await Promise.all([
+            import("../modules/taxonomy-discovery/adapters/index.js"),
+            import("../modules/taxonomy-discovery/application/index.js"),
+            import("../runtime/owner-taxonomy-content-service.js"),
+            import("../runtime/fakes/owner-taxonomy.js"),
+          ]);
+          ownerTaxonomy = createContentBackedOwnerTaxonomyService(createTaxonomyOwnerService({
+            repository: createPostgresTaxonomyOwnerRepository(),
+            operations,
+            scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
+          }), createProductionOwnerTaxonomyService());
         }
         return {
           operations,
           ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
           ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
+          ...(ownerTaxonomy === undefined ? {} : { ownerTaxonomy }),
           resource: database.resource,
           readiness: database.readiness,
         };
@@ -198,6 +216,7 @@ export async function initializeDatabaseRuntime(
     currentOperations = dependencies.operations;
     currentOwnerConfiguration = dependencies.ownerConfiguration;
     currentContentAuthoring = dependencies.contentAuthoring;
+    currentOwnerTaxonomy = dependencies.ownerTaxonomy;
     lifecycle.markReady();
     return Object.freeze({ ...config, runtimeKind });
   } catch (error) {
@@ -225,6 +244,13 @@ export async function getContentAuthoringApplicationService(): Promise<ContentAu
   if (currentContentAuthoring !== undefined) return currentContentAuthoring;
   const { createProductionContentAuthoringService } = await import("../runtime/fakes/content-authoring.js");
   return createProductionContentAuthoringService();
+}
+
+/** Controlled Taxonomy roots and value creation use the configured PostgreSQL application assembly. */
+export async function getOwnerTaxonomyApplicationService(): Promise<OwnerTaxonomyApplicationService> {
+  if (currentOwnerTaxonomy !== undefined) return currentOwnerTaxonomy;
+  const { createProductionOwnerTaxonomyService } = await import("../runtime/fakes/owner-taxonomy.js");
+  return createProductionOwnerTaxonomyService();
 }
 
 /** Project route, status, and Featured operations share the Content transaction boundary. */
@@ -256,5 +282,6 @@ export function resetRuntimeForTests(): void {
   currentOperations = undefined;
   currentOwnerConfiguration = undefined;
   currentContentAuthoring = undefined;
+  currentOwnerTaxonomy = undefined;
   resetLifecycleForTests();
 }

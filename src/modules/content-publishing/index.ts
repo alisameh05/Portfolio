@@ -99,6 +99,8 @@ export {
   type ContentAuthoringRepository,
   type ContentAuthoringRevision,
   type ContentAuthoringScope,
+  type ProjectTaxonomyAssignmentFactsPort,
+  type ContentProjectTaxonomyAssignment,
   type ContentAuthoringService,
   type CreateContentPersistenceInput,
   type CreateContentReceipt,

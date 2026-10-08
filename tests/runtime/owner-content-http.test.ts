@@ -100,6 +100,7 @@ function createService() {
     async retireProjectStatusValue() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "UNAVAILABLE" } }; },
     async changeProjectStatus() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "UNAVAILABLE" } }; },
     async setProjectFeatured() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "UNAVAILABLE" } }; },
+    async assignProjectTaxonomyValue() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "UNAVAILABLE" } }; },
   };
   return { calls, service };
 }

@@ -1,6 +1,7 @@
 import type { ContentAuthoringService } from "../modules/content-publishing/application/authoring.js";
 import type { Result, Rejection } from "../shared/domain/index.js";
 import { createProductionOwnerProjectService } from "./fakes/owner-project.js";
+import { createCorrelation } from "./ports.js";
 import type {
   OwnerProjectApplicationService,
   OwnerProjectCommandReceipt,
@@ -32,6 +33,17 @@ export function createContentOwnerProjectService(
     },
     async setOwnerProjectFeatured(command) {
       const result = await content.setProjectFeatured(command);
+      return mapProjectReceipt(result);
+    },
+    async assignOwnerProjectTaxonomyValue(command) {
+      const result = await content.assignProjectTaxonomyValue({
+        actor: command.actor,
+        projectId: command.projectId,
+        valueId: command.valueId as never,
+        expectedVersion: command.expectedVersion,
+        idempotencyKey: command.idempotencyKey,
+        correlationId: createCorrelation().traceId,
+      });
       return mapProjectReceipt(result);
     },
   };

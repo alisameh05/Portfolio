@@ -358,6 +358,30 @@ export interface ContentProjectOwnerView {
   }[];
 }
 
+export interface ContentProjectTaxonomyAssignment {
+  readonly aggregateVersion: number;
+  readonly changed: boolean;
+  readonly changedAt: string;
+}
+
+/** Taxonomy-owned active-value facts and discovery projection writer. Calls share Content's transaction. */
+export interface ProjectTaxonomyAssignmentFactsPort {
+  getValueFacts(input: {
+    readonly valueId: StableId<"TaxonomyValue">;
+    readonly scope: ContentAuthoringScope;
+  }, context: TransactionContext): Promise<Result<{
+    readonly taxonomyId: StableId<"Taxonomy">;
+    readonly taxonomyKind: "category" | "ai-ml-domain" | "technology" | "project-type";
+    readonly label: string;
+    readonly eligible: boolean;
+  }, Rejection>>;
+  updateProjectDiscoveryTaxonomyValue(input: {
+    readonly projectId: StableId<"Project">;
+    readonly valueId: StableId<"TaxonomyValue">;
+    readonly scope: ContentAuthoringScope;
+  }, context: TransactionContext): Promise<void>;
+}
+
 export interface ContentAuthoringRepository {
   projectExists(projectId: StableId<"Project">, scope: ContentAuthoringScope, context: TransactionContext): Promise<boolean>;
   create(input: CreateContentPersistenceInput, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
@@ -385,6 +409,7 @@ export interface ContentAuthoringRepository {
   retireProjectStatusValue(input: { readonly valueId: StableId<"ProjectStatusValue">; readonly expectedVersion: number; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<ContentProjectStatusValueChange, Rejection>>;
   changeProjectStatus(input: { readonly projectId: StableId<"Project">; readonly valueId: StableId<"ProjectStatusValue">; readonly expectedVersion: number; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<ContentProjectStatusTransition, Rejection>>;
   setProjectFeatured(input: { readonly projectId: StableId<"Project">; readonly featured: boolean; readonly expectedVersion: number; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<ContentProjectMutation, Rejection>>;
+  assignProjectTaxonomyValue(input: { readonly projectId: StableId<"Project">; readonly valueId: StableId<"TaxonomyValue">; readonly actorId: StableId<"Owner">; readonly expectedVersion: number; readonly eligible: boolean; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<ContentProjectTaxonomyAssignment, Rejection>>;
 }
 
 export interface AppendContentReviewInput {
@@ -499,6 +524,7 @@ export interface ContentAuthoringService {
   retireProjectStatusValue(command: { readonly actor: ActorContext; readonly valueId: StableId<"ProjectStatusValue">; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ContentProjectStatusValue, Rejection>>;
   changeProjectStatus(command: { readonly actor: ActorContext; readonly projectId: StableId<"Project">; readonly statusValueId: StableId<"ProjectStatusValue">; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ProjectCommandReceipt, Rejection>>;
   setProjectFeatured(command: { readonly actor: ActorContext; readonly projectId: StableId<"Project">; readonly featured: boolean; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ProjectCommandReceipt, Rejection>>;
+  assignProjectTaxonomyValue(command: { readonly actor: ActorContext; readonly projectId: StableId<"Project">; readonly valueId: StableId<"TaxonomyValue">; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ProjectCommandReceipt, Rejection>>;
 }
 
 export interface RelateOwnerProjectsCommand {
@@ -845,6 +871,7 @@ export function createContentAuthoringService(input: {
   readonly ids?: StableIdGenerator;
   /** Test seam for authoritative Media facts; production intentionally has no Media acceptance adapter yet. */
   readonly mediaAcceptance?: MediaAcceptancePort;
+  readonly taxonomyAssignments?: ProjectTaxonomyAssignmentFactsPort;
 }): ContentAuthoringService {
   const clock = input.clock ?? createSystemClock();
   const ids = input.ids ?? createSystemIdGenerator();
@@ -1917,6 +1944,54 @@ export function createContentAuthoringService(input: {
             projectId: command.projectId,
             aggregateVersion: changed.value.aggregateVersion,
             outcome: "project-featured-changed",
+          } };
+        },
+      });
+    },
+
+    async assignProjectTaxonomyValue(command) {
+      if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      if (!validCorrelation(command.correlationId) || !Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1 ||
+          !parseStableId("Project", command.projectId).ok || !parseStableId("TaxonomyValue", command.valueId).ok) {
+        return err({ kind: "validation", code: "INVALID_PROJECT_TAXONOMY_ASSIGNMENT" });
+      }
+      if (input.taxonomyAssignments === undefined) return err({ kind: "temporarily_unavailable", code: "TAXONOMY_ASSIGNMENTS_UNAVAILABLE" });
+      return await executeIdempotently<ProjectCommandReceipt>({
+        operationScope: "content-publishing.assign-project-taxonomy-value",
+        actor: command.actor,
+        key: command.idempotencyKey,
+        request: { projectId: command.projectId, valueId: command.valueId, expectedVersion: command.expectedVersion },
+        effect: async (context) => {
+          // Lock order: Taxonomy root/value (shared) before Content Project (exclusive).
+          // Retirement and merge take the same Taxonomy-first order before touching assignments.
+          const facts = await input.taxonomyAssignments!.getValueFacts({ valueId: command.valueId, scope: input.scope }, context);
+          if (!facts.ok) return rejectionOutcome(facts.error);
+          const assigned = await input.repository.assignProjectTaxonomyValue({
+            projectId: command.projectId, valueId: command.valueId, actorId: input.scope.ownerId,
+            expectedVersion: command.expectedVersion, eligible: facts.value.eligible, scope: input.scope,
+          }, context);
+          if (!assigned.ok) return rejectionOutcome(assigned.error);
+          if (assigned.value.changed) {
+            await input.taxonomyAssignments!.updateProjectDiscoveryTaxonomyValue({
+              projectId: command.projectId, valueId: command.valueId, scope: input.scope,
+            }, context);
+            const ownerScope = await actorScope;
+            await input.operations.outbox.append(context, {
+              eventId: ids.generate("DomainEvent"),
+              payload: { type: "content.project_taxonomy_value_assigned.v1", version: 1, value: {
+                projectId: command.projectId, taxonomyId: facts.value.taxonomyId, valueId: command.valueId, ownerScope,
+              } },
+              aggregateId: command.projectId,
+              aggregateVersion: assigned.value.aggregateVersion,
+              correlationId: command.correlationId,
+              occurredAt: assigned.value.changedAt,
+              availableAt: assigned.value.changedAt,
+            });
+          }
+          return { status: "completed", receipt: {
+            projectId: command.projectId,
+            aggregateVersion: assigned.value.aggregateVersion,
+            outcome: "taxonomy-value-assigned",
           } };
         },
       });

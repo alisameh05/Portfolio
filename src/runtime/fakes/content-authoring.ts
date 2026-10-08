@@ -32,5 +32,6 @@ export function createProductionContentAuthoringService(): ContentAuthoringServi
     async retireProjectStatusValue() { return unavailable; },
     async changeProjectStatus() { return unavailable; },
     async setProjectFeatured() { return unavailable; },
+    async assignProjectTaxonomyValue() { return unavailable; },
   };
 }
