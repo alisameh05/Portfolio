@@ -650,7 +650,9 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       expectedVersion: first.aggregateVersion + 1, idempotencyKey: key("route-durable-change-0"), correlationId: "route-durable-change-0", newSlug: "different-intent" }))
       .toMatchObject({ ok: false, error: { kind: "conflict", code: "IDEMPOTENCY_KEY_REUSED" } });
     const aggregate = await content.getOwnerContentAggregate({ actor: owner, contentId: first.contentId });
-    expect(aggregate).toMatchObject({ ok: true, value: { aggregateVersion: version, publicRoute: {
+    expect(aggregate.ok).toBe(true);
+    if (!aggregate.ok) return;
+    expect(aggregate.value).toMatchObject({ aggregateVersion: version, publicRoute: {
       identity: routeIdentity, canonicalSlug: "route-a", redirects: [
         { fromSlug: "route-b", toSlug: "route-a" }, { fromSlug: "route-c", toSlug: "route-a" },
       ], history: [
@@ -658,7 +660,11 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
         { sequence: 2, fromSlug: "route-b", toSlug: "route-c" },
         { sequence: 3, fromSlug: "route-c", toSlug: "route-a" },
       ],
-    } } });
+    }, routeHistory: [
+      { sequence: 1, fromSlug: "route-a", toSlug: "route-b" },
+      { sequence: 2, fromSlug: "route-b", toSlug: "route-c" },
+      { sequence: 3, fromSlug: "route-c", toSlug: "route-a" },
+    ] });
 
     const collision = await createReviewedProject(scope, "Candidate conflict", "route-candidate-collision", "en", { service: content, slug: "route-a" });
     const rejected = await content.publishLanguageVersion({ actor: owner, contentId: collision.contentId,
@@ -742,6 +748,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       outbox: { ...operations.outbox, async append() { throw new Error("route outbox fault"); } },
     };
     const failingContent = service(scope, failingOperations);
+    const routeChangeKeyHash = createHash("sha256").update("route-rollback-rename").digest("hex");
     await expect(failingContent.changePublicSlug({ actor: owner, projectId: project.contentId as StableId<"Project">,
       expectedVersion: published.value.aggregateVersion, idempotencyKey: key("route-rollback-rename"),
       correlationId: "route-rollback-rename", newSlug: "route-rollback-after" })).rejects.toThrow();
@@ -753,10 +760,11 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "select (select count(*)::int from content.public_route_reservations where content_id = $1::uuid and normalized_slug = 'route-rollback-after') attempted_reservation, " +
       "(select count(*)::int from content.public_route_history where content_id = $1::uuid) history, " +
       "(select count(*)::int from taxonomy.project_discovery_locales where content_id = $1::uuid and slug = 'route-rollback-after') projection, " +
+      "(select count(*)::int from operations.idempotency_records where key_hash = $2) receipts, " +
       "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.public_route_changed.v1') events",
-      [project.contentId],
+      [project.contentId, routeChangeKeyHash],
     );
-    expect(persisted.rows[0]).toEqual({ attempted_reservation: 0, history: 0, projection: 0, events: 0 });
+    expect(persisted.rows[0]).toEqual({ attempted_reservation: 0, history: 0, projection: 0, receipts: 0, events: 0 });
   }, 30_000);
 
   it("publishes minimal Testimonials with explicit associations, localized review, and visibility-safe projections", async () => {

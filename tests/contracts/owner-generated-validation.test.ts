@@ -197,6 +197,8 @@ describe("generated Owner v1 validators", () => {
       aggregateVersion: 7,
       contentType: "project",
       lifecycle: "published",
+      publicRoute: null,
+      routeHistory: [],
       localizedStreams: {
         en: { revisionCount: 3, currentPublishedRevisionId: ids.revision },
         ar: { revisionCount: 1, currentPublishedRevisionId: null },

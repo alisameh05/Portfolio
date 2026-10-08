@@ -117,6 +117,8 @@ describe("Owner Publication aggregate retrieval (#30)", () => {
       aggregateVersion: 1,
       contentType: "project",
       lifecycle: "draft",
+      publicRoute: null,
+      routeHistory: [],
       localizedStreams: {
         en: { revisionCount: 1, currentPublishedRevisionId: null },
       },

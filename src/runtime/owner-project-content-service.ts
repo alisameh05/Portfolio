@@ -13,21 +13,6 @@ export function createContentBackedOwnerProjectService(
 ): OwnerProjectApplicationService {
   return {
     ...fallback,
-    async getOwnerProjectAggregate(query) {
-      const base = await fallback.getOwnerProjectAggregate(query);
-      if (!base.ok) return base;
-      const aggregate = await content.getOwnerContentAggregate({ actor: query.actor, contentId: query.projectId });
-      if (!aggregate.ok) return aggregate;
-      const route = aggregate.value.publicRoute;
-      return { ok: true, value: {
-        ...base.value,
-        publicRoute: route === null ? null : {
-          identity: route.identity,
-          canonicalSlug: route.canonicalSlug,
-          redirects: route.redirects,
-        },
-      } };
-    },
     async changeOwnerProjectPublicSlug(command) {
       const result = await content.changePublicSlug({
         actor: command.actor, projectId: command.projectId, newSlug: command.slug,

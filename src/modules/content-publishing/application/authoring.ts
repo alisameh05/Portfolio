@@ -326,6 +326,7 @@ export interface OwnerContentAggregateView {
   readonly contentType: ContentKind;
   readonly lifecycle: ContentAuthoringRecord["lifecycle"];
   readonly publicRoute: ContentPublicRouteFacts | null;
+  readonly routeHistory: ContentPublicRouteFacts["history"];
   readonly localizedStreams: Partial<Record<SupportedLocale, {
     readonly revisionCount: number;
     readonly currentPublishedRevisionId: StableId<string> | null;
@@ -594,6 +595,7 @@ function view(record: ContentAuthoringRecord): OwnerContentAggregateView {
     contentType: record.contentType,
     lifecycle: record.lifecycle,
     publicRoute: record.publicRoute ?? null,
+    routeHistory: record.publicRoute?.history ?? [],
     localizedStreams,
     revisions: record.revisions.map(({ revisionId, locale, sequence, reviewed, reviewDecision }) => ({
       revisionId, locale, sequence, reviewed, ...(reviewDecision === undefined ? {} : { reviewDecision }),

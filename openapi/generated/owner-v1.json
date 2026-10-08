@@ -3786,6 +3786,84 @@
           }
         }
       },
+      "PublicRouteRedirectView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fromSlug",
+          "toSlug"
+        ],
+        "properties": {
+          "fromSlug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "toSlug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        }
+      },
+      "PublicRouteHistoryEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sequence",
+          "fromSlug",
+          "toSlug",
+          "changedAt"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "fromSlug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "toSlug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "changedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicRouteView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identity",
+          "canonicalSlug",
+          "redirects"
+        ],
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "canonicalSlug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "redirects": {
+            "type": "array",
+            "description": "Retained former slugs and their current canonical target.",
+            "items": {
+              "$ref": "#/components/schemas/PublicRouteRedirectView"
+            }
+          },
+          "history": {
+            "type": "array",
+            "description": "Immutable canonical slug changes ordered by sequence.",
+            "items": {
+              "$ref": "#/components/schemas/PublicRouteHistoryEntry"
+            }
+          }
+        }
+      },
       "LocalizedRevisionStreamView": {
         "type": "object",
         "additionalProperties": false,
@@ -3844,7 +3922,9 @@
           "contentType",
           "lifecycle",
           "localizedStreams",
-          "revisions"
+          "revisions",
+          "publicRoute",
+          "routeHistory"
         ],
         "properties": {
           "contentId": {
@@ -3870,6 +3950,23 @@
               "hidden",
               "archived"
             ]
+          },
+          "publicRoute": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PublicRouteView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "routeHistory": {
+            "type": "array",
+            "description": "Immutable canonical slug changes ordered by sequence.",
+            "items": {
+              "$ref": "#/components/schemas/PublicRouteHistoryEntry"
+            }
           },
           "localizedStreams": {
             "type": "object",
@@ -4712,49 +4809,6 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 500
-          }
-        }
-      },
-      "PublicRouteRedirectView": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "fromSlug",
-          "toSlug"
-        ],
-        "properties": {
-          "fromSlug": {
-            "type": "string",
-            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-          },
-          "toSlug": {
-            "type": "string",
-            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-          }
-        }
-      },
-      "PublicRouteView": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "identity",
-          "canonicalSlug",
-          "redirects"
-        ],
-        "properties": {
-          "identity": {
-            "$ref": "#/components/schemas/StableId"
-          },
-          "canonicalSlug": {
-            "type": "string",
-            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-          },
-          "redirects": {
-            "type": "array",
-            "description": "Retained former slugs and their current canonical target.",
-            "items": {
-              "$ref": "#/components/schemas/PublicRouteRedirectView"
-            }
           }
         }
       },

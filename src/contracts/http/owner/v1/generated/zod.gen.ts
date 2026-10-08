@@ -104,6 +104,25 @@ export const zProjectCtaUpdate = z.strictObject({
     unavailableFallback: z.string().min(1).max(160)
 });
 
+export const zPublicRouteRedirectView = z.strictObject({
+    fromSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    toSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+});
+
+export const zPublicRouteHistoryEntry = z.strictObject({
+    sequence: z.number().int().gte(1),
+    fromSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    toSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    changedAt: z.string().datetime()
+});
+
+export const zPublicRouteView = z.strictObject({
+    identity: zStableId,
+    canonicalSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    redirects: z.array(zPublicRouteRedirectView),
+    history: z.array(zPublicRouteHistoryEntry).optional()
+});
+
 export const zLocalizedRevisionStreamView = z.strictObject({
     revisionCount: z.number().int().gte(0),
     currentPublishedRevisionId: zStableId.nullable()
@@ -130,6 +149,8 @@ export const zContentAggregateView = z.strictObject({
         'hidden',
         'archived'
     ]),
+    publicRoute: zPublicRouteView.nullable(),
+    routeHistory: z.array(zPublicRouteHistoryEntry),
     localizedStreams: z.strictObject({
         en: zLocalizedRevisionStreamView.optional(),
         ar: zLocalizedRevisionStreamView.optional()
@@ -334,17 +355,6 @@ export const zPublishLanguageCommand = z.strictObject({
 
 export const zLifecycleReasonCommand = z.strictObject({
     reason: z.string().min(1).max(500).optional()
-});
-
-export const zPublicRouteRedirectView = z.strictObject({
-    fromSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-    toSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-});
-
-export const zPublicRouteView = z.strictObject({
-    identity: zStableId,
-    canonicalSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-    redirects: z.array(zPublicRouteRedirectView)
 });
 
 export const zProjectTaxonomyAssignmentView = z.strictObject({

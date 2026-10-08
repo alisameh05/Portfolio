@@ -331,7 +331,7 @@ schemas:
   ContentAggregateView:
     type: object
     additionalProperties: false
-    required: [contentId, aggregateVersion, contentType, lifecycle, localizedStreams, revisions]
+    required: [contentId, aggregateVersion, contentType, lifecycle, localizedStreams, revisions, publicRoute, routeHistory]
     properties:
       contentId: { $ref: ./common.yaml#/schemas/StableId }
       aggregateVersion: { type: integer, minimum: 1 }
@@ -341,6 +341,14 @@ schemas:
       lifecycle:
         type: string
         enum: [draft, published, hidden, archived]
+      publicRoute:
+        oneOf:
+          - { $ref: ./projects.yaml#/schemas/PublicRouteView }
+          - { type: 'null' }
+      routeHistory:
+        type: array
+        description: Immutable canonical slug changes ordered by sequence.
+        items: { $ref: ./projects.yaml#/schemas/PublicRouteHistoryEntry }
       localizedStreams:
         type: object
         additionalProperties: false

@@ -26,7 +26,13 @@ const CONTENT = {
   aggregateVersion: 1,
   contentType: "project",
   lifecycle: "draft",
-  publicRoute: null,
+  publicRoute: {
+    identity: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea7",
+    canonicalSlug: "route-current",
+    redirects: [{ fromSlug: "route-before", toSlug: "route-current" }],
+    history: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current", changedAt: "2026-10-08T00:00:00.000Z" }],
+  },
+  routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current", changedAt: "2026-10-08T00:00:00.000Z" }],
   localizedStreams: { en: { revisionCount: 1, currentPublishedRevisionId: null } },
   revisions: [{ revisionId: REVISION_ID, locale: "en", sequence: 1, reviewed: false }],
 };
@@ -132,6 +138,7 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: publicationFake, contentAuthoring: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(get.status).toBe(200);
+    expect(await get.json()).toMatchObject({ routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current" }] });
     expect(fake.calls.get).toHaveLength(1);
     const save = await handleSaveOwnerContentRevision(
       request("POST", { locale: "ar", title: "بحث", summary: "مسودة", body: "نص أولي", draftData: { contentType: "project", caseStudy: { outcomes: ["مخرجات"] },

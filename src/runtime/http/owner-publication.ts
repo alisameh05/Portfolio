@@ -61,7 +61,7 @@ import type {
   Result,
   StableId,
 } from "../../shared/domain/index.js";
-import type { ContentAuthoringService } from "../../modules/content-publishing/application/authoring.js";
+import type { ContentAuthoringService, ContentPublicRouteFacts } from "../../modules/content-publishing/application/authoring.js";
 import type { LocalizedDraftData } from "../../modules/content-publishing/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
 import {
@@ -133,6 +133,8 @@ export interface OwnerContentAggregateView {
   readonly aggregateVersion: number;
   readonly contentType: "project" | "achievement" | "testimonial";
   readonly lifecycle: "draft" | "published" | "hidden" | "archived";
+  readonly publicRoute: ContentPublicRouteFacts | null;
+  readonly routeHistory: ContentPublicRouteFacts["history"];
   readonly localizedStreams: {
     readonly en?: {
       readonly revisionCount: number;
@@ -304,6 +306,8 @@ export async function handleGetOwnerContentAggregate(
       aggregateVersion: result.value.aggregateVersion,
       contentType: result.value.contentType,
       lifecycle: result.value.lifecycle,
+      publicRoute: result.value.publicRoute,
+      routeHistory: result.value.routeHistory,
       localizedStreams: result.value.localizedStreams,
       revisions: [...result.value.revisions],
     };
