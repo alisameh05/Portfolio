@@ -176,7 +176,7 @@ relateProject:
         description: Project relationship created.
         content:
           application/json:
-            schema: { $ref: ../components/common.yaml#/schemas/CommandReceipt }
+            schema: { $ref: ../components/common.yaml#/schemas/ProjectRelationshipCommandReceipt }
       '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
       '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
       '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }

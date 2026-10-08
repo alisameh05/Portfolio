@@ -16,7 +16,6 @@ export const zStableId = z.string().uuid().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9
 export const zCommandReceipt = z.strictObject({
     aggregateId: zStableId,
     aggregateVersion: z.number().int().gte(1),
-    relatedProjectAggregateVersion: z.number().int().gte(1).optional(),
     outcome: z.enum([
         'configuration-updated',
         'revision-saved',
@@ -398,6 +397,44 @@ export const zCorrectCandidateSlugCommand = z.strictObject({
 
 export const zRelateProjectCommand = z.strictObject({
     relatedProjectId: zStableId
+});
+
+export const zProjectRelationshipCommandReceipt = z.strictObject({
+    aggregateId: zStableId,
+    aggregateVersion: z.number().int().gte(1),
+    relatedProjectAggregateVersion: z.number().int().gte(1),
+    outcome: z.enum([
+        'configuration-updated',
+        'revision-saved',
+        'content-created',
+        'revision-reviewed',
+        'language-published',
+        'content-hidden',
+        'content-archived',
+        'content-restored',
+        'project-status-changed',
+        'project-featured-changed',
+        'public-slug-changed',
+        'candidate-slug-corrected',
+        'project-related',
+        'taxonomy-value-created',
+        'taxonomy-value-renamed',
+        'taxonomy-value-retired',
+        'taxonomy-value-merged',
+        'taxonomy-value-assigned',
+        'project-status-value-created',
+        'project-status-value-renamed',
+        'project-status-value-retired',
+        'media-processing-recorded',
+        'media-accepted',
+        'media-rejected',
+        'cv-version-accepted',
+        'current-cv-activated',
+        'feedback-approved',
+        'feedback-rejected',
+        'feedback-suppressed',
+        'analytics-goal-version-activated'
+    ])
 });
 
 export const zActiveTaxonomyValueView = z.strictObject({
@@ -1293,7 +1330,7 @@ export const zRelateOwnerProjectsPath = z.strictObject({
 /**
  * Project relationship created.
  */
-export const zRelateOwnerProjectsResponse = zCommandReceipt;
+export const zRelateOwnerProjectsResponse = zProjectRelationshipCommandReceipt;
 
 export const zGetOwnerTaxonomyAggregatePath = z.strictObject({
     taxonomyId: zStableId

@@ -48,6 +48,7 @@ import {
   handleRelateOwnerProjects,
   handleSetOwnerProjectFeatured,
 } from "../../src/runtime/http/owner-project.js";
+import type { OwnerProjectApplicationService } from "../../src/runtime/http/owner-project.js";
 import { ownerTestSecurity, withOwnerTestAuth } from "./owner-test-auth.js";
 
 const PROJECT_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e8f";
@@ -302,6 +303,22 @@ describe("Owner Project commands (#29)", () => {
       relatedProjectAggregateVersion: 3,
       outcome: "project-related",
     });
+  });
+
+  it("rejects a relationship receipt without the secondary aggregate version", async () => {
+    const fake = createOwnerProjectTestFake({ type: "success" });
+    const service: OwnerProjectApplicationService = {
+      ...fake,
+      async relateOwnerProjects() {
+        return { ok: true, value: { aggregateId: PROJECT_ID as never, aggregateVersion: 3, outcome: "project-related" } };
+      },
+    };
+    const response = await handleRelateOwnerProjects(
+      postRequest(PROJECT_ID, "relate-project", { body: { relatedProjectId: RELATED_ID } }),
+      { projectId: PROJECT_ID },
+      { service, security: ownerTestSecurity(), logger: createTestLogger() },
+    );
+    expect(response.status).toBe(500);
   });
 
   it("assigns a Taxonomy value once and returns the declared receipt", async () => {
