@@ -576,7 +576,9 @@ export async function main() {
     if (
       /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
     ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
-    const evidencePath = ticket114
+    const evidencePath = ticket115
+      ? join(ROOT, "evidence/phase-5-project-routes.json")
+      : ticket114
       ? join(ROOT, "evidence/phase-5-content-lifecycle.json")
       : ticket112
       ? join(ROOT, "evidence/phase-5-achievement-timeline-postgres.json")

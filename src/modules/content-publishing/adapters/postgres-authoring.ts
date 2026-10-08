@@ -1277,6 +1277,10 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
                  item.first_published_at, locale.published_at
             from content.public_routes route
             join content.items item on item.content_id = route.content_id and item.portfolio_id = route.portfolio_id
+            join content.public_route_reservations reservation
+              on reservation.route_identity = route.route_identity
+             and reservation.content_id = route.content_id
+             and reservation.portfolio_id = route.portfolio_id
             join content.language_publications publication
               on publication.content_id = item.content_id and publication.portfolio_id = item.portfolio_id
              and publication.locale = ${input.locale} and publication.route_identity = route.route_identity
@@ -1284,7 +1288,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
               on locale.content_id = publication.content_id and locale.portfolio_id = publication.portfolio_id
              and locale.locale = publication.locale and locale.revision_id = publication.revision_id
            where route.portfolio_id = ${input.scope.portfolioId}::uuid
-             and route.content_type = 'project' and route.current_slug = ${input.slug}
+             and route.content_type = 'project' and reservation.normalized_slug = ${input.slug}
              and item.lifecycle = 'published' and item.content_type = 'project'
         `.execute(executor);
         const row = result.rows[0];

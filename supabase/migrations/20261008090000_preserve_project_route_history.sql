@@ -42,6 +42,32 @@ grant update (current_slug) on content.public_routes to shipwithali_application;
 grant update (is_current) on content.public_route_reservations to shipwithali_application;
 grant select, insert on content.public_route_history to shipwithali_application;
 
+drop policy project_discovery_locales_application_scope on taxonomy.project_discovery_locales;
+create policy project_discovery_locales_application_scope on taxonomy.project_discovery_locales
+  for all to shipwithali_application
+  using (portfolio_id::text = current_setting('shipwithali.portfolio_id', true)
+    and exists (select 1 from content.items item
+      where item.content_id = project_discovery_locales.content_id
+        and item.portfolio_id = project_discovery_locales.portfolio_id
+        and item.content_type = 'project' and item.lifecycle in ('published', 'hidden', 'archived'))
+    and exists (select 1 from portfolio_config.settings settings
+      where settings.portfolio_id = project_discovery_locales.portfolio_id
+        and settings.owner_id::text = current_setting('shipwithali.owner_id', true)))
+  with check (portfolio_id::text = current_setting('shipwithali.portfolio_id', true)
+    and exists (select 1 from content.items item
+      where item.content_id = project_discovery_locales.content_id
+        and item.portfolio_id = project_discovery_locales.portfolio_id
+        and item.content_type = 'project' and item.lifecycle in ('published', 'hidden', 'archived'))
+    and exists (select 1 from content.language_publications publication
+      where publication.content_id = project_discovery_locales.content_id
+        and publication.portfolio_id = project_discovery_locales.portfolio_id
+        and publication.locale = project_discovery_locales.locale
+        and publication.revision_id = project_discovery_locales.revision_id
+        and publication.route_identity = project_discovery_locales.route_identity)
+    and exists (select 1 from portfolio_config.settings settings
+      where settings.portfolio_id = project_discovery_locales.portfolio_id
+        and settings.owner_id::text = current_setting('shipwithali.owner_id', true)));
+
 create policy public_route_history_application_scope on content.public_route_history
   for all to shipwithali_application
   using (portfolio_id::text = current_setting('shipwithali.portfolio_id', true)
