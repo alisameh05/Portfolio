@@ -35,6 +35,45 @@ function runCompatibility(candidatePath: string) {
   );
 }
 
+function runCompatibilityAgainst(baselineDocument: JsonObject, candidateDocument: JsonObject) {
+  const directory = mkdtempSync(join(tmpdir(), "shipwithali-compatibility-pair-"));
+  temporaryDirectories.push(directory);
+  const baselineFile = join(directory, "baseline.json");
+  const candidateFile = join(directory, "candidate.json");
+  writeFileSync(baselineFile, `${JSON.stringify(baselineDocument, null, 2)}\n`);
+  writeFileSync(candidateFile, `${JSON.stringify(candidateDocument, null, 2)}\n`);
+  return spawnSync(
+    process.execPath,
+    [checkerPath, "--baseline", baselineFile, "--candidate", candidateFile, "--surface", "fixture"],
+    { encoding: "utf8" },
+  );
+}
+
+function relationshipReceiptContract(): JsonObject {
+  const document = structuredClone(baseline);
+  document["paths"]["/api/owner/v1/projects/{projectId}/commands/relate-project"] = {
+    post: {
+      operationId: "relateOwnerProjects",
+      responses: {
+        "200": {
+          description: "Related",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  outcome: { type: "string", enum: ["configuration-updated", "project-related"] },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  return document;
+}
+
 describe("contract compatibility gate", () => {
   it("accepts additive optional input and response fields", () => {
     const candidatePath = candidateWith((document) => {
@@ -52,6 +91,54 @@ describe("contract compatibility gate", () => {
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(result.stdout).toContain("backward compatible");
+  });
+
+  it("allows only the relationship receipt outcome to narrow to project-related", () => {
+    const baselineDocument = relationshipReceiptContract();
+    const candidateDocument = structuredClone(baselineDocument);
+    candidateDocument["paths"][
+      "/api/owner/v1/projects/{projectId}/commands/relate-project"
+    ].post.responses["200"].content["application/json"].schema.properties.outcome.enum = [
+      "project-related",
+    ];
+
+    const result = runCompatibilityAgainst(baselineDocument, candidateDocument);
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain("backward compatible");
+  });
+
+  it("rejects a relationship receipt narrowed to an unrelated outcome", () => {
+    const baselineDocument = relationshipReceiptContract();
+    const candidateDocument = structuredClone(baselineDocument);
+    candidateDocument["paths"][
+      "/api/owner/v1/projects/{projectId}/commands/relate-project"
+    ].post.responses["200"].content["application/json"].schema.properties.outcome.enum = [
+      "configuration-updated",
+    ];
+
+    const result = runCompatibilityAgainst(baselineDocument, candidateDocument);
+
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain("enum narrowed");
+  });
+
+  it("rejects the same enum narrowing on a different response path", () => {
+    const baselineDocument = relationshipReceiptContract();
+    const relationPath = "/api/owner/v1/projects/{projectId}/commands/relate-project";
+    baselineDocument["paths"]["/api/owner/v1/projects/{projectId}/commands/update-status"] =
+      structuredClone(baselineDocument["paths"][relationPath]);
+    const candidateDocument = structuredClone(baselineDocument);
+    candidateDocument["paths"][
+      "/api/owner/v1/projects/{projectId}/commands/update-status"
+    ].post.responses["200"].content["application/json"].schema.properties.outcome.enum = [
+      "project-related",
+    ];
+
+    const result = runCompatibilityAgainst(baselineDocument, candidateDocument);
+
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain("enum narrowed");
   });
 
   it.each([
