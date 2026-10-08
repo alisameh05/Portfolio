@@ -1390,7 +1390,7 @@ export function createContentAuthoringService(input: {
             contentId: command.projectId, slug: command.candidateSlug, ownerScope: await actorScope,
           } },
           aggregateId: command.projectId, aggregateVersion: receipt.aggregateVersion,
-          correlationId: command.correlationId, occurredAt: clock.now(), availableAt: clock.now(),
+          correlationId: command.correlationId, occurredAt: eventTime, availableAt: eventTime,
         });
         return { status: "completed", receipt: { aggregateId: receipt.aggregateId, aggregateVersion: receipt.aggregateVersion, outcome: receipt.outcome, slug: receipt.slug } };
       };
