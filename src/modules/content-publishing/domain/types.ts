@@ -182,8 +182,16 @@ export interface ContentHistoryEntry {
   readonly reviewDecision?: ReviewRecord["decision"];
 }
 
+export interface ContentRouteHistoryEntry {
+  readonly sequence: number;
+  readonly fromSlug: string;
+  readonly toSlug: string;
+  readonly changedAt: string;
+}
+
 export interface ContentHistoryPage {
   readonly entries: readonly ContentHistoryEntry[];
+  readonly routeHistory: readonly ContentRouteHistoryEntry[];
   readonly nextCursor: string | null;
 }
 

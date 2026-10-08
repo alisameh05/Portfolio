@@ -53,6 +53,7 @@ function createHarness() {
         contentType: input.payload.contentType,
         lifecycle: "draft",
         candidateSlug: input.candidateSlug,
+        publicRoute: null,
         aggregateVersion: 1,
         revisions: [revision],
       };
@@ -65,6 +66,25 @@ function createHarness() {
         return { ok: false, error: { kind: "not_found", code: "CONTENT_NOT_FOUND" } };
       }
       return { ok: true, value: record };
+    },
+    async correctCandidateSlug(input) {
+      const record = records.get(input.contentId);
+      if (!record) return { ok: false as const, error: { kind: "not_found" as const, code: "CONTENT_NOT_FOUND" } };
+      const updated = { ...record, candidateSlug: input.slug, aggregateVersion: record.aggregateVersion + 1 };
+      records.set(input.contentId, updated);
+      return { ok: true as const, value: { aggregateVersion: updated.aggregateVersion } };
+    },
+    async changePublicSlug(input) {
+      const record = records.get(input.contentId);
+      if (!record?.publicRoute) return { ok: false as const, error: { kind: "validation" as const, code: "PROJECT_PUBLIC_ROUTE_REQUIRED" } };
+      const fromSlug = record.publicRoute.canonicalSlug;
+      const updated = { ...record, aggregateVersion: record.aggregateVersion + 1, publicRoute: {
+        ...record.publicRoute, canonicalSlug: input.slug,
+        redirects: [...record.publicRoute.redirects.filter((entry) => entry.fromSlug !== input.slug), { fromSlug, toSlug: input.slug }],
+        history: record.publicRoute.history,
+      } };
+      records.set(input.contentId, updated);
+      return { ok: true as const, value: { aggregateVersion: updated.aggregateVersion, previousSlug: fromSlug, routeIdentity: updated.publicRoute.identity } };
     },
     async changeLifecycle(input) {
       const prior = records.get(input.contentId);
@@ -234,7 +254,7 @@ function createHarness() {
     repository,
     operations,
     scope: { ownerId: OWNER_ID, portfolioId: PORTFOLIO_ID },
-    discoveryProjection: { async writePublishedProjectLocale() {} },
+    discoveryProjection: { async writePublishedProjectLocale() {}, async updateProjectRouteSlug() {} },
     clock: { now: () => "2026-10-05T08:00:00.000Z" },
     ids: { generate: () => uuid(id++) },
   });
@@ -242,6 +262,25 @@ function createHarness() {
 }
 
 describe("Content authoring application service", () => {
+  it("corrects private Project candidates with optimistic concurrency and exact idempotent replay", async () => {
+    const { service, records } = createHarness();
+    const created = await service.createContent({ actor: ACTOR, idempotencyKey: "candidate-create" as never,
+      correlationId: "candidate-create", payload: { contentType: "project", locale: "en", title: "Candidate",
+        summary: "Private candidate.", body: "Still private." } });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const command = { actor: ACTOR, projectId: created.value.contentId as never, expectedVersion: 1,
+      candidateSlug: "corrected-candidate", idempotencyKey: "candidate-correct" as never, correlationId: "candidate-correct" };
+    const corrected = await service.correctCandidateSlug(command);
+    expect(corrected).toMatchObject({ ok: true, value: { aggregateVersion: 2, outcome: "candidate-slug-corrected", slug: "corrected-candidate" } });
+    expect(await service.correctCandidateSlug(command)).toEqual(corrected);
+    expect(records.get(created.value.contentId)).toMatchObject({ lifecycle: "draft", candidateSlug: "corrected-candidate", aggregateVersion: 2, publicRoute: null });
+    expect(await service.correctCandidateSlug({ ...command, candidateSlug: "different-intent" }))
+      .toMatchObject({ ok: false, error: { kind: "conflict", code: "IDEMPOTENCY_KEY_REUSED" } });
+    expect(await service.correctCandidateSlug({ ...command, expectedVersion: 1, idempotencyKey: "candidate-stale" as never }))
+      .toMatchObject({ ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: 2 } });
+  });
+
   it("reviews the exact immutable Revision snapshot, replays safely, and keeps a saved Revision unreviewed", async () => {
     const { service, records, events } = createHarness();
     const created = await service.createContent({
@@ -345,7 +384,7 @@ describe("Content authoring application service", () => {
       expectedVersion = saved.value.aggregateVersion;
     }
     const first = await service.getContentHistory({ actor: ACTOR, contentId: created.value.contentId, locale: "en", limit: 1 });
-    expect(first).toMatchObject({ ok: true, value: { entries: [{ locale: "en", sequence: 1 }], nextCursor: "en:1" } });
+    expect(first).toMatchObject({ ok: true, value: { entries: [{ locale: "en", sequence: 1 }], routeHistory: [], nextCursor: "en:1" } });
     if (!first.ok || first.value.nextCursor === null) return;
     const second = await service.getContentHistory({ actor: ACTOR, contentId: created.value.contentId, locale: "en", limit: 1, cursor: first.value.nextCursor });
     expect(second).toMatchObject({ ok: true, value: { entries: [{ locale: "en", sequence: 2 }], nextCursor: "en:2" } });

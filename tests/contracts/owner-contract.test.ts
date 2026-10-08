@@ -324,7 +324,7 @@ describe("Owner v1 contract", () => {
     });
     expect(document.components.schemas["ContentHistoryPage"]).toMatchObject({
       additionalProperties: false,
-      required: ["entries", "nextCursor"],
+      required: ["entries", "routeHistory", "nextCursor"],
     });
     expect(document.components.schemas["ProjectStatusValueReceipt"]).toMatchObject({
       additionalProperties: false,

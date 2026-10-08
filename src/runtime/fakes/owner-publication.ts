@@ -47,6 +47,8 @@ function aggregateView(contentId: StableId<string>): OwnerContentAggregateView {
     aggregateVersion: 1,
     contentType: "project",
     lifecycle: "draft",
+    publicRoute: null,
+    routeHistory: [],
     localizedStreams: {
       en: { revisionCount: 1, currentPublishedRevisionId: null },
     },
@@ -67,6 +69,8 @@ function invalidAggregateView(contentId: StableId<string>): OwnerContentAggregat
     aggregateVersion: -1,
     contentType: "project",
     lifecycle: "draft",
+    publicRoute: null,
+    routeHistory: [],
     localizedStreams: {
       en: { revisionCount: 1, currentPublishedRevisionId: null },
     },

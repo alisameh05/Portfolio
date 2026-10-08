@@ -27,8 +27,8 @@ describe("Phase 2 contract-to-adapter runtime boundary (#33)", () => {
     expect(report.matrix).toHaveLength(53);
     expect(report.matrix.filter((entry) => entry.surface === "public")).toHaveLength(5);
     expect(report.matrix.filter((entry) => entry.surface === "owner")).toHaveLength(48);
-    expect(report.matrix.filter((entry) => entry.activation === "active")).toHaveLength(48);
-    expect(report.matrix.filter((entry) => entry.activation === "fail-closed")).toHaveLength(5);
+    expect(report.matrix.filter((entry) => entry.activation === "active")).toHaveLength(49);
+    expect(report.matrix.filter((entry) => entry.activation === "fail-closed")).toHaveLength(4);
     expect(report.matrix.filter((entry) => entry.activation === "active").every((entry) => entry.matches.length === 1)).toBe(true);
     expect(report.matrix.filter((entry) => entry.activation === "fail-closed").every((entry) => entry.matches.length === 0)).toBe(true);
     expect(report.matrix.filter((entry) => entry.activation === "fail-closed").map((entry) => entry.operationId).sort()).toEqual([...FAIL_CLOSED_OWNER_OPERATION_IDS].sort());

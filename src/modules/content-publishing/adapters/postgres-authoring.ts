@@ -19,6 +19,7 @@ import type {
   PublishProjectLanguageResult,
   PublicAchievementTimelineEntry,
   PublicProjectContentView,
+  ContentPublicRouteFacts,
 } from "../application/authoring.js";
 
 interface RootRow {
@@ -245,6 +246,41 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         publishedAt,
       };
     });
+    const routeResult = root.content_type === "project" ? await sql<{
+      route_identity: string; current_slug: string; normalized_slug: string; is_current: boolean;
+    }>`
+      select route.route_identity::text, route.current_slug, reservation.normalized_slug, reservation.is_current
+        from content.public_routes route
+        join content.public_route_reservations reservation
+          on reservation.route_identity = route.route_identity
+         and reservation.content_id = route.content_id
+         and reservation.portfolio_id = route.portfolio_id
+       where route.content_id = ${contentId}::uuid and route.portfolio_id = ${scope.portfolioId}::uuid
+       order by reservation.normalized_slug
+    `.execute(executor) : { rows: [] };
+    const routeIdentity = routeResult.rows[0]?.route_identity;
+    const routeHistoryResult = routeIdentity !== undefined ? await sql<{
+      sequence: number; from_slug: string; to_slug: string; changed_at: Date | string;
+    }>`
+      select sequence, from_slug, to_slug, changed_at
+        from content.public_route_history
+       where content_id = ${contentId}::uuid and portfolio_id = ${scope.portfolioId}::uuid
+       order by sequence
+    `.execute(executor) : { rows: [] };
+    if (routeIdentity !== undefined && routeResult.rows.some((row) => row.route_identity !== routeIdentity || row.current_slug !== routeResult.rows[0]?.current_slug)) {
+      throw new PostgresInfrastructureError();
+    }
+    const currentSlug = routeResult.rows[0]?.current_slug;
+    const publicRoute: ContentPublicRouteFacts | null = routeIdentity === undefined || currentSlug === undefined ? null : {
+      identity: routeIdentity as StableId<"PublicRoute">,
+      canonicalSlug: currentSlug,
+      redirects: routeResult.rows.filter((row) => !row.is_current).map((row) => ({ fromSlug: row.normalized_slug, toSlug: currentSlug })),
+      history: routeHistoryResult.rows.map((row) => {
+        const changedAt = row.changed_at instanceof Date ? row.changed_at.toISOString() : new Date(row.changed_at).toISOString();
+        if (!Number.isSafeInteger(row.sequence) || row.sequence < 1 || !Number.isFinite(Date.parse(changedAt))) throw new PostgresInfrastructureError();
+        return { sequence: row.sequence, fromSlug: row.from_slug, toSlug: row.to_slug, changedAt };
+      }),
+    };
     return {
       ok: true,
       value: {
@@ -257,6 +293,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         aggregateVersion: root.aggregate_version,
         revisions: revisions.rows.map(mapRevision),
         publications: mappedPublications,
+        publicRoute,
       },
     };
   }
@@ -316,6 +353,122 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
     async get(contentId, scope, context) {
       try {
         return await getRecord(contentId, scope, context);
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async correctCandidateSlug(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const selected = await sql<{ content_type: string; lifecycle: string; aggregate_version: number }>`
+          select content_type, lifecycle, aggregate_version
+            from content.items
+           where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           for update
+        `.execute(executor);
+        const root = selected.rows[0];
+        if (root === undefined) return err({ kind: "not_found", code: "CONTENT_NOT_FOUND" });
+        if (root.content_type !== "project") return err({ kind: "validation", code: "CONTENT_TYPE_NOT_PROJECT" });
+        if (root.aggregate_version !== input.expectedVersion) return err({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: root.aggregate_version });
+        if (root.lifecycle !== "draft" && root.lifecycle !== "archived") return err({ kind: "validation", code: "PROJECT_CANDIDATE_SLUG_NOT_EDITABLE" });
+        const route = await sql<{ route_identity: string }>`
+          select route_identity::text from content.public_routes
+           where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+        `.execute(executor);
+        if (route.rows[0] !== undefined) return err({ kind: "validation", code: "PROJECT_CANDIDATE_SLUG_NOT_EDITABLE" });
+        const updated = await sql<{ aggregate_version: number }>`
+          update content.items
+             set candidate_slug = ${input.slug}, aggregate_version = aggregate_version + 1, updated_at = transaction_timestamp()
+           where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+             and aggregate_version = ${input.expectedVersion}
+          returning aggregate_version
+        `.execute(executor);
+        const aggregateVersion = updated.rows[0]?.aggregate_version;
+        if (aggregateVersion === undefined) throw new PostgresInfrastructureError();
+        return { ok: true, value: { aggregateVersion } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async changePublicSlug(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const selected = await sql<{ content_type: string; aggregate_version: number }>`
+          select content_type, aggregate_version from content.items
+           where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           for update
+        `.execute(executor);
+        const root = selected.rows[0];
+        if (root === undefined) return err({ kind: "not_found", code: "CONTENT_NOT_FOUND" });
+        if (root.content_type !== "project") return err({ kind: "validation", code: "CONTENT_TYPE_NOT_PROJECT" });
+        if (root.aggregate_version !== input.expectedVersion) return err({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: root.aggregate_version });
+        const route = await sql<{ route_identity: string; current_slug: string }>`
+          select route_identity::text, current_slug from content.public_routes
+           where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           for update
+        `.execute(executor);
+        const current = route.rows[0];
+        if (current === undefined) return err({ kind: "validation", code: "PROJECT_PUBLIC_ROUTE_REQUIRED" });
+        const claimed = await sql<{ normalized_slug: string }>`
+          insert into content.public_route_reservations
+            (portfolio_id, content_type, normalized_slug, route_identity, content_id, is_current)
+          values (${input.scope.portfolioId}::uuid, 'project', ${input.slug}, ${current.route_identity}::uuid, ${input.contentId}::uuid, true)
+          on conflict (portfolio_id, content_type, normalized_slug) do nothing
+          returning normalized_slug
+        `.execute(executor);
+        if (claimed.rows[0] === undefined) {
+          const existingReservation = await sql<{ route_identity: string; content_id: string }>`
+            select route_identity::text, content_id::text
+              from content.public_route_reservations
+             where portfolio_id = ${input.scope.portfolioId}::uuid
+               and content_type = 'project' and normalized_slug = ${input.slug}
+          `.execute(executor);
+          const reservation = existingReservation.rows[0];
+          if (reservation === undefined || reservation.route_identity !== current.route_identity || reservation.content_id !== input.contentId) {
+            return err({ kind: "conflict", code: "PUBLIC_SLUG_CONFLICT" });
+          }
+          await sql`
+            update content.public_route_reservations set is_current = true
+             where route_identity = ${current.route_identity}::uuid and normalized_slug = ${input.slug}
+          `.execute(executor);
+        }
+        await sql`
+          update content.public_route_reservations set is_current = false
+           where route_identity = ${current.route_identity}::uuid and normalized_slug <> ${input.slug}
+        `.execute(executor);
+        if (current.current_slug !== input.slug) {
+          const sequence = await sql<{ value: number }>`
+            select coalesce(max(sequence), 0)::integer + 1 as value
+              from content.public_route_history where route_identity = ${current.route_identity}::uuid
+          `.execute(executor);
+          const next = sequence.rows[0]?.value;
+          if (next === undefined) throw new PostgresInfrastructureError();
+          await sql`
+            insert into content.public_route_history
+              (route_identity, content_id, portfolio_id, sequence, from_slug, to_slug, changed_at)
+            values (${current.route_identity}::uuid, ${input.contentId}::uuid, ${input.scope.portfolioId}::uuid,
+              ${next}, ${current.current_slug}, ${input.slug}, transaction_timestamp())
+          `.execute(executor);
+        }
+        await sql`
+          update content.public_routes set current_slug = ${input.slug}
+           where route_identity = ${current.route_identity}::uuid and content_id = ${input.contentId}::uuid
+        `.execute(executor);
+        const updated = await sql<{ aggregate_version: number }>`
+          update content.items set aggregate_version = aggregate_version + 1, updated_at = transaction_timestamp()
+           where content_id = ${input.contentId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+             and aggregate_version = ${input.expectedVersion}
+          returning aggregate_version
+        `.execute(executor);
+        const aggregateVersion = updated.rows[0]?.aggregate_version;
+        if (aggregateVersion === undefined) throw new PostgresInfrastructureError();
+        return { ok: true, value: { aggregateVersion, previousSlug: current.current_slug, routeIdentity: current.route_identity as StableId<"PublicRoute"> } };
       } catch (error) {
         if (error instanceof PostgresInfrastructureError) throw error;
         throw new PostgresInfrastructureError();
@@ -1124,6 +1277,10 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
                  item.first_published_at, locale.published_at
             from content.public_routes route
             join content.items item on item.content_id = route.content_id and item.portfolio_id = route.portfolio_id
+            join content.public_route_reservations reservation
+              on reservation.route_identity = route.route_identity
+             and reservation.content_id = route.content_id
+             and reservation.portfolio_id = route.portfolio_id
             join content.language_publications publication
               on publication.content_id = item.content_id and publication.portfolio_id = item.portfolio_id
              and publication.locale = ${input.locale} and publication.route_identity = route.route_identity
@@ -1131,7 +1288,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
               on locale.content_id = publication.content_id and locale.portfolio_id = publication.portfolio_id
              and locale.locale = publication.locale and locale.revision_id = publication.revision_id
            where route.portfolio_id = ${input.scope.portfolioId}::uuid
-             and route.content_type = 'project' and route.current_slug = ${input.slug}
+             and route.content_type = 'project' and reservation.normalized_slug = ${input.slug}
              and item.lifecycle = 'published' and item.content_type = 'project'
         `.execute(executor);
         const row = result.rows[0];

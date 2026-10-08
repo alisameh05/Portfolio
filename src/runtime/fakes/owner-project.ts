@@ -14,6 +14,7 @@ import type {
   AssignOwnerProjectTaxonomyValueApplicationCommand,
   ChangeOwnerProjectPublicSlugApplicationCommand,
   ChangeOwnerProjectStatusApplicationCommand,
+  CorrectOwnerProjectCandidateSlugApplicationCommand,
   GetOwnerProjectAggregateQuery,
   OwnerProjectAggregateView,
   OwnerProjectApplicationService,
@@ -33,6 +34,7 @@ export interface OwnerProjectTestFake extends OwnerProjectApplicationService {
     readonly changeOwnerProjectStatus: ReadonlyArray<ChangeOwnerProjectStatusApplicationCommand>;
     readonly setOwnerProjectFeatured: ReadonlyArray<SetOwnerProjectFeaturedApplicationCommand>;
     readonly changeOwnerProjectPublicSlug: ReadonlyArray<ChangeOwnerProjectPublicSlugApplicationCommand>;
+    readonly correctOwnerProjectCandidateSlug: ReadonlyArray<CorrectOwnerProjectCandidateSlugApplicationCommand>;
     readonly relateOwnerProjects: ReadonlyArray<RelateOwnerProjectsApplicationCommand>;
     readonly assignOwnerProjectTaxonomyValue: ReadonlyArray<AssignOwnerProjectTaxonomyValueApplicationCommand>;
   };
@@ -87,6 +89,7 @@ export function createOwnerProjectTestFake(mode: OwnerProjectFakeMode): OwnerPro
   const statusCalls: ChangeOwnerProjectStatusApplicationCommand[] = [];
   const featuredCalls: SetOwnerProjectFeaturedApplicationCommand[] = [];
   const slugCalls: ChangeOwnerProjectPublicSlugApplicationCommand[] = [];
+  const candidateSlugCalls: CorrectOwnerProjectCandidateSlugApplicationCommand[] = [];
   const relateCalls: RelateOwnerProjectsApplicationCommand[] = [];
   const assignCalls: AssignOwnerProjectTaxonomyValueApplicationCommand[] = [];
   return {
@@ -96,6 +99,7 @@ export function createOwnerProjectTestFake(mode: OwnerProjectFakeMode): OwnerPro
         changeOwnerProjectStatus: statusCalls,
         setOwnerProjectFeatured: featuredCalls,
         changeOwnerProjectPublicSlug: slugCalls,
+        correctOwnerProjectCandidateSlug: candidateSlugCalls,
         relateOwnerProjects: relateCalls,
         assignOwnerProjectTaxonomyValue: assignCalls,
       };
@@ -149,6 +153,17 @@ export function createOwnerProjectTestFake(mode: OwnerProjectFakeMode): OwnerPro
             ok: true as const,
             value: receipt(command.projectId, command.expectedVersion + 1, "public-slug-changed"),
           };
+        case "rejection":
+          return { ok: false as const, error: mode.rejection };
+        case "invalid-success":
+          return { ok: true as const, value: invalidReceipt() };
+      }
+    },
+    async correctOwnerProjectCandidateSlug(command: CorrectOwnerProjectCandidateSlugApplicationCommand) {
+      candidateSlugCalls.push(command);
+      switch (mode.type) {
+        case "success":
+          return { ok: true as const, value: receipt(command.projectId, command.expectedVersion + 1, "candidate-slug-corrected") };
         case "rejection":
           return { ok: false as const, error: mode.rejection };
         case "invalid-success":
@@ -216,6 +231,9 @@ export function createProductionOwnerProjectService(): OwnerProjectApplicationSe
     async changeOwnerProjectPublicSlug(
       _command: ChangeOwnerProjectPublicSlugApplicationCommand,
     ) {
+      return failure;
+    },
+    async correctOwnerProjectCandidateSlug(_command: CorrectOwnerProjectCandidateSlugApplicationCommand) {
       return failure;
     },
     async relateOwnerProjects(_command: RelateOwnerProjectsApplicationCommand) {

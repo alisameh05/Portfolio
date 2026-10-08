@@ -54,6 +54,15 @@ schemas:
     properties:
       fromSlug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
       toSlug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+  PublicRouteHistoryEntry:
+    type: object
+    additionalProperties: false
+    required: [sequence, fromSlug, toSlug, changedAt]
+    properties:
+      sequence: { type: integer, minimum: 1 }
+      fromSlug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+      toSlug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+      changedAt: { type: string, format: date-time }
   PublicRouteView:
     type: object
     additionalProperties: false
@@ -65,6 +74,10 @@ schemas:
         type: array
         description: Retained former slugs and their current canonical target.
         items: { $ref: '#/schemas/PublicRouteRedirectView' }
+      history:
+        type: array
+        description: Immutable canonical slug changes ordered by sequence.
+        items: { $ref: '#/schemas/PublicRouteHistoryEntry' }
   ProjectAggregateView:
     type: object
     additionalProperties: false
