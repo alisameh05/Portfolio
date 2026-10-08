@@ -36,10 +36,8 @@ const EXPECTED_OPERATIONAL_ROUTES = [
 ];
 
 // Phase 5 contracts are visible before their vertical slices are active.
-// Keep these explicitly allowlisted and adapter-free until their tickets add
-// authenticated handlers, persistence, and negative behavior together.
+// Keep only unfinished contracts explicitly allowlisted and adapter-free.
 export const FAIL_CLOSED_OWNER_OPERATION_IDS = Object.freeze([
-  "correctOwnerProjectCandidateSlug",
   "listOwnerProjectStatusValues",
   "createOwnerProjectStatusValue",
   "renameOwnerProjectStatusValue",
@@ -251,9 +249,9 @@ export function buildRuntimeBoundary(root = DEFAULT_ROOT) {
       name: "owner-operation-count",
       passed:
         matrix.filter((entry) => entry.surface === "owner").length === 48 &&
-        activeOperations.filter((entry) => entry.surface === "owner").length === 43 &&
+        activeOperations.filter((entry) => entry.surface === "owner").length === 44 &&
         failClosedOwnerOperations.length === FAIL_CLOSED_OWNER_OPERATION_IDS.length,
-      detail: "43 active Owner operations and 5 explicitly fail-closed Phase 5 contracts",
+      detail: "44 active Owner operations and 4 explicitly fail-closed Phase 5 contracts",
     },
     {
       name: "unique-operation-identifiers",

@@ -284,8 +284,9 @@ export async function main() {
   const ticket111 = process.argv.includes("--ticket-111");
   const ticket113 = process.argv.includes("--ticket-113");
   const ticket112 = process.argv.includes("--ticket-112");
-  if ([ticket109, ticket110, ticket111, ticket112, ticket113].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
-  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113;
+  const ticket115 = process.argv.includes("--ticket-115");
+  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket115].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
+  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket115;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -437,9 +438,11 @@ export async function main() {
 
     const evidence = contentAuthoringTicket ? {
       sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
-      ticket: ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
+      ticket: ticket115 ? 115 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
       parent: 106,
-      scope: ticket113
+      scope: ticket115
+        ? "candidate-slug-correction-durable-route-reservations-history-locale-safe-direct-redirects-and-atomic-replay"
+        : ticket113
         ? "testimonial-review-publication-history-safe-profile-project-projections-and-atomic-replay"
         : ticket112
         ? "achievement-publication-private-verification-and-chronological-timeline"
@@ -459,9 +462,10 @@ export async function main() {
         outboxEvents: preservedRows.outbox.length === 1,
         jobs: preservedRows.jobs.length === 1,
       },
-      authoringTablesWithForcedRls: ["content.items", "content.revisions", ...(ticket110 || ticket111 || ticket112 ? ["content.revision_reviews"] : []),
+      authoringTablesWithForcedRls: ["content.items", "content.revisions", ...(ticket110 || ticket111 || ticket112 || ticket115 ? ["content.revision_reviews"] : []),
         ...(ticket111 || ticket112 ? ["content.language_publications", "content.publication_history"] : []),
         ...(ticket111 ? ["content.public_routes", "content.public_route_reservations", "content.public_project_locales", "taxonomy.project_discovery_locales"] : []),
+        ...(ticket115 ? ["content.public_routes", "content.public_route_reservations", "content.public_route_history", "content.language_publications", "content.publication_history", "content.public_project_locales", "taxonomy.project_discovery_locales"] : []),
         ...(ticket112 ? ["content.public_achievement_locales"] : [])],
       databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),

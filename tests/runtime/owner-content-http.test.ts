@@ -26,6 +26,7 @@ const CONTENT = {
   aggregateVersion: 1,
   contentType: "project",
   lifecycle: "draft",
+  publicRoute: null,
   localizedStreams: { en: { revisionCount: 1, currentPublishedRevisionId: null } },
   revisions: [{ revisionId: REVISION_ID, locale: "en", sequence: 1, reviewed: false }],
 };
@@ -59,7 +60,10 @@ function createService() {
         revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: command.locale, currentSlug: "atlas", routeIdentity: unsafeStableId<"PublicRoute">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4"),
         firstPublishedAt: "2026-10-07T12:00:00.000Z", publishedAt: "2026-10-07T12:00:00.000Z" } };
     },
+    async correctCandidateSlug(command) { return { ok: true, value: { aggregateId: command.projectId, aggregateVersion: command.expectedVersion + 1, outcome: "candidate-slug-corrected", slug: command.candidateSlug } }; },
+    async changePublicSlug(command) { return { ok: true, value: { aggregateId: command.projectId, aggregateVersion: command.expectedVersion + 1, outcome: "public-slug-changed", slug: command.newSlug } }; },
     async getPublicProject() { return { ok: false as const, error: { kind: "not_found" as const, code: "PUBLIC_CONTENT_NOT_FOUND" } }; },
+    async resolvePublicProjectRoute() { return { ok: false as const, error: { kind: "not_found" as const, code: "PUBLIC_CONTENT_NOT_FOUND" } }; },
     async getPublicTestimonials() { return { ok: true as const, value: [] }; },
     async getPublicAchievementTimeline() { return { ok: true as const, value: [] }; },
     async getContentHistory(query) {

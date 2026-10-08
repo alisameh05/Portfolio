@@ -98,6 +98,16 @@ export interface ContentPublicProjectLocales {
   updated_at: Generated<Timestamp>;
 }
 
+export interface ContentPublicRouteHistory {
+  changed_at: Generated<Timestamp>;
+  content_id: string;
+  from_slug: string;
+  portfolio_id: string;
+  route_identity: string;
+  sequence: number;
+  to_slug: string;
+}
+
 export interface ContentPublicRouteReservations {
   content_id: string;
   content_type: string;
@@ -280,6 +290,7 @@ export interface DB {
   "content.language_publications": ContentLanguagePublications;
   "content.public_achievement_locales": ContentPublicAchievementLocales;
   "content.public_project_locales": ContentPublicProjectLocales;
+  "content.public_route_history": ContentPublicRouteHistory;
   "content.public_route_reservations": ContentPublicRouteReservations;
   "content.public_routes": ContentPublicRoutes;
   "content.public_testimonial_locales": ContentPublicTestimonialLocales;

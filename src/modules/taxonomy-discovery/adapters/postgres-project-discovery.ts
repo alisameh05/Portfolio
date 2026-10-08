@@ -29,5 +29,14 @@ export function createPostgresProjectDiscoveryProjectionWriter(): ProjectDiscove
           published_at = excluded.published_at
       `.execute(executor);
     },
+    async updateProjectRouteSlug(input, transaction: TransactionContext): Promise<void> {
+      const executor = resolvePostgresTransaction(transaction);
+      await sql`
+        update taxonomy.project_discovery_locales
+           set slug = ${input.slug}
+         where content_id = ${input.contentId}::uuid
+           and route_identity = ${input.routeIdentity}::uuid
+      `.execute(executor);
+    },
   };
 }
