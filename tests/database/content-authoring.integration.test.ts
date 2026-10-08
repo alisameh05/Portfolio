@@ -767,6 +767,38 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(persisted.rows[0]).toEqual({ attempted_reservation: 0, history: 0, projection: 0, receipts: 0, events: 0 });
   }, 30_000);
 
+  it("rolls back a route change when an eligible Discovery projection is missing", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const owner = actor(scope.ownerId);
+    const project = await createReviewedProject(scope, "Missing route projection", "route-projection-missing", "en", {
+      service: content, slug: "route-projection-before",
+    });
+    const published = await content.publishLanguageVersion({ actor: owner, contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key("route-projection-publish"),
+      correlationId: "route-projection-publish", locale: "en", revisionId: project.revisionId });
+    expect(published.ok).toBe(true);
+    if (!published.ok) return;
+    await admin.query("delete from taxonomy.project_discovery_locales where content_id = $1::uuid", [project.contentId]);
+
+    await expect(content.changePublicSlug({ actor: owner, projectId: project.contentId as StableId<"Project">,
+      expectedVersion: published.value.aggregateVersion, idempotencyKey: key("route-projection-rename"),
+      correlationId: "route-projection-rename", newSlug: "route-projection-after" })).rejects.toThrow();
+
+    const keyHash = createHash("sha256").update("route-projection-rename").digest("hex");
+    const state = await admin.query(
+      "select (select aggregate_version from content.items where content_id = $1::uuid) aggregate_version, " +
+      "(select current_slug from content.public_routes where content_id = $1::uuid) current_slug, " +
+      "(select count(*)::int from content.public_route_reservations where content_id = $1::uuid and normalized_slug = 'route-projection-after') attempted_reservation, " +
+      "(select count(*)::int from content.public_route_history where content_id = $1::uuid) history, " +
+      "(select count(*)::int from operations.idempotency_records where key_hash = $2) receipts, " +
+      "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.public_route_changed.v1') events",
+      [project.contentId, keyHash],
+    );
+    expect(state.rows[0]).toEqual({ aggregate_version: published.value.aggregateVersion, current_slug: "route-projection-before",
+      attempted_reservation: 0, history: 0, receipts: 0, events: 0 });
+  }, 30_000);
+
   it("publishes minimal Testimonials with explicit associations, localized review, and visibility-safe projections", async () => {
     const scope = await configuredScope();
     const profile = await createReviewedTestimonial(scope, "profile-testimonial", { type: "profile" });

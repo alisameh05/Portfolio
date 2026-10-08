@@ -29,7 +29,12 @@ export interface ProjectDiscoveryProjectionPort {
     transaction: TransactionContext,
   ): Promise<void>;
   updateProjectRouteSlug(
-    input: { readonly contentId: StableId<"Project">; readonly routeIdentity: StableId<"PublicRoute">; readonly slug: string },
+    input: {
+      readonly contentId: StableId<"Project">;
+      readonly routeIdentity: StableId<"PublicRoute">;
+      readonly slug: string;
+      readonly expectedLocales: readonly SupportedLocale[];
+    },
     transaction: TransactionContext,
   ): Promise<void>;
 }
@@ -1263,7 +1268,12 @@ export function createContentAuthoringService(input: {
         }, context);
         if (!changed.ok) return rejectionOutcome(changed.error);
         await input.discoveryProjection.updateProjectRouteSlug({
-          contentId: command.projectId, routeIdentity: changed.value.routeIdentity, slug: command.newSlug,
+          contentId: command.projectId,
+          routeIdentity: changed.value.routeIdentity,
+          slug: command.newSlug,
+          expectedLocales: existing.value.lifecycle === "published"
+            ? (existing.value.publications ?? []).map((publication) => publication.locale)
+            : [],
         }, context);
         const receipt: OwnerContentRouteChangeReceipt = {
           aggregateId: command.projectId, aggregateVersion: changed.value.aggregateVersion,
