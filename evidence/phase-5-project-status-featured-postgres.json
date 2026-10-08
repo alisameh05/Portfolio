@@ -1,5 +1,5 @@
 {
-  "sourceRevision": "9920f92bd3f278f233a76e83c293955159590d7b",
+  "sourceRevision": "e0c23d786fd4638adec9c6ae8a436adcdd42471f",
   "ticket": 116,
   "parent": 106,
   "scope": "owner-defined-project-status-registry-featured-commands-and-atomic-discovery-projection",
@@ -56,6 +56,10 @@
     {
       "file": "20261007200000_publish_localized_testimonials.sql",
       "sha256": "d262130f861be52c4c5556f45f31d0dd94dfcc10a6471cf22c28ca0390eb0877"
+    },
+    {
+      "file": "20261008090000_preserve_project_route_history.sql",
+      "sha256": "e56f6c1aaa4c40d28cb7f2dc5ab7c17d766c19ea82b72c0549264abd1275e058"
     },
     {
       "file": "20261008120000_add_content_lifecycle_history.sql",
@@ -120,6 +124,10 @@
       "name": "publish_localized_testimonials"
     },
     {
+      "version": "20261008090000",
+      "name": "preserve_project_route_history"
+    },
+    {
       "version": "20261008120000",
       "name": "add_content_lifecycle_history"
     },
@@ -176,6 +184,26 @@
     },
     {
       "name": "Content authoring production PostgreSQL invariants > publishes English and Arabic independently, preserves first publication time, history, and the last valid projection",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > corrects candidate collisions and resolves A to B to C to A directly under one durable route identity",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > changes retained Project routes while hidden and restores matching discovery",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > changes retained Project routes while archived and restores matching discovery",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back route reservations, immutable history, projections, receipt, and event when outbox append fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back a route change when an eligible Discovery projection is missing",
       "status": "passed"
     },
     {
@@ -255,7 +283,7 @@
       "status": "passed"
     }
   ],
-  "databaseIntegrationTestsPassed": 27,
+  "databaseIntegrationTestsPassed": 32,
   "skippedCases": 0,
   "isolatedLoopbackProjects": true,
   "credentialsRecorded": false,
