@@ -1,5 +1,5 @@
 {
-  "sourceRevision": "fd7e3cea6d4ece612ef05479edb369298f607c81",
+  "sourceRevision": "14fe83d4b09812ca169c86d0b055896c6ac06cbe",
   "ticket": 117,
   "parent": 106,
   "scope": "symmetric-owner-curated-relationships-atomic-root-versions-locale-safe-public-reads-history-replay-and-rollback",
@@ -66,6 +66,10 @@
       "sha256": "b2ef7861b063a20f45bbc2fd7857e6aaee59f3d154512d3c752e8b2f0a6c90c1"
     },
     {
+      "file": "20261008130000_add_project_status_and_featured.sql",
+      "sha256": "da301da8f9aa79dcdc754c305e6453e348012d5d450fc689793c562264febbe2"
+    },
+    {
       "file": "20261008180000_add_project_relationships.sql",
       "sha256": "0826469828a5534a191fa9fcbf00355b8ef80078db1556d164e68edfef624174"
     }
@@ -130,6 +134,10 @@
     {
       "version": "20261008120000",
       "name": "add_content_lifecycle_history"
+    },
+    {
+      "version": "20261008130000",
+      "name": "add_project_status_and_featured"
     },
     {
       "version": "20261008180000",
@@ -279,9 +287,25 @@
     {
       "name": "Content authoring production PostgreSQL invariants > returns only currently published related Projects in the requested locale, ordered and bounded",
       "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > keeps Project status identities, histories, Featured state, and published projections atomic",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > keeps status and Featured mutations atomic when the outbox fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > scopes all status tables to one Portfolio and rejects status or Featured writes on Achievements",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > keeps the status registry within the strict Owner list response limit",
+      "status": "passed"
     }
   ],
-  "databaseIntegrationTestsPassed": 32,
+  "databaseIntegrationTestsPassed": 36,
   "skippedCases": 0,
   "isolatedLoopbackProjects": true,
   "credentialsRecorded": false,
