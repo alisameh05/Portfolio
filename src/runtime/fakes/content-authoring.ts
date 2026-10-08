@@ -21,5 +21,13 @@ export function createProductionContentAuthoringService(): ContentAuthoringServi
     async getPublicTestimonials() { return unavailable; },
     async getPublicAchievementTimeline() { return unavailable; },
     async getContentHistory() { return unavailable; },
+    async listProjectStatusValues() { return unavailable; },
+    async getProjectOwnerView() { return unavailable; },
+    async getProjectStatusHistory() { return unavailable; },
+    async createProjectStatusValue() { return unavailable; },
+    async renameProjectStatusValue() { return unavailable; },
+    async retireProjectStatusValue() { return unavailable; },
+    async changeProjectStatus() { return unavailable; },
+    async setProjectFeatured() { return unavailable; },
   };
 }

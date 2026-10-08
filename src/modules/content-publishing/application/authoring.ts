@@ -4,7 +4,7 @@ import { createSystemClock, createSystemIdGenerator } from "../../../runtime/por
 import { hashCanonicalRequest } from "../../../shared/application/idempotency.js";
 import type { OperationsPersistencePorts, SafeResultEnvelope } from "../../portability-operations/index.js";
 import type { ContentHistoryEntry, ContentHistoryPage, ContentKind, CreateDraftPayload, LocalizedDraftData, PrivateRevisionPreview, SupportedLocale } from "../domain/index.js";
-import type { ChangePublicSlugCommand, CorrectCandidateSlugCommand, MediaAcceptancePort, PublishLanguageVersionCommand, ReviewRevisionCommand } from "./service.js";
+import type { ChangePublicSlugCommand, CorrectCandidateSlugCommand, MediaAcceptancePort, ProjectCommandReceipt, PublishLanguageVersionCommand, ReviewRevisionCommand } from "./service.js";
 
 export interface ContentAuthoringScope {
   readonly portfolioId: StableId<"Portfolio">;
@@ -276,6 +276,61 @@ export interface AppendContentRevisionInput {
   readonly savedAt: string;
 }
 
+export interface ContentProjectStatusValue {
+  readonly valueId: StableId<"ProjectStatusValue">;
+  readonly label: string;
+  readonly state: "active" | "retired";
+  readonly aggregateVersion: number;
+}
+
+export interface ContentProjectStatusHistoryEntry {
+  readonly operation: "created" | "renamed" | "retired";
+  readonly previousLabel: string | null;
+  readonly label: string;
+  readonly state: "active" | "retired";
+  readonly aggregateVersion: number;
+  readonly changedAt: string;
+}
+
+export interface ContentProjectStatusTransition {
+  readonly previousValueId: StableId<"ProjectStatusValue"> | null;
+  readonly currentValueId: StableId<"ProjectStatusValue">;
+  readonly aggregateVersion: number;
+  readonly changedAt: string;
+  readonly changed: boolean;
+}
+
+export interface ContentProjectMutation {
+  readonly aggregateVersion: number;
+  readonly changedAt: string | null;
+  readonly changed: boolean;
+}
+
+export interface ContentProjectStatusValueChange {
+  readonly value: ContentProjectStatusValue;
+  readonly changed: boolean;
+  readonly changedAt: string | null;
+}
+
+export interface ContentProjectOwnerView {
+  readonly projectId: StableId<"Project">;
+  readonly aggregateVersion: number;
+  readonly statusValueId: StableId<"ProjectStatusValue"> | null;
+  readonly featured: boolean;
+  readonly publicRoute: {
+    readonly identity: StableId<"PublicRoute">;
+    readonly canonicalSlug: string;
+    readonly redirects: readonly { readonly fromSlug: string; readonly toSlug: string }[];
+    readonly history: readonly { readonly sequence: number; readonly fromSlug: string; readonly toSlug: string; readonly changedAt: string }[];
+  } | null;
+  readonly relatedProjectIds: readonly StableId<"Project">[];
+  readonly taxonomyAssignments: readonly {
+    readonly taxonomyId: StableId<"Taxonomy">;
+    readonly taxonomyKind: string;
+    readonly valueId: StableId<"TaxonomyValue">;
+  }[];
+}
+
 export interface ContentAuthoringRepository {
   projectExists(projectId: StableId<"Project">, scope: ContentAuthoringScope, context: TransactionContext): Promise<boolean>;
   create(input: CreateContentPersistenceInput, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
@@ -292,6 +347,14 @@ export interface ContentAuthoringRepository {
   getPublicProjectBySlug(input: { readonly slug: string; readonly locale: SupportedLocale; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<PublicProjectContentView, Rejection>>;
   getPublicAchievementTimeline(input: { readonly locale: SupportedLocale; readonly limit: number; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<readonly PublicAchievementTimelineEntry[], Rejection>>;
   listHistory(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly locale?: SupportedLocale; readonly after?: { readonly locale: SupportedLocale; readonly sequence: number }; readonly limit: number }, context: TransactionContext): Promise<Result<{ readonly entries: readonly ContentHistoryEntry[]; readonly hasMore: boolean }, Rejection>>;
+  listProjectStatusValues(scope: ContentAuthoringScope, context: TransactionContext): Promise<Result<readonly ContentProjectStatusValue[], Rejection>>;
+  getProjectOwnerView(projectId: StableId<"Project">, scope: ContentAuthoringScope, context: TransactionContext): Promise<Result<ContentProjectOwnerView, Rejection>>;
+  listProjectStatusHistory(input: { readonly valueId: StableId<"ProjectStatusValue">; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<readonly ContentProjectStatusHistoryEntry[], Rejection>>;
+  createProjectStatusValue(input: { readonly valueId: StableId<"ProjectStatusValue">; readonly label: string; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<ContentProjectStatusValueChange, Rejection>>;
+  renameProjectStatusValue(input: { readonly valueId: StableId<"ProjectStatusValue">; readonly label: string; readonly expectedVersion: number; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<ContentProjectStatusValueChange, Rejection>>;
+  retireProjectStatusValue(input: { readonly valueId: StableId<"ProjectStatusValue">; readonly expectedVersion: number; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<ContentProjectStatusValueChange, Rejection>>;
+  changeProjectStatus(input: { readonly projectId: StableId<"Project">; readonly valueId: StableId<"ProjectStatusValue">; readonly expectedVersion: number; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<ContentProjectStatusTransition, Rejection>>;
+  setProjectFeatured(input: { readonly projectId: StableId<"Project">; readonly featured: boolean; readonly expectedVersion: number; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<ContentProjectMutation, Rejection>>;
 }
 
 export interface AppendContentReviewInput {
@@ -395,6 +458,14 @@ export interface ContentAuthoringService {
   /** Oldest achievement date first; ties use stable Achievement ID ascending. */
   getPublicAchievementTimeline(query: { readonly locale: SupportedLocale; readonly limit: number }): Promise<Result<readonly PublicAchievementTimelineEntry[], Rejection>>;
   getContentHistory(query: { readonly actor: ActorContext; readonly contentId: StableId<string>; readonly locale?: SupportedLocale; readonly limit: number; readonly cursor?: string }): Promise<Result<ContentHistoryPage, Rejection>>;
+  listProjectStatusValues(query: { readonly actor: ActorContext }): Promise<Result<readonly ContentProjectStatusValue[], Rejection>>;
+  getProjectOwnerView(query: { readonly actor: ActorContext; readonly projectId: StableId<"Project"> }): Promise<Result<ContentProjectOwnerView, Rejection>>;
+  getProjectStatusHistory(query: { readonly actor: ActorContext; readonly valueId: StableId<"ProjectStatusValue"> }): Promise<Result<readonly ContentProjectStatusHistoryEntry[], Rejection>>;
+  createProjectStatusValue(command: { readonly actor: ActorContext; readonly label: string; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ContentProjectStatusValue, Rejection>>;
+  renameProjectStatusValue(command: { readonly actor: ActorContext; readonly valueId: StableId<"ProjectStatusValue">; readonly label: string; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ContentProjectStatusValue, Rejection>>;
+  retireProjectStatusValue(command: { readonly actor: ActorContext; readonly valueId: StableId<"ProjectStatusValue">; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ContentProjectStatusValue, Rejection>>;
+  changeProjectStatus(command: { readonly actor: ActorContext; readonly projectId: StableId<"Project">; readonly statusValueId: StableId<"ProjectStatusValue">; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ProjectCommandReceipt, Rejection>>;
+  setProjectFeatured(command: { readonly actor: ActorContext; readonly projectId: StableId<"Project">; readonly featured: boolean; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ProjectCommandReceipt, Rejection>>;
 }
 
 export interface OwnerContentRouteChangeReceipt {
@@ -1542,6 +1613,194 @@ export function createContentAuthoringService(input: {
           routeHistory: aggregate.value.publicRoute?.history ?? [],
           nextCursor: listed.value.hasMore && last !== undefined ? `${last.locale}:${last.sequence}` : null,
         } };
+      });
+    },
+
+    async listProjectStatusValues(query) {
+      if (!ownerAuthorized(query.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      return await input.operations.transactions.run((context) => input.repository.listProjectStatusValues(input.scope, context));
+    },
+
+    async getProjectOwnerView(query) {
+      if (!ownerAuthorized(query.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      return await input.operations.transactions.run((context) => input.repository.getProjectOwnerView(query.projectId, input.scope, context));
+    },
+
+    async getProjectStatusHistory(query) {
+      if (!ownerAuthorized(query.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      return await input.operations.transactions.run((context) => input.repository.listProjectStatusHistory({
+        valueId: query.valueId,
+        scope: input.scope,
+      }, context));
+    },
+
+    async createProjectStatusValue(command) {
+      if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      const label = command.label.trim().replace(/\s+/g, " ");
+      if (!validCorrelation(command.correlationId) || !isCleanText(label, 100) || label.toLowerCase() === "archived") {
+        return err({ kind: "validation", code: "INVALID_PROJECT_STATUS_LABEL" });
+      }
+      const valueId = parseStableId("ProjectStatusValue", ids.generate("ProjectStatusValue"));
+      if (!valueId.ok) throw new Error("Stable ID generator returned an invalid ProjectStatusValue identity.");
+      return await executeIdempotently<ContentProjectStatusValue>({
+        operationScope: "content-publishing.create-project-status-value",
+        actor: command.actor,
+        key: command.idempotencyKey,
+        request: { label },
+        effect: async (context) => {
+          const created = await input.repository.createProjectStatusValue({ valueId: valueId.value, label, scope: input.scope }, context);
+          if (!created.ok) return rejectionOutcome(created.error);
+          const changedAt = created.value.changedAt;
+          if (changedAt === null) throw new Error("Status creation omitted its transaction timestamp.");
+          await input.operations.outbox.append(context, {
+            eventId: ids.generate("DomainEvent"),
+            payload: { type: "content.project_status_value_created.v1", version: 1, value: {
+              valueId: valueId.value, ownerScope: await actorScope,
+            } },
+            aggregateId: valueId.value,
+            aggregateVersion: created.value.value.aggregateVersion,
+            correlationId: command.correlationId,
+            occurredAt: changedAt,
+            availableAt: changedAt,
+          });
+          return { status: "completed", receipt: created.value.value as unknown as import("../../../shared/application/idempotency.js").CanonicalValue };
+        },
+      });
+    },
+
+    async renameProjectStatusValue(command) {
+      if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      const label = command.label.trim().replace(/\s+/g, " ");
+      if (!validCorrelation(command.correlationId) || !Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1 ||
+          !isCleanText(label, 100) || label.toLowerCase() === "archived") {
+        return err({ kind: "validation", code: "INVALID_PROJECT_STATUS_RENAME" });
+      }
+      return await executeIdempotently<ContentProjectStatusValue>({
+        operationScope: "content-publishing.rename-project-status-value",
+        actor: command.actor,
+        key: command.idempotencyKey,
+        request: { valueId: command.valueId, label, expectedVersion: command.expectedVersion },
+        effect: async (context) => {
+          const changed = await input.repository.renameProjectStatusValue({
+            valueId: command.valueId, label, expectedVersion: command.expectedVersion, scope: input.scope,
+          }, context);
+          if (!changed.ok) return rejectionOutcome(changed.error);
+          const changedAt = changed.value.changedAt;
+          if (changed.value.changed && changedAt !== null) await input.operations.outbox.append(context, {
+            eventId: ids.generate("DomainEvent"),
+            payload: { type: "content.project_status_value_renamed.v1", version: 1, value: {
+              valueId: command.valueId, ownerScope: await actorScope,
+            } },
+            aggregateId: command.valueId,
+            aggregateVersion: changed.value.value.aggregateVersion,
+            correlationId: command.correlationId,
+            occurredAt: changedAt,
+            availableAt: changedAt,
+          });
+          return { status: "completed", receipt: changed.value.value as unknown as import("../../../shared/application/idempotency.js").CanonicalValue };
+        },
+      });
+    },
+
+    async retireProjectStatusValue(command) {
+      if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      if (!validCorrelation(command.correlationId) || !Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1) {
+        return err({ kind: "validation", code: "INVALID_PROJECT_STATUS_RETIREMENT" });
+      }
+      return await executeIdempotently<ContentProjectStatusValue>({
+        operationScope: "content-publishing.retire-project-status-value",
+        actor: command.actor,
+        key: command.idempotencyKey,
+        request: { valueId: command.valueId, expectedVersion: command.expectedVersion },
+        effect: async (context) => {
+          const changed = await input.repository.retireProjectStatusValue({
+            valueId: command.valueId, expectedVersion: command.expectedVersion, scope: input.scope,
+          }, context);
+          if (!changed.ok) return rejectionOutcome(changed.error);
+          const changedAt = changed.value.changedAt;
+          if (changed.value.changed && changedAt !== null) await input.operations.outbox.append(context, {
+            eventId: ids.generate("DomainEvent"),
+            payload: { type: "content.project_status_value_retired.v1", version: 1, value: {
+              valueId: command.valueId, ownerScope: await actorScope,
+            } },
+            aggregateId: command.valueId,
+            aggregateVersion: changed.value.value.aggregateVersion,
+            correlationId: command.correlationId,
+            occurredAt: changedAt,
+            availableAt: changedAt,
+          });
+          return { status: "completed", receipt: changed.value.value as unknown as import("../../../shared/application/idempotency.js").CanonicalValue };
+        },
+      });
+    },
+
+    async changeProjectStatus(command) {
+      if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      if (!validCorrelation(command.correlationId) || !Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1) {
+        return err({ kind: "validation", code: "INVALID_PROJECT_STATUS_COMMAND" });
+      }
+      return await executeIdempotently<ProjectCommandReceipt>({
+        operationScope: "content-publishing.change-project-status",
+        actor: command.actor,
+        key: command.idempotencyKey,
+        request: { projectId: command.projectId, statusValueId: command.statusValueId, expectedVersion: command.expectedVersion },
+        effect: async (context) => {
+          const changed = await input.repository.changeProjectStatus({
+            projectId: command.projectId, valueId: command.statusValueId, expectedVersion: command.expectedVersion, scope: input.scope,
+          }, context);
+          if (!changed.ok) return rejectionOutcome(changed.error);
+          if (changed.value.changed) await input.operations.outbox.append(context, {
+            eventId: ids.generate("DomainEvent"),
+            payload: { type: "content.project_status_changed.v1", version: 1, value: {
+              projectId: command.projectId, previousStatus: changed.value.previousValueId,
+              newStatus: changed.value.currentValueId, ownerScope: await actorScope,
+            } },
+            aggregateId: command.projectId,
+            aggregateVersion: changed.value.aggregateVersion,
+            correlationId: command.correlationId,
+            occurredAt: changed.value.changedAt,
+            availableAt: changed.value.changedAt,
+          });
+          return { status: "completed", receipt: {
+            projectId: command.projectId,
+            aggregateVersion: changed.value.aggregateVersion,
+            outcome: "project-status-changed",
+          } };
+        },
+      });
+    },
+
+    async setProjectFeatured(command) {
+      if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      if (!validCorrelation(command.correlationId) || !Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1 ||
+          typeof command.featured !== "boolean") return err({ kind: "validation", code: "INVALID_PROJECT_FEATURED_COMMAND" });
+      return await executeIdempotently<ProjectCommandReceipt>({
+        operationScope: "content-publishing.set-project-featured",
+        actor: command.actor,
+        key: command.idempotencyKey,
+        request: { projectId: command.projectId, featured: command.featured, expectedVersion: command.expectedVersion },
+        effect: async (context) => {
+          const changed = await input.repository.setProjectFeatured({
+            projectId: command.projectId, featured: command.featured, expectedVersion: command.expectedVersion, scope: input.scope,
+          }, context);
+          if (!changed.ok) return rejectionOutcome(changed.error);
+          if (changed.value.changed && changed.value.changedAt !== null) await input.operations.outbox.append(context, {
+            eventId: ids.generate("DomainEvent"),
+            payload: { type: "content.project_featured_changed.v1", version: 1, value: {
+              projectId: command.projectId, featured: command.featured, ownerScope: await actorScope,
+            } },
+            aggregateId: command.projectId,
+            aggregateVersion: changed.value.aggregateVersion,
+            correlationId: command.correlationId,
+            occurredAt: changed.value.changedAt,
+            availableAt: changed.value.changedAt,
+          });
+          return { status: "completed", receipt: {
+            projectId: command.projectId,
+            aggregateVersion: changed.value.aggregateVersion,
+            outcome: "project-featured-changed",
+          } };
+        },
       });
     },
   };

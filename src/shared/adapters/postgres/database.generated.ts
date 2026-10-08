@@ -32,9 +32,11 @@ export interface ContentItems {
   content_id: string;
   content_type: string;
   created_at: Generated<Timestamp>;
+  featured: Generated<boolean>;
   first_published_at: Timestamp | null;
   lifecycle: Generated<string>;
   portfolio_id: string;
+  status_value_id: string | null;
   updated_at: Generated<Timestamp>;
 }
 
@@ -61,6 +63,39 @@ export interface ContentLifecycleHistory {
   previous_lifecycle: string;
   reason: string | null;
   transition_sequence: number;
+}
+
+export interface ContentProjectStatusHistory {
+  aggregate_version: number;
+  changed_at: Generated<Timestamp>;
+  content_id: string;
+  current_value_id: string;
+  portfolio_id: string;
+  previous_value_id: string | null;
+  transition_sequence: number;
+}
+
+export interface ContentProjectStatusValueHistory {
+  aggregate_version: number;
+  changed_at: Generated<Timestamp>;
+  label: string;
+  operation: string;
+  portfolio_id: string;
+  previous_label: string | null;
+  state: string;
+  transition_sequence: number;
+  value_id: string;
+}
+
+export interface ContentProjectStatusValues {
+  aggregate_version: Generated<number>;
+  created_at: Generated<Timestamp>;
+  label: string;
+  normalized_label: Generated<string | null>;
+  portfolio_id: string;
+  state: Generated<string>;
+  updated_at: Generated<Timestamp>;
+  value_id: string;
 }
 
 export interface ContentPublicAchievementLocales {
@@ -301,6 +336,9 @@ export interface DB {
   "content.items": ContentItems;
   "content.language_publications": ContentLanguagePublications;
   "content.lifecycle_history": ContentLifecycleHistory;
+  "content.project_status_history": ContentProjectStatusHistory;
+  "content.project_status_value_history": ContentProjectStatusValueHistory;
+  "content.project_status_values": ContentProjectStatusValues;
   "content.public_achievement_locales": ContentPublicAchievementLocales;
   "content.public_project_locales": ContentPublicProjectLocales;
   "content.public_route_history": ContentPublicRouteHistory;

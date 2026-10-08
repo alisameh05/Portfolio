@@ -88,6 +88,8 @@
     "phase5:focus:project-routes-postgres": "node scripts/portfolio-settings-integration.mjs --ticket-115",
     "prephase5:focus:content-lifecycle-postgres": "npm run validation:ready",
     "phase5:focus:content-lifecycle-postgres": "node scripts/portfolio-settings-integration.mjs --ticket-114",
+    "prephase5:focus:project-status-postgres": "npm run validation:ready",
+    "phase5:focus:project-status-postgres": "node scripts/portfolio-settings-integration.mjs --ticket-116",
     "prephase5:focus:taxonomy-status-relationships-discovery": "npm run validation:ready",
     "phase5:focus:taxonomy-status-relationships-discovery": "node scripts/phase5-verification.mjs --suite taxonomy",
     "prephase5:focus:database-rls-migrations-concurrency": "npm run validation:ready",

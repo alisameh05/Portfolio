@@ -227,13 +227,16 @@ export async function getContentAuthoringApplicationService(): Promise<ContentAu
   return createProductionContentAuthoringService();
 }
 
-/** Project route mutations compose through the real Content aggregate and share its transaction/idempotency boundary. */
+/** Project route, status, and Featured operations share the Content transaction boundary. */
 export async function getOwnerProjectApplicationService(): Promise<OwnerProjectApplicationService> {
-  const [{ createContentBackedOwnerProjectService }, { createProductionOwnerProjectService }] = await Promise.all([
+  const contentAuthoring = await getContentAuthoringApplicationService();
+  const [{ createContentBackedOwnerProjectService }, { createContentOwnerProjectService }, { createProductionOwnerProjectService }] = await Promise.all([
     import("../runtime/owner-project-content-service.js"),
+    import("../runtime/content-owner-project.js"),
     import("../runtime/fakes/owner-project.js"),
   ]);
-  return createContentBackedOwnerProjectService(await getContentAuthoringApplicationService(), createProductionOwnerProjectService());
+  const routeService = createContentBackedOwnerProjectService(contentAuthoring, createProductionOwnerProjectService());
+  return createContentOwnerProjectService(contentAuthoring, routeService);
 }
 
 export function getRuntimeConfig(): RuntimeConfig {

@@ -86,6 +86,7 @@ export interface ChangeOwnerProjectStatusApplicationCommand {
   readonly expectedVersion: number;
   readonly projectId: StableId<"Project">;
   readonly statusValueId: StableId<string>;
+  readonly correlationId: string;
 }
 
 export interface SetOwnerProjectFeaturedApplicationCommand {
@@ -94,6 +95,7 @@ export interface SetOwnerProjectFeaturedApplicationCommand {
   readonly expectedVersion: number;
   readonly projectId: StableId<"Project">;
   readonly featured: boolean;
+  readonly correlationId: string;
 }
 
 export interface ChangeOwnerProjectPublicSlugApplicationCommand {
@@ -155,6 +157,12 @@ export interface OwnerProjectAggregateView {
     readonly redirects: ReadonlyArray<{
       readonly fromSlug: string;
       readonly toSlug: string;
+    }>;
+    readonly history?: ReadonlyArray<{
+      readonly sequence: number;
+      readonly fromSlug: string;
+      readonly toSlug: string;
+      readonly changedAt: string;
     }>;
   } | null;
   readonly relatedProjectIds: ReadonlyArray<StableId<"Project">>;
@@ -437,12 +445,13 @@ export async function handleChangeOwnerProjectStatus(
       body: zChangeOwnerProjectStatusBody,
       response: zChangeOwnerProjectStatusResponse,
     },
-    ({ actor, projectId, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, projectId, idempotencyKey, expectedVersion, correlationId, body }) => ({
       actor,
       idempotencyKey,
       expectedVersion,
       projectId,
       statusValueId: body["statusValueId"] as StableId<string>,
+      correlationId,
     }) as ChangeOwnerProjectStatusApplicationCommand,
     (command) => deps.service.changeOwnerProjectStatus(command),
   );
@@ -464,12 +473,13 @@ export async function handleSetOwnerProjectFeatured(
       body: zSetOwnerProjectFeaturedBody,
       response: zSetOwnerProjectFeaturedResponse,
     },
-    ({ actor, projectId, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, projectId, idempotencyKey, expectedVersion, correlationId, body }) => ({
       actor,
       idempotencyKey,
       expectedVersion,
       projectId,
       featured: body["featured"] as boolean,
+      correlationId,
     }) as SetOwnerProjectFeaturedApplicationCommand,
     (command) => deps.service.setOwnerProjectFeatured(command),
   );
