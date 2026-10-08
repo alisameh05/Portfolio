@@ -2336,6 +2336,161 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(retry).toMatchObject({ ok: true, value: { aggregateVersion: published.value.aggregateVersion + 1 } });
   }, 30_000);
 
+  it("renames and retires Taxonomy values while preserving assignments, public labels, and restoration", async () => {
+    const scope = await configuredScope();
+    const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
+    const taxonomy = createTaxonomyOwnerService({ repository: createPostgresTaxonomyOwnerRepository(), operations, scope });
+    const created = await taxonomy.createOwnerTaxonomyValue({
+      actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-evolution-create"), taxonomyId,
+      expectedVersion: 1, name: "TypeScript",
+    });
+    expect(created).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+    const initial = await taxonomy.getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    if (!initial.ok) throw new Error("TAXONOMY_EVOLUTION_ROOT_MISSING");
+    const valueId = initial.value.values[0]!.valueId;
+
+    const project = await createReviewedProject(scope, "Taxonomy history", "taxonomy-evolution-project");
+    const published = await project.content.publishLanguageVersion({
+      actor: actor(scope.ownerId), contentId: project.contentId, expectedVersion: project.aggregateVersion,
+      idempotencyKey: key("taxonomy-evolution-publish"), correlationId: "taxonomy-evolution-publish",
+      locale: "en", revisionId: project.revisionId,
+    });
+    if (!published.ok) throw new Error("TAXONOMY_EVOLUTION_PUBLISH_FAILED");
+    const assignment = await project.content.assignProjectTaxonomyValue({
+      actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">, valueId,
+      expectedVersion: published.value.aggregateVersion, idempotencyKey: key("taxonomy-evolution-assignment"),
+      correlationId: "taxonomy-evolution-assignment",
+    });
+    if (!assignment.ok) throw new Error("TAXONOMY_EVOLUTION_ASSIGNMENT_FAILED");
+    const originalProjection = await admin.query(
+      "select label, first_published_at from taxonomy.project_discovery_taxonomy_values where portfolio_id = $1::uuid and content_id = $2::uuid and locale = 'en' and value_id = $3::uuid",
+      [scope.portfolioId, project.contentId, valueId],
+    );
+    expect(originalProjection.rows).toHaveLength(1);
+
+    const renameCommand = {
+      actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-evolution-rename"),
+      taxonomyId, valueId, expectedVersion: 2, name: "TypeScript Next",
+    };
+    const failingOutbox = {
+      ...operations,
+      outbox: { ...operations.outbox, async append() { throw new Error("INJECTED_TAXONOMY_EVOLUTION_OUTBOX_FAILURE"); } },
+    };
+    await expect(createTaxonomyOwnerService({ repository: createPostgresTaxonomyOwnerRepository(), operations: failingOutbox, scope })
+      .renameOwnerTaxonomyValue(renameCommand)).rejects.toThrow();
+    const beforeRetry = await admin.query(
+      "select root.aggregate_version, value.label, (select count(*)::int from taxonomy.value_history history where history.portfolio_id = value.portfolio_id and history.value_id = value.value_id) history_count " +
+      "from taxonomy.roots root join taxonomy.taxonomy_values value on value.portfolio_id = root.portfolio_id and value.taxonomy_id = root.taxonomy_id " +
+      "where root.portfolio_id = $1::uuid and value.value_id = $2::uuid",
+      [scope.portfolioId, valueId],
+    );
+    expect(beforeRetry.rows[0]).toEqual({ aggregate_version: 2, label: "TypeScript", history_count: 1 });
+    const renamed = await taxonomy.renameOwnerTaxonomyValue(renameCommand);
+    expect(renamed).toMatchObject({ ok: true, value: { aggregateId: taxonomyId, aggregateVersion: 3, outcome: "taxonomy-value-renamed" } });
+    expect(await taxonomy.renameOwnerTaxonomyValue(renameCommand)).toEqual(renamed);
+    const differentIntent = await taxonomy.renameOwnerTaxonomyValue({ ...renameCommand, name: "A different name" });
+    expect(differentIntent).toMatchObject({ ok: false, error: { kind: "conflict", code: "IDEMPOTENCY_KEY_REUSED" } });
+    const staleRename = await taxonomy.renameOwnerTaxonomyValue({
+      ...renameCommand, idempotencyKey: key("taxonomy-evolution-stale-rename"), expectedVersion: 2,
+    });
+    expect(staleRename).toMatchObject({ ok: false, error: { kind: "precondition_failed", code: "TAXONOMY_VERSION_MISMATCH", currentVersion: 3 } });
+    const retired = await taxonomy.retireOwnerTaxonomyValue({
+      actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-evolution-retire"),
+      valueId, expectedVersion: 3, reason: "No longer a current choice",
+    });
+    expect(retired).toMatchObject({ ok: true, value: { aggregateVersion: 4, outcome: "taxonomy-value-retired" } });
+    const replayAfterEvolution = await taxonomy.renameOwnerTaxonomyValue(renameCommand);
+    expect(replayAfterEvolution).toEqual(renamed);
+    const current = await taxonomy.getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    expect(current).toMatchObject({ ok: true, value: { aggregateVersion: 4, values: [{ valueId, name: "TypeScript Next", state: "retired" }] } });
+
+    const history = await admin.query(
+      "select action, previous_label, label, state, aggregate_version, actor_id, reason from taxonomy.value_history where portfolio_id = $1::uuid and value_id = $2::uuid order by transition_sequence",
+      [scope.portfolioId, valueId],
+    );
+    expect(history.rows).toEqual([
+      { action: "created", previous_label: null, label: "TypeScript", state: "active", aggregate_version: 1, actor_id: null, reason: null },
+      { action: "renamed", previous_label: "TypeScript", label: "TypeScript Next", state: "active", aggregate_version: 3, actor_id: scope.ownerId, reason: null },
+      { action: "retired", previous_label: "TypeScript Next", label: "TypeScript Next", state: "retired", aggregate_version: 4, actor_id: scope.ownerId, reason: "No longer a current choice" },
+    ]);
+    const retainedProjection = await admin.query(
+      "select label, first_published_at from taxonomy.project_discovery_taxonomy_values where portfolio_id = $1::uuid and content_id = $2::uuid and locale = 'en' and value_id = $3::uuid",
+      [scope.portfolioId, project.contentId, valueId],
+    );
+    expect(retainedProjection.rows).toEqual([{ label: "TypeScript Next", first_published_at: originalProjection.rows[0]!.first_published_at }]);
+
+    const lateProject = await createReviewedProject(scope, "Retired value choice", "taxonomy-evolution-late-project");
+    const latePublished = await lateProject.content.publishLanguageVersion({
+      actor: actor(scope.ownerId), contentId: lateProject.contentId, expectedVersion: lateProject.aggregateVersion,
+      idempotencyKey: key("taxonomy-evolution-late-publish"), correlationId: "taxonomy-evolution-late-publish",
+      locale: "en", revisionId: lateProject.revisionId,
+    });
+    if (!latePublished.ok) throw new Error("TAXONOMY_EVOLUTION_LATE_PUBLISH_FAILED");
+    const newAssignment = await lateProject.content.assignProjectTaxonomyValue({
+      actor: actor(scope.ownerId), projectId: lateProject.contentId as StableId<"Project">, valueId,
+      expectedVersion: latePublished.value.aggregateVersion, idempotencyKey: key("taxonomy-evolution-late-assignment"),
+      correlationId: "taxonomy-evolution-late-assignment",
+    });
+    expect(newAssignment).toMatchObject({ ok: false, error: { kind: "validation", code: "TAXONOMY_VALUE_NOT_ACTIVE" } });
+
+    const hidden = await project.content.hideContent({
+      actor: actor(scope.ownerId), contentId: project.contentId, expectedVersion: assignment.value.aggregateVersion,
+      idempotencyKey: key("taxonomy-evolution-hide"), correlationId: "taxonomy-evolution-hide",
+    });
+    if (!hidden.ok) throw new Error("TAXONOMY_EVOLUTION_HIDE_FAILED");
+    const restored = await project.content.restoreContent({
+      actor: actor(scope.ownerId), contentId: project.contentId, expectedVersion: hidden.value.aggregateVersion,
+      idempotencyKey: key("taxonomy-evolution-restore"), correlationId: "taxonomy-evolution-restore",
+    });
+    expect(restored).toMatchObject({ ok: true, value: { aggregateVersion: hidden.value.aggregateVersion + 1 } });
+  }, 30_000);
+
+  it("serializes Taxonomy retirement against new assignments", async () => {
+    const scope = await configuredScope();
+    const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
+    const taxonomy = createTaxonomyOwnerService({ repository: createPostgresTaxonomyOwnerRepository(), operations, scope });
+    await taxonomy.createOwnerTaxonomyValue({
+      actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-retirement-race-create"), taxonomyId,
+      expectedVersion: 1, name: "Race value",
+    });
+    const values = await taxonomy.getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    if (!values.ok) throw new Error("TAXONOMY_RETIREMENT_RACE_ROOT_MISSING");
+    const valueId = values.value.values[0]!.valueId;
+    const project = await createReviewedProject(scope, "Assignment retirement race", "taxonomy-retirement-race-project");
+    const published = await project.content.publishLanguageVersion({
+      actor: actor(scope.ownerId), contentId: project.contentId, expectedVersion: project.aggregateVersion,
+      idempotencyKey: key("taxonomy-retirement-race-publish"), correlationId: "taxonomy-retirement-race-publish",
+      locale: "en", revisionId: project.revisionId,
+    });
+    if (!published.ok) throw new Error("TAXONOMY_RETIREMENT_RACE_PUBLISH_FAILED");
+    const [assignment, retirement] = await Promise.all([
+      project.content.assignProjectTaxonomyValue({
+        actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">, valueId,
+        expectedVersion: published.value.aggregateVersion, idempotencyKey: key("taxonomy-retirement-race-assignment"),
+        correlationId: "taxonomy-retirement-race-assignment",
+      }),
+      taxonomy.retireOwnerTaxonomyValue({
+        actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-retirement-race-retire"),
+        valueId, expectedVersion: 2, reason: "Retired during assignment race",
+      }),
+    ]);
+    expect(retirement).toMatchObject({ ok: true, value: { aggregateVersion: 3 } });
+    expect(assignment.ok ? assignment.value.outcome : assignment.error.code).toMatch(/taxonomy-value-assigned|TAXONOMY_VALUE_NOT_ACTIVE/);
+    const lateProject = await createReviewedProject(scope, "Post retirement assignment", "taxonomy-retirement-race-late");
+    const latePublished = await lateProject.content.publishLanguageVersion({
+      actor: actor(scope.ownerId), contentId: lateProject.contentId, expectedVersion: lateProject.aggregateVersion,
+      idempotencyKey: key("taxonomy-retirement-race-late-publish"), correlationId: "taxonomy-retirement-race-late-publish",
+      locale: "en", revisionId: lateProject.revisionId,
+    });
+    if (!latePublished.ok) throw new Error("TAXONOMY_RETIREMENT_RACE_LATE_PUBLISH_FAILED");
+    const afterRetirement = await lateProject.content.assignProjectTaxonomyValue({
+      actor: actor(scope.ownerId), projectId: lateProject.contentId as StableId<"Project">, valueId,
+      expectedVersion: latePublished.value.aggregateVersion, idempotencyKey: key("taxonomy-retirement-race-late-assignment"),
+      correlationId: "taxonomy-retirement-race-late-assignment",
+    });
+    expect(afterRetirement).toMatchObject({ ok: false, error: { kind: "validation", code: "TAXONOMY_VALUE_NOT_ACTIVE" } });
+  }, 30_000);
+
   it("rejects foreign-scope Taxonomy values and non-Project assignment targets", async () => {
     const sourceScope = await configuredScope();
     const targetScope = await configuredScope();

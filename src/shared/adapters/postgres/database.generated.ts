@@ -436,11 +436,13 @@ export interface TaxonomyTaxonomyValues {
 
 export interface TaxonomyValueHistory {
   action: string;
+  actor_id: string | null;
   aggregate_version: number;
   changed_at: Generated<Timestamp>;
   label: string;
   portfolio_id: string;
   previous_label: string | null;
+  reason: string | null;
   state: string;
   taxonomy_id: string;
   transition_sequence: number;

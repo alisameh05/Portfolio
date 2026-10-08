@@ -80,18 +80,28 @@ export function createPostgresProjectDiscoveryProjectionWriter(): ProjectDiscove
       try {
         await sql`select set_config('shipwithali.portfolio_id', ${input.scope.portfolioId}, true),
                          set_config('shipwithali.owner_id', ${input.scope.ownerId}, true)`.execute(executor);
-        const selected = await sql<{ taxonomy_id: string; kind: string; label: string; state: string }>`
-          select value.taxonomy_id::text, root.kind, value.label, value.state
-            from taxonomy.taxonomy_values value
-            join taxonomy.roots root on root.portfolio_id = value.portfolio_id and root.taxonomy_id = value.taxonomy_id
-           where value.portfolio_id = ${input.scope.portfolioId}::uuid and value.value_id = ${input.valueId}::uuid
-             and root.portfolio_id = ${input.scope.portfolioId}::uuid
-           for share of root, value
+        const owner = await sql<{ taxonomy_id: string }>`
+          select taxonomy_id::text from taxonomy.taxonomy_values
+           where portfolio_id = ${input.scope.portfolioId}::uuid and value_id = ${input.valueId}::uuid
+        `.execute(executor);
+        const taxonomyId = owner.rows[0]?.taxonomy_id;
+        if (taxonomyId === undefined) return err({ kind: "validation", code: "TAXONOMY_VALUE_NOT_FOUND" });
+        const root = await sql<{ kind: string }>`
+          select kind from taxonomy.roots
+           where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${taxonomyId}::uuid
+           for share
+        `.execute(executor);
+        const rootRow = root.rows[0];
+        if (rootRow === undefined) return err({ kind: "validation", code: "TAXONOMY_VALUE_NOT_FOUND" });
+        if (rootRow.kind !== "category" && rootRow.kind !== "ai-ml-domain" && rootRow.kind !== "technology" && rootRow.kind !== "project-type") throw new PostgresInfrastructureError();
+        const selected = await sql<{ label: string; state: string }>`
+          select label, state from taxonomy.taxonomy_values
+           where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${taxonomyId}::uuid and value_id = ${input.valueId}::uuid
+           for share
         `.execute(executor);
         const row = selected.rows[0];
         if (row === undefined) return err({ kind: "validation", code: "TAXONOMY_VALUE_NOT_FOUND" });
-        if (row.kind !== "category" && row.kind !== "ai-ml-domain" && row.kind !== "technology" && row.kind !== "project-type") throw new PostgresInfrastructureError();
-        return { ok: true, value: { taxonomyId: row.taxonomy_id as StableId<"Taxonomy">, taxonomyKind: row.kind, label: row.label, eligible: row.state === "active" } };
+        return { ok: true, value: { taxonomyId: taxonomyId as StableId<"Taxonomy">, taxonomyKind: rootRow.kind, label: row.label, eligible: row.state === "active" } };
       } catch (error) {
         if (error instanceof PostgresInfrastructureError) throw error;
         throw new PostgresInfrastructureError();

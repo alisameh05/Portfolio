@@ -22,6 +22,9 @@ export type {
   TaxonomyOwnerScope,
   TaxonomyOwnerRepository,
   CreateOwnerTaxonomyValueCommand,
+  RenameOwnerTaxonomyValueCommand,
+  RetireOwnerTaxonomyValueCommand,
+  TaxonomyEvolutionResult,
   TaxonomyOwnerService,
 } from "./owner-taxonomies.js";
 export { createTaxonomyOwnerService } from "./owner-taxonomies.js";

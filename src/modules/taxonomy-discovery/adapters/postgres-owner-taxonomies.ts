@@ -1,6 +1,6 @@
 import { sql } from "kysely";
-import { err, type StableId } from "../../../shared/domain/index.js";
-import type { TaxonomyOwnerRepository, TaxonomyOwnerScope, TaxonomyKind } from "../application/owner-taxonomies.js";
+import { err, type Rejection, type Result, type StableId } from "../../../shared/domain/index.js";
+import type { TaxonomyOwnerRepository, TaxonomyOwnerScope, TaxonomyKind, TaxonomyEvolutionResult } from "../application/owner-taxonomies.js";
 import type { TransactionContext } from "../../../runtime/ports.js";
 import { PostgresInfrastructureError, resolvePostgresTransaction } from "../../../shared/adapters/postgres/runtime.js";
 
@@ -14,6 +14,125 @@ function setScope(context: TransactionContext, scope: TaxonomyOwnerScope) {
 }
 
 export function createPostgresTaxonomyOwnerRepository(): TaxonomyOwnerRepository {
+  async function evolveValue(input: {
+    readonly valueId: StableId<"TaxonomyValue">;
+    readonly expectedVersion: number;
+    readonly actorId: StableId<"Owner">;
+    readonly scope: TaxonomyOwnerScope;
+    readonly name?: string;
+    readonly reason?: string;
+  }, action: "renamed" | "retired", context: TransactionContext): Promise<Result<TaxonomyEvolutionResult, Rejection>> {
+    const executor = resolvePostgresTransaction(context);
+    try {
+      await setScope(context, input.scope);
+      // Assignment eligibility always locks the Taxonomy root before the value.
+      // Evolution takes the same locks in the same order so retirement cannot
+      // race a late assignment past the active-state check.
+      const owner = await sql<{ taxonomy_id: string }>`
+        select taxonomy_id::text from taxonomy.taxonomy_values
+         where portfolio_id = ${input.scope.portfolioId}::uuid and value_id = ${input.valueId}::uuid
+      `.execute(executor);
+      const taxonomyId = owner.rows[0]?.taxonomy_id;
+      if (taxonomyId === undefined) return err({ kind: "not_found", code: "TAXONOMY_VALUE_NOT_FOUND" });
+      const selectedRoot = await sql<{ kind: string; aggregate_version: number }>`
+        select kind, aggregate_version from taxonomy.roots
+         where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${taxonomyId}::uuid
+         for update
+      `.execute(executor);
+      const root = selectedRoot.rows[0];
+      if (root === undefined) return err({ kind: "not_found", code: "TAXONOMY_NOT_FOUND" });
+      if (!validKind(root.kind) || !Number.isSafeInteger(root.aggregate_version) || root.aggregate_version < 1) throw new PostgresInfrastructureError();
+      if (root.aggregate_version !== input.expectedVersion) return err({ kind: "precondition_failed", code: "TAXONOMY_VERSION_MISMATCH", currentVersion: root.aggregate_version });
+      const selectedValue = await sql<{ label: string; state: string }>`
+        select label, state from taxonomy.taxonomy_values
+         where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${taxonomyId}::uuid and value_id = ${input.valueId}::uuid
+         for update
+      `.execute(executor);
+      const value = selectedValue.rows[0];
+      if (value === undefined) return err({ kind: "not_found", code: "TAXONOMY_VALUE_NOT_FOUND" });
+      if (value.state !== "active" && value.state !== "retired" && value.state !== "merged") throw new PostgresInfrastructureError();
+      if (value.state === "merged") return err({ kind: "conflict", code: "TAXONOMY_VALUE_NOT_ACTIVE" });
+      if (action === "renamed" && value.state !== "active") return err({ kind: "conflict", code: "TAXONOMY_VALUE_NOT_ACTIVE" });
+      if (action === "retired" && value.state === "retired") {
+        return { ok: true as const, value: {
+          taxonomyId: taxonomyId as StableId<"Taxonomy">,
+          aggregateVersion: root.aggregate_version,
+          changed: false,
+          label: value.label,
+        } satisfies TaxonomyEvolutionResult };
+      }
+      const nextLabel = action === "renamed" ? input.name : value.label;
+      if (nextLabel === undefined) throw new PostgresInfrastructureError();
+      if (action === "renamed" && nextLabel === value.label) {
+        return { ok: true as const, value: {
+          taxonomyId: taxonomyId as StableId<"Taxonomy">,
+          aggregateVersion: root.aggregate_version,
+          changed: false,
+          label: value.label,
+        } satisfies TaxonomyEvolutionResult };
+      }
+      if (action === "renamed") {
+        const duplicate = await sql<{ value_id: string }>`
+          select value_id::text from taxonomy.taxonomy_values
+           where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${taxonomyId}::uuid
+             and normalized_label = lower(regexp_replace(btrim(${nextLabel}), '[[:space:]]+', ' ', 'g'))
+             and value_id <> ${input.valueId}::uuid
+        `.execute(executor);
+        if (duplicate.rows.length > 0) return err({ kind: "conflict", code: "TAXONOMY_VALUE_NAME_ALREADY_EXISTS" });
+      }
+      const updatedRoot = await sql<{ aggregate_version: number; changed_at: Date | string }>`
+        update taxonomy.roots set aggregate_version = aggregate_version + 1, updated_at = transaction_timestamp()
+         where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${taxonomyId}::uuid
+         returning aggregate_version, updated_at as changed_at
+      `.execute(executor);
+      const nextRoot = updatedRoot.rows[0];
+      if (nextRoot === undefined || !Number.isSafeInteger(nextRoot.aggregate_version)) throw new PostgresInfrastructureError();
+      const nextState = action === "retired" ? "retired" : "active";
+      const updatedValue = await sql`
+        update taxonomy.taxonomy_values
+           set label = ${nextLabel}, state = ${nextState}, aggregate_version = aggregate_version + 1,
+               updated_at = transaction_timestamp()
+         where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${taxonomyId}::uuid and value_id = ${input.valueId}::uuid
+      `.execute(executor);
+      if (Number(updatedValue.numAffectedRows) !== 1) throw new PostgresInfrastructureError();
+      const sequence = await sql<{ next_sequence: number }>`
+        select coalesce(max(transition_sequence), 0)::integer + 1 as next_sequence
+          from taxonomy.value_history
+         where portfolio_id = ${input.scope.portfolioId}::uuid and value_id = ${input.valueId}::uuid
+      `.execute(executor);
+      const nextSequence = sequence.rows[0]?.next_sequence;
+      if (!Number.isSafeInteger(nextSequence) || nextSequence === undefined) throw new PostgresInfrastructureError();
+      const changedAt = nextRoot.changed_at instanceof Date ? nextRoot.changed_at.toISOString() : new Date(nextRoot.changed_at).toISOString();
+      if (!Number.isFinite(Date.parse(changedAt))) throw new PostgresInfrastructureError();
+      await sql`
+        insert into taxonomy.value_history (
+          portfolio_id, taxonomy_id, value_id, transition_sequence, action, previous_label, label, state,
+          aggregate_version, actor_id, reason, changed_at
+        ) values (
+          ${input.scope.portfolioId}::uuid, ${taxonomyId}::uuid, ${input.valueId}::uuid, ${nextSequence},
+          ${action}, ${action === "renamed" ? value.label : value.label}, ${nextLabel}, ${nextState},
+          ${nextRoot.aggregate_version}, ${input.actorId}::uuid, ${action === "retired" ? (input.reason ?? null) : null}, ${changedAt}::timestamptz
+        )
+      `.execute(executor);
+      if (action === "renamed") {
+        await sql`
+          update taxonomy.project_discovery_taxonomy_values set label = ${nextLabel}
+           where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${taxonomyId}::uuid
+             and value_id = ${input.valueId}::uuid
+        `.execute(executor);
+      }
+      return { ok: true as const, value: {
+        taxonomyId: taxonomyId as StableId<"Taxonomy">,
+        aggregateVersion: nextRoot.aggregate_version,
+        changed: true,
+        previousLabel: value.label,
+        label: nextLabel,
+      } satisfies TaxonomyEvolutionResult };
+    } catch (error) {
+      if (error instanceof PostgresInfrastructureError) throw error;
+      throw new PostgresInfrastructureError();
+    }
+  }
   return {
     async getOwnerTaxonomy(input, context) {
       const executor = resolvePostgresTransaction(context);
@@ -92,6 +211,12 @@ export function createPostgresTaxonomyOwnerRepository(): TaxonomyOwnerRepository
         if (error instanceof PostgresInfrastructureError) throw error;
         throw new PostgresInfrastructureError();
       }
+    },
+    async renameValue(input, context) {
+      return evolveValue(input, "renamed", context);
+    },
+    async retireValue(input, context) {
+      return evolveValue(input, "retired", context);
     },
   };
 }
