@@ -51,6 +51,18 @@ export interface ContentLanguagePublications {
   route_identity: string | null;
 }
 
+export interface ContentLifecycleHistory {
+  aggregate_version: number;
+  changed_at: Generated<Timestamp>;
+  content_id: string;
+  content_type: string;
+  lifecycle: string;
+  portfolio_id: string;
+  previous_lifecycle: string;
+  reason: string | null;
+  transition_sequence: number;
+}
+
 export interface ContentPublicAchievementLocales {
   achieved_on: Timestamp;
   artifacts: Generated<Json>;
@@ -278,6 +290,7 @@ export interface PortfolioConfigSettings {
 export interface DB {
   "content.items": ContentItems;
   "content.language_publications": ContentLanguagePublications;
+  "content.lifecycle_history": ContentLifecycleHistory;
   "content.public_achievement_locales": ContentPublicAchievementLocales;
   "content.public_project_locales": ContentPublicProjectLocales;
   "content.public_route_reservations": ContentPublicRouteReservations;

@@ -66,6 +66,19 @@ function createHarness() {
       }
       return { ok: true, value: record };
     },
+    async changeLifecycle(input) {
+      const prior = records.get(input.contentId);
+      if (!prior) return { ok: false, error: { kind: "not_found", code: "CONTENT_NOT_FOUND" } };
+      if (prior.aggregateVersion !== input.expectedVersion) return { ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: prior.aggregateVersion } };
+      if (prior.lifecycle === input.lifecycle) return { ok: true, value: {
+        aggregateVersion: prior.aggregateVersion, lifecycle: input.lifecycle, previousLifecycle: prior.lifecycle, changed: false, changedAt: null,
+      } };
+      const changedAt = "2026-10-08T10:00:00.000Z";
+      records.set(input.contentId, { ...prior, lifecycle: input.lifecycle, aggregateVersion: prior.aggregateVersion + 1 });
+      return { ok: true, value: {
+        aggregateVersion: prior.aggregateVersion + 1, lifecycle: input.lifecycle, previousLifecycle: prior.lifecycle, changed: true, changedAt,
+      } };
+    },
     async appendRevision(input) {
       const prior = records.get(input.contentId);
       if (!prior) return { ok: false, error: { kind: "not_found", code: "CONTENT_NOT_FOUND" } };
@@ -125,7 +138,11 @@ function createHarness() {
         externalLinks: (input.payload.externalLinks ?? []).filter((link) => input.locale === "en" || link.isAvailableInArabic).map(({ label, destination }) => ({ label, destination })),
       });
       records.set(input.contentId, { ...prior, lifecycle: "published", aggregateVersion: prior.aggregateVersion + 1,
-        publications: [...(prior.publications ?? []).filter((publication) => publication.locale !== input.locale), { locale: input.locale, revisionId: input.revisionId, publishedAt }] });
+        publications: [...(prior.publications ?? []).filter((publication) => publication.locale !== input.locale), {
+          locale: input.locale, revisionId: input.revisionId, reviewId: input.reviewId, snapshotHash: input.snapshotHash,
+          evidenceVersion: prior.revisions.find((revision) => revision.revisionId === input.revisionId)?.evidenceSnapshotVersion ?? 1,
+          reviewerId: prior.ownerId, decision: "accepted", mediaFactsVersion: input.mediaFactsVersion, publishedAt,
+        }] });
       return { ok: true, value: { aggregateVersion: prior.aggregateVersion + 1, revisionId: input.revisionId, locale: input.locale,
         routeIdentity: input.routeIdentity, currentSlug, firstPublishedAt: publishedAt, publishedAt } };
     },
@@ -135,7 +152,11 @@ function createHarness() {
       if (prior.aggregateVersion !== input.expectedVersion) return { ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: prior.aggregateVersion } };
       const publishedAt = "2026-10-07T12:00:00.000Z";
       records.set(input.contentId, { ...prior, lifecycle: "published", aggregateVersion: prior.aggregateVersion + 1,
-        publications: [...(prior.publications ?? []).filter((publication) => publication.locale !== input.locale), { locale: input.locale, revisionId: input.revisionId, publishedAt }] });
+        publications: [...(prior.publications ?? []).filter((publication) => publication.locale !== input.locale), {
+          locale: input.locale, revisionId: input.revisionId, reviewId: input.reviewId, snapshotHash: input.snapshotHash,
+          evidenceVersion: prior.revisions.find((revision) => revision.revisionId === input.revisionId)?.evidenceSnapshotVersion ?? 1,
+          reviewerId: prior.ownerId, decision: "accepted", mediaFactsVersion: null, publishedAt,
+        }] });
       return { ok: true, value: { aggregateVersion: prior.aggregateVersion + 1, revisionId: input.revisionId, locale: input.locale,
         firstPublishedAt: publishedAt, publishedAt } };
     },
@@ -159,7 +180,11 @@ function createHarness() {
         summary: input.payload.summary, body: input.payload.body, artifacts,
       });
       records.set(input.contentId, { ...prior, lifecycle: "published", aggregateVersion: prior.aggregateVersion + 1,
-        publications: [...(prior.publications ?? []).filter((publication) => publication.locale !== input.locale), { locale: input.locale, revisionId: input.revisionId, publishedAt }] });
+        publications: [...(prior.publications ?? []).filter((publication) => publication.locale !== input.locale), {
+          locale: input.locale, revisionId: input.revisionId, reviewId: input.reviewId, snapshotHash: input.snapshotHash,
+          evidenceVersion: prior.revisions.find((revision) => revision.revisionId === input.revisionId)?.evidenceSnapshotVersion ?? 1,
+          reviewerId: prior.ownerId, decision: "accepted", mediaFactsVersion: input.mediaFactsVersion, publishedAt,
+        }] });
       return { ok: true, value: { aggregateVersion: prior.aggregateVersion + 1, revisionId: input.revisionId,
         locale: input.locale, firstPublishedAt: publishedAt, publishedAt } };
     },
