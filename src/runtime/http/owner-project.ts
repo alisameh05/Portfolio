@@ -120,6 +120,7 @@ export interface RelateOwnerProjectsApplicationCommand {
   readonly expectedVersion: number;
   readonly projectId: StableId<"Project">;
   readonly relatedProjectId: StableId<"Project">;
+  readonly correlationId: string;
 }
 
 export interface AssignOwnerProjectTaxonomyValueApplicationCommand {
@@ -142,6 +143,7 @@ export interface OwnerProjectCommandReceipt {
   readonly aggregateId: StableId<string>;
   readonly aggregateVersion: number;
   readonly outcome: OwnerProjectCommandOutcome;
+  readonly relatedProjectAggregateVersion?: number;
 }
 
 export interface OwnerProjectAggregateView {
@@ -404,6 +406,9 @@ async function handleProjectCommand(
       aggregateId: result.value.aggregateId,
       aggregateVersion: result.value.aggregateVersion,
       outcome: result.value.outcome,
+      ...(result.value.relatedProjectAggregateVersion === undefined
+        ? {}
+        : { relatedProjectAggregateVersion: result.value.relatedProjectAggregateVersion }),
     };
     const parsed = validators.response.safeParse(payload);
     if (!parsed.success) {
@@ -543,12 +548,13 @@ export async function handleRelateOwnerProjects(
       body: zRelateOwnerProjectsBody,
       response: zRelateOwnerProjectsResponse,
     },
-    ({ actor, projectId, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, projectId, idempotencyKey, expectedVersion, body, correlationId }) => ({
       actor,
       idempotencyKey,
       expectedVersion,
       projectId,
       relatedProjectId: body["relatedProjectId"] as StableId<"Project">,
+      correlationId,
     }) as RelateOwnerProjectsApplicationCommand,
     (command) => deps.service.relateOwnerProjects(command),
   );

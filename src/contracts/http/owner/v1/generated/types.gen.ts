@@ -34,6 +34,10 @@ export type StableId = string;
 export type CommandReceipt = {
     aggregateId: StableId;
     aggregateVersion: number;
+    /**
+     * Version of the related Project after a successful symmetric relationship mutation.
+     */
+    relatedProjectAggregateVersion?: number;
     outcome: 'configuration-updated' | 'revision-saved' | 'content-created' | 'revision-reviewed' | 'language-published' | 'content-hidden' | 'content-archived' | 'content-restored' | 'project-status-changed' | 'project-featured-changed' | 'public-slug-changed' | 'candidate-slug-corrected' | 'project-related' | 'taxonomy-value-created' | 'taxonomy-value-renamed' | 'taxonomy-value-retired' | 'taxonomy-value-merged' | 'taxonomy-value-assigned' | 'project-status-value-created' | 'project-status-value-renamed' | 'project-status-value-retired' | 'media-processing-recorded' | 'media-accepted' | 'media-rejected' | 'cv-version-accepted' | 'current-cv-activated' | 'feedback-approved' | 'feedback-rejected' | 'feedback-suppressed' | 'analytics-goal-version-activated';
 };
 

@@ -53,6 +53,10 @@ schemas:
     properties:
       aggregateId: { $ref: '#/schemas/StableId' }
       aggregateVersion: { type: integer, minimum: 1 }
+      relatedProjectAggregateVersion:
+        type: integer
+        minimum: 1
+        description: Version of the related Project after a successful symmetric relationship mutation.
       outcome:
         type: string
         enum:

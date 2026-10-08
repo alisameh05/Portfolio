@@ -24,6 +24,7 @@ function createHarness() {
   const records = new Map<string, ContentAuthoringRecord>();
   const publicProjects = new Map<string, PublicProjectContentView>();
   const publicAchievements = new Map<string, PublicAchievementTimelineEntry>();
+  const relationships = new Map<string, Set<string>>();
   const events: unknown[] = [];
   let id = 10;
   const repository: ContentAuthoringRepository = {
@@ -86,6 +87,32 @@ function createHarness() {
       records.set(input.contentId, updated);
       return { ok: true as const, value: { aggregateVersion: updated.aggregateVersion, previousSlug: fromSlug, routeIdentity: updated.publicRoute.identity } };
     },
+    async relateProjects(input) {
+      const initiating = records.get(input.projectId);
+      const related = records.get(input.relatedProjectId);
+      if (!initiating || initiating.portfolioId !== input.scope.portfolioId) return { ok: false as const, error: { kind: "not_found" as const, code: "CONTENT_NOT_FOUND" } };
+      if (!related || related.portfolioId !== input.scope.portfolioId) return { ok: false as const, error: { kind: "validation" as const, code: "RELATED_PROJECT_UNAVAILABLE" } };
+      if (initiating.contentType !== "project" || related.contentType !== "project") return { ok: false as const, error: { kind: "validation" as const, code: "CONTENT_TYPE_NOT_PROJECT" } };
+      if (initiating.aggregateVersion !== input.expectedVersion) return { ok: false as const, error: { kind: "precondition_failed" as const, code: "CONTENT_VERSION_MISMATCH", currentVersion: initiating.aggregateVersion } };
+      const key = [input.projectId, input.relatedProjectId].sort().join(":");
+      if (relationships.has(key)) return { ok: false as const, error: { kind: "conflict" as const, code: "PROJECT_RELATIONSHIP_ALREADY_EXISTS" } };
+      relationships.set(key, new Set([input.projectId, input.relatedProjectId]));
+      const updatedInitiating = { ...initiating, aggregateVersion: initiating.aggregateVersion + 1 };
+      const updatedRelated = { ...related, aggregateVersion: related.aggregateVersion + 1 };
+      records.set(input.projectId, updatedInitiating);
+      records.set(input.relatedProjectId, updatedRelated);
+      return { ok: true as const, value: { projectAggregateVersion: updatedInitiating.aggregateVersion,
+        relatedProjectAggregateVersion: updatedRelated.aggregateVersion, relatedAt: "2026-10-08T10:00:00.000Z" } };
+    },
+    async getOwnerProjectRelationships(input) {
+      const record = records.get(input.projectId);
+      if (!record || record.portfolioId !== input.scope.portfolioId) return { ok: false as const, error: { kind: "not_found" as const, code: "CONTENT_NOT_FOUND" } };
+      const relatedProjectIds = [...relationships.values()].flatMap((pair) => pair.has(input.projectId)
+        ? [...pair].filter((id) => id !== input.projectId) : []).sort();
+      return { ok: true as const, value: { projectId: input.projectId, aggregateVersion: record.aggregateVersion,
+        relatedProjectIds: relatedProjectIds as never, publicRoute: record.publicRoute ?? null } };
+    },
+    async getPublicRelatedProjects() { return { ok: true as const, value: [] }; },
     async changeLifecycle(input) {
       const prior = records.get(input.contentId);
       if (!prior) return { ok: false, error: { kind: "not_found", code: "CONTENT_NOT_FOUND" } };

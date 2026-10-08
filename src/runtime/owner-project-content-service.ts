@@ -13,6 +13,23 @@ export function createContentBackedOwnerProjectService(
 ): OwnerProjectApplicationService {
   return {
     ...fallback,
+    async getOwnerProjectAggregate(query) {
+      const result = await content.getOwnerProjectRelationships({ actor: query.actor, projectId: query.projectId });
+      if (!result.ok) return result;
+      return { ok: true, value: {
+        projectId: result.value.projectId,
+        aggregateVersion: result.value.aggregateVersion,
+        statusValueId: null,
+        featured: false,
+        publicRoute: result.value.publicRoute === null ? null : {
+          identity: result.value.publicRoute.identity,
+          canonicalSlug: result.value.publicRoute.canonicalSlug,
+          redirects: result.value.publicRoute.redirects,
+        },
+        relatedProjectIds: result.value.relatedProjectIds,
+        taxonomyAssignments: [],
+      } };
+    },
     async changeOwnerProjectPublicSlug(command) {
       const result = await content.changePublicSlug({
         actor: command.actor, projectId: command.projectId, newSlug: command.slug,
@@ -28,6 +45,23 @@ export function createContentBackedOwnerProjectService(
         correlationId: command.correlationId,
       });
       return mapRouteReceipt(result);
+    },
+    async relateOwnerProjects(command) {
+      const result = await content.relateProjects({
+        actor: command.actor,
+        projectId: command.projectId,
+        relatedProjectId: command.relatedProjectId,
+        expectedVersion: command.expectedVersion,
+        idempotencyKey: command.idempotencyKey,
+        correlationId: command.correlationId,
+      });
+      if (!result.ok) return result;
+      return { ok: true, value: {
+        aggregateId: result.value.aggregateId,
+        aggregateVersion: result.value.aggregateVersion,
+        relatedProjectAggregateVersion: result.value.relatedProjectAggregateVersion,
+        outcome: result.value.outcome,
+      } };
     },
   };
 }

@@ -176,7 +176,10 @@ export function createOwnerProjectTestFake(mode: OwnerProjectFakeMode): OwnerPro
         case "success":
           return {
             ok: true as const,
-            value: receipt(command.projectId, command.expectedVersion + 1, "project-related"),
+            value: {
+              ...receipt(command.projectId, command.expectedVersion + 1, "project-related"),
+              relatedProjectAggregateVersion: command.expectedVersion + 1,
+            },
           };
         case "rejection":
           return { ok: false as const, error: mode.rejection };

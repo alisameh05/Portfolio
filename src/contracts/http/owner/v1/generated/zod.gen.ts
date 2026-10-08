@@ -16,6 +16,7 @@ export const zStableId = z.string().uuid().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9
 export const zCommandReceipt = z.strictObject({
     aggregateId: zStableId,
     aggregateVersion: z.number().int().gte(1),
+    relatedProjectAggregateVersion: z.number().int().gte(1).optional(),
     outcome: z.enum([
         'configuration-updated',
         'revision-saved',

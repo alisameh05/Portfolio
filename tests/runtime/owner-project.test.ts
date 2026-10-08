@@ -293,11 +293,13 @@ describe("Owner Project commands (#29)", () => {
     );
     expect(response.status).toBe(200);
     expect(fake.calls.relateOwnerProjects).toHaveLength(1);
+    expect(fake.calls.relateOwnerProjects[0]).toMatchObject({ projectId: PROJECT_ID, relatedProjectId: RELATED_ID, expectedVersion: 2 });
     const body = (await response.json()) as unknown;
     expect(zRelateOwnerProjectsResponse.safeParse(body).success).toBe(true);
     expect(body).toEqual({
       aggregateId: PROJECT_ID,
       aggregateVersion: 3,
+      relatedProjectAggregateVersion: 3,
       outcome: "project-related",
     });
   });
@@ -508,6 +510,7 @@ describe("Owner Project commands (#29)", () => {
         expectedVersion: 2,
         projectId: PROJECT_ID as never,
         relatedProjectId: RELATED_ID as never,
+        correlationId: "test-correlation",
       }),
       service.assignOwnerProjectTaxonomyValue({
         actor: owner as never,

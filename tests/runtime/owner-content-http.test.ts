@@ -69,6 +69,9 @@ function createService() {
     },
     async correctCandidateSlug(command) { return { ok: true, value: { aggregateId: command.projectId, aggregateVersion: command.expectedVersion + 1, outcome: "candidate-slug-corrected", slug: command.candidateSlug } }; },
     async changePublicSlug(command) { return { ok: true, value: { aggregateId: command.projectId, aggregateVersion: command.expectedVersion + 1, outcome: "public-slug-changed", slug: command.newSlug } }; },
+    async relateProjects(command) { return { ok: true, value: { aggregateId: command.projectId, aggregateVersion: command.expectedVersion + 1, relatedProjectAggregateVersion: command.expectedVersion + 1, outcome: "project-related" } }; },
+    async getOwnerProjectRelationships() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "UNAVAILABLE" } }; },
+    async getPublicRelatedProjects() { return { ok: true as const, value: [] }; },
     async hideContent(command) {
       calls.hide.push(command);
       return { ok: true, value: { aggregateId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 4, outcome: "content-hidden" } };
