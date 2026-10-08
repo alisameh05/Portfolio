@@ -21,6 +21,13 @@ export type {
 } from "./domain/index.js";
 
 export type {
+  TaxonomyKind,
+  TaxonomyValueView as OwnerTaxonomyValueView,
+  OwnerTaxonomyView,
+  TaxonomyOwnerScope,
+  TaxonomyOwnerRepository,
+  CreateOwnerTaxonomyValueCommand,
+  TaxonomyOwnerService,
   RenameTaxonomyValueCommand,
   RetireTaxonomyValueCommand,
   MergeTaxonomyValueCommand,
@@ -36,6 +43,8 @@ export type {
   RetireProjectStatusValueCommand,
   TaxonomyDiscoveryService,
 } from "./application/index.js";
+export { createTaxonomyOwnerService } from "./application/index.js";
 
 export type { TaxonomyRepositoryPort } from "./ports/index.js";
 export { createPostgresProjectDiscoveryProjectionWriter } from "./adapters/index.js";
+export { createPostgresTaxonomyOwnerRepository } from "./adapters/index.js";

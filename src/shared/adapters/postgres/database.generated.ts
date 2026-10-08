@@ -132,6 +132,27 @@ export interface ContentProjectStatusValues {
   value_id: string;
 }
 
+export interface ContentProjectTaxonomyAssignmentHistory {
+  actor_id: string;
+  aggregate_version: number;
+  changed_at: Generated<Timestamp>;
+  content_id: string;
+  content_type: Generated<string>;
+  portfolio_id: string;
+  sequence: number;
+  taxonomy_id: string;
+  value_id: string;
+}
+
+export interface ContentProjectTaxonomyAssignments {
+  assigned_at: Generated<Timestamp>;
+  content_id: string;
+  content_type: Generated<string>;
+  portfolio_id: string;
+  taxonomy_id: string;
+  value_id: string;
+}
+
 export interface ContentPublicAchievementLocales {
   achieved_on: Timestamp;
   artifacts: Generated<Json>;
@@ -366,6 +387,66 @@ export interface PortfolioConfigSettings {
   version: Generated<number>;
 }
 
+export interface TaxonomyProjectDiscoveryLocales {
+  content_id: string;
+  featured: Generated<boolean>;
+  first_published_at: Timestamp;
+  locale: string;
+  portfolio_id: string;
+  published_at: Timestamp;
+  revision_id: string;
+  route_identity: string;
+  slug: string;
+  status_value_id: string | null;
+  title: string;
+}
+
+export interface TaxonomyProjectDiscoveryTaxonomyValues {
+  content_id: string;
+  first_published_at: Timestamp;
+  kind: string;
+  label: string;
+  locale: string;
+  portfolio_id: string;
+  taxonomy_id: string;
+  value_id: string;
+}
+
+export interface TaxonomyRoots {
+  aggregate_version: Generated<number>;
+  created_at: Generated<Timestamp>;
+  kind: string;
+  portfolio_id: string;
+  taxonomy_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface TaxonomyTaxonomyValues {
+  aggregate_version: Generated<number>;
+  created_at: Generated<Timestamp>;
+  label: string;
+  merged_into_value_id: string | null;
+  normalized_label: Generated<string | null>;
+  portfolio_id: string;
+  state: Generated<string>;
+  taxonomy_id: string;
+  updated_at: Generated<Timestamp>;
+  value_id: string;
+}
+
+export interface TaxonomyValueHistory {
+  action: string;
+  aggregate_version: number;
+  changed_at: Generated<Timestamp>;
+  label: string;
+  portfolio_id: string;
+  previous_label: string | null;
+  state: string;
+  taxonomy_id: string;
+  transition_sequence: number;
+  value_id: string;
+}
+
 export interface DB {
   "content.items": ContentItems;
   "content.language_publications": ContentLanguagePublications;
@@ -376,6 +457,8 @@ export interface DB {
   "content.project_status_history": ContentProjectStatusHistory;
   "content.project_status_value_history": ContentProjectStatusValueHistory;
   "content.project_status_values": ContentProjectStatusValues;
+  "content.project_taxonomy_assignment_history": ContentProjectTaxonomyAssignmentHistory;
+  "content.project_taxonomy_assignments": ContentProjectTaxonomyAssignments;
   "content.public_achievement_locales": ContentPublicAchievementLocales;
   "content.public_project_locales": ContentPublicProjectLocales;
   "content.public_route_history": ContentPublicRouteHistory;
@@ -393,4 +476,9 @@ export interface DB {
   "operations.outbox_events": OperationsOutboxEvents;
   "portfolio_config.contact_channels": PortfolioConfigContactChannels;
   "portfolio_config.settings": PortfolioConfigSettings;
+  "taxonomy.project_discovery_locales": TaxonomyProjectDiscoveryLocales;
+  "taxonomy.project_discovery_taxonomy_values": TaxonomyProjectDiscoveryTaxonomyValues;
+  "taxonomy.roots": TaxonomyRoots;
+  "taxonomy.taxonomy_values": TaxonomyTaxonomyValues;
+  "taxonomy.value_history": TaxonomyValueHistory;
 }

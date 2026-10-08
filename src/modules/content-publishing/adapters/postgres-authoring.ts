@@ -1668,6 +1668,13 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
              and project_id = ${projectId}::uuid
            order by related_project_id
         `.execute(executor);
+        const taxonomyAssignments = await sql<{ taxonomy_id: string; taxonomy_kind: string; value_id: string }>`
+          select assignment.taxonomy_id::text, root.kind as taxonomy_kind, assignment.value_id::text
+            from content.project_taxonomy_assignments assignment
+            join taxonomy.roots root on root.portfolio_id = assignment.portfolio_id and root.taxonomy_id = assignment.taxonomy_id
+           where assignment.portfolio_id = ${scope.portfolioId}::uuid and assignment.content_id = ${projectId}::uuid
+           order by root.kind, assignment.value_id
+        `.execute(executor);
         return { ok: true, value: {
           projectId: row.content_id as StableId<"Project">,
           aggregateVersion: row.aggregate_version,
@@ -1680,7 +1687,11 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
             history: routeHistory,
           },
           relatedProjectIds: relatedProjects.rows.map((related) => related.project_id as StableId<"Project">),
-          taxonomyAssignments: [],
+          taxonomyAssignments: taxonomyAssignments.rows.map((assignment) => ({
+            taxonomyId: assignment.taxonomy_id as StableId<"Taxonomy">,
+            taxonomyKind: assignment.taxonomy_kind,
+            valueId: assignment.value_id as StableId<"TaxonomyValue">,
+          })),
         } satisfies ContentProjectOwnerView };
       } catch (error) {
         if (error instanceof PostgresInfrastructureError) throw error;
@@ -1940,6 +1951,62 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
            where content_id = ${input.projectId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
         `.execute(executor);
         return { ok: true, value: { aggregateVersion: next.aggregate_version, changedAt, changed: true } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async assignProjectTaxonomyValue(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const selected = await sql<{ content_type: string; aggregate_version: number }>`
+          select content_type, aggregate_version from content.items
+           where content_id = ${input.projectId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           for update
+        `.execute(executor);
+        const project = selected.rows[0];
+        if (project === undefined || project.content_type !== "project") return err({ kind: "not_found", code: "PROJECT_NOT_FOUND" });
+        if (!Number.isSafeInteger(project.aggregate_version) || project.aggregate_version < 1) throw new PostgresInfrastructureError();
+        if (project.aggregate_version !== input.expectedVersion) return err({ kind: "precondition_failed", code: "PROJECT_VERSION_MISMATCH", currentVersion: project.aggregate_version });
+        const existing = await sql<{ value_id: string }>`
+          select value_id::text from content.project_taxonomy_assignments
+           where portfolio_id = ${input.scope.portfolioId}::uuid and content_id = ${input.projectId}::uuid
+             and value_id = ${input.valueId}::uuid
+        `.execute(executor);
+        if (existing.rows.length > 0) return { ok: true, value: { aggregateVersion: project.aggregate_version, changed: false, changedAt: "" } };
+        if (!input.eligible) return err({ kind: "validation", code: "TAXONOMY_VALUE_NOT_ACTIVE" });
+        const updated = await sql<{ aggregate_version: number; changed_at: Date | string }>`
+          update content.items set aggregate_version = aggregate_version + 1, updated_at = transaction_timestamp()
+           where content_id = ${input.projectId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           returning aggregate_version, updated_at as changed_at
+        `.execute(executor);
+        const next = updated.rows[0];
+        if (next === undefined) throw new PostgresInfrastructureError();
+        const changedAt = databaseTime(next.changed_at);
+        await sql`
+          insert into content.project_taxonomy_assignments (portfolio_id, content_id, taxonomy_id, value_id, assigned_at)
+          select ${input.scope.portfolioId}::uuid, ${input.projectId}::uuid, value.taxonomy_id, value.value_id, ${changedAt}::timestamptz
+            from taxonomy.taxonomy_values value
+           where value.portfolio_id = ${input.scope.portfolioId}::uuid and value.value_id = ${input.valueId}::uuid
+        `.execute(executor);
+        const sequence = await sql<{ sequence: number }>`
+          select coalesce(max(sequence), 0)::integer + 1 as sequence
+            from content.project_taxonomy_assignment_history
+           where portfolio_id = ${input.scope.portfolioId}::uuid and content_id = ${input.projectId}::uuid
+        `.execute(executor);
+        const nextSequence = sequence.rows[0]?.sequence;
+        if (nextSequence === undefined) throw new PostgresInfrastructureError();
+        await sql`
+          insert into content.project_taxonomy_assignment_history (
+            portfolio_id, content_id, sequence, taxonomy_id, value_id, aggregate_version, actor_id, changed_at
+          ) select ${input.scope.portfolioId}::uuid, ${input.projectId}::uuid, ${nextSequence}, value.taxonomy_id,
+                   value.value_id, ${next.aggregate_version}, ${input.actorId}::uuid, ${changedAt}::timestamptz
+              from taxonomy.taxonomy_values value
+             where value.portfolio_id = ${input.scope.portfolioId}::uuid and value.value_id = ${input.valueId}::uuid
+        `.execute(executor);
+        return { ok: true, value: { aggregateVersion: next.aggregate_version, changed: true, changedAt } };
       } catch (error) {
         if (error instanceof PostgresInfrastructureError) throw error;
         throw new PostgresInfrastructureError();

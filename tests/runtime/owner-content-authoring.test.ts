@@ -267,6 +267,7 @@ function createHarness() {
     async retireProjectStatusValue() { return { ok: false, error: { kind: "temporarily_unavailable", code: "UNAVAILABLE" } }; },
     async changeProjectStatus() { return { ok: false, error: { kind: "temporarily_unavailable", code: "UNAVAILABLE" } }; },
     async setProjectFeatured() { return { ok: false, error: { kind: "temporarily_unavailable", code: "UNAVAILABLE" } }; },
+    async assignProjectTaxonomyValue() { return { ok: false, error: { kind: "temporarily_unavailable", code: "UNAVAILABLE" } }; },
   };
 
   const cache = new Map<string, { requestHash: string; result: SafeResultEnvelope }>();

@@ -68,4 +68,6 @@ export {
   type PublicAchievementTimelineEntry,
   type PublicProjectContentView,
   type ProjectDiscoveryProjectionPort,
+  type ProjectTaxonomyAssignmentFactsPort,
+  type ContentProjectTaxonomyAssignment,
 } from "./authoring.js";

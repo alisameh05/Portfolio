@@ -9,6 +9,7 @@ import type {
 } from "../domain/index.js";
 
 export { createPostgresProjectDiscoveryProjectionWriter } from "./postgres-project-discovery.js";
+export { createPostgresTaxonomyOwnerRepository } from "./postgres-owner-taxonomies.js";
 
 /**
  * Stub repository adapter for Phase 1 skeleton.

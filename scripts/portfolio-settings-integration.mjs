@@ -288,8 +288,9 @@ export async function main() {
   const ticket114 = process.argv.includes("--ticket-114");
   const ticket117 = process.argv.includes("--ticket-117");
   const ticket116 = process.argv.includes("--ticket-116");
-  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket114, ticket115, ticket116, ticket117].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
-  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket114 || ticket115 || ticket116 || ticket117;
+  const ticket118 = process.argv.includes("--ticket-118");
+  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket114, ticket115, ticket116, ticket117, ticket118].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
+  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket114 || ticket115 || ticket116 || ticket117 || ticket118;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -348,7 +349,10 @@ export async function main() {
       throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_REPORT_MISSING");
     }
     if (predecessorResult.error || predecessorResult.status !== 0) {
-      throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED");
+      const failedAssertions = predecessorReport.testResults?.flatMap((suite) => suite.assertionResults
+        ?.filter((test) => test.status === "failed")
+        .map((test) => [...(test.ancestorTitles ?? []), test.title].join(" > ")) ?? []) ?? [];
+      throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED:" + failedAssertions.join(" | "));
     }
     const predecessorTestCount = requirePredecessorTests(predecessorReport, predecessorTestFiles);
     console.log(`Phase 3 historical database invariants: ${predecessorTestCount} passed, 0 skipped before Phase 4 migrations.`);
@@ -382,8 +386,8 @@ export async function main() {
       CODEGEN,
       "--dialect", "postgres",
       "--url", "env(PHASE4_SETTINGS_DATABASE_URL)",
-      "--default-schema", "content,identity_access,operations,portfolio_config",
-      "--include-pattern", "{content,identity_access,operations,portfolio_config}.*",
+      "--default-schema", "content,identity_access,operations,portfolio_config,taxonomy",
+      "--include-pattern", "{content,identity_access,operations,portfolio_config,taxonomy}.*",
       "--date-parser", "timestamp",
       "--out-file", GENERATED,
       "--log-level", "error",
@@ -441,9 +445,11 @@ export async function main() {
 
     const evidence = contentAuthoringTicket ? {
       sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
-      ticket: ticket117 ? 117 : ticket116 ? 116 : ticket115 ? 115 : ticket114 ? 114 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
+      ticket: ticket118 ? 118 : ticket117 ? 117 : ticket116 ? 116 : ticket115 ? 115 : ticket114 ? 114 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
       parent: 106,
-      scope: ticket117
+      scope: ticket118
+        ? "four-stable-portfolio-taxonomy-roots-owner-value-creation-and-atomic-content-owned-project-assignments-with-synchronous-discovery-facts"
+        : ticket117
         ? "symmetric-owner-curated-relationships-atomic-root-versions-locale-safe-public-reads-history-replay-and-rollback"
         : ticket116
         ? "owner-defined-project-status-registry-featured-commands-and-atomic-discovery-projection"
@@ -479,6 +485,7 @@ export async function main() {
         ...(ticket114 || ticket115 ? ["content.public_routes", "content.public_route_reservations", "content.public_project_locales", "content.public_testimonial_locales", "taxonomy.project_discovery_locales"] : []),
         ...(ticket115 ? ["content.public_route_history"] : []),
         ...(ticket116 ? ["content.project_status_values", "content.project_status_value_history", "content.project_status_history", "taxonomy.project_discovery_locales"] : []),
+        ...(ticket118 ? ["taxonomy.roots", "taxonomy.taxonomy_values", "taxonomy.value_history", "content.project_taxonomy_assignments", "content.project_taxonomy_assignment_history", "taxonomy.project_discovery_taxonomy_values"] : []),
         ...(ticket117 ? ["content.project_relationships", "content.project_relationship_views", "content.project_relationship_history"] : [])],
       databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
@@ -584,7 +591,9 @@ export async function main() {
     if (
       /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
     ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
-    const evidencePath = ticket117
+    const evidencePath = ticket118
+      ? join(ROOT, "evidence/phase-5-controlled-taxonomy-postgres.json")
+      : ticket117
       ? join(ROOT, "evidence/phase-5-project-relationships-postgres.json")
       : ticket116
       ? join(ROOT, "evidence/phase-5-project-status-featured-postgres.json")
