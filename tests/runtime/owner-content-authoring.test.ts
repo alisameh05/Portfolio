@@ -259,6 +259,14 @@ function createHarness() {
         hasMore: selected.length > input.limit,
       } };
     },
+    async listProjectStatusValues() { return { ok: true, value: [] }; },
+    async getProjectOwnerView() { return { ok: false, error: { kind: "not_found", code: "PROJECT_NOT_FOUND" } }; },
+    async listProjectStatusHistory() { return { ok: true, value: [] }; },
+    async createProjectStatusValue() { return { ok: false, error: { kind: "temporarily_unavailable", code: "UNAVAILABLE" } }; },
+    async renameProjectStatusValue() { return { ok: false, error: { kind: "temporarily_unavailable", code: "UNAVAILABLE" } }; },
+    async retireProjectStatusValue() { return { ok: false, error: { kind: "temporarily_unavailable", code: "UNAVAILABLE" } }; },
+    async changeProjectStatus() { return { ok: false, error: { kind: "temporarily_unavailable", code: "UNAVAILABLE" } }; },
+    async setProjectFeatured() { return { ok: false, error: { kind: "temporarily_unavailable", code: "UNAVAILABLE" } }; },
   };
 
   const cache = new Map<string, { requestHash: string; result: SafeResultEnvelope }>();

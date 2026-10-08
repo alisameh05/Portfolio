@@ -488,6 +488,7 @@ describe("Owner Project commands (#29)", () => {
         expectedVersion: 2,
         projectId: PROJECT_ID as never,
         statusValueId: STATUS_ID as never,
+        correlationId: "test-status",
       }),
       service.setOwnerProjectFeatured({
         actor: owner as never,
@@ -495,6 +496,7 @@ describe("Owner Project commands (#29)", () => {
         expectedVersion: 2,
         projectId: PROJECT_ID as never,
         featured: true,
+        correlationId: "test-featured",
       }),
       service.changeOwnerProjectPublicSlug({
         actor: owner as never,

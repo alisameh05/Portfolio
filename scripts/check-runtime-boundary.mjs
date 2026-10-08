@@ -38,10 +38,6 @@ const EXPECTED_OPERATIONAL_ROUTES = [
 // Phase 5 contracts are visible before their vertical slices are active.
 // Keep only unfinished contracts explicitly allowlisted and adapter-free.
 export const FAIL_CLOSED_OWNER_OPERATION_IDS = Object.freeze([
-  "listOwnerProjectStatusValues",
-  "createOwnerProjectStatusValue",
-  "renameOwnerProjectStatusValue",
-  "retireOwnerProjectStatusValue",
 ]);
 
 function toPosix(path) {
@@ -249,9 +245,9 @@ export function buildRuntimeBoundary(root = DEFAULT_ROOT) {
       name: "owner-operation-count",
       passed:
         matrix.filter((entry) => entry.surface === "owner").length === 48 &&
-        activeOperations.filter((entry) => entry.surface === "owner").length === 44 &&
+        activeOperations.filter((entry) => entry.surface === "owner").length === 48 &&
         failClosedOwnerOperations.length === FAIL_CLOSED_OWNER_OPERATION_IDS.length,
-      detail: "44 active Owner operations and 4 explicitly fail-closed Phase 5 contracts",
+      detail: "48 active Owner operations and 0 explicitly fail-closed Phase 5 contracts",
     },
     {
       name: "unique-operation-identifiers",
@@ -341,7 +337,7 @@ export function main(root = DEFAULT_ROOT) {
     }
     return 1;
   }
-  console.log("✓ runtime boundary: 5 public + 43 active Owner operations resolve exactly once; 5 Phase 5 contracts fail closed");
+  console.log("✓ runtime boundary: 5 public + 48 active Owner operations resolve exactly once; 0 Phase 5 contracts fail closed");
   return 0;
 }
 

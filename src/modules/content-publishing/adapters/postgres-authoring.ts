@@ -12,6 +12,12 @@ import type {
   ContentAuthoringPublication,
   ContentAuthoringRevision,
   ContentAuthoringScope,
+  ContentProjectOwnerView,
+  ContentProjectStatusHistoryEntry,
+  ContentProjectStatusTransition,
+  ContentProjectStatusValue,
+  ContentProjectStatusValueChange,
+  ContentProjectMutation,
   CreateContentPersistenceInput,
   PublishAchievementLanguageInput,
   PublishAchievementLanguageResult,
@@ -70,6 +76,18 @@ function isLocale(value: string): value is SupportedLocale {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function statusValue(row: { value_id: string; label: string; state: string; aggregate_version: number }): ContentProjectStatusValue {
+  if ((row.state !== "active" && row.state !== "retired") || !Number.isSafeInteger(row.aggregate_version) || row.aggregate_version < 1 ||
+      row.label.length === 0 || row.label.length > 100) throw new PostgresInfrastructureError();
+  return { valueId: row.value_id as StableId<"ProjectStatusValue">, label: row.label, state: row.state, aggregateVersion: row.aggregate_version };
+}
+
+function databaseTime(value: Date | string): string {
+  const result = value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+  if (!Number.isFinite(Date.parse(result))) throw new PostgresInfrastructureError();
+  return result;
 }
 
 function parsePayload(value: unknown, row: RevisionRow): CreateDraftPayload {
@@ -1577,6 +1595,351 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
           };
         });
         return { ok: true, value: { entries, hasMore } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async listProjectStatusValues(scope, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, scope);
+        const result = await sql<{ value_id: string; label: string; state: string; aggregate_version: number }>`
+          select value_id::text, label, state, aggregate_version
+            from content.project_status_values
+           where portfolio_id = ${scope.portfolioId}::uuid
+           order by case when state = 'active' then 0 else 1 end, normalized_label, value_id
+        `.execute(executor);
+        return { ok: true, value: result.rows.map(statusValue) };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async getProjectOwnerView(projectId, scope, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, scope);
+        const result = await sql<{
+          content_id: string; aggregate_version: number; status_value_id: string | null; featured: boolean;
+          route_identity: string | null; current_slug: string | null;
+        }>`
+          select item.content_id::text, item.aggregate_version, item.status_value_id::text, item.featured,
+                 route.route_identity::text, route.current_slug
+            from content.items item
+            left join content.public_routes route
+              on route.content_id = item.content_id and route.portfolio_id = item.portfolio_id
+           where item.content_id = ${projectId}::uuid
+             and item.portfolio_id = ${scope.portfolioId}::uuid
+             and item.content_type = 'project'
+        `.execute(executor);
+        const row = result.rows[0];
+        if (row === undefined) return err({ kind: "not_found", code: "PROJECT_NOT_FOUND" });
+        if (!Number.isSafeInteger(row.aggregate_version) || row.aggregate_version < 1 || typeof row.featured !== "boolean" ||
+            (row.route_identity === null) !== (row.current_slug === null)) throw new PostgresInfrastructureError();
+        let redirects: { fromSlug: string; toSlug: string }[] = [];
+        let routeHistory: { sequence: number; fromSlug: string; toSlug: string; changedAt: string }[] = [];
+        if (row.route_identity !== null && row.current_slug !== null) {
+          const reservations = await sql<{ normalized_slug: string }>`
+            select normalized_slug from content.public_route_reservations
+             where route_identity = ${row.route_identity}::uuid and portfolio_id = ${scope.portfolioId}::uuid and not is_current
+             order by reserved_at, normalized_slug
+          `.execute(executor);
+          redirects = reservations.rows.map((reservation) => ({ fromSlug: reservation.normalized_slug, toSlug: row.current_slug! }));
+          const history = await sql<{ sequence: number; from_slug: string; to_slug: string; changed_at: Date | string }>`
+            select sequence, from_slug, to_slug, changed_at
+              from content.public_route_history
+             where route_identity = ${row.route_identity}::uuid and content_id = ${projectId}::uuid
+               and portfolio_id = ${scope.portfolioId}::uuid
+             order by sequence
+          `.execute(executor);
+          routeHistory = history.rows.map((entry) => {
+            const changedAt = entry.changed_at instanceof Date ? entry.changed_at.toISOString() : new Date(entry.changed_at).toISOString();
+            if (!Number.isSafeInteger(entry.sequence) || entry.sequence < 1 || !Number.isFinite(Date.parse(changedAt))) throw new PostgresInfrastructureError();
+            return { sequence: entry.sequence, fromSlug: entry.from_slug, toSlug: entry.to_slug, changedAt };
+          });
+        }
+        const relatedProjects = await sql<{ project_id: string }>`
+          select related_project_id::text as project_id
+            from content.project_relationship_views
+           where portfolio_id = ${scope.portfolioId}::uuid
+             and project_id = ${projectId}::uuid
+           order by related_project_id
+        `.execute(executor);
+        return { ok: true, value: {
+          projectId: row.content_id as StableId<"Project">,
+          aggregateVersion: row.aggregate_version,
+          statusValueId: row.status_value_id as StableId<"ProjectStatusValue"> | null,
+          featured: row.featured,
+          publicRoute: row.route_identity === null || row.current_slug === null ? null : {
+            identity: row.route_identity as StableId<"PublicRoute">,
+            canonicalSlug: row.current_slug,
+            redirects: redirects.map((redirect) => ({ fromSlug: redirect.fromSlug, toSlug: redirect.toSlug })),
+            history: routeHistory,
+          },
+          relatedProjectIds: relatedProjects.rows.map((related) => related.project_id as StableId<"Project">),
+          taxonomyAssignments: [],
+        } satisfies ContentProjectOwnerView };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async listProjectStatusHistory(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const exists = await sql<{ exists: boolean }>`
+          select exists (select 1 from content.project_status_values
+            where value_id = ${input.valueId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid) as exists
+        `.execute(executor);
+        if (exists.rows[0]?.exists !== true) return err({ kind: "not_found", code: "PROJECT_STATUS_VALUE_NOT_FOUND" });
+        const result = await sql<{
+          operation: string; previous_label: string | null; label: string; state: string;
+          aggregate_version: number; changed_at: Date | string;
+        }>`
+          select operation, previous_label, label, state, aggregate_version, changed_at
+            from content.project_status_value_history
+           where value_id = ${input.valueId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           order by transition_sequence
+        `.execute(executor);
+        return { ok: true, value: result.rows.map((row): ContentProjectStatusHistoryEntry => {
+          if (!(row.operation === "created" || row.operation === "renamed" || row.operation === "retired") ||
+              !(row.state === "active" || row.state === "retired") || !Number.isSafeInteger(row.aggregate_version)) {
+            throw new PostgresInfrastructureError();
+          }
+          return { operation: row.operation, previousLabel: row.previous_label, label: row.label,
+            state: row.state, aggregateVersion: row.aggregate_version, changedAt: databaseTime(row.changed_at) };
+        }) };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async createProjectStatusValue(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        await sql`select pg_advisory_xact_lock(hashtextextended(${input.scope.portfolioId}::text, 0))`.execute(executor);
+        const count = await sql<{ count: number }>`
+          select count(*)::integer as count from content.project_status_values
+           where portfolio_id = ${input.scope.portfolioId}::uuid
+        `.execute(executor);
+        if ((count.rows[0]?.count ?? 100) >= 100) return err({ kind: "conflict", code: "PROJECT_STATUS_VALUE_LIMIT_REACHED" });
+        const inserted = await sql<{
+          value_id: string; label: string; state: string; aggregate_version: number; changed_at: Date | string;
+        }>`
+          insert into content.project_status_values (value_id, portfolio_id, label)
+          values (${input.valueId}::uuid, ${input.scope.portfolioId}::uuid, ${input.label})
+          on conflict (portfolio_id, normalized_label) do nothing
+          returning value_id::text, label, state, aggregate_version, transaction_timestamp() as changed_at
+        `.execute(executor);
+        const row = inserted.rows[0];
+        if (row === undefined) return err({ kind: "conflict", code: "PROJECT_STATUS_LABEL_ALREADY_EXISTS" });
+        const changedAt = databaseTime(row.changed_at);
+        await sql`
+          insert into content.project_status_value_history (
+            value_id, portfolio_id, transition_sequence, operation, previous_label, label, state, aggregate_version, changed_at
+          ) values (${input.valueId}::uuid, ${input.scope.portfolioId}::uuid, 1, 'created', null,
+            ${row.label}, 'active', 1, ${changedAt}::timestamptz)
+        `.execute(executor);
+        return { ok: true, value: { value: statusValue(row), changed: true, changedAt } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async renameProjectStatusValue(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        await sql`select pg_advisory_xact_lock(hashtextextended(${input.scope.portfolioId}::text, 0))`.execute(executor);
+        const selected = await sql<{ value_id: string; label: string; state: string; aggregate_version: number }>`
+          select value_id::text, label, state, aggregate_version
+            from content.project_status_values
+           where value_id = ${input.valueId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid for update
+        `.execute(executor);
+        const current = selected.rows[0];
+        if (current === undefined) return err({ kind: "not_found", code: "PROJECT_STATUS_VALUE_NOT_FOUND" });
+        const currentValue = statusValue(current);
+        if (currentValue.aggregateVersion !== input.expectedVersion) return err({ kind: "precondition_failed", code: "PROJECT_STATUS_VERSION_MISMATCH", currentVersion: currentValue.aggregateVersion });
+        if (currentValue.state !== "active") return err({ kind: "validation", code: "PROJECT_STATUS_VALUE_RETIRED" });
+        if (currentValue.label === input.label) return { ok: true, value: { value: currentValue, changed: false, changedAt: null } };
+        const duplicate = await sql<{ exists: boolean }>`
+          select exists (select 1 from content.project_status_values
+            where portfolio_id = ${input.scope.portfolioId}::uuid and value_id <> ${input.valueId}::uuid
+              and normalized_label = lower(regexp_replace(btrim(${input.label}), '[[:space:]]+', ' ', 'g'))) as exists
+        `.execute(executor);
+        if (duplicate.rows[0]?.exists === true) return err({ kind: "conflict", code: "PROJECT_STATUS_LABEL_ALREADY_EXISTS" });
+        const updated = await sql<{
+          value_id: string; label: string; state: string; aggregate_version: number; changed_at: Date | string;
+        }>`
+          update content.project_status_values
+             set label = ${input.label}, aggregate_version = aggregate_version + 1, updated_at = transaction_timestamp()
+           where value_id = ${input.valueId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           returning value_id::text, label, state, aggregate_version, updated_at as changed_at
+        `.execute(executor);
+        const row = updated.rows[0];
+        if (row === undefined) throw new PostgresInfrastructureError();
+        const changedAt = databaseTime(row.changed_at);
+        await sql`
+          insert into content.project_status_value_history (
+            value_id, portfolio_id, transition_sequence, operation, previous_label, label, state, aggregate_version, changed_at
+          ) values (${input.valueId}::uuid, ${input.scope.portfolioId}::uuid,
+            ${currentValue.aggregateVersion + 1}, 'renamed', ${currentValue.label}, ${row.label}, 'active',
+            ${row.aggregate_version}, ${changedAt}::timestamptz)
+        `.execute(executor);
+        return { ok: true, value: { value: statusValue(row), changed: true, changedAt } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async retireProjectStatusValue(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const selected = await sql<{ value_id: string; label: string; state: string; aggregate_version: number }>`
+          select value_id::text, label, state, aggregate_version
+            from content.project_status_values
+           where value_id = ${input.valueId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid for update
+        `.execute(executor);
+        const current = selected.rows[0];
+        if (current === undefined) return err({ kind: "not_found", code: "PROJECT_STATUS_VALUE_NOT_FOUND" });
+        const currentValue = statusValue(current);
+        if (currentValue.aggregateVersion !== input.expectedVersion) return err({ kind: "precondition_failed", code: "PROJECT_STATUS_VERSION_MISMATCH", currentVersion: currentValue.aggregateVersion });
+        if (currentValue.state === "retired") return { ok: true, value: { value: currentValue, changed: false, changedAt: null } };
+        const updated = await sql<{
+          value_id: string; label: string; state: string; aggregate_version: number; changed_at: Date | string;
+        }>`
+          update content.project_status_values
+             set state = 'retired', aggregate_version = aggregate_version + 1, updated_at = transaction_timestamp()
+           where value_id = ${input.valueId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           returning value_id::text, label, state, aggregate_version, updated_at as changed_at
+        `.execute(executor);
+        const row = updated.rows[0];
+        if (row === undefined) throw new PostgresInfrastructureError();
+        const changedAt = databaseTime(row.changed_at);
+        await sql`
+          insert into content.project_status_value_history (
+            value_id, portfolio_id, transition_sequence, operation, previous_label, label, state, aggregate_version, changed_at
+          ) values (${input.valueId}::uuid, ${input.scope.portfolioId}::uuid,
+            ${currentValue.aggregateVersion + 1}, 'retired', ${currentValue.label}, ${row.label}, 'retired',
+            ${row.aggregate_version}, ${changedAt}::timestamptz)
+        `.execute(executor);
+        return { ok: true, value: { value: statusValue(row), changed: true, changedAt } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async changeProjectStatus(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const selectedStatus = await sql<{ state: string }>`
+          select state from content.project_status_values
+           where value_id = ${input.valueId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid for share
+        `.execute(executor);
+        if (selectedStatus.rows[0] === undefined) return err({ kind: "validation", code: "PROJECT_STATUS_VALUE_NOT_FOUND" });
+        if (selectedStatus.rows[0].state !== "active") return err({ kind: "validation", code: "PROJECT_STATUS_VALUE_NOT_ACTIVE" });
+        const selectedProject = await sql<{
+          content_id: string; content_type: string; status_value_id: string | null; aggregate_version: number;
+        }>`
+          select content_id::text, content_type, status_value_id::text, aggregate_version
+            from content.items
+           where content_id = ${input.projectId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           for update
+        `.execute(executor);
+        const project = selectedProject.rows[0];
+        if (project === undefined || project.content_type !== "project") return err({ kind: "not_found", code: "PROJECT_NOT_FOUND" });
+        if (!Number.isSafeInteger(project.aggregate_version) || project.aggregate_version < 1) throw new PostgresInfrastructureError();
+        if (project.aggregate_version !== input.expectedVersion) return err({ kind: "precondition_failed", code: "PROJECT_VERSION_MISMATCH", currentVersion: project.aggregate_version });
+        if (project.status_value_id === input.valueId) return { ok: true, value: {
+          previousValueId: project.status_value_id as StableId<"ProjectStatusValue">,
+          currentValueId: project.status_value_id as StableId<"ProjectStatusValue">,
+          aggregateVersion: project.aggregate_version,
+          changedAt: "",
+          changed: false,
+        } satisfies ContentProjectStatusTransition };
+        const updated = await sql<{ aggregate_version: number; changed_at: Date | string }>`
+          update content.items
+             set status_value_id = ${input.valueId}::uuid, aggregate_version = aggregate_version + 1,
+                 updated_at = transaction_timestamp()
+           where content_id = ${input.projectId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           returning aggregate_version, updated_at as changed_at
+        `.execute(executor);
+        const updatedProject = updated.rows[0];
+        if (updatedProject === undefined) throw new PostgresInfrastructureError();
+        const changedAt = databaseTime(updatedProject.changed_at);
+        const sequence = await sql<{ sequence: number }>`
+          select coalesce(max(transition_sequence), 0)::integer + 1 as sequence
+            from content.project_status_history
+           where content_id = ${input.projectId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+        `.execute(executor);
+        const nextSequence = sequence.rows[0]?.sequence;
+        if (nextSequence === undefined) throw new PostgresInfrastructureError();
+        await sql`
+          insert into content.project_status_history (
+            content_id, portfolio_id, transition_sequence, previous_value_id, current_value_id, aggregate_version, changed_at
+          ) values (${input.projectId}::uuid, ${input.scope.portfolioId}::uuid, ${nextSequence},
+            ${project.status_value_id}::uuid, ${input.valueId}::uuid, ${updatedProject.aggregate_version}, ${changedAt}::timestamptz)
+        `.execute(executor);
+        await sql`
+          update taxonomy.project_discovery_locales
+             set status_value_id = ${input.valueId}::uuid
+           where content_id = ${input.projectId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+        `.execute(executor);
+        return { ok: true, value: {
+          previousValueId: project.status_value_id as StableId<"ProjectStatusValue"> | null,
+          currentValueId: input.valueId,
+          aggregateVersion: updatedProject.aggregate_version,
+          changedAt,
+          changed: true,
+        } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
+    async setProjectFeatured(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        const selected = await sql<{ content_type: string; featured: boolean; aggregate_version: number }>`
+          select content_type, featured, aggregate_version from content.items
+           where content_id = ${input.projectId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           for update
+        `.execute(executor);
+        const project = selected.rows[0];
+        if (project === undefined || project.content_type !== "project") return err({ kind: "not_found", code: "PROJECT_NOT_FOUND" });
+        if (!Number.isSafeInteger(project.aggregate_version) || project.aggregate_version < 1) throw new PostgresInfrastructureError();
+        if (project.aggregate_version !== input.expectedVersion) return err({ kind: "precondition_failed", code: "PROJECT_VERSION_MISMATCH", currentVersion: project.aggregate_version });
+        if (project.featured === input.featured) return { ok: true, value: { aggregateVersion: project.aggregate_version, changedAt: null, changed: false } satisfies ContentProjectMutation };
+        const updated = await sql<{ aggregate_version: number; changed_at: Date | string }>`
+          update content.items
+             set featured = ${input.featured}, aggregate_version = aggregate_version + 1,
+                 updated_at = transaction_timestamp()
+           where content_id = ${input.projectId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+           returning aggregate_version, updated_at as changed_at
+        `.execute(executor);
+        const next = updated.rows[0];
+        if (next === undefined) throw new PostgresInfrastructureError();
+        const changedAt = databaseTime(next.changed_at);
+        await sql`
+          update taxonomy.project_discovery_locales
+             set featured = ${input.featured}
+           where content_id = ${input.projectId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+        `.execute(executor);
+        return { ok: true, value: { aggregateVersion: next.aggregate_version, changedAt, changed: true } };
       } catch (error) {
         if (error instanceof PostgresInfrastructureError) throw error;
         throw new PostgresInfrastructureError();

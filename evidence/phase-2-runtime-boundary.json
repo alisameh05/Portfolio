@@ -12,7 +12,7 @@
     {
       "name": "owner-operation-count",
       "passed": true,
-      "detail": "43 active Owner operations and 5 explicitly fail-closed Phase 5 contracts"
+      "detail": "48 active Owner operations and 0 explicitly fail-closed Phase 5 contracts"
     },
     {
       "name": "unique-operation-identifiers",
@@ -22,22 +22,22 @@
     {
       "name": "one-adapter-per-operation",
       "passed": true,
-      "detail": "48/48 active operations resolve once; deferred operations have no adapter"
+      "detail": "53/53 active operations resolve once; deferred operations have no adapter"
     },
     {
       "name": "unfinished-owner-operations-fail-closed",
       "passed": true,
-      "detail": "5 declared Phase 5 operations have no runtime adapter"
+      "detail": "0 declared Phase 5 operations have no runtime adapter"
     },
     {
       "name": "no-undeclared-product-adapters",
       "passed": true,
-      "detail": "48 adapter exports declared by a contract"
+      "detail": "53 adapter exports declared by a contract"
     },
     {
       "name": "only-callable-runtime-adapters",
       "passed": true,
-      "detail": "48/48 handler exports are callable runtime values"
+      "detail": "53/53 handler exports are callable runtime values"
     },
     {
       "name": "only-operational-routes",
@@ -262,8 +262,14 @@
       "path": "/api/owner/v1/projects/{projectId}/commands/correct-candidate-slug",
       "operationId": "correctOwnerProjectCandidateSlug",
       "expectedExport": "handleCorrectOwnerProjectCandidateSlug",
-      "activation": "fail-closed",
-      "matches": []
+      "activation": "active",
+      "matches": [
+        {
+          "exportName": "handleCorrectOwnerProjectCandidateSlug",
+          "file": "src/runtime/http/owner-project.ts",
+          "callable": true
+        }
+      ]
     },
     {
       "surface": "owner",
@@ -316,8 +322,14 @@
       "path": "/api/owner/v1/project-status-values",
       "operationId": "createOwnerProjectStatusValue",
       "expectedExport": "handleCreateOwnerProjectStatusValue",
-      "activation": "fail-closed",
-      "matches": []
+      "activation": "active",
+      "matches": [
+        {
+          "exportName": "handleCreateOwnerProjectStatusValue",
+          "file": "src/runtime/http/owner-project-status.ts",
+          "callable": true
+        }
+      ]
     },
     {
       "surface": "owner",
@@ -505,8 +517,14 @@
       "path": "/api/owner/v1/project-status-values",
       "operationId": "listOwnerProjectStatusValues",
       "expectedExport": "handleListOwnerProjectStatusValues",
-      "activation": "fail-closed",
-      "matches": []
+      "activation": "active",
+      "matches": [
+        {
+          "exportName": "handleListOwnerProjectStatusValues",
+          "file": "src/runtime/http/owner-project-status.ts",
+          "callable": true
+        }
+      ]
     },
     {
       "surface": "owner",
@@ -634,8 +652,14 @@
       "path": "/api/owner/v1/project-status-values/{valueId}/commands/rename",
       "operationId": "renameOwnerProjectStatusValue",
       "expectedExport": "handleRenameOwnerProjectStatusValue",
-      "activation": "fail-closed",
-      "matches": []
+      "activation": "active",
+      "matches": [
+        {
+          "exportName": "handleRenameOwnerProjectStatusValue",
+          "file": "src/runtime/http/owner-project-status.ts",
+          "callable": true
+        }
+      ]
     },
     {
       "surface": "owner",
@@ -688,8 +712,14 @@
       "path": "/api/owner/v1/project-status-values/{valueId}/commands/retire",
       "operationId": "retireOwnerProjectStatusValue",
       "expectedExport": "handleRetireOwnerProjectStatusValue",
-      "activation": "fail-closed",
-      "matches": []
+      "activation": "active",
+      "matches": [
+        {
+          "exportName": "handleRetireOwnerProjectStatusValue",
+          "file": "src/runtime/http/owner-project-status.ts",
+          "callable": true
+        }
+      ]
     },
     {
       "surface": "owner",
@@ -859,6 +889,11 @@
       "callable": true
     },
     {
+      "exportName": "handleCorrectOwnerProjectCandidateSlug",
+      "file": "src/runtime/http/owner-project.ts",
+      "callable": true
+    },
+    {
       "exportName": "handleCreateOwnerAnalyticsGoalVersion",
       "file": "src/runtime/http/owner-analytics.ts",
       "callable": true
@@ -871,6 +906,11 @@
     {
       "exportName": "handleCreateOwnerMediaUploadIntent",
       "file": "src/runtime/http/owner-media.ts",
+      "callable": true
+    },
+    {
+      "exportName": "handleCreateOwnerProjectStatusValue",
+      "file": "src/runtime/http/owner-project-status.ts",
       "callable": true
     },
     {
@@ -939,6 +979,11 @@
       "callable": true
     },
     {
+      "exportName": "handleListOwnerProjectStatusValues",
+      "file": "src/runtime/http/owner-project-status.ts",
+      "callable": true
+    },
+    {
       "exportName": "handleMergeOwnerTaxonomyValue",
       "file": "src/runtime/http/owner-taxonomy.ts",
       "callable": true
@@ -999,6 +1044,11 @@
       "callable": true
     },
     {
+      "exportName": "handleRenameOwnerProjectStatusValue",
+      "file": "src/runtime/http/owner-project-status.ts",
+      "callable": true
+    },
+    {
       "exportName": "handleRenameOwnerTaxonomyValue",
       "file": "src/runtime/http/owner-taxonomy.ts",
       "callable": true
@@ -1011,6 +1061,11 @@
     {
       "exportName": "handleRestoreOwnerContent",
       "file": "src/runtime/http/owner-publication.ts",
+      "callable": true
+    },
+    {
+      "exportName": "handleRetireOwnerProjectStatusValue",
+      "file": "src/runtime/http/owner-project-status.ts",
       "callable": true
     },
     {
