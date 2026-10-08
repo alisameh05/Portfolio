@@ -27,6 +27,7 @@ export type {
   PublicLocalizedContentDto,
   PrivateRevisionPreview,
   ContentHistoryEntry,
+  ContentRouteHistoryEntry,
   ContentHistoryPage,
   Project,
   Achievement,

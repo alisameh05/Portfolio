@@ -4,7 +4,7 @@ import { createSystemClock, createSystemIdGenerator } from "../../../runtime/por
 import { hashCanonicalRequest } from "../../../shared/application/idempotency.js";
 import type { OperationsPersistencePorts, SafeResultEnvelope } from "../../portability-operations/index.js";
 import type { ContentHistoryEntry, ContentHistoryPage, ContentKind, CreateDraftPayload, LocalizedDraftData, PrivateRevisionPreview, SupportedLocale } from "../domain/index.js";
-import type { MediaAcceptancePort, ProjectCommandReceipt, PublishLanguageVersionCommand, ReviewRevisionCommand } from "./service.js";
+import type { ChangePublicSlugCommand, CorrectCandidateSlugCommand, MediaAcceptancePort, ProjectCommandReceipt, PublishLanguageVersionCommand, ReviewRevisionCommand } from "./service.js";
 
 export interface ContentAuthoringScope {
   readonly portfolioId: StableId<"Portfolio">;
@@ -25,6 +25,15 @@ export interface ProjectDiscoveryProjectionPort {
       readonly slug: string;
       readonly firstPublishedAt: string;
       readonly publishedAt: string;
+    },
+    transaction: TransactionContext,
+  ): Promise<void>;
+  updateProjectRouteSlug(
+    input: {
+      readonly contentId: StableId<"Project">;
+      readonly routeIdentity: StableId<"PublicRoute">;
+      readonly slug: string;
+      readonly expectedLocales: readonly SupportedLocale[];
     },
     transaction: TransactionContext,
   ): Promise<void>;
@@ -73,6 +82,14 @@ export interface ContentAuthoringRecord {
   readonly aggregateVersion: number;
   readonly revisions: readonly ContentAuthoringRevision[];
   readonly publications?: readonly ContentAuthoringPublication[];
+  readonly publicRoute?: ContentPublicRouteFacts | null;
+}
+
+export interface ContentPublicRouteFacts {
+  readonly identity: StableId<"PublicRoute">;
+  readonly canonicalSlug: string;
+  readonly redirects: ReadonlyArray<{ readonly fromSlug: string; readonly toSlug: string }>;
+  readonly history: ReadonlyArray<{ readonly sequence: number; readonly fromSlug: string; readonly toSlug: string; readonly changedAt: string }>;
 }
 
 export interface ContentAuthoringPublication {
@@ -226,6 +243,20 @@ export interface PublicProjectContentView {
   }[];
 }
 
+export type PublicProjectRouteResolution =
+  | { readonly type: "canonical"; readonly content: PublicProjectContentView }
+  | {
+      readonly type: "redirect";
+      readonly statusCode: 308;
+      readonly contentId: StableId<string>;
+      readonly routeIdentity: StableId<"PublicRoute">;
+      readonly locale: SupportedLocale;
+      readonly fromSlug: string;
+      readonly toSlug: string;
+      /** A root-relative same-origin path built only from a validated reserved slug. */
+      readonly location: string;
+    };
+
 export interface CreateContentPersistenceInput {
   readonly contentId: StableId<string>;
   readonly revisionId: StableId<"Revision">;
@@ -290,6 +321,7 @@ export interface ContentProjectOwnerView {
     readonly identity: StableId<"PublicRoute">;
     readonly canonicalSlug: string;
     readonly redirects: readonly { readonly fromSlug: string; readonly toSlug: string }[];
+    readonly history: readonly { readonly sequence: number; readonly fromSlug: string; readonly toSlug: string; readonly changedAt: string }[];
   } | null;
   readonly relatedProjectIds: readonly StableId<"Project">[];
   readonly taxonomyAssignments: readonly {
@@ -303,6 +335,8 @@ export interface ContentAuthoringRepository {
   projectExists(projectId: StableId<"Project">, scope: ContentAuthoringScope, context: TransactionContext): Promise<boolean>;
   create(input: CreateContentPersistenceInput, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
   get(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
+  correctCandidateSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
+  changePublicSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number; readonly previousSlug: string; readonly routeIdentity: StableId<"PublicRoute"> }, Rejection>>;
   changeLifecycle(input: ChangeContentLifecycleInput, context: TransactionContext): Promise<Result<ChangeContentLifecycleResult, Rejection>>;
   appendRevision(input: AppendContentRevisionInput, context: TransactionContext): Promise<Result<{ readonly record: ContentAuthoringRecord; readonly revision: ContentAuthoringRevision }, Rejection>>;
   appendReview(input: AppendContentReviewInput, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
@@ -391,6 +425,8 @@ export interface OwnerContentAggregateView {
   readonly aggregateVersion: number;
   readonly contentType: ContentKind;
   readonly lifecycle: ContentAuthoringRecord["lifecycle"];
+  readonly publicRoute: ContentPublicRouteFacts | null;
+  readonly routeHistory: ContentPublicRouteFacts["history"];
   readonly localizedStreams: Partial<Record<SupportedLocale, {
     readonly revisionCount: number;
     readonly currentPublishedRevisionId: StableId<string> | null;
@@ -411,10 +447,13 @@ export interface ContentAuthoringService {
   previewRevision(query: { readonly actor: ActorContext; readonly contentId: StableId<string>; readonly revisionId: StableId<"Revision"> }): Promise<Result<PrivateRevisionPreview, Rejection>>;
   reviewRevision(command: ReviewRevisionCommand): Promise<Result<ReviewRevisionReceipt, Rejection>>;
   publishLanguageVersion(command: PublishLanguageVersionCommand): Promise<Result<ContentAuthoringPublicationReceipt, Rejection>>;
+  correctCandidateSlug(command: CorrectCandidateSlugCommand): Promise<Result<OwnerContentRouteChangeReceipt, Rejection>>;
+  changePublicSlug(command: ChangePublicSlugCommand): Promise<Result<OwnerContentRouteChangeReceipt, Rejection>>;
   hideContent(command: ChangeContentLifecycleCommand): Promise<Result<ContentLifecycleReceipt, Rejection>>;
   archiveContent(command: ChangeContentLifecycleCommand): Promise<Result<ContentLifecycleReceipt, Rejection>>;
   restoreContent(command: ChangeContentLifecycleCommand): Promise<Result<ContentLifecycleReceipt, Rejection>>;
   getPublicProject(query: { readonly slug: string; readonly locale: SupportedLocale }): Promise<Result<PublicProjectContentView, Rejection>>;
+  resolvePublicProjectRoute(query: { readonly slug: string; readonly locale: SupportedLocale }): Promise<Result<PublicProjectRouteResolution, Rejection>>;
   getPublicTestimonials(query: { readonly locale: SupportedLocale; readonly association: PublicTestimonialAssociationQuery }): Promise<Result<readonly PublicTestimonialView[], Rejection>>;
   /** Oldest achievement date first; ties use stable Achievement ID ascending. */
   getPublicAchievementTimeline(query: { readonly locale: SupportedLocale; readonly limit: number }): Promise<Result<readonly PublicAchievementTimelineEntry[], Rejection>>;
@@ -427,6 +466,13 @@ export interface ContentAuthoringService {
   retireProjectStatusValue(command: { readonly actor: ActorContext; readonly valueId: StableId<"ProjectStatusValue">; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ContentProjectStatusValue, Rejection>>;
   changeProjectStatus(command: { readonly actor: ActorContext; readonly projectId: StableId<"Project">; readonly statusValueId: StableId<"ProjectStatusValue">; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ProjectCommandReceipt, Rejection>>;
   setProjectFeatured(command: { readonly actor: ActorContext; readonly projectId: StableId<"Project">; readonly featured: boolean; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly correlationId: string }): Promise<Result<ProjectCommandReceipt, Rejection>>;
+}
+
+export interface OwnerContentRouteChangeReceipt {
+  readonly aggregateId: StableId<string>;
+  readonly aggregateVersion: number;
+  readonly outcome: "candidate-slug-corrected" | "public-slug-changed";
+  readonly slug: string;
 }
 
 export interface ContentLifecycleReceipt {
@@ -460,6 +506,8 @@ const CREATE_SCOPE = "content-publishing.create-owner-content";
 const SAVE_SCOPE = "content-publishing.save-owner-content-revision";
 const REVIEW_SCOPE = "content-publishing.review-owner-content-revision";
 const PUBLISH_SCOPE = "content-publishing.publish-owner-project-language";
+const CANDIDATE_SLUG_SCOPE = "content-publishing.correct-project-candidate-slug";
+const PUBLIC_SLUG_SCOPE = "content-publishing.change-project-public-slug";
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 const EXECUTABLE_MARKUP = /<\s*(?:script|iframe|object|embed|svg|math)\b|\bon[a-z]{2,}\s*=|(?:javascript|vbscript)\s*:|data\s*:\s*text\/html/i;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -663,6 +711,8 @@ function view(record: ContentAuthoringRecord): OwnerContentAggregateView {
     aggregateVersion: record.aggregateVersion,
     contentType: record.contentType,
     lifecycle: record.lifecycle,
+    publicRoute: record.publicRoute ?? null,
+    routeHistory: record.publicRoute?.history ?? [],
     localizedStreams,
     revisions: record.revisions.map(({ revisionId, locale, sequence, reviewed, reviewDecision }) => ({
       revisionId, locale, sequence, reviewed, ...(reviewDecision === undefined ? {} : { reviewDecision }),
@@ -1379,6 +1429,94 @@ export function createContentAuthoringService(input: {
       });
     },
 
+    async correctCandidateSlug(command) {
+      if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      if (!validCorrelation(command.correlationId) || !Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1 ||
+          !parseStableId("Project", command.projectId).ok || !SLUG_PATTERN.test(command.candidateSlug) || command.candidateSlug.length > 120) {
+        return err({ kind: "validation", code: "INVALID_PROJECT_CANDIDATE_SLUG" });
+      }
+      const effect = async (context: TransactionContext): Promise<SafeResultEnvelope> => {
+        const existing = await input.repository.get(command.projectId, input.scope, context);
+        if (!existing.ok) return rejectionOutcome(existing.error);
+        if (existing.value.contentType !== "project") return rejectionOutcome({ kind: "validation", code: "CONTENT_TYPE_NOT_PROJECT" });
+        if (existing.value.publicRoute !== null && existing.value.publicRoute !== undefined ||
+            existing.value.lifecycle !== "draft" && existing.value.lifecycle !== "archived") {
+          return rejectionOutcome({ kind: "validation", code: "PROJECT_CANDIDATE_SLUG_NOT_EDITABLE" });
+        }
+        if (existing.value.aggregateVersion !== command.expectedVersion) {
+          return rejectionOutcome({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: existing.value.aggregateVersion });
+        }
+        const changed = await input.repository.correctCandidateSlug({
+          contentId: command.projectId, scope: input.scope, expectedVersion: command.expectedVersion, slug: command.candidateSlug,
+        }, context);
+        if (!changed.ok) return rejectionOutcome(changed.error);
+        const receipt: OwnerContentRouteChangeReceipt = {
+          aggregateId: command.projectId, aggregateVersion: changed.value.aggregateVersion,
+          outcome: "candidate-slug-corrected", slug: command.candidateSlug,
+        };
+        const eventTime = clock.now();
+        await input.operations.outbox.append(context, {
+          eventId: ids.generate("DomainEvent"),
+          payload: { type: "content.project_candidate_slug_corrected.v1", version: 1, value: {
+            contentId: command.projectId, slug: command.candidateSlug, ownerScope: await actorScope,
+          } },
+          aggregateId: command.projectId, aggregateVersion: receipt.aggregateVersion,
+          correlationId: command.correlationId, occurredAt: eventTime, availableAt: eventTime,
+        });
+        return { status: "completed", receipt: { aggregateId: receipt.aggregateId, aggregateVersion: receipt.aggregateVersion, outcome: receipt.outcome, slug: receipt.slug } };
+      };
+      return await executeIdempotently<OwnerContentRouteChangeReceipt>({
+        operationScope: CANDIDATE_SLUG_SCOPE, actor: command.actor, key: command.idempotencyKey as IdempotencyKey,
+        request: { projectId: command.projectId, expectedVersion: command.expectedVersion, candidateSlug: command.candidateSlug }, effect,
+      });
+    },
+
+    async changePublicSlug(command) {
+      if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      if (!validCorrelation(command.correlationId) || !Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1 ||
+          !parseStableId("Project", command.projectId).ok || !SLUG_PATTERN.test(command.newSlug) || command.newSlug.length > 120) {
+        return err({ kind: "validation", code: "INVALID_PUBLIC_PROJECT_SLUG" });
+      }
+      const effect = async (context: TransactionContext): Promise<SafeResultEnvelope> => {
+        const existing = await input.repository.get(command.projectId, input.scope, context);
+        if (!existing.ok) return rejectionOutcome(existing.error);
+        if (existing.value.contentType !== "project") return rejectionOutcome({ kind: "validation", code: "CONTENT_TYPE_NOT_PROJECT" });
+        if (existing.value.aggregateVersion !== command.expectedVersion) {
+          return rejectionOutcome({ kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH", currentVersion: existing.value.aggregateVersion });
+        }
+        if (existing.value.publicRoute == null) return rejectionOutcome({ kind: "validation", code: "PROJECT_PUBLIC_ROUTE_REQUIRED" });
+        const changed = await input.repository.changePublicSlug({
+          contentId: command.projectId, scope: input.scope, expectedVersion: command.expectedVersion, slug: command.newSlug,
+        }, context);
+        if (!changed.ok) return rejectionOutcome(changed.error);
+        await input.discoveryProjection.updateProjectRouteSlug({
+          contentId: command.projectId,
+          routeIdentity: changed.value.routeIdentity,
+          slug: command.newSlug,
+          expectedLocales: (existing.value.publications ?? []).map((publication) => publication.locale),
+        }, context);
+        const receipt: OwnerContentRouteChangeReceipt = {
+          aggregateId: command.projectId, aggregateVersion: changed.value.aggregateVersion,
+          outcome: "public-slug-changed", slug: command.newSlug,
+        };
+        const eventTime = clock.now();
+        await input.operations.outbox.append(context, {
+          eventId: ids.generate("DomainEvent"),
+          payload: { type: "content.public_route_changed.v1", version: 1, value: {
+            routeIdentity: changed.value.routeIdentity,
+            previousSlug: changed.value.previousSlug, newSlug: command.newSlug, ownerScope: await actorScope,
+          } },
+          aggregateId: command.projectId, aggregateVersion: receipt.aggregateVersion,
+          correlationId: command.correlationId, occurredAt: eventTime, availableAt: eventTime,
+        });
+        return { status: "completed", receipt: { aggregateId: receipt.aggregateId, aggregateVersion: receipt.aggregateVersion, outcome: receipt.outcome, slug: receipt.slug } };
+      };
+      return await executeIdempotently<OwnerContentRouteChangeReceipt>({
+        operationScope: PUBLIC_SLUG_SCOPE, actor: command.actor, key: command.idempotencyKey as IdempotencyKey,
+        request: { projectId: command.projectId, expectedVersion: command.expectedVersion, slug: command.newSlug }, effect,
+      });
+    },
+
     async hideContent(command) {
       return await changeContentLifecycle(
         command, "hidden", "content-publishing.hide-owner-content", "content-hidden", "content.content_hidden.v1",
@@ -1406,6 +1544,18 @@ export function createContentAuthoringService(input: {
         locale: query.locale,
         scope: input.scope,
       }, context));
+    },
+
+    async resolvePublicProjectRoute(query) {
+      const result = await this.getPublicProject(query);
+      if (!result.ok) return result;
+      if (result.value.currentSlug === query.slug) return { ok: true, value: { type: "canonical", content: result.value } };
+      return { ok: true, value: {
+        type: "redirect", statusCode: 308, contentId: result.value.contentId,
+        routeIdentity: result.value.routeIdentity, locale: result.value.locale,
+        fromSlug: query.slug, toSlug: result.value.currentSlug,
+        location: `/projects/${encodeURIComponent(result.value.currentSlug)}`,
+      } };
     },
 
     async getPublicTestimonials(query) {
@@ -1454,10 +1604,13 @@ export function createContentAuthoringService(input: {
           limit: query.limit,
         }, context);
         if (!listed.ok) return listed;
+        const aggregate = await input.repository.get(query.contentId, input.scope, context);
+        if (!aggregate.ok) return aggregate;
         const entries = listed.value.entries;
         const last = entries.at(-1);
         return { ok: true as const, value: {
           entries,
+          routeHistory: aggregate.value.publicRoute?.history ?? [],
           nextCursor: listed.value.hasMore && last !== undefined ? `${last.locale}:${last.sequence}` : null,
         } };
       });

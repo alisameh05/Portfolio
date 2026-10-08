@@ -7,9 +7,12 @@ import type {
 } from "./http/owner-project.js";
 
 /** Activates the completed status/Featured slice while other Project commands stay fail closed. */
-export function createContentOwnerProjectService(content: ContentAuthoringService): OwnerProjectApplicationService {
-  const laterProjectOperations = createProductionOwnerProjectService();
+export function createContentOwnerProjectService(
+  content: ContentAuthoringService,
+  fallback: OwnerProjectApplicationService = createProductionOwnerProjectService(),
+): OwnerProjectApplicationService {
   return {
+    ...fallback,
     async getOwnerProjectAggregate(query) {
       const result = await content.getProjectOwnerView(query);
       if (!result.ok) return result;
@@ -31,9 +34,6 @@ export function createContentOwnerProjectService(content: ContentAuthoringServic
       const result = await content.setProjectFeatured(command);
       return mapProjectReceipt(result);
     },
-    async changeOwnerProjectPublicSlug(command) { return await laterProjectOperations.changeOwnerProjectPublicSlug(command); },
-    async relateOwnerProjects(command) { return await laterProjectOperations.relateOwnerProjects(command); },
-    async assignOwnerProjectTaxonomyValue(command) { return await laterProjectOperations.assignOwnerProjectTaxonomyValue(command); },
   };
 }
 

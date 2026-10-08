@@ -36,6 +36,10 @@ import {
   zChangeOwnerProjectPublicSlugHeaders,
   zChangeOwnerProjectPublicSlugPath,
   zChangeOwnerProjectPublicSlugResponse,
+  zCorrectOwnerProjectCandidateSlugBody,
+  zCorrectOwnerProjectCandidateSlugHeaders,
+  zCorrectOwnerProjectCandidateSlugPath,
+  zCorrectOwnerProjectCandidateSlugResponse,
   zChangeOwnerProjectStatusBody,
   zChangeOwnerProjectStatusHeaders,
   zChangeOwnerProjectStatusPath,
@@ -100,6 +104,16 @@ export interface ChangeOwnerProjectPublicSlugApplicationCommand {
   readonly expectedVersion: number;
   readonly projectId: StableId<"Project">;
   readonly slug: string;
+  readonly correlationId: string;
+}
+
+export interface CorrectOwnerProjectCandidateSlugApplicationCommand {
+  readonly actor: ActorContext;
+  readonly idempotencyKey: IdempotencyKey;
+  readonly expectedVersion: number;
+  readonly projectId: StableId<"Project">;
+  readonly candidateSlug: string;
+  readonly correlationId: string;
 }
 
 export interface RelateOwnerProjectsApplicationCommand {
@@ -122,6 +136,7 @@ export type OwnerProjectCommandOutcome =
   | "project-status-changed"
   | "project-featured-changed"
   | "public-slug-changed"
+  | "candidate-slug-corrected"
   | "project-related"
   | "taxonomy-value-assigned";
 
@@ -142,6 +157,12 @@ export interface OwnerProjectAggregateView {
     readonly redirects: ReadonlyArray<{
       readonly fromSlug: string;
       readonly toSlug: string;
+    }>;
+    readonly history?: ReadonlyArray<{
+      readonly sequence: number;
+      readonly fromSlug: string;
+      readonly toSlug: string;
+      readonly changedAt: string;
     }>;
   } | null;
   readonly relatedProjectIds: ReadonlyArray<StableId<"Project">>;
@@ -164,6 +185,9 @@ export interface OwnerProjectApplicationService {
   ): Promise<Result<OwnerProjectCommandReceipt, Rejection>>;
   changeOwnerProjectPublicSlug(
     command: ChangeOwnerProjectPublicSlugApplicationCommand,
+  ): Promise<Result<OwnerProjectCommandReceipt, Rejection>>;
+  correctOwnerProjectCandidateSlug(
+    command: CorrectOwnerProjectCandidateSlugApplicationCommand,
   ): Promise<Result<OwnerProjectCommandReceipt, Rejection>>;
   relateOwnerProjects(
     command: RelateOwnerProjectsApplicationCommand,
@@ -325,8 +349,8 @@ async function handleProjectCommand(
     readonly projectId: StableId<"Project">;
     readonly idempotencyKey: IdempotencyKey;
     readonly expectedVersion: number;
-    readonly correlationId: string;
     readonly body: Record<string, unknown>;
+    readonly correlationId: string;
   }) => unknown,
   call: (command: never) => Promise<Result<OwnerProjectCommandReceipt, Rejection>>,
 ): Promise<Response> {
@@ -372,8 +396,8 @@ async function handleProjectCommand(
       projectId: pathResult.data.projectId as StableId<"Project">,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
-      correlationId: traceId,
       body: bodyResult.data,
+      correlationId: traceId,
     });
     let result: Result<OwnerProjectCommandReceipt, Rejection>;
     try {
@@ -477,14 +501,39 @@ export async function handleChangeOwnerProjectPublicSlug(
       body: zChangeOwnerProjectPublicSlugBody,
       response: zChangeOwnerProjectPublicSlugResponse,
     },
-    ({ actor, projectId, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, projectId, idempotencyKey, expectedVersion, body, correlationId }) => ({
       actor,
       idempotencyKey,
       expectedVersion,
       projectId,
       slug: body["slug"] as string,
+      correlationId,
     }) as ChangeOwnerProjectPublicSlugApplicationCommand,
     (command) => deps.service.changeOwnerProjectPublicSlug(command),
+  );
+}
+
+export async function handleCorrectOwnerProjectCandidateSlug(
+  request: Request,
+  params: { projectId: string },
+  deps: OwnerProjectAdapterDeps,
+): Promise<Response> {
+  return await handleProjectCommand(
+    request,
+    params,
+    deps,
+    "correctOwnerProjectCandidateSlug",
+    {
+      path: zCorrectOwnerProjectCandidateSlugPath,
+      headers: zCorrectOwnerProjectCandidateSlugHeaders,
+      body: zCorrectOwnerProjectCandidateSlugBody,
+      response: zCorrectOwnerProjectCandidateSlugResponse,
+    },
+    ({ actor, projectId, idempotencyKey, expectedVersion, body, correlationId }) => ({
+      actor, idempotencyKey, expectedVersion, projectId,
+      candidateSlug: body["candidateSlug"] as string, correlationId,
+    }) as CorrectOwnerProjectCandidateSlugApplicationCommand,
+    (command) => deps.service.correctOwnerProjectCandidateSlug(command),
   );
 }
 

@@ -30,6 +30,7 @@ import {
   zChangeOwnerProjectStatusResponse,
   zSetOwnerProjectFeaturedResponse,
   zChangeOwnerProjectPublicSlugResponse,
+  zCorrectOwnerProjectCandidateSlugResponse,
   zRelateOwnerProjectsResponse,
   zAssignOwnerProjectTaxonomyValueResponse,
 } from "../../src/contracts/http/owner/v1/generated/zod.gen.js";
@@ -41,6 +42,7 @@ import {
 import {
   handleAssignOwnerProjectTaxonomyValue,
   handleChangeOwnerProjectPublicSlug,
+  handleCorrectOwnerProjectCandidateSlug,
   handleChangeOwnerProjectStatus,
   handleGetOwnerProjectAggregate,
   handleRelateOwnerProjects,
@@ -269,6 +271,19 @@ describe("Owner Project commands (#29)", () => {
     });
   });
 
+  it("corrects a private candidate slug once through the authenticated Owner boundary", async () => {
+    const fake = createOwnerProjectTestFake({ type: "success" });
+    const response = await handleCorrectOwnerProjectCandidateSlug(
+      postRequest(PROJECT_ID, "correct-candidate-slug", { body: { candidateSlug: "corrected-project" } }),
+      { projectId: PROJECT_ID },
+      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
+    );
+    expect(response.status).toBe(200);
+    expect(fake.calls.correctOwnerProjectCandidateSlug).toHaveLength(1);
+    expect(fake.calls.correctOwnerProjectCandidateSlug[0]).toMatchObject({ projectId: PROJECT_ID, candidateSlug: "corrected-project", expectedVersion: 2 });
+    expect(zCorrectOwnerProjectCandidateSlugResponse.safeParse(await response.json()).success).toBe(true);
+  });
+
   it("relates Projects once and returns the declared receipt", async () => {
     const fake = createOwnerProjectTestFake({ type: "success" });
     const response = await handleRelateOwnerProjects(
@@ -323,6 +338,7 @@ describe("Owner Project commands (#29)", () => {
         "change-status": handleChangeOwnerProjectStatus,
         "set-featured": handleSetOwnerProjectFeatured as never,
         "change-slug": handleChangeOwnerProjectPublicSlug as never,
+        "correct-candidate-slug": handleCorrectOwnerProjectCandidateSlug as never,
         "relate-project": handleRelateOwnerProjects as never,
         "assign-taxonomy-value": handleAssignOwnerProjectTaxonomyValue as never,
       };
@@ -486,6 +502,7 @@ describe("Owner Project commands (#29)", () => {
         expectedVersion: 2,
         projectId: PROJECT_ID as never,
         slug: "evidence-led-portfolio",
+        correlationId: "test-correlation",
       }),
       service.relateOwnerProjects({
         actor: owner as never,
@@ -526,6 +543,7 @@ describe("Owner Project commands (#29)", () => {
       async changeOwnerProjectPublicSlug(): Promise<never> {
         throw new Error("unreachable");
       },
+      async correctOwnerProjectCandidateSlug(): Promise<never> { throw new Error("unreachable"); },
       async relateOwnerProjects(): Promise<never> {
         throw new Error("unreachable");
       },

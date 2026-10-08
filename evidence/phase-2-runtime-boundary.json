@@ -12,7 +12,7 @@
     {
       "name": "owner-operation-count",
       "passed": true,
-      "detail": "47 active Owner operations and 1 explicitly fail-closed Phase 5 contract"
+      "detail": "48 active Owner operations and 0 explicitly fail-closed Phase 5 contracts"
     },
     {
       "name": "unique-operation-identifiers",
@@ -22,22 +22,22 @@
     {
       "name": "one-adapter-per-operation",
       "passed": true,
-      "detail": "52/52 active operations resolve once; deferred operations have no adapter"
+      "detail": "53/53 active operations resolve once; deferred operations have no adapter"
     },
     {
       "name": "unfinished-owner-operations-fail-closed",
       "passed": true,
-      "detail": "1 declared Phase 5 operations have no runtime adapter"
+      "detail": "0 declared Phase 5 operations have no runtime adapter"
     },
     {
       "name": "no-undeclared-product-adapters",
       "passed": true,
-      "detail": "52 adapter exports declared by a contract"
+      "detail": "53 adapter exports declared by a contract"
     },
     {
       "name": "only-callable-runtime-adapters",
       "passed": true,
-      "detail": "52/52 handler exports are callable runtime values"
+      "detail": "53/53 handler exports are callable runtime values"
     },
     {
       "name": "only-operational-routes",
@@ -262,8 +262,14 @@
       "path": "/api/owner/v1/projects/{projectId}/commands/correct-candidate-slug",
       "operationId": "correctOwnerProjectCandidateSlug",
       "expectedExport": "handleCorrectOwnerProjectCandidateSlug",
-      "activation": "fail-closed",
-      "matches": []
+      "activation": "active",
+      "matches": [
+        {
+          "exportName": "handleCorrectOwnerProjectCandidateSlug",
+          "file": "src/runtime/http/owner-project.ts",
+          "callable": true
+        }
+      ]
     },
     {
       "surface": "owner",
@@ -879,6 +885,11 @@
     },
     {
       "exportName": "handleChangeOwnerProjectStatus",
+      "file": "src/runtime/http/owner-project.ts",
+      "callable": true
+    },
+    {
+      "exportName": "handleCorrectOwnerProjectCandidateSlug",
       "file": "src/runtime/http/owner-project.ts",
       "callable": true
     },

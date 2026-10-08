@@ -73,6 +73,31 @@ export type ProjectCtaUpdate = {
     unavailableFallback: string;
 };
 
+export type PublicRouteRedirectView = {
+    fromSlug: string;
+    toSlug: string;
+};
+
+export type PublicRouteHistoryEntry = {
+    sequence: number;
+    fromSlug: string;
+    toSlug: string;
+    changedAt: string;
+};
+
+export type PublicRouteView = {
+    identity: StableId;
+    canonicalSlug: string;
+    /**
+     * Retained former slugs and their current canonical target.
+     */
+    redirects: Array<PublicRouteRedirectView>;
+    /**
+     * Immutable canonical slug changes ordered by sequence.
+     */
+    history?: Array<PublicRouteHistoryEntry>;
+};
+
 export type LocalizedRevisionStreamView = {
     revisionCount: number;
     currentPublishedRevisionId: StableId | null;
@@ -90,6 +115,11 @@ export type ContentAggregateView = {
     aggregateVersion: number;
     contentType: 'project' | 'achievement' | 'testimonial';
     lifecycle: 'draft' | 'published' | 'hidden' | 'archived';
+    publicRoute: PublicRouteView | null;
+    /**
+     * Immutable canonical slug changes ordered by sequence.
+     */
+    routeHistory: Array<PublicRouteHistoryEntry>;
     localizedStreams: {
         en?: LocalizedRevisionStreamView;
         ar?: LocalizedRevisionStreamView;
@@ -292,6 +322,10 @@ export type ContentHistoryEntry = {
 
 export type ContentHistoryPage = {
     entries: Array<ContentHistoryEntry>;
+    /**
+     * Immutable canonical slug changes ordered by sequence.
+     */
+    routeHistory: Array<PublicRouteHistoryEntry>;
     nextCursor: string | null;
 };
 
@@ -302,20 +336,6 @@ export type PublishLanguageCommand = {
 
 export type LifecycleReasonCommand = {
     reason?: string;
-};
-
-export type PublicRouteRedirectView = {
-    fromSlug: string;
-    toSlug: string;
-};
-
-export type PublicRouteView = {
-    identity: StableId;
-    canonicalSlug: string;
-    /**
-     * Retained former slugs and their current canonical target.
-     */
-    redirects: Array<PublicRouteRedirectView>;
 };
 
 export type ProjectTaxonomyAssignmentView = {

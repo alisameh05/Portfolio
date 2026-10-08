@@ -27,6 +27,13 @@ const CONTENT = {
   aggregateVersion: 1,
   contentType: "project",
   lifecycle: "draft",
+  publicRoute: {
+    identity: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea7",
+    canonicalSlug: "route-current",
+    redirects: [{ fromSlug: "route-before", toSlug: "route-current" }],
+    history: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current", changedAt: "2026-10-08T00:00:00.000Z" }],
+  },
+  routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current", changedAt: "2026-10-08T00:00:00.000Z" }],
   localizedStreams: { en: { revisionCount: 1, currentPublishedRevisionId: null } },
   revisions: [{ revisionId: REVISION_ID, locale: "en", sequence: 1, reviewed: false }],
 };
@@ -60,6 +67,8 @@ function createService() {
         revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: command.locale, currentSlug: "atlas", routeIdentity: unsafeStableId<"PublicRoute">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea4"),
         firstPublishedAt: "2026-10-07T12:00:00.000Z", publishedAt: "2026-10-07T12:00:00.000Z" } };
     },
+    async correctCandidateSlug(command) { return { ok: true, value: { aggregateId: command.projectId, aggregateVersion: command.expectedVersion + 1, outcome: "candidate-slug-corrected", slug: command.candidateSlug } }; },
+    async changePublicSlug(command) { return { ok: true, value: { aggregateId: command.projectId, aggregateVersion: command.expectedVersion + 1, outcome: "public-slug-changed", slug: command.newSlug } }; },
     async hideContent(command) {
       calls.hide.push(command);
       return { ok: true, value: { aggregateId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 4, outcome: "content-hidden" } };
@@ -73,11 +82,12 @@ function createService() {
       return { ok: true, value: { aggregateId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 4, outcome: "content-restored" } };
     },
     async getPublicProject() { return { ok: false as const, error: { kind: "not_found" as const, code: "PUBLIC_CONTENT_NOT_FOUND" } }; },
+    async resolvePublicProjectRoute() { return { ok: false as const, error: { kind: "not_found" as const, code: "PUBLIC_CONTENT_NOT_FOUND" } }; },
     async getPublicTestimonials() { return { ok: true as const, value: [] }; },
     async getPublicAchievementTimeline() { return { ok: true as const, value: [] }; },
     async getContentHistory(query) {
       calls.history.push(query);
-      return { ok: true, value: { entries: [{ revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: "en", sequence: 1, savedAt: "2026-10-05T08:00:00.000Z", reviewDecision: "accepted" }], nextCursor: null } };
+      return { ok: true, value: { entries: [{ revisionId: unsafeStableId<"Revision">(REVISION_ID), locale: "en", sequence: 1, savedAt: "2026-10-05T08:00:00.000Z", reviewDecision: "accepted" }], routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current", changedAt: "2026-10-08T00:00:00.000Z" }], nextCursor: null } };
     },
     async listProjectStatusValues() { return { ok: true as const, value: [] }; },
     async getProjectOwnerView() { return { ok: false as const, error: { kind: "not_found" as const, code: "PROJECT_NOT_FOUND" } }; },
@@ -149,6 +159,7 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: publicationFake, contentAuthoring: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(get.status).toBe(200);
+    expect(await get.json()).toMatchObject({ routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current" }] });
     expect(fake.calls.get).toHaveLength(1);
     const save = await handleSaveOwnerContentRevision(
       request("POST", { locale: "ar", title: "بحث", summary: "مسودة", body: "نص أولي", draftData: { contentType: "project", caseStudy: { outcomes: ["مخرجات"] },
@@ -216,7 +227,7 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: fake.service, security: ownerTestSecurity(), logger },
     );
     expect(history.status).toBe(200);
-    expect(await history.json()).toMatchObject({ entries: [{ revisionId: REVISION_ID, reviewDecision: "accepted" }], nextCursor: null });
+    expect(await history.json()).toMatchObject({ entries: [{ revisionId: REVISION_ID, reviewDecision: "accepted" }], routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current" }], nextCursor: null });
     expect(fake.calls.history[0]).toMatchObject({ limit: 25 });
     expect(JSON.stringify(logger.records)).not.toContain("Private preview");
   });

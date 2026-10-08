@@ -619,6 +619,256 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     ]);
   }, 30_000);
 
+  it("corrects candidate collisions and resolves A to B to C to A directly under one durable route identity", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const owner = actor(scope.ownerId);
+    const first = await createReviewedProject(scope, "Durable route", "route-durable", "en", { service: content, slug: "route-a" });
+    const published = await content.publishLanguageVersion({ actor: owner, contentId: first.contentId,
+      expectedVersion: first.aggregateVersion, idempotencyKey: key("route-durable-publish"), correlationId: "route-durable-publish",
+      locale: "en", revisionId: first.revisionId });
+    expect(published.ok).toBe(true);
+    if (!published.ok || published.value.routeIdentity === null || published.value.routeIdentity === undefined) return;
+    const routeIdentity = published.value.routeIdentity;
+    let version = published.value.aggregateVersion;
+    let firstChange: Awaited<ReturnType<typeof content.changePublicSlug>> | undefined;
+    for (const [index, slug] of ["route-b", "route-c", "route-a"].entries()) {
+      const changed = await content.changePublicSlug({ actor: owner, projectId: first.contentId as StableId<"Project">,
+        expectedVersion: version, idempotencyKey: key(`route-durable-change-${index}`), correlationId: `route-durable-change-${index}`, newSlug: slug });
+      expect(changed.ok).toBe(true);
+      if (!changed.ok) return;
+      if (index === 0) firstChange = changed;
+      version = changed.value.aggregateVersion;
+      const resolution = await content.resolvePublicProjectRoute({ slug: "route-b", locale: "en" });
+      if (index === 0) expect(resolution).toMatchObject({ ok: true, value: { type: "canonical", content: { currentSlug: slug, routeIdentity } } });
+      else expect(resolution).toMatchObject({ ok: true, value: { type: "redirect", statusCode: 308, routeIdentity, fromSlug: "route-b", toSlug: slug, location: `/projects/${slug}` } });
+    }
+    if (firstChange === undefined) return;
+    expect(await content.changePublicSlug({ actor: owner, projectId: first.contentId as StableId<"Project">,
+      expectedVersion: first.aggregateVersion + 1, idempotencyKey: key("route-durable-change-0"), correlationId: "route-durable-change-0", newSlug: "route-b" }))
+      .toEqual(firstChange);
+    expect(await content.changePublicSlug({ actor: owner, projectId: first.contentId as StableId<"Project">,
+      expectedVersion: first.aggregateVersion + 1, idempotencyKey: key("route-durable-change-0"), correlationId: "route-durable-change-0", newSlug: "different-intent" }))
+      .toMatchObject({ ok: false, error: { kind: "conflict", code: "IDEMPOTENCY_KEY_REUSED" } });
+    const aggregate = await content.getOwnerContentAggregate({ actor: owner, contentId: first.contentId });
+    expect(aggregate.ok).toBe(true);
+    if (!aggregate.ok) return;
+    expect(aggregate.value).toMatchObject({ aggregateVersion: version, publicRoute: {
+      identity: routeIdentity, canonicalSlug: "route-a", redirects: [
+        { fromSlug: "route-b", toSlug: "route-a" }, { fromSlug: "route-c", toSlug: "route-a" },
+      ], history: [
+        { sequence: 1, fromSlug: "route-a", toSlug: "route-b" },
+        { sequence: 2, fromSlug: "route-b", toSlug: "route-c" },
+        { sequence: 3, fromSlug: "route-c", toSlug: "route-a" },
+      ],
+    }, routeHistory: [
+      { sequence: 1, fromSlug: "route-a", toSlug: "route-b" },
+      { sequence: 2, fromSlug: "route-b", toSlug: "route-c" },
+      { sequence: 3, fromSlug: "route-c", toSlug: "route-a" },
+    ] });
+    expect(await content.getContentHistory({ actor: owner, contentId: first.contentId, limit: 25 }))
+      .toMatchObject({ ok: true, value: { routeHistory: [
+        { sequence: 1, fromSlug: "route-a", toSlug: "route-b" },
+        { sequence: 2, fromSlug: "route-b", toSlug: "route-c" },
+        { sequence: 3, fromSlug: "route-c", toSlug: "route-a" },
+      ] } });
+    expect(await content.getProjectOwnerView({ actor: owner, projectId: first.contentId as StableId<"Project"> }))
+      .toMatchObject({ ok: true, value: { publicRoute: { history: [
+        { sequence: 1, fromSlug: "route-a", toSlug: "route-b" },
+        { sequence: 2, fromSlug: "route-b", toSlug: "route-c" },
+        { sequence: 3, fromSlug: "route-c", toSlug: "route-a" },
+      ] } } });
+
+    const collision = await createReviewedProject(scope, "Candidate conflict", "route-candidate-collision", "en", { service: content, slug: "route-a" });
+    const rejected = await content.publishLanguageVersion({ actor: owner, contentId: collision.contentId,
+      expectedVersion: collision.aggregateVersion, idempotencyKey: key("route-candidate-collision-publish"), correlationId: "route-candidate-collision-publish",
+      locale: "en", revisionId: collision.revisionId });
+    expect(rejected).toMatchObject({ ok: false, error: { kind: "conflict", code: "PUBLIC_SLUG_CONFLICT" } });
+    const corrected = await content.correctCandidateSlug({ actor: owner, projectId: collision.contentId as StableId<"Project">,
+      expectedVersion: collision.aggregateVersion, candidateSlug: "route-candidate-fixed",
+      idempotencyKey: key("route-candidate-correction"), correlationId: "route-candidate-correction" });
+    expect(corrected).toMatchObject({ ok: true, value: { outcome: "candidate-slug-corrected", slug: "route-candidate-fixed" } });
+    if (!corrected.ok) return;
+    const correctedPublication = await content.publishLanguageVersion({ actor: owner, contentId: collision.contentId,
+      expectedVersion: corrected.value.aggregateVersion, idempotencyKey: key("route-candidate-fixed-publish"), correlationId: "route-candidate-fixed-publish",
+      locale: "en", revisionId: collision.revisionId });
+    expect(correctedPublication).toMatchObject({ ok: true, value: { currentSlug: "route-candidate-fixed" } });
+
+    const neverPublished = await createReviewedProject(scope, "Archived candidate", "archived-candidate-original", "en", { service: content });
+    const archivedCandidate = await content.archiveContent({ actor: owner, contentId: neverPublished.contentId,
+      expectedVersion: neverPublished.aggregateVersion, idempotencyKey: key("route-archived-candidate-archive"),
+      correlationId: "route-archived-candidate-archive" });
+    expect(archivedCandidate).toMatchObject({ ok: true, value: { outcome: "content-archived" } });
+    if (!archivedCandidate.ok) return;
+    const archivedCorrection = await content.correctCandidateSlug({ actor: owner, projectId: neverPublished.contentId as StableId<"Project">,
+      expectedVersion: archivedCandidate.value.aggregateVersion, candidateSlug: "archived-candidate-corrected",
+      idempotencyKey: key("route-archived-candidate-correct"), correlationId: "route-archived-candidate-correct" });
+    expect(archivedCorrection).toMatchObject({ ok: true, value: { outcome: "candidate-slug-corrected", slug: "archived-candidate-corrected" } });
+    const archivedCandidateRows = await admin.query(
+      "select item.lifecycle, item.candidate_slug, (select count(*)::int from content.public_routes route where route.content_id = item.content_id) routes, " +
+      "(select count(*)::int from content.public_route_reservations reservation where reservation.content_id = item.content_id) reservations " +
+      "from content.items item where item.content_id = $1::uuid", [neverPublished.contentId],
+    );
+    expect(archivedCandidateRows.rows[0]).toEqual({ lifecycle: "archived", candidate_slug: "archived-candidate-corrected", routes: 0, reservations: 0 });
+    const hijack = await content.changePublicSlug({ actor: owner, projectId: first.contentId as StableId<"Project">,
+      expectedVersion: version, idempotencyKey: key("route-hijack"), correlationId: "route-hijack", newSlug: "route-candidate-fixed" });
+    expect(hijack).toMatchObject({ ok: false, error: { kind: "conflict", code: "PUBLIC_SLUG_CONFLICT" } });
+    expect(await content.getOwnerContentAggregate({ actor: owner, contentId: first.contentId }))
+      .toMatchObject({ ok: true, value: { aggregateVersion: version, publicRoute: { canonicalSlug: "route-a" } } });
+
+    const hiddenLocale = await content.resolvePublicProjectRoute({ slug: "route-c", locale: "ar" });
+    expect(hiddenLocale).toMatchObject({ ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } });
+    expect(await content.changePublicSlug({ actor: owner, projectId: first.contentId as StableId<"Project">, expectedVersion: version,
+      idempotencyKey: key("route-open-redirect"), correlationId: "route-open-redirect", newSlug: "https://evil.example" }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_PUBLIC_PROJECT_SLUG" } });
+    const routeRows = await admin.query("select normalized_slug, is_current from content.public_route_reservations where route_identity = $1::uuid order by normalized_slug", [routeIdentity]);
+    expect(routeRows.rows).toEqual([
+      { normalized_slug: "route-a", is_current: true }, { normalized_slug: "route-b", is_current: false }, { normalized_slug: "route-c", is_current: false },
+    ]);
+    await admin.query("update content.items set lifecycle = 'hidden', aggregate_version = aggregate_version + 1 where content_id = $1::uuid", [first.contentId]);
+    expect(await content.resolvePublicProjectRoute({ slug: "route-a", locale: "en" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } });
+    expect(await content.resolvePublicProjectRoute({ slug: "route-b", locale: "en" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } });
+
+    const race = await createReviewedProject(scope, "Route publication race", "route-publication-race", "en", { service: content, slug: "route-race" });
+    const raceEnglishPublished = await content.publishLanguageVersion({ actor: owner, contentId: race.contentId,
+      expectedVersion: race.aggregateVersion, idempotencyKey: key("route-race-english-publish"), correlationId: "route-race-english-publish",
+      locale: "en", revisionId: race.revisionId });
+    expect(raceEnglishPublished.ok).toBe(true);
+    if (!raceEnglishPublished.ok) return;
+    const arabicDraft = await content.saveRevision({ actor: owner, contentId: race.contentId, expectedVersion: raceEnglishPublished.value.aggregateVersion,
+      idempotencyKey: key("route-race-arabic-save"), correlationId: "route-race-arabic-save", locale: "ar",
+      title: "سباق المسار", summary: "نسخة مستقلة.", body: "محتوى عربي." });
+    expect(arabicDraft.ok).toBe(true);
+    if (!arabicDraft.ok) return;
+    const arabicPreview = await content.previewRevision({ actor: owner, contentId: race.contentId, revisionId: arabicDraft.value.revisionId });
+    expect(arabicPreview.ok).toBe(true);
+    if (!arabicPreview.ok) return;
+    const arabicReview = await content.reviewRevision({ actor: owner, contentId: race.contentId, revisionId: arabicDraft.value.revisionId,
+      expectedVersion: arabicDraft.value.aggregateVersion, idempotencyKey: key("route-race-arabic-review"), correlationId: "route-race-arabic-review",
+      locale: "ar", snapshotHash: arabicPreview.value.snapshotHash, evidenceVersion: arabicPreview.value.evidenceVersion,
+      decision: "accepted", findings: [] });
+    expect(arabicReview.ok).toBe(true);
+    if (!arabicReview.ok) return;
+    const [racePublish, raceRename] = await Promise.all([
+      content.publishLanguageVersion({ actor: owner, contentId: race.contentId, expectedVersion: arabicReview.value.aggregateVersion,
+        idempotencyKey: key("route-race-arabic-publish"), correlationId: "route-race-arabic-publish", locale: "ar", revisionId: arabicDraft.value.revisionId }),
+      content.changePublicSlug({ actor: owner, projectId: race.contentId as StableId<"Project">,
+        expectedVersion: arabicReview.value.aggregateVersion, idempotencyKey: key("route-race-rename"),
+        correlationId: "route-race-rename", newSlug: "route-race-renamed" }),
+    ]);
+    expect([racePublish.ok, raceRename.ok].filter(Boolean)).toHaveLength(1);
+    const failedRace = racePublish.ok ? raceRename : racePublish;
+    expect(failedRace).toMatchObject({ ok: false, error: { kind: "precondition_failed", code: "CONTENT_VERSION_MISMATCH" } });
+  }, 30_000);
+
+  it.each(["hidden", "archived"] as const)("changes retained Project routes while %s and restores matching discovery", async (lifecycle) => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const owner = actor(scope.ownerId);
+    const project = await createReviewedProject(scope, `Route ${lifecycle}`, `route-retained-${lifecycle}`, "en", { service: content, slug: `route-${lifecycle}-before` });
+    const published = await content.publishLanguageVersion({ actor: owner, contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key(`route-retained-${lifecycle}-publish`),
+      correlationId: `route-retained-${lifecycle}-publish`, locale: "en", revisionId: project.revisionId });
+    expect(published.ok).toBe(true);
+    if (!published.ok) return;
+    const lifecycleChange = lifecycle === "hidden"
+      ? await content.hideContent({ actor: owner, contentId: project.contentId, expectedVersion: published.value.aggregateVersion,
+        idempotencyKey: key(`route-retained-${lifecycle}-hide`), correlationId: `route-retained-${lifecycle}-hide` })
+      : await content.archiveContent({ actor: owner, contentId: project.contentId, expectedVersion: published.value.aggregateVersion,
+        idempotencyKey: key(`route-retained-${lifecycle}-archive`), correlationId: `route-retained-${lifecycle}-archive` });
+    expect(lifecycleChange.ok).toBe(true);
+    if (!lifecycleChange.ok) return;
+    const changed = await content.changePublicSlug({ actor: owner, projectId: project.contentId as StableId<"Project">,
+      expectedVersion: lifecycleChange.value.aggregateVersion, idempotencyKey: key(`route-retained-${lifecycle}-rename`),
+      correlationId: `route-retained-${lifecycle}-rename`, newSlug: `route-${lifecycle}-after` });
+    expect(changed).toMatchObject({ ok: true, value: { outcome: "public-slug-changed", slug: `route-${lifecycle}-after` } });
+    if (!changed.ok) return;
+    expect(await content.resolvePublicProjectRoute({ slug: `route-${lifecycle}-before`, locale: "en" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } });
+    expect(await content.resolvePublicProjectRoute({ slug: `route-${lifecycle}-after`, locale: "en" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "PUBLIC_CONTENT_NOT_FOUND" } });
+    const restored = await content.restoreContent({ actor: owner, contentId: project.contentId, expectedVersion: changed.value.aggregateVersion,
+      idempotencyKey: key(`route-retained-${lifecycle}-restore`), correlationId: `route-retained-${lifecycle}-restore` });
+    expect(restored.ok).toBe(true);
+    if (!restored.ok) return;
+    expect(await content.resolvePublicProjectRoute({ slug: `route-${lifecycle}-after`, locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "canonical", content: { currentSlug: `route-${lifecycle}-after` } } });
+    expect(await content.resolvePublicProjectRoute({ slug: `route-${lifecycle}-before`, locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "redirect", toSlug: `route-${lifecycle}-after` } });
+    const projection = await admin.query(
+      "select locale, slug from taxonomy.project_discovery_locales where content_id = $1::uuid order by locale", [project.contentId],
+    );
+    expect(projection.rows).toEqual([{ locale: "en", slug: `route-${lifecycle}-after` }]);
+  }, 30_000);
+
+  it("rolls back route reservations, immutable history, projections, receipt, and event when outbox append fails", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const owner = actor(scope.ownerId);
+    const project = await createReviewedProject(scope, "Route rollback", "route-rollback", "en", { service: content, slug: "route-rollback-before" });
+    const published = await content.publishLanguageVersion({ actor: owner, contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key("route-rollback-publish"), correlationId: "route-rollback-publish",
+      locale: "en", revisionId: project.revisionId });
+    expect(published.ok).toBe(true);
+    if (!published.ok) return;
+    const failingOperations = {
+      ...operations,
+      outbox: { ...operations.outbox, async append() { throw new Error("route outbox fault"); } },
+    };
+    const failingContent = service(scope, failingOperations);
+    const routeChangeKeyHash = createHash("sha256").update("route-rollback-rename").digest("hex");
+    await expect(failingContent.changePublicSlug({ actor: owner, projectId: project.contentId as StableId<"Project">,
+      expectedVersion: published.value.aggregateVersion, idempotencyKey: key("route-rollback-rename"),
+      correlationId: "route-rollback-rename", newSlug: "route-rollback-after" })).rejects.toThrow();
+    const aggregate = await content.getOwnerContentAggregate({ actor: owner, contentId: project.contentId });
+    expect(aggregate).toMatchObject({ ok: true, value: { aggregateVersion: published.value.aggregateVersion, publicRoute: {
+      canonicalSlug: "route-rollback-before", redirects: [], history: [],
+    } } });
+    const persisted = await admin.query(
+      "select (select count(*)::int from content.public_route_reservations where content_id = $1::uuid and normalized_slug = 'route-rollback-after') attempted_reservation, " +
+      "(select count(*)::int from content.public_route_history where content_id = $1::uuid) history, " +
+      "(select count(*)::int from taxonomy.project_discovery_locales where content_id = $1::uuid and slug = 'route-rollback-after') projection, " +
+      "(select count(*)::int from operations.idempotency_records where key_hash = $2) receipts, " +
+      "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.public_route_changed.v1') events",
+      [project.contentId, routeChangeKeyHash],
+    );
+    expect(persisted.rows[0]).toEqual({ attempted_reservation: 0, history: 0, projection: 0, receipts: 0, events: 0 });
+  }, 30_000);
+
+  it("rolls back a route change when an eligible Discovery projection is missing", async () => {
+    const scope = await configuredScope();
+    const content = service(scope);
+    const owner = actor(scope.ownerId);
+    const project = await createReviewedProject(scope, "Missing route projection", "route-projection-missing", "en", {
+      service: content, slug: "route-projection-before",
+    });
+    const published = await content.publishLanguageVersion({ actor: owner, contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key("route-projection-publish"),
+      correlationId: "route-projection-publish", locale: "en", revisionId: project.revisionId });
+    expect(published.ok).toBe(true);
+    if (!published.ok) return;
+    await admin.query("delete from taxonomy.project_discovery_locales where content_id = $1::uuid", [project.contentId]);
+
+    await expect(content.changePublicSlug({ actor: owner, projectId: project.contentId as StableId<"Project">,
+      expectedVersion: published.value.aggregateVersion, idempotencyKey: key("route-projection-rename"),
+      correlationId: "route-projection-rename", newSlug: "route-projection-after" })).rejects.toThrow();
+
+    const keyHash = createHash("sha256").update("route-projection-rename").digest("hex");
+    const state = await admin.query(
+      "select (select aggregate_version from content.items where content_id = $1::uuid) aggregate_version, " +
+      "(select current_slug from content.public_routes where content_id = $1::uuid) current_slug, " +
+      "(select count(*)::int from content.public_route_reservations where content_id = $1::uuid and normalized_slug = 'route-projection-after') attempted_reservation, " +
+      "(select count(*)::int from content.public_route_history where content_id = $1::uuid) history, " +
+      "(select count(*)::int from operations.idempotency_records where key_hash = $2) receipts, " +
+      "(select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.public_route_changed.v1') events",
+      [project.contentId, keyHash],
+    );
+    expect(state.rows[0]).toEqual({ aggregate_version: published.value.aggregateVersion, current_slug: "route-projection-before",
+      attempted_reservation: 0, history: 0, receipts: 0, events: 0 });
+  }, 30_000);
+
   it("publishes minimal Testimonials with explicit associations, localized review, and visibility-safe projections", async () => {
     const scope = await configuredScope();
     const profile = await createReviewedTestimonial(scope, "profile-testimonial", { type: "profile" });
@@ -1471,17 +1721,23 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "has_table_privilege('anon', 'taxonomy.project_discovery_locales', 'select') anon_discovery_projection, " +
       "has_column_privilege('shipwithali_application', 'content.public_routes', 'current_slug', 'UPDATE') app_route_slug_update, " +
       "has_table_privilege('authenticated', 'content.public_routes', 'select') authenticated_routes, " +
-      "has_table_privilege('shipwithali_worker', 'content.language_publications', 'select') worker_publication",
+      "has_table_privilege('shipwithali_worker', 'content.language_publications', 'select') worker_publication, " +
+      "has_table_privilege('shipwithali_application', 'content.public_routes', 'select') app_routes, " +
+      "has_table_privilege('shipwithali_application', 'content.public_route_reservations', 'select') app_reservations, " +
+      "has_column_privilege('shipwithali_application', 'content.public_route_reservations', 'is_current', 'UPDATE') app_reservation_current_update, " +
+      "has_table_privilege('shipwithali_application', 'content.public_route_history', 'select') app_route_history, " +
+      "has_table_privilege('shipwithali_application', 'content.public_route_history', 'insert') app_route_history_insert",
     );
     expect(grants.rows[0]).toEqual({ anon_root: false, anon_revision: false, authenticated_root: false, worker_revision: false,
       backup_root: false, anon_projection: false, anon_testimonial_projection: false, authenticated_testimonial_publication: false,
       worker_testimonial_history: false, backup_testimonial_projection: false, app_testimonial_projection: true,
-      anon_lifecycle_history: false, authenticated_lifecycle_history: false, worker_lifecycle_history: false, backup_lifecycle_history: false,
-      app_lifecycle_read: true, app_lifecycle_insert: true, app_lifecycle_update: false, app_lifecycle_delete: false,
-      app_testimonial_quote_update: true, anon_discovery_projection: false, app_route_slug_update: false,
+      app_testimonial_quote_update: true, anon_discovery_projection: false, app_route_slug_update: true,
       anon_achievement_projection: false, authenticated_achievement_projection: false,
       worker_achievement_projection: false, backup_achievement_projection: false,
-      authenticated_routes: false, worker_publication: false });
+      anon_lifecycle_history: false, authenticated_lifecycle_history: false, worker_lifecycle_history: false, backup_lifecycle_history: false,
+      app_lifecycle_read: true, app_lifecycle_insert: true, app_lifecycle_update: false, app_lifecycle_delete: false,
+      authenticated_routes: false, worker_publication: false, app_routes: true, app_reservations: true,
+      app_reservation_current_update: true, app_route_history: true, app_route_history_insert: true });
     const lifecycleRls = await admin.query(
       "select relrowsecurity, relforcerowsecurity from pg_class where oid = 'content.lifecycle_history'::regclass",
     );

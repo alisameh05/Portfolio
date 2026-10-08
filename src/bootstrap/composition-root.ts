@@ -227,11 +227,16 @@ export async function getContentAuthoringApplicationService(): Promise<ContentAu
   return createProductionContentAuthoringService();
 }
 
-/** The real Project status and Featured operations come from Content persistence. */
+/** Project route, status, and Featured operations share the Content transaction boundary. */
 export async function getOwnerProjectApplicationService(): Promise<OwnerProjectApplicationService> {
   const contentAuthoring = await getContentAuthoringApplicationService();
-  const { createContentOwnerProjectService } = await import("../runtime/content-owner-project.js");
-  return createContentOwnerProjectService(contentAuthoring);
+  const [{ createContentBackedOwnerProjectService }, { createContentOwnerProjectService }, { createProductionOwnerProjectService }] = await Promise.all([
+    import("../runtime/owner-project-content-service.js"),
+    import("../runtime/content-owner-project.js"),
+    import("../runtime/fakes/owner-project.js"),
+  ]);
+  const routeService = createContentBackedOwnerProjectService(contentAuthoring, createProductionOwnerProjectService());
+  return createContentOwnerProjectService(contentAuthoring, routeService);
 }
 
 export function getRuntimeConfig(): RuntimeConfig {
