@@ -3,7 +3,7 @@ import type { TransactionContext } from "../../../runtime/ports.js";
 import type { ContentTaxonomyAssignmentsPort } from "../../content-publishing/index.js";
 import type {
   TaxonomyValue,
-  ProjectDiscoveryCard,
+  ProjectDiscoveryPage,
   ProjectStatusValueView,
   ProjectStatusValueReceipt,
   ProjectStatusHistoryEntry,
@@ -113,7 +113,7 @@ export interface TaxonomyDiscoveryService {
 
   getPublicDiscovery(
     query: GetPublicDiscoveryQuery,
-  ): Promise<Result<readonly ProjectDiscoveryCard[], Rejection>>;
+  ): Promise<Result<ProjectDiscoveryPage, Rejection>>;
 }
 
 export interface CreateProjectStatusValueCommand {

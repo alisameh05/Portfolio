@@ -25,17 +25,33 @@ export interface ProjectDiscoveryCard {
   readonly projectId: StableId<"Project">;
   readonly locale: "en" | "ar";
   readonly title: string;
+  readonly summary: string;
   readonly slug: string;
   readonly firstPublishedAt: string;
-  readonly taxonomyValues: readonly Pick<TaxonomyValue, "id" | "taxonomyId" | "slug" | "label">[];
+  readonly taxonomyValues: readonly Pick<TaxonomyValue, "id" | "taxonomyId" | "label">[];
   readonly isFeatured: boolean;
+}
+
+export interface ProjectDiscoveryFacet {
+  readonly taxonomyId: StableId<"Taxonomy">;
+  readonly valueId: StableId<"TaxonomyValue">;
+  readonly kind: "category" | "ai-ml-domain" | "technology" | "project-type";
+  readonly label: string;
+  readonly projectCount: number;
+}
+
+export interface ProjectDiscoveryPage {
+  readonly entries: readonly ProjectDiscoveryCard[];
+  readonly facets: readonly ProjectDiscoveryFacet[];
+  readonly nextCursor: string | null;
 }
 
 export interface PublicDiscoveryCriteria {
   readonly locale: "en" | "ar";
+  /** At most one stable controlled value may be selected. */
   readonly taxonomyValueIds?: readonly StableId<"TaxonomyValue">[];
-  /** Clamp to 1..100 before querying; default to 25. */
-  readonly limit: number;
+  /** Defaults to 20 and is capped at 100. */
+  readonly limit?: number;
   readonly cursor?: string;
 }
 

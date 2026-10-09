@@ -1,7 +1,7 @@
 {
-  "sourceRevision": "82b385c39006f0399b2b516ca8e29c72746dec5f",
-  "sourceTreeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "runId": "8eaa5779-d0df-4e9e-9cd9-22e8d9380d56",
+  "sourceRevision": "9d0b22bb9c772035fb65903ff41c8ecd89b7537b",
+  "sourceTreeSha256": "9bb8843bbd1a8a590a092344b60303e5bfb4ee23084e787cfccbd4d92dc84774",
+  "runId": "dea8ec6a-b7a7-4d4f-93b0-7bed22944401",
   "toolVersions": {
     "node": "24.21.0",
     "npm": "11.19.0",
@@ -88,6 +88,10 @@
     {
       "file": "20261009090000_record_taxonomy_evolution_actor_reason.sql",
       "sha256": "14d9ebfa4266d239eca09f6e6ee944684423624e2ef545bfdf57e9c8aca9114e"
+    },
+    {
+      "file": "20261009100000_index_project_discovery_reads.sql",
+      "sha256": "ad685fa5f79f1f7c3b9ba001c3c5ea73272845ce6881eece0787a25fcd056d48"
     }
   ],
   "migrationLedger": [
@@ -166,6 +170,10 @@
     {
       "version": "20261009090000",
       "name": "record_taxonomy_evolution_actor_reason"
+    },
+    {
+      "version": "20261009100000",
+      "name": "index_project_discovery_reads"
     }
   ],
   "cleanUpgradeEquivalent": true,
@@ -197,18 +205,6 @@
     {
       "file": "tests/contracts/owner-contract.test.ts",
       "passed": 6,
-      "failed": 0,
-      "skipped": 0
-    },
-    {
-      "file": "tests/phase4/owner-operation-policy.test.ts",
-      "passed": 11,
-      "failed": 0,
-      "skipped": 0
-    },
-    {
-      "file": "tests/phase4/owner-request-security.test.ts",
-      "passed": 20,
       "failed": 0,
       "skipped": 0
     },
@@ -245,6 +241,18 @@
     {
       "file": "tests/runtime/owner-taxonomy.test.ts",
       "passed": 35,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "tests/phase4/owner-operation-policy.test.ts",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "tests/phase4/owner-request-security.test.ts",
+      "passed": 20,
       "failed": 0,
       "skipped": 0
     }

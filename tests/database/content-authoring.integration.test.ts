@@ -5,8 +5,10 @@ import { createContentAuthoringService } from "../../src/modules/content-publish
 import { createPostgresContentAuthoringRepository } from "../../src/modules/content-publishing/adapters/postgres-authoring.js";
 import { createPostgresContentTaxonomyAssignmentsPort } from "../../src/modules/content-publishing/adapters/postgres-taxonomy-assignments.js";
 import { createPostgresProjectDiscoveryProjectionWriter } from "../../src/modules/taxonomy-discovery/adapters/index.js";
+import { createPostgresPublicDiscoveryReader } from "../../src/modules/taxonomy-discovery/adapters/index.js";
 import { createPostgresTaxonomyOwnerRepository } from "../../src/modules/taxonomy-discovery/adapters/index.js";
 import { createTaxonomyOwnerService } from "../../src/modules/taxonomy-discovery/application/owner-taxonomies.js";
+import { createPublicDiscoveryService } from "../../src/modules/taxonomy-discovery/application/public-discovery.js";
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
@@ -2894,4 +2896,95 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     });
     expect(wrongKind).toMatchObject({ ok: false, error: { kind: "not_found", code: "PROJECT_NOT_FOUND" } });
   }, 30_000);
+
+  it("queries only current published locale projections with stable tied-time cursors and controlled facets", async () => {
+    const scope = await configuredScope();
+    const prefix = `discovery-${process.pid}-${randomBytes(3).toString("hex")}`;
+    const publishedAt = "2026-10-09T11:30:00.000Z";
+    const content = service(scope, operations, { now: () => publishedAt });
+    const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
+    const taxonomy = taxonomyServiceForMerge(scope);
+    const createdValue = await taxonomy.createOwnerTaxonomyValue({
+      actor: actor(scope.ownerId), idempotencyKey: key(`${prefix}-value`), taxonomyId, expectedVersion: 1, name: "TypeScript",
+    });
+    expect(createdValue.ok).toBe(true);
+    const taxonomyView = await taxonomy.getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    if (!taxonomyView.ok) throw new Error("DISCOVERY_TAXONOMY_NOT_FOUND");
+    const valueId = taxonomyView.value.values[0]!.valueId;
+
+    const projects = [] as Awaited<ReturnType<typeof createReviewedProject>>[];
+    for (const title of ["Discovery Alpha", "Discovery Beta", "Discovery Hidden"]) {
+      const slug = title.toLowerCase().replaceAll(" ", "-");
+      const project = await createReviewedProject(scope, title, `${prefix}-${slug}`, "en", { service: content });
+      const published = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+        expectedVersion: project.aggregateVersion, idempotencyKey: key(`${prefix}-${slug}-publish`),
+        correlationId: `${prefix}-${slug}-publish`, locale: "en", revisionId: project.revisionId });
+      if (!published.ok) throw new Error(`DISCOVERY_PROJECT_PUBLICATION_FAILED:${published.error.kind}:${published.error.code}`);
+      projects.push({ ...project, aggregateVersion: published.value.aggregateVersion });
+    }
+    for (const [index, project] of projects.slice(0, 2).entries()) {
+      const assigned = await content.assignProjectTaxonomyValue({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+        valueId, expectedVersion: project.aggregateVersion, idempotencyKey: key(`${prefix}-assign-${index}`), correlationId: `${prefix}-assign-${index}` });
+      expect(assigned.ok).toBe(true);
+    }
+    const hidden = await content.hideContent({ actor: actor(scope.ownerId), contentId: projects[2]!.contentId,
+      expectedVersion: projects[2]!.aggregateVersion, idempotencyKey: key(`${prefix}-hide`), correlationId: `${prefix}-hide` });
+    expect(hidden.ok).toBe(true);
+
+    const discovery = createPublicDiscoveryService({
+      reader: createPostgresPublicDiscoveryReader(scope), transactions: operations.transactions,
+    });
+    const first = await discovery.getPublicDiscovery({ locale: "en", limit: 1 });
+    expect(first).toMatchObject({ ok: true, value: { entries: [{ summary: expect.any(String) }], facets: expect.arrayContaining([
+      expect.objectContaining({ valueId, label: "TypeScript", projectCount: 2 }),
+    ]) } });
+    if (!first.ok || first.value.nextCursor === null) throw new Error("DISCOVERY_NEXT_PAGE_MISSING");
+    const second = await discovery.getPublicDiscovery({ locale: "en", limit: 1, cursor: first.value.nextCursor });
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    const ids = [...first.value.entries, ...second.value.entries].map((entry) => entry.projectId);
+    expect(ids).toEqual([...ids].sort((a, b) => b.localeCompare(a)));
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).not.toContain(projects[2]!.contentId);
+    expect(await discovery.getPublicDiscovery({ locale: "ar" })).toMatchObject({ ok: true, value: { entries: [], facets: [], nextCursor: null } });
+    expect(await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: ["01890f3e-7b2f-7cc0-98cf-5a2890378ef0" as StableId<"TaxonomyValue">] }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_FILTER" } });
+    expect(await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [valueId, valueId] }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_FILTER" } });
+    expect(await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: ["not-a-uuid" as StableId<"TaxonomyValue">] }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_FILTER" } });
+    expect(await discovery.getPublicDiscovery({ locale: "en", limit: 101 }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_PAGE_SIZE" } });
+    expect(await discovery.getPublicDiscovery({ locale: "ar", limit: 1, cursor: first.value.nextCursor }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_CURSOR" } });
+
+    const retired = await taxonomy.retireOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key(`${prefix}-retire`),
+      valueId, expectedVersion: 2, reason: "Retained history remains filterable." });
+    expect(retired.ok).toBe(true);
+    expect(await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [valueId] }))
+      .toMatchObject({ ok: true, value: { entries: expect.arrayContaining([expect.objectContaining({ projectId: projects[0]!.contentId })]) } });
+
+    const orderingIndex = await admin.query("select indexdef from pg_indexes where schemaname = 'taxonomy' and indexname = 'project_discovery_locale_public_order'");
+    expect(orderingIndex.rows[0]?.["indexdef"]).toContain("first_published_at DESC, content_id DESC");
+
+    // The behavioral fixture is deliberately small. Clone the production table and indexes,
+    // seed realistic cardinality, then inspect the same scoped keyset page shape so the planner
+    // can demonstrate that ordering is supplied by the composite index without a sort.
+    await admin.query("create temporary table discovery_plan_probe (like taxonomy.project_discovery_locales including all)");
+    await admin.query(`insert into discovery_plan_probe
+      (content_id, portfolio_id, locale, revision_id, route_identity, title, slug, first_published_at, published_at)
+      select gen_random_uuid(), $1::uuid, 'en', gen_random_uuid(), gen_random_uuid(),
+             'Plan probe ' || series::text, 'plan-probe-' || series::text,
+             timestamptz '2026-10-09 12:00:00+00' - series * interval '1 second',
+             timestamptz '2026-10-09 12:00:00+00' - series * interval '1 second'
+        from generate_series(1, 10000) series`, [scope.portfolioId]);
+    await admin.query("analyze discovery_plan_probe");
+    const plan = await admin.query("explain (analyze, buffers, format json) select content_id from discovery_plan_probe where portfolio_id = $1::uuid and locale = 'en' order by first_published_at desc, content_id desc limit 21", [scope.portfolioId]);
+    const planJson = JSON.stringify(plan.rows[0]?.["QUERY PLAN"]);
+    expect(planJson).toMatch(/\"Node Type\":\"Limit\"/);
+    expect(planJson).toMatch(/\"Actual Rows\":21/);
+    expect(planJson).toMatch(/\"Node Type\":\"Index Scan\"|\"Node Type\":\"Index Only Scan\"/);
+    expect(planJson).not.toContain('"Node Type":"Sort"');
+    await admin.query("drop table discovery_plan_probe");
+  }, 60_000);
 });
