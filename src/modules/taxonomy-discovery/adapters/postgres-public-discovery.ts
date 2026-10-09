@@ -48,6 +48,17 @@ function parseTaxonomyValues(value: unknown): ProjectDiscoveryCard["taxonomyValu
   });
 }
 
+function currentPublicLocaleJoins() {
+  return sql`join content.items item on item.content_id = discovery.content_id
+              and item.portfolio_id = discovery.portfolio_id and item.content_type = 'project' and item.lifecycle = 'published'
+            join content.language_publications publication on publication.content_id = discovery.content_id
+              and publication.portfolio_id = discovery.portfolio_id and publication.locale = discovery.locale
+              and publication.revision_id = discovery.revision_id and publication.route_identity = discovery.route_identity
+            join content.public_project_locales public_project on public_project.content_id = publication.content_id
+              and public_project.portfolio_id = publication.portfolio_id and public_project.locale = publication.locale
+              and public_project.revision_id = publication.revision_id and public_project.route_identity = publication.route_identity`;
+}
+
 export function createPostgresPublicDiscoveryReader(scope: PublicDiscoveryScope): PublicDiscoveryReader {
   return {
     async read(query: PublicDiscoveryReadQuery, context: TransactionContext): Promise<Result<{
@@ -88,14 +99,7 @@ export function createPostgresPublicDiscoveryReader(scope: PublicDiscoveryScope)
                       and facet.locale = discovery.locale
                  ), '[]'::jsonb) as taxonomy_values
             from taxonomy.project_discovery_locales discovery
-            join content.items item on item.content_id = discovery.content_id
-              and item.portfolio_id = discovery.portfolio_id and item.content_type = 'project' and item.lifecycle = 'published'
-            join content.language_publications publication on publication.content_id = discovery.content_id
-              and publication.portfolio_id = discovery.portfolio_id and publication.locale = discovery.locale
-              and publication.revision_id = discovery.revision_id and publication.route_identity = discovery.route_identity
-            join content.public_project_locales public_project on public_project.content_id = publication.content_id
-              and public_project.portfolio_id = publication.portfolio_id and public_project.locale = publication.locale
-              and public_project.revision_id = publication.revision_id and public_project.route_identity = publication.route_identity
+            ${currentPublicLocaleJoins()}
            where discovery.portfolio_id = ${scope.portfolioId}::uuid and discovery.locale = ${query.locale}
              and (${query.taxonomyValueId ?? null}::uuid is null or exists (
                select 1 from taxonomy.project_discovery_taxonomy_values selected_facet
@@ -115,14 +119,7 @@ export function createPostgresPublicDiscoveryReader(scope: PublicDiscoveryScope)
             from taxonomy.project_discovery_taxonomy_values facet
             join taxonomy.project_discovery_locales discovery on discovery.portfolio_id = facet.portfolio_id
               and discovery.content_id = facet.content_id and discovery.locale = facet.locale
-            join content.items item on item.content_id = discovery.content_id
-              and item.portfolio_id = discovery.portfolio_id and item.content_type = 'project' and item.lifecycle = 'published'
-            join content.language_publications publication on publication.content_id = discovery.content_id
-              and publication.portfolio_id = discovery.portfolio_id and publication.locale = discovery.locale
-              and publication.revision_id = discovery.revision_id and publication.route_identity = discovery.route_identity
-            join content.public_project_locales public_project on public_project.content_id = publication.content_id
-              and public_project.portfolio_id = publication.portfolio_id and public_project.locale = publication.locale
-              and public_project.revision_id = publication.revision_id and public_project.route_identity = publication.route_identity
+            ${currentPublicLocaleJoins()}
            where facet.portfolio_id = ${scope.portfolioId}::uuid and facet.locale = ${query.locale}
            group by facet.taxonomy_id, facet.value_id, facet.kind, facet.label
            order by facet.kind, facet.label, facet.value_id

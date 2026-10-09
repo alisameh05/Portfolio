@@ -53,6 +53,8 @@ describe("Public Discovery query policy", () => {
     expect(await service.getPublicDiscovery({ locale: "en", limit: 101 })).toMatchObject({ ok: false, error: { code: "INVALID_DISCOVERY_PAGE_SIZE" } });
     expect(await service.getPublicDiscovery({ locale: "xx" as "en", limit: 20 })).toMatchObject({ ok: false, error: { code: "UNSUPPORTED_DISCOVERY_LOCALE" } });
     expect(await service.getPublicDiscovery({ locale: "en", taxonomyValueIds: [facet.valueId, facet.valueId] })).toMatchObject({ ok: false, error: { code: "INVALID_DISCOVERY_FILTER" } });
+    expect(await service.getPublicDiscovery({ locale: "en", taxonomyValueIds: ["not-a-uuid" as StableId<"TaxonomyValue">] }))
+      .toMatchObject({ ok: false, error: { code: "INVALID_DISCOVERY_FILTER" } });
     expect(read).toHaveBeenCalledTimes(1);
   });
 

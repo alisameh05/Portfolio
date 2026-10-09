@@ -1,4 +1,4 @@
-import { err, type Rejection, type Result, type StableId } from "../../../shared/domain/index.js";
+import { err, parseStableId, type Rejection, type Result, type StableId } from "../../../shared/domain/index.js";
 import type { TransactionContext, TransactionRunner } from "../../../runtime/ports.js";
 import type { ProjectDiscoveryCard, ProjectDiscoveryFacet, ProjectDiscoveryPage, PublicDiscoveryCriteria } from "../domain/index.js";
 
@@ -49,7 +49,7 @@ function decodeCursor(cursor: string, locale: "en" | "ar", taxonomyValueId: stri
       value["v"] !== 1 || value["locale"] !== locale || value["taxonomyValueId"] !== taxonomyValueId ||
       typeof value["firstPublishedAt"] !== "string" || !Number.isFinite(Date.parse(value["firstPublishedAt"])) ||
       new Date(value["firstPublishedAt"]).toISOString() !== value["firstPublishedAt"] ||
-      typeof value["projectId"] !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value["projectId"])) return undefined;
+      typeof value["projectId"] !== "string" || !parseStableId("Project", value["projectId"]).ok) return undefined;
     return value as unknown as CursorPayload;
   } catch {
     return undefined;
@@ -68,6 +68,9 @@ export function createPublicDiscoveryService(input: {
       const values = query.taxonomyValueIds ?? [];
       if (values.length > 1) return err({ kind: "validation", code: "INVALID_DISCOVERY_FILTER" });
       const taxonomyValueId = values[0];
+      if (taxonomyValueId !== undefined && !parseStableId("TaxonomyValue", taxonomyValueId).ok) {
+        return err({ kind: "validation", code: "INVALID_DISCOVERY_FILTER" });
+      }
       const cursor = query.cursor === undefined ? undefined : decodeCursor(query.cursor, query.locale, taxonomyValueId ?? null);
       if (query.cursor !== undefined && cursor === undefined) return err({ kind: "validation", code: "INVALID_DISCOVERY_CURSOR" });
 

@@ -2951,6 +2951,8 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_FILTER" } });
     expect(await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [valueId, valueId] }))
       .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_FILTER" } });
+    expect(await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: ["not-a-uuid" as StableId<"TaxonomyValue">] }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_FILTER" } });
     expect(await discovery.getPublicDiscovery({ locale: "en", limit: 101 }))
       .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_PAGE_SIZE" } });
     expect(await discovery.getPublicDiscovery({ locale: "ar", limit: 1, cursor: first.value.nextCursor }))
@@ -2962,7 +2964,15 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [valueId] }))
       .toMatchObject({ ok: true, value: { entries: expect.arrayContaining([expect.objectContaining({ projectId: projects[0]!.contentId })]) } });
 
+    // Three fixture rows are intentionally too small for PostgreSQL to prefer an index scan.
+    // Assert the bounded LIMIT plan and the production ordering index separately; at realistic
+    // cardinality that composite index supplies the filter, order, and keyset without a sort.
     const plan = await admin.query("explain (analyze, buffers, format json) select content_id from taxonomy.project_discovery_locales where portfolio_id = $1::uuid and locale = 'en' order by first_published_at desc, content_id desc limit 21", [scope.portfolioId]);
-    expect(plan.rows[0]?.["QUERY PLAN"]).toBeDefined();
+    const planDocument = plan.rows[0]?.["QUERY PLAN"] as Array<{ Plan?: Record<string, unknown> }> | undefined;
+    const planRoot = planDocument?.[0]?.Plan;
+    expect(planRoot).toMatchObject({ "Node Type": "Limit" });
+    expect(Number(planRoot?.["Actual Rows"])).toBeLessThanOrEqual(21);
+    const orderingIndex = await admin.query("select indexdef from pg_indexes where schemaname = 'taxonomy' and indexname = 'project_discovery_locale_public_order'");
+    expect(orderingIndex.rows[0]?.["indexdef"]).toContain("first_published_at DESC, content_id DESC");
   }, 60_000);
 });
