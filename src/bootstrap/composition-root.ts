@@ -27,6 +27,7 @@ import type { OwnerConfigurationApplicationService } from "../runtime/http/owner
 import type { ContentAuthoringService } from "../modules/content-publishing/application/authoring.js";
 import type { OwnerProjectApplicationService } from "../runtime/http/owner-project.js";
 import type { OwnerTaxonomyApplicationService } from "../runtime/http/owner-taxonomy.js";
+import type { OwnerPublicationApplicationService } from "../runtime/http/owner-publication.js";
 import type { PublicDiscoveryService } from "../modules/taxonomy-discovery/application/index.js";
 import type { LifecycleResource, ReadinessCheck } from "../runtime/ports.js";
 import { parseStableId } from "../shared/domain/index.js";
@@ -69,6 +70,18 @@ export interface DatabaseRuntimeDependencies {
   readonly publicDiscovery?: PublicDiscoveryService;
   readonly resource: LifecycleResource;
   readonly readiness: ReadinessCheck;
+}
+
+/**
+ * Provider-neutral services used by the Phase 5 Owner transport adapters.
+ * Handlers receive this bundle from the standard composition root so routes
+ * cannot assemble repositories or bypass the configured transaction scope.
+ */
+export interface Phase5OwnerApplicationServices {
+  readonly contentAuthoring: ContentAuthoringService;
+  readonly publication: OwnerPublicationApplicationService;
+  readonly project: OwnerProjectApplicationService;
+  readonly taxonomy: OwnerTaxonomyApplicationService;
 }
 
 export type DatabaseRuntimeFactory = () =>
@@ -292,6 +305,24 @@ export async function getOwnerProjectApplicationService(): Promise<OwnerProjectA
   ]);
   const routeService = createContentBackedOwnerProjectService(contentAuthoring, createProductionOwnerProjectService());
   return createContentOwnerProjectService(contentAuthoring, routeService);
+}
+
+/** Resolve every completed Phase 5 Owner facade from the active runtime. */
+export async function getPhase5OwnerApplicationServices(): Promise<Phase5OwnerApplicationServices> {
+  const [contentAuthoring, project, taxonomy] = await Promise.all([
+    getContentAuthoringApplicationService(),
+    getOwnerProjectApplicationService(),
+    getOwnerTaxonomyApplicationService(),
+  ]);
+  const { createProductionOwnerPublicationService } = await import("../runtime/fakes/owner-publication.js");
+  return Object.freeze({
+    contentAuthoring,
+    // Publication handlers delegate completed operations to contentAuthoring;
+    // this fallback remains fail-closed for any future/unwired operation.
+    publication: createProductionOwnerPublicationService(),
+    project,
+    taxonomy,
+  });
 }
 
 export function getRuntimeConfig(): RuntimeConfig {

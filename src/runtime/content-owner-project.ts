@@ -24,6 +24,8 @@ export function createContentOwnerProjectService(
         featured: result.value.featured,
         publicRoute: result.value.publicRoute,
         relatedProjectIds: result.value.relatedProjectIds,
+        relationshipHistory: result.value.relationshipHistory,
+        statusHistory: result.value.statusHistory,
         taxonomyAssignments: result.value.taxonomyAssignments,
       } };
     },

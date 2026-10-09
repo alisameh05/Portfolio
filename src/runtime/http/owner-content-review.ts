@@ -12,7 +12,7 @@ import {
 import type { ContentAuthoringService } from "../../modules/content-publishing/application/authoring.js";
 import type { IdempotencyKey, Rejection, StableId } from "../../shared/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
-import { guardOwnerRequest, type OwnerRequestSecurity } from "./owner-security.js";
+import { guardOwnerRequest, OWNER_PRIVATE_RESPONSE_HEADERS, type OwnerRequestSecurity } from "./owner-security.js";
 import { internalErrorProblem, rejectionToProblem, transportProblem } from "./problem.js";
 
 export interface OwnerContentReviewAdapterDeps {
@@ -65,10 +65,7 @@ export async function handlePreviewOwnerContentRevision(
     const response = zPreviewOwnerContentRevisionResponse.safeParse(result.value);
     if (!response.success) return internalErrorProblem(new Error("Invalid application result"), traceId, instance, logger);
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(response.data, { status: 200, headers: {
-      "Cache-Control": "private, no-store",
-      "X-Robots-Tag": "noindex, nofollow",
-    } });
+    return Response.json(response.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
@@ -115,7 +112,7 @@ export async function handleReviewOwnerContentRevision(
     const response = zReviewOwnerContentRevisionResponse.safeParse(result.value);
     if (!response.success) return internalErrorProblem(new Error("Invalid application result"), traceId, instance, logger);
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(response.data, { status: 200 });
+    return Response.json(response.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
@@ -153,7 +150,7 @@ export async function handleGetOwnerContentHistory(
     const response = zGetOwnerContentHistoryResponse.safeParse(result.value);
     if (!response.success) return internalErrorProblem(new Error("Invalid application result"), traceId, instance, logger);
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(response.data, { status: 200 });
+    return Response.json(response.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }

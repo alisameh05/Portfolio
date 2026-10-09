@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -40,6 +40,16 @@ function run(command, args, options = {}) {
     throw new Error(`${options.errorCode ?? "PORTFOLIO_SETTINGS_COMMAND_FAILED"}${diagnostic === "" ? "" : `:${diagnostic}`}`);
   }
   return result.stdout;
+}
+
+function workingTreeSourceSha256() {
+  const digest = createHash("sha256").update(run("git", ["diff", "HEAD", "--binary"]));
+  const untracked = run("git", ["ls-files", "--others", "--exclude-standard"])
+    .split(/\r?\n/u)
+    .filter((path) => path !== "" && path.replaceAll("\\", "/") !== "evidence/phase-5-owner-composition-postgres.json")
+    .sort();
+  for (const path of untracked) digest.update(path).update(readFileSync(join(ROOT, path)));
+  return digest.digest("hex");
 }
 
 export function localEnvironment(source = process.env) {
@@ -93,11 +103,11 @@ function readDatabaseUrl(workdir, expectedPort) {
   return connectionString;
 }
 
-export function requireExecutedTests(report) {
+export function requireExecutedTests(report, expectedSuiteCount = 1) {
   if (
     report.success !== true || report.numPassedTests < 1 || report.numFailedTests !== 0 ||
     report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-    report.testResults?.length !== 1 || report.testResults[0].status !== "passed"
+    report.testResults?.length !== expectedSuiteCount || report.testResults.some((suite) => suite.status !== "passed")
   ) throw new Error("PORTFOLIO_SETTINGS_TEST_FAILED: no missing or skipped database evidence is accepted.");
 }
 
@@ -291,9 +301,10 @@ export async function main() {
   const ticket118 = process.argv.includes("--ticket-118");
   const ticket119 = process.argv.includes("--ticket-119");
   const ticket120 = process.argv.includes("--ticket-120");
+  const ticket122 = process.argv.includes("--ticket-122");
   const ticket121 = process.argv.includes("--ticket-121");
-  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket114, ticket115, ticket116, ticket117, ticket118, ticket119, ticket120, ticket121].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
-  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket114 || ticket115 || ticket116 || ticket117 || ticket118 || ticket119 || ticket120 || ticket121;
+  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket114, ticket115, ticket116, ticket117, ticket118, ticket119, ticket120, ticket121, ticket122].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
+  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket114 || ticket115 || ticket116 || ticket117 || ticket118 || ticket119 || ticket120 || ticket121 || ticket122;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -405,20 +416,33 @@ export async function main() {
     console.log(process.argv.includes("--refresh-types")
       ? "Generated database types from the clean PostgreSQL schema."
       : "Generated database types match the clean PostgreSQL schema.");
-    const testFile = contentAuthoringTicket
-      ? "tests/database/content-authoring.integration.test.ts"
-      : "tests/database/portfolio-settings.integration.test.ts";
+    const testFiles = ticket122
+      ? [
+        "tests/database/owner-composition.integration.test.ts",
+        "tests/runtime/owner-content-authoring.test.ts",
+        "tests/runtime/owner-content-http.test.ts",
+        "tests/runtime/owner-publication.test.ts",
+        "tests/runtime/owner-project.test.ts",
+        "tests/runtime/owner-project-status.test.ts",
+        "tests/runtime/owner-taxonomy.test.ts",
+        "tests/phase4/owner-request-security.test.ts",
+        "tests/phase4/owner-operation-policy.test.ts",
+        "tests/contracts/owner-contract.test.ts",
+      ]
+      : [contentAuthoringTicket
+        ? "tests/database/content-authoring.integration.test.ts"
+        : "tests/database/portfolio-settings.integration.test.ts"];
     const reportPath = join(cleanProject.workdir, contentAuthoringTicket ? "content-authoring-test-report.json" : "test-report.json");
     const result = spawnSync(process.execPath, [
       join(ROOT, "node_modules/vitest/vitest.mjs"),
       "run",
-      testFile,
+      ...testFiles,
       "--reporter=json",
       `--outputFile=${reportPath}`,
     ], {
       cwd: ROOT,
       env: contentAuthoringTicket
-        ? { ...databaseEnv, PHASE5_CONTENT_AUTHORING_DATABASE_URL: cleanUrl, PHASE5_REQUIRE_CONTENT_AUTHORING: "1" }
+        ? { ...databaseEnv, PHASE5_CONTENT_AUTHORING_DATABASE_URL: cleanUrl, PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_REQUIRE_OWNER_COMPOSITION: ticket122 ? "1" : "0" }
         : { ...databaseEnv, PHASE4_REQUIRE_SETTINGS: "1" },
       encoding: "utf8",
       timeout: 120_000,
@@ -442,16 +466,42 @@ export async function main() {
         .slice(0, 2_000);
       throw new Error(`PORTFOLIO_SETTINGS_TEST_FAILED:${code}:${failedTests.join(" | ")}:${safeDetail}`);
     }
-    requireExecutedTests(report);
-    console.log((contentAuthoringTicket ? "Content authoring" : "Portfolio settings") +
-      " real PostgreSQL integration: " + report.numPassedTests + " passed, 0 skipped.");
+    requireExecutedTests(report, testFiles.length);
+    if (ticket122) {
+      const databaseSuite = report.testResults.find((suite) =>
+        relative(ROOT, suite.name).replaceAll("\\", "/") === "tests/database/owner-composition.integration.test.ts");
+      if (databaseSuite === undefined) throw new Error("PORTFOLIO_SETTINGS_OWNER_COMPOSITION_DATABASE_SUITE_MISSING");
+      const injectedSuites = report.testResults.filter((suite) => suite !== databaseSuite);
+      const databasePassed = databaseSuite.assertionResults?.filter((test) => test.status === "passed").length ?? 0;
+      const injectedPassed = injectedSuites.reduce((total, suite) =>
+        total + (suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0), 0);
+      console.log(`Owner production PostgreSQL workflow: ${databasePassed} passed, 0 skipped.`);
+      console.log(`Injected adapter and contract suites: ${injectedPassed} passed, 0 skipped.`);
+      report.ownerCompositionDatabaseSuite = databaseSuite;
+      report.ownerCompositionInjectedSuites = injectedSuites;
+    } else {
+      console.log((contentAuthoringTicket ? "Content authoring" : "Portfolio settings") +
+        " real PostgreSQL integration: " + report.numPassedTests + " passed, 0 skipped.");
+    }
 
     const evidence = contentAuthoringTicket ? {
       sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
-      ticket: ticket121 ? 121 : ticket120 ? 120 : ticket119 ? 119 : ticket118 ? 118 : ticket117 ? 117 : ticket116 ? 116 : ticket115 ? 115 : ticket114 ? 114 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
+      ...(ticket122 ? {
+        sourceTreeSha256: workingTreeSourceSha256(),
+        runId: randomUUID(),
+        toolVersions: {
+          node: process.versions.node,
+          npm: process.env.npm_config_user_agent?.split(" ").find((part) => part.startsWith("npm/"))?.slice(4) ?? "unknown",
+          supabaseCli: supabasePackage.version,
+          postgresServer: run("docker", ["version", "--format", "{{.Server.Version}}"]).trim(),
+        },
+      } : {}),
+      ticket: ticket122 ? 122 : ticket121 ? 121 : ticket120 ? 120 : ticket119 ? 119 : ticket118 ? 118 : ticket117 ? 117 : ticket116 ? 116 : ticket115 ? 115 : ticket114 ? 114 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
       parent: 106,
-      scope: ticket121
-        ? "bounded-locale-aware-public-discovery-stable-keyset-cursors-controlled-facets-publication-timestamp-order-and-authoritative-visibility"
+      scope: ticket122
+        ? "runtime-assembled-phase5-owner-authoring-review-publication-route-status-relationships-taxonomy-and-security-adapters"
+        : ticket121
+          ? "bounded-locale-aware-public-discovery-stable-keyset-cursors-controlled-facets-publication-timestamp-order-and-authoritative-visibility"
         : ticket120
         ? "atomic-taxonomy-value-merge-with-content-owned-multi-project-assignment-history-deduplication-discovery-projection-idempotency-concurrency-and-rollback"
         : ticket119
@@ -510,13 +560,23 @@ export async function main() {
         ...(ticket114 || ticket115 ? ["content.public_routes", "content.public_route_reservations", "content.public_project_locales", "content.public_testimonial_locales", "taxonomy.project_discovery_locales"] : []),
         ...(ticket115 ? ["content.public_route_history"] : []),
         ...(ticket116 ? ["content.project_status_values", "content.project_status_value_history", "content.project_status_history", "taxonomy.project_discovery_locales"] : []),
-        ...(ticket118 || ticket119 || ticket120 || ticket121 ? ["taxonomy.roots", "taxonomy.taxonomy_values", "taxonomy.value_history", "content.project_taxonomy_assignments", "content.project_taxonomy_assignment_history", "taxonomy.project_discovery_taxonomy_values"] : []),
+        ...(ticket118 || ticket119 || ticket120 || ticket121 || ticket122 ? ["taxonomy.roots", "taxonomy.taxonomy_values", "taxonomy.value_history", "content.project_taxonomy_assignments", "content.project_taxonomy_assignment_history", "taxonomy.project_discovery_taxonomy_values"] : []),
         ...(ticket117 ? ["content.project_relationships", "content.project_relationship_views", "content.project_relationship_history"] : [])],
-      databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
+      databaseTestResults: ((ticket122 ? report.ownerCompositionDatabaseSuite : report.testResults[0]).assertionResults ?? []).map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
         status: test.status,
       })),
-      databaseIntegrationTestsPassed: report.numPassedTests,
+      databaseIntegrationTestsPassed: (ticket122 ? report.ownerCompositionDatabaseSuite : report.testResults[0]).assertionResults?.filter((test) => test.status === "passed").length ?? 0,
+      ...(ticket122 ? {
+        injectedAdapterAndContractTestSuites: report.ownerCompositionInjectedSuites.map((suite) => ({
+          file: relative(ROOT, suite.name).replaceAll("\\", "/"),
+          passed: suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0,
+          failed: suite.assertionResults?.filter((test) => test.status === "failed").length ?? 0,
+          skipped: suite.assertionResults?.filter((test) => test.status === "pending" || test.status === "todo").length ?? 0,
+        })),
+        injectedAdapterAndContractTestsPassed: report.ownerCompositionInjectedSuites.reduce((total, suite) =>
+          total + (suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0), 0),
+      } : {}),
       skippedCases: 0,
       isolatedLoopbackProjects: true,
       credentialsRecorded: false,
@@ -616,8 +676,10 @@ export async function main() {
     if (
       /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
     ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
-    const evidencePath = ticket121
-      ? join(ROOT, "evidence/phase-5-project-discovery-postgres.json")
+    const evidencePath = ticket122
+      ? join(ROOT, "evidence/phase-5-owner-composition-postgres.json")
+      : ticket121
+        ? join(ROOT, "evidence/phase-5-project-discovery-postgres.json")
       : ticket120
       ? join(ROOT, "evidence/phase-5-taxonomy-merge-postgres.json")
       : ticket119

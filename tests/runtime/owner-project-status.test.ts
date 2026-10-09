@@ -32,6 +32,8 @@ it("uses the Content Owner view as the source for the composed Project aggregate
       history: [{ sequence: 1, fromSlug: "old-route", toSlug: "project-route", changedAt: "2026-10-08T10:00:00.000Z" }],
     },
     relatedProjectIds: [relatedProjectId],
+    relationshipHistory: [],
+    statusHistory: [],
     taxonomyAssignments: [{
       taxonomyId: unsafeStableId<"Taxonomy">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e94"),
       taxonomyKind: "industry",
@@ -94,6 +96,8 @@ describe("Owner Project status HTTP adapters", () => {
       request("/api/owner/v1/project-status-values", "GET"), deps(fake.service),
     );
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await response.json()).toEqual({ values: [{ valueId: VALUE_ID, label: "Shipped", state: "active" }] });
     expect(fake.calls).toHaveLength(1);
   });

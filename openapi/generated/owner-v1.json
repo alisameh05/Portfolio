@@ -3850,14 +3850,14 @@
           },
           "redirects": {
             "type": "array",
-            "description": "Retained former slugs and their current canonical target.",
+            "description": "Retained former slugs and their current canonical target; Owner responses include at most the most recent 100 entries.",
             "items": {
               "$ref": "#/components/schemas/PublicRouteRedirectView"
             }
           },
           "history": {
             "type": "array",
-            "description": "Immutable canonical slug changes ordered by sequence.",
+            "description": "Immutable canonical slug changes ordered by sequence; Owner responses include at most the most recent 100 entries.",
             "items": {
               "$ref": "#/components/schemas/PublicRouteHistoryEntry"
             }
@@ -3913,6 +3913,36 @@
           }
         }
       },
+      "PublicationHistoryEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "locale",
+          "sequence",
+          "revisionId",
+          "reviewId",
+          "publishedAt"
+        ],
+        "properties": {
+          "locale": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "revisionId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "reviewId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ContentAggregateView": {
         "type": "object",
         "additionalProperties": false,
@@ -3924,7 +3954,8 @@
           "localizedStreams",
           "revisions",
           "publicRoute",
-          "routeHistory"
+          "routeHistory",
+          "publicationHistory"
         ],
         "properties": {
           "contentId": {
@@ -3963,6 +3994,7 @@
           },
           "routeHistory": {
             "type": "array",
+            "maxItems": 100,
             "description": "Immutable canonical slug changes ordered by sequence.",
             "items": {
               "$ref": "#/components/schemas/PublicRouteHistoryEntry"
@@ -3983,9 +4015,17 @@
           },
           "revisions": {
             "type": "array",
-            "description": "Immutable Revision history ordered by sequence within each locale.",
+            "description": "Immutable Revision history ordered by sequence within each locale; Owner responses include at most the most recent 100 entries per locale.",
             "items": {
               "$ref": "#/components/schemas/RevisionHistoryEntry"
+            }
+          },
+          "publicationHistory": {
+            "type": "array",
+            "maxItems": 100,
+            "description": "Most recent immutable publication facts, capped at 100 entries.",
+            "items": {
+              "$ref": "#/components/schemas/PublicationHistoryEntry"
             }
           }
         }
@@ -4774,6 +4814,7 @@
           },
           "routeHistory": {
             "type": "array",
+            "maxItems": 100,
             "description": "Immutable canonical slug changes ordered by sequence.",
             "items": {
               "$ref": "#/components/schemas/PublicRouteHistoryEntry"
@@ -4820,6 +4861,73 @@
           }
         }
       },
+      "ProjectRelationshipHistoryEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sequence",
+          "relatedProjectId",
+          "action",
+          "changedAt"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "relatedProjectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "related"
+            ]
+          },
+          "changedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ProjectStatusHistoryEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sequence",
+          "previousValueId",
+          "currentValueId",
+          "aggregateVersion",
+          "changedAt"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "previousValueId": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currentValueId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "changedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ProjectTaxonomyAssignmentView": {
         "type": "object",
         "additionalProperties": false,
@@ -4855,6 +4963,8 @@
           "statusValueId",
           "featured",
           "relatedProjectIds",
+          "relationshipHistory",
+          "statusHistory",
           "taxonomyAssignments",
           "publicRoute"
         ],
@@ -4894,6 +5004,22 @@
             "uniqueItems": true,
             "items": {
               "$ref": "#/components/schemas/StableId"
+            }
+          },
+          "relationshipHistory": {
+            "type": "array",
+            "maxItems": 100,
+            "description": "Most recent retained relationship facts, capped at 100 entries.",
+            "items": {
+              "$ref": "#/components/schemas/ProjectRelationshipHistoryEntry"
+            }
+          },
+          "statusHistory": {
+            "type": "array",
+            "maxItems": 100,
+            "description": "Most recent Project status transitions, capped at 100 entries.",
+            "items": {
+              "$ref": "#/components/schemas/ProjectStatusHistoryEntry"
             }
           },
           "taxonomyAssignments": {

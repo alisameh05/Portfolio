@@ -108,6 +108,8 @@ describe("Owner Project aggregate retrieval (#29)", () => {
       { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls.getOwnerProjectAggregate).toHaveLength(1);
     expect(fake.calls.changeOwnerProjectStatus).toHaveLength(0);
     const query = fake.calls.getOwnerProjectAggregate[0] as { projectId: string };
@@ -121,6 +123,8 @@ describe("Owner Project aggregate retrieval (#29)", () => {
       featured: false,
       publicRoute: null,
       relatedProjectIds: [],
+      relationshipHistory: [],
+      statusHistory: [],
       taxonomyAssignments: [],
     });
   });
