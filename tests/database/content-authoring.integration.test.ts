@@ -2964,15 +2964,27 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [valueId] }))
       .toMatchObject({ ok: true, value: { entries: expect.arrayContaining([expect.objectContaining({ projectId: projects[0]!.contentId })]) } });
 
-    // Three fixture rows are intentionally too small for PostgreSQL to prefer an index scan.
-    // Assert the bounded LIMIT plan and the production ordering index separately; at realistic
-    // cardinality that composite index supplies the filter, order, and keyset without a sort.
-    const plan = await admin.query("explain (analyze, buffers, format json) select content_id from taxonomy.project_discovery_locales where portfolio_id = $1::uuid and locale = 'en' order by first_published_at desc, content_id desc limit 21", [scope.portfolioId]);
-    const planDocument = plan.rows[0]?.["QUERY PLAN"] as Array<{ Plan?: Record<string, unknown> }> | undefined;
-    const planRoot = planDocument?.[0]?.Plan;
-    expect(planRoot).toMatchObject({ "Node Type": "Limit" });
-    expect(Number(planRoot?.["Actual Rows"])).toBeLessThanOrEqual(21);
     const orderingIndex = await admin.query("select indexdef from pg_indexes where schemaname = 'taxonomy' and indexname = 'project_discovery_locale_public_order'");
     expect(orderingIndex.rows[0]?.["indexdef"]).toContain("first_published_at DESC, content_id DESC");
+
+    // The behavioral fixture is deliberately small. Clone the production table and indexes,
+    // seed realistic cardinality, then inspect the same scoped keyset page shape so the planner
+    // can demonstrate that ordering is supplied by the composite index without a sort.
+    await admin.query("create temporary table discovery_plan_probe (like taxonomy.project_discovery_locales including all)");
+    await admin.query(`insert into discovery_plan_probe
+      (content_id, portfolio_id, locale, revision_id, route_identity, title, slug, first_published_at, published_at)
+      select gen_random_uuid(), $1::uuid, 'en', gen_random_uuid(), gen_random_uuid(),
+             'Plan probe ' || series::text, 'plan-probe-' || series::text,
+             timestamptz '2026-10-09 12:00:00+00' - series * interval '1 second',
+             timestamptz '2026-10-09 12:00:00+00' - series * interval '1 second'
+        from generate_series(1, 10000) series`, [scope.portfolioId]);
+    await admin.query("analyze discovery_plan_probe");
+    const plan = await admin.query("explain (analyze, buffers, format json) select content_id from discovery_plan_probe where portfolio_id = $1::uuid and locale = 'en' order by first_published_at desc, content_id desc limit 21", [scope.portfolioId]);
+    const planJson = JSON.stringify(plan.rows[0]?.["QUERY PLAN"]);
+    expect(planJson).toMatch(/\"Node Type\":\"Limit\"/);
+    expect(planJson).toMatch(/\"Actual Rows\":21/);
+    expect(planJson).toMatch(/\"Node Type\":\"Index Scan\"|\"Node Type\":\"Index Only Scan\"/);
+    expect(planJson).not.toContain('"Node Type":"Sort"');
+    await admin.query("drop table discovery_plan_probe");
   }, 60_000);
 });
