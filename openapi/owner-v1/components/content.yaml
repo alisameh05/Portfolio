@@ -197,6 +197,7 @@ schemas:
         items: { $ref: '#/schemas/ContentHistoryEntry' }
       routeHistory:
         type: array
+        maxItems: 100
         description: Immutable canonical slug changes ordered by sequence.
         items: { $ref: ./projects.yaml#/schemas/PublicRouteHistoryEntry }
       nextCursor:
@@ -351,6 +352,7 @@ schemas:
           - { type: 'null' }
       routeHistory:
         type: array
+        maxItems: 100
         description: Immutable canonical slug changes ordered by sequence.
         items: { $ref: ./projects.yaml#/schemas/PublicRouteHistoryEntry }
       localizedStreams:

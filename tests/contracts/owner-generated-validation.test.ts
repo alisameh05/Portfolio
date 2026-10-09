@@ -260,6 +260,8 @@ describe("generated Owner v1 validators", () => {
         ],
       },
       relatedProjectIds: [ids.related],
+      relationshipHistory: [{ sequence: 1, relatedProjectId: ids.related, action: "related", changedAt: "2026-10-09T12:00:00.000Z" }],
+      statusHistory: [{ sequence: 1, previousValueId: null, currentValueId: ids.status, aggregateVersion: 2, changedAt: "2026-10-09T12:00:00.000Z" }],
       taxonomyAssignments: [
         { taxonomyId: ids.taxonomy, taxonomyKind: "technology", valueId: ids.value },
       ],
@@ -270,6 +272,8 @@ describe("generated Owner v1 validators", () => {
       featured: false,
       publicRoute: null,
       relatedProjectIds: [],
+      relationshipHistory: [],
+      statusHistory: [],
       taxonomyAssignments: [],
     }).success).toBe(false);
     expect(zTaxonomyAggregateView.safeParse({

@@ -3963,6 +3963,7 @@
           },
           "routeHistory": {
             "type": "array",
+            "maxItems": 100,
             "description": "Immutable canonical slug changes ordered by sequence.",
             "items": {
               "$ref": "#/components/schemas/PublicRouteHistoryEntry"
@@ -4774,6 +4775,7 @@
           },
           "routeHistory": {
             "type": "array",
+            "maxItems": 100,
             "description": "Immutable canonical slug changes ordered by sequence.",
             "items": {
               "$ref": "#/components/schemas/PublicRouteHistoryEntry"

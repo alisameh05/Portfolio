@@ -285,8 +285,13 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
       sequence: number; from_slug: string; to_slug: string; changed_at: Date | string;
     }>`
       select sequence, from_slug, to_slug, changed_at
-        from content.public_route_history
-       where content_id = ${contentId}::uuid and portfolio_id = ${scope.portfolioId}::uuid
+        from (
+          select sequence, from_slug, to_slug, changed_at
+            from content.public_route_history
+           where content_id = ${contentId}::uuid and portfolio_id = ${scope.portfolioId}::uuid
+           order by sequence desc
+           limit 100
+        ) bounded
        order by sequence
     `.execute(executor) : { rows: [] };
     if (routeIdentity !== undefined && routeResult.rows.some((row) => row.route_identity !== routeIdentity || row.current_slug !== routeResult.rows[0]?.current_slug)) {
