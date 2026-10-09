@@ -466,8 +466,16 @@ export async function main() {
       throw new Error(`PORTFOLIO_SETTINGS_TEST_FAILED:${code}:${failedTests.join(" | ")}:${safeDetail}`);
     }
     requireExecutedTests(report, testFiles.length);
-    console.log((contentAuthoringTicket ? "Content authoring" : "Portfolio settings") +
-      " real PostgreSQL integration: " + report.numPassedTests + " passed, 0 skipped.");
+    if (ticket122) {
+      const databasePassed = report.testResults[0].assertionResults?.filter((test) => test.status === "passed").length ?? 0;
+      const injectedPassed = report.testResults.slice(1).reduce((total, suite) =>
+        total + (suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0), 0);
+      console.log(`Owner production PostgreSQL workflow: ${databasePassed} passed, 0 skipped.`);
+      console.log(`Injected adapter and contract suites: ${injectedPassed} passed, 0 skipped.`);
+    } else {
+      console.log((contentAuthoringTicket ? "Content authoring" : "Portfolio settings") +
+        " real PostgreSQL integration: " + report.numPassedTests + " passed, 0 skipped.");
+    }
 
     const evidence = contentAuthoringTicket ? {
       sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
@@ -529,11 +537,21 @@ export async function main() {
         ...(ticket116 ? ["content.project_status_values", "content.project_status_value_history", "content.project_status_history", "taxonomy.project_discovery_locales"] : []),
         ...(ticket118 || ticket119 || ticket120 || ticket122 ? ["taxonomy.roots", "taxonomy.taxonomy_values", "taxonomy.value_history", "content.project_taxonomy_assignments", "content.project_taxonomy_assignment_history", "taxonomy.project_discovery_taxonomy_values"] : []),
         ...(ticket117 ? ["content.project_relationships", "content.project_relationship_views", "content.project_relationship_history"] : [])],
-      databaseTestResults: report.testResults.flatMap((suite) => suite.assertionResults ?? []).map((test) => ({
+      databaseTestResults: (report.testResults[0].assertionResults ?? []).map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
         status: test.status,
       })),
-      databaseIntegrationTestsPassed: report.numPassedTests,
+      databaseIntegrationTestsPassed: report.testResults[0].assertionResults?.filter((test) => test.status === "passed").length ?? 0,
+      ...(ticket122 ? {
+        injectedAdapterAndContractTestSuites: report.testResults.slice(1).map((suite) => ({
+          file: relative(ROOT, suite.name).replaceAll("\\", "/"),
+          passed: suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0,
+          failed: suite.assertionResults?.filter((test) => test.status === "failed").length ?? 0,
+          skipped: suite.assertionResults?.filter((test) => test.status === "pending" || test.status === "todo").length ?? 0,
+        })),
+        injectedAdapterAndContractTestsPassed: report.testResults.slice(1).reduce((total, suite) =>
+          total + (suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0), 0),
+      } : {}),
       skippedCases: 0,
       isolatedLoopbackProjects: true,
       credentialsRecorded: false,

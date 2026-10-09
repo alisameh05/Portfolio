@@ -230,5 +230,23 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       idempotencyKey: key("owner-assembly-taxonomy-assignment"),
     });
     expect(assignment.ok).toBe(true);
+    const renamed = await services.taxonomy.renameOwnerTaxonomyValue({
+      actor, valueId: createdValue.valueId, name: "Owner composition integration renamed",
+      expectedVersion: value.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-taxonomy-rename"),
+    });
+    expect(renamed.ok).toBe(true);
+    const evolvedTaxonomy = await services.taxonomy.getOwnerTaxonomyAggregate({ actor, taxonomyId });
+    expect(evolvedTaxonomy).toMatchObject({
+      ok: true,
+      value: {
+        values: [expect.objectContaining({ valueId: createdValue.valueId, name: "Owner composition integration renamed", state: "active" })],
+        history: expect.arrayContaining([
+          expect.objectContaining({ valueId: createdValue.valueId, action: "created" }),
+          expect.objectContaining({ valueId: createdValue.valueId, action: "renamed", previousLabel: "Owner composition integration", label: "Owner composition integration renamed" }),
+        ]),
+        assignmentHistory: [expect.objectContaining({ projectId: created.value.contentId, valueId: createdValue.valueId })],
+      },
+    });
   }, 60_000);
 });
