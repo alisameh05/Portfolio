@@ -277,6 +277,8 @@ describe("generated Owner v1 validators", () => {
       aggregateVersion: 4,
       kind: "technology",
       values: [{ valueId: ids.value, name: "TypeScript", state: "active" }],
+      history: [],
+      assignmentHistory: [],
     }).success).toBe(true);
     expect(zTaxonomyAggregateView.safeParse({
       taxonomyId: ids.taxonomy,
@@ -305,6 +307,8 @@ describe("generated Owner v1 validators", () => {
         state: "merged",
         mergedIntoValueId: ids.related,
       }],
+      history: [],
+      assignmentHistory: [],
     }).success).toBe(true);
     expect(zTaxonomyAggregateView.safeParse({
       taxonomyId: ids.taxonomy,

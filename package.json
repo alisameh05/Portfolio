@@ -96,6 +96,8 @@
     "phase5:focus:controlled-taxonomy-postgres": "node scripts/portfolio-settings-integration.mjs --ticket-118",
     "prephase5:focus:taxonomy-evolution-postgres": "npm run validation:ready",
     "phase5:focus:taxonomy-evolution-postgres": "node scripts/portfolio-settings-integration.mjs --ticket-119",
+    "prephase5:focus:taxonomy-merge-postgres": "npm run validation:ready",
+    "phase5:focus:taxonomy-merge-postgres": "node scripts/portfolio-settings-integration.mjs --ticket-120",
     "prephase5:focus:taxonomy-status-relationships-discovery": "npm run validation:ready",
     "phase5:focus:taxonomy-status-relationships-discovery": "node scripts/phase5-verification.mjs --suite taxonomy",
     "prephase5:focus:database-rls-migrations-concurrency": "npm run validation:ready",

@@ -416,6 +416,20 @@ export type TaxonomyAggregateView = {
     aggregateVersion: number;
     kind: 'category' | 'ai-ml-domain' | 'technology' | 'project-type';
     values: Array<TaxonomyValueView>;
+    history: Array<{
+        valueId: StableId;
+        action: 'created' | 'renamed' | 'retired' | 'merged';
+        previousLabel: string | null;
+        label: string;
+        aggregateVersion: number;
+        changedAt: string;
+    }>;
+    assignmentHistory: Array<{
+        projectId: StableId;
+        valueId: StableId;
+        aggregateVersion: number;
+        changedAt: string;
+    }>;
 };
 
 export type CreateTaxonomyValueRequest = {

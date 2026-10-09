@@ -135,5 +135,41 @@ export function createPostgresProjectDiscoveryProjectionWriter(): ProjectDiscove
         throw new PostgresInfrastructureError();
       }
     },
+    async mergeProjectDiscoveryTaxonomyValue(input, transaction: TransactionContext): Promise<void> {
+      const executor = resolvePostgresTransaction(transaction);
+      try {
+        await sql`select set_config('shipwithali.portfolio_id', ${input.scope.portfolioId}, true),
+                         set_config('shipwithali.owner_id', ${input.scope.ownerId}, true)`.execute(executor);
+        await sql`
+          insert into taxonomy.project_discovery_taxonomy_values as current_facet (
+            portfolio_id, content_id, locale, taxonomy_id, value_id, kind, label, first_published_at
+          )
+          select source.portfolio_id, source.content_id, source.locale, assignment.taxonomy_id,
+                 assignment.value_id, root.kind, value.label, source.first_published_at
+            from taxonomy.project_discovery_taxonomy_values source
+            join content.project_taxonomy_assignments assignment
+              on assignment.portfolio_id = source.portfolio_id and assignment.content_id = source.content_id
+             and assignment.value_id = ${input.targetValueId}::uuid
+            join taxonomy.roots root
+              on root.portfolio_id = assignment.portfolio_id and root.taxonomy_id = assignment.taxonomy_id
+            join taxonomy.taxonomy_values value
+              on value.portfolio_id = assignment.portfolio_id and value.taxonomy_id = assignment.taxonomy_id
+             and value.value_id = assignment.value_id
+           where source.portfolio_id = ${input.scope.portfolioId}::uuid
+             and source.content_id = ${input.projectId}::uuid and source.value_id = ${input.sourceValueId}::uuid
+          on conflict (portfolio_id, content_id, locale, value_id) do update set
+            taxonomy_id = excluded.taxonomy_id, kind = excluded.kind, label = excluded.label,
+            first_published_at = least(current_facet.first_published_at, excluded.first_published_at)
+        `.execute(executor);
+        await sql`
+          delete from taxonomy.project_discovery_taxonomy_values
+           where portfolio_id = ${input.scope.portfolioId}::uuid and content_id = ${input.projectId}::uuid
+             and value_id = ${input.sourceValueId}::uuid
+        `.execute(executor);
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
   };
 }

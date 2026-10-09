@@ -5101,7 +5101,9 @@
           "taxonomyId",
           "aggregateVersion",
           "kind",
-          "values"
+          "values",
+          "history",
+          "assignmentHistory"
         ],
         "properties": {
           "taxonomyId": {
@@ -5124,6 +5126,86 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/TaxonomyValueView"
+            }
+          },
+          "history": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "valueId",
+                "action",
+                "previousLabel",
+                "label",
+                "aggregateVersion",
+                "changedAt"
+              ],
+              "properties": {
+                "valueId": {
+                  "$ref": "#/components/schemas/StableId"
+                },
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "created",
+                    "renamed",
+                    "retired",
+                    "merged"
+                  ]
+                },
+                "previousLabel": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 100
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "aggregateVersion": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "changedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "assignmentHistory": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "projectId",
+                "valueId",
+                "aggregateVersion",
+                "changedAt"
+              ],
+              "properties": {
+                "projectId": {
+                  "$ref": "#/components/schemas/StableId"
+                },
+                "valueId": {
+                  "$ref": "#/components/schemas/StableId"
+                },
+                "aggregateVersion": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "changedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
             }
           }
         }

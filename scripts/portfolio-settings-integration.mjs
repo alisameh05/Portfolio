@@ -290,8 +290,9 @@ export async function main() {
   const ticket116 = process.argv.includes("--ticket-116");
   const ticket118 = process.argv.includes("--ticket-118");
   const ticket119 = process.argv.includes("--ticket-119");
-  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket114, ticket115, ticket116, ticket117, ticket118, ticket119].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
-  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket114 || ticket115 || ticket116 || ticket117 || ticket118 || ticket119;
+  const ticket120 = process.argv.includes("--ticket-120");
+  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket114, ticket115, ticket116, ticket117, ticket118, ticket119, ticket120].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
+  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket114 || ticket115 || ticket116 || ticket117 || ticket118 || ticket119 || ticket120;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -446,9 +447,11 @@ export async function main() {
 
     const evidence = contentAuthoringTicket ? {
       sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
-      ticket: ticket119 ? 119 : ticket118 ? 118 : ticket117 ? 117 : ticket116 ? 116 : ticket115 ? 115 : ticket114 ? 114 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
+      ticket: ticket120 ? 120 : ticket119 ? 119 : ticket118 ? 118 : ticket117 ? 117 : ticket116 ? 116 : ticket115 ? 115 : ticket114 ? 114 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
       parent: 106,
-      scope: ticket119
+      scope: ticket120
+        ? "atomic-taxonomy-value-merge-with-content-owned-multi-project-assignment-history-deduplication-discovery-projection-idempotency-concurrency-and-rollback"
+        : ticket119
         ? "taxonomy-value-rename-retirement-history-active-choice-locking-discovery-label-preservation-and-idempotent-rollback"
         : ticket118
         ? "four-stable-portfolio-taxonomy-roots-owner-value-creation-and-atomic-content-owned-project-assignments-with-synchronous-discovery-facts"
@@ -488,7 +491,7 @@ export async function main() {
         ...(ticket114 || ticket115 ? ["content.public_routes", "content.public_route_reservations", "content.public_project_locales", "content.public_testimonial_locales", "taxonomy.project_discovery_locales"] : []),
         ...(ticket115 ? ["content.public_route_history"] : []),
         ...(ticket116 ? ["content.project_status_values", "content.project_status_value_history", "content.project_status_history", "taxonomy.project_discovery_locales"] : []),
-        ...(ticket118 || ticket119 ? ["taxonomy.roots", "taxonomy.taxonomy_values", "taxonomy.value_history", "content.project_taxonomy_assignments", "content.project_taxonomy_assignment_history", "taxonomy.project_discovery_taxonomy_values"] : []),
+        ...(ticket118 || ticket119 || ticket120 ? ["taxonomy.roots", "taxonomy.taxonomy_values", "taxonomy.value_history", "content.project_taxonomy_assignments", "content.project_taxonomy_assignment_history", "taxonomy.project_discovery_taxonomy_values"] : []),
         ...(ticket117 ? ["content.project_relationships", "content.project_relationship_views", "content.project_relationship_history"] : [])],
       databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
@@ -594,7 +597,9 @@ export async function main() {
     if (
       /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
     ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
-    const evidencePath = ticket119
+    const evidencePath = ticket120
+      ? join(ROOT, "evidence/phase-5-taxonomy-merge-postgres.json")
+      : ticket119
       ? join(ROOT, "evidence/phase-5-taxonomy-evolution-postgres.json")
       : ticket118
       ? join(ROOT, "evidence/phase-5-controlled-taxonomy-postgres.json")

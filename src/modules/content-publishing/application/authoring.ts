@@ -380,6 +380,12 @@ export interface ProjectTaxonomyAssignmentFactsPort {
     readonly valueId: StableId<"TaxonomyValue">;
     readonly scope: ContentAuthoringScope;
   }, context: TransactionContext): Promise<void>;
+  mergeProjectDiscoveryTaxonomyValue(input: {
+    readonly projectId: StableId<"Project">;
+    readonly sourceValueId: StableId<"TaxonomyValue">;
+    readonly targetValueId: StableId<"TaxonomyValue">;
+    readonly scope: ContentAuthoringScope;
+  }, context: TransactionContext): Promise<void>;
 }
 
 export interface ContentAuthoringRepository {

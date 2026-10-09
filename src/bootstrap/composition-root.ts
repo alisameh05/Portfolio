@@ -178,16 +178,22 @@ export async function initializeDatabaseRuntime(
             taxonomyAssignments: discoveryProjection,
             scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
           });
-          const [{ createPostgresTaxonomyOwnerRepository }, { createTaxonomyOwnerService }, { createContentBackedOwnerTaxonomyService }, { createProductionOwnerTaxonomyService }] = await Promise.all([
+          const [{ createPostgresTaxonomyOwnerRepository }, { createTaxonomyOwnerService }, { createContentBackedOwnerTaxonomyService }, { createProductionOwnerTaxonomyService }, { createPostgresContentTaxonomyAssignmentsPort }] = await Promise.all([
             import("../modules/taxonomy-discovery/adapters/index.js"),
             import("../modules/taxonomy-discovery/application/index.js"),
             import("../runtime/owner-taxonomy-content-service.js"),
             import("../runtime/fakes/owner-taxonomy.js"),
+            import("../modules/content-publishing/adapters/postgres-taxonomy-assignments.js"),
           ]);
+          const contentTaxonomyAssignments = createPostgresContentTaxonomyAssignmentsPort({
+            scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
+            discovery: discoveryProjection,
+          });
           ownerTaxonomy = createContentBackedOwnerTaxonomyService(createTaxonomyOwnerService({
             repository: createPostgresTaxonomyOwnerRepository(),
             operations,
             scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
+            contentAssignments: contentTaxonomyAssignments,
           }), createProductionOwnerTaxonomyService());
         }
         return {
