@@ -467,11 +467,17 @@ export async function main() {
     }
     requireExecutedTests(report, testFiles.length);
     if (ticket122) {
-      const databasePassed = report.testResults[0].assertionResults?.filter((test) => test.status === "passed").length ?? 0;
-      const injectedPassed = report.testResults.slice(1).reduce((total, suite) =>
+      const databaseSuite = report.testResults.find((suite) =>
+        relative(ROOT, suite.name).replaceAll("\\", "/") === "tests/database/owner-composition.integration.test.ts");
+      if (databaseSuite === undefined) throw new Error("PORTFOLIO_SETTINGS_OWNER_COMPOSITION_DATABASE_SUITE_MISSING");
+      const injectedSuites = report.testResults.filter((suite) => suite !== databaseSuite);
+      const databasePassed = databaseSuite.assertionResults?.filter((test) => test.status === "passed").length ?? 0;
+      const injectedPassed = injectedSuites.reduce((total, suite) =>
         total + (suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0), 0);
       console.log(`Owner production PostgreSQL workflow: ${databasePassed} passed, 0 skipped.`);
       console.log(`Injected adapter and contract suites: ${injectedPassed} passed, 0 skipped.`);
+      report.ownerCompositionDatabaseSuite = databaseSuite;
+      report.ownerCompositionInjectedSuites = injectedSuites;
     } else {
       console.log((contentAuthoringTicket ? "Content authoring" : "Portfolio settings") +
         " real PostgreSQL integration: " + report.numPassedTests + " passed, 0 skipped.");
@@ -537,19 +543,19 @@ export async function main() {
         ...(ticket116 ? ["content.project_status_values", "content.project_status_value_history", "content.project_status_history", "taxonomy.project_discovery_locales"] : []),
         ...(ticket118 || ticket119 || ticket120 || ticket122 ? ["taxonomy.roots", "taxonomy.taxonomy_values", "taxonomy.value_history", "content.project_taxonomy_assignments", "content.project_taxonomy_assignment_history", "taxonomy.project_discovery_taxonomy_values"] : []),
         ...(ticket117 ? ["content.project_relationships", "content.project_relationship_views", "content.project_relationship_history"] : [])],
-      databaseTestResults: (report.testResults[0].assertionResults ?? []).map((test) => ({
+      databaseTestResults: ((ticket122 ? report.ownerCompositionDatabaseSuite : report.testResults[0]).assertionResults ?? []).map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
         status: test.status,
       })),
-      databaseIntegrationTestsPassed: report.testResults[0].assertionResults?.filter((test) => test.status === "passed").length ?? 0,
+      databaseIntegrationTestsPassed: (ticket122 ? report.ownerCompositionDatabaseSuite : report.testResults[0]).assertionResults?.filter((test) => test.status === "passed").length ?? 0,
       ...(ticket122 ? {
-        injectedAdapterAndContractTestSuites: report.testResults.slice(1).map((suite) => ({
+        injectedAdapterAndContractTestSuites: report.ownerCompositionInjectedSuites.map((suite) => ({
           file: relative(ROOT, suite.name).replaceAll("\\", "/"),
           passed: suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0,
           failed: suite.assertionResults?.filter((test) => test.status === "failed").length ?? 0,
           skipped: suite.assertionResults?.filter((test) => test.status === "pending" || test.status === "todo").length ?? 0,
         })),
-        injectedAdapterAndContractTestsPassed: report.testResults.slice(1).reduce((total, suite) =>
+        injectedAdapterAndContractTestsPassed: report.ownerCompositionInjectedSuites.reduce((total, suite) =>
           total + (suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0), 0),
       } : {}),
       skippedCases: 0,
