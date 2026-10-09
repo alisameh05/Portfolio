@@ -312,7 +312,12 @@ export async function handleGetOwnerContentAggregate(
       publicRoute: result.value.publicRoute,
       routeHistory: result.value.routeHistory,
       localizedStreams: result.value.localizedStreams,
-      revisions: [...result.value.revisions],
+      revisions: result.value.revisions.map((revision) => ({
+        revisionId: revision.revisionId,
+        locale: revision.locale,
+        sequence: revision.sequence,
+        reviewed: revision.reviewed,
+      })),
     };
     const parsed = zGetOwnerContentAggregateResponse.safeParse(payload);
     if (!parsed.success) {
