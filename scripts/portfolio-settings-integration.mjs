@@ -291,8 +291,9 @@ export async function main() {
   const ticket118 = process.argv.includes("--ticket-118");
   const ticket119 = process.argv.includes("--ticket-119");
   const ticket120 = process.argv.includes("--ticket-120");
-  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket114, ticket115, ticket116, ticket117, ticket118, ticket119, ticket120].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
-  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket114 || ticket115 || ticket116 || ticket117 || ticket118 || ticket119 || ticket120;
+  const ticket121 = process.argv.includes("--ticket-121");
+  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket114, ticket115, ticket116, ticket117, ticket118, ticket119, ticket120, ticket121].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
+  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket114 || ticket115 || ticket116 || ticket117 || ticket118 || ticket119 || ticket120 || ticket121;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -447,9 +448,11 @@ export async function main() {
 
     const evidence = contentAuthoringTicket ? {
       sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
-      ticket: ticket120 ? 120 : ticket119 ? 119 : ticket118 ? 118 : ticket117 ? 117 : ticket116 ? 116 : ticket115 ? 115 : ticket114 ? 114 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
+      ticket: ticket121 ? 121 : ticket120 ? 120 : ticket119 ? 119 : ticket118 ? 118 : ticket117 ? 117 : ticket116 ? 116 : ticket115 ? 115 : ticket114 ? 114 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
       parent: 106,
-      scope: ticket120
+      scope: ticket121
+        ? "bounded-locale-aware-public-discovery-stable-keyset-cursors-controlled-facets-publication-timestamp-order-and-authoritative-visibility"
+        : ticket120
         ? "atomic-taxonomy-value-merge-with-content-owned-multi-project-assignment-history-deduplication-discovery-projection-idempotency-concurrency-and-rollback"
         : ticket119
         ? "taxonomy-value-rename-retirement-history-active-choice-locking-discovery-label-preservation-and-idempotent-rollback"
@@ -475,6 +478,22 @@ export async function main() {
       predecessorSnapshot: "supabase/baselines/phase3.json",
       migrationChecksums: migrations.checksums,
       migrationLedger: cleanSnapshot.migrationLedger,
+      ...(ticket121 ? {
+        ticketMigrationSafety: {
+          introduced: ["supabase/migrations/20261009100000_index_project_discovery_reads.sql"],
+          boundedLockTimeout: true,
+          rollbackNote: true,
+          rollbackForwardFix: "Both indexes are additive. Roll back application code; remove them in a later reviewed migration if database rollback is required.",
+        },
+        discoveryReadPlan: {
+          explainAnalyzeCaptured: true,
+          orderIndex: "taxonomy.project_discovery_locale_public_order",
+          filterIndex: "taxonomy.project_discovery_value_public_filter",
+          pageOutputBound: "limit plus one, at most 101 cards",
+          queryShape: "Portfolio and exact locale predicates; publication and Published lifecycle joins; stable first_published_at and Project ID keyset",
+          costAssertions: false,
+        },
+      } : {}),
       cleanUpgradeEquivalent: true,
       migrationReplayNoop: true,
       generatedTypeDrift: false,
@@ -484,14 +503,14 @@ export async function main() {
         jobs: preservedRows.jobs.length === 1,
       },
       authoringTablesWithForcedRls: ["content.items", "content.revisions", ...(ticket110 || ticket111 || ticket112 || ticket114 || ticket115 || ticket116 ? ["content.revision_reviews"] : []),
-        ...(ticket111 || ticket112 || ticket114 || ticket115 ? ["content.language_publications", "content.publication_history"] : []),
+        ...(ticket111 || ticket112 || ticket114 || ticket115 || ticket121 ? ["content.language_publications", "content.publication_history"] : []),
         ...(ticket114 || ticket115 ? ["content.testimonial_language_publications", "content.testimonial_publication_history", "content.lifecycle_history"] : []),
-        ...(ticket111 ? ["content.public_routes", "content.public_route_reservations", "content.public_project_locales", "taxonomy.project_discovery_locales"] : []),
+        ...(ticket111 || ticket121 ? ["content.public_routes", "content.public_route_reservations", "content.public_project_locales", "taxonomy.project_discovery_locales"] : []),
         ...(ticket112 || ticket114 || ticket115 ? ["content.public_achievement_locales"] : []),
         ...(ticket114 || ticket115 ? ["content.public_routes", "content.public_route_reservations", "content.public_project_locales", "content.public_testimonial_locales", "taxonomy.project_discovery_locales"] : []),
         ...(ticket115 ? ["content.public_route_history"] : []),
         ...(ticket116 ? ["content.project_status_values", "content.project_status_value_history", "content.project_status_history", "taxonomy.project_discovery_locales"] : []),
-        ...(ticket118 || ticket119 || ticket120 ? ["taxonomy.roots", "taxonomy.taxonomy_values", "taxonomy.value_history", "content.project_taxonomy_assignments", "content.project_taxonomy_assignment_history", "taxonomy.project_discovery_taxonomy_values"] : []),
+        ...(ticket118 || ticket119 || ticket120 || ticket121 ? ["taxonomy.roots", "taxonomy.taxonomy_values", "taxonomy.value_history", "content.project_taxonomy_assignments", "content.project_taxonomy_assignment_history", "taxonomy.project_discovery_taxonomy_values"] : []),
         ...(ticket117 ? ["content.project_relationships", "content.project_relationship_views", "content.project_relationship_history"] : [])],
       databaseTestResults: report.testResults[0].assertionResults.map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
@@ -597,7 +616,9 @@ export async function main() {
     if (
       /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
     ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
-    const evidencePath = ticket120
+    const evidencePath = ticket121
+      ? join(ROOT, "evidence/phase-5-project-discovery-postgres.json")
+      : ticket120
       ? join(ROOT, "evidence/phase-5-taxonomy-merge-postgres.json")
       : ticket119
       ? join(ROOT, "evidence/phase-5-taxonomy-evolution-postgres.json")

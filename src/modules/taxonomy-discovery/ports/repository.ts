@@ -2,7 +2,7 @@ import type { StableId, Result, Rejection } from "@shared/domain";
 import type {
   Taxonomy,
   TaxonomyValue,
-  ProjectDiscoveryCard,
+  ProjectDiscoveryPage,
   PublicDiscoveryCriteria,
 } from "../domain/index.js";
 
@@ -21,5 +21,5 @@ export interface TaxonomyRepositoryPort {
 
   getDiscoveryProjects(
     query: PublicDiscoveryCriteria,
-  ): Promise<Result<readonly ProjectDiscoveryCard[], Rejection>>;
+  ): Promise<Result<ProjectDiscoveryPage, Rejection>>;
 }

@@ -27,6 +27,7 @@ import type { OwnerConfigurationApplicationService } from "../runtime/http/owner
 import type { ContentAuthoringService } from "../modules/content-publishing/application/authoring.js";
 import type { OwnerProjectApplicationService } from "../runtime/http/owner-project.js";
 import type { OwnerTaxonomyApplicationService } from "../runtime/http/owner-taxonomy.js";
+import type { PublicDiscoveryService } from "../modules/taxonomy-discovery/application/index.js";
 import type { LifecycleResource, ReadinessCheck } from "../runtime/ports.js";
 import { parseStableId } from "../shared/domain/index.js";
 
@@ -37,6 +38,7 @@ let currentOperations: OperationsPersistencePorts | undefined;
 let currentOwnerConfiguration: OwnerConfigurationApplicationService | undefined;
 let currentContentAuthoring: ContentAuthoringService | undefined;
 let currentOwnerTaxonomy: OwnerTaxonomyApplicationService | undefined;
+let currentPublicDiscovery: PublicDiscoveryService | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -64,6 +66,7 @@ export interface DatabaseRuntimeDependencies {
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
   readonly contentAuthoring?: ContentAuthoringService;
   readonly ownerTaxonomy?: OwnerTaxonomyApplicationService;
+  readonly publicDiscovery?: PublicDiscoveryService;
   readonly resource: LifecycleResource;
   readonly readiness: ReadinessCheck;
 }
@@ -122,6 +125,7 @@ export async function initializeDatabaseRuntime(
         let ownerConfiguration: OwnerConfigurationApplicationService | undefined;
         let contentAuthoring: ContentAuthoringService | undefined;
         let ownerTaxonomy: OwnerTaxonomyApplicationService | undefined;
+        let publicDiscovery: PublicDiscoveryService | undefined;
         if (runtimeKind === "application") {
           if (configuredScope === undefined || !configuredScope.portfolioId.ok || !configuredScope.ownerId.ok) {
             throw new RuntimeConfigError("PORTFOLIO_ID", "must be configured for Owner configuration commands");
@@ -171,6 +175,17 @@ export async function initializeDatabaseRuntime(
             import("../modules/content-publishing/application/authoring.js"),
           ]);
           const discoveryProjection = createPostgresProjectDiscoveryProjectionWriter();
+          const [{ createPostgresPublicDiscoveryReader }, { createPublicDiscoveryService }] = await Promise.all([
+            import("../modules/taxonomy-discovery/adapters/index.js"),
+            import("../modules/taxonomy-discovery/application/index.js"),
+          ]);
+          publicDiscovery = createPublicDiscoveryService({
+            reader: createPostgresPublicDiscoveryReader({
+              portfolioId: configuredScope.portfolioId.value,
+              ownerId: configuredScope.ownerId.value,
+            }),
+            transactions: operations.transactions,
+          });
           contentAuthoring = createContentAuthoringService({
             repository: createPostgresContentAuthoringRepository(),
             operations,
@@ -201,6 +216,7 @@ export async function initializeDatabaseRuntime(
           ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
           ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
           ...(ownerTaxonomy === undefined ? {} : { ownerTaxonomy }),
+          ...(publicDiscovery === undefined ? {} : { publicDiscovery }),
           resource: database.resource,
           readiness: database.readiness,
         };
@@ -223,6 +239,7 @@ export async function initializeDatabaseRuntime(
     currentOwnerConfiguration = dependencies.ownerConfiguration;
     currentContentAuthoring = dependencies.contentAuthoring;
     currentOwnerTaxonomy = dependencies.ownerTaxonomy;
+    currentPublicDiscovery = dependencies.publicDiscovery;
     lifecycle.markReady();
     return Object.freeze({ ...config, runtimeKind });
   } catch (error) {
@@ -259,6 +276,12 @@ export async function getOwnerTaxonomyApplicationService(): Promise<OwnerTaxonom
   return createProductionOwnerTaxonomyService();
 }
 
+/** Locale-aware public discovery is an in-process query over approved projections. */
+export async function getPublicDiscoveryApplicationService(): Promise<PublicDiscoveryService> {
+  if (currentPublicDiscovery !== undefined) return currentPublicDiscovery;
+  throw new Error("Public discovery requires the configured PostgreSQL application assembly.");
+}
+
 /** Project route, status, and Featured operations share the Content transaction boundary. */
 export async function getOwnerProjectApplicationService(): Promise<OwnerProjectApplicationService> {
   const contentAuthoring = await getContentAuthoringApplicationService();
@@ -289,5 +312,6 @@ export function resetRuntimeForTests(): void {
   currentOwnerConfiguration = undefined;
   currentContentAuthoring = undefined;
   currentOwnerTaxonomy = undefined;
+  currentPublicDiscovery = undefined;
   resetLifecycleForTests();
 }

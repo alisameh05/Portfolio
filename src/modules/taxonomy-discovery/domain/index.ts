@@ -3,6 +3,8 @@ export type {
   TaxonomyValue,
   TaxonomyAssignment,
   ProjectDiscoveryCard,
+  ProjectDiscoveryFacet,
+  ProjectDiscoveryPage,
   PublicDiscoveryCriteria,
   ProjectStatusValueView,
   ProjectStatusValueReceipt,
