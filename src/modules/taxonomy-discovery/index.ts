@@ -10,6 +10,8 @@ export type {
   TaxonomyValue,
   TaxonomyAssignment,
   ProjectDiscoveryCard,
+  ProjectDiscoveryFacet,
+  ProjectDiscoveryPage,
   PublicDiscoveryCriteria,
   ProjectStatusValueView,
   ProjectStatusValueReceipt,
@@ -45,8 +47,12 @@ export type {
   RenameProjectStatusValueCommand,
   RetireProjectStatusValueCommand,
   TaxonomyDiscoveryService,
+  PublicDiscoveryService,
+  PublicDiscoveryReader,
+  PublicDiscoveryReadQuery,
+  PublicDiscoveryReadResult,
 } from "./application/index.js";
-export { createTaxonomyOwnerService } from "./application/index.js";
+export { createTaxonomyOwnerService, createPublicDiscoveryService } from "./application/index.js";
 
 export type { TaxonomyRepositoryPort } from "./ports/index.js";
 export { createPostgresProjectDiscoveryProjectionWriter } from "./adapters/index.js";

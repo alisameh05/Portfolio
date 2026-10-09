@@ -5,11 +5,12 @@ import type {
   Taxonomy,
   TaxonomyValue,
   TaxonomyAssignment,
-  ProjectDiscoveryCard,
+  ProjectDiscoveryPage,
 } from "../domain/index.js";
 
 export { createPostgresProjectDiscoveryProjectionWriter } from "./postgres-project-discovery.js";
 export { createPostgresTaxonomyOwnerRepository } from "./postgres-owner-taxonomies.js";
+export { createPostgresPublicDiscoveryReader } from "./postgres-public-discovery.js";
 
 /**
  * Stub repository adapter for Phase 1 skeleton.
@@ -46,7 +47,7 @@ export class StubTaxonomyRepository implements TaxonomyRepositoryPort {
     return err({ kind: "temporarily_unavailable", code: "PERSISTENCE_NOT_IMPLEMENTED" });
   }
 
-  async getDiscoveryProjects(): Promise<Result<readonly ProjectDiscoveryCard[], Rejection>> {
+  async getDiscoveryProjects(_query: import("../domain/index.js").PublicDiscoveryCriteria): Promise<Result<ProjectDiscoveryPage, Rejection>> {
     return err({ kind: "not_found", code: "DISCOVERY_PROJECTS_NOT_FOUND" });
   }
 }
