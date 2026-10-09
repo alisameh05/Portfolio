@@ -44,6 +44,8 @@ function aggregateView(taxonomyId: StableId<string>): OwnerTaxonomyAggregateView
     aggregateVersion: 1,
     kind: "technology",
     values: [{ valueId: VALUE_ID as StableId<string>, name: "TypeScript", state: "active" }],
+    history: [],
+    assignmentHistory: [],
   };
 }
 
@@ -53,6 +55,8 @@ function invalidAggregateView(taxonomyId: StableId<string>): OwnerTaxonomyAggreg
     aggregateVersion: -1,
     kind: "technology",
     values: [{ valueId: taxonomyId, name: "TypeScript", state: "active" }],
+    history: [],
+    assignmentHistory: [],
   };
 }
 

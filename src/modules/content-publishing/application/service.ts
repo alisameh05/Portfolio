@@ -151,14 +151,28 @@ export interface ProjectTaxonomyMergeCommand extends ExistingContentCommandConte
 
 /** Content owns assignment writes; Taxonomy supplies the active transaction identity. */
 export interface ContentTaxonomyAssignmentsPort {
-  assignProjectValue(
-    command: ProjectTaxonomyAssignmentCommand,
+  listAssignmentHistory(
+    taxonomyId: StableId<"Taxonomy">,
+    limit: number,
     transaction: TransactionContext,
-  ): Promise<Result<ProjectCommandReceipt, Rejection>>;
+  ): Promise<readonly {
+    readonly projectId: StableId<"Project">;
+    readonly valueId: StableId<"TaxonomyValue">;
+    readonly aggregateVersion: number;
+    readonly changedAt: string;
+  }[]>;
+  listProjectsWithValue(
+    valueId: StableId<"TaxonomyValue">,
+    limit: number,
+    transaction: TransactionContext,
+  ): Promise<Result<readonly StableId<"Project">[], Rejection>>;
   migrateProjectValues(
-    command: ProjectTaxonomyMergeCommand,
+    command: Pick<ProjectTaxonomyMergeCommand, "sourceValueId" | "targetValueId"> & {
+      readonly projectId: StableId<"Project">;
+      readonly actorId: StableId<"Owner">;
+    },
     transaction: TransactionContext,
-  ): Promise<Result<ProjectCommandReceipt, Rejection>>;
+  ): Promise<Result<{ readonly aggregateVersion: number; readonly changed: boolean }, Rejection>>;
 }
 
 export interface GetPublicContentQuery {

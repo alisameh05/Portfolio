@@ -26,6 +26,16 @@ export function createContentBackedOwnerTaxonomyService(
       const result = await taxonomy.retireOwnerTaxonomyValue(command as never);
       return mapReceipt(result);
     },
+    async mergeOwnerTaxonomyValue(command) {
+      const result = await taxonomy.mergeOwnerTaxonomyValue({
+        actor: command.actor,
+        idempotencyKey: command.idempotencyKey as never,
+        expectedVersion: command.expectedVersion,
+        sourceValueId: command.valueId as never,
+        targetValueId: command.targetValueId as never,
+      });
+      return mapReceipt(result);
+    },
   };
 }
 
@@ -41,5 +51,5 @@ function mapReceipt(result: Result<OwnerTaxonomyCommandReceiptShape, Rejection>)
 interface OwnerTaxonomyCommandReceiptShape {
   readonly aggregateId: OwnerTaxonomyCommandReceipt["aggregateId"];
   readonly aggregateVersion: number;
-  readonly outcome: "taxonomy-value-created" | "taxonomy-value-renamed" | "taxonomy-value-retired";
+  readonly outcome: "taxonomy-value-created" | "taxonomy-value-renamed" | "taxonomy-value-retired" | "taxonomy-value-merged";
 }

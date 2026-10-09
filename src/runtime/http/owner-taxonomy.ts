@@ -120,6 +120,20 @@ export interface OwnerTaxonomyAggregateView {
   readonly aggregateVersion: number;
   readonly kind: "category" | "ai-ml-domain" | "technology" | "project-type";
   readonly values: ReadonlyArray<OwnerTaxonomyValueView>;
+  readonly history: ReadonlyArray<{
+    readonly valueId: StableId<string>;
+    readonly action: "created" | "renamed" | "retired" | "merged";
+    readonly previousLabel: string | null;
+    readonly label: string;
+    readonly aggregateVersion: number;
+    readonly changedAt: string;
+  }>;
+  readonly assignmentHistory: ReadonlyArray<{
+    readonly projectId: StableId<string>;
+    readonly valueId: StableId<string>;
+    readonly aggregateVersion: number;
+    readonly changedAt: string;
+  }>;
 }
 
 export interface OwnerTaxonomyCommandReceipt {
@@ -262,6 +276,8 @@ export async function handleGetOwnerTaxonomyAggregate(
       aggregateVersion: result.value.aggregateVersion,
       kind: result.value.kind,
       values: [...result.value.values],
+      history: [...result.value.history],
+      assignmentHistory: [...result.value.assignmentHistory],
     };
     const parsed = zGetOwnerTaxonomyAggregateResponse.safeParse(payload);
     if (!parsed.success) {

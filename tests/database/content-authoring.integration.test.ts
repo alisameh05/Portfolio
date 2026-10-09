@@ -3,6 +3,7 @@ import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createContentAuthoringService } from "../../src/modules/content-publishing/application/authoring.js";
 import { createPostgresContentAuthoringRepository } from "../../src/modules/content-publishing/adapters/postgres-authoring.js";
+import { createPostgresContentTaxonomyAssignmentsPort } from "../../src/modules/content-publishing/adapters/postgres-taxonomy-assignments.js";
 import { createPostgresProjectDiscoveryProjectionWriter } from "../../src/modules/taxonomy-discovery/adapters/index.js";
 import { createPostgresTaxonomyOwnerRepository } from "../../src/modules/taxonomy-discovery/adapters/index.js";
 import { createTaxonomyOwnerService } from "../../src/modules/taxonomy-discovery/application/owner-taxonomies.js";
@@ -85,6 +86,18 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     return createContentAuthoringService({ repository, operations: selectedOperations, scope,
       discoveryProjection, taxonomyAssignments: taxonomyAssignments ?? discoveryProjection, ...(clock === undefined ? {} : { clock }),
       ...(mediaAcceptance === undefined ? {} : { mediaAcceptance }) });
+  }
+  function taxonomyServiceForMerge(
+    scope: { portfolioId: StableId<"Portfolio">; ownerId: StableId<"Owner"> },
+    selectedOperations = operations,
+    discovery = createPostgresProjectDiscoveryProjectionWriter(),
+  ) {
+    return createTaxonomyOwnerService({
+      repository: createPostgresTaxonomyOwnerRepository(),
+      operations: selectedOperations,
+      scope,
+      contentAssignments: createPostgresContentTaxonomyAssignmentsPort({ scope, discovery }),
+    });
   }
   const key = (value: string) => value as IdempotencyKey;
   const actor = (ownerId: StableId<"Owner">) => ({ kind: "owner" as const, ownerId, sessionId: "authoring-integration" });
@@ -2182,6 +2195,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       repository: createPostgresTaxonomyOwnerRepository(),
       operations,
       scope,
+      contentAssignments: createPostgresContentTaxonomyAssignmentsPort({ scope, discovery: createPostgresProjectDiscoveryProjectionWriter() }),
       ids: createSystemIdGenerator(),
       clock: { now: () => new Date().toISOString() },
     });
@@ -2289,7 +2303,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
 
   it("rolls back assignment, Project version, history, and receipt when projection or outbox persistence fails", async () => {
     const scope = await configuredScope();
-    const taxonomy = createTaxonomyOwnerService({ repository: createPostgresTaxonomyOwnerRepository(), operations, scope });
+    const taxonomy = taxonomyServiceForMerge(scope);
     const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
     const created = await taxonomy.createOwnerTaxonomyValue({
       actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-rollback-create"),
@@ -2339,7 +2353,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
   it("renames and retires Taxonomy values while preserving assignments, public labels, and restoration", async () => {
     const scope = await configuredScope();
     const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
-    const taxonomy = createTaxonomyOwnerService({ repository: createPostgresTaxonomyOwnerRepository(), operations, scope });
+    const taxonomy = taxonomyServiceForMerge(scope);
     const created = await taxonomy.createOwnerTaxonomyValue({
       actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-evolution-create"), taxonomyId,
       expectedVersion: 1, name: "TypeScript",
@@ -2376,7 +2390,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       ...operations,
       outbox: { ...operations.outbox, async append() { throw new Error("INJECTED_TAXONOMY_EVOLUTION_OUTBOX_FAILURE"); } },
     };
-    await expect(createTaxonomyOwnerService({ repository: createPostgresTaxonomyOwnerRepository(), operations: failingOutbox, scope })
+    await expect(taxonomyServiceForMerge(scope, failingOutbox)
       .renameOwnerTaxonomyValue(renameCommand)).rejects.toThrow();
     const beforeRetry = await admin.query(
       "select root.aggregate_version, value.label, (select count(*)::int from taxonomy.value_history history where history.portfolio_id = value.portfolio_id and history.value_id = value.value_id) history_count " +
@@ -2445,10 +2459,364 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(restored).toMatchObject({ ok: true, value: { aggregateVersion: hidden.value.aggregateVersion + 1 } });
   }, 30_000);
 
+  it("merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt", async () => {
+    const scope = await configuredScope();
+    const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
+    const taxonomy = taxonomyServiceForMerge(scope);
+    await taxonomy.createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-source"), taxonomyId, expectedVersion: 1, name: "Old framework" });
+    await taxonomy.createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-target"), taxonomyId, expectedVersion: 2, name: "Current framework" });
+    const aggregate = await taxonomy.getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    if (!aggregate.ok) throw new Error("TAXONOMY_MERGE_ROOT_MISSING");
+    const sourceValueId = aggregate.value.values.find((value) => value.name === "Old framework")!.valueId;
+    const targetValueId = aggregate.value.values.find((value) => value.name === "Current framework")!.valueId;
+    const projects = await Promise.all([0, 1, 2].map((index) => createReviewedProject(scope, `Merge project ${index}`, `taxonomy-merge-project-${index}`)));
+    const initialVersions: number[] = [];
+    for (const [index, project] of projects.entries()) {
+      const published = await project.content.publishLanguageVersion({
+        actor: actor(scope.ownerId), contentId: project.contentId, expectedVersion: project.aggregateVersion,
+        idempotencyKey: key(`taxonomy-merge-publish-${index}`), correlationId: `taxonomy-merge-publish-${index}`,
+        locale: "en", revisionId: project.revisionId,
+      });
+      if (!published.ok) throw new Error("TAXONOMY_MERGE_PUBLISH_FAILED");
+      let currentVersion = published.value.aggregateVersion;
+      if (index === 1) {
+        const target = await project.content.assignProjectTaxonomyValue({
+          actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">, valueId: targetValueId,
+          expectedVersion: currentVersion, idempotencyKey: key(`taxonomy-merge-target-assignment-${index}`), correlationId: `taxonomy-merge-target-assignment-${index}`,
+        });
+        if (!target.ok) throw new Error("TAXONOMY_MERGE_TARGET_ASSIGNMENT_FAILED");
+        currentVersion = target.value.aggregateVersion;
+      }
+      const source = await project.content.assignProjectTaxonomyValue({
+        actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">, valueId: sourceValueId,
+        expectedVersion: currentVersion, idempotencyKey: key(`taxonomy-merge-source-assignment-${index}`), correlationId: `taxonomy-merge-source-assignment-${index}`,
+      });
+      if (!source.ok) throw new Error("TAXONOMY_MERGE_SOURCE_ASSIGNMENT_FAILED");
+      initialVersions.push(source.value.aggregateVersion);
+    }
+    const before = await admin.query(
+      "select content_id::text, locale, value_id::text, first_published_at from taxonomy.project_discovery_taxonomy_values where portfolio_id = $1::uuid and value_id = $2::uuid order by content_id, locale",
+      [scope.portfolioId, sourceValueId],
+    );
+    expect(before.rows).toHaveLength(3);
+
+    const mergeCommand = {
+      actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-success"), expectedVersion: 3,
+      sourceValueId, targetValueId,
+    };
+    const merged = await taxonomy.mergeOwnerTaxonomyValue(mergeCommand);
+    expect(merged).toMatchObject({ ok: true, value: { aggregateId: taxonomyId, aggregateVersion: 4, outcome: "taxonomy-value-merged" } });
+    expect(await taxonomy.mergeOwnerTaxonomyValue(mergeCommand)).toEqual(merged);
+    const changedIntent = await taxonomy.mergeOwnerTaxonomyValue({ ...mergeCommand, expectedVersion: 2 });
+    expect(changedIntent).toMatchObject({ ok: false, error: { kind: "conflict", code: "IDEMPOTENCY_KEY_REUSED" } });
+
+    const current = await taxonomy.getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    if (!current.ok) throw new Error(`TAXONOMY_MERGE_VIEW_FAILED:${current.error.code}`);
+    expect(current.value.aggregateVersion).toBe(4);
+    expect(current.value.values.find((value) => value.valueId === sourceValueId)).toMatchObject({ state: "merged", mergedIntoValueId: targetValueId });
+    expect(current.value.values.find((value) => value.valueId === targetValueId)?.state).toBe("active");
+    expect(current.value.history).toContainEqual(expect.objectContaining({ valueId: sourceValueId, action: "merged", label: "Old framework" }));
+    expect(current.value.assignmentHistory).toEqual(expect.arrayContaining([
+      expect.objectContaining({ projectId: projects[0]!.contentId, valueId: targetValueId }),
+      expect.objectContaining({ projectId: projects[1]!.contentId, valueId: targetValueId }),
+      expect.objectContaining({ projectId: projects[2]!.contentId, valueId: targetValueId }),
+    ]));
+    expect(current.value.history.length).toBeLessThanOrEqual(100);
+    expect(current.value.assignmentHistory.length).toBeLessThanOrEqual(100);
+    const databaseState = await admin.query(
+      "select (select count(*)::int from content.project_taxonomy_assignments where portfolio_id = $1::uuid and value_id = $2::uuid) source_assignments, " +
+      "(select count(*)::int from content.project_taxonomy_assignments where portfolio_id = $1::uuid and value_id = $3::uuid) target_assignments, " +
+      "(select count(*)::int from taxonomy.project_discovery_taxonomy_values where portfolio_id = $1::uuid and value_id = $2::uuid) source_facets, " +
+      "(select count(*)::int from taxonomy.project_discovery_taxonomy_values where portfolio_id = $1::uuid and value_id = $3::uuid) target_facets",
+      [scope.portfolioId, sourceValueId, targetValueId],
+    );
+    expect(databaseState.rows[0]).toEqual({ source_assignments: 0, target_assignments: 3, source_facets: 0, target_facets: 3 });
+    const migratedProjects = await admin.query(
+      "select content_id::text, aggregate_version from content.items where portfolio_id = $1::uuid and content_id = any($2::uuid[]) order by content_id",
+      [scope.portfolioId, projects.map((project) => project.contentId)],
+    );
+    expect(migratedProjects.rows.every((row) => row.aggregate_version === initialVersions[projects.findIndex((project) => project.contentId === row.content_id)]! + 1)).toBe(true);
+    const history = await admin.query(
+      "select action, previous_label, label, state, aggregate_version, actor_id from taxonomy.value_history where portfolio_id = $1::uuid and value_id = $2::uuid order by transition_sequence",
+      [scope.portfolioId, sourceValueId],
+    );
+    expect(history.rows.at(-1)).toEqual({ action: "merged", previous_label: "Old framework", label: "Old framework", state: "merged", aggregate_version: 4, actor_id: scope.ownerId });
+    const targetHistory = await admin.query(
+      "select count(*)::int as entries from content.project_taxonomy_assignment_history where portfolio_id = $1::uuid and value_id = $2::uuid",
+      [scope.portfolioId, targetValueId],
+    );
+    expect(targetHistory.rows[0]!.entries).toBe(4); // Existing target assignment plus one merge record per affected Project.
+    const projectedTimes = await admin.query(
+      "select content_id::text, first_published_at from taxonomy.project_discovery_taxonomy_values where portfolio_id = $1::uuid and value_id = $2::uuid order by content_id",
+      [scope.portfolioId, targetValueId],
+    );
+    expect(projectedTimes.rows.map((row) => row.first_published_at)).toEqual(before.rows.map((row) => row.first_published_at));
+
+    const lateProject = await createReviewedProject(scope, "Merged source is closed", "taxonomy-merge-late");
+    const rejected = await lateProject.content.assignProjectTaxonomyValue({
+      actor: actor(scope.ownerId), projectId: lateProject.contentId as StableId<"Project">, valueId: sourceValueId,
+      expectedVersion: lateProject.aggregateVersion, idempotencyKey: key("taxonomy-merge-late-assignment"), correlationId: "taxonomy-merge-late-assignment",
+    });
+    expect(rejected).toMatchObject({ ok: false, error: { kind: "validation", code: "TAXONOMY_VALUE_NOT_ACTIVE" } });
+    const stale = await taxonomy.mergeOwnerTaxonomyValue({ ...mergeCommand, idempotencyKey: key("taxonomy-merge-stale"), expectedVersion: 3 });
+    expect(stale).toMatchObject({ ok: false, error: { kind: "precondition_failed", code: "TAXONOMY_VERSION_MISMATCH", currentVersion: 4 } });
+  }, 30_000);
+
+  it("rolls back every Project when a multi-Project merge projection or outbox write fails", async () => {
+    const scope = await configuredScope();
+    const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
+    const projection = createPostgresProjectDiscoveryProjectionWriter();
+    await taxonomyServiceForMerge(scope).createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-rollback-source"), taxonomyId, expectedVersion: 1, name: "Rollback source" });
+    await taxonomyServiceForMerge(scope).createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-rollback-target"), taxonomyId, expectedVersion: 2, name: "Rollback target" });
+    const aggregate = await taxonomyServiceForMerge(scope).getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    if (!aggregate.ok) throw new Error("TAXONOMY_MERGE_ROLLBACK_ROOT_MISSING");
+    const sourceValueId = aggregate.value.values.find((value) => value.name === "Rollback source")!.valueId;
+    const targetValueId = aggregate.value.values.find((value) => value.name === "Rollback target")!.valueId;
+    const projects = await Promise.all([0, 1].map((index) => createReviewedProject(scope, `Rollback merge ${index}`, `taxonomy-merge-rollback-${index}`)));
+    for (const [index, project] of projects.entries()) {
+      const published = await project.content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+        expectedVersion: project.aggregateVersion, idempotencyKey: key(`taxonomy-merge-rollback-pub-${index}`), correlationId: `taxonomy-merge-rollback-pub-${index}`,
+        locale: "en", revisionId: project.revisionId });
+      if (!published.ok) throw new Error("TAXONOMY_MERGE_ROLLBACK_PUBLISH_FAILED");
+      const assigned = await project.content.assignProjectTaxonomyValue({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+        valueId: sourceValueId, expectedVersion: published.value.aggregateVersion, idempotencyKey: key(`taxonomy-merge-rollback-assign-${index}`), correlationId: `taxonomy-merge-rollback-assign-${index}` });
+      if (!assigned.ok) throw new Error("TAXONOMY_MERGE_ROLLBACK_ASSIGN_FAILED");
+    }
+    let projectionCalls = 0;
+    const failingProjection = {
+      ...projection,
+      async mergeProjectDiscoveryTaxonomyValue(command: Parameters<typeof projection.mergeProjectDiscoveryTaxonomyValue>[0], transaction: Parameters<typeof projection.mergeProjectDiscoveryTaxonomyValue>[1]) {
+        await projection.mergeProjectDiscoveryTaxonomyValue(command, transaction);
+        projectionCalls += 1;
+        if (projectionCalls === 2) throw new Error("INJECTED_SECOND_PROJECT_PROJECTION_FAILURE");
+      },
+    };
+    const command = { actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-projection-failure"), expectedVersion: 3, sourceValueId, targetValueId };
+    expect(await taxonomyServiceForMerge(scope, operations, failingProjection).mergeOwnerTaxonomyValue(command))
+      .toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "TAXONOMY_MERGE_RETRYABLE" } });
+    const unchanged = await admin.query(
+      "select (select state from taxonomy.taxonomy_values where portfolio_id = $1::uuid and value_id = $2::uuid) source_state, " +
+      "(select aggregate_version from taxonomy.roots where portfolio_id = $1::uuid and taxonomy_id = $3::uuid) root_version, " +
+      "(select count(*)::int from content.project_taxonomy_assignments where portfolio_id = $1::uuid and value_id = $2::uuid) source_assignments, " +
+      "(select count(*)::int from content.project_taxonomy_assignments where portfolio_id = $1::uuid and value_id = $4::uuid) target_assignments",
+      [scope.portfolioId, sourceValueId, taxonomyId, targetValueId],
+    );
+    expect(unchanged.rows[0]).toEqual({ source_state: "active", root_version: 3, source_assignments: 2, target_assignments: 0 });
+    const failingOutbox = { ...operations, outbox: { ...operations.outbox, async append() { throw new Error("INJECTED_MERGE_OUTBOX_FAILURE"); } } };
+    expect(await taxonomyServiceForMerge(scope, failingOutbox).mergeOwnerTaxonomyValue(command))
+      .toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "TAXONOMY_MERGE_RETRYABLE" } });
+    const stillUnchanged = await admin.query(
+      "select (select state from taxonomy.taxonomy_values where portfolio_id = $1::uuid and value_id = $2::uuid) source_state, " +
+      "(select count(*)::int from content.project_taxonomy_assignments where portfolio_id = $1::uuid and value_id = $2::uuid) source_assignments",
+      [scope.portfolioId, sourceValueId],
+    );
+    expect(stillUnchanged.rows[0]).toEqual({ source_state: "active", source_assignments: 2 });
+    const receiptFailureStateQuery =
+      "select (select aggregate_version from taxonomy.roots where portfolio_id = $1::uuid and taxonomy_id = $3::uuid) root_version, " +
+      "(select state from taxonomy.taxonomy_values where portfolio_id = $1::uuid and value_id = $2::uuid) source_state, " +
+      "(select count(*)::int from content.project_taxonomy_assignments where portfolio_id = $1::uuid and value_id = $2::uuid) source_assignments, " +
+      "(select count(*)::int from content.project_taxonomy_assignments where portfolio_id = $1::uuid and value_id = $4::uuid) target_assignments, " +
+      "(select string_agg(content_id::text || ':' || aggregate_version::text, ',' order by content_id) from content.items where portfolio_id = $1::uuid and content_id = any($5::uuid[])) project_versions, " +
+      "(select count(*)::int from content.project_taxonomy_assignment_history where portfolio_id = $1::uuid and content_id = any($5::uuid[])) assignment_history, " +
+      "(select count(*)::int from taxonomy.project_discovery_taxonomy_values where portfolio_id = $1::uuid and value_id = $2::uuid) source_facets, " +
+      "(select count(*)::int from taxonomy.project_discovery_taxonomy_values where portfolio_id = $1::uuid and value_id = $4::uuid) target_facets, " +
+      "(select count(*)::int from operations.outbox_events where aggregate_id = $3::uuid and event_type = 'taxonomy.value_merged.v1') merge_events, " +
+      "(select count(*)::int from operations.idempotency_records where operation_scope = 'taxonomy-discovery.merge-value') merge_receipts";
+    const receiptFailureParams = [scope.portfolioId, sourceValueId, taxonomyId, targetValueId, projects.map((project) => project.contentId)];
+    const beforeReceiptFailure = await admin.query(receiptFailureStateQuery, receiptFailureParams);
+    await admin.query(`create or replace function public.phase5_fail_taxonomy_merge_receipt() returns trigger language plpgsql as $$
+      begin
+        if old.operation_scope = 'taxonomy-discovery.merge-value' and new.status = 'completed' then
+          raise exception 'INJECTED_MERGE_RECEIPT_FAILURE';
+        end if;
+        return new;
+      end;
+    $$`);
+    await admin.query("create trigger phase5_fail_taxonomy_merge_receipt before update on operations.idempotency_records for each row execute function public.phase5_fail_taxonomy_merge_receipt()");
+    try {
+      expect(await taxonomyServiceForMerge(scope).mergeOwnerTaxonomyValue({
+        actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-receipt-failure"), expectedVersion: 3, sourceValueId, targetValueId,
+      })).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "TAXONOMY_MERGE_RETRYABLE" } });
+    } finally {
+      await admin.query("drop trigger if exists phase5_fail_taxonomy_merge_receipt on operations.idempotency_records");
+      await admin.query("drop function if exists public.phase5_fail_taxonomy_merge_receipt()");
+    }
+    const afterReceiptFailure = await admin.query(receiptFailureStateQuery, receiptFailureParams);
+    expect(afterReceiptFailure.rows).toEqual(beforeReceiptFailure.rows);
+    const replayAfterRollback = await taxonomyServiceForMerge(scope).mergeOwnerTaxonomyValue(command);
+    expect(replayAfterRollback).toMatchObject({ ok: true, value: { aggregateVersion: 4, outcome: "taxonomy-value-merged" } });
+  }, 30_000);
+
+  it("serializes assignment against merge and simultaneous merges on independent connections", async () => {
+    const scope = await configuredScope();
+    const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
+    const taxonomy = taxonomyServiceForMerge(scope);
+    await taxonomy.createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-race-source"), taxonomyId, expectedVersion: 1, name: "Race source" });
+    await taxonomy.createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-race-target"), taxonomyId, expectedVersion: 2, name: "Race target" });
+    const values = await taxonomy.getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    if (!values.ok) throw new Error("TAXONOMY_MERGE_RACE_ROOT_MISSING");
+    const sourceValueId = values.value.values.find((value) => value.name === "Race source")!.valueId;
+    const targetValueId = values.value.values.find((value) => value.name === "Race target")!.valueId;
+    const existing = await createReviewedProject(scope, "Existing merge assignment", "taxonomy-merge-race-existing");
+    const late = await createReviewedProject(scope, "Assignment racing merge", "taxonomy-merge-race-late");
+    const publishResults = await Promise.all([existing, late].map((project, index) => project.content.publishLanguageVersion({
+      actor: actor(scope.ownerId), contentId: project.contentId, expectedVersion: project.aggregateVersion,
+      idempotencyKey: key(`taxonomy-merge-race-publish-${index}`), correlationId: `taxonomy-merge-race-publish-${index}`,
+      locale: "en", revisionId: project.revisionId,
+    })));
+    const existingPublished = publishResults[0];
+    const latePublished = publishResults[1];
+    if (existingPublished === undefined || latePublished === undefined || !existingPublished.ok || !latePublished.ok) throw new Error("TAXONOMY_MERGE_RACE_PUBLISH_FAILED");
+    const initialAssignment = await existing.content.assignProjectTaxonomyValue({ actor: actor(scope.ownerId), projectId: existing.contentId as StableId<"Project">,
+      valueId: sourceValueId, expectedVersion: existingPublished.value.aggregateVersion, idempotencyKey: key("taxonomy-merge-race-existing-assignment"), correlationId: "taxonomy-merge-race-existing-assignment" });
+    if (!initialAssignment.ok) throw new Error("TAXONOMY_MERGE_RACE_INITIAL_ASSIGNMENT_FAILED");
+    const [racedAssignment, racedMerge] = await Promise.all([
+      late.content.assignProjectTaxonomyValue({ actor: actor(scope.ownerId), projectId: late.contentId as StableId<"Project">, valueId: sourceValueId,
+        expectedVersion: latePublished.value.aggregateVersion, idempotencyKey: key("taxonomy-merge-race-late-assignment"), correlationId: "taxonomy-merge-race-late-assignment" }),
+      taxonomy.mergeOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-race-merge"), expectedVersion: 3, sourceValueId, targetValueId }),
+    ]);
+    expect(racedMerge).toMatchObject({ ok: true, value: { aggregateVersion: 4 } });
+    expect(racedAssignment.ok ? "assigned" : racedAssignment.error.code).toMatch(/assigned|TAXONOMY_VALUE_NOT_ACTIVE/);
+    const sourceAssignments = await admin.query("select count(*)::int as count from content.project_taxonomy_assignments where portfolio_id = $1::uuid and value_id = $2::uuid", [scope.portfolioId, sourceValueId]);
+    expect(sourceAssignments.rows[0]!.count).toBe(0);
+
+    const freshScope = await configuredScope();
+    const secondTaxonomy = taxonomyServiceForMerge(freshScope);
+    await secondTaxonomy.createOwnerTaxonomyValue({ actor: actor(freshScope.ownerId), idempotencyKey: key("taxonomy-double-merge-a"), taxonomyId, expectedVersion: 1, name: "Merge A" });
+    await secondTaxonomy.createOwnerTaxonomyValue({ actor: actor(freshScope.ownerId), idempotencyKey: key("taxonomy-double-merge-b"), taxonomyId, expectedVersion: 2, name: "Merge B" });
+    await secondTaxonomy.createOwnerTaxonomyValue({ actor: actor(freshScope.ownerId), idempotencyKey: key("taxonomy-double-merge-target"), taxonomyId, expectedVersion: 3, name: "Merge target" });
+    const doubleValues = await secondTaxonomy.getOwnerTaxonomy({ actor: actor(freshScope.ownerId), taxonomyId });
+    if (!doubleValues.ok) throw new Error("TAXONOMY_DOUBLE_MERGE_ROOT_MISSING");
+    const a = doubleValues.value.values.find((value) => value.name === "Merge A")!.valueId;
+    const b = doubleValues.value.values.find((value) => value.name === "Merge B")!.valueId;
+    const survivor = doubleValues.value.values.find((value) => value.name === "Merge target")!.valueId;
+    const simultaneous = await Promise.all([
+      secondTaxonomy.mergeOwnerTaxonomyValue({ actor: actor(freshScope.ownerId), idempotencyKey: key("taxonomy-double-merge-one"), expectedVersion: 4, sourceValueId: a, targetValueId: b }),
+      secondTaxonomy.mergeOwnerTaxonomyValue({ actor: actor(freshScope.ownerId), idempotencyKey: key("taxonomy-double-merge-two"), expectedVersion: 4, sourceValueId: b, targetValueId: survivor }),
+    ]);
+    expect(simultaneous.filter((result) => result.ok)).toHaveLength(1);
+    expect(simultaneous.filter((result) => !result.ok && result.error.kind === "precondition_failed")).toHaveLength(1);
+    const mappings = await secondTaxonomy.getOwnerTaxonomy({ actor: actor(freshScope.ownerId), taxonomyId });
+    if (!mappings.ok) throw new Error(`TAXONOMY_DOUBLE_MERGE_VIEW_FAILED:${mappings.error.code}`);
+    expect(mappings.value.values.find((value) => value.valueId === survivor)?.state).toBe("active");
+    for (const value of mappings.value.values.filter((entry) => entry.state === "merged")) {
+      expect(mappings.value.values.find((entry) => entry.valueId === value.mergedIntoValueId)?.state).toBe("active");
+    }
+
+    const retireMergeScope = await configuredScope();
+    const retireMergeTaxonomy = taxonomyServiceForMerge(retireMergeScope);
+    await retireMergeTaxonomy.createOwnerTaxonomyValue({ actor: actor(retireMergeScope.ownerId), idempotencyKey: key("taxonomy-merge-retire-race-source"), taxonomyId, expectedVersion: 1, name: "Merge retire source" });
+    await retireMergeTaxonomy.createOwnerTaxonomyValue({ actor: actor(retireMergeScope.ownerId), idempotencyKey: key("taxonomy-merge-retire-race-target"), taxonomyId, expectedVersion: 2, name: "Merge retire target" });
+    const retireMergeValues = await retireMergeTaxonomy.getOwnerTaxonomy({ actor: actor(retireMergeScope.ownerId), taxonomyId });
+    if (!retireMergeValues.ok) throw new Error("TAXONOMY_MERGE_RETIRE_RACE_ROOT_MISSING");
+    const retireMergeSource = retireMergeValues.value.values.find((value) => value.name === "Merge retire source")!.valueId;
+    const retireMergeTarget = retireMergeValues.value.values.find((value) => value.name === "Merge retire target")!.valueId;
+    const retireMergeProject = await createReviewedProject(retireMergeScope, "Merge retirement race", "taxonomy-merge-retire-race-project");
+    const retireMergePublished = await retireMergeProject.content.publishLanguageVersion({
+      actor: actor(retireMergeScope.ownerId), contentId: retireMergeProject.contentId, expectedVersion: retireMergeProject.aggregateVersion,
+      idempotencyKey: key("taxonomy-merge-retire-race-publish"), correlationId: "taxonomy-merge-retire-race-publish",
+      locale: "en", revisionId: retireMergeProject.revisionId,
+    });
+    if (!retireMergePublished.ok) throw new Error("TAXONOMY_MERGE_RETIRE_RACE_PUBLISH_FAILED");
+    const retireMergeAssignment = await retireMergeProject.content.assignProjectTaxonomyValue({
+      actor: actor(retireMergeScope.ownerId), projectId: retireMergeProject.contentId as StableId<"Project">, valueId: retireMergeSource,
+      expectedVersion: retireMergePublished.value.aggregateVersion, idempotencyKey: key("taxonomy-merge-retire-race-assignment"), correlationId: "taxonomy-merge-retire-race-assignment",
+    });
+    if (!retireMergeAssignment.ok) throw new Error("TAXONOMY_MERGE_RETIRE_RACE_ASSIGNMENT_FAILED");
+    const [mergeAgainstRetirement, retirementAgainstMerge] = await Promise.all([
+      retireMergeTaxonomy.mergeOwnerTaxonomyValue({ actor: actor(retireMergeScope.ownerId), idempotencyKey: key("taxonomy-merge-retire-race-merge"), expectedVersion: 3, sourceValueId: retireMergeSource, targetValueId: retireMergeTarget }),
+      retireMergeTaxonomy.retireOwnerTaxonomyValue({ actor: actor(retireMergeScope.ownerId), idempotencyKey: key("taxonomy-merge-retire-race-retire"), expectedVersion: 3, valueId: retireMergeSource }),
+    ]);
+    expect([mergeAgainstRetirement, retirementAgainstMerge].filter((result) => result.ok)).toHaveLength(1);
+    const retireMergeState = await admin.query(
+      "select state, merged_into_value_id::text from taxonomy.taxonomy_values where portfolio_id = $1::uuid and value_id = $2::uuid",
+      [retireMergeScope.portfolioId, retireMergeSource],
+    );
+    expect(["merged", "retired"]).toContain(retireMergeState.rows[0]?.state);
+    if (retireMergeState.rows[0]?.state === "merged") {
+      expect(retireMergeState.rows[0]?.merged_into_value_id).toBe(retireMergeTarget);
+      const retainedSource = await admin.query("select count(*)::int as count from content.project_taxonomy_assignments where portfolio_id = $1::uuid and value_id = $2::uuid", [retireMergeScope.portfolioId, retireMergeSource]);
+      expect(retainedSource.rows[0]?.count).toBe(0);
+    }
+  }, 30_000);
+
+  it("merges a retired source only into an active same-root survivor and rejects merged sources, self merges, and oversized work", async () => {
+    const scope = await configuredScope();
+    const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
+    const taxonomy = taxonomyServiceForMerge(scope);
+    await taxonomy.createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-retired-merge-source"), taxonomyId, expectedVersion: 1, name: "Retired source" });
+    await taxonomy.createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-retired-merge-target"), taxonomyId, expectedVersion: 2, name: "Retired target" });
+    await taxonomy.createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-retired-merge-survivor"), taxonomyId, expectedVersion: 3, name: "Active survivor" });
+    const values = await taxonomy.getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    if (!values.ok) throw new Error("TAXONOMY_RETIRED_MERGE_ROOT_MISSING");
+    const sourceValueId = values.value.values.find((value) => value.name === "Retired source")!.valueId;
+    const retiredTargetId = values.value.values.find((value) => value.name === "Retired target")!.valueId;
+    const survivorId = values.value.values.find((value) => value.name === "Active survivor")!.valueId;
+    await taxonomy.retireOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-retired-merge-retire-source"), valueId: sourceValueId, expectedVersion: 4 });
+    await taxonomy.retireOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-retired-merge-retire-target"), valueId: retiredTargetId, expectedVersion: 5 });
+    expect(await taxonomy.mergeOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-retired-merge-self"), expectedVersion: 6, sourceValueId, targetValueId: sourceValueId }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "TAXONOMY_MERGE_VALUES_MUST_DIFFER" } });
+    expect(await taxonomy.mergeOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-retired-merge-target-rejected"), expectedVersion: 6, sourceValueId, targetValueId: retiredTargetId }))
+      .toMatchObject({ ok: false, error: { kind: "conflict", code: "TAXONOMY_MERGE_TARGET_NOT_ACTIVE" } });
+    const retiredSourceMerge = await taxonomy.mergeOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-retired-merge-success"), expectedVersion: 6, sourceValueId, targetValueId: survivorId });
+    expect(retiredSourceMerge).toMatchObject({ ok: true, value: { aggregateVersion: 7 } });
+    const alreadyMerged = await taxonomy.mergeOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merged-source-again"), expectedVersion: 7, sourceValueId, targetValueId: survivorId });
+    expect(alreadyMerged).toMatchObject({ ok: false, error: { kind: "conflict", code: "TAXONOMY_VALUE_ALREADY_MERGED" } });
+
+    const sourceTwo = await taxonomy.createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-cap-source"), taxonomyId, expectedVersion: 7, name: "Capacity source" });
+    const survivorTwo = await taxonomy.createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-cap-target"), taxonomyId, expectedVersion: 8, name: "Capacity target" });
+    expect(sourceTwo.ok && survivorTwo.ok).toBe(true);
+    const capValues = await taxonomy.getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    if (!capValues.ok) throw new Error("TAXONOMY_MERGE_CAPACITY_ROOT_MISSING");
+    const capSourceId = capValues.value.values.find((value) => value.name === "Capacity source")!.valueId;
+    const capTargetId = capValues.value.values.find((value) => value.name === "Capacity target")!.valueId;
+    const realPort = createPostgresContentTaxonomyAssignmentsPort({ scope, discovery: createPostgresProjectDiscoveryProjectionWriter() });
+    const oversizedPort = {
+      ...realPort,
+      async listProjectsWithValue() {
+        return { ok: true as const, value: Array.from({ length: 501 }, () => createStableId("Project")) };
+      },
+      async migrateProjectValues() {
+        throw new Error("OVERSIZED_MERGE_MUST_REJECT_BEFORE_MUTATION");
+      },
+    };
+    const limited = createTaxonomyOwnerService({ repository: createPostgresTaxonomyOwnerRepository(), operations, scope, contentAssignments: oversizedPort });
+    expect(await limited.mergeOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-capacity"), expectedVersion: 9, sourceValueId: capSourceId, targetValueId: capTargetId }))
+      .toMatchObject({ ok: false, error: { kind: "conflict", code: "TAXONOMY_MERGE_CAPACITY_EXCEEDED" } });
+    const afterLimit = await admin.query("select state, merged_into_value_id::text from taxonomy.taxonomy_values where portfolio_id = $1::uuid and value_id = $2::uuid", [scope.portfolioId, capSourceId]);
+    expect(afterLimit.rows[0]).toEqual({ state: "active", merged_into_value_id: null });
+  }, 30_000);
+
+  it("preserves Taxonomy root version ordering when merging a previously renamed source", async () => {
+    const scope = await configuredScope();
+    const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
+    const taxonomy = taxonomyServiceForMerge(scope);
+    await taxonomy.createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-rename-merge-source"), taxonomyId, expectedVersion: 1, name: "Renamed source" });
+    const source = await taxonomy.getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    if (!source.ok) throw new Error("TAXONOMY_RENAMED_MERGE_ROOT_MISSING");
+    const sourceValueId = source.value.values[0]!.valueId;
+    await taxonomy.renameOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-rename-before-merge"), valueId: sourceValueId, expectedVersion: 2, name: "Source after rename" });
+    await taxonomy.createOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-rename-merge-target"), taxonomyId, expectedVersion: 3, name: "Rename merge survivor" });
+    const beforeMerge = await taxonomy.getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    if (!beforeMerge.ok) throw new Error("TAXONOMY_RENAMED_MERGE_TARGET_MISSING");
+    const targetValueId = beforeMerge.value.values.find((value) => value.name === "Rename merge survivor")!.valueId;
+    expect(await taxonomy.mergeOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-merge-renamed-source"), expectedVersion: 4, sourceValueId, targetValueId }))
+      .toMatchObject({ ok: true, value: { aggregateVersion: 5 } });
+    const history = await admin.query(
+      "select action, aggregate_version from taxonomy.value_history where portfolio_id = $1::uuid and value_id = $2::uuid order by transition_sequence",
+      [scope.portfolioId, sourceValueId],
+    );
+    expect(history.rows).toEqual([
+      { action: "created", aggregate_version: 1 },
+      { action: "renamed", aggregate_version: 3 },
+      { action: "merged", aggregate_version: 5 },
+    ]);
+  }, 30_000);
+
   it("serializes Taxonomy retirement against new assignments", async () => {
     const scope = await configuredScope();
     const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
-    const taxonomy = createTaxonomyOwnerService({ repository: createPostgresTaxonomyOwnerRepository(), operations, scope });
+    const taxonomy = taxonomyServiceForMerge(scope);
     await taxonomy.createOwnerTaxonomyValue({
       actor: actor(scope.ownerId), idempotencyKey: key("taxonomy-retirement-race-create"), taxonomyId,
       expectedVersion: 1, name: "Race value",
@@ -2495,7 +2863,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     const sourceScope = await configuredScope();
     const targetScope = await configuredScope();
     const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
-    const sourceTaxonomy = createTaxonomyOwnerService({ repository: createPostgresTaxonomyOwnerRepository(), operations, scope: sourceScope });
+    const sourceTaxonomy = taxonomyServiceForMerge(sourceScope);
     await sourceTaxonomy.createOwnerTaxonomyValue({
       actor: actor(sourceScope.ownerId), idempotencyKey: key("taxonomy-foreign-value"), taxonomyId, expectedVersion: 1, name: "Foreign",
     });
@@ -2511,7 +2879,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     });
     expect(foreignAssignment).toMatchObject({ ok: false, error: { kind: "validation", code: "TAXONOMY_VALUE_NOT_FOUND" } });
 
-    const targetTaxonomy = createTaxonomyOwnerService({ repository: createPostgresTaxonomyOwnerRepository(), operations, scope: targetScope });
+    const targetTaxonomy = taxonomyServiceForMerge(targetScope);
     await targetTaxonomy.createOwnerTaxonomyValue({
       actor: actor(targetScope.ownerId), idempotencyKey: key("taxonomy-local-value"), taxonomyId, expectedVersion: 1, name: "Local",
     });

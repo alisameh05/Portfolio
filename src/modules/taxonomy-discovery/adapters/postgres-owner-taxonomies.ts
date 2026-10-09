@@ -3,6 +3,13 @@ import { err, type Rejection, type Result, type StableId } from "../../../shared
 import type { TaxonomyOwnerRepository, TaxonomyOwnerScope, TaxonomyKind, TaxonomyEvolutionResult } from "../application/owner-taxonomies.js";
 import type { TransactionContext } from "../../../runtime/ports.js";
 import { PostgresInfrastructureError, resolvePostgresTransaction } from "../../../shared/adapters/postgres/runtime.js";
+import type { ContentTaxonomyAssignmentsPort } from "../../content-publishing/index.js";
+
+// The shared transaction runner bounds lock waits at 5s and statements at 15s.
+// Keep merges synchronous and capped; lock timeout/deadlock failures abort the
+// enclosing transaction. The service maps them to 503/TAXONOMY_MERGE_RETRYABLE;
+// clients may retry with the same idempotency key.
+const MAX_PROJECTS_PER_TAXONOMY_MERGE = 500;
 
 function validKind(kind: string): kind is TaxonomyKind {
   return kind === "category" || kind === "ai-ml-domain" || kind === "technology" || kind === "project-type";
@@ -134,7 +141,7 @@ export function createPostgresTaxonomyOwnerRepository(): TaxonomyOwnerRepository
     }
   }
   return {
-    async getOwnerTaxonomy(input, context) {
+  async getOwnerTaxonomy(input, context) {
       const executor = resolvePostgresTransaction(context);
       try {
         await setScope(context, input.scope);
@@ -151,6 +158,13 @@ export function createPostgresTaxonomyOwnerRepository(): TaxonomyOwnerRepository
            where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${input.taxonomyId}::uuid
            order by normalized_label, value_id
         `.execute(executor);
+        const history = await sql<{ value_id: string; action: string; previous_label: string | null; label: string; aggregate_version: number; changed_at: Date | string }>`
+          select value_id::text, action, previous_label, label, aggregate_version, changed_at
+            from taxonomy.value_history
+           where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${input.taxonomyId}::uuid
+           order by changed_at desc, value_id, transition_sequence desc
+           limit 100
+        `.execute(executor);
         return { ok: true, value: {
           taxonomyId: row.taxonomy_id as StableId<"Taxonomy">,
           aggregateVersion: row.aggregate_version,
@@ -164,6 +178,13 @@ export function createPostgresTaxonomyOwnerRepository(): TaxonomyOwnerRepository
               state: value.state,
               ...(value.merged_into_value_id === null ? {} : { mergedIntoValueId: value.merged_into_value_id as StableId<"TaxonomyValue"> }),
             };
+          }),
+          history: history.rows.map((entry) => {
+            if (entry.action !== "created" && entry.action !== "renamed" && entry.action !== "retired" && entry.action !== "merged") throw new PostgresInfrastructureError();
+            if (!Number.isSafeInteger(entry.aggregate_version) || entry.aggregate_version < 1) throw new PostgresInfrastructureError();
+            const changedAt = entry.changed_at instanceof Date ? entry.changed_at.toISOString() : new Date(entry.changed_at).toISOString();
+            if (!Number.isFinite(Date.parse(changedAt))) throw new PostgresInfrastructureError();
+            return { valueId: entry.value_id as StableId<"TaxonomyValue">, action: entry.action, previousLabel: entry.previous_label, label: entry.label, aggregateVersion: entry.aggregate_version, changedAt };
           }),
         } };
       } catch (error) {
@@ -217,6 +238,103 @@ export function createPostgresTaxonomyOwnerRepository(): TaxonomyOwnerRepository
     },
     async retireValue(input, context) {
       return evolveValue(input, "retired", context);
+    },
+    async mergeValue(input, contentAssignments: ContentTaxonomyAssignmentsPort, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setScope(context, input.scope);
+        const sourceValueTaxonomy = await sql<{ taxonomy_id: string }>`
+          select taxonomy_id::text from taxonomy.taxonomy_values
+           where portfolio_id = ${input.scope.portfolioId}::uuid and value_id = ${input.sourceValueId}::uuid
+        `.execute(executor);
+        const taxonomyId = sourceValueTaxonomy.rows[0]?.taxonomy_id;
+        if (taxonomyId === undefined) return err({ kind: "not_found", code: "TAXONOMY_VALUE_NOT_FOUND" });
+
+        const selectedRoot = await sql<{ aggregate_version: number }>`
+          select aggregate_version from taxonomy.roots
+           where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${taxonomyId}::uuid
+           for update
+        `.execute(executor);
+        const root = selectedRoot.rows[0];
+        if (root === undefined) return err({ kind: "not_found", code: "TAXONOMY_NOT_FOUND" });
+        if (!Number.isSafeInteger(root.aggregate_version) || root.aggregate_version < 1) throw new PostgresInfrastructureError();
+        if (root.aggregate_version !== input.expectedVersion) return err({ kind: "precondition_failed", code: "TAXONOMY_VERSION_MISMATCH", currentVersion: root.aggregate_version });
+
+        const selectedValues = await sql<{ value_id: string; label: string; state: string; aggregate_version: number }>`
+          select value_id::text, label, state, aggregate_version from taxonomy.taxonomy_values
+           where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${taxonomyId}::uuid
+             and value_id in (${input.sourceValueId}::uuid, ${input.targetValueId}::uuid)
+           order by value_id for update
+        `.execute(executor);
+        const source = selectedValues.rows.find((value) => value.value_id === input.sourceValueId);
+        const target = selectedValues.rows.find((value) => value.value_id === input.targetValueId);
+        if (source === undefined || target === undefined) return err({ kind: "not_found", code: "TAXONOMY_VALUE_NOT_FOUND" });
+        if (source.state !== "active" && source.state !== "retired" && source.state !== "merged" ||
+            target.state !== "active" && target.state !== "retired" && target.state !== "merged" ||
+            !Number.isSafeInteger(source.aggregate_version) || !Number.isSafeInteger(target.aggregate_version)) {
+          throw new PostgresInfrastructureError();
+        }
+        if (source.state === "merged") return err({ kind: "conflict", code: "TAXONOMY_VALUE_ALREADY_MERGED" });
+        if (target.state !== "active") return err({ kind: "conflict", code: "TAXONOMY_MERGE_TARGET_NOT_ACTIVE" });
+
+        const projects = await contentAssignments.listProjectsWithValue(input.sourceValueId, MAX_PROJECTS_PER_TAXONOMY_MERGE + 1, context);
+        if (!projects.ok) return projects;
+        const projectIds = [...new Set(projects.value)].sort();
+        if (projectIds.length > MAX_PROJECTS_PER_TAXONOMY_MERGE) {
+          return err({ kind: "conflict", code: "TAXONOMY_MERGE_CAPACITY_EXCEEDED" });
+        }
+        for (const projectId of projectIds) {
+          const migrated = await contentAssignments.migrateProjectValues({
+            projectId,
+            sourceValueId: input.sourceValueId,
+            targetValueId: input.targetValueId,
+            actorId: input.actorId,
+          }, context);
+          // Any late failure must abort the surrounding transaction rather than
+          // persist a partial multi-Project migration.
+          if (!migrated.ok) throw new PostgresInfrastructureError();
+        }
+
+        const updatedRoot = await sql<{ aggregate_version: number; changed_at: Date | string }>`
+          update taxonomy.roots set aggregate_version = aggregate_version + 1, updated_at = transaction_timestamp()
+           where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${taxonomyId}::uuid
+           returning aggregate_version, updated_at as changed_at
+        `.execute(executor);
+        const nextRoot = updatedRoot.rows[0];
+        if (nextRoot === undefined || !Number.isSafeInteger(nextRoot.aggregate_version)) throw new PostgresInfrastructureError();
+        const updatedSource = await sql<{ aggregate_version: number }>`
+          update taxonomy.taxonomy_values
+             set state = 'merged', merged_into_value_id = ${input.targetValueId}::uuid,
+                 aggregate_version = aggregate_version + 1, updated_at = transaction_timestamp()
+           where portfolio_id = ${input.scope.portfolioId}::uuid and taxonomy_id = ${taxonomyId}::uuid
+             and value_id = ${input.sourceValueId}::uuid
+           returning aggregate_version
+        `.execute(executor);
+        const nextSourceVersion = updatedSource.rows[0]?.aggregate_version;
+        if (!Number.isSafeInteger(nextSourceVersion) || nextSourceVersion === undefined) throw new PostgresInfrastructureError();
+        const changedAt = nextRoot.changed_at instanceof Date ? nextRoot.changed_at.toISOString() : new Date(nextRoot.changed_at).toISOString();
+        if (!Number.isFinite(Date.parse(changedAt))) throw new PostgresInfrastructureError();
+        await sql`
+          insert into taxonomy.value_history (
+            portfolio_id, taxonomy_id, value_id, transition_sequence, action, previous_label, label, state,
+            aggregate_version, actor_id, reason, changed_at
+          ) values (
+            ${input.scope.portfolioId}::uuid, ${taxonomyId}::uuid, ${input.sourceValueId}::uuid,
+            ${nextSourceVersion}, 'merged', ${source.label}, ${source.label}, 'merged',
+            ${nextRoot.aggregate_version}, ${input.actorId}::uuid, null, ${changedAt}::timestamptz
+          )
+        `.execute(executor);
+        return { ok: true, value: {
+          taxonomyId: taxonomyId as StableId<"Taxonomy">,
+          aggregateVersion: nextRoot.aggregate_version,
+          changed: true,
+          previousLabel: source.label,
+          label: source.label,
+        } satisfies TaxonomyEvolutionResult };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
     },
   };
 }

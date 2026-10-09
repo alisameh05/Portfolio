@@ -110,6 +110,8 @@ describe("Owner Taxonomy aggregate retrieval (#30)", () => {
       aggregateVersion: 1,
       kind: "technology",
       values: [{ valueId: VALUE_ID, name: "TypeScript", state: "active" }],
+      history: [],
+      assignmentHistory: [],
     });
   });
 

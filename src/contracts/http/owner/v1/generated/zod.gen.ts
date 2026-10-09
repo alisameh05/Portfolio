@@ -440,7 +440,26 @@ export const zTaxonomyAggregateView = z.strictObject({
         'technology',
         'project-type'
     ]),
-    values: z.array(zTaxonomyValueView)
+    values: z.array(zTaxonomyValueView),
+    history: z.array(z.strictObject({
+        valueId: zStableId,
+        action: z.enum([
+            'created',
+            'renamed',
+            'retired',
+            'merged'
+        ]),
+        previousLabel: z.string().max(100).nullable(),
+        label: z.string().min(1).max(100),
+        aggregateVersion: z.number().int().gte(1),
+        changedAt: z.string().datetime()
+    })).max(100),
+    assignmentHistory: z.array(z.strictObject({
+        projectId: zStableId,
+        valueId: zStableId,
+        aggregateVersion: z.number().int().gte(1),
+        changedAt: z.string().datetime()
+    })).max(100)
 });
 
 export const zCreateTaxonomyValueRequest = z.strictObject({
