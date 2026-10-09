@@ -163,6 +163,8 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: publicationFake, contentAuthoring: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(get.status).toBe(200);
+    expect(get.headers.get("cache-control")).toBe("private, no-store");
+    expect(get.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await get.json()).toMatchObject({ routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current" }] });
     expect(fake.calls.get).toHaveLength(1);
     const save = await handleSaveOwnerContentRevision(
@@ -231,6 +233,8 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: fake.service, security: ownerTestSecurity(), logger },
     );
     expect(history.status).toBe(200);
+    expect(history.headers.get("cache-control")).toBe("private, no-store");
+    expect(history.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await history.json()).toMatchObject({ entries: [{ revisionId: REVISION_ID, reviewDecision: "accepted" }], routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current" }], nextCursor: null });
     expect(fake.calls.history[0]).toMatchObject({ limit: 25 });
     expect(JSON.stringify(logger.records)).not.toContain("Private preview");

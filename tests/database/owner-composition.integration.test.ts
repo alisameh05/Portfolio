@@ -168,6 +168,8 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       { service: services.publication, contentAuthoring: services.contentAuthoring, security },
     );
     expect(contentResponse.status).toBe(200);
+    expect(contentResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(contentResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await contentResponse.json()).toMatchObject({ contentId: created.value.contentId, lifecycle: "published" });
     const historyResponse = await handleGetOwnerContentHistory(
       ownerReadRequest(`/api/owner/v1/content/${created.value.contentId}/history?locale=en&limit=10`),
@@ -175,6 +177,8 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       { service: services.contentAuthoring, security },
     );
     expect(historyResponse.status).toBe(200);
+    expect(historyResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(historyResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await historyResponse.json()).toMatchObject({ entries: [{ revisionId: created.value.revisionId }] });
     const projectResponse = await handleGetOwnerProjectAggregate(
       ownerReadRequest(`/api/owner/v1/projects/${created.value.contentId}`),
@@ -182,7 +186,16 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       { service: services.project, security },
     );
     expect(projectResponse.status).toBe(200);
+    expect(projectResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(projectResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await projectResponse.json()).toMatchObject({ projectId: created.value.contentId });
+
+    const slugChanged = await services.project.changeOwnerProjectPublicSlug({
+      actor, projectId: created.value.contentId as StableId<"Project">, slug: "runtime-assembled-project-revised",
+      expectedVersion: published.value.aggregateVersion, idempotencyKey: key("owner-assembly-route-change"), correlationId: "owner-assembly-route-change",
+    });
+    expect(slugChanged.ok).toBe(true);
+    if (!slugChanged.ok) return;
 
     const statusCreated = await services.contentAuthoring.createProjectStatusValue({
       actor, label: "Owner assembly state", idempotencyKey: key("owner-assembly-status-create"), correlationId: "owner-assembly-status-create",
@@ -191,7 +204,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     if (!statusCreated.ok) return;
     const changedStatus = await services.project.changeOwnerProjectStatus({
       actor, projectId: created.value.contentId as StableId<"Project">, statusValueId: statusCreated.value.valueId,
-      expectedVersion: published.value.aggregateVersion, idempotencyKey: key("owner-assembly-status"), correlationId: "owner-assembly-status",
+      expectedVersion: slugChanged.value.aggregateVersion, idempotencyKey: key("owner-assembly-status"), correlationId: "owner-assembly-status",
     });
     expect(changedStatus.ok).toBe(true);
     if (!changedStatus.ok) return;
@@ -200,10 +213,52 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       expectedVersion: changedStatus.value.aggregateVersion, idempotencyKey: key("owner-assembly-featured"), correlationId: "owner-assembly-featured",
     });
     expect(featured.ok).toBe(true);
+    if (!featured.ok) return;
     const statusHistory = await services.contentAuthoring.getProjectStatusHistory({ actor, valueId: statusCreated.value.valueId });
     expect(statusHistory).toMatchObject({ ok: true, value: expect.arrayContaining([expect.objectContaining({ operation: "created", label: "Owner assembly state" })]) });
     const featuredProject = await services.project.getOwnerProjectAggregate({ actor, projectId: created.value.contentId as StableId<"Project"> });
-    expect(featuredProject).toMatchObject({ ok: true, value: { featured: true, statusValueId: statusCreated.value.valueId } });
+    expect(featuredProject).toMatchObject({ ok: true, value: {
+      featured: true,
+      statusValueId: statusCreated.value.valueId,
+      publicRoute: { canonicalSlug: "runtime-assembled-project-revised", history: [expect.objectContaining({ fromSlug: "runtime-assembled-project", toSlug: "runtime-assembled-project-revised" })] },
+      statusHistory: [expect.objectContaining({ currentValueId: statusCreated.value.valueId })],
+    } });
+
+    const relatedCreated = await services.contentAuthoring.createContent({
+      actor, idempotencyKey: key("owner-assembly-related-project-create"), correlationId: "owner-assembly-related-project-create",
+      payload: {
+        contentType: "project", locale: "en", title: "Runtime relationship target", summary: "A second real Project.",
+        body: "The relationship is stored by the standard runtime composition.", candidateSlug: "runtime-relationship-target",
+        caseStudy: { problem: "No relationship existed.", ownerRole: "Connected a Project.", contributions: ["Created the link."], outcomes: ["Both projects retain the fact."], lessons: "Keep links symmetric." },
+        evidence: { claims: [], artifacts: [] }, externalLinks: [],
+      },
+    });
+    expect(relatedCreated.ok).toBe(true);
+    if (!relatedCreated.ok) return;
+    const related = await services.project.relateOwnerProjects({
+      actor, projectId: created.value.contentId as StableId<"Project">, relatedProjectId: relatedCreated.value.contentId as StableId<"Project">,
+      expectedVersion: featured.value.aggregateVersion, idempotencyKey: key("owner-assembly-relate-projects"), correlationId: "owner-assembly-relate-projects",
+    });
+    expect(related.ok).toBe(true);
+    if (!related.ok) return;
+    const relationshipView = await services.project.getOwnerProjectAggregate({ actor, projectId: created.value.contentId as StableId<"Project"> });
+    expect(relationshipView).toMatchObject({ ok: true, value: {
+      relatedProjectIds: [relatedCreated.value.contentId],
+      relationshipHistory: [expect.objectContaining({ relatedProjectId: relatedCreated.value.contentId, action: "related" })],
+      statusHistory: [expect.objectContaining({ currentValueId: statusCreated.value.valueId })],
+    } });
+    const relationshipResponse = await handleGetOwnerProjectAggregate(
+      ownerReadRequest(`/api/owner/v1/projects/${created.value.contentId}`),
+      { projectId: created.value.contentId },
+      { service: services.project, security },
+    );
+    expect(relationshipResponse.status).toBe(200);
+    expect(relationshipResponse.headers.get("cache-control")).toBe("private, no-store");
+    expect(relationshipResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(await relationshipResponse.json()).toMatchObject({
+      statusHistory: [expect.objectContaining({ currentValueId: statusCreated.value.valueId })],
+      relationshipHistory: [expect.objectContaining({ relatedProjectId: relatedCreated.value.contentId, action: "related" })],
+    });
 
     const taxonomyId = TAXONOMY_IDS.technology as StableId<"Taxonomy">;
     const taxonomy = await services.taxonomy.getOwnerTaxonomyAggregate({ actor, taxonomyId });
@@ -248,5 +303,59 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
         assignmentHistory: [expect.objectContaining({ projectId: created.value.contentId, valueId: createdValue.valueId })],
       },
     });
+    const mergeSource = await services.taxonomy.createOwnerTaxonomyValue({
+      actor, taxonomyId, name: "Owner composition merge source", expectedVersion: renamed.ok ? renamed.value.aggregateVersion : 0,
+      idempotencyKey: key("owner-assembly-taxonomy-merge-source"),
+    });
+    expect(mergeSource.ok).toBe(true);
+    if (!mergeSource.ok) return;
+    const afterMergeSourceCreate = await services.taxonomy.getOwnerTaxonomyAggregate({ actor, taxonomyId });
+    expect(afterMergeSourceCreate.ok).toBe(true);
+    if (!afterMergeSourceCreate.ok) return;
+    const mergeSourceValue = afterMergeSourceCreate.value.values.find((entry) => entry.name === "Owner composition merge source");
+    expect(mergeSourceValue).toBeDefined();
+    if (mergeSourceValue === undefined) return;
+    const relatedProject = await services.project.getOwnerProjectAggregate({ actor, projectId: relatedCreated.value.contentId as StableId<"Project"> });
+    expect(relatedProject.ok).toBe(true);
+    if (!relatedProject.ok) return;
+    const sourceAssignment = await services.project.assignOwnerProjectTaxonomyValue({
+      actor, projectId: relatedCreated.value.contentId as StableId<"Project">, valueId: mergeSourceValue.valueId,
+      expectedVersion: relatedProject.value.aggregateVersion, idempotencyKey: key("owner-assembly-taxonomy-source-assignment"),
+    });
+    expect(sourceAssignment.ok).toBe(true);
+    const merged = await services.taxonomy.mergeOwnerTaxonomyValue({
+      actor, valueId: mergeSourceValue.valueId, targetValueId: createdValue.valueId,
+      expectedVersion: mergeSource.value.aggregateVersion, idempotencyKey: key("owner-assembly-taxonomy-merge"),
+    });
+    expect(merged.ok).toBe(true);
+    if (!merged.ok) return;
+    const retireValue = await services.taxonomy.createOwnerTaxonomyValue({
+      actor, taxonomyId, name: "Owner composition retirement", expectedVersion: merged.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-taxonomy-retire-value"),
+    });
+    expect(retireValue.ok).toBe(true);
+    if (!retireValue.ok) return;
+    const beforeRetire = await services.taxonomy.getOwnerTaxonomyAggregate({ actor, taxonomyId });
+    expect(beforeRetire.ok).toBe(true);
+    if (!beforeRetire.ok) return;
+    const retirementValue = beforeRetire.value.values.find((entry) => entry.name === "Owner composition retirement");
+    expect(retirementValue).toBeDefined();
+    if (retirementValue === undefined) return;
+    const retired = await services.taxonomy.retireOwnerTaxonomyValue({
+      actor, valueId: retirementValue.valueId, expectedVersion: retireValue.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-taxonomy-retire"),
+    });
+    expect(retired.ok).toBe(true);
+    const finalTaxonomy = await services.taxonomy.getOwnerTaxonomyAggregate({ actor, taxonomyId });
+    expect(finalTaxonomy).toMatchObject({ ok: true, value: {
+      values: expect.arrayContaining([
+        expect.objectContaining({ valueId: mergeSourceValue.valueId, state: "merged", mergedIntoValueId: createdValue.valueId }),
+        expect.objectContaining({ valueId: retirementValue.valueId, state: "retired" }),
+      ]),
+      history: expect.arrayContaining([
+        expect.objectContaining({ valueId: mergeSourceValue.valueId, action: "merged" }),
+        expect.objectContaining({ valueId: retirementValue.valueId, action: "retired" }),
+      ]),
+    } });
   }, 60_000);
 });

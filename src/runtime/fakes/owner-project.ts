@@ -68,6 +68,8 @@ function aggregateView(projectId: StableId<"Project">): OwnerProjectAggregateVie
     featured: false,
     publicRoute: null,
     relatedProjectIds: [],
+    relationshipHistory: [],
+    statusHistory: [],
     taxonomyAssignments: [],
   };
 }
@@ -80,6 +82,8 @@ function invalidAggregateView(projectId: StableId<"Project">): OwnerProjectAggre
     featured: false,
     publicRoute: null,
     relatedProjectIds: [projectId],
+    relationshipHistory: [],
+    statusHistory: [],
     taxonomyAssignments: [],
   };
 }

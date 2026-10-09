@@ -66,6 +66,7 @@ import type { LocalizedDraftData } from "../../modules/content-publishing/domain
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
+  OWNER_PRIVATE_RESPONSE_HEADERS,
   type OwnerRequestSecurity,
 } from "./owner-security.js";
 import {
@@ -329,7 +330,7 @@ export async function handleGetOwnerContentAggregate(
       );
     }
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(parsed.data, { status: 200 });
+    return Response.json(parsed.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }

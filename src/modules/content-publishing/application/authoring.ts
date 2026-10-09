@@ -351,6 +351,19 @@ export interface ContentProjectOwnerView {
     readonly history: readonly { readonly sequence: number; readonly fromSlug: string; readonly toSlug: string; readonly changedAt: string }[];
   } | null;
   readonly relatedProjectIds: readonly StableId<"Project">[];
+  readonly relationshipHistory: readonly {
+    readonly sequence: number;
+    readonly relatedProjectId: StableId<"Project">;
+    readonly action: "related";
+    readonly changedAt: string;
+  }[];
+  readonly statusHistory: readonly {
+    readonly sequence: number;
+    readonly previousValueId: StableId<"ProjectStatusValue"> | null;
+    readonly currentValueId: StableId<"ProjectStatusValue">;
+    readonly aggregateVersion: number;
+    readonly changedAt: string;
+  }[];
   readonly taxonomyAssignments: readonly {
     readonly taxonomyId: StableId<"Taxonomy">;
     readonly taxonomyKind: string;

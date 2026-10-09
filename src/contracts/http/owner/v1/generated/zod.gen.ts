@@ -358,6 +358,21 @@ export const zLifecycleReasonCommand = z.strictObject({
     reason: z.string().min(1).max(500).optional()
 });
 
+export const zProjectRelationshipHistoryEntry = z.strictObject({
+    sequence: z.number().int().gte(1),
+    relatedProjectId: zStableId,
+    action: z.enum(['related']),
+    changedAt: z.string().datetime()
+});
+
+export const zProjectStatusHistoryEntry = z.strictObject({
+    sequence: z.number().int().gte(1),
+    previousValueId: zStableId.nullable(),
+    currentValueId: zStableId,
+    aggregateVersion: z.number().int().gte(2),
+    changedAt: z.string().datetime()
+});
+
 export const zProjectTaxonomyAssignmentView = z.strictObject({
     taxonomyId: zStableId,
     taxonomyKind: z.enum([
@@ -376,6 +391,8 @@ export const zProjectAggregateView = z.strictObject({
     featured: z.boolean(),
     publicRoute: zPublicRouteView.nullable(),
     relatedProjectIds: z.array(zStableId),
+    relationshipHistory: z.array(zProjectRelationshipHistoryEntry).max(100),
+    statusHistory: z.array(zProjectStatusHistoryEntry).max(100),
     taxonomyAssignments: z.array(zProjectTaxonomyAssignmentView)
 });
 

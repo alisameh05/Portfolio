@@ -32,6 +32,8 @@ it("uses the Content Owner view as the source for the composed Project aggregate
       history: [{ sequence: 1, fromSlug: "old-route", toSlug: "project-route", changedAt: "2026-10-08T10:00:00.000Z" }],
     },
     relatedProjectIds: [relatedProjectId],
+    relationshipHistory: [],
+    statusHistory: [],
     taxonomyAssignments: [{
       taxonomyId: unsafeStableId<"Taxonomy">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e94"),
       taxonomyKind: "industry",

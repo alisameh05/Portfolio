@@ -4820,6 +4820,73 @@
           }
         }
       },
+      "ProjectRelationshipHistoryEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sequence",
+          "relatedProjectId",
+          "action",
+          "changedAt"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "relatedProjectId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "related"
+            ]
+          },
+          "changedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ProjectStatusHistoryEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sequence",
+          "previousValueId",
+          "currentValueId",
+          "aggregateVersion",
+          "changedAt"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "previousValueId": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currentValueId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "aggregateVersion": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "changedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ProjectTaxonomyAssignmentView": {
         "type": "object",
         "additionalProperties": false,
@@ -4855,6 +4922,8 @@
           "statusValueId",
           "featured",
           "relatedProjectIds",
+          "relationshipHistory",
+          "statusHistory",
           "taxonomyAssignments",
           "publicRoute"
         ],
@@ -4894,6 +4963,22 @@
             "uniqueItems": true,
             "items": {
               "$ref": "#/components/schemas/StableId"
+            }
+          },
+          "relationshipHistory": {
+            "type": "array",
+            "maxItems": 100,
+            "description": "Most recent retained relationship facts, capped at 100 entries.",
+            "items": {
+              "$ref": "#/components/schemas/ProjectRelationshipHistoryEntry"
+            }
+          },
+          "statusHistory": {
+            "type": "array",
+            "maxItems": 100,
+            "description": "Most recent Project status transitions, capped at 100 entries.",
+            "items": {
+              "$ref": "#/components/schemas/ProjectStatusHistoryEntry"
             }
           },
           "taxonomyAssignments": {

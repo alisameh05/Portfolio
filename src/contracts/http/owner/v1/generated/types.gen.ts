@@ -338,6 +338,21 @@ export type LifecycleReasonCommand = {
     reason?: string;
 };
 
+export type ProjectRelationshipHistoryEntry = {
+    sequence: number;
+    relatedProjectId: StableId;
+    action: 'related';
+    changedAt: string;
+};
+
+export type ProjectStatusHistoryEntry = {
+    sequence: number;
+    previousValueId: StableId | null;
+    currentValueId: StableId;
+    aggregateVersion: number;
+    changedAt: string;
+};
+
 export type ProjectTaxonomyAssignmentView = {
     taxonomyId: StableId;
     taxonomyKind: 'category' | 'ai-ml-domain' | 'technology' | 'project-type';
@@ -351,6 +366,14 @@ export type ProjectAggregateView = {
     featured: boolean;
     publicRoute: PublicRouteView | null;
     relatedProjectIds: Array<StableId>;
+    /**
+     * Most recent retained relationship facts, capped at 100 entries.
+     */
+    relationshipHistory: Array<ProjectRelationshipHistoryEntry>;
+    /**
+     * Most recent Project status transitions, capped at 100 entries.
+     */
+    statusHistory: Array<ProjectStatusHistoryEntry>;
     taxonomyAssignments: Array<ProjectTaxonomyAssignmentView>;
 };
 

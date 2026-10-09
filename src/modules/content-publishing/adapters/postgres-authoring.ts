@@ -1650,9 +1650,14 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
           redirects = reservations.rows.map((reservation) => ({ fromSlug: reservation.normalized_slug, toSlug: row.current_slug! }));
           const history = await sql<{ sequence: number; from_slug: string; to_slug: string; changed_at: Date | string }>`
             select sequence, from_slug, to_slug, changed_at
-              from content.public_route_history
-             where route_identity = ${row.route_identity}::uuid and content_id = ${projectId}::uuid
-               and portfolio_id = ${scope.portfolioId}::uuid
+              from (
+                select sequence, from_slug, to_slug, changed_at
+                  from content.public_route_history
+                 where route_identity = ${row.route_identity}::uuid and content_id = ${projectId}::uuid
+                   and portfolio_id = ${scope.portfolioId}::uuid
+                 order by sequence desc
+                 limit 100
+              ) bounded
              order by sequence
           `.execute(executor);
           routeHistory = history.rows.map((entry) => {
@@ -1667,6 +1672,37 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
            where portfolio_id = ${scope.portfolioId}::uuid
              and project_id = ${projectId}::uuid
            order by related_project_id
+        `.execute(executor);
+        const relationshipHistory = await sql<{
+          sequence: number; related_project_id: string; action: "related"; changed_at: Date | string;
+        }>`
+          select sequence, related_project_id::text, action, occurred_at as changed_at
+            from (
+              select sequence,
+                     case when initiating_project_id = ${projectId}::uuid then related_project_id else initiating_project_id end as related_project_id,
+                     action, occurred_at
+                from content.project_relationship_history
+               where portfolio_id = ${scope.portfolioId}::uuid
+                 and (initiating_project_id = ${projectId}::uuid or related_project_id = ${projectId}::uuid)
+               order by occurred_at desc, related_project_id
+               limit 100
+            ) bounded
+           order by occurred_at, related_project_id, sequence
+        `.execute(executor);
+        const statusHistory = await sql<{
+          sequence: number; previous_value_id: string | null; current_value_id: string;
+          aggregate_version: number; changed_at: Date | string;
+        }>`
+          select transition_sequence as sequence, previous_value_id::text, current_value_id::text,
+                 aggregate_version, changed_at
+            from (
+              select transition_sequence, previous_value_id, current_value_id, aggregate_version, changed_at
+                from content.project_status_history
+               where portfolio_id = ${scope.portfolioId}::uuid and content_id = ${projectId}::uuid
+               order by transition_sequence desc
+               limit 100
+            ) bounded
+           order by transition_sequence
         `.execute(executor);
         const taxonomyAssignments = await sql<{ taxonomy_id: string; taxonomy_kind: string; value_id: string }>`
           select assignment.taxonomy_id::text, root.kind as taxonomy_kind, assignment.value_id::text
@@ -1687,6 +1723,22 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
             history: routeHistory,
           },
           relatedProjectIds: relatedProjects.rows.map((related) => related.project_id as StableId<"Project">),
+          relationshipHistory: relationshipHistory.rows.map((entry) => {
+            const changedAt = entry.changed_at instanceof Date ? entry.changed_at.toISOString() : new Date(entry.changed_at).toISOString();
+            if (!Number.isSafeInteger(entry.sequence) || entry.sequence < 1 || !Number.isFinite(Date.parse(changedAt))) throw new PostgresInfrastructureError();
+            return { sequence: entry.sequence, relatedProjectId: entry.related_project_id as StableId<"Project">, action: entry.action, changedAt };
+          }),
+          statusHistory: statusHistory.rows.map((entry) => {
+            const changedAt = entry.changed_at instanceof Date ? entry.changed_at.toISOString() : new Date(entry.changed_at).toISOString();
+            if (!Number.isSafeInteger(entry.sequence) || entry.sequence < 1 || !Number.isSafeInteger(entry.aggregate_version) || entry.aggregate_version < 2 || !Number.isFinite(Date.parse(changedAt))) throw new PostgresInfrastructureError();
+            return {
+              sequence: entry.sequence,
+              previousValueId: entry.previous_value_id as StableId<"ProjectStatusValue"> | null,
+              currentValueId: entry.current_value_id as StableId<"ProjectStatusValue">,
+              aggregateVersion: entry.aggregate_version,
+              changedAt,
+            };
+          }),
           taxonomyAssignments: taxonomyAssignments.rows.map((assignment) => ({
             taxonomyId: assignment.taxonomy_id as StableId<"Taxonomy">,
             taxonomyKind: assignment.taxonomy_kind,
