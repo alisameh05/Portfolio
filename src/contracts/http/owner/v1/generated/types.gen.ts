@@ -89,11 +89,11 @@ export type PublicRouteView = {
     identity: StableId;
     canonicalSlug: string;
     /**
-     * Retained former slugs and their current canonical target.
+     * Retained former slugs and their current canonical target; Owner responses include at most the most recent 100 entries.
      */
     redirects: Array<PublicRouteRedirectView>;
     /**
-     * Immutable canonical slug changes ordered by sequence.
+     * Immutable canonical slug changes ordered by sequence; Owner responses include at most the most recent 100 entries.
      */
     history?: Array<PublicRouteHistoryEntry>;
 };
@@ -108,6 +108,14 @@ export type RevisionHistoryEntry = {
     locale: Locale;
     sequence: number;
     reviewed: boolean;
+};
+
+export type PublicationHistoryEntry = {
+    locale: Locale;
+    sequence: number;
+    revisionId: StableId;
+    reviewId: StableId;
+    publishedAt: string;
 };
 
 export type ContentAggregateView = {
@@ -125,9 +133,13 @@ export type ContentAggregateView = {
         ar?: LocalizedRevisionStreamView;
     };
     /**
-     * Immutable Revision history ordered by sequence within each locale.
+     * Immutable Revision history ordered by sequence within each locale; Owner responses include at most the most recent 100 entries per locale.
      */
     revisions: Array<RevisionHistoryEntry>;
+    /**
+     * Most recent immutable publication facts, capped at 100 entries.
+     */
+    publicationHistory: Array<PublicationHistoryEntry>;
 };
 
 export type ExternalLinkDraft = {

@@ -36,6 +36,7 @@ const requestExample = (path: string, method: string, name: string) =>
 const ids = {
   content: "01890f3e-7b2f-7cc0-98cf-5a2890378ef1",
   revision: "01890f3e-7b2f-7cc0-98cf-5a2890378ef2",
+  review: "01890f3e-7b2f-7cc0-98cf-5a2890378ef8",
   route: "01890f3e-7b2f-7cc0-98cf-5a2890378ef3",
   status: "01890f3e-7b2f-7cc0-98cf-5a2890378ef4",
   related: "01890f3e-7b2f-7cc0-98cf-5a2890378ef5",
@@ -206,6 +207,7 @@ describe("generated Owner v1 validators", () => {
       revisions: [
         { revisionId: ids.revision, locale: "en", sequence: 3, reviewed: true },
       ],
+      publicationHistory: [{ locale: "en", sequence: 1, revisionId: ids.revision, reviewId: ids.review, publishedAt: "2026-10-09T12:00:00.000Z" }],
     }).success).toBe(true);
     expect(zContentAggregateView.safeParse({
       contentId: ids.content,

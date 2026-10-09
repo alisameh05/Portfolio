@@ -36,6 +36,7 @@ const CONTENT = {
   routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current", changedAt: "2026-10-08T00:00:00.000Z" }],
   localizedStreams: { en: { revisionCount: 1, currentPublishedRevisionId: null } },
   revisions: [{ revisionId: REVISION_ID, locale: "en", sequence: 1, reviewed: false }],
+  publicationHistory: [],
 };
 
 function createService() {

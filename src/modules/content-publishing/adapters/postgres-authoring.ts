@@ -47,6 +47,7 @@ interface RevisionRow {
   readonly content_type: string;
   readonly locale: string;
   readonly stream_sequence: number;
+  readonly locale_total: number;
   readonly aggregate_version: number;
   readonly title: string;
   readonly summary: string;
@@ -187,7 +188,7 @@ function latestReviewForRevision() {
 }
 
 export function createPostgresContentAuthoringRepository(): ContentAuthoringRepository {
-  async function getRecord(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>> {
+  async function getRecord(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext, revisionHistoryLimit?: number): Promise<Result<ContentAuthoringRecord, Rejection>> {
     const executor = resolvePostgresTransaction(context);
     await setTrustedScope(context, scope);
     const selected = await sql<RootRow>`
@@ -199,9 +200,11 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
     if (root === undefined) return err({ kind: "not_found", code: "CONTENT_NOT_FOUND" });
     if (!isKind(root.content_type) || !["draft", "published", "hidden", "archived"].includes(root.lifecycle) ||
         !Number.isSafeInteger(root.aggregate_version) || root.aggregate_version < 1) throw new PostgresInfrastructureError();
+    const revisionBound = revisionHistoryLimit === undefined ? sql`true` : sql`revision.owner_rank <= ${revisionHistoryLimit}`;
     const revisions = await sql<RevisionRow>`
       select revision.revision_id::text, revision.content_id::text,
              revision.content_type, revision.locale, revision.stream_sequence,
+             revision.locale_total,
              revision.aggregate_version, revision.title, revision.summary,
              revision.body, revision.payload, revision.saved_at,
              (latest.review_id is not null) as reviewed,
@@ -215,13 +218,19 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
              latest.decision as latest_review_decision,
              latest.findings as latest_review_findings,
              latest.reviewed_at as latest_reviewed_at
-        from content.revisions revision
+        from (
+          select source.*,
+                 row_number() over (partition by source.locale order by source.stream_sequence desc) as owner_rank,
+                 count(*) over (partition by source.locale)::integer as locale_total
+            from content.revisions source
+           where source.content_id = ${contentId}::uuid
+             and source.portfolio_id = ${scope.portfolioId}::uuid
+        ) revision
         join content.items item
           on item.content_id = revision.content_id
          and item.portfolio_id = revision.portfolio_id
         left join lateral (${latestReviewForRevision()}) latest on true
-       where revision.content_id = ${contentId}::uuid
-         and revision.portfolio_id = ${scope.portfolioId}::uuid
+       where ${revisionBound}
        order by revision.locale, revision.stream_sequence
     `.execute(executor);
     const publications = await sql<{
@@ -268,6 +277,35 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         publishedAt,
       };
     });
+    const publicationHistoryRows = await sql<{
+      locale: string; publication_sequence: number; revision_id: string; review_id: string; published_at: Date | string;
+    }>`
+      select locale, publication_sequence, revision_id::text, review_id::text, published_at
+        from (
+          select locale, publication_sequence, revision_id, review_id, published_at
+            from content.publication_history
+           where content_id = ${contentId}::uuid and portfolio_id = ${scope.portfolioId}::uuid
+          union all
+          select locale, publication_sequence, revision_id, review_id, published_at
+            from content.testimonial_publication_history
+           where content_id = ${contentId}::uuid and portfolio_id = ${scope.portfolioId}::uuid
+        ) retained
+       order by published_at desc, locale, publication_sequence desc
+       limit 100
+    `.execute(executor);
+    const publicationHistory = publicationHistoryRows.rows.map((entry) => {
+      const publishedAt = entry.published_at instanceof Date ? entry.published_at.toISOString() : new Date(entry.published_at).toISOString();
+      if (!isLocale(entry.locale) || !Number.isSafeInteger(entry.publication_sequence) || entry.publication_sequence < 1 || !Number.isFinite(Date.parse(publishedAt))) {
+        throw new PostgresInfrastructureError();
+      }
+      return {
+        locale: entry.locale,
+        sequence: entry.publication_sequence,
+        revisionId: entry.revision_id as StableId<"Revision">,
+        reviewId: entry.review_id as StableId<"ContentReview">,
+        publishedAt,
+      };
+    });
     const routeResult = root.content_type === "project" ? await sql<{
       route_identity: string; current_slug: string; normalized_slug: string; is_current: boolean;
     }>`
@@ -278,7 +316,8 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
          and reservation.content_id = route.content_id
          and reservation.portfolio_id = route.portfolio_id
        where route.content_id = ${contentId}::uuid and route.portfolio_id = ${scope.portfolioId}::uuid
-       order by reservation.normalized_slug
+       order by reservation.reserved_at desc, reservation.normalized_slug
+       limit 100
     `.execute(executor) : { rows: [] };
     const routeIdentity = routeResult.rows[0]?.route_identity;
     const routeHistoryResult = routeIdentity !== undefined ? await sql<{
@@ -319,7 +358,11 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         candidateSlug: root.candidate_slug,
         aggregateVersion: root.aggregate_version,
         revisions: revisions.rows.map(mapRevision),
+        ...(revisions.rows.length === 0 ? {} : {
+          revisionCounts: Object.fromEntries(revisions.rows.map((entry) => [entry.locale, entry.locale_total])) as NonNullable<ContentAuthoringRecord["revisionCounts"]>,
+        }),
         publications: mappedPublications,
+        publicationHistory,
         publicRoute,
       },
     };
@@ -377,9 +420,9 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
       }
     },
 
-    async get(contentId, scope, context) {
+    async get(contentId, scope, context, revisionHistoryLimit) {
       try {
-        return await getRecord(contentId, scope, context);
+        return await getRecord(contentId, scope, context, revisionHistoryLimit);
       } catch (error) {
         if (error instanceof PostgresInfrastructureError) throw error;
         throw new PostgresInfrastructureError();
@@ -1650,7 +1693,8 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
           const reservations = await sql<{ normalized_slug: string }>`
             select normalized_slug from content.public_route_reservations
              where route_identity = ${row.route_identity}::uuid and portfolio_id = ${scope.portfolioId}::uuid and not is_current
-             order by reserved_at, normalized_slug
+             order by reserved_at desc, normalized_slug
+             limit 100
           `.execute(executor);
           redirects = reservations.rows.map((reservation) => ({ fromSlug: reservation.normalized_slug, toSlug: row.current_slug! }));
           const history = await sql<{ sequence: number; from_slug: string; to_slug: string; changed_at: Date | string }>`

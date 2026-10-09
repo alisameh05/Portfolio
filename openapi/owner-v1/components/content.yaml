@@ -333,10 +333,20 @@ schemas:
       locale: { $ref: ./common.yaml#/schemas/Locale }
       sequence: { type: integer, minimum: 1 }
       reviewed: { type: boolean }
+  PublicationHistoryEntry:
+    type: object
+    additionalProperties: false
+    required: [locale, sequence, revisionId, reviewId, publishedAt]
+    properties:
+      locale: { $ref: ./common.yaml#/schemas/Locale }
+      sequence: { type: integer, minimum: 1 }
+      revisionId: { $ref: ./common.yaml#/schemas/StableId }
+      reviewId: { $ref: ./common.yaml#/schemas/StableId }
+      publishedAt: { type: string, format: date-time }
   ContentAggregateView:
     type: object
     additionalProperties: false
-    required: [contentId, aggregateVersion, contentType, lifecycle, localizedStreams, revisions, publicRoute, routeHistory]
+    required: [contentId, aggregateVersion, contentType, lifecycle, localizedStreams, revisions, publicRoute, routeHistory, publicationHistory]
     properties:
       contentId: { $ref: ./common.yaml#/schemas/StableId }
       aggregateVersion: { type: integer, minimum: 1 }
@@ -364,5 +374,10 @@ schemas:
           ar: { $ref: '#/schemas/LocalizedRevisionStreamView' }
       revisions:
         type: array
-        description: Immutable Revision history ordered by sequence within each locale.
+        description: Immutable Revision history ordered by sequence within each locale; Owner responses include at most the most recent 100 entries per locale.
         items: { $ref: '#/schemas/RevisionHistoryEntry' }
+      publicationHistory:
+        type: array
+        maxItems: 100
+        description: Most recent immutable publication facts, capped at 100 entries.
+        items: { $ref: '#/schemas/PublicationHistoryEntry' }

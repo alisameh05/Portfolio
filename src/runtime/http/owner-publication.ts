@@ -61,7 +61,7 @@ import type {
   Result,
   StableId,
 } from "../../shared/domain/index.js";
-import type { ContentAuthoringService, ContentPublicRouteFacts } from "../../modules/content-publishing/application/authoring.js";
+import type { ContentAuthoringPublicationHistory, ContentAuthoringService, ContentPublicRouteFacts } from "../../modules/content-publishing/application/authoring.js";
 import type { LocalizedDraftData } from "../../modules/content-publishing/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
 import {
@@ -155,6 +155,7 @@ export interface OwnerContentAggregateView {
     readonly sequence: number;
     readonly reviewed: boolean;
   }>;
+  readonly publicationHistory: readonly ContentAuthoringPublicationHistory[];
 }
 
 export interface SaveOwnerContentRevisionReceipt {
@@ -319,6 +320,7 @@ export async function handleGetOwnerContentAggregate(
         sequence: revision.sequence,
         reviewed: revision.reviewed,
       })),
+      publicationHistory: result.value.publicationHistory,
     };
     const parsed = zGetOwnerContentAggregateResponse.safeParse(payload);
     if (!parsed.success) {

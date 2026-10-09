@@ -96,6 +96,8 @@ describe("Owner Project status HTTP adapters", () => {
       request("/api/owner/v1/project-status-values", "GET"), deps(fake.service),
     );
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await response.json()).toEqual({ values: [{ valueId: VALUE_ID, label: "Shipped", state: "active" }] });
     expect(fake.calls).toHaveLength(1);
   });

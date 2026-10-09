@@ -127,6 +127,7 @@ describe("Owner Publication aggregate retrieval (#30)", () => {
       revisions: [
         { revisionId: REVISION_ID, locale: "en", sequence: 1, reviewed: false },
       ],
+      publicationHistory: [],
     });
   });
 

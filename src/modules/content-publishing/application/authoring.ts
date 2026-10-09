@@ -109,6 +109,8 @@ export interface ContentAuthoringRecord {
   readonly aggregateVersion: number;
   readonly revisions: readonly ContentAuthoringRevision[];
   readonly publications?: readonly ContentAuthoringPublication[];
+  readonly publicationHistory?: readonly ContentAuthoringPublicationHistory[];
+  readonly revisionCounts?: Partial<Record<SupportedLocale, number>>;
   readonly publicRoute?: ContentPublicRouteFacts | null;
 }
 
@@ -128,6 +130,14 @@ export interface ContentAuthoringPublication {
   readonly reviewerId: StableId<"Owner">;
   readonly decision: "accepted" | "rejected";
   readonly mediaFactsVersion: string | null;
+  readonly publishedAt: string;
+}
+
+export interface ContentAuthoringPublicationHistory {
+  readonly locale: SupportedLocale;
+  readonly sequence: number;
+  readonly revisionId: StableId<"Revision">;
+  readonly reviewId: StableId<"ContentReview">;
   readonly publishedAt: string;
 }
 
@@ -404,7 +414,7 @@ export interface ProjectTaxonomyAssignmentFactsPort {
 export interface ContentAuthoringRepository {
   projectExists(projectId: StableId<"Project">, scope: ContentAuthoringScope, context: TransactionContext): Promise<boolean>;
   create(input: CreateContentPersistenceInput, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
-  get(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
+  get(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext, revisionHistoryLimit?: number): Promise<Result<ContentAuthoringRecord, Rejection>>;
   correctCandidateSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
   changePublicSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number; readonly previousSlug: string; readonly routeIdentity: StableId<"PublicRoute"> }, Rejection>>;
   relateProjects(input: RelateProjectsInput, context: TransactionContext): Promise<Result<RelateProjectsResult, Rejection>>;
@@ -512,6 +522,7 @@ export interface OwnerContentAggregateView {
     readonly reviewed: boolean;
     readonly reviewDecision?: "accepted" | "rejected";
   }[];
+  readonly publicationHistory: readonly ContentAuthoringPublicationHistory[];
 }
 
 export interface ContentAuthoringService {
@@ -795,7 +806,7 @@ function validCorrelation(value: string): boolean {
 function view(record: ContentAuthoringRecord): OwnerContentAggregateView {
   const localizedStreams: OwnerContentAggregateView["localizedStreams"] = {};
   for (const locale of ["en", "ar"] as const) {
-    const count = record.revisions.filter((revision) => revision.locale === locale).length;
+    const count = record.revisionCounts?.[locale] ?? record.revisions.filter((revision) => revision.locale === locale).length;
     if (count > 0) localizedStreams[locale] = {
       revisionCount: count,
       currentPublishedRevisionId: record.publications?.find((publication) => publication.locale === locale)?.revisionId ?? null,
@@ -809,9 +820,10 @@ function view(record: ContentAuthoringRecord): OwnerContentAggregateView {
     publicRoute: record.publicRoute ?? null,
     routeHistory: record.publicRoute?.history ?? [],
     localizedStreams,
-    revisions: record.revisions.map(({ revisionId, locale, sequence, reviewed, reviewDecision }) => ({
+    revisions: record.revisions.slice(-200).map(({ revisionId, locale, sequence, reviewed, reviewDecision }) => ({
       revisionId, locale, sequence, reviewed, ...(reviewDecision === undefined ? {} : { reviewDecision }),
     })),
+    publicationHistory: (record.publicationHistory ?? []).slice(0, 100),
   };
 }
 
@@ -1105,7 +1117,7 @@ export function createContentAuthoringService(input: {
     async getOwnerContentAggregate(query) {
       if (!ownerAuthorized(query.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
       return await input.operations.transactions.run(async (context) => {
-        const result = await input.repository.get(query.contentId, input.scope, context);
+        const result = await input.repository.get(query.contentId, input.scope, context, 100);
         return result.ok ? { ok: true as const, value: view(result.value) } : result;
       });
     },

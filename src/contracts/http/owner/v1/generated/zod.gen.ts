@@ -135,6 +135,14 @@ export const zRevisionHistoryEntry = z.strictObject({
     reviewed: z.boolean()
 });
 
+export const zPublicationHistoryEntry = z.strictObject({
+    locale: zLocale,
+    sequence: z.number().int().gte(1),
+    revisionId: zStableId,
+    reviewId: zStableId,
+    publishedAt: z.string().datetime()
+});
+
 export const zContentAggregateView = z.strictObject({
     contentId: zStableId,
     aggregateVersion: z.number().int().gte(1),
@@ -155,7 +163,8 @@ export const zContentAggregateView = z.strictObject({
         en: zLocalizedRevisionStreamView.optional(),
         ar: zLocalizedRevisionStreamView.optional()
     }),
-    revisions: z.array(zRevisionHistoryEntry)
+    revisions: z.array(zRevisionHistoryEntry),
+    publicationHistory: z.array(zPublicationHistoryEntry).max(100)
 });
 
 export const zExternalLinkDraft = z.strictObject({
