@@ -1,0 +1,372 @@
+{
+  "sourceRevision": "941def2cee878c23c0558aff3475e523f3637e1e",
+  "ticket": 120,
+  "parent": 106,
+  "scope": "atomic-taxonomy-value-merge-with-content-owned-multi-project-assignment-history-deduplication-discovery-projection-idempotency-concurrency-and-rollback",
+  "predecessorSnapshot": "supabase/baselines/phase3.json",
+  "migrationChecksums": [
+    {
+      "file": "20260922170000_prepare_migration_capability.sql",
+      "sha256": "f626df30438e644254fd6c5af015118be117ef5090fbc976bb0762593ac481fe"
+    },
+    {
+      "file": "20260922171906_establish_database_security_baseline.sql",
+      "sha256": "1406e77b9a2505ec684ef350170545558217ca2bf345675f67eb723a735f6be3"
+    },
+    {
+      "file": "20260922203000_create_operations_primitives.sql",
+      "sha256": "adad38103c83693de591f1691fe4eaabbe7da90423b3e68a02d7b7aa9b76cb98"
+    },
+    {
+      "file": "20261001220000_create_identity_access_owner_links.sql",
+      "sha256": "caa742152a624883937f3204ca1ec2ee947c7c52a812e0760ba794d1195b1205"
+    },
+    {
+      "file": "20261002120000_create_portfolio_configuration_settings.sql",
+      "sha256": "55452f45d7b4b18720993ec5fe4d0e818652c331339bd97c7e15fed6fb6a9c90"
+    },
+    {
+      "file": "20261002130000_allow_versioned_portfolio_profile_updates.sql",
+      "sha256": "533e07ffcad2d12297337fd84a6b7beb29cc5254a8f1632e75024ad73a013fae"
+    },
+    {
+      "file": "20261002140000_allow_owner_contact_channel_replacement.sql",
+      "sha256": "046977710edcffca09133ea794e874dbdd9b68188526cdc548182b3c73843ca4"
+    },
+    {
+      "file": "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+      "sha256": "f05678c118b14daee3ccfaf34736169b3339720b32ed6c1a394366398ded605a"
+    },
+    {
+      "file": "20261005001318_create_content_authoring.sql",
+      "sha256": "9b83a3dfdeed012f5ff6a61a96d765f54ebd8280530a2be428ec0e11eb0c029e"
+    },
+    {
+      "file": "20261007090000_add_immutable_content_revision_reviews.sql",
+      "sha256": "787ce6c713d8c2c719878ed119d1e0095b7e852d13fa634544e73db27e861a02"
+    },
+    {
+      "file": "20261007170000_add_project_publication_routes.sql",
+      "sha256": "a1fccbc91c732890ff8e0d0e5f754385abc927a70008e2017e6bf0b4a462c896"
+    },
+    {
+      "file": "20261007190000_add_achievement_publication_timeline.sql",
+      "sha256": "abeddadfcab69209b95986d036d0a929e916630ba9cf9c55828e2fb477ae441f"
+    },
+    {
+      "file": "20261007200000_publish_localized_testimonials.sql",
+      "sha256": "d262130f861be52c4c5556f45f31d0dd94dfcc10a6471cf22c28ca0390eb0877"
+    },
+    {
+      "file": "20261008090000_preserve_project_route_history.sql",
+      "sha256": "e56f6c1aaa4c40d28cb7f2dc5ab7c17d766c19ea82b72c0549264abd1275e058"
+    },
+    {
+      "file": "20261008120000_add_content_lifecycle_history.sql",
+      "sha256": "b2ef7861b063a20f45bbc2fd7857e6aaee59f3d154512d3c752e8b2f0a6c90c1"
+    },
+    {
+      "file": "20261008130000_add_project_status_and_featured.sql",
+      "sha256": "da301da8f9aa79dcdc754c305e6453e348012d5d450fc689793c562264febbe2"
+    },
+    {
+      "file": "20261008180000_add_project_relationships.sql",
+      "sha256": "0826469828a5534a191fa9fcbf00355b8ef80078db1556d164e68edfef624174"
+    },
+    {
+      "file": "20261008210000_provision_project_taxonomies.sql",
+      "sha256": "c405a2ecb3f425eaf6874557a70d4f277e95d38816970c6ac884b67279c76948"
+    },
+    {
+      "file": "20261009090000_record_taxonomy_evolution_actor_reason.sql",
+      "sha256": "14d9ebfa4266d239eca09f6e6ee944684423624e2ef545bfdf57e9c8aca9114e"
+    }
+  ],
+  "migrationLedger": [
+    {
+      "version": "20260922170000",
+      "name": "prepare_migration_capability"
+    },
+    {
+      "version": "20260922171906",
+      "name": "establish_database_security_baseline"
+    },
+    {
+      "version": "20260922203000",
+      "name": "create_operations_primitives"
+    },
+    {
+      "version": "20261001220000",
+      "name": "create_identity_access_owner_links"
+    },
+    {
+      "version": "20261002120000",
+      "name": "create_portfolio_configuration_settings"
+    },
+    {
+      "version": "20261002130000",
+      "name": "allow_versioned_portfolio_profile_updates"
+    },
+    {
+      "version": "20261002140000",
+      "name": "allow_owner_contact_channel_replacement"
+    },
+    {
+      "version": "20261002150000",
+      "name": "allow_versioned_portfolio_cta_updates"
+    },
+    {
+      "version": "20261005001318",
+      "name": "create_content_authoring"
+    },
+    {
+      "version": "20261007090000",
+      "name": "add_immutable_content_revision_reviews"
+    },
+    {
+      "version": "20261007170000",
+      "name": "add_project_publication_routes"
+    },
+    {
+      "version": "20261007190000",
+      "name": "add_achievement_publication_timeline"
+    },
+    {
+      "version": "20261007200000",
+      "name": "publish_localized_testimonials"
+    },
+    {
+      "version": "20261008090000",
+      "name": "preserve_project_route_history"
+    },
+    {
+      "version": "20261008120000",
+      "name": "add_content_lifecycle_history"
+    },
+    {
+      "version": "20261008130000",
+      "name": "add_project_status_and_featured"
+    },
+    {
+      "version": "20261008180000",
+      "name": "add_project_relationships"
+    },
+    {
+      "version": "20261008210000",
+      "name": "provision_project_taxonomies"
+    },
+    {
+      "version": "20261009090000",
+      "name": "record_taxonomy_evolution_actor_reason"
+    }
+  ],
+  "cleanUpgradeEquivalent": true,
+  "migrationReplayNoop": true,
+  "generatedTypeDrift": false,
+  "phase3OperationsRowsPreserved": {
+    "idempotencyRecords": true,
+    "outboxEvents": true,
+    "jobs": true
+  },
+  "authoringTablesWithForcedRls": [
+    "content.items",
+    "content.revisions",
+    "taxonomy.roots",
+    "taxonomy.taxonomy_values",
+    "taxonomy.value_history",
+    "content.project_taxonomy_assignments",
+    "content.project_taxonomy_assignment_history",
+    "taxonomy.project_discovery_taxonomy_values"
+  ],
+  "databaseTestResults": [
+    {
+      "name": "Content authoring production PostgreSQL invariants > creates all Draft kinds, saves both locales, and keeps typed snapshots private and unreviewed",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > persists an explicitly selected profile association for a Testimonial",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > orders revision history by locale stream sequence when saved timestamps regress",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > serializes same-key and stale-version races and preserves the original replay receipt",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > persists immutable exact-snapshot reviews atomically and does not transfer them to later Revisions",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back the aggregate version, review, idempotency receipt, and event when review outbox append fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > does not allow a Testimonial association to disclose or reference another Portfolio's Project",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > publishes English and Arabic independently, preserves first publication time, history, and the last valid projection",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > corrects candidate collisions and resolves A to B to C to A directly under one durable route identity",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > changes retained Project routes while hidden and restores matching discovery",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > changes retained Project routes while archived and restores matching discovery",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back route reservations, immutable history, projections, receipt, and event when outbox append fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back a route change when an eligible Discovery projection is missing",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > publishes minimal Testimonials with explicit associations, localized review, and visibility-safe projections",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects invalid evidence, review, and Media facts without creating public state",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects placeholder text in every public Achievement field before publication",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > preserves the last valid locale and both projections when a replacement is rejected",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > reserves a first Project route atomically when two content items race for the same slug",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > serializes simultaneous locale publication on one aggregate and allows the other locale to publish next",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back route, pointer, projection, success receipt, and event after injected writes fail",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > uses fixture-only accepted Media facts and fails closed when production facts are unresolved",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back the root, Revision, receipt, and outbox when the event append fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > hides, archives, and restores all three content kinds through atomic owner lifecycle commands",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > revalidates each exact locale publication before restore and changes none when one Media fact fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects restore of never-published Archived content but allows explicit first publication and safe retries",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back lifecycle state, history, and the receipt when the lifecycle outbox append fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects overwrite, duplicate sequencing, and cross-Portfolio reparenting while denying public roles",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > stores one canonical symmetric relationship, advances both roots, and replays its original safe receipt",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects self, foreign-scope, wrong-kind, and stale initiating Project relationships",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > serializes inverse relationship races and rolls back both roots if the second update fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > returns only currently published related Projects in the requested locale, ordered and bounded",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > keeps Project status identities, histories, Featured state, and published projections atomic",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > keeps status and Featured mutations atomic when the outbox fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > scopes all status tables to one Portfolio and rejects status or Featured writes on Achievements",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > keeps the status registry within the strict Owner list response limit",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > provisions stable Taxonomy roots and commits value creation, Project assignment, and discovery facts atomically",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back assignment, Project version, history, and receipt when projection or outbox persistence fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > renames and retires Taxonomy values while preserving assignments, public labels, and restoration",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back every Project when a multi-Project merge projection or outbox write fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > serializes assignment against merge and simultaneous merges on independent connections",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > merges a retired source only into an active same-root survivor and rejects merged sources, self merges, and oversized work",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > preserves Taxonomy root version ordering when merging a previously renamed source",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > serializes Taxonomy retirement against new assignments",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects foreign-scope Taxonomy values and non-Project assignment targets",
+      "status": "passed"
+    }
+  ],
+  "databaseIntegrationTestsPassed": 46,
+  "skippedCases": 0,
+  "isolatedLoopbackProjects": true,
+  "credentialsRecorded": false,
+  "secretValuesRecorded": false
+}
