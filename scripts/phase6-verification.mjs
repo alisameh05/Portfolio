@@ -244,7 +244,7 @@ async function main() {
       skipped: uploadAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length,
       failedTests: uploadAssertions.filter((item) => item.status === "failed").map((item) => ({
         name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
-        reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 3).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
+        reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
       })),
       verdict: testResult.status === 0 && uploadAssertions.length === 3 && uploadAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
     };
@@ -256,7 +256,7 @@ async function main() {
       skipped: processingAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length,
       failedTests: processingAssertions.filter((item) => item.status === "failed").map((item) => ({
         name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
-        reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 3).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
+        reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
       })),
       verdict: testResult.status === 0 && processingAssertions.length === 1 && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
     };
