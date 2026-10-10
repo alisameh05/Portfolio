@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 149,
   "parent": 145,
-  "runId": "24b757f6-2d90-435b-80d9-0f5d18dbfdbd",
-  "sourceRevision": "4ec3b9e5b349098e86c4f84a6be504994cfcca8e",
-  "sourceTreeSha256": "e52f7f1b17fb4274499b8f9aa88449e7f2651a9aba0228191c8537bd40128f43",
-  "startedAt": "2026-10-10T21:43:27.218Z",
-  "completedAt": "2026-10-10T21:47:18.325Z",
+  "runId": "2604a551-df0d-4596-9dab-37d628c8d9b5",
+  "sourceRevision": "bbb82196e6802ab0a5677bdf5f07860672a6cb0f",
+  "sourceTreeSha256": "a292aaf18172f64f3306c41c688f43808b5f4ad55610dec00b84432be42120dc",
+  "startedAt": "2026-10-10T23:08:57.805Z",
+  "completedAt": "2026-10-10T23:14:11.915Z",
   "scope": "trusted-byte-bound-PDF-processing-with-immutable-private-output",
   "runtime": {
     "node": "v24.21.0",
@@ -21,7 +21,10 @@
     "pdfProcessor": "17.12.1"
   },
   "policyIds": {
-    "migration": "20261010200000_record_trusted_pdf_processing.sql",
+    "migrations": [
+      "20261010200000_record_trusted_pdf_processing.sql",
+      "20261011210000_harden_trusted_pdf_processing.sql"
+    ],
     "processing": "pdf-active-content-deny-1",
     "limits": {
       "pdfBytes": 20971520,
@@ -52,13 +55,13 @@
     },
     "scanner": {
       "available": true,
-      "image": "clamav/clamav:1.4.3",
-      "executionCount": 2
+      "image": "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4",
+      "executionCount": 16
     },
     "pdfProcessor": {
       "available": true,
-      "image": "jbarlow83/ocrmypdf-alpine:v17.12.1",
-      "executionCount": 1
+      "image": "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c",
+      "executionCount": 9
     }
   },
   "principalScope": {
@@ -77,6 +80,36 @@
     },
     {
       "name": "exact replay without repeated scan or output",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "concurrent same-key processing serialized",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "fresh-key reprocessing after success rejected",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "non-PDF filename extension rejected",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "retryable processor outage returns typed temporary failure and fresh-key retry succeeds",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "latest attempt pointer remains authoritative when attempt timestamps tie",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "application role UPDATE grants limited to mutable processing columns",
       "executed": true,
       "status": "passed"
     },
