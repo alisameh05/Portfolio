@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "runId": "45a3a9de-2539-407e-8e38-73ff21de9cae",
+  "runId": "497822e4-0048-40f2-bd50-cce7134574e8",
   "ticket": 124,
   "parent": 106,
-  "sourceRevision": "0e82928a23a9acfce562b8e5ec0d60e8fd267d10",
+  "sourceRevision": "63d83565005ccb6e5974ac323eb5087c2b82c1e7",
   "sourceTreeSha256": "a2d99759fb65c9c85e7589d77a452232aed90a2cfe1487b95ed1ef17d44106ea",
-  "startedAt": "2026-10-10T14:34:36.483Z",
+  "startedAt": "2026-10-10T14:34:56.709Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "counts": {
