@@ -231,15 +231,25 @@ export async function initializeDatabaseRuntime(
 
           const [
             { createPostgresMediaUploadIntentRepository },
+            { createPostgresMediaProcessingRepository },
             { createUploadCapabilityVault },
             { createMediaUploadIntentApplicationService },
+            { createMediaProcessingApplicationService },
             { createSupabaseMediaUploadTargetAdapter },
+            { createSupabaseMediaProcessingStorage },
+            { createClamAvScanner, createOcrMyPdfProcessor },
+            { createNodeMediaDigest },
             { createProductionOwnerMediaService },
           ] = await Promise.all([
             import("../modules/media/adapters/postgres-upload-intents.js"),
+            import("../modules/media/adapters/postgres-processing.js"),
             import("../modules/media/adapters/upload-capability-vault.js"),
             import("../modules/media/application/upload-intent.js"),
+            import("../modules/media/application/processing.js"),
             import("../runtime/adapters/supabase-media-upload-target.js"),
+            import("../runtime/adapters/supabase-media-processing-storage.js"),
+            import("../runtime/adapters/media-processing-tools.js"),
+            import("../runtime/adapters/media-digest.js"),
             import("../runtime/fakes/owner-media.js"),
           ]);
           const uploadIntentTarget = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
@@ -270,6 +280,31 @@ export async function initializeDatabaseRuntime(
             ...failClosed,
             createOwnerMediaUploadIntent: uploadIntent.create,
           };
+          if (env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]) {
+            const processing = createMediaProcessingApplicationService({
+              scope: { ownerId: configuredScope.ownerId.value },
+              repository: createPostgresMediaProcessingRepository({
+                database: database.database,
+                transactions: operations.transactions,
+                scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
+              }),
+              storage: createSupabaseMediaProcessingStorage({
+                storageUrl: env["SUPABASE_URL"],
+                serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
+                ...(env["MEDIA_CANDIDATE_BUCKET"] === undefined ? {} : { candidateBucket: env["MEDIA_CANDIDATE_BUCKET"] }),
+                ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+              }),
+              scanner: createClamAvScanner(env["CLAMSCAN_PATH"] === undefined ? {} : { executable: env["CLAMSCAN_PATH"] }),
+              processor: createOcrMyPdfProcessor({
+                ...(env["PYTHON_PATH"] === undefined ? {} : { python: env["PYTHON_PATH"] }),
+                ...(env["OCRMY_PDF_PATH"] === undefined ? {} : { ocrmypdf: env["OCRMY_PDF_PATH"] }),
+              }),
+              digest: createNodeMediaDigest(),
+              ids: createSystemIdGenerator(),
+              clock: createSystemClock(),
+            });
+            ownerMedia = { ...ownerMedia, recordOwnerMediaProcessing: processing.record };
+          }
         }
         return {
           operations,

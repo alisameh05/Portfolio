@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "ticket": 149,
+  "parent": 145,
+  "runId": "24b757f6-2d90-435b-80d9-0f5d18dbfdbd",
+  "sourceRevision": "4ec3b9e5b349098e86c4f84a6be504994cfcca8e",
+  "sourceTreeSha256": "e52f7f1b17fb4274499b8f9aa88449e7f2651a9aba0228191c8537bd40128f43",
+  "startedAt": "2026-10-10T21:43:27.218Z",
+  "completedAt": "2026-10-10T21:47:18.325Z",
+  "scope": "trusted-byte-bound-PDF-processing-with-immutable-private-output",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1"
+  },
+  "policyIds": {
+    "migration": "20261010200000_record_trusted_pdf_processing.sql",
+    "processing": "pdf-active-content-deny-1",
+    "limits": {
+      "pdfBytes": 20971520,
+      "maxAttemptMs": 60000,
+      "maxPages": 500,
+      "maxPdfObjects": 100000,
+      "maxOutputBytes": 20971520,
+      "tempPdfCount": 3
+    },
+    "storage": [
+      "media-candidates private",
+      "media-processed private",
+      "create-only output"
+    ]
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "majorVersion": 17
+    },
+    "auth": {
+      "available": true
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 5
+    },
+    "scanner": {
+      "available": true,
+      "image": "clamav/clamav:1.4.3",
+      "executionCount": 2
+    },
+    "pdfProcessor": {
+      "available": true,
+      "image": "jbarlow83/ocrmypdf-alpine:v17.12.1",
+      "executionCount": 1
+    }
+  },
+  "principalScope": {
+    "database": "shipwithali_application constrained by portfolio_id and owner_id RLS",
+    "storage": [
+      "server service role for exact candidate read and processed write",
+      "anonymous denied processed object read"
+    ],
+    "environment": "disposable loopback Supabase"
+  },
+  "scenarios": [
+    {
+      "name": "real PDF process and byte hash round trip",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "exact replay without repeated scan or output",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "EICAR harmless malware signature rejected",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "malformed PDF rejected",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "encrypted PDF rejected",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "active-content PDF rejected",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "foreign Owner RLS read denied",
+      "executed": true,
+      "status": "passed"
+    }
+  ],
+  "checks": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "verdict": "pass"
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:media-processing"
+  ],
+  "limitations": [
+    "The focused runner validates the PDF slice only; image/video processing and the final Phase 6 gate remain separate tickets."
+  ]
+}

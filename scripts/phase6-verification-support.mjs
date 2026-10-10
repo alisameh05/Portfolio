@@ -32,7 +32,7 @@ export function isolatedPhase6Config(source, projectId) {
     .replace(/^port = 54321$/m, "port = 57321")
     .replace(/^port = 54322$/m, "port = 57322")
     .replace(/^shadow_port = 54320$/m, "shadow_port = 57320");
-  return `${config.trimEnd()}\n\n[storage.buckets.phase6-private-fixtures]\npublic = false\nfile_size_limit = "50MiB"\n`;
+  return `${config.trimEnd()}\n\n[storage.buckets.phase6-private-fixtures]\npublic = false\nfile_size_limit = "50MiB"\n\n[storage.buckets.media-candidates]\npublic = false\nfile_size_limit = "50MiB"\nallowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]\n\n[storage.buckets.media-processed]\npublic = false\nfile_size_limit = "50MiB"\nallowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]\n`;
 }
 
 export function scrubPhase6Environment(source = process.env) {

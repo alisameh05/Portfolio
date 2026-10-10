@@ -12,6 +12,7 @@ import type { MediaAsset } from "../domain/index.js";
 
 export { createUploadCapabilityVault } from "./upload-capability-vault.js";
 export { createPostgresMediaUploadIntentRepository } from "./postgres-upload-intents.js";
+export { createPostgresMediaProcessingRepository } from "./postgres-processing.js";
 
 /**
  * Stub repository adapter for Phase 1 skeleton.
