@@ -496,7 +496,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       capabilities: { currentCvAvailable: false, externalLinksAvailable: false },
     } });
     expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project-revised", locale: "en" })).toMatchObject({
-      ok: true, value: { title: "Runtime assembled Project", slug: "runtime-assembled-project-revised" },
+      ok: true, value: { title: "Runtime assembled Project", currentSlug: "runtime-assembled-project-revised" },
     });
 
     const currentRelatedContent = await services.contentAuthoring.getOwnerContentAggregate({ actor, contentId: relatedCreated.value.contentId });
