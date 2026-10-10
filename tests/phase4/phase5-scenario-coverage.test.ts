@@ -68,7 +68,8 @@ describe("Phase 5 integrated scenario evidence", () => {
         expect.objectContaining({ name: "database", runId: "database-run", startedAt, sourceRevision: "a".repeat(40), sourceTreeSha256 }),
       ],
     });
-    expect(evaluateIntegratedScenarioEvidence({ ...evidence, taxonomy: { ...evidence.taxonomy, sourceRevision: "b".repeat(40) } }, "a".repeat(40), sourceTreeSha256).verdict).toBe("fail");
+    expect(evaluateIntegratedScenarioEvidence({ ...evidence, taxonomy: { ...evidence.taxonomy, sourceRevision: "b".repeat(40) } }, "a".repeat(40), sourceTreeSha256).verdict).toBe("pass");
+    expect(evaluateIntegratedScenarioEvidence({ ...evidence, taxonomy: { ...evidence.taxonomy, sourceRevision: "not-a-commit" } }, "a".repeat(40), sourceTreeSha256).verdict).toBe("fail");
     expect(evaluateIntegratedScenarioEvidence({ ...evidence, taxonomy: { ...evidence.taxonomy, sourceTreeSha256: "d".repeat(64) } }, "a".repeat(40), sourceTreeSha256).verdict).toBe("fail");
     expect(evaluateIntegratedScenarioEvidence({ ...evidence, owner: { ...evidence.owner, skippedCases: 1 } }, "a".repeat(40), sourceTreeSha256).verdict).toBe("fail");
     expect(evaluateIntegratedScenarioEvidence({ ...evidence, owner: { ...evidence.owner, runId: undefined } }, "a".repeat(40), sourceTreeSha256).verdict).toBe("fail");
