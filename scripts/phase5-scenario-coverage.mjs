@@ -1,18 +1,23 @@
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE_DIR = join(ROOT, "evidence");
-const STORY_ASSERTION = "tests/database/content-authoring.integration.test.ts :: publication, lifecycle, route, evidence and retry assertions";
-const OWNER_ASSERTION = "tests/database/owner-composition.integration.test.ts :: real Owner and public-query workflow through production composition";
-const DISCOVERY_ASSERTION = "tests/database/phase5-security.integration.test.ts :: scoped public discovery and restricted-principal assertions";
-const SECURITY_ASSERTION = "tests/database/phase5-security.integration.test.ts :: private-content, RLS and pooled-scope assertions";
-const AUTHORIZATION_ASSERTION = "tests/database/owner-composition.integration.test.ts :: Owner handlers and histories through production assembly";
-const TAXONOMY_ASSERTION = "tests/database/owner-composition.integration.test.ts :: assignment, rename, retirement and merge history";
-const ROUTE_ASSERTION = "tests/database/content-authoring.integration.test.ts :: durable route reservation and lifecycle assertions";
+const CONTENT = "tests/database/content-authoring.integration.test.ts";
+const OWNER = "tests/database/owner-composition.integration.test.ts";
+const SECURITY = "tests/database/phase5-security.integration.test.ts";
+const VERIFICATION = "tests/phase4/phase5-verification.test.ts";
+const STORY_ASSERTION = `${CONTENT} :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection`;
+const OWNER_ASSERTION = `${OWNER} :: serves real Owner content, histories, Project controls and Taxonomy through the runtime assembly`;
+const DISCOVERY_ASSERTION = `${SECURITY} :: keeps private content private while the in-process discovery query returns only published approved projections`;
+const SECURITY_ASSERTION = `${SECURITY} :: denies actual public, authenticated, worker, and backup logins direct access to private Phase 5 rows`;
+const AUTHORIZATION_ASSERTION = OWNER_ASSERTION;
+const TAXONOMY_ASSERTION = `${CONTENT} :: merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt`;
+const ROUTE_ASSERTION = `${CONTENT} :: corrects candidate collisions and resolves A to B to C to A directly under one durable route identity`;
+const assertionRef = (file, title) => `${file} :: ${title}`;
 
 const group = (ids, tickets, assertion) => ids.map((id) => ({ id, tickets, assertions: [assertion] }));
 
@@ -38,27 +43,27 @@ export const PHASE5_STORY_COVERAGE = Object.freeze([
   ...group([44, 45, 46], [109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120], STORY_ASSERTION),
   ...group([47], [123], SECURITY_ASSERTION),
   ...group([48], [109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121], STORY_ASSERTION),
-  ...group([49], [106, 111, 114], "tests/database/content-authoring.integration.test.ts :: preserves last valid publication when required acceptance facts fail; optional delivery services are outside this phase's runtime dependency graph"),
-  ...group([50], [106, 122], "tests/phase4/phase5-verification.test.ts :: Phase 5 route, architecture, contract and public-boundary verification"),
+  ...group([49], [106, 111, 114], assertionRef(CONTENT, "rejects invalid evidence, review, and Media facts without creating public state")),
+  ...group([50], [106, 122], assertionRef(VERIFICATION, "declares separate focused suites for the four Phase 5 verification seams")),
   ...group([51], [123], SECURITY_ASSERTION),
   ...group([52], [106, 109, 110, 111, 112, 113, 114, 115, 118, 119, 120], STORY_ASSERTION),
-  ...group([53], [124, 125], "tests/phase4/phase5-scenario-coverage.test.ts :: fresh zero-skip evidence aggregation rejects incomplete constituents"),
-  ...group([54], [106, 124], "tests/phase4/phase5-verification.test.ts :: executable boundary inventory rejects Lab and frontend surfaces"),
+  ...group([53], [124, 125], assertionRef("tests/phase4/phase5-scenario-coverage.test.ts", "rejects incomplete or stale focused evidence and accepts only zero-skip fresh results")),
+  ...group([54], [106, 124], assertionRef("tests/architecture/architecture.test.ts", "must contain no Lab entry implementation in modules (ADR-0007)")),
 ]);
 
 export const PHASE5_SCENARIO_COVERAGE = Object.freeze([
-  { id: 1, tickets: [111, 112, 113], assertions: ["tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently and preserves first publication time"] },
-  { id: 2, tickets: [121], assertions: ["tests/phase5/taxonomy/public-discovery.test.ts :: rejects cross-locale cursors", DISCOVERY_ASSERTION] },
-  { id: 3, tickets: [111, 114], assertions: ["tests/database/content-authoring.integration.test.ts :: preserves the last valid locale and both projections when a replacement is rejected"] },
-  { id: 4, tickets: [115], assertions: ["tests/database/content-authoring.integration.test.ts :: corrects candidate collisions and resolves A to B to C to A directly under one durable route identity"] },
-  { id: 5, tickets: [114, 117, 121], assertions: ["tests/database/content-authoring.integration.test.ts :: hides, archives, and restores all three content kinds through atomic owner lifecycle commands", DISCOVERY_ASSERTION], deferred: "Phase 7 Reaction, Rating, Feedback, and aggregate behavior remains deferred." },
-  { id: 6, tickets: [116, 121], assertions: ["tests/database/owner-composition.integration.test.ts :: keeps Project status and Featured independent of publication", DISCOVERY_ASSERTION] },
-  { id: 7, tickets: [121], assertions: ["tests/database/phase5-security.integration.test.ts :: public discovery query plans and visibility-scoped Project projections"] },
-  { id: 8, tickets: [118, 119, 120], assertions: ["tests/database/owner-composition.integration.test.ts :: assignment, rename, retirement, merge, deduplication and retained history"] },
-  { id: 12, tickets: [110, 111, 112, 113, 114], assertions: ["tests/database/content-authoring.integration.test.ts :: rejects invalid evidence, review, and Media facts without creating public state"] },
-  { id: 13, tickets: [110, 111], assertions: ["tests/database/content-authoring.integration.test.ts :: uses fixture-only accepted Media facts and fails closed when production facts are unresolved", DISCOVERY_ASSERTION], deferred: "Real Media processing and CV delivery are Phase 6 work." },
-  { id: 14, tickets: [106, 124], assertions: ["tests/phase4/phase5-verification.test.ts :: executable Lab/frontend boundary inventory"] },
-  { id: 15, tickets: [109, 111, 114, 124], assertions: ["tests/database/content-authoring.integration.test.ts :: required acceptance outage leaves public state unchanged", OWNER_ASSERTION], deferred: "External optional delivery implementations and full release/load/restore qualification remain deferred." },
+  { id: 1, tickets: [111, 112, 113], assertions: [STORY_ASSERTION] },
+  { id: 2, tickets: [121], assertions: [assertionRef("tests/phase5/taxonomy/public-discovery.test.ts", "rejects malformed and cross-locale or cross-filter cursors"), DISCOVERY_ASSERTION] },
+  { id: 3, tickets: [111, 114], assertions: [assertionRef(CONTENT, "preserves the last valid locale and both projections when a replacement is rejected")] },
+  { id: 4, tickets: [115], assertions: [ROUTE_ASSERTION] },
+  { id: 5, tickets: [114, 117, 121], assertions: [assertionRef(CONTENT, "hides, archives, and restores all three content kinds through atomic owner lifecycle commands"), DISCOVERY_ASSERTION], deferred: "Phase 7 Reaction, Rating, Feedback, and aggregate behavior remains deferred." },
+  { id: 6, tickets: [116, 121], assertions: [assertionRef(CONTENT, "keeps Project status identities, histories, Featured state, and published projections atomic"), DISCOVERY_ASSERTION] },
+  { id: 7, tickets: [121], assertions: [assertionRef(CONTENT, "queries only current published locale projections with stable tied-time cursors and controlled facets")] },
+  { id: 8, tickets: [118, 119, 120], assertions: [TAXONOMY_ASSERTION] },
+  { id: 12, tickets: [110, 111, 112, 113, 114], assertions: [assertionRef(CONTENT, "rejects invalid evidence, review, and Media facts without creating public state")] },
+  { id: 13, tickets: [110, 111], assertions: [assertionRef(CONTENT, "uses fixture-only accepted Media facts and fails closed when production facts are unresolved"), DISCOVERY_ASSERTION], deferred: "Real Media processing and CV delivery are Phase 6 work." },
+  { id: 14, tickets: [106, 124], assertions: [assertionRef("tests/architecture/architecture.test.ts", "must contain no Lab entry implementation in modules (ADR-0007)")] },
+  { id: 15, tickets: [109, 111, 114, 124], assertions: [assertionRef(CONTENT, "rolls back route, pointer, projection, success receipt, and event after injected writes fail"), OWNER_ASSERTION], deferred: "External optional delivery implementations and full release/load/restore qualification remain deferred." },
 ]);
 
 export const PHASE5_DEFERRED_SCOPE = Object.freeze([
@@ -81,8 +86,14 @@ export function validateScenarioCoverage(stories = PHASE5_STORY_COVERAGE, scenar
     return !Number.isSafeInteger(entry?.id) || !Array.isArray(entry?.tickets) || entry.tickets.length === 0 ||
       entry.tickets.some((ticket) => !Number.isSafeInteger(ticket) || ticket < 1) ||
       !Array.isArray(entry?.assertions) || entry.assertions.length === 0 ||
-      entry.assertions.some((assertion) => typeof assertion !== "string" || !assertion.includes(" :: ") ||
-        !existsSync(join(ROOT, assertion.split(" :: ", 1)[0])))
+      entry.assertions.some((assertion) => {
+        if (typeof assertion !== "string" || !assertion.includes(" :: ")) return true;
+        const [file, title] = assertion.split(" :: ");
+        const path = join(ROOT, file);
+        if (!existsSync(path)) return true;
+        const source = readFileSync(path, "utf8");
+        return !source.includes(`it("${title}"`) && !source.includes(`test("${title}"`);
+      })
       ? [key] : [];
   });
   if (new Set(storyIds).size !== storyIds.length || new Set(scenarioIds).size !== scenarioIds.length) invalidEntries.push("duplicate IDs");
@@ -104,6 +115,7 @@ export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision) {
     const report = evidence?.[requirement.key];
     const issues = [];
     if (!report || report.sourceRevision !== sourceRevision) issues.push("missing or stale source revision");
+    if (typeof report?.runId !== "string" || report.runId.length === 0 || typeof report?.startedAt !== "string" || Number.isNaN(Date.parse(report.startedAt))) issues.push("missing focused run identity");
     if (requirement.suite !== undefined) {
       const counts = report?.counts;
       if (report?.suite !== requirement.suite || report?.verdict !== "pass" || report?.scenarioAcceptance !== true) issues.push("focused suite did not pass scenario acceptance");
@@ -117,6 +129,9 @@ export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision) {
       name: requirement.key,
       ticket: requirement.ticket ?? null,
       suite: requirement.suite ?? null,
+      runId: report?.runId ?? null,
+      startedAt: report?.startedAt ?? null,
+      sourceRevision: report?.sourceRevision ?? null,
       verdict: issues.length === 0 ? "pass" : "fail",
       issues,
       counts: requirement.suite !== undefined
@@ -168,6 +183,14 @@ export function buildIntegratedScenarioEvidence({ sourceRevision, evidence, runI
     ],
     cleanup: "Each PostgreSQL constituent creates isolated loopback projects and scoped roles, then verifies cleanup.",
   };
+}
+
+export function invalidateIntegratedEvidence(path) {
+  try {
+    unlinkSync(path);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
 }
 
 function currentRevision() {

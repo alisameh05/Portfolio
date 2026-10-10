@@ -302,6 +302,30 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       idempotencyKey: key("owner-assembly-taxonomy-assignment"),
     });
     expect(assignment.ok).toBe(true);
+    const categoryTaxonomyId = TAXONOMY_IDS.category as StableId<"Taxonomy">;
+    const categoryTaxonomy = await services.taxonomy.getOwnerTaxonomyAggregate({ actor, taxonomyId: categoryTaxonomyId });
+    expect(categoryTaxonomy.ok).toBe(true);
+    if (!categoryTaxonomy.ok) return;
+    const categoryValueResult = await services.taxonomy.createOwnerTaxonomyValue({
+      actor, taxonomyId: categoryTaxonomyId, name: "Owner composition category",
+      expectedVersion: categoryTaxonomy.value.aggregateVersion, idempotencyKey: key("owner-assembly-category-value-create"),
+    });
+    expect(categoryValueResult.ok).toBe(true);
+    if (!categoryValueResult.ok) return;
+    const categoryValue = await services.taxonomy.getOwnerTaxonomyAggregate({ actor, taxonomyId: categoryTaxonomyId });
+    expect(categoryValue.ok).toBe(true);
+    if (!categoryValue.ok) return;
+    const createdCategoryValue = categoryValue.value.values.find((entry) => entry.name === "Owner composition category");
+    expect(createdCategoryValue).toBeDefined();
+    if (createdCategoryValue === undefined) return;
+    const currentProjectForCategory = await services.project.getOwnerProjectAggregate({ actor, projectId: created.value.contentId as StableId<"Project"> });
+    expect(currentProjectForCategory.ok).toBe(true);
+    if (!currentProjectForCategory.ok) return;
+    const categoryAssignment = await services.project.assignOwnerProjectTaxonomyValue({
+      actor, projectId: created.value.contentId as StableId<"Project">, valueId: createdCategoryValue.valueId,
+      expectedVersion: currentProjectForCategory.value.aggregateVersion, idempotencyKey: key("owner-assembly-category-assignment"),
+    });
+    expect(categoryAssignment.ok).toBe(true);
     const renamed = await services.taxonomy.renameOwnerTaxonomyValue({
       actor, valueId: createdValue.valueId, name: "Owner composition integration renamed",
       expectedVersion: value.value.aggregateVersion,
@@ -414,9 +438,12 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     });
     expect(returnedRoute.ok).toBe(true);
     if (!returnedRoute.ok) return;
+    const currentRelatedProject = await services.project.getOwnerProjectAggregate({ actor, projectId: relatedCreated.value.contentId as StableId<"Project"> });
+    expect(currentRelatedProject.ok).toBe(true);
+    if (!currentRelatedProject.ok) return;
     const reservedSlugCollision = await services.project.changeOwnerProjectPublicSlug({
       actor, projectId: relatedCreated.value.contentId as StableId<"Project">, slug: "runtime-assembled-project",
-      expectedVersion: relatedPublished.value.aggregateVersion, idempotencyKey: key("owner-assembly-route-reservation-collision"),
+      expectedVersion: currentRelatedProject.value.aggregateVersion, idempotencyKey: key("owner-assembly-route-reservation-collision"),
       correlationId: "owner-assembly-route-reservation-collision",
     });
     expect(reservedSlugCollision).toMatchObject({ ok: false, error: { kind: "conflict", code: "PUBLIC_SLUG_CONFLICT" } });
@@ -427,13 +454,27 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
 
     const discovery = await getPublicDiscoveryApplicationService();
     const taxonomyValueId = createdValue.valueId as StableId<"TaxonomyValue">;
+    const categoryValueId = createdCategoryValue.valueId as StableId<"TaxonomyValue">;
     const filtered = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [taxonomyValueId], limit: 20 });
     expect(filtered).toMatchObject({ ok: true, value: { entries: expect.arrayContaining([
       expect.objectContaining({ projectId: created.value.contentId, slug: "runtime-assembled-project-revised", isFeatured: true,
         taxonomyValues: expect.arrayContaining([expect.objectContaining({ id: createdValue.valueId, label: "Owner composition integration renamed" })]) }),
       expect.objectContaining({ projectId: relatedCreated.value.contentId, slug: "runtime-relationship-target",
         taxonomyValues: expect.arrayContaining([expect.objectContaining({ id: createdValue.valueId, label: "Owner composition integration renamed" })]) }),
-    ]) } });
+      ]) } });
+    const firstPage = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [taxonomyValueId], limit: 1 });
+    expect(firstPage.ok).toBe(true);
+    if (!firstPage.ok) return;
+    expect(firstPage.value.entries.map((entry) => entry.projectId)).toEqual([relatedCreated.value.contentId]);
+    expect(firstPage.value.nextCursor).not.toBeNull();
+    if (firstPage.value.nextCursor === null) throw new Error("OWNER_COMPOSITION_DISCOVERY_NEXT_PAGE_MISSING");
+    const secondPage = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [taxonomyValueId], limit: 1, cursor: firstPage.value.nextCursor });
+    expect(secondPage).toMatchObject({ ok: true, value: { entries: [expect.objectContaining({ projectId: created.value.contentId })], nextCursor: null } });
+    const crossTaxonomy = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [categoryValueId], limit: 20 });
+    expect(crossTaxonomy).toMatchObject({ ok: true, value: { entries: [expect.objectContaining({
+      projectId: created.value.contentId,
+      taxonomyValues: expect.arrayContaining([expect.objectContaining({ id: categoryValueId, label: "Owner composition category" })]),
+    })] } });
     const arabic = await discovery.getPublicDiscovery({ locale: "ar", taxonomyValueIds: [taxonomyValueId], limit: 20 });
     expect(arabic).toMatchObject({ ok: true, value: { entries: [] } });
     const publicRelated = await services.contentAuthoring.getPublicRelatedProjects({ projectId: created.value.contentId as StableId<"Project">, locale: "en", limit: 10 });
@@ -441,8 +482,11 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     const missingArabicRoute = await services.contentAuthoring.getPublicProject({ slug: "runtime-relationship-target", locale: "ar" });
     expect(missingArabicRoute.ok).toBe(false);
 
+    const currentRelatedContent = await services.contentAuthoring.getOwnerContentAggregate({ actor, contentId: relatedCreated.value.contentId });
+    expect(currentRelatedContent.ok).toBe(true);
+    if (!currentRelatedContent.ok) return;
     const hidden = await services.contentAuthoring.hideContent({
-      actor, contentId: relatedCreated.value.contentId, expectedVersion: relatedPublished.value.aggregateVersion,
+      actor, contentId: relatedCreated.value.contentId, expectedVersion: currentRelatedContent.value.aggregateVersion,
       idempotencyKey: key("owner-assembly-related-hide"), correlationId: "owner-assembly-related-hide",
     });
     expect(hidden.ok).toBe(true);

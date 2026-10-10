@@ -7,6 +7,7 @@ import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
+import { invalidateIntegratedEvidence } from "./phase5-scenario-coverage.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const VITEST = join(ROOT, "node_modules", "vitest", "vitest.mjs");
@@ -182,7 +183,9 @@ function readReport(path) {
 }
 
 function runFocus(suite) {
+  invalidateIntegratedEvidence(join(EVIDENCE_DIR, `phase-5-verification-${suite}.json`));
   if (suite === "database") {
+    invalidateIntegratedEvidence(join(EVIDENCE_DIR, "phase-5-security-migrations-postgres.json"));
     const child = spawnSync(process.execPath, [join(ROOT, "scripts", "portfolio-settings-integration.mjs"), "--ticket-123"], {
       cwd: ROOT,
       env: localVerificationEnvironment(),
