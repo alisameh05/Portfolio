@@ -115,7 +115,7 @@ function isSourceRevisionAncestor(revision, aggregateRevision) {
   }
 }
 
-export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision, sourceTreeSha256) {
+export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision, sourceTreeSha256, isRevisionAncestor = isSourceRevisionAncestor) {
   const requirements = [
     { key: "authoring", suite: "authoring" },
     { key: "taxonomy", suite: "taxonomy" },
@@ -126,7 +126,7 @@ export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision, sou
   const constituents = requirements.map((requirement) => {
     const report = evidence?.[requirement.key];
     const issues = [];
-    if (!report || !/^[a-f0-9]{40}$/i.test(report.sourceRevision ?? "") || !isSourceRevisionAncestor(report.sourceRevision, sourceRevision)) issues.push("missing, invalid, or unrelated source revision");
+    if (!report || !/^[a-f0-9]{40}$/i.test(report.sourceRevision ?? "") || !isRevisionAncestor(report.sourceRevision, sourceRevision)) issues.push("missing, invalid, or unrelated source revision");
     if (typeof sourceTreeSha256 !== "string" || !/^[a-f0-9]{64}$/i.test(sourceTreeSha256) || report?.sourceTreeSha256 !== sourceTreeSha256) issues.push("missing or stale source tree identity");
     if (typeof report?.runId !== "string" || report.runId.length === 0 || typeof report?.startedAt !== "string" || Number.isNaN(Date.parse(report.startedAt))) issues.push("missing focused run identity");
     if (requirement.suite !== undefined) {

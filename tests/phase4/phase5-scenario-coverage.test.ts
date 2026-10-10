@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -50,9 +49,11 @@ describe("Phase 5 integrated scenario evidence", () => {
   it("rejects incomplete or stale focused evidence and accepts only zero-skip fresh results", () => {
     const startedAt = "2026-10-10T00:00:00.000Z";
     const sourceTreeSha256 = "c".repeat(64);
-    const sourceRevision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-    const firstParentHistory = execFileSync("git", ["rev-list", "--first-parent", "HEAD"], { encoding: "utf8" }).trim().split(/\r?\n/u);
-    const earlierSourceRevision = firstParentHistory[1] ?? sourceRevision;
+    const sourceRevision = "a".repeat(40);
+    const earlierSourceRevision = "b".repeat(40);
+    const isRevisionAncestor = (candidate: string, aggregate: string) => candidate === aggregate || candidate === earlierSourceRevision;
+    const evaluate = (candidateEvidence: Record<string, unknown>, aggregateRevision = sourceRevision) =>
+      evaluateIntegratedScenarioEvidence(candidateEvidence, aggregateRevision, sourceTreeSha256, isRevisionAncestor);
     const evidence = {
       authoring: { suite: "authoring", runId: "authoring-run", startedAt, verdict: "pass", sourceRevision, sourceTreeSha256, scenarioAcceptance: true, counts: { executed: 12, failed: 0, skipped: 0, total: 12 } },
       taxonomy: { suite: "taxonomy", runId: "taxonomy-run", startedAt, verdict: "pass", sourceRevision, sourceTreeSha256, scenarioAcceptance: true, counts: { executed: 4, failed: 0, skipped: 0, total: 4 } },
@@ -61,7 +62,7 @@ describe("Phase 5 integrated scenario evidence", () => {
       database: { ticket: 123, runId: "database-run", startedAt, sourceRevision, sourceTreeSha256, databaseIntegrationTestsPassed: 40, skippedCases: 0, cleanUpgradeEquivalent: true, generatedTypeDrift: false },
     };
 
-    expect(evaluateIntegratedScenarioEvidence(evidence, sourceRevision, sourceTreeSha256)).toMatchObject({
+    expect(evaluate(evidence)).toMatchObject({
       verdict: "pass",
       counts: { executed: 88, failed: 0, skipped: 0 },
       constituents: [
@@ -72,14 +73,14 @@ describe("Phase 5 integrated scenario evidence", () => {
         expect.objectContaining({ name: "database", runId: "database-run", startedAt, sourceRevision, sourceTreeSha256 }),
       ],
     });
-    expect(evaluateIntegratedScenarioEvidence({ ...evidence, taxonomy: { ...evidence.taxonomy, sourceRevision: earlierSourceRevision } }, sourceRevision, sourceTreeSha256).verdict).toBe("pass");
-    expect(evaluateIntegratedScenarioEvidence({ ...evidence, taxonomy: { ...evidence.taxonomy, sourceRevision: "not-a-commit" } }, sourceRevision, sourceTreeSha256).verdict).toBe("fail");
-    expect(evaluateIntegratedScenarioEvidence({ ...evidence, taxonomy: { ...evidence.taxonomy, sourceRevision: "deadbeef".repeat(5) } }, sourceRevision, sourceTreeSha256).verdict).toBe("fail");
-    expect(evaluateIntegratedScenarioEvidence({ ...evidence, taxonomy: { ...evidence.taxonomy, sourceTreeSha256: "d".repeat(64) } }, sourceRevision, sourceTreeSha256).verdict).toBe("fail");
-    expect(evaluateIntegratedScenarioEvidence({ ...evidence, owner: { ...evidence.owner, skippedCases: 1 } }, sourceRevision, sourceTreeSha256).verdict).toBe("fail");
-    expect(evaluateIntegratedScenarioEvidence({ ...evidence, owner: { ...evidence.owner, runId: undefined } }, sourceRevision, sourceTreeSha256).verdict).toBe("fail");
-    expect(evaluateIntegratedScenarioEvidence({ ...evidence, authoring: { ...evidence.authoring, counts: { executed: 0, failed: 0, skipped: 0, total: 0 } } }, sourceRevision, sourceTreeSha256).verdict).toBe("fail");
-    expect(evaluateIntegratedScenarioEvidence({ ...evidence, traceability: { ...evidence.traceability, details: { files: [] } } }, sourceRevision, sourceTreeSha256).verdict).toBe("fail");
-    expect(evaluateIntegratedScenarioEvidence({ ...evidence, traceability: { ...evidence.traceability, details: { files: ["tests/architecture/architecture.test.ts"] } } }, sourceRevision, sourceTreeSha256).verdict).toBe("fail");
+    expect(evaluate({ ...evidence, taxonomy: { ...evidence.taxonomy, sourceRevision: earlierSourceRevision } }).verdict).toBe("pass");
+    expect(evaluate({ ...evidence, taxonomy: { ...evidence.taxonomy, sourceRevision: "not-a-commit" } }).verdict).toBe("fail");
+    expect(evaluate({ ...evidence, taxonomy: { ...evidence.taxonomy, sourceRevision: "deadbeef".repeat(5) } }).verdict).toBe("fail");
+    expect(evaluate({ ...evidence, taxonomy: { ...evidence.taxonomy, sourceTreeSha256: "d".repeat(64) } }).verdict).toBe("fail");
+    expect(evaluate({ ...evidence, owner: { ...evidence.owner, skippedCases: 1 } }).verdict).toBe("fail");
+    expect(evaluate({ ...evidence, owner: { ...evidence.owner, runId: undefined } }).verdict).toBe("fail");
+    expect(evaluate({ ...evidence, authoring: { ...evidence.authoring, counts: { executed: 0, failed: 0, skipped: 0, total: 0 } } }).verdict).toBe("fail");
+    expect(evaluate({ ...evidence, traceability: { ...evidence.traceability, details: { files: [] } } }).verdict).toBe("fail");
+    expect(evaluate({ ...evidence, traceability: { ...evidence.traceability, details: { files: ["tests/architecture/architecture.test.ts"] } } }).verdict).toBe("fail");
   });
 });
