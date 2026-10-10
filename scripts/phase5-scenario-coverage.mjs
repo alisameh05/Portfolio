@@ -123,7 +123,10 @@ export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision, sou
       const counts = report?.counts;
       if (report?.suite !== requirement.suite || report?.verdict !== "pass" || report?.scenarioAcceptance !== true) issues.push("focused suite did not pass scenario acceptance");
       if (!counts || !nonnegativeInteger(counts.executed) || counts.executed === 0 || counts.failed !== 0 || counts.skipped !== 0 || counts.total !== counts.executed) issues.push("focused suite must execute with zero failures and skips");
-      if (requirement.suite === "traceability" && !report?.details?.files?.includes("tests/architecture/architecture.test.ts")) issues.push("architecture assertions were not executed in the traceability suite");
+      if (requirement.suite === "traceability") {
+        if (!report?.details?.files?.includes("tests/architecture/architecture.test.ts")) issues.push("architecture assertions were not executed in the traceability suite");
+        if (!report?.details?.files?.includes("tests/phase4/phase5-verification.test.ts")) issues.push("verification seam assertions were not executed in the traceability suite");
+      }
     } else {
       if (report?.ticket !== requirement.ticket || !nonnegativeInteger(report?.databaseIntegrationTestsPassed) || report.databaseIntegrationTestsPassed === 0 || report?.skippedCases !== 0) issues.push("real PostgreSQL ticket suite is incomplete or skipped");
       if (report?.cleanUpgradeEquivalent !== true) issues.push("clean reset and upgrade are not equivalent");

@@ -58,9 +58,11 @@ describe("Phase 5 verification preparation (#107)", () => {
       traceability: "scenario-traceability",
     });
     const packageJson = JSON.parse((await import("node:fs")).readFileSync("package.json", "utf8")) as { scripts: Record<string, string> };
-    for (const entrypoint of Object.values(harness.FOCUS_ENTRYPOINTS)) {
+    for (const [suite, entrypoint] of Object.entries(harness.FOCUS_ENTRYPOINTS)) {
       expect(packageJson.scripts[`phase5:focus:${entrypoint}`]).toBeDefined();
-      expect(packageJson.scripts[`prephase5:focus:${entrypoint}`]).toContain("npm run validation:ready");
+      expect(packageJson.scripts[`prephase5:focus:${entrypoint}`]).toBe(
+        `node scripts/phase5-scenario-coverage.mjs --invalidate-suite ${suite} && npm run validation:ready`,
+      );
     }
     expect(packageJson.scripts["phase5:focus:database-rls-migrations-concurrency"])
       .toBe("node scripts/phase5-verification.mjs --suite database");

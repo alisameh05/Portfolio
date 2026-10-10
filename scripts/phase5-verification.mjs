@@ -237,6 +237,7 @@ function runFocus(suite) {
   const files = suite === "traceability"
     ? [
       join(ROOT, "tests", "phase4", "phase5-scenario-coverage.test.ts"),
+      join(ROOT, "tests", "phase4", "phase5-verification.test.ts"),
       join(ROOT, "tests", "architecture", "architecture.test.ts"),
     ]
     : filesUnder(directory);
