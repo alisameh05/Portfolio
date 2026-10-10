@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "runId": "908bdd00-9710-45d5-9804-60b2325e6d7c",
+  "runId": "e53e79c8-5fa9-442a-98e0-c1afcc644450",
   "ticket": 124,
   "parent": 106,
-  "sourceRevision": "53171b12629b08e3645515bfc2d06396d86ca472",
-  "sourceTreeSha256": "a535ba9948f4627e858220edbe34e5046f41942b1756f8f6a5782e8e0eeea792",
-  "startedAt": "2026-10-10T13:42:41.305Z",
+  "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
+  "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
+  "startedAt": "2026-10-10T13:51:31.042Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "counts": {
@@ -19,10 +19,10 @@
       "name": "authoring",
       "ticket": null,
       "suite": "authoring",
-      "runId": "8d67d02c-ceb1-4848-9579-558005a86131",
-      "startedAt": "2026-10-10T13:37:07.469Z",
-      "sourceRevision": "53171b12629b08e3645515bfc2d06396d86ca472",
-      "sourceTreeSha256": "a535ba9948f4627e858220edbe34e5046f41942b1756f8f6a5782e8e0eeea792",
+      "runId": "4b2b8274-6833-43dc-9407-97ebf2fd7904",
+      "startedAt": "2026-10-10T13:45:49.123Z",
+      "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
+      "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -36,10 +36,10 @@
       "name": "taxonomy",
       "ticket": null,
       "suite": "taxonomy",
-      "runId": "5c41deee-97fa-4fee-bfdb-4f72803e18f3",
-      "startedAt": "2026-10-10T13:37:12.728Z",
-      "sourceRevision": "53171b12629b08e3645515bfc2d06396d86ca472",
-      "sourceTreeSha256": "a535ba9948f4627e858220edbe34e5046f41942b1756f8f6a5782e8e0eeea792",
+      "runId": "b46d9594-1c76-4410-a72a-d6a5d2ba77aa",
+      "startedAt": "2026-10-10T13:45:55.889Z",
+      "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
+      "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -53,10 +53,10 @@
       "name": "traceability",
       "ticket": null,
       "suite": "traceability",
-      "runId": "88dbcdd4-1a65-416d-9058-eb3a6d648402",
-      "startedAt": "2026-10-10T13:37:01.260Z",
-      "sourceRevision": "53171b12629b08e3645515bfc2d06396d86ca472",
-      "sourceTreeSha256": "a535ba9948f4627e858220edbe34e5046f41942b1756f8f6a5782e8e0eeea792",
+      "runId": "4a14889e-6bf1-4faf-bb50-8afc27636e08",
+      "startedAt": "2026-10-10T13:45:42.425Z",
+      "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
+      "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -70,10 +70,10 @@
       "name": "owner",
       "ticket": 122,
       "suite": null,
-      "runId": "3995283d-d62f-48a0-bf17-d743a86d7238",
-      "startedAt": "2026-10-10T13:39:37.784Z",
-      "sourceRevision": "53171b12629b08e3645515bfc2d06396d86ca472",
-      "sourceTreeSha256": "a535ba9948f4627e858220edbe34e5046f41942b1756f8f6a5782e8e0eeea792",
+      "runId": "a3171611-f5de-4473-8531-69a46703d51d",
+      "startedAt": "2026-10-10T13:48:15.012Z",
+      "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
+      "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -87,10 +87,10 @@
       "name": "database",
       "ticket": 123,
       "suite": null,
-      "runId": "648f8d9c-f706-4b3a-a8b2-62d751573243",
-      "startedAt": "2026-10-10T13:42:23.960Z",
-      "sourceRevision": "53171b12629b08e3645515bfc2d06396d86ca472",
-      "sourceTreeSha256": "a535ba9948f4627e858220edbe34e5046f41942b1756f8f6a5782e8e0eeea792",
+      "runId": "f3c22954-84f8-4008-b081-7af36b7672b7",
+      "startedAt": "2026-10-10T13:51:05.888Z",
+      "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
+      "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -375,7 +375,7 @@
           110
         ],
         "assertions": [
-          "tests/database/owner-composition.integration.test.ts :: preserves committed public routes and projections when optional delivery consumers fail after publication"
+          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
         ]
       },
       {
@@ -384,7 +384,7 @@
           116
         ],
         "assertions": [
-          "tests/database/owner-composition.integration.test.ts :: preserves committed public routes and projections when optional delivery consumers fail after publication"
+          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
         ]
       },
       {
@@ -393,7 +393,7 @@
           116
         ],
         "assertions": [
-          "tests/database/owner-composition.integration.test.ts :: preserves committed public routes and projections when optional delivery consumers fail after publication"
+          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
         ]
       },
       {
@@ -402,7 +402,7 @@
           116
         ],
         "assertions": [
-          "tests/database/owner-composition.integration.test.ts :: preserves committed public routes and projections when optional delivery consumers fail after publication"
+          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
         ]
       },
       {
@@ -532,7 +532,7 @@
           122
         ],
         "assertions": [
-          "tests/database/owner-composition.integration.test.ts :: preserves committed public routes and projections when optional delivery consumers fail after publication"
+          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
         ]
       },
       {
@@ -634,7 +634,7 @@
           124
         ],
         "assertions": [
-          "tests/database/owner-composition.integration.test.ts :: preserves committed public routes and projections when optional delivery consumers fail after publication"
+          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
         ]
       },
       {
@@ -826,7 +826,7 @@
         ],
         "assertions": [
           "tests/database/content-authoring.integration.test.ts :: rolls back route, pointer, projection, success receipt, and event after injected writes fail",
-          "tests/database/owner-composition.integration.test.ts :: preserves committed public routes and projections when optional delivery consumers fail after publication"
+          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
         ],
         "deferred": "Production optional worker integrations and full release/load/restore qualification remain deferred."
       }
