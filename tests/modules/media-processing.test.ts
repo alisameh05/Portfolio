@@ -15,13 +15,14 @@ const candidate: MediaProcessingCandidate = {
   mediaId, ownerId, portfolioId: "00000000-0000-7000-8000-000000000006" as StableId<"Portfolio">, kind: "document",
   declaredMimeType: "application/pdf", declaredByteLength: pdf.byteLength, declaredSha256: sha(pdf),
   mediaObjectId: inputObjectId, uploadIntentId, expiresAt: "2026-10-11T00:00:00.000Z", aggregateVersion: 1, state: "upload-pending",
+  originalFileName: "document.pdf",
 };
 const command = {
   actor: { kind: "owner" as const, ownerId, sessionId: "opaque" }, idempotencyKey: "idempotency-key-0001" as never,
   expectedVersion: 1, mediaId, result: "passed" as const, detectedMediaType: "application/pdf", detectedByteLength: pdf.byteLength, sha256: sha(pdf),
 };
 
-function harness(options: { readonly state?: MediaProcessingCandidate["state"]; readonly replay?: boolean; readonly commitError?: string; readonly bytes?: Uint8Array; readonly elapsedDuringScanMs?: number } = {}) {
+function harness(options: { readonly state?: MediaProcessingCandidate["state"]; readonly replay?: boolean; readonly commitError?: string; readonly bytes?: Uint8Array; readonly elapsedDuringScanMs?: number; readonly fileName?: string; readonly scannerUnavailable?: boolean; readonly sealedObjectId?: StableId<"MediaObject"> } = {}) {
   const commits: Parameters<MediaProcessingRepositoryPort["commitAttempt"]>[0][] = [];
   const orphanCalls: Parameters<MediaProcessingRepositoryPort["recordOrphan"]>[0][] = [];
   const marks: unknown[] = [];
@@ -34,12 +35,17 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
   const process = vi.fn(async () => ({ ok: true as const, value: { bytes: output, version: "OCRmyPDF pinned", policyVersion: "pdf-policy-1" } }));
   const discard = vi.fn(async () => undefined);
   const repository: MediaProcessingRepositoryPort = {
-    async getCandidate() { return { ok: true, value: { ...candidate, state: options.state ?? candidate.state } }; },
+    async getCandidate() { return { ok: true, value: { ...candidate, state: options.state ?? candidate.state, originalFileName: options.fileName ?? candidate.originalFileName } }; },
     async getReplay() { return options.replay ? { ok: true, value: { kind: "replay", version: 2, outcome: "media-processing-recorded" } } : { ok: true, value: { kind: "missing" } }; },
+    async claimAttempt(input) {
+      if (["processed", "accepted", "rejected"].includes(options.state ?? candidate.state)) return { ok: true, value: { kind: "invalid-transition" } };
+      if (input.candidate.aggregateVersion !== input.expectedVersion) return { ok: true, value: { kind: "version-mismatch" } };
+      return { ok: true, value: { kind: "claimed" } };
+    },
     async commitAttempt(input) {
       commits.push(input);
       if (options.commitError) return { ok: false, error: { kind: "temporarily_unavailable", code: options.commitError } };
-      return { ok: true, value: { version: 2, outcome: "media-processing-recorded" } };
+      return { ok: true, value: { version: 2, outcome: "media-processing-recorded", ...(input.attempt.temporaryFailure ? { failureCode: input.attempt.findings[0] } : {}) } };
     },
     async recordOrphan(input) { orphanCalls.push(input); return { ok: true, value: undefined }; },
     async listOrphans() { return { ok: true, value: orphanCalls.map((item) => ({ mediaId: item.candidate.mediaId, portfolioId: item.candidate.portfolioId, objectId: item.objectId, sha256: item.sha256 })) }; },
@@ -49,10 +55,10 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
     scope: { ownerId }, repository,
     storage: {
       readCandidate: read,
-      async sealProcessedPdf(input) { return { ok: true, value: { objectId: outputObjectId, sha256: input.sha256 } }; },
+      async sealProcessedPdf(input) { return { ok: true, value: { objectId: options.sealedObjectId ?? outputObjectId, sha256: input.sha256 } }; },
       discardSealedObject: discard,
     },
-    scanner: { scan }, processor: { process },
+    scanner: { scan: options.scannerUnavailable ? vi.fn(async () => ({ ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_SCANNER_UNAVAILABLE" } })) : scan }, processor: { process },
     digest: { sha256: sha },
     ids: { generate(kind) { return kind === "MediaProcessingAttempt" ? "00000000-0000-7000-8000-000000000007" : outputObjectId; } },
     clock: { now: () => new Date(nowMs).toISOString() },
@@ -87,6 +93,27 @@ describe("trusted PDF media processing", () => {
     expect(h.scan).not.toHaveBeenCalled();
   });
 
+  it("rejects a non-PDF original filename before reading or scanning bytes", async () => {
+    const h = harness({ fileName: "report.png" });
+    expect(await h.service.record(command)).toMatchObject({ ok: false, error: { code: "MEDIA_EXTENSION_MISMATCH" } });
+    expect(h.read).not.toHaveBeenCalled();
+    expect(h.scan).not.toHaveBeenCalled();
+  });
+
+  it("returns a typed temporary failure and preserves a fresh-key retry path after scanner outage", async () => {
+    const h = harness({ scannerUnavailable: true });
+    expect(await h.service.record(command)).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_SCANNER_UNAVAILABLE" } });
+    expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", temporaryFailure: true, findings: ["MEDIA_SCANNER_UNAVAILABLE"] });
+  });
+
+  it("discards and records an adapter-returned object when it violates the requested output ID", async () => {
+    const wrongId = "00000000-0000-7000-8000-000000000099" as StableId<"MediaObject">;
+    const h = harness({ sealedObjectId: wrongId });
+    expect(await h.service.record(command)).toMatchObject({ ok: true });
+    expect(h.discard).toHaveBeenCalledWith({ portfolioId: candidate.portfolioId, mediaId, objectId: wrongId, sha256: sha(output) });
+    expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", findings: ["MEDIA_OUTPUT_OBJECT_MISMATCH"] });
+  });
+
   it("does not process terminal candidates or replay an exact successful key twice", async () => {
     const terminal = harness({ state: "accepted" });
     expect((await terminal.service.record(command)).ok).toBe(false);
@@ -106,7 +133,7 @@ describe("trusted PDF media processing", () => {
   it("records an over-budget processing attempt as a failure before PDF processing", async () => {
     const h = harness({ elapsedDuringScanMs: 60_001 });
     const result = await h.service.record(command);
-    expect(result.ok).toBe(true);
+    expect(result).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_PROCESSING_TIMEOUT" } });
     expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", findings: ["MEDIA_PROCESSING_TIMEOUT"] });
     expect(h.process).not.toHaveBeenCalled();
   });

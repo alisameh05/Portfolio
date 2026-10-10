@@ -445,12 +445,12 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const processedFiles: Uint8Array[] = [];
     let scannerExecutions = 0;
     let processorExecutions = 0;
-    const uploadPdf = async (payload: Uint8Array, suffix: string) => {
+    const uploadPdf = async (payload: Uint8Array, suffix: string, originalFileName = `candidate-${suffix}.pdf`) => {
       const uploadService = createService();
       const issued = await uploadService.create({
         actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
         idempotencyKey: `phase6-pdf-${suffix}-${randomBytes(12).toString("hex")}` as never,
-        kind: "document", originalFileName: `candidate-${suffix}.pdf`, declaredMediaType: "application/pdf",
+        kind: "document", originalFileName, declaredMediaType: "application/pdf",
         byteLength: payload.byteLength, sha256: createHash("sha256").update(payload).digest("hex"),
       });
       expect(issued.ok, JSON.stringify({ issued, storage: lastStorageFailure ?? null })).toBe(true);
@@ -461,12 +461,12 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     };
     const normalProcessingStorage = createSupabaseMediaProcessingStorage({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY! });
     const realProcessor = { async process(input: Uint8Array) { processorExecutions += 1; const result = dockerPdfProcessor(input); if (result.ok) processedFiles.push(result.value.bytes); return result; } };
-    const makeMediaProcessing = (storage = normalProcessingStorage, processor: PdfProcessorPort = realProcessor) => createMediaProcessingApplicationService({
+    const makeMediaProcessing = (storage = normalProcessingStorage, processor: PdfProcessorPort = realProcessor, scanner = { async scan(input: Uint8Array) { scannerExecutions += 1; return dockerScanner(input); } }) => createMediaProcessingApplicationService({
       scope: { ownerId }, repository: createPostgresMediaProcessingRepository({
         database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
       }),
       storage,
-      scanner: { async scan(input) { scannerExecutions += 1; return dockerScanner(input); } },
+      scanner,
       processor,
       digest: { sha256(input) { return createHash("sha256").update(input).digest("hex"); } },
       ids: createSystemIdGenerator(), clock: { now: () => new Date(appNow).toISOString() },
@@ -514,6 +514,43 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       [safe.mediaId],
     );
     expect(terminalFacts.rows[0]).toEqual({ attempts: 1, outputs: 1, commands: 1, events: 1 });
+
+    const concurrent = await uploadPdf(pdfBytes, "concurrent");
+    const concurrentKey = "phase6-pdf-process-concurrent-key" as never;
+    let enteredScanner!: () => void;
+    let releaseScanner!: () => void;
+    const scannerEntered = new Promise<void>((resolve) => { enteredScanner = resolve; });
+    const scannerRelease = new Promise<void>((resolve) => { releaseScanner = resolve; });
+    let firstScan = true;
+    const blockingScanner = { async scan(input: Uint8Array) {
+      scannerExecutions += 1;
+      if (firstScan) { firstScan = false; enteredScanner(); await scannerRelease; }
+      return dockerScanner(input);
+    } };
+    const concurrentService = makeMediaProcessing(normalProcessingStorage, realProcessor, blockingScanner);
+    const concurrentPayload = { actor: { kind: "owner" as const, ownerId, sessionId: "phase6-pdf-processing-owner" }, idempotencyKey: concurrentKey,
+      mediaId: concurrent.mediaId, expectedVersion: 1, result: "passed" as const, detectedMediaType: "application/pdf", detectedByteLength: pdfBytes.byteLength, sha256: safeHash };
+    const firstConcurrent = concurrentService.record(concurrentPayload);
+    await scannerEntered;
+    const secondConcurrent = await concurrentService.record(concurrentPayload);
+    expect(secondConcurrent).toMatchObject({ ok: false, error: { code: "MEDIA_PROCESSING_IN_PROGRESS" } });
+    releaseScanner();
+    expect((await firstConcurrent).ok).toBe(true);
+    const concurrentFacts = await admin.query(
+      `select (select count(*)::int from media.processing_attempts where media_id = $1::uuid) as attempts,
+              (select count(*)::int from media.processed_objects where media_id = $1::uuid) as outputs,
+              (select count(*)::int from media.processing_commands where media_id = $1::uuid) as commands,
+              (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'media.processing_recorded.v1') as events`,
+      [concurrent.mediaId],
+    );
+    expect(concurrentFacts.rows[0]).toEqual({ attempts: 1, outputs: 1, commands: 1, events: 1 });
+
+    const extensionMismatch = await uploadPdf(pdfBytes, "extension-mismatch", "candidate-extension-mismatch.png");
+    const extensionResult = await mediaProcessing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
+      idempotencyKey: "phase6-pdf-process-extension-key" as never, mediaId: extensionMismatch.mediaId, expectedVersion: 1, result: "passed",
+      detectedMediaType: "application/pdf", detectedByteLength: pdfBytes.byteLength, sha256: safeHash });
+    expect(extensionResult).toMatchObject({ ok: false, error: { code: "MEDIA_EXTENSION_MISMATCH" } });
+    expect((await admin.query("select count(*)::int as count from media.processing_attempts where media_id = $1::uuid", [extensionMismatch.mediaId])).rows[0]?.count).toBe(0);
 
     const persisted = await admin.query(
       `select attempt.result, attempt.input_object_id::text, attempt.input_sha256, attempt.detected_mime_type,
@@ -570,7 +607,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       idempotencyKey: "phase6-pdf-process-eicar-key" as never, mediaId: malware.mediaId, expectedVersion: 1, result: "passed",
       detectedMediaType: "application/pdf", detectedByteLength: malwareBytes.byteLength, sha256: createHash("sha256").update(malwareBytes).digest("hex") });
     expect(malwareResult.ok).toBe(true);
-    expect(processedFiles).toHaveLength(1);
+    expect(processedFiles).toHaveLength(2);
     const malwareAttempt = await admin.query("select result, finding_codes from media.processing_attempts where portfolio_id = $1::uuid and owner_id = $2::uuid and media_id = $3::uuid", [portfolioId, ownerId, malware.mediaId]);
     expect(malwareAttempt.rows[0], JSON.stringify(malwareAttempt.rows[0])).toMatchObject({ result: "failed", finding_codes: ["MEDIA_UNSAFE_CONTENT"] });
 
@@ -593,12 +630,25 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       mediaId: retry.mediaId, result: "passed" as const, detectedMediaType: "application/pdf", detectedByteLength: pdfBytes.byteLength,
       sha256: safeHash };
     const unavailableProcessor = makeMediaProcessing(normalProcessingStorage, { async process() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_PROCESSOR_UNAVAILABLE" } }; } });
-    expect((await unavailableProcessor.record({ ...retryPayload, idempotencyKey: "phase6-pdf-retry-first" as never, expectedVersion: 1 })).ok).toBe(true);
+    expect(await unavailableProcessor.record({ ...retryPayload, idempotencyKey: "phase6-pdf-retry-first" as never, expectedVersion: 1 }))
+      .toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_PROCESSOR_UNAVAILABLE" } });
+    expect(await unavailableProcessor.record({ ...retryPayload, idempotencyKey: "phase6-pdf-retry-first" as never, expectedVersion: 1 }))
+      .toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_PROCESSOR_UNAVAILABLE" } });
     const successfulRetry = await mediaProcessing.record({ ...retryPayload, idempotencyKey: "phase6-pdf-retry-second" as never, expectedVersion: 2 });
     expect(successfulRetry).toMatchObject({ ok: true, value: { aggregateVersion: 3 } });
     const retainedAttempts = await admin.query("select result, finding_codes from media.processing_attempts where portfolio_id = $1::uuid and owner_id = $2::uuid and media_id = $3::uuid order by finished_at", [portfolioId, ownerId, retry.mediaId]);
     expect(retainedAttempts.rowCount).toBe(2);
     expect(retainedAttempts.rows.map((row) => row.result)).toEqual(["failed", "passed"]);
+    await admin.query(
+      `update media.processing_attempts set finished_at = (
+         select max(started_at) + interval '1 second' from media.processing_attempts where media_id = $1::uuid
+       ) where media_id = $1::uuid`,
+      [retry.mediaId],
+    );
+    const scansBeforeTerminalRetry = scannerExecutions;
+    expect(await mediaProcessing.record({ ...retryPayload, idempotencyKey: "phase6-pdf-retry-terminal-tie" as never, expectedVersion: 3 }))
+      .toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
+    expect(scannerExecutions).toBe(scansBeforeTerminalRetry);
 
     const rollbackCandidate = await uploadPdf(pdfBytes, "rollback");
     const suffix = randomBytes(3).toString("hex");

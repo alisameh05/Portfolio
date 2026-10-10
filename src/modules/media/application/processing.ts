@@ -11,6 +11,7 @@ export interface MediaProcessingCandidate {
   readonly declaredMimeType: string;
   readonly declaredByteLength: number;
   readonly declaredSha256: string;
+  readonly originalFileName: string;
   readonly mediaObjectId: StableId<string>;
   readonly uploadIntentId: StableId<string>;
   readonly expiresAt: string;
@@ -22,6 +23,7 @@ export interface MediaProcessingAttempt {
   readonly attemptId: StableId<string>;
   readonly mediaId: StableId<string>;
   readonly result: "passed" | "failed";
+  readonly temporaryFailure?: boolean;
   readonly startedAt: string;
   readonly detectedMimeType: string;
   readonly detectedByteLength: number;
@@ -39,8 +41,9 @@ export interface MediaProcessingAttempt {
 
 export interface MediaProcessingRepositoryPort {
   getCandidate(input: { readonly ownerId: StableId<string>; readonly mediaId: StableId<string> }): Promise<Result<MediaProcessingCandidate, Rejection>>;
-  getReplay(input: { readonly ownerId: StableId<string>; readonly mediaId: StableId<string>; readonly idempotencyKey: IdempotencyKey; readonly requestHash: string }): Promise<Result<{ readonly kind: "missing" } | { readonly kind: "replay"; readonly version: number; readonly outcome: "media-processing-recorded" } | { readonly kind: "conflict" }, Rejection>>;
-  commitAttempt(input: { readonly candidate: MediaProcessingCandidate; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly requestHash: string; readonly attempt: MediaProcessingAttempt }): Promise<Result<{ readonly version: number; readonly outcome: "media-processing-recorded" }, Rejection>>;
+  getReplay(input: { readonly ownerId: StableId<string>; readonly mediaId: StableId<string>; readonly idempotencyKey: IdempotencyKey; readonly requestHash: string }): Promise<Result<{ readonly kind: "missing" } | { readonly kind: "replay"; readonly version: number; readonly outcome: "media-processing-recorded"; readonly failureCode?: string } | { readonly kind: "conflict" }, Rejection>>;
+  claimAttempt(input: { readonly candidate: MediaProcessingCandidate; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly requestHash: string; readonly claimId: StableId<string> }): Promise<Result<{ readonly kind: "claimed" } | { readonly kind: "replay"; readonly version: number; readonly outcome: "media-processing-recorded"; readonly failureCode?: string } | { readonly kind: "conflict" } | { readonly kind: "in-progress" } | { readonly kind: "invalid-transition" } | { readonly kind: "version-mismatch" } | { readonly kind: "expired" } | { readonly kind: "candidate-stale" }, Rejection>>;
+  commitAttempt(input: { readonly candidate: MediaProcessingCandidate; readonly expectedVersion: number; readonly idempotencyKey: IdempotencyKey; readonly requestHash: string; readonly claimId: StableId<string>; readonly attempt: MediaProcessingAttempt }): Promise<Result<{ readonly version: number; readonly outcome: "media-processing-recorded"; readonly failureCode?: string }, Rejection>>;
   recordOrphan(input: { readonly candidate: MediaProcessingCandidate; readonly objectId: StableId<string>; readonly sha256: string }): Promise<Result<void, Rejection>>;
   listOrphans(input: { readonly ownerId: StableId<string>; readonly limit: number }): Promise<Result<ReadonlyArray<{ readonly mediaId: StableId<string>; readonly portfolioId: StableId<string>; readonly objectId: StableId<string>; readonly sha256: string }>, Rejection>>;
   markOrphanReconciled(input: { readonly ownerId: StableId<string>; readonly objectId: StableId<string> }): Promise<Result<void, Rejection>>;
@@ -112,29 +115,44 @@ export function createMediaProcessingApplicationService(deps: {
       const replay = await deps.repository.getReplay({ ownerId: deps.scope.ownerId, mediaId: command.mediaId, idempotencyKey: command.idempotencyKey, requestHash });
       if (!replay.ok) return replay;
       if (replay.value.kind === "conflict") return err({ kind: "conflict", code: "IDEMPOTENCY_CONFLICT" });
-      if (replay.value.kind === "replay") return ok({ aggregateId: command.mediaId, aggregateVersion: replay.value.version, outcome: replay.value.outcome });
+      if (replay.value.kind === "replay") return replay.value.failureCode
+        ? err({ kind: "temporarily_unavailable" as const, code: replay.value.failureCode })
+        : ok({ aggregateId: command.mediaId, aggregateVersion: replay.value.version, outcome: replay.value.outcome });
 
       const found = await deps.repository.getCandidate({ ownerId: deps.scope.ownerId, mediaId: command.mediaId });
       if (!found.ok) return found;
       const candidate = found.value;
-      if (["processed", "accepted", "rejected"].includes(candidate.state)) return err({ kind: "conflict", code: "MEDIA_INVALID_TRANSITION" });
-      if (candidate.aggregateVersion !== command.expectedVersion) return err({ kind: "precondition_failed", code: "MEDIA_VERSION_MISMATCH" });
-      if (Date.parse(candidate.expiresAt) <= Date.parse(deps.clock.now())) return err({ kind: "conflict", code: "MEDIA_UPLOAD_EXPIRED" });
       if (candidate.kind !== "document" || candidate.declaredMimeType !== "application/pdf") return err({ kind: "validation", code: "MEDIA_PROCESSING_FORMAT_UNSUPPORTED" });
+      if (!/\.pdf$/i.test(candidate.originalFileName)) return err({ kind: "validation", code: "MEDIA_EXTENSION_MISMATCH" });
+
+      const claimId = deps.ids.generate("MediaProcessingClaim") as StableId<string>;
+      const claim = await deps.repository.claimAttempt({ candidate, expectedVersion: command.expectedVersion, idempotencyKey: command.idempotencyKey, requestHash, claimId });
+      if (!claim.ok) return claim;
+      if (claim.value.kind === "conflict") return err({ kind: "conflict", code: "IDEMPOTENCY_CONFLICT" });
+      if (claim.value.kind === "in-progress") return err({ kind: "temporarily_unavailable" as const, code: "MEDIA_PROCESSING_IN_PROGRESS" });
+      if (claim.value.kind === "invalid-transition") return err({ kind: "conflict", code: "MEDIA_INVALID_TRANSITION" });
+      if (claim.value.kind === "version-mismatch") return err({ kind: "precondition_failed", code: "MEDIA_VERSION_MISMATCH" });
+      if (claim.value.kind === "expired") return err({ kind: "conflict", code: "MEDIA_UPLOAD_EXPIRED" });
+      if (claim.value.kind === "candidate-stale") return err({ kind: "conflict", code: "MEDIA_CANDIDATE_STALE" });
+      if (claim.value.kind === "replay") return claim.value.failureCode
+        ? err({ kind: "temporarily_unavailable" as const, code: claim.value.failureCode })
+        : ok({ aggregateId: command.mediaId, aggregateVersion: claim.value.version, outcome: claim.value.outcome });
 
       const startedAt = deps.clock.now();
       const attemptWithinBudget = () => {
         const startedAtMs = Date.parse(startedAt), currentAtMs = Date.parse(deps.clock.now());
         return Number.isFinite(startedAtMs) && Number.isFinite(currentAtMs) && currentAtMs - startedAtMs <= MEDIA_PROCESSING_POLICY.maxProcessingAttemptMs;
       };
+      const temporaryCodes = new Set(["MEDIA_STORAGE_UNAVAILABLE", "MEDIA_UPLOAD_OBJECT_MISSING", "MEDIA_SCANNER_UNAVAILABLE", "MEDIA_SCAN_INCONCLUSIVE", "MEDIA_PROCESSOR_UNAVAILABLE", "MEDIA_OUTPUT_SEAL_FAILED", "MEDIA_PROCESSING_TIMEOUT"]);
       const failedAttempt = async (code: string, facts: { bytes?: Uint8Array; mime?: string; hash?: string; scannerVersion?: string; processorVersion?: string; policyVersion?: string } = {}) => {
         const attempt: MediaProcessingAttempt = { attemptId: deps.ids.generate("MediaProcessingAttempt") as StableId<string>, mediaId: candidate.mediaId,
-          result: "failed", startedAt, detectedMimeType: facts.mime ?? "application/octet-stream", detectedByteLength: facts.bytes?.byteLength ?? 0,
+          result: "failed", temporaryFailure: temporaryCodes.has(code), startedAt, detectedMimeType: facts.mime ?? "application/octet-stream", detectedByteLength: facts.bytes?.byteLength ?? 0,
           sha256: facts.hash ?? "0".repeat(64), inputObjectId: candidate.mediaObjectId, scannerVersion: facts.scannerVersion ?? "unavailable",
           processorVersion: facts.processorVersion ?? "unavailable", policyVersion: facts.policyVersion ?? "media-pdf-v1", findings: [code], recordedAt: deps.clock.now() };
         try {
-          const committed = await deps.repository.commitAttempt({ candidate, expectedVersion: command.expectedVersion, idempotencyKey: command.idempotencyKey, requestHash, attempt });
+          const committed = await deps.repository.commitAttempt({ candidate, expectedVersion: command.expectedVersion, idempotencyKey: command.idempotencyKey, requestHash, claimId, attempt });
           if (!committed.ok) return err(committed.error);
+          if (committed.value.failureCode) return err({ kind: "temporarily_unavailable" as const, code: committed.value.failureCode });
           return ok({ aggregateId: candidate.mediaId, aggregateVersion: committed.value.version, outcome: committed.value.outcome });
         } catch { return err({ kind: "temporarily_unavailable" as const, code: "MEDIA_PROCESSING_COMMIT_FAILED" }); }
       };
@@ -179,9 +197,14 @@ export function createMediaProcessingApplicationService(deps: {
       catch { return failedAttempt("MEDIA_OUTPUT_SEAL_FAILED", { bytes, mime, hash: sha256, scannerVersion: outputScan.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion }); }
       if (!sealed.ok) return failedAttempt("MEDIA_OUTPUT_SEAL_FAILED", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });
       const discardOrRecordOrphan = async () => {
-        try { await deps.storage.discardSealedObject({ portfolioId: candidate.portfolioId, mediaId: candidate.mediaId, objectId: sealed.value.objectId, sha256: outputHash }); }
-        catch { await deps.repository.recordOrphan({ candidate, objectId: sealed.value.objectId, sha256: outputHash }).catch(() => undefined); }
+        try { await deps.storage.discardSealedObject({ portfolioId: candidate.portfolioId, mediaId: candidate.mediaId, objectId: sealed.value.objectId, sha256: sealed.value.sha256 }); }
+        catch { await deps.repository.recordOrphan({ candidate, objectId: sealed.value.objectId, sha256: sealed.value.sha256 }).catch(() => undefined); }
       };
+      if (sealed.value.objectId !== expectedOutputObjectId) {
+        try { await deps.storage.discardSealedObject({ portfolioId: candidate.portfolioId, mediaId: candidate.mediaId, objectId: sealed.value.objectId, sha256: sealed.value.sha256 }); }
+        catch { await deps.repository.recordOrphan({ candidate, objectId: sealed.value.objectId, sha256: sealed.value.sha256 }).catch(() => undefined); }
+        return failedAttempt("MEDIA_OUTPUT_OBJECT_MISMATCH", { bytes, mime, hash: sha256, scannerVersion: outputScan.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });
+      }
       if (sealed.value.sha256 !== outputHash) { await discardOrRecordOrphan(); return failedAttempt("MEDIA_OUTPUT_HASH_MISMATCH", { bytes, mime, hash: sha256, scannerVersion: outputScan.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion }); }
       if (!attemptWithinBudget()) { await discardOrRecordOrphan(); return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: outputScan.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion }); }
       const attempt: MediaProcessingAttempt = { attemptId: deps.ids.generate("MediaProcessingAttempt") as StableId<string>, mediaId: candidate.mediaId, result: "passed", startedAt,
@@ -189,7 +212,7 @@ export function createMediaProcessingApplicationService(deps: {
         outputSha256: outputHash, outputByteLength: processed.value.bytes.byteLength, scannerVersion: outputScan.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion,
         findings: [], recordedAt: deps.clock.now() };
       let committed: Awaited<ReturnType<MediaProcessingRepositoryPort["commitAttempt"]>>;
-      try { committed = await deps.repository.commitAttempt({ candidate, expectedVersion: command.expectedVersion, idempotencyKey: command.idempotencyKey, requestHash, attempt }); }
+      try { committed = await deps.repository.commitAttempt({ candidate, expectedVersion: command.expectedVersion, idempotencyKey: command.idempotencyKey, requestHash, claimId, attempt }); }
       catch { await discardOrRecordOrphan(); return err({ kind: "temporarily_unavailable", code: "MEDIA_PROCESSING_COMMIT_FAILED" }); }
       if (!committed.ok) { await discardOrRecordOrphan(); return err(committed.error); }
       return ok({ aggregateId: candidate.mediaId, aggregateVersion: committed.value.version, outcome: committed.value.outcome });

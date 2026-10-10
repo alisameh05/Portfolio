@@ -10,10 +10,11 @@ import type { MediaProcessingAttempt, MediaProcessingCandidate, MediaProcessingR
 interface CandidateRow {
   readonly media_id: string; readonly portfolio_id: string; readonly owner_id: string; readonly kind: string;
   readonly declared_media_type: string; readonly declared_byte_length: string | number; readonly declared_sha256: string;
+  readonly original_file_name: string;
   readonly upload_intent_id: string; readonly media_object_id: string; readonly expires_at: Date | string;
   readonly aggregate_version: number | string | null; readonly latest_result: string | null;
 }
-interface ReplayRow { readonly request_hash: string; readonly aggregate_version: number | string; readonly outcome: string; }
+interface ReplayRow { readonly request_hash: string; readonly aggregate_version: number | string; readonly outcome: string; readonly failure_code: string | null; }
 interface LockedRow extends CandidateRow { readonly current_version: number | string; readonly current_result: string | null; }
 
 function keyHash(key: IdempotencyKey): string { return createHash("sha256").update(key, "utf8").digest("hex"); }
@@ -27,6 +28,7 @@ function asCandidate(row: CandidateRow): MediaProcessingCandidate {
       !/^[0-9a-f]{64}$/.test(row.declared_sha256)) throw new PostgresInfrastructureError();
   return { mediaId: mediaId.value, portfolioId: portfolioId.value, ownerId: ownerId.value, kind: row.kind as MediaProcessingCandidate["kind"],
     declaredMimeType: row.declared_media_type, declaredByteLength: Number(row.declared_byte_length), declaredSha256: row.declared_sha256,
+    originalFileName: row.original_file_name,
     uploadIntentId: uploadIntentId.value, mediaObjectId: mediaObjectId.value, expiresAt: time(row.expires_at),
     aggregateVersion: Number(row.aggregate_version ?? 1), state: row.latest_result === "passed" ? "processed" : "upload-pending" };
 }
@@ -46,12 +48,12 @@ export function createPostgresMediaProcessingRepository(input: {
         return await input.transactions.run(async (context) => {
           const executor = resolvePostgresTransaction(context); await setScope(context, input.scope);
           const rows = await sql<CandidateRow>`
-            select a.media_id, a.portfolio_id, a.owner_id, a.kind, a.declared_media_type, a.declared_byte_length,
+            select a.media_id, a.portfolio_id, a.owner_id, a.kind, a.original_file_name, a.declared_media_type, a.declared_byte_length,
                    a.declared_sha256, i.upload_intent_id, i.media_object_id, i.expires_at,
-                   s.aggregate_version, (select p.result from media.processing_attempts p where p.media_id = a.media_id
-                     and p.owner_id = a.owner_id and p.portfolio_id = a.portfolio_id order by p.finished_at desc limit 1) as latest_result
+                   s.aggregate_version, latest.result as latest_result
               from media.assets a join media.upload_intents i on i.media_id = a.media_id
               left join media.processing_states s on s.media_id = a.media_id
+              left join media.processing_attempts latest on latest.attempt_id = s.latest_attempt_id
              where a.media_id = ${query.mediaId} and a.owner_id = ${query.ownerId}
              order by i.created_at desc limit 1
           `.execute(executor);
@@ -64,15 +66,63 @@ export function createPostgresMediaProcessingRepository(input: {
       try {
         return await input.transactions.run(async (context) => {
           const executor = resolvePostgresTransaction(context); await setScope(context, input.scope);
-          const rows = await sql<ReplayRow>`select request_hash, aggregate_version, outcome from media.processing_commands
+          const rows = await sql<ReplayRow>`select request_hash, aggregate_version, outcome, failure_code from media.processing_commands
             where portfolio_id = ${input.scope.portfolioId} and owner_id = ${query.ownerId} and media_id = ${query.mediaId}
               and idempotency_key_hash = ${keyHash(query.idempotencyKey)} limit 1`.execute(executor);
           const row = rows.rows[0];
           if (!row) return ok({ kind: "missing" } as const);
           if (row.request_hash !== query.requestHash) return ok({ kind: "conflict" } as const);
-          return ok({ kind: "replay", version: Number(row.aggregate_version), outcome: row.outcome as "media-processing-recorded" } as const);
+          return ok({ kind: "replay", version: Number(row.aggregate_version), outcome: row.outcome as "media-processing-recorded", ...(row.failure_code ? { failureCode: row.failure_code } : {}) } as const);
         });
       } catch { return err({ kind: "temporarily_unavailable", code: "MEDIA_PROCESSING_UNAVAILABLE" }); }
+    },
+    async claimAttempt(query) {
+      try {
+        return await input.transactions.run(async (context) => {
+          const executor = resolvePostgresTransaction(context); await setScope(context, input.scope);
+          await sql`set local lock_timeout = '1s'`.execute(executor);
+          const key = keyHash(query.idempotencyKey);
+          const existing = await sql<ReplayRow>`select request_hash, aggregate_version, outcome, failure_code from media.processing_commands
+            where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId} and media_id = ${query.candidate.mediaId}
+              and idempotency_key_hash = ${key} limit 1`.execute(executor);
+          if (existing.rows[0]) {
+            if (existing.rows[0].request_hash !== query.requestHash) return ok({ kind: "conflict" } as const);
+            const row = existing.rows[0];
+            return ok({ kind: "replay", version: Number(row.aggregate_version), outcome: "media-processing-recorded" as const, ...(row.failure_code ? { failureCode: row.failure_code } : {}) } as const);
+          }
+          await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId}
+            and owner_id = ${input.scope.ownerId} and lease_expires_at <= transaction_timestamp()`.execute(executor);
+          const currentRows = await sql<{ readonly current_version: number | string; readonly latest_result: string | null; readonly expired: boolean }>`
+            select coalesce(s.aggregate_version, 1) as current_version, latest.result as latest_result,
+                   (i.expires_at <= transaction_timestamp()) as expired
+              from media.assets a join media.upload_intents i on i.media_id = a.media_id
+              left join media.processing_states s on s.media_id = a.media_id
+              left join media.processing_attempts latest on latest.attempt_id = s.latest_attempt_id
+             where a.media_id = ${query.candidate.mediaId} and a.owner_id = ${input.scope.ownerId}
+               and a.portfolio_id = ${input.scope.portfolioId} and i.upload_intent_id = ${query.candidate.uploadIntentId}
+               and i.media_object_id = ${query.candidate.mediaObjectId}
+          `.execute(executor);
+          const current = currentRows.rows[0];
+          if (!current) return ok({ kind: "candidate-stale" } as const);
+          if (current.expired) return ok({ kind: "expired" } as const);
+          if (Number(current.current_version) !== query.expectedVersion) return ok({ kind: "version-mismatch" } as const);
+          if (current.latest_result === "passed") return ok({ kind: "invalid-transition" } as const);
+          const claimed = await sql`insert into media.processing_claims
+              (portfolio_id, owner_id, media_id, idempotency_key_hash, request_hash, claim_id, lease_expires_at)
+            values (${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId}, ${key}, ${query.requestHash}, ${query.claimId}, transaction_timestamp() + interval '75 seconds')
+            on conflict (portfolio_id, owner_id, media_id) do update
+              set idempotency_key_hash = excluded.idempotency_key_hash, request_hash = excluded.request_hash,
+                  claim_id = excluded.claim_id, lease_expires_at = excluded.lease_expires_at
+              where media.processing_claims.lease_expires_at <= transaction_timestamp()
+            returning claim_id`.execute(executor);
+          if (claimed.rows.length === 1) return ok({ kind: "claimed" } as const);
+          const currentClaim = await sql<{ readonly request_hash: string; readonly idempotency_key_hash: string }>`select request_hash, idempotency_key_hash from media.processing_claims
+            where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId} and media_id = ${query.candidate.mediaId}
+          `.execute(executor);
+          return ok(currentClaim.rows[0]?.idempotency_key_hash === key && currentClaim.rows[0]?.request_hash !== query.requestHash
+            ? { kind: "conflict" } as const : { kind: "in-progress" } as const);
+        });
+      } catch { return err({ kind: "temporarily_unavailable", code: "MEDIA_PROCESSING_CLAIM_UNAVAILABLE" }); }
     },
     async commitAttempt(query) {
       try {
@@ -81,30 +131,46 @@ export function createPostgresMediaProcessingRepository(input: {
           await sql`set local lock_timeout = '1s'`.execute(executor);
           await sql`set local statement_timeout = '3s'`.execute(executor);
           const key = keyHash(query.idempotencyKey);
-          const existing = await sql<ReplayRow>`select request_hash, aggregate_version, outcome from media.processing_commands
+          const existing = await sql<ReplayRow>`select request_hash, aggregate_version, outcome, failure_code from media.processing_commands
             where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId} and media_id = ${query.candidate.mediaId}
               and idempotency_key_hash = ${key} limit 1`.execute(executor);
           if (existing.rows[0]) {
             if (existing.rows[0].request_hash !== query.requestHash) return err({ kind: "conflict", code: "IDEMPOTENCY_CONFLICT" });
             return ok({ version: Number(existing.rows[0].aggregate_version), outcome: "media-processing-recorded" as const });
           }
+          const claim = await sql`select claim_id from media.processing_claims where portfolio_id = ${input.scope.portfolioId}
+            and owner_id = ${input.scope.ownerId} and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key}
+            and claim_id = ${query.claimId} and lease_expires_at > transaction_timestamp() for update`.execute(executor);
+          if (!claim.rows.length) return err({ kind: "temporarily_unavailable", code: "MEDIA_PROCESSING_CLAIM_EXPIRED" });
           await sql`select pg_advisory_xact_lock(hashtextextended(${query.candidate.mediaId}::text, 0))`.execute(executor);
           const locked = await sql<LockedRow>`
-            select a.media_id, a.portfolio_id, a.owner_id, a.kind, a.declared_media_type, a.declared_byte_length,
+            select a.media_id, a.portfolio_id, a.owner_id, a.kind, a.original_file_name, a.declared_media_type, a.declared_byte_length,
                    a.declared_sha256, i.upload_intent_id, i.media_object_id, i.expires_at,
                    coalesce(s.aggregate_version, 1) as current_version,
-                   (select p.result from media.processing_attempts p where p.media_id = a.media_id
-                     and p.owner_id = a.owner_id and p.portfolio_id = a.portfolio_id order by p.finished_at desc limit 1) as current_result
+                   latest.result as current_result
               from media.assets a join media.upload_intents i on i.media_id = a.media_id
               left join media.processing_states s on s.media_id = a.media_id
+              left join media.processing_attempts latest on latest.attempt_id = s.latest_attempt_id
              where a.media_id = ${query.candidate.mediaId} and a.owner_id = ${input.scope.ownerId}
                and a.portfolio_id = ${input.scope.portfolioId} and i.upload_intent_id = ${query.candidate.uploadIntentId}
                and i.media_object_id = ${query.candidate.mediaObjectId} and i.expires_at > transaction_timestamp()
           `.execute(executor);
           const row = locked.rows[0];
-          if (!row) return err({ kind: "conflict", code: "MEDIA_CANDIDATE_STALE" });
-          if (Number(row.current_version) !== query.expectedVersion) return err({ kind: "precondition_failed", code: "MEDIA_VERSION_MISMATCH" });
-          if (["accepted", "rejected"].includes(row.current_result ?? "")) return err({ kind: "conflict", code: "MEDIA_INVALID_TRANSITION" });
+          if (!row) {
+            await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
+              and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
+            return err({ kind: "conflict", code: "MEDIA_CANDIDATE_STALE" });
+          }
+          if (Number(row.current_version) !== query.expectedVersion) {
+            await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
+              and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
+            return err({ kind: "precondition_failed", code: "MEDIA_VERSION_MISMATCH" });
+          }
+          if (["accepted", "rejected"].includes(row.current_result ?? "")) {
+            await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
+              and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
+            return err({ kind: "conflict", code: "MEDIA_INVALID_TRANSITION" });
+          }
           const version = Number(row.current_version) + 1;
           if (query.attempt.result === "passed") {
             if (!query.attempt.outputObjectId || !query.attempt.outputSha256 || !query.attempt.outputByteLength) throw new PostgresInfrastructureError();
@@ -124,16 +190,19 @@ export function createPostgresMediaProcessingRepository(input: {
               values (${query.candidate.mediaId}, ${query.candidate.portfolioId}, ${query.candidate.ownerId}, ${version}, ${query.attempt.attemptId}, transaction_timestamp())
             on conflict (media_id) do update set aggregate_version = excluded.aggregate_version,
               latest_attempt_id = excluded.latest_attempt_id, updated_at = excluded.updated_at`.execute(executor);
+          const failureCode = query.attempt.temporaryFailure ? query.attempt.findings[0] : null;
           await sql`insert into media.processing_commands (portfolio_id, owner_id, media_id, idempotency_key_hash, request_hash,
-              attempt_id, aggregate_version, outcome)
+              attempt_id, aggregate_version, outcome, failure_code)
             values (${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId}, ${key}, ${query.requestHash},
-              ${query.attempt.attemptId}, ${version}, 'media-processing-recorded')`.execute(executor);
+              ${query.attempt.attemptId}, ${version}, 'media-processing-recorded', ${failureCode})`.execute(executor);
           await sql`insert into operations.outbox_events (event_id, event_type, schema_version, aggregate_id, aggregate_version,
               payload, correlation_id, occurred_at, available_at)
             values (${uuidv7()}, 'media.processing_recorded.v1', 1, ${query.candidate.mediaId}, ${version},
               ${JSON.stringify({ mediaId: query.candidate.mediaId, attemptId: query.attempt.attemptId, result: query.attempt.result })}::jsonb,
               ${key}, transaction_timestamp(), transaction_timestamp())`.execute(executor);
-          return ok({ version, outcome: "media-processing-recorded" as const });
+          await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
+            and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
+          return ok({ version, outcome: "media-processing-recorded" as const, ...(failureCode ? { failureCode } : {}) });
         });
       } catch { return err({ kind: "temporarily_unavailable", code: "MEDIA_PROCESSING_COMMIT_FAILED" }); }
     },
