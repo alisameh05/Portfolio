@@ -9,6 +9,9 @@ import type { NextConfig } from "next";
  */
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Keep standalone traces inside the active checkout when managed worktrees
+  // live under the repository and Next.js sees a parent lockfile.
+  outputFileTracingRoot: process.cwd(),
   poweredByHeader: false,
   webpack(config) {
     config.resolve.extensionAlias = {
