@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 149,
   "parent": 145,
-  "runId": "2604a551-df0d-4596-9dab-37d628c8d9b5",
-  "sourceRevision": "bbb82196e6802ab0a5677bdf5f07860672a6cb0f",
-  "sourceTreeSha256": "a292aaf18172f64f3306c41c688f43808b5f4ad55610dec00b84432be42120dc",
-  "startedAt": "2026-10-10T23:08:57.805Z",
-  "completedAt": "2026-10-10T23:14:11.915Z",
+  "runId": "8725aa69-a35b-47c6-8c03-f278e542689d",
+  "sourceRevision": "3b14584beb6b27c4c26895ce20846e5f78fc69a2",
+  "sourceTreeSha256": "283f50c9a6af70f17640b80076f558d21a411219858996421716eaa5e5739b9e",
+  "startedAt": "2026-10-10T23:36:57.318Z",
+  "completedAt": "2026-10-10T23:42:07.072Z",
   "scope": "trusted-byte-bound-PDF-processing-with-immutable-private-output",
   "runtime": {
     "node": "v24.21.0",
@@ -99,6 +99,21 @@
       "status": "passed"
     },
     {
+      "name": "forged caller facts rejected without producing output",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "missing candidate object returns a typed temporary failure",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "same-length substituted candidate bytes fail the trusted hash check",
+      "executed": true,
+      "status": "passed"
+    },
+    {
       "name": "retryable processor outage returns typed temporary failure and fresh-key retry succeeds",
       "executed": true,
       "status": "passed"
@@ -110,6 +125,26 @@
     },
     {
       "name": "application role UPDATE grants limited to mutable processing columns",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "processed output is private and immutable to overwrite or candidate capability substitution",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "failed anonymous processed-object deletion leaves sealed output intact",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "commit-time stale candidate hash creates no success facts, event, output, or orphan",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "commit rollback leaves no success facts or orphan",
       "executed": true,
       "status": "passed"
     },
