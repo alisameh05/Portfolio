@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 149,
   "parent": 145,
-  "runId": "8725aa69-a35b-47c6-8c03-f278e542689d",
-  "sourceRevision": "3b14584beb6b27c4c26895ce20846e5f78fc69a2",
-  "sourceTreeSha256": "283f50c9a6af70f17640b80076f558d21a411219858996421716eaa5e5739b9e",
-  "startedAt": "2026-10-10T23:36:57.318Z",
-  "completedAt": "2026-10-10T23:42:07.072Z",
+  "runId": "399ba989-b0fa-4c90-8fd6-2038c1c3aa5e",
+  "sourceRevision": "605821d0a1007e9b9ea2b469a829822bb9a7e37c",
+  "sourceTreeSha256": "d0f246b91d1071ead6cc02d4cf321c8bdf2812f3419ede965769b91687d028ad",
+  "startedAt": "2026-10-10T23:46:54.100Z",
+  "completedAt": "2026-10-10T23:52:10.151Z",
   "scope": "trusted-byte-bound-PDF-processing-with-immutable-private-output",
   "runtime": {
     "node": "v24.21.0",
@@ -114,7 +114,17 @@
       "status": "passed"
     },
     {
+      "name": "scanner outage returns a typed temporary failure without output",
+      "executed": true,
+      "status": "passed"
+    },
+    {
       "name": "retryable processor outage returns typed temporary failure and fresh-key retry succeeds",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "bounded container timeout terminates in-flight PDF work",
       "executed": true,
       "status": "passed"
     },
