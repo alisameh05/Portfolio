@@ -1,8 +1,8 @@
 {
-  "sourceRevision": "84efc9e7685d67dd43fd401fdbefe1b9e41de5ce",
-  "sourceTreeSha256": "d02ad7775f02a3312bd15e294cf9be9c9561957c4043674fc8bf83af5f903661",
-  "runId": "f1fab96b-f3a2-4515-93b4-0fc6326fbe75",
-  "startedAt": "2026-10-10T13:28:07.924Z",
+  "sourceRevision": "53171b12629b08e3645515bfc2d06396d86ca472",
+  "sourceTreeSha256": "a535ba9948f4627e858220edbe34e5046f41942b1756f8f6a5782e8e0eeea792",
+  "runId": "648f8d9c-f706-4b3a-a8b2-62d751573243",
+  "startedAt": "2026-10-10T13:42:23.960Z",
   "toolVersions": {
     "node": "24.21.0",
     "npm": "11.19.0",
@@ -214,7 +214,7 @@
     ],
     "retainedRecordsBeforeAndAfterPhase5": {
       "configuredPortfolios": 21,
-      "contactChannels": 38,
+      "contactChannels": 42,
       "ownerLinks": 1,
       "idempotencyRecords": 22,
       "outboxEvents": 14,
@@ -724,7 +724,7 @@
       "status": "passed"
     },
     {
-      "name": "Phase 5 Owner production composition against PostgreSQL > preserves core content and Contact/CTA queries when optional capability facts fail in real Owner composition",
+      "name": "Phase 5 Owner production composition against PostgreSQL > preserves committed public routes and projections when optional delivery consumers fail after publication",
       "status": "passed"
     },
     {

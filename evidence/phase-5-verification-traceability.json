@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "runId": "88dbcdd4-1a65-416d-9058-eb3a6d648402",
+  "sourceRevision": "53171b12629b08e3645515bfc2d06396d86ca472",
+  "sourceTreeSha256": "a535ba9948f4627e858220edbe34e5046f41942b1756f8f6a5782e8e0eeea792",
+  "suite": "traceability",
+  "startedAt": "2026-10-10T13:37:01.260Z",
+  "verdict": "pass",
+  "scenarioAcceptance": true,
+  "suiteAvailable": true,
+  "counts": {
+    "executed": 24,
+    "failed": 0,
+    "skipped": 0,
+    "total": 24
+  },
+  "partial": false,
+  "dependency": {
+    "required": false,
+    "available": true,
+    "code": "NOT_REQUIRED"
+  },
+  "cleanup": {
+    "attempted": true,
+    "passed": true
+  },
+  "reproduction": [
+    "npm run phase5:focus:scenario-traceability"
+  ],
+  "details": {
+    "message": "focused suite executed",
+    "files": [
+      "tests/phase4/phase5-scenario-coverage.test.ts",
+      "tests/architecture/architecture.test.ts"
+    ]
+  }
+}

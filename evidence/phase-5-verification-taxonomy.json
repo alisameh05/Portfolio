@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "runId": "ce70e5d1-c87b-4c28-b0d3-44b9c2d0240a",
-  "sourceRevision": "84efc9e7685d67dd43fd401fdbefe1b9e41de5ce",
-  "sourceTreeSha256": "d02ad7775f02a3312bd15e294cf9be9c9561957c4043674fc8bf83af5f903661",
+  "runId": "5c41deee-97fa-4fee-bfdb-4f72803e18f3",
+  "sourceRevision": "53171b12629b08e3645515bfc2d06396d86ca472",
+  "sourceTreeSha256": "a535ba9948f4627e858220edbe34e5046f41942b1756f8f6a5782e8e0eeea792",
   "suite": "taxonomy",
-  "startedAt": "2026-10-10T13:23:07.480Z",
+  "startedAt": "2026-10-10T13:37:12.728Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,
@@ -28,6 +28,9 @@
     "npm run phase5:focus:taxonomy-status-relationships-discovery"
   ],
   "details": {
-    "message": "focused suite executed"
+    "message": "focused suite executed",
+    "files": [
+      "tests/phase5/taxonomy/public-discovery.test.ts"
+    ]
   }
 }
