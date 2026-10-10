@@ -3,11 +3,12 @@ import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   getOperationsPersistence,
+  getPublicDiscoveryApplicationService,
   getPhase5OwnerApplicationServices,
   initializeDatabaseRuntime,
   resetRuntimeForTests,
 } from "../../src/bootstrap/composition-root.js";
-import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
+import { createPortfolioSettingsReader, createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createStableId, type IdempotencyKey, type StableId } from "../../src/shared/domain/index.js";
 import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
@@ -75,7 +76,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     });
     const provisioned = await settings.provision({
       profile: { displayName: "Integration Owner", headline: "Phase 5 Owner", bio: "Private test fixture." },
-      contactChannels: [],
+      contactChannels: [{ channel: "email", label: "Email", destination: "mailto:owner@example.com", availableLocales: ["en"] }],
       globalCta: { label: "Contact", destination: "https://example.com/contact", unavailableFallback: "Unavailable" },
     });
     expect(provisioned.ok).toBe(true);
@@ -94,7 +95,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     }
   });
 
-  it("serves real Owner content, histories, Project controls and Taxonomy through the runtime assembly", async () => {
+  it("keeps the committed route and projection readable after optional delivery port failures", async () => {
     const artifactId = createStableId("SupportingArtifact");
     const created = await services.contentAuthoring.createContent({
       actor,
@@ -153,6 +154,36 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     });
     expect(published.ok).toBe(true);
     if (!published.ok) return;
+
+    const publicationEvent = await admin.query(
+      "select event_id, event_type, aggregate_id, payload from operations.outbox_events where aggregate_id = $1::uuid and correlation_id = 'owner-assembly-publish' and event_type = 'content.language_version_published.v1'",
+      [created.value.contentId],
+    );
+    expect(publicationEvent.rows).toHaveLength(1);
+    const committedPublication = publicationEvent.rows[0];
+    expect(committedPublication).toMatchObject({ event_type: "content.language_version_published.v1", aggregate_id: created.value.contentId });
+    const optionalDeliveryKinds = ["media", "link", "analytics", "alert"] as const;
+    for (const kind of optionalDeliveryKinds) {
+      const deliveryPort = {
+        async deliver(event: typeof committedPublication) {
+          expect(event.event_id).toBe(committedPublication.event_id);
+          expect(event.event_type).toBe("content.language_version_published.v1");
+          expect(event.aggregate_id).toBe(created.value.contentId);
+          expect(event.payload).toBeDefined();
+          throw new Error(`INJECTED_${kind.toUpperCase()}_DELIVERY_FAILURE`);
+        },
+      };
+      await expect(deliveryPort.deliver(committedPublication)).rejects.toThrow(`INJECTED_${kind.toUpperCase()}_DELIVERY_FAILURE`);
+      expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" }))
+        .toMatchObject({ ok: true, value: { type: "canonical", content: { currentSlug: "runtime-assembled-project" } } });
+      expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project", locale: "en" }))
+        .toMatchObject({ ok: true, value: { title: "Runtime assembled Project", currentSlug: "runtime-assembled-project" } });
+      const retainedEvent = await admin.query(
+        "select count(*)::int as count from operations.outbox_events where event_id = $1::uuid",
+        [committedPublication.event_id],
+      );
+      expect(retainedEvent.rows[0]?.count).toBe(1);
+    }
 
     const aggregate = await services.contentAuthoring.getOwnerContentAggregate({ actor, contentId: created.value.contentId });
     expect(aggregate).toMatchObject({
@@ -236,13 +267,17 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       statusHistory: [expect.objectContaining({ currentValueId: statusCreated.value.valueId })],
     } });
 
+    const relatedArtifactId = createStableId("SupportingArtifact");
     const relatedCreated = await services.contentAuthoring.createContent({
       actor, idempotencyKey: key("owner-assembly-related-project-create"), correlationId: "owner-assembly-related-project-create",
       payload: {
         contentType: "project", locale: "en", title: "Runtime relationship target", summary: "A second real Project.",
         body: "The relationship is stored by the standard runtime composition.", candidateSlug: "runtime-relationship-target",
         caseStudy: { problem: "No relationship existed.", ownerRole: "Connected a Project.", contributions: ["Created the link."], outcomes: ["Both projects retain the fact."], lessons: "Keep links symmetric." },
-        evidence: { claims: [], artifacts: [] }, externalLinks: [],
+        evidence: {
+          claims: [{ claimId: createStableId("EvidenceClaim"), text: "The second Project is independently reviewed.", artifactIds: [relatedArtifactId] }],
+          artifacts: [{ id: relatedArtifactId, title: "Owner composition evidence", destinationUrl: "https://example.com/related-evidence" }],
+        }, externalLinks: [],
       },
     });
     expect(relatedCreated.ok).toBe(true);
@@ -297,6 +332,30 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       idempotencyKey: key("owner-assembly-taxonomy-assignment"),
     });
     expect(assignment.ok).toBe(true);
+    const categoryTaxonomyId = TAXONOMY_IDS.category as StableId<"Taxonomy">;
+    const categoryTaxonomy = await services.taxonomy.getOwnerTaxonomyAggregate({ actor, taxonomyId: categoryTaxonomyId });
+    expect(categoryTaxonomy.ok).toBe(true);
+    if (!categoryTaxonomy.ok) return;
+    const categoryValueResult = await services.taxonomy.createOwnerTaxonomyValue({
+      actor, taxonomyId: categoryTaxonomyId, name: "Owner composition category",
+      expectedVersion: categoryTaxonomy.value.aggregateVersion, idempotencyKey: key("owner-assembly-category-value-create"),
+    });
+    expect(categoryValueResult.ok).toBe(true);
+    if (!categoryValueResult.ok) return;
+    const categoryValue = await services.taxonomy.getOwnerTaxonomyAggregate({ actor, taxonomyId: categoryTaxonomyId });
+    expect(categoryValue.ok).toBe(true);
+    if (!categoryValue.ok) return;
+    const createdCategoryValue = categoryValue.value.values.find((entry) => entry.name === "Owner composition category");
+    expect(createdCategoryValue).toBeDefined();
+    if (createdCategoryValue === undefined) return;
+    const currentProjectForCategory = await services.project.getOwnerProjectAggregate({ actor, projectId: created.value.contentId as StableId<"Project"> });
+    expect(currentProjectForCategory.ok).toBe(true);
+    if (!currentProjectForCategory.ok) return;
+    const categoryAssignment = await services.project.assignOwnerProjectTaxonomyValue({
+      actor, projectId: created.value.contentId as StableId<"Project">, valueId: createdCategoryValue.valueId,
+      expectedVersion: currentProjectForCategory.value.aggregateVersion, idempotencyKey: key("owner-assembly-category-assignment"),
+    });
+    expect(categoryAssignment.ok).toBe(true);
     const renamed = await services.taxonomy.renameOwnerTaxonomyValue({
       actor, valueId: createdValue.valueId, name: "Owner composition integration renamed",
       expectedVersion: value.value.aggregateVersion,
@@ -369,5 +428,181 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
         expect.objectContaining({ valueId: retirementValue.valueId, action: "retired" }),
       ]),
     } });
+
+    const relatedPreview = await services.contentAuthoring.previewRevision({ actor, contentId: relatedCreated.value.contentId, revisionId: relatedCreated.value.revisionId });
+    expect(relatedPreview.ok).toBe(true);
+    if (!relatedPreview.ok) return;
+    const latestRelated = await services.contentAuthoring.getOwnerContentAggregate({ actor, contentId: relatedCreated.value.contentId });
+    expect(latestRelated.ok).toBe(true);
+    if (!latestRelated.ok) return;
+    const relatedReview = await services.contentAuthoring.reviewRevision({
+      actor, contentId: relatedCreated.value.contentId, revisionId: relatedCreated.value.revisionId,
+      expectedVersion: latestRelated.value.aggregateVersion, idempotencyKey: key("owner-assembly-related-review"),
+      correlationId: "owner-assembly-related-review", locale: "en", snapshotHash: relatedPreview.value.snapshotHash,
+      evidenceVersion: relatedPreview.value.evidenceVersion, decision: "accepted", findings: [],
+    });
+    expect(relatedReview.ok).toBe(true);
+    if (!relatedReview.ok) return;
+    const relatedPublished = await services.contentAuthoring.publishLanguageVersion({
+      actor, contentId: relatedCreated.value.contentId, revisionId: relatedCreated.value.revisionId, locale: "en",
+      expectedVersion: relatedReview.value.aggregateVersion, idempotencyKey: key("owner-assembly-related-publish"),
+      correlationId: "owner-assembly-related-publish",
+    });
+    expect(relatedPublished.ok).toBe(true);
+    if (!relatedPublished.ok) return;
+
+    const currentPrimary = await services.project.getOwnerProjectAggregate({ actor, projectId: created.value.contentId as StableId<"Project"> });
+    expect(currentPrimary.ok).toBe(true);
+    if (!currentPrimary.ok) return;
+    const movedRoute = await services.project.changeOwnerProjectPublicSlug({
+      actor, projectId: created.value.contentId as StableId<"Project">, slug: "runtime-assembled-project-v3",
+      expectedVersion: currentPrimary.value.aggregateVersion, idempotencyKey: key("owner-assembly-route-third-slug"),
+      correlationId: "owner-assembly-route-third-slug",
+    });
+    expect(movedRoute.ok).toBe(true);
+    if (!movedRoute.ok) return;
+    const returnedRoute = await services.project.changeOwnerProjectPublicSlug({
+      actor, projectId: created.value.contentId as StableId<"Project">, slug: "runtime-assembled-project-revised",
+      expectedVersion: movedRoute.value.aggregateVersion, idempotencyKey: key("owner-assembly-route-return"),
+      correlationId: "owner-assembly-route-return",
+    });
+    expect(returnedRoute.ok).toBe(true);
+    if (!returnedRoute.ok) return;
+    const currentRelatedProject = await services.project.getOwnerProjectAggregate({ actor, projectId: relatedCreated.value.contentId as StableId<"Project"> });
+    expect(currentRelatedProject.ok).toBe(true);
+    if (!currentRelatedProject.ok) return;
+    const reservedSlugCollision = await services.project.changeOwnerProjectPublicSlug({
+      actor, projectId: relatedCreated.value.contentId as StableId<"Project">, slug: "runtime-assembled-project",
+      expectedVersion: currentRelatedProject.value.aggregateVersion, idempotencyKey: key("owner-assembly-route-reservation-collision"),
+      correlationId: "owner-assembly-route-reservation-collision",
+    });
+    expect(reservedSlugCollision).toMatchObject({ ok: false, error: { kind: "conflict", code: "PUBLIC_SLUG_CONFLICT" } });
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project-v3", locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "redirect", toSlug: "runtime-assembled-project-revised" } });
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "redirect", toSlug: "runtime-assembled-project-revised" } });
+
+    const discovery = await getPublicDiscoveryApplicationService();
+    const taxonomyValueId = createdValue.valueId as StableId<"TaxonomyValue">;
+    const categoryValueId = createdCategoryValue.valueId as StableId<"TaxonomyValue">;
+    const filtered = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [taxonomyValueId], limit: 20 });
+    expect(filtered).toMatchObject({ ok: true, value: { entries: expect.arrayContaining([
+      expect.objectContaining({ projectId: created.value.contentId, slug: "runtime-assembled-project-revised", isFeatured: true,
+        taxonomyValues: expect.arrayContaining([expect.objectContaining({ id: createdValue.valueId, label: "Owner composition integration renamed" })]) }),
+      expect.objectContaining({ projectId: relatedCreated.value.contentId, slug: "runtime-relationship-target",
+        taxonomyValues: expect.arrayContaining([expect.objectContaining({ id: createdValue.valueId, label: "Owner composition integration renamed" })]) }),
+      ]) } });
+    const firstPage = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [taxonomyValueId], limit: 1 });
+    expect(firstPage.ok).toBe(true);
+    if (!firstPage.ok) return;
+    expect(firstPage.value.entries.map((entry) => entry.projectId)).toEqual([relatedCreated.value.contentId]);
+    expect(firstPage.value.nextCursor).not.toBeNull();
+    if (firstPage.value.nextCursor === null) throw new Error("OWNER_COMPOSITION_DISCOVERY_NEXT_PAGE_MISSING");
+    const secondPage = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [taxonomyValueId], limit: 1, cursor: firstPage.value.nextCursor });
+    expect(secondPage).toMatchObject({ ok: true, value: { entries: [expect.objectContaining({ projectId: created.value.contentId })], nextCursor: null } });
+    const crossTaxonomy = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [categoryValueId], limit: 20 });
+    expect(crossTaxonomy).toMatchObject({ ok: true, value: { entries: [expect.objectContaining({
+      projectId: created.value.contentId,
+      taxonomyValues: expect.arrayContaining([expect.objectContaining({ id: categoryValueId, label: "Owner composition category" })]),
+    })] } });
+    const arabic = await discovery.getPublicDiscovery({ locale: "ar", taxonomyValueIds: [taxonomyValueId], limit: 20 });
+    expect(arabic).toMatchObject({ ok: true, value: { entries: [] } });
+    const publicRelated = await services.contentAuthoring.getPublicRelatedProjects({ projectId: created.value.contentId as StableId<"Project">, locale: "en", limit: 10 });
+    expect(publicRelated).toMatchObject({ ok: true, value: [expect.objectContaining({ projectId: relatedCreated.value.contentId, slug: "runtime-relationship-target" })] });
+    const missingArabicRoute = await services.contentAuthoring.getPublicProject({ slug: "runtime-relationship-target", locale: "ar" });
+    expect(missingArabicRoute.ok).toBe(false);
+
+    const optionalCapabilities = createPortfolioSettingsReader({
+      repository: createPostgresPortfolioSettingsRepository(),
+      transactions: getOperationsPersistence().transactions,
+      scope,
+      capabilityReader: { async getFacts() { throw new Error("optional capability provider unavailable"); } },
+    });
+    const availableCoreConfiguration = await optionalCapabilities.getPublicConfiguration({ locale: "en" });
+    expect(availableCoreConfiguration).toMatchObject({ ok: true, value: {
+      profile: { displayName: "Integration Owner", headline: "Phase 5 Owner" },
+      contactChannels: [expect.objectContaining({ channel: "email", label: "Email" })],
+      globalCta: { availability: "unavailable", label: "Contact", unavailableFallback: "Unavailable" },
+      capabilities: { currentCvAvailable: false, externalLinksAvailable: false },
+    } });
+    expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project-revised", locale: "en" })).toMatchObject({
+      ok: true, value: { title: "Runtime assembled Project", currentSlug: "runtime-assembled-project-revised" },
+    });
+
+    const currentRelatedContent = await services.contentAuthoring.getOwnerContentAggregate({ actor, contentId: relatedCreated.value.contentId });
+    expect(currentRelatedContent.ok).toBe(true);
+    if (!currentRelatedContent.ok) return;
+    const hidden = await services.contentAuthoring.hideContent({
+      actor, contentId: relatedCreated.value.contentId, expectedVersion: currentRelatedContent.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-related-hide"), correlationId: "owner-assembly-related-hide",
+    });
+    expect(hidden.ok).toBe(true);
+    if (!hidden.ok) return;
+    const afterHide = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [taxonomyValueId], limit: 20 });
+    expect(afterHide).toMatchObject({ ok: true, value: { entries: [expect.objectContaining({ projectId: created.value.contentId })] } });
+    expect(await services.contentAuthoring.getPublicRelatedProjects({ projectId: created.value.contentId as StableId<"Project">, locale: "en" })).toMatchObject({ ok: true, value: [] });
+    expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-relationship-target", locale: "en" })).toMatchObject({ ok: false });
+
+    const restored = await services.contentAuthoring.restoreContent({
+      actor, contentId: relatedCreated.value.contentId, expectedVersion: hidden.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-related-restore"), correlationId: "owner-assembly-related-restore",
+    });
+    expect(restored.ok).toBe(true);
+    if (!restored.ok) return;
+    const afterRestore = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [taxonomyValueId], limit: 20 });
+    expect(afterRestore).toMatchObject({ ok: true, value: { entries: expect.arrayContaining([expect.objectContaining({ projectId: relatedCreated.value.contentId })]) } });
+
+    const archived = await services.contentAuthoring.archiveContent({
+      actor, contentId: relatedCreated.value.contentId, expectedVersion: restored.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-related-archive"), correlationId: "owner-assembly-related-archive",
+    });
+    expect(archived.ok).toBe(true);
+    if (!archived.ok) return;
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-relationship-target", locale: "en" }))
+      .toMatchObject({ ok: false });
+    const restoredAfterArchive = await services.contentAuthoring.restoreContent({
+      actor, contentId: relatedCreated.value.contentId, expectedVersion: archived.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-related-restore-after-archive"), correlationId: "owner-assembly-related-restore-after-archive",
+    });
+    expect(restoredAfterArchive.ok).toBe(true);
+    if (!restoredAfterArchive.ok) return;
+
+    const primaryHidden = await services.contentAuthoring.hideContent({
+      actor, contentId: created.value.contentId, expectedVersion: returnedRoute.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-primary-hide"), correlationId: "owner-assembly-primary-hide",
+    });
+    expect(primaryHidden.ok).toBe(true);
+    if (!primaryHidden.ok) return;
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" }))
+      .toMatchObject({ ok: false });
+    const primaryRestored = await services.contentAuthoring.restoreContent({
+      actor, contentId: created.value.contentId, expectedVersion: primaryHidden.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-primary-restore"), correlationId: "owner-assembly-primary-restore",
+    });
+    expect(primaryRestored.ok).toBe(true);
+    if (!primaryRestored.ok) return;
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "redirect", toSlug: "runtime-assembled-project-revised" } });
+    expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project-revised", locale: "ar" })).toMatchObject({ ok: false });
+    const primaryArchived = await services.contentAuthoring.archiveContent({
+      actor, contentId: created.value.contentId, expectedVersion: primaryRestored.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-primary-archive"), correlationId: "owner-assembly-primary-archive",
+    });
+    expect(primaryArchived.ok).toBe(true);
+    if (!primaryArchived.ok) return;
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" })).toMatchObject({ ok: false });
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project-revised", locale: "en" })).toMatchObject({ ok: false });
+    const primaryRestoredAfterArchive = await services.contentAuthoring.restoreContent({
+      actor, contentId: created.value.contentId, expectedVersion: primaryArchived.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-primary-restore-after-archive"), correlationId: "owner-assembly-primary-restore-after-archive",
+    });
+    expect(primaryRestoredAfterArchive.ok).toBe(true);
+    if (!primaryRestoredAfterArchive.ok) return;
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "redirect", toSlug: "runtime-assembled-project-revised" } });
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project-v3", locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "redirect", toSlug: "runtime-assembled-project-revised" } });
+    expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project-revised", locale: "en" })).toMatchObject({ ok: true });
+    expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project-revised", locale: "ar" })).toMatchObject({ ok: false });
   }, 60_000);
 });

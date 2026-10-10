@@ -41,27 +41,33 @@ describe("Phase 5 verification preparation (#107)", () => {
     expect(phases.allowedActivationsFor("phase4")).toEqual(["identity-access", "portfolio-configuration"]);
   });
 
-  it("declares separate focused suites for the four Phase 5 verification seams", async () => {
+  it("declares separate focused suites for the five Phase 5 verification seams", async () => {
     const harness = await import("../../scripts/phase5-verification.mjs") as unknown as VerificationModule;
-    expect(Object.keys(harness.FOCUS_SUITES)).toEqual(["authoring", "taxonomy", "database", "owner"]);
-    expect(new Set(Object.values(harness.FOCUS_SUITES)).size).toBe(4);
+    expect(Object.keys(harness.FOCUS_SUITES)).toEqual(["authoring", "taxonomy", "database", "owner", "traceability"]);
+    expect(new Set(Object.values(harness.FOCUS_SUITES)).size).toBe(5);
     expect(harness.FOCUS_SUITES["authoring"]).toMatch(/authoring/);
     expect(harness.FOCUS_SUITES["taxonomy"]).toMatch(/taxonomy/);
     expect(harness.FOCUS_SUITES["database"]).toMatch(/database/);
     expect(harness.FOCUS_SUITES["owner"]).toMatch(/owner/);
+    expect(harness.FOCUS_SUITES["traceability"]).toMatch(/traceability/);
     expect(harness.FOCUS_ENTRYPOINTS).toEqual({
       authoring: "authoring-review-publication-routes",
       taxonomy: "taxonomy-status-relationships-discovery",
       database: "database-rls-migrations-concurrency",
       owner: "owner-adapters-composition",
+      traceability: "scenario-traceability",
     });
     const packageJson = JSON.parse((await import("node:fs")).readFileSync("package.json", "utf8")) as { scripts: Record<string, string> };
-    for (const entrypoint of Object.values(harness.FOCUS_ENTRYPOINTS)) {
+    for (const [suite, entrypoint] of Object.entries(harness.FOCUS_ENTRYPOINTS)) {
       expect(packageJson.scripts[`phase5:focus:${entrypoint}`]).toBeDefined();
-      expect(packageJson.scripts[`prephase5:focus:${entrypoint}`]).toBe("npm run validation:ready");
+      expect(packageJson.scripts[`prephase5:focus:${entrypoint}`]).toBe(
+        `node scripts/phase5-scenario-coverage.mjs --invalidate-suite ${suite} && npm run validation:ready`,
+      );
     }
     expect(packageJson.scripts["phase5:focus:database-rls-migrations-concurrency"])
       .toBe("node scripts/phase5-verification.mjs --suite database");
+    expect(packageJson.scripts["phase5:focus:scenario-traceability"])
+      .toBe("node scripts/phase5-verification.mjs --suite traceability");
     expect(packageJson.scripts["phase5:context"]).toBe("node scripts/check-phase5-context.mjs");
     expect(packageJson.scripts["prephase5:smoke"]).toBe("npm run validation:ready");
   });

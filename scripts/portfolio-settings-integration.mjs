@@ -7,6 +7,8 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { migrationSha256 } from "./migration-checksum.mjs";
+import { invalidateIntegratedEvidence } from "./phase5-scenario-coverage.mjs";
+import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import {
   assertPhase5MigrationSafety,
   PHASE5_MIGRATION_COMPATIBILITY,
@@ -42,16 +44,6 @@ function run(command, args, options = {}) {
     throw new Error(`${options.errorCode ?? "PORTFOLIO_SETTINGS_COMMAND_FAILED"}${diagnostic === "" ? "" : `:${diagnostic}`}`);
   }
   return result.stdout;
-}
-
-function workingTreeSourceSha256() {
-  const digest = createHash("sha256").update(run("git", ["diff", "origin/master", "--binary", "--", ".", ":(exclude)evidence/**"]));
-  const untracked = run("git", ["ls-files", "--others", "--exclude-standard"])
-    .split(/\r?\n/u)
-    .filter((path) => path !== "" && !path.replaceAll("\\", "/").startsWith("evidence/"))
-    .sort();
-  for (const path of untracked) digest.update(path).update(readFileSync(join(ROOT, path)));
-  return digest.digest("hex");
 }
 
 export function localEnvironment(source = process.env) {
@@ -327,6 +319,8 @@ export async function main() {
   const ticket122 = process.argv.includes("--ticket-122");
   const ticket121 = process.argv.includes("--ticket-121");
   const ticket123 = process.argv.includes("--ticket-123");
+  if (ticket122) invalidateIntegratedEvidence(join(ROOT, "evidence/phase-5-owner-composition-postgres.json"));
+  if (ticket123) invalidateIntegratedEvidence(join(ROOT, "evidence/phase-5-security-migrations-postgres.json"));
   if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket114, ticket115, ticket116, ticket117, ticket118, ticket119, ticket120, ticket121, ticket122, ticket123].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
   const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket114 || ticket115 || ticket116 || ticket117 || ticket118 || ticket119 || ticket120 || ticket121 || ticket122 || ticket123;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
@@ -621,6 +615,7 @@ export async function main() {
       ...(ticket122 || ticket123 ? {
         sourceTreeSha256: workingTreeSourceSha256(),
         runId: randomUUID(),
+        startedAt: new Date().toISOString(),
         toolVersions: {
           node: process.versions.node,
           npm: process.env.npm_config_user_agent?.split(" ").find((part) => part.startsWith("npm/"))?.slice(4) ?? "unknown",
