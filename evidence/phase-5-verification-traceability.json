@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "runId": "a7d89b72-a60b-4e97-b9a4-8b056db2b713",
-  "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
-  "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
+  "runId": "b1e88f6c-9143-41f3-9c50-981c6096bd6a",
+  "sourceRevision": "0e82928a23a9acfce562b8e5ec0d60e8fd267d10",
+  "sourceTreeSha256": "a2d99759fb65c9c85e7589d77a452232aed90a2cfe1487b95ed1ef17d44106ea",
   "suite": "traceability",
-  "startedAt": "2026-10-10T13:54:22.372Z",
+  "startedAt": "2026-10-10T14:29:19.876Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,
   "counts": {
-    "executed": 24,
+    "executed": 30,
     "failed": 0,
     "skipped": 0,
-    "total": 24
+    "total": 30
   },
   "partial": false,
   "dependency": {
@@ -31,6 +31,7 @@
     "message": "focused suite executed",
     "files": [
       "tests/phase4/phase5-scenario-coverage.test.ts",
+      "tests/phase4/phase5-verification.test.ts",
       "tests/architecture/architecture.test.ts"
     ]
   }

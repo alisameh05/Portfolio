@@ -1,28 +1,28 @@
 {
   "schemaVersion": 1,
-  "runId": "ec718e93-d14a-4ec7-b109-1db89b934587",
+  "runId": "45a3a9de-2539-407e-8e38-73ff21de9cae",
   "ticket": 124,
   "parent": 106,
-  "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
-  "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
-  "startedAt": "2026-10-10T14:03:39.451Z",
+  "sourceRevision": "0e82928a23a9acfce562b8e5ec0d60e8fd267d10",
+  "sourceTreeSha256": "a2d99759fb65c9c85e7589d77a452232aed90a2cfe1487b95ed1ef17d44106ea",
+  "startedAt": "2026-10-10T14:34:36.483Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "counts": {
-    "executed": 118,
+    "executed": 124,
     "failed": 0,
     "skipped": 0,
-    "total": 118
+    "total": 124
   },
   "constituents": [
     {
       "name": "authoring",
       "ticket": null,
       "suite": "authoring",
-      "runId": "5f0440fb-f64d-483c-b919-2e676c61852d",
-      "startedAt": "2026-10-10T13:54:26.811Z",
-      "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
-      "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
+      "runId": "25cebd20-c2ee-48c7-af8c-cb8fffda9362",
+      "startedAt": "2026-10-10T14:29:27.866Z",
+      "sourceRevision": "0e82928a23a9acfce562b8e5ec0d60e8fd267d10",
+      "sourceTreeSha256": "a2d99759fb65c9c85e7589d77a452232aed90a2cfe1487b95ed1ef17d44106ea",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -36,10 +36,10 @@
       "name": "taxonomy",
       "ticket": null,
       "suite": "taxonomy",
-      "runId": "736ae6bc-b6fb-4dba-9f36-69b52545700c",
-      "startedAt": "2026-10-10T13:54:30.671Z",
-      "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
-      "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
+      "runId": "e56ff851-bdf9-47b6-af60-902e3501beee",
+      "startedAt": "2026-10-10T14:29:27.509Z",
+      "sourceRevision": "0e82928a23a9acfce562b8e5ec0d60e8fd267d10",
+      "sourceTreeSha256": "a2d99759fb65c9c85e7589d77a452232aed90a2cfe1487b95ed1ef17d44106ea",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -53,27 +53,27 @@
       "name": "traceability",
       "ticket": null,
       "suite": "traceability",
-      "runId": "a7d89b72-a60b-4e97-b9a4-8b056db2b713",
-      "startedAt": "2026-10-10T13:54:22.372Z",
-      "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
-      "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
+      "runId": "b1e88f6c-9143-41f3-9c50-981c6096bd6a",
+      "startedAt": "2026-10-10T14:29:19.876Z",
+      "sourceRevision": "0e82928a23a9acfce562b8e5ec0d60e8fd267d10",
+      "sourceTreeSha256": "a2d99759fb65c9c85e7589d77a452232aed90a2cfe1487b95ed1ef17d44106ea",
       "verdict": "pass",
       "issues": [],
       "counts": {
-        "executed": 24,
+        "executed": 30,
         "failed": 0,
         "skipped": 0,
-        "total": 24
+        "total": 30
       }
     },
     {
       "name": "owner",
       "ticket": 122,
       "suite": null,
-      "runId": "527e5414-22c2-4622-9afe-35e07fc4ee5f",
-      "startedAt": "2026-10-10T14:00:13.995Z",
-      "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
-      "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
+      "runId": "4af6c54d-ee0b-40d2-9355-9a1107f52a77",
+      "startedAt": "2026-10-10T14:31:45.793Z",
+      "sourceRevision": "0e82928a23a9acfce562b8e5ec0d60e8fd267d10",
+      "sourceTreeSha256": "a2d99759fb65c9c85e7589d77a452232aed90a2cfe1487b95ed1ef17d44106ea",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -87,10 +87,10 @@
       "name": "database",
       "ticket": 123,
       "suite": null,
-      "runId": "655dc7bc-3ba5-401c-ad28-f1524f422cac",
-      "startedAt": "2026-10-10T14:03:21.936Z",
-      "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
-      "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
+      "runId": "c69bf290-3578-4653-b341-f0cd37b00e5c",
+      "startedAt": "2026-10-10T14:34:21.265Z",
+      "sourceRevision": "0e82928a23a9acfce562b8e5ec0d60e8fd267d10",
+      "sourceTreeSha256": "a2d99759fb65c9c85e7589d77a452232aed90a2cfe1487b95ed1ef17d44106ea",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -644,7 +644,7 @@
           122
         ],
         "assertions": [
-          "tests/phase4/phase5-verification.test.ts :: declares separate focused suites for the four Phase 5 verification seams"
+          "tests/phase4/phase5-verification.test.ts :: declares separate focused suites for the five Phase 5 verification seams"
         ]
       },
       {
