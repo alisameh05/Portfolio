@@ -12,7 +12,7 @@ const OWNER = "tests/database/owner-composition.integration.test.ts";
 const SECURITY = "tests/database/phase5-security.integration.test.ts";
 const VERIFICATION = "tests/phase4/phase5-verification.test.ts";
 const STORY_ASSERTION = `${CONTENT} :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection`;
-const OWNER_ASSERTION = `${OWNER} :: preserves committed public routes and projections when optional delivery consumers fail after publication`;
+const OWNER_ASSERTION = `${OWNER} :: preserves the committed public route and projection when injected optional delivery consumers fail`;
 const DISCOVERY_ASSERTION = `${SECURITY} :: keeps private content private while the in-process discovery query returns only published approved projections`;
 const SECURITY_ASSERTION = `${SECURITY} :: denies actual public, authenticated, worker, and backup logins direct access to private Phase 5 rows`;
 const AUTHORIZATION_ASSERTION = OWNER_ASSERTION;
@@ -64,7 +64,7 @@ export const PHASE5_SCENARIO_COVERAGE = Object.freeze([
   { id: 12, tickets: [110, 111, 112, 113, 114], assertions: [assertionRef(CONTENT, "rejects invalid evidence, review, and Media facts without creating public state")] },
   { id: 13, tickets: [110, 111], assertions: [assertionRef(CONTENT, "uses fixture-only accepted Media facts and fails closed when production facts are unresolved"), DISCOVERY_ASSERTION], deferred: "Real Media processing and CV delivery are Phase 6 work." },
   { id: 14, tickets: [106, 124], assertions: [assertionRef("tests/architecture/architecture.test.ts", "must contain no Lab entry implementation in modules (ADR-0007)")] },
-  { id: 15, tickets: [109, 111, 114, 124], assertions: [assertionRef(CONTENT, "rolls back route, pointer, projection, success receipt, and event after injected writes fail"), assertionRef(OWNER, "preserves committed public routes and projections when optional delivery consumers fail after publication")], deferred: "Production optional worker integrations and full release/load/restore qualification remain deferred." },
+  { id: 15, tickets: [109, 111, 114, 124], assertions: [assertionRef(CONTENT, "rolls back route, pointer, projection, success receipt, and event after injected writes fail"), OWNER_ASSERTION], deferred: "Production optional worker integrations and full release/load/restore qualification remain deferred." },
 ]);
 
 export const PHASE5_DEFERRED_SCOPE = Object.freeze([
