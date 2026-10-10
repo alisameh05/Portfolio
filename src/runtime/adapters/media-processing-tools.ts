@@ -1,6 +1,6 @@
 import { execFile as nodeExecFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { open, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { err, ok, type Rejection, type Result } from "@shared/domain";
@@ -14,6 +14,27 @@ const POLICY_VERSION = "pdf-active-content-deny-1";
 const PINNED_CLAMAV_VERSION = /^ClamAV 1\.4\.3\/[0-9]+\//u;
 function safeFailure(code: string): Result<never, Rejection> {
   return err({ kind: "temporarily_unavailable", code });
+}
+
+export async function readBoundedFile(path: string, maxBytes: number): Promise<Buffer> {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new Error("MEDIA_PDF_OUTPUT_INVALID");
+  const file = await open(path, "r");
+  try {
+    const initial = await file.stat();
+    if (!initial.isFile() || !Number.isSafeInteger(initial.size) || initial.size > maxBytes) throw new Error("MEDIA_PDF_OUTPUT_INVALID");
+    const buffer = Buffer.allocUnsafe(Math.min(maxBytes + 1, initial.size + 1));
+    let offset = 0;
+    while (offset < buffer.byteLength) {
+      const { bytesRead } = await file.read(buffer, offset, buffer.byteLength - offset, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    const final = await file.stat();
+    if (offset > maxBytes || final.size > maxBytes || offset !== final.size) throw new Error("MEDIA_PDF_OUTPUT_INVALID");
+    return Buffer.from(buffer.subarray(0, offset));
+  } finally {
+    await file.close();
+  }
 }
 
 async function toolVersion(executable: string, args: readonly string[]): Promise<string> {
@@ -114,8 +135,8 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
           const verifiedOutput = join(directory, "verified-output.pdf");
           try { await execFile(python, ["-c", PDF_PREFLIGHT, output, verifiedOutput], { timeout: 4_000, maxBuffer: 16 * 1024, windowsHide: true }); }
           catch { throw new Error("MEDIA_PDF_OUTPUT_INVALID"); }
-          const result = await readFile(verifiedOutput);
-          if (result.byteLength < 1 || result.byteLength > MAX_BYTES || !result.subarray(0, 5).equals(Buffer.from("%PDF-"))) throw new Error("MEDIA_PDF_OUTPUT_INVALID");
+          const result = await readBoundedFile(verifiedOutput, MAX_BYTES);
+          if (result.byteLength < 1 || !result.subarray(0, 5).equals(Buffer.from("%PDF-"))) throw new Error("MEDIA_PDF_OUTPUT_INVALID");
           return { bytes: new Uint8Array(result), unsafe: false as const };
         });
         if (processed.unsafe) return err({ kind: "validation", code: "MEDIA_PDF_POLICY_REJECTED" });
