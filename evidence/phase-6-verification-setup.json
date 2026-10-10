@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "ticket": 146,
+  "parent": 145,
+  "runId": "bceb93ac-60b3-49b9-804b-eeb5e9d57161",
+  "sourceRevision": "26d6efb3d9e281265cc9c099195492b5dcbec79d",
+  "sourceTreeSha256": "32764ddcfb85bf3d08fa8d2b2e64bb82771e957cf7b7175329cfb175c870d3de",
+  "startedAt": "2026-10-10T17:47:52.153Z",
+  "completedAt": "2026-10-10T17:50:16.560Z",
+  "scope": "phase6-reproducible-service-and-processor-context",
+  "suite": "phase6-setup-context",
+  "toolVersions": {
+    "node": "v24.21.0",
+    "npm": "11.19.0",
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1"
+  },
+  "toolDefinitions": {
+    "scanner": "clamav/clamav:1.4.3",
+    "imageProcessor": "dpokidov/imagemagick:7.1.1-47",
+    "videoProcessor": "jrottenberg/ffmpeg:7.1-ubuntu2404",
+    "pdfProcessor": "jbarlow83/ocrmypdf-alpine:v17.12.1"
+  },
+  "predecessorContexts": {
+    "phase4": {
+      "issue": 90,
+      "pullRequest": 105,
+      "mergeCommit": "9806af81d4ce705c36d9b22089f77213d16887bc",
+      "contextVerdict": "pass",
+      "context": "phase4 historical baseline; five public and 39 Owner operations; six negative fixtures rejected"
+    },
+    "phase5": {
+      "issue": 125,
+      "pullRequest": 144,
+      "mergeCommit": "26d6efb3d9e281265cc9c099195492b5dcbec79d",
+      "contextVerdict": "pass",
+      "context": "current Phase 5 context; five public and 48 Owner operations"
+    },
+    "activationDifferences": {
+      "phase4": [
+        "identity-access",
+        "portfolio-configuration"
+      ],
+      "phase5": [
+        "content-and-publishing",
+        "taxonomy-and-discovery"
+      ],
+      "phase6Owned": [
+        "media",
+        "cv-portfolio"
+      ]
+    }
+  },
+  "serviceDefinitions": {
+    "postgres": "Supabase CLI local stack, PostgreSQL 17 from the committed config",
+    "auth": "Supabase local Auth and API gateway",
+    "storage": "Supabase local private Storage API and private bucket"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "executionCount": 3,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 20
+    }
+  },
+  "formats": [
+    {
+      "id": "pdf",
+      "kind": "document",
+      "mimeType": "application/pdf",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "ea2be33f0a32f8803cc1fc4c18f10c946c25373947c086f53396c32d63c7ecfe",
+      "scannerVerdict": "clean",
+      "processorVersion": "17.12.1"
+    },
+    {
+      "id": "png",
+      "kind": "image",
+      "mimeType": "image/png",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "d85f6ccf62eb2d934f5f6afd3963f88eee5b2f1ddea8f25f9f446116a823fdf7",
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "jpeg",
+      "kind": "image",
+      "mimeType": "image/jpeg",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "5860c3c67e54c1f048897405d320e7f982bb1c298e9407c611fb333228882ccb",
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "webp",
+      "kind": "image",
+      "mimeType": "image/webp",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "2bea8f7bccff9bab756080faf8893b36b1a5b1f332e999d581a5c05ce014feda",
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "mp4",
+      "kind": "video",
+      "mimeType": "video/mp4",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "7426629be79bc282dfabce15c8bf8974546b565f618ce020dbc5b7ad1df9de3b",
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    },
+    {
+      "id": "webm",
+      "kind": "video",
+      "mimeType": "video/webm",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "32ccb10a7b56af837aac9af4739a62e054e3fdc6b2f982b974ae1641886e820c",
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    }
+  ],
+  "counts": {
+    "expectedFormats": 6,
+    "executedFormats": 6,
+    "failedFormats": 0,
+    "skippedFormats": 0
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:verification"
+  ],
+  "limitations": [
+    "This setup probe does not certify Phase 6 application behavior, RLS matrices, race/rollback scenarios, or the final phase6:gate."
+  ]
+}

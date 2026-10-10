@@ -72,6 +72,8 @@
     "test:local-auth-runner": "node --test tests/tooling/local-auth-integration.test.mjs",
     "prephase5:context": "npm run validation:ready",
     "phase5:context": "node scripts/check-phase5-context.mjs",
+    "phase6:focus:verification": "node scripts/phase6-verification.mjs",
+    "test:phase6:verification": "node --test tests/tooling/phase6-verification.test.mjs",
     "prephase5:smoke": "npm run validation:ready",
     "phase5:smoke": "node scripts/phase5-verification.mjs --smoke",
     "phase5:gate": "node scripts/phase5-gate.mjs",
