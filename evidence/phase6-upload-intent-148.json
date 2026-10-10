@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 148,
   "parent": 145,
-  "runId": "312763b8-2844-40d2-ae56-b07dfb4e7847",
-  "sourceRevision": "4140ce1368e5aafbec300400f75e393ece1728fa",
-  "sourceTreeSha256": "5359b4c0eaf6e8893b57427fce329e66b49d96213aa08e87b05ba4e1b091061e",
-  "startedAt": "2026-10-10T19:52:50.738Z",
-  "completedAt": "2026-10-10T19:53:35.990Z",
+  "runId": "b9702c44-44ed-4d03-833c-077a02224faf",
+  "sourceRevision": "83ff2a5da00f26b5532fcee699dea137d3fb1256",
+  "sourceTreeSha256": "02f3bf47f15de2aba04ac2d25b4f37685f84ecc6ef6049b4a8c68ebea17df072",
+  "startedAt": "2026-10-10T19:58:08.818Z",
+  "completedAt": "2026-10-10T20:01:03.699Z",
   "scope": "owner-private-scoped-upload-intents-and-encrypted-exact-replay",
   "runtime": {
     "node": "v24.21.0",
@@ -14,7 +14,11 @@
   },
   "toolVersions": {
     "supabaseCli": "2.117.0",
-    "postgres": "17.6"
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1"
   },
   "policyIds": {
     "migration": "20261010100000_create_private_media_upload_intents.sql",
@@ -41,9 +45,90 @@
     "environment": "disposable loopback Supabase"
   },
   "services": {
-    "postgres": true,
-    "auth": true,
-    "storage": true
+    "postgres": {
+      "available": true,
+      "majorVersion": 17,
+      "independentConnections": 2,
+      "executionCount": 3
+    },
+    "auth": {
+      "available": true,
+      "status": 200,
+      "executionCount": 1
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 20
+    }
+  },
+  "formats": [
+    {
+      "id": "pdf",
+      "kind": "document",
+      "mimeType": "application/pdf",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "17.12.1"
+    },
+    {
+      "id": "png",
+      "kind": "image",
+      "mimeType": "image/png",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "jpeg",
+      "kind": "image",
+      "mimeType": "image/jpeg",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "webp",
+      "kind": "image",
+      "mimeType": "image/webp",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "mp4",
+      "kind": "video",
+      "mimeType": "video/mp4",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    },
+    {
+      "id": "webm",
+      "kind": "video",
+      "mimeType": "video/webm",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    }
+  ],
+  "formatCounts": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0
   },
   "checks": {
     "suite": "tests/database/media-upload-intent.integration.test.ts",
