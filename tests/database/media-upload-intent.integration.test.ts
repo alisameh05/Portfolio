@@ -459,6 +459,11 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       const { createOcrMyPdfProcessor, runWithBoundedOutput } = await import("../../src/runtime/adapters/media-processing-tools.js");
       const productionResult = await createOcrMyPdfProcessor().process(pdfBytes);
       expect(productionResult.ok, `Windows production processor must use the bounded pinned container runtime: ${JSON.stringify(productionResult)}`).toBe(true);
+      const timeoutDirectory = mkdtempSync(join(tmpdir(), "phase6-pdf-timeout-"));
+      try {
+        await expect(runWithBoundedOutput("python3", ["-c", "import time; time.sleep(10)"], join(timeoutDirectory, "never-written.pdf"),
+          { maxBytes: 20 * 1024 * 1024, timeoutMs: 100, python: "python3" })).rejects.toThrow();
+      } finally { rmSync(timeoutDirectory, { recursive: true, force: true }); }
       const quotaDirectory = mkdtempSync(join(tmpdir(), "phase6-pdf-output-quota-"));
       const quotaPath = join(quotaDirectory, "oversized.pdf");
       try {
@@ -543,6 +548,22 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(substituteResult).toMatchObject({ ok: true });
     const substituteFacts = await admin.query("select result, finding_codes from media.processing_attempts where media_id = $1::uuid", [substitutedCandidate.mediaId]);
     expect(substituteFacts.rows[0]).toEqual({ result: "failed", finding_codes: ["MEDIA_DECLARATION_MISMATCH"] });
+    const scannerUnavailableCandidate = await uploadPdf(pdfBytes, "scanner-unavailable");
+    const unavailableScanner = { async scan() {
+      return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_SCANNER_UNAVAILABLE" } };
+    } };
+    const scannerUnavailableService = makeMediaProcessing(normalProcessingStorage, realProcessor, unavailableScanner);
+    const scannerUnavailableResult = await scannerUnavailableService.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
+      idempotencyKey: "phase6-pdf-scanner-unavailable" as never, mediaId: scannerUnavailableCandidate.mediaId, expectedVersion: 1, result: "passed",
+      detectedMediaType: "application/pdf", detectedByteLength: pdfBytes.byteLength, sha256: safeHash });
+    expect(scannerUnavailableResult).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_SCANNER_UNAVAILABLE" } });
+    const scannerUnavailableFacts = await admin.query(
+      `select (select result from media.processing_attempts where media_id = $1::uuid) as result,
+              (select finding_codes from media.processing_attempts where media_id = $1::uuid) as finding_codes,
+              (select count(*)::int from media.processed_objects where media_id = $1::uuid) as outputs`,
+      [scannerUnavailableCandidate.mediaId],
+    );
+    expect(scannerUnavailableFacts.rows[0]).toEqual({ result: "failed", finding_codes: ["MEDIA_SCANNER_UNAVAILABLE"], outputs: 0 });
     let applicationResult: Awaited<ReturnType<typeof mediaProcessing.record>> | undefined;
     const operationService = { ...createProductionOwnerMediaService(), recordOwnerMediaProcessing: async (command: Parameters<typeof mediaProcessing.record>[0]) => {
       applicationResult = await mediaProcessing.record(command);
