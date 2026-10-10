@@ -458,7 +458,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     if (process.platform === "win32") {
       const { createOcrMyPdfProcessor, runWithBoundedOutput } = await import("../../src/runtime/adapters/media-processing-tools.js");
       const productionResult = await createOcrMyPdfProcessor().process(pdfBytes);
-      expect(productionResult.ok, "Windows production processor must use the bounded pinned container runtime").toBe(true);
+      expect(productionResult.ok, `Windows production processor must use the bounded pinned container runtime: ${JSON.stringify(productionResult)}`).toBe(true);
       const quotaDirectory = mkdtempSync(join(tmpdir(), "phase6-pdf-output-quota-"));
       const quotaPath = join(quotaDirectory, "oversized.pdf");
       try {
