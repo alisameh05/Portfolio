@@ -532,7 +532,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const missingFacts = await admin.query("select result, finding_codes from media.processing_attempts where media_id = $1::uuid", [missingCandidate.mediaId]);
     expect(missingFacts.rows[0]).toEqual({ result: "failed", finding_codes: ["MEDIA_STORAGE_UNAVAILABLE"] });
 
-    const replacement = Buffer.from("%PDF-1.4\nsubstituted bytes\n%%EOF\n");
+    const replacement = Buffer.from(pdfBytes);
+    replacement[replacement.byteLength - 1] = replacement[replacement.byteLength - 1]! ^ 1;
+    expect(replacement.byteLength).toBe(pdfBytes.byteLength);
+    expect(replacement.subarray(0, 5).toString("ascii")).toBe("%PDF-");
     const substitutedCandidate = await uploadPdf(pdfBytes, "substituted-object", undefined, true, replacement);
     const substituteResult = await mediaProcessing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
       idempotencyKey: "phase6-pdf-substituted-object" as never, mediaId: substitutedCandidate.mediaId, expectedVersion: 1, result: "passed",

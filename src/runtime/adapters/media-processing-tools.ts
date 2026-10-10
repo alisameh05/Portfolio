@@ -9,8 +9,13 @@ import type { PdfProcessorPort, TrustedByteScannerPort } from "../../modules/med
 
 const execFile = promisify(nodeExecFile);
 const MAX_BYTES = 20 * 1024 * 1024;
-const SCAN_TIMEOUT_MS = 16_000;
-const PROCESS_TIMEOUT_MS = 8_000;
+// Leave time for storage reads/seals and the database commit inside the 60s
+// application attempt budget. The combined external-work ceiling is 38s:
+// 2s scanner version + 2x8s scans + 12s PDF preflight/process/version work,
+// plus two 4s Storage operations. This leaves 22s for repository operations,
+// cleanup, and application overhead (the commit statement is capped at 3s).
+const SCAN_TIMEOUT_MS = 8_000;
+const PROCESS_TIMEOUT_MS = 4_000;
 const POLICY_VERSION = "pdf-active-content-deny-1";
 const BOUNDED_PDF_IMAGE = "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c";
 const BOUNDED_SCANNER_IMAGE = "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4";
@@ -215,7 +220,7 @@ async function toolVersion(executable: string, args: readonly string[]): Promise
   try {
     result = await execFile("docker", ["run", "--rm", "--pull=never", "--name", containerName, "--network=none", "--read-only", "--memory=512m", "--cpus=1", "--pids-limit=32",
       "--ulimit=fsize=4096:4096", "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--entrypoint", entrypoint, image, ...args],
-    { encoding: "utf8", timeout: 4_000, maxBuffer: 4 * 1024, windowsHide: true });
+    { encoding: "utf8", timeout: 2_000, maxBuffer: 4 * 1024, windowsHide: true });
   } catch (cause) {
     try { await stopDockerContainer(containerName); }
     catch { throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED"); }
@@ -313,7 +318,7 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
           const checked = join(directory, "checked.pdf");
           const output = join(directory, "processed.pdf");
           try {
-            await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, input, checked], checked, { maxBytes: MAX_BYTES, timeoutMs: 4_000, python });
+            await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, input, checked], checked, { maxBytes: MAX_BYTES, timeoutMs: 2_000, python });
           } catch (cause) {
             const exitCode = typeof cause === "object" && cause !== null && "code" in cause ? Number((cause as { code: unknown }).code) : 0;
             if ([21, 22, 23, 24, 25].includes(exitCode)) return { unsafe: true as const };
@@ -324,7 +329,7 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
             output, { maxBytes: MAX_BYTES, timeoutMs: PROCESS_TIMEOUT_MS, python });
           await assertBoundedFile(output, MAX_BYTES);
           const verifiedOutput = join(directory, "verified-output.pdf");
-          try { await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, output, verifiedOutput], verifiedOutput, { maxBytes: MAX_BYTES, timeoutMs: 4_000, python }); }
+          try { await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, output, verifiedOutput], verifiedOutput, { maxBytes: MAX_BYTES, timeoutMs: 2_000, python }); }
           catch { throw new Error("MEDIA_PDF_OUTPUT_INVALID"); }
           const result = await readBoundedFile(verifiedOutput, MAX_BYTES);
           if (result.byteLength < 1 || !result.subarray(0, 5).equals(Buffer.from("%PDF-"))) throw new Error("MEDIA_PDF_OUTPUT_INVALID");
