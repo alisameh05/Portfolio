@@ -12,6 +12,14 @@ const SCAN_TIMEOUT_MS = 8_000;
 const PROCESS_TIMEOUT_MS = 8_000;
 const POLICY_VERSION = "pdf-active-content-deny-1";
 const PINNED_CLAMAV_VERSION = /^ClamAV 1\.4\.3\/[0-9]+\//u;
+const HARD_FILE_LIMIT_WRAPPER = String.raw`
+import os, resource, sys
+limit = int(sys.argv[1])
+target = sys.argv[2]
+args = sys.argv[3:]
+resource.setrlimit(resource.RLIMIT_FSIZE, (limit, limit))
+os.execvp(target, [target, *args])
+`;
 function safeFailure(code: string): Result<never, Rejection> {
   return err({ kind: "temporarily_unavailable", code });
 }
@@ -49,7 +57,7 @@ export async function assertBoundedFile(path: string, maxBytes: number): Promise
   }
 }
 
-export function runWithBoundedOutput(executable: string, args: readonly string[], outputPath: string,
+export function monitorBoundedChildOutput(executable: string, args: readonly string[], outputPath: string,
   limits: { readonly maxBytes: number; readonly timeoutMs: number }): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, [...args], { stdio: "ignore", windowsHide: true });
@@ -86,6 +94,13 @@ export function runWithBoundedOutput(executable: string, args: readonly string[]
       })();
     });
   });
+}
+
+/** Applies an inherited OS file-size limit; Windows fails closed because Node has no per-process file-size quota API. */
+export function runWithBoundedOutput(executable: string, args: readonly string[], outputPath: string,
+  limits: { readonly maxBytes: number; readonly timeoutMs: number; readonly python: string }): Promise<void> {
+  if (process.platform === "win32") return Promise.reject(new Error("MEDIA_PDF_PROCESSOR_UNAVAILABLE"));
+  return monitorBoundedChildOutput(limits.python, ["-c", HARD_FILE_LIMIT_WRAPPER, String(limits.maxBytes), executable, ...args], outputPath, limits);
 }
 
 async function toolVersion(executable: string, args: readonly string[]): Promise<string> {
@@ -174,7 +189,7 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
           const checked = join(directory, "checked.pdf");
           const output = join(directory, "processed.pdf");
           try {
-            await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, input, checked], checked, { maxBytes: MAX_BYTES, timeoutMs: 4_000 });
+            await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, input, checked], checked, { maxBytes: MAX_BYTES, timeoutMs: 4_000, python });
           } catch (cause) {
             const exitCode = typeof cause === "object" && cause !== null && "code" in cause ? Number((cause as { code: unknown }).code) : 0;
             if ([21, 22, 23, 24, 25].includes(exitCode)) return { unsafe: true as const };
@@ -182,10 +197,10 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
           }
           await assertBoundedFile(checked, MAX_BYTES);
           await runWithBoundedOutput(ocrmypdf, ["--skip-text", "--output-type", "pdfa-2", "--optimize", "0", "--jobs", "1", "--quiet", checked, output],
-            output, { maxBytes: MAX_BYTES, timeoutMs: PROCESS_TIMEOUT_MS });
+            output, { maxBytes: MAX_BYTES, timeoutMs: PROCESS_TIMEOUT_MS, python });
           await assertBoundedFile(output, MAX_BYTES);
           const verifiedOutput = join(directory, "verified-output.pdf");
-          try { await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, output, verifiedOutput], verifiedOutput, { maxBytes: MAX_BYTES, timeoutMs: 4_000 }); }
+          try { await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, output, verifiedOutput], verifiedOutput, { maxBytes: MAX_BYTES, timeoutMs: 4_000, python }); }
           catch { throw new Error("MEDIA_PDF_OUTPUT_INVALID"); }
           const result = await readBoundedFile(verifiedOutput, MAX_BYTES);
           if (result.byteLength < 1 || !result.subarray(0, 5).equals(Buffer.from("%PDF-"))) throw new Error("MEDIA_PDF_OUTPUT_INVALID");
