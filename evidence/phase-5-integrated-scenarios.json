@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "runId": "e53e79c8-5fa9-442a-98e0-c1afcc644450",
+  "runId": "ec718e93-d14a-4ec7-b109-1db89b934587",
   "ticket": 124,
   "parent": 106,
-  "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
-  "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
-  "startedAt": "2026-10-10T13:51:31.042Z",
+  "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
+  "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
+  "startedAt": "2026-10-10T14:03:39.451Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "counts": {
@@ -19,10 +19,10 @@
       "name": "authoring",
       "ticket": null,
       "suite": "authoring",
-      "runId": "4b2b8274-6833-43dc-9407-97ebf2fd7904",
-      "startedAt": "2026-10-10T13:45:49.123Z",
-      "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
-      "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
+      "runId": "5f0440fb-f64d-483c-b919-2e676c61852d",
+      "startedAt": "2026-10-10T13:54:26.811Z",
+      "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
+      "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -36,10 +36,10 @@
       "name": "taxonomy",
       "ticket": null,
       "suite": "taxonomy",
-      "runId": "b46d9594-1c76-4410-a72a-d6a5d2ba77aa",
-      "startedAt": "2026-10-10T13:45:55.889Z",
-      "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
-      "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
+      "runId": "736ae6bc-b6fb-4dba-9f36-69b52545700c",
+      "startedAt": "2026-10-10T13:54:30.671Z",
+      "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
+      "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -53,10 +53,10 @@
       "name": "traceability",
       "ticket": null,
       "suite": "traceability",
-      "runId": "4a14889e-6bf1-4faf-bb50-8afc27636e08",
-      "startedAt": "2026-10-10T13:45:42.425Z",
-      "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
-      "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
+      "runId": "a7d89b72-a60b-4e97-b9a4-8b056db2b713",
+      "startedAt": "2026-10-10T13:54:22.372Z",
+      "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
+      "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -70,10 +70,10 @@
       "name": "owner",
       "ticket": 122,
       "suite": null,
-      "runId": "a3171611-f5de-4473-8531-69a46703d51d",
-      "startedAt": "2026-10-10T13:48:15.012Z",
-      "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
-      "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
+      "runId": "527e5414-22c2-4622-9afe-35e07fc4ee5f",
+      "startedAt": "2026-10-10T14:00:13.995Z",
+      "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
+      "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -87,10 +87,10 @@
       "name": "database",
       "ticket": 123,
       "suite": null,
-      "runId": "f3c22954-84f8-4008-b081-7af36b7672b7",
-      "startedAt": "2026-10-10T13:51:05.888Z",
-      "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
-      "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
+      "runId": "655dc7bc-3ba5-401c-ad28-f1524f422cac",
+      "startedAt": "2026-10-10T14:03:21.936Z",
+      "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
+      "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -375,7 +375,7 @@
           110
         ],
         "assertions": [
-          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
         ]
       },
       {
@@ -384,7 +384,7 @@
           116
         ],
         "assertions": [
-          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
         ]
       },
       {
@@ -393,7 +393,7 @@
           116
         ],
         "assertions": [
-          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
         ]
       },
       {
@@ -402,7 +402,7 @@
           116
         ],
         "assertions": [
-          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
         ]
       },
       {
@@ -532,7 +532,7 @@
           122
         ],
         "assertions": [
-          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
         ]
       },
       {
@@ -634,7 +634,7 @@
           124
         ],
         "assertions": [
-          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
         ]
       },
       {
@@ -826,7 +826,7 @@
         ],
         "assertions": [
           "tests/database/content-authoring.integration.test.ts :: rolls back route, pointer, projection, success receipt, and event after injected writes fail",
-          "tests/database/owner-composition.integration.test.ts :: preserves the committed public route and projection when injected optional delivery consumers fail"
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
         ],
         "deferred": "Production optional worker integrations and full release/load/restore qualification remain deferred."
       }
@@ -837,7 +837,7 @@
     "Phase 7: persisted Reactions, Ratings, Feedback, Moderation, and their public aggregates.",
     "Phase 8: production optional workers, exports, alerts, analytics pipelines, backups, and recovery automation.",
     "Phase 9-10 and release: deployed TestSprite, container publication, promotion, load/resilience, and measured backup restore RPO/RTO.",
-    "Phase 5 injects Media, link, analytics, and alert consumer failures after publication and proves the committed outbox event, public Project route, and projection remain available. Production worker integrations remain Phase 6/8 work; required publication acceptance facts remain fail closed."
+    "Phase 5 passes a persisted publication event to injected Media, link, analytics, and alert delivery ports, confirms each failure, and verifies the outbox event, public Project route, and projection remain readable. Production dispatchers and worker integrations remain Phase 6/8 work; required publication acceptance facts remain fail closed."
   ],
   "reproduction": [
     "npm run phase5:focus:authoring-review-publication-routes",

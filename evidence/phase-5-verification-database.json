@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "runId": "67ded240-dc5a-4d17-a056-71948c3b6b8e",
-  "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
-  "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
+  "runId": "6b5666c4-b5d8-491a-a040-1be75b1439b1",
+  "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
+  "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
   "suite": "database",
-  "startedAt": "2026-10-10T13:51:24.301Z",
+  "startedAt": "2026-10-10T14:03:32.235Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,
@@ -32,7 +32,7 @@
     "phase5MigrationCount": 12,
     "retainedReleaseRecords": {
       "configuredPortfolios": 21,
-      "contactChannels": 42,
+      "contactChannels": 38,
       "ownerLinks": 1,
       "idempotencyRecords": 22,
       "outboxEvents": 14,

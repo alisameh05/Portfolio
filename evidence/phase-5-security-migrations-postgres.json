@@ -1,8 +1,8 @@
 {
-  "sourceRevision": "94f72c2a2fd828f022ecb3510ee9dd2d0b586ea2",
-  "sourceTreeSha256": "140070e2175fc28e933ff1759e804945183c703eafda37bc6a93da8cb8d3cfed",
-  "runId": "f3c22954-84f8-4008-b081-7af36b7672b7",
-  "startedAt": "2026-10-10T13:51:05.888Z",
+  "sourceRevision": "ba4952abe045f1bca142dccf6238b404676f13c0",
+  "sourceTreeSha256": "3f95e6968728b4337a6f150022c891aa6e16a25ec27e8dc09bd10cb705113526",
+  "runId": "655dc7bc-3ba5-401c-ad28-f1524f422cac",
+  "startedAt": "2026-10-10T14:03:21.936Z",
   "toolVersions": {
     "node": "24.21.0",
     "npm": "11.19.0",
@@ -214,7 +214,7 @@
     ],
     "retainedRecordsBeforeAndAfterPhase5": {
       "configuredPortfolios": 21,
-      "contactChannels": 42,
+      "contactChannels": 38,
       "ownerLinks": 1,
       "idempotencyRecords": 22,
       "outboxEvents": 14,
@@ -724,7 +724,7 @@
       "status": "passed"
     },
     {
-      "name": "Phase 5 Owner production composition against PostgreSQL > preserves the committed public route and projection when injected optional delivery consumers fail",
+      "name": "Phase 5 Owner production composition against PostgreSQL > keeps the committed route and projection readable after optional delivery port failures",
       "status": "passed"
     },
     {
