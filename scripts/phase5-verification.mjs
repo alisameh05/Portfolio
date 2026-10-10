@@ -19,12 +19,14 @@ export const FOCUS_SUITES = Object.freeze({
   taxonomy: "taxonomy",
   database: "database",
   owner: "owner",
+  traceability: "traceability",
 });
 export const FOCUS_ENTRYPOINTS = Object.freeze({
   authoring: "authoring-review-publication-routes",
   taxonomy: "taxonomy-status-relationships-discovery",
   database: "database-rls-migrations-concurrency",
   owner: "owner-adapters-composition",
+  traceability: "scenario-traceability",
 });
 
 function filesUnder(directory) {
@@ -232,7 +234,12 @@ function runFocus(suite) {
   }
 
   const directory = join(ROOT, "tests", "phase5", suite);
-  const files = filesUnder(directory);
+  const files = suite === "traceability"
+    ? [
+      join(ROOT, "tests", "phase4", "phase5-scenario-coverage.test.ts"),
+      join(ROOT, "tests", "architecture", "architecture.test.ts"),
+    ]
+    : filesUnder(directory);
   if (suite === "authoring") {
     files.push(
       join(ROOT, "tests", "runtime", "owner-content-authoring.test.ts"),
@@ -276,7 +283,10 @@ function runFocus(suite) {
     suiteAvailable,
     cleanup,
     reproduction: [`npm run phase5:focus:${FOCUS_ENTRYPOINTS[suite]}`],
-    details: { message: suiteAvailable ? "focused suite executed" : "no Phase 5 business scenarios are implemented in this suite yet" },
+    details: {
+      message: suiteAvailable ? "focused suite executed" : "no Phase 5 business scenarios are implemented in this suite yet",
+      files: files.map((path) => relative(ROOT, path).replaceAll("\\", "/")),
+    },
   });
   const path = writeReport(report);
   if (output) process.stdout.write(sanitizeVerificationText(output));

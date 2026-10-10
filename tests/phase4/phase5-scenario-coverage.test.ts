@@ -52,16 +52,18 @@ describe("Phase 5 integrated scenario evidence", () => {
     const evidence = {
       authoring: { suite: "authoring", runId: "authoring-run", startedAt, verdict: "pass", sourceRevision: "a".repeat(40), sourceTreeSha256, scenarioAcceptance: true, counts: { executed: 12, failed: 0, skipped: 0, total: 12 } },
       taxonomy: { suite: "taxonomy", runId: "taxonomy-run", startedAt, verdict: "pass", sourceRevision: "a".repeat(40), sourceTreeSha256, scenarioAcceptance: true, counts: { executed: 4, failed: 0, skipped: 0, total: 4 } },
+      traceability: { suite: "traceability", runId: "traceability-run", startedAt, verdict: "pass", sourceRevision: "a".repeat(40), sourceTreeSha256, scenarioAcceptance: true, counts: { executed: 29, failed: 0, skipped: 0, total: 29 }, details: { files: ["tests/architecture/architecture.test.ts"] } },
       owner: { ticket: 122, runId: "owner-run", startedAt, sourceRevision: "a".repeat(40), sourceTreeSha256, databaseIntegrationTestsPassed: 2, skippedCases: 0, cleanUpgradeEquivalent: true },
       database: { ticket: 123, runId: "database-run", startedAt, sourceRevision: "a".repeat(40), sourceTreeSha256, databaseIntegrationTestsPassed: 40, skippedCases: 0, cleanUpgradeEquivalent: true, generatedTypeDrift: false },
     };
 
     expect(evaluateIntegratedScenarioEvidence(evidence, "a".repeat(40), sourceTreeSha256)).toMatchObject({
       verdict: "pass",
-      counts: { executed: 58, failed: 0, skipped: 0 },
+      counts: { executed: 87, failed: 0, skipped: 0 },
       constituents: [
         expect.objectContaining({ name: "authoring", runId: "authoring-run", startedAt, sourceRevision: "a".repeat(40), sourceTreeSha256 }),
         expect.objectContaining({ name: "taxonomy", runId: "taxonomy-run", startedAt, sourceRevision: "a".repeat(40), sourceTreeSha256 }),
+        expect.objectContaining({ name: "traceability", runId: "traceability-run", startedAt, sourceRevision: "a".repeat(40), sourceTreeSha256 }),
         expect.objectContaining({ name: "owner", runId: "owner-run", startedAt, sourceRevision: "a".repeat(40), sourceTreeSha256 }),
         expect.objectContaining({ name: "database", runId: "database-run", startedAt, sourceRevision: "a".repeat(40), sourceTreeSha256 }),
       ],
@@ -71,5 +73,6 @@ describe("Phase 5 integrated scenario evidence", () => {
     expect(evaluateIntegratedScenarioEvidence({ ...evidence, owner: { ...evidence.owner, skippedCases: 1 } }, "a".repeat(40), sourceTreeSha256).verdict).toBe("fail");
     expect(evaluateIntegratedScenarioEvidence({ ...evidence, owner: { ...evidence.owner, runId: undefined } }, "a".repeat(40), sourceTreeSha256).verdict).toBe("fail");
     expect(evaluateIntegratedScenarioEvidence({ ...evidence, authoring: { ...evidence.authoring, counts: { executed: 0, failed: 0, skipped: 0, total: 0 } } }, "a".repeat(40), sourceTreeSha256).verdict).toBe("fail");
+    expect(evaluateIntegratedScenarioEvidence({ ...evidence, traceability: { ...evidence.traceability, details: { files: [] } } }, "a".repeat(40), sourceTreeSha256).verdict).toBe("fail");
   });
 });

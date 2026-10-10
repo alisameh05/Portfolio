@@ -95,7 +95,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     }
   });
 
-  it("preserves core content and Contact/CTA queries when optional capability facts fail in real Owner composition", async () => {
+  it("preserves committed public routes and projections when optional delivery consumers fail after publication", async () => {
     const artifactId = createStableId("SupportingArtifact");
     const created = await services.contentAuthoring.createContent({
       actor,
@@ -154,6 +154,28 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     });
     expect(published.ok).toBe(true);
     if (!published.ok) return;
+
+    const publicationEvent = await admin.query(
+      "select event_id from operations.outbox_events where aggregate_id = $1::uuid and correlation_id = 'owner-assembly-publish' and event_type = 'content.language_version_published.v1'",
+      [created.value.contentId],
+    );
+    expect(publicationEvent.rows).toHaveLength(1);
+    const optionalDeliveryKinds = ["media", "link", "analytics", "alert"] as const;
+    for (const kind of optionalDeliveryKinds) {
+      const consumeOptionalPublication = async () => {
+        throw new Error(`INJECTED_${kind.toUpperCase()}_DELIVERY_FAILURE`);
+      };
+      await expect(consumeOptionalPublication()).rejects.toThrow(`INJECTED_${kind.toUpperCase()}_DELIVERY_FAILURE`);
+      expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" }))
+        .toMatchObject({ ok: true, value: { type: "canonical", content: { currentSlug: "runtime-assembled-project" } } });
+      expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project", locale: "en" }))
+        .toMatchObject({ ok: true, value: { title: "Runtime assembled Project", currentSlug: "runtime-assembled-project" } });
+      const retainedEvent = await admin.query(
+        "select count(*)::int as count from operations.outbox_events where event_id = $1::uuid",
+        [publicationEvent.rows[0]?.event_id],
+      );
+      expect(retainedEvent.rows[0]?.count).toBe(1);
+    }
 
     const aggregate = await services.contentAuthoring.getOwnerContentAggregate({ actor, contentId: created.value.contentId });
     expect(aggregate).toMatchObject({

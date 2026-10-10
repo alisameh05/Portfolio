@@ -12,7 +12,7 @@ const OWNER = "tests/database/owner-composition.integration.test.ts";
 const SECURITY = "tests/database/phase5-security.integration.test.ts";
 const VERIFICATION = "tests/phase4/phase5-verification.test.ts";
 const STORY_ASSERTION = `${CONTENT} :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection`;
-const OWNER_ASSERTION = `${OWNER} :: preserves core content and Contact/CTA queries when optional capability facts fail in real Owner composition`;
+const OWNER_ASSERTION = `${OWNER} :: preserves committed public routes and projections when optional delivery consumers fail after publication`;
 const DISCOVERY_ASSERTION = `${SECURITY} :: keeps private content private while the in-process discovery query returns only published approved projections`;
 const SECURITY_ASSERTION = `${SECURITY} :: denies actual public, authenticated, worker, and backup logins direct access to private Phase 5 rows`;
 const AUTHORIZATION_ASSERTION = OWNER_ASSERTION;
@@ -64,7 +64,7 @@ export const PHASE5_SCENARIO_COVERAGE = Object.freeze([
   { id: 12, tickets: [110, 111, 112, 113, 114], assertions: [assertionRef(CONTENT, "rejects invalid evidence, review, and Media facts without creating public state")] },
   { id: 13, tickets: [110, 111], assertions: [assertionRef(CONTENT, "uses fixture-only accepted Media facts and fails closed when production facts are unresolved"), DISCOVERY_ASSERTION], deferred: "Real Media processing and CV delivery are Phase 6 work." },
   { id: 14, tickets: [106, 124], assertions: [assertionRef("tests/architecture/architecture.test.ts", "must contain no Lab entry implementation in modules (ADR-0007)")] },
-  { id: 15, tickets: [109, 111, 114, 124], assertions: [assertionRef(CONTENT, "rolls back route, pointer, projection, success receipt, and event after injected writes fail"), OWNER_ASSERTION], deferred: "External optional delivery implementations and full release/load/restore qualification remain deferred." },
+  { id: 15, tickets: [109, 111, 114, 124], assertions: [assertionRef(CONTENT, "rolls back route, pointer, projection, success receipt, and event after injected writes fail"), assertionRef(OWNER, "preserves committed public routes and projections when optional delivery consumers fail after publication")], deferred: "Production optional worker integrations and full release/load/restore qualification remain deferred." },
 ]);
 
 export const PHASE5_DEFERRED_SCOPE = Object.freeze([
@@ -72,7 +72,7 @@ export const PHASE5_DEFERRED_SCOPE = Object.freeze([
   "Phase 7: persisted Reactions, Ratings, Feedback, Moderation, and their public aggregates.",
   "Phase 8: production optional workers, exports, alerts, analytics pipelines, backups, and recovery automation.",
   "Phase 9-10 and release: deployed TestSprite, container publication, promotion, load/resilience, and measured backup restore RPO/RTO.",
-  "Phase 5 proves public content and Configuration/Contact/CTA queries remain available when optional capability facts fail. Real Media/link delivery and analytics/alert workers are Phase 6/8 ports not present in the Phase 5 runtime; required publication acceptance facts remain fail closed.",
+  "Phase 5 injects Media, link, analytics, and alert consumer failures after publication and proves the committed outbox event, public Project route, and projection remain available. Production worker integrations remain Phase 6/8 work; required publication acceptance facts remain fail closed.",
 ]);
 
 const EXPECTED_SCENARIOS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 12, 13, 14, 15]);
@@ -109,6 +109,7 @@ export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision, sou
   const requirements = [
     { key: "authoring", suite: "authoring" },
     { key: "taxonomy", suite: "taxonomy" },
+    { key: "traceability", suite: "traceability" },
     { key: "owner", ticket: 122 },
     { key: "database", ticket: 123 },
   ];
@@ -122,6 +123,7 @@ export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision, sou
       const counts = report?.counts;
       if (report?.suite !== requirement.suite || report?.verdict !== "pass" || report?.scenarioAcceptance !== true) issues.push("focused suite did not pass scenario acceptance");
       if (!counts || !nonnegativeInteger(counts.executed) || counts.executed === 0 || counts.failed !== 0 || counts.skipped !== 0 || counts.total !== counts.executed) issues.push("focused suite must execute with zero failures and skips");
+      if (requirement.suite === "traceability" && !report?.details?.files?.includes("tests/architecture/architecture.test.ts")) issues.push("architecture assertions were not executed in the traceability suite");
     } else {
       if (report?.ticket !== requirement.ticket || !nonnegativeInteger(report?.databaseIntegrationTestsPassed) || report.databaseIntegrationTestsPassed === 0 || report?.skippedCases !== 0) issues.push("real PostgreSQL ticket suite is incomplete or skipped");
       if (report?.cleanUpgradeEquivalent !== true) issues.push("clean reset and upgrade are not equivalent");
@@ -201,6 +203,7 @@ export function invalidateSuiteEvidence(suite) {
   const files = {
     authoring: ["phase-5-verification-authoring.json"],
     taxonomy: ["phase-5-verification-taxonomy.json"],
+    traceability: ["phase-5-verification-traceability.json"],
     owner: ["phase-5-owner-composition-postgres.json"],
     database: ["phase-5-verification-database.json", "phase-5-security-migrations-postgres.json"],
   }[suite];
@@ -223,6 +226,7 @@ function run() {
   const evidence = {
     authoring: readJson("phase-5-verification-authoring.json"),
     taxonomy: readJson("phase-5-verification-taxonomy.json"),
+    traceability: readJson("phase-5-verification-traceability.json"),
     owner: readJson("phase-5-owner-composition-postgres.json"),
     database: readJson("phase-5-security-migrations-postgres.json"),
   };
