@@ -220,6 +220,11 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const foreignScope = await appClient.query("select media_id::text from media.assets where media_id = $1::uuid", [mediaId]);
     expect(foreignScope.rowCount).toBe(0);
     await appClient.query("rollback");
+
+    const signingCallsBeforeInvalidName = signingCalls;
+    const invalidName = await issue(`phase6-upload-intent-nul-${randomBytes(16).toString("hex")}`, "bad\u0000name.png", service);
+    expect(invalidName.status).toBe(422);
+    expect(signingCalls).toBe(signingCallsBeforeInvalidName);
   });
 
   it("allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes", async () => {
@@ -289,7 +294,8 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       method: "DELETE", headers: { ...headers(ANON_KEY!), "content-type": "application/json" },
       body: JSON.stringify({ prefixes: [objectPath] }),
     });
-    expect(anonymousDelete.status).toBeLessThan(500);
+    // Supabase Storage returns 200 when RLS filters all anonymous delete rows; verify the object is unchanged below.
+    expect(anonymousDelete.status).toBe(200);
     const retained = await storageRequest(objectUrl, { headers: headers(SERVICE_ROLE_KEY!) });
     expect(retained.ok).toBe(true);
     expect(Buffer.from(await retained.arrayBuffer())).toEqual(bytes);

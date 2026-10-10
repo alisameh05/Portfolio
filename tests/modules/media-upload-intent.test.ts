@@ -17,7 +17,7 @@ const command = {
   actor,
   idempotencyKey: "intent-key-1234567890" as IdempotencyKey,
   kind: "image" as const,
-  originalFileName: "../../bad\u0000name.png",
+  originalFileName: "../../bad\u0001name.png",
   declaredMediaType: "image/png",
   byteLength: 2048,
   sha256: "a".repeat(64),
@@ -128,6 +128,7 @@ describe("Media upload-intent application seam", () => {
     ["zero bytes", { ...command, byteLength: 0 }, "MEDIA_UPLOAD_SIZE_OUT_OF_BOUNDS"],
     ["oversized image", { ...command, byteLength: 10 * 1024 * 1024 + 1 }, "MEDIA_UPLOAD_SIZE_OUT_OF_BOUNDS"],
     ["invalid digest", { ...command, sha256: "bad" }, "MEDIA_UPLOAD_SHA256_INVALID"],
+    ["NUL in filename", { ...command, originalFileName: "bad\u0000name.png" }, "MEDIA_UPLOAD_FILENAME_INVALID"],
   ])("rejects %s before reservation or Storage", async (_label, input, code) => {
     const store = repositoryFake();
     let preparations = 0;

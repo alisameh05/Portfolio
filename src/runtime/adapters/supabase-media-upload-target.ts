@@ -46,18 +46,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseSignedTarget(data: unknown, base: URL, bucket: string, objectPath: string): string | undefined {
   if (!isRecord(data)) return undefined;
   const target = data["signedUrl"] ?? data["signedURL"] ?? data["url"];
-  if (typeof target === "string" && target.length > 0) {
-    try {
-      const url = new URL(target, base);
-      if (url.pathname.startsWith("/object/upload/sign/")) {
-        url.pathname = `/storage/v1${url.pathname}`;
-      }
-      if (url.origin === base.origin && url.searchParams.has("token")) return url.toString();
-    } catch { return undefined; }
-  }
-  const token = data["token"];
-  if (typeof token !== "string" || token.length < 16) return undefined;
-  return new URL(`/storage/v1/object/upload/sign/${encodeURIComponent(bucket)}/${objectPath.split("/").map(encodeURIComponent).join("/")}?token=${encodeURIComponent(token)}`, base).toString();
+  if (typeof target !== "string" || target.length === 0) return undefined;
+  try {
+    const url = new URL(target, base);
+    if (url.pathname.startsWith("/object/upload/sign/")) {
+      url.pathname = `/storage/v1${url.pathname}`;
+    }
+    const expectedPath = `/storage/v1/object/upload/sign/${encodeURIComponent(bucket)}/${objectPath.split("/").map(encodeURIComponent).join("/")}`;
+    if (url.origin === base.origin && url.pathname === expectedPath && url.searchParams.has("token")) return url.toString();
+  } catch { return undefined; }
+  return undefined;
 }
 
 /** Supabase Storage adapter: only the exact private candidate target is signed. */

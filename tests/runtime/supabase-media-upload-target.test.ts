@@ -58,6 +58,25 @@ describe("Supabase private candidate upload adapter", () => {
     if (!result.ok) expect(result.error.code).toBe("MEDIA_STORAGE_BUCKET_UNAVAILABLE");
   });
 
+  it("rejects a same-origin signed URL for a different object", async () => {
+    const adapter = createSupabaseMediaUploadTargetAdapter({
+      storageUrl: "http://127.0.0.1:57321",
+      serviceRoleKey: "local-service-role",
+      fetcher: async (input) => {
+        const url = new URL(input.toString());
+        if (url.pathname.endsWith("/storage/v1/bucket/media-candidates") || url.pathname.endsWith("/storage/v1/bucket/media-processed")) {
+          return new Response(JSON.stringify({ public: false, file_size_limit: 52_428_800, allowed_mime_types: ["image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm", "application/pdf"] }), { status: 200 });
+        }
+        if (url.pathname.includes("/object/upload/sign/")) {
+          return new Response(JSON.stringify({ url: "/storage/v1/object/upload/sign/media-candidates/candidate/other-owner/other-media/other-intent/other-object?token=opaque-storage-capability", token: "opaque-storage-capability" }), { status: 200 });
+        }
+        throw new Error(`Unexpected Storage request: ${url.pathname}`);
+      },
+    });
+    const result = await adapter.prepare({ ...ids, mimeType: "image/png", byteLength: 2048 });
+    expect(result).toEqual({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_STORAGE_TARGET_INVALID" } });
+  });
+
   it("refuses a shared candidate and processed bucket", () => {
     expect(() => createSupabaseMediaUploadTargetAdapter({
       storageUrl: "https://storage.example.test",

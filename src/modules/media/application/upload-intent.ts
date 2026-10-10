@@ -84,7 +84,7 @@ function validateDeclaration(command: CreateMediaUploadIntentCommand): Rejection
   if (!/^[0-9a-f]{64}$/i.test(command.sha256)) {
     return { kind: "validation", code: "MEDIA_UPLOAD_SHA256_INVALID" };
   }
-  if (typeof command.originalFileName !== "string" || command.originalFileName.length < 1 ||
+  if (typeof command.originalFileName !== "string" || command.originalFileName.includes("\u0000") || command.originalFileName.length < 1 ||
       command.originalFileName.length > 255) {
     return { kind: "validation", code: "MEDIA_UPLOAD_FILENAME_INVALID" };
   }

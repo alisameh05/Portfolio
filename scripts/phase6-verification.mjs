@@ -165,7 +165,6 @@ async function main() {
     if (bucketMetadata.public !== false) throw new Error("PHASE6_STORAGE_BUCKET_NOT_PRIVATE");
     services.storage = { available: true, privateBucketVerified: true, executionCount: storageExecutions };
 
-    if (!UPLOAD_INTENT_ONLY) {
     console.log("Probing pinned ClamAV, ImageMagick, FFmpeg and OCRmyPDF runtimes.");
     const image = PHASE6_TOOL_DEFINITIONS.imageProcessor;
     const video = PHASE6_TOOL_DEFINITIONS.videoProcessor;
@@ -204,7 +203,6 @@ async function main() {
       formats.push({ id: fixture.id, kind: fixture.kind, mimeType: fixture.mimeType, executed: true, status: "passed", storageRoundTrip: true, sha256: storageHash, scannerVerdict: "clean", processorVersion });
       services.storage.executionCount += 3;
       console.log(`✓ ${fixture.id}: processor, clean scan and private byte round-trip passed.`);
-    }
     }
     console.log("Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.");
     const testJsonPath = join(workdir, "upload-intent-vitest.json");
@@ -284,10 +282,16 @@ async function main() {
         storage: ["media-candidates", "media-processed", "signed upload lifetime 7200 seconds", "no-upsert"],
       },
       principalScope: { database: "shipwithali_application constrained by portfolio_id and owner_id RLS", storage: ["configured Owner signed capability", "anonymous", "authenticated non-Owner"], environment: "disposable loopback Supabase" },
-      services: { postgres: true, auth: true, storage: true },
+      services: {
+        postgres: { available: true, majorVersion: 17, independentConnections: 2, executionCount: 3 },
+        auth: { available: true, status: 200, executionCount: 1 },
+        storage: { available: true, privateBucketVerified: true, executionCount: services.storage?.executionCount },
+      },
+      formats: formats.map(({ id, kind, mimeType, executed, status, storageRoundTrip, scannerVerdict, processorVersion }) => ({ id, kind, mimeType, executed, status, storageRoundTrip, scannerVerdict, processorVersion })),
+      formatCounts: { total: formats.length, passed: formats.filter((format) => format.status === "passed").length, failed: formats.filter((format) => format.status !== "passed").length, skipped: 0 },
       checks: uploadIntentChecks,
       cleanup,
-      verdict: uploadIntentChecks.verdict === "pass" && cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
+      verdict: uploadIntentChecks.verdict === "pass" && formats.length === PHASE6_FORMATS.length && formats.every((format) => format.status === "passed" && format.executed && format.storageRoundTrip && format.scannerVerdict === "clean") && cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:upload-intents"],
       limitations: [],
     };
@@ -295,7 +299,7 @@ async function main() {
   }
   if (UPLOAD_INTENT_ONLY) {
     const uploadEvidence = uploadIntentChecks === undefined ? undefined : JSON.parse(readFileSync(UPLOAD_INTENT_EVIDENCE, "utf8"));
-    console.log(JSON.stringify({ ticket: 148, runId: uploadEvidence?.runId, sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256, verdict: uploadEvidence?.verdict ?? "fail", uploadIntentChecks, cleanup, failures, evidence: uploadEvidence === undefined ? undefined : "evidence/phase6-upload-intent-148.json" }, null, 2));
+    console.log(JSON.stringify({ ticket: 148, runId: uploadEvidence?.runId, sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256, verdict: uploadEvidence?.verdict ?? "fail", formatCounts: uploadEvidence?.formatCounts, uploadIntentChecks, cleanup, failures, evidence: uploadEvidence === undefined ? undefined : "evidence/phase6-upload-intent-148.json" }, null, 2));
     if (uploadEvidence?.verdict !== "pass") process.exitCode = 1;
   } else {
     console.log(JSON.stringify({ ticket: report.ticket, runId: report.runId, sourceRevision: report.sourceRevision, sourceTreeSha256: report.sourceTreeSha256, verdict: report.verdict, counts: report.counts, services: report.services, cleanup: report.cleanup, failures: report.failures, uploadIntentChecks, evidence: "evidence/phase-6-verification-setup.json", uploadIntentEvidence: uploadIntentChecks === undefined ? undefined : "evidence/phase6-upload-intent-148.json" }, null, 2));
