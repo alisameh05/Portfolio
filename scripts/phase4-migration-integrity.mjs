@@ -36,6 +36,21 @@ const PHASE4_APPLICATION_POLICIES = new Map([
   ]],
 ]);
 
+export const PHASE5_MIGRATION_COMPATIBILITY = Object.freeze({
+  "20261005001318_create_content_authoring.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds new content item and immutable revision tables; existing Phase 4 write paths are unchanged." },
+  "20261007090000_add_immutable_content_revision_reviews.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds review storage and revision identity uniqueness; existing content writes remain valid." },
+  "20261007170000_add_project_publication_routes.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds route, publication, history, and discovery tables without removing the previous content contract." },
+  "20261007190000_add_achievement_publication_timeline.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Broadens publication kinds and relaxes route identity for non-Project content; Project publications still require a route identity." },
+  "20261007200000_publish_localized_testimonials.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds testimonial publication and projection tables without changing existing write requirements." },
+  "20261008090000_preserve_project_route_history.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds immutable route history and broadens Owner discovery scope for lifecycle management." },
+  "20261008120000_add_content_lifecycle_history.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds an append-only lifecycle history table; existing content rows and writes remain valid." },
+  "20261008130000_add_project_status_and_featured.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds nullable status references and default-false Featured columns; existing Project inserts retain valid defaults." },
+  "20261008180000_add_project_relationships.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds relationship, view, and history tables without changing existing content writes." },
+  "20261008210000_provision_project_taxonomies.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds Taxonomy and assignment tables plus nullable discovery projection fields; existing Project writes remain valid." },
+  "20261009090000_record_taxonomy_evolution_actor_reason.sql": { stage: "lockstep", priorWriterCompatible: false, boundary: "The new history check requires Owner actor IDs for rename, retire, and merge writes. Deploy the actor-aware #120 writer with this migration and do not keep older actor-less writers online." },
+  "20261009100000_index_project_discovery_reads.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds two indexes only; no application contract changes." },
+});
+
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
   if (value !== null && typeof value === "object") {
@@ -61,6 +76,33 @@ export function validatePhase3MigrationSnapshot(snapshot, phase3Files, contentsB
     }
   }
   return actualFiles;
+}
+
+export function assertPhase5MigrationSafety(files, contentsByName, compatibility = PHASE5_MIGRATION_COMPATIBILITY) {
+  const phase5Files = [...files].filter((file) => file.localeCompare("20261005001318_create_content_authoring.sql") >= 0);
+  if (phase5Files.length === 0) throw new Error("PHASE5_MIGRATIONS_MISSING");
+  for (const file of phase5Files) {
+    if (!/^\d{14}_[a-z0-9_]+\.sql$/.test(file)) throw new Error("PHASE5_MIGRATION_NAME_INVALID");
+    const source = contentsByName.get(file);
+    if (typeof source !== "string") throw new Error("PHASE5_MIGRATION_SOURCE_MISSING");
+    const audit = compatibility[file];
+    if (audit === undefined || !["expand", "lockstep"].includes(audit.stage) ||
+      typeof audit.boundary !== "string" || audit.boundary.trim() === "" ||
+      audit.priorWriterCompatible !== (audit.stage === "expand")) {
+      throw new Error("PHASE5_MIGRATION_COMPATIBILITY_UNDOCUMENTED");
+    }
+    if (!/set\s+lock_timeout\s*=\s*'5s'\s*;/i.test(source)) {
+      throw new Error("PHASE5_MIGRATION_LOCK_TIMEOUT_MISSING");
+    }
+    if (!/^\s*--\s*rollback\s*:/im.test(source)) throw new Error("PHASE5_MIGRATION_ROLLBACK_NOTE_MISSING");
+    if (!/^\s*--\s*(?:forward\s+fix|rollback)\s*:/im.test(source)) {
+      throw new Error("PHASE5_MIGRATION_RECOVERY_LIMITATION_MISSING");
+    }
+    if (/\b(?:drop\s+(?:table|column|type|schema)|truncate\s+(?:table\s+)?)/i.test(source)) {
+      throw new Error("PHASE5_UNREVIEWED_DESTRUCTIVE_CONTRACTION");
+    }
+  }
+  return phase5Files;
 }
 
 export function assertPhase4SnapshotsEquivalent(clean, upgrade) {

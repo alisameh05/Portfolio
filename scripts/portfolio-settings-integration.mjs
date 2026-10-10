@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { migrationSha256 } from "./migration-checksum.mjs";
 import {
+  assertPhase5MigrationSafety,
+  PHASE5_MIGRATION_COMPATIBILITY,
   assertPhase3OperationsContractPreserved,
   assertPhase3OperationsRls,
   assertPhase4SnapshotsEquivalent,
@@ -43,10 +45,10 @@ function run(command, args, options = {}) {
 }
 
 function workingTreeSourceSha256() {
-  const digest = createHash("sha256").update(run("git", ["diff", "HEAD", "--binary"]));
+  const digest = createHash("sha256").update(run("git", ["diff", "origin/master", "--binary", "--", ".", ":(exclude)evidence/**"]));
   const untracked = run("git", ["ls-files", "--others", "--exclude-standard"])
     .split(/\r?\n/u)
-    .filter((path) => path !== "" && path.replaceAll("\\", "/") !== "evidence/phase-5-owner-composition-postgres.json")
+    .filter((path) => path !== "" && !path.replaceAll("\\", "/").startsWith("evidence/"))
     .sort();
   for (const path of untracked) digest.update(path).update(readFileSync(join(ROOT, path)));
   return digest.digest("hex");
@@ -288,6 +290,27 @@ async function assertPhase3OperationsPreserved(connectionString, expected) {
   }
 }
 
+async function countRetainedReleaseRecords(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const result = await client.query(`
+      select
+        (select count(*)::int from portfolio_config.settings) as "configuredPortfolios",
+        (select count(*)::int from portfolio_config.contact_channels) as "contactChannels",
+        (select count(*)::int from identity_access.owner_links) as "ownerLinks",
+        (select count(*)::int from operations.idempotency_records) as "idempotencyRecords",
+        (select count(*)::int from operations.outbox_events) as "outboxEvents",
+        (select count(*)::int from operations.jobs) as "jobs"
+    `);
+    return result.rows[0];
+  } catch {
+    throw new Error("PHASE5_PHASE4_RELEASE_RECORD_SNAPSHOT_FAILED");
+  } finally {
+    await client.end();
+  }
+}
+
 export async function main() {
   const ticket109 = process.argv.includes("--ticket-109");
   const ticket110 = process.argv.includes("--ticket-110");
@@ -303,8 +326,9 @@ export async function main() {
   const ticket120 = process.argv.includes("--ticket-120");
   const ticket122 = process.argv.includes("--ticket-122");
   const ticket121 = process.argv.includes("--ticket-121");
-  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket114, ticket115, ticket116, ticket117, ticket118, ticket119, ticket120, ticket121, ticket122].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
-  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket114 || ticket115 || ticket116 || ticket117 || ticket118 || ticket119 || ticket120 || ticket121 || ticket122;
+  const ticket123 = process.argv.includes("--ticket-123");
+  if ([ticket109, ticket110, ticket111, ticket112, ticket113, ticket114, ticket115, ticket116, ticket117, ticket118, ticket119, ticket120, ticket121, ticket122, ticket123].filter(Boolean).length > 1) throw new Error("PORTFOLIO_SETTINGS_TICKET_SELECTION_INVALID");
+  const contentAuthoringTicket = ticket109 || ticket110 || ticket111 || ticket112 || ticket113 || ticket114 || ticket115 || ticket116 || ticket117 || ticket118 || ticket119 || ticket120 || ticket121 || ticket122 || ticket123;
   const packageJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const supabasePackage = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (supabasePackage.version !== packageJson.devDependencies.supabase) {
@@ -313,6 +337,9 @@ export async function main() {
 
   const migrations = migrationSources();
   const phase4Files = migrations.files.filter((file) => !migrations.phase3Files.includes(file));
+  const phase5Files = assertPhase5MigrationSafety(migrations.files, migrations.contents);
+  const phase4ReleaseFiles = migrations.files.filter((file) => !phase5Files.includes(file));
+  const upgradeBaselineFiles = ticket123 ? phase4ReleaseFiles : migrations.phase3Files;
   if (phase4Files.length === 0) throw new Error("PORTFOLIO_SETTINGS_PHASE4_MIGRATIONS_MISSING");
   requireDocker();
   const env = localEnvironment();
@@ -324,12 +351,16 @@ export async function main() {
   try {
     cleanProject = createProject("settings-clean", 57320, migrations.files);
     projects.push(cleanProject);
-    upgradeProject = createProject("settings-upgrade", 57340, migrations.phase3Files);
+    upgradeProject = createProject("settings-upgrade", 57340, upgradeBaselineFiles);
     projects.push(upgradeProject);
-    console.log("Starting isolated loopback PostgreSQL clean and Phase 3 upgrade projects.");
+    console.log(ticket123
+      ? "Starting isolated loopback PostgreSQL clean and merged Phase 4 release upgrade projects."
+      : "Starting isolated loopback PostgreSQL clean and Phase 3 upgrade projects.");
     const cleanUrl = startProject(cleanProject, env);
     const upgradeUrl = startProject(upgradeProject, env);
-    console.log("Isolated PostgreSQL projects are healthy; clean and Phase 3 upgrade migrations are applied.");
+    console.log(ticket123
+      ? "Isolated PostgreSQL projects are healthy; clean install and Phase 4 release schemas are applied."
+      : "Isolated PostgreSQL projects are healthy; clean and Phase 3 upgrade migrations are applied.");
 
     const phase3Snapshot = await snapshotPhase4Database(upgradeUrl);
     assertPhase3OperationsRls(phase3Snapshot);
@@ -369,14 +400,57 @@ export async function main() {
       throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED:" + failedAssertions.join(" | "));
     }
     const predecessorTestCount = requirePredecessorTests(predecessorReport, predecessorTestFiles);
-    console.log(`Phase 3 historical database invariants: ${predecessorTestCount} passed, 0 skipped before Phase 4 migrations.`);
+    console.log(ticket123
+      ? `Phase 3 historical database invariants: ${predecessorTestCount} passed, 0 skipped on the merged Phase 4 release schema.`
+      : `Phase 3 historical database invariants: ${predecessorTestCount} passed, 0 skipped before Phase 4 migrations.`);
     const phase3Rows = await seedAndCapturePhase3Operations(upgradeUrl);
     console.log("Captured the Phase 3 operations contract and seeded rows through restricted capability roles.");
-    for (const file of phase4Files) {
+    const phase4MigrationsToApply = ticket123 ? phase4Files.filter((file) => !phase5Files.includes(file)) : phase4Files;
+    for (const file of phase4MigrationsToApply) {
       copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
     }
     invokeProject(upgradeProject, ["migration", "up", "--local"], env);
-    console.log("Applied Phase 4 migrations to the Phase 3 upgrade database.");
+    console.log(ticket123 ? "Applied the merged Phase 4 release migrations." : "Applied Phase 4 migrations to the Phase 3 upgrade database.");
+    let phase4ReleaseRows;
+    let phase4ReleaseLedger;
+    if (ticket123) {
+      const phase4SettingsReportPath = join(upgradeProject.workdir, "phase4-settings-test-report.json");
+      const phase4SettingsResult = spawnSync(process.execPath, [
+        join(ROOT, "node_modules/vitest/vitest.mjs"), "run", "tests/database/portfolio-settings.integration.test.ts",
+        "--reporter=json", `--outputFile=${phase4SettingsReportPath}`,
+      ], {
+        cwd: ROOT,
+        env: { ...env, PHASE4_SETTINGS_DATABASE_URL: upgradeUrl, PHASE4_REQUIRE_SETTINGS: "1" },
+        encoding: "utf8",
+        timeout: 180_000,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let phase4SettingsReport;
+      try { phase4SettingsReport = JSON.parse(readFileSync(phase4SettingsReportPath, "utf8")); }
+      catch { throw new Error("PHASE5_PHASE4_RELEASE_TEST_REPORT_MISSING"); }
+      try { unlinkSync(phase4SettingsReportPath); } catch { /* isolated project cleanup removes it */ }
+      if (phase4SettingsResult.error || phase4SettingsResult.status !== 0) {
+        throw new Error("PHASE5_PHASE4_RELEASE_SETTINGS_HISTORY_TESTS_FAILED");
+      }
+      requireExecutedTests(phase4SettingsReport, 1);
+      phase4ReleaseLedger = (await snapshotPhase4Database(upgradeUrl)).migrationLedger;
+      if (JSON.stringify(phase4ReleaseLedger) !== JSON.stringify(
+        phase4ReleaseFiles.map((file) => ({ version: file.slice(0, 14), name: file.slice(15, -4) })),
+      )) throw new Error("PHASE5_PHASE4_RELEASE_LEDGER_MISMATCH");
+      phase4ReleaseRows = await countRetainedReleaseRecords(upgradeUrl);
+      if (phase4ReleaseRows.configuredPortfolios < 1 || phase4ReleaseRows.contactChannels < 1 ||
+        phase4ReleaseRows.idempotencyRecords < 1 || phase4ReleaseRows.outboxEvents < 1) {
+        throw new Error("PHASE5_PHASE4_RELEASE_FIXTURE_INCOMPLETE");
+      }
+      for (const file of phase5Files) {
+        copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
+      }
+      invokeProject(upgradeProject, ["migration", "up", "--local"], env);
+      const afterPhase5Rows = await countRetainedReleaseRecords(upgradeUrl);
+      if (JSON.stringify(afterPhase5Rows) !== JSON.stringify(phase4ReleaseRows)) {
+        throw new Error("PHASE5_PHASE4_RELEASE_RECORDS_NOT_PRESERVED");
+      }
+    }
     const cleanSnapshot = await snapshotPhase4Database(cleanUrl);
     console.log("Captured the clean-install normalized database state.");
     const upgradeSnapshot = await snapshotPhase4Database(upgradeUrl);
@@ -384,6 +458,9 @@ export async function main() {
     assertPhase3OperationsRls(upgradeSnapshot);
     assertPhase3OperationsContractPreserved(phase3Snapshot, upgradeSnapshot);
     console.log("Verified Phase 3 operations grants, policies, and schema objects were preserved.");
+    if (ticket123 && JSON.stringify(cleanSnapshot.roleMemberships) !== JSON.stringify(upgradeSnapshot.roleMemberships)) {
+      throw new Error(`PHASE5_ROLE_MEMBERSHIP_DIFFER:${JSON.stringify({ clean: cleanSnapshot.roleMemberships, upgrade: upgradeSnapshot.roleMemberships })}`);
+    }
     assertPhase4SnapshotsEquivalent(cleanSnapshot, upgradeSnapshot);
     console.log("Clean and upgraded normalized schemas, grants, constraints, and policies match.");
     if (JSON.stringify(cleanSnapshot.migrationLedger) !== JSON.stringify(
@@ -416,7 +493,17 @@ export async function main() {
     console.log(process.argv.includes("--refresh-types")
       ? "Generated database types from the clean PostgreSQL schema."
       : "Generated database types match the clean PostgreSQL schema.");
-    const testFiles = ticket122
+    const testFiles = ticket123
+      ? [
+        "tests/database/content-authoring.integration.test.ts",
+        "tests/database/owner-composition.integration.test.ts",
+        "tests/database/phase5-security.integration.test.ts",
+        "tests/database/postgres-transaction-runner.test.ts",
+        "tests/database/postgres-runtime.test.ts",
+        "tests/phase4/owner-session-auth.test.ts",
+        "tests/runtime/runtime-ports.test.ts",
+      ]
+      : ticket122
       ? [
         "tests/database/owner-composition.integration.test.ts",
         "tests/runtime/owner-content-authoring.test.ts",
@@ -437,15 +524,26 @@ export async function main() {
       join(ROOT, "node_modules/vitest/vitest.mjs"),
       "run",
       ...testFiles,
+      ...(ticket123 ? ["--maxWorkers=1", "--no-file-parallelism"] : []),
       "--reporter=json",
       `--outputFile=${reportPath}`,
     ], {
       cwd: ROOT,
-      env: contentAuthoringTicket
+      env: ticket123
+        ? {
+          ...databaseEnv,
+          PHASE5_CONTENT_AUTHORING_DATABASE_URL: cleanUrl,
+          PHASE5_REQUIRE_CONTENT_AUTHORING: "1",
+          PHASE5_REQUIRE_OWNER_COMPOSITION: "1",
+          PHASE5_SECURITY_DATABASE_URL: cleanUrl,
+          PHASE5_REQUIRE_SECURITY_DATABASE: "1",
+          PHASE5_SECURITY_STAGE_PATH: join(cleanProject.workdir, "phase5-security-stage.txt"),
+        }
+        : contentAuthoringTicket
         ? { ...databaseEnv, PHASE5_CONTENT_AUTHORING_DATABASE_URL: cleanUrl, PHASE5_REQUIRE_CONTENT_AUTHORING: "1", PHASE5_REQUIRE_OWNER_COMPOSITION: ticket122 ? "1" : "0" }
         : { ...databaseEnv, PHASE4_REQUIRE_SETTINGS: "1" },
       encoding: "utf8",
-      timeout: 120_000,
+      timeout: ticket123 ? 180_000 : 120_000,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let report;
@@ -454,17 +552,38 @@ export async function main() {
       const failedAssertions = report.testResults?.flatMap((suite) => suite.assertionResults
         ?.filter((test) => test.status === "failed")
         .map((test) => `${[...(test.ancestorTitles ?? []), test.title].join(" > ")}: ${(test.failureMessages ?? []).join(" ")}`) ?? []) ?? [];
-      const messages = failedAssertions.join("\n");
-      const code = messages.match(/PORTFOLIO_SETTINGS_[A-Z_]+/)?.[0] ?? "assertion";
+      const suiteMessages = report.testResults?.map((suite) => suite.message).filter((message) => typeof message === "string") ?? [];
+      const messages = [...failedAssertions, ...suiteMessages].join("\n");
+      const suiteCodes = report.testResults?.flatMap((suite) =>
+        JSON.stringify(suite).match(/\b(?:PORTFOLIO_SETTINGS|PHASE[345])_[A-Z0-9_]+\b/g) ?? []) ?? [];
+      const outputCodes = `${result.stdout ?? ""}\n${result.stderr ?? ""}`
+        .match(/\b(?:PORTFOLIO_SETTINGS|PHASE[345])_[A-Z0-9_]+\b/g) ?? [];
+      const stageMarkers = `${result.stdout ?? ""}\n${result.stderr ?? ""}`
+        .match(/PHASE5_SECURITY_STAGE:[a-z-]+/g) ?? [];
+      let setupStage = "not-reached";
+      if (ticket123) {
+        try {
+          const value = readFileSync(join(cleanProject.workdir, "phase5-security-stage.txt"), "utf8");
+          if (/^[a-z-]+$/u.test(value)) setupStage = value;
+        } catch { /* no setup stage was recorded */ }
+      }
+      const code = messages.match(/\b(?:PORTFOLIO_SETTINGS|PHASE[345])_[A-Z0-9_]+\b/)?.[0] ?? suiteCodes[0] ?? outputCodes[0] ?? "PHASE5_SECURITY_DATABASE_TEST_FAILED";
       const failedTests = report.testResults?.flatMap((suite) => suite.assertionResults
         ?.filter((test) => test.status === "failed")
-        .map((test) => [...(test.ancestorTitles ?? []), test.title].join(" > ")) ?? []) ?? [];
-      const safeDetail = messages
-        .replace(/postgres(?:ql)?:\/\/[^\s"']+/gi, "[database connection redacted]")
-        .replace(/password\s*[=:]\s*[^\s,;]+/gi, "password=[redacted]")
-        .replace(/\s+/g, " ")
-        .slice(0, 2_000);
-      throw new Error(`PORTFOLIO_SETTINGS_TEST_FAILED:${code}:${failedTests.join(" | ")}:${safeDetail}`);
+        .map((test) => {
+          const line = (test.failureMessages ?? []).join("\n").match(/tests[\\/]database[\\/][^:\r\n]+:(\d+):\d+/u)?.[1] ?? "unknown";
+          return `${[...(test.ancestorTitles ?? []), test.title].join(" > ")}@line-${line}`;
+        }) ?? []) ?? [];
+      const failureSummary = failedTests.length > 0 ? failedTests : report.testResults
+        ?.filter((suite) => suite.status !== "passed")
+        .map((suite) => `${basename(suite.name)}:suite-${suite.status}`) ?? [];
+      const suiteShape = report.testResults?.filter((suite) => suite.status !== "passed")
+        .map((suite) => `${basename(suite.name)}:${Object.keys(suite).sort().join(",")}`) ?? [];
+      const suiteCounts = report.testResults?.map((suite) => {
+        const assertions = suite.assertionResults ?? [];
+        return `${basename(suite.name)}:${suite.status}:assertions=${assertions.length}:passed=${assertions.filter((test) => test.status === "passed").length}:failed=${assertions.filter((test) => test.status === "failed").length}:pending=${assertions.filter((test) => test.status === "pending" || test.status === "todo" || test.status === "skipped").length}`;
+      }) ?? [];
+      throw new Error(`PORTFOLIO_SETTINGS_TEST_FAILED:${code}:passed=${report.numPassedTests ?? 0}:failed=${report.numFailedTests ?? 0}:pending=${(report.numPendingTests ?? 0) + (report.numTodoTests ?? 0)}:setup-stage=${setupStage}:${stageMarkers.join(",")}:${failureSummary.join(" | ") || "suite-failed"}:${suiteShape.join(" | ")}:${suiteCounts.join(" | ")}`);
     }
     requireExecutedTests(report, testFiles.length);
     if (ticket122) {
@@ -480,13 +599,26 @@ export async function main() {
       report.ownerCompositionDatabaseSuite = databaseSuite;
       report.ownerCompositionInjectedSuites = injectedSuites;
     } else {
-      console.log((contentAuthoringTicket ? "Content authoring" : "Portfolio settings") +
-        " real PostgreSQL integration: " + report.numPassedTests + " passed, 0 skipped.");
+      if (ticket123) {
+        const diagnosticSuites = report.testResults.filter((suite) => [
+          "tests/database/postgres-transaction-runner.test.ts",
+          "tests/database/postgres-runtime.test.ts",
+          "tests/phase4/owner-session-auth.test.ts",
+          "tests/runtime/runtime-ports.test.ts",
+        ].includes(relative(ROOT, suite.name).replaceAll("\\", "/")));
+        const diagnosticPassed = diagnosticSuites.reduce((count, suite) =>
+          count + (suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0), 0);
+        console.log(`Phase 5 security real PostgreSQL integration: ${report.numPassedTests - diagnosticPassed} passed, 0 skipped.`);
+        console.log(`Database, auth-provider, and structured-log diagnostics audit: ${diagnosticPassed} passed, 0 skipped.`);
+      } else {
+        console.log((contentAuthoringTicket ? "Content authoring" : "Portfolio settings") +
+          " real PostgreSQL integration: " + report.numPassedTests + " passed, 0 skipped.");
+      }
     }
 
     const evidence = contentAuthoringTicket ? {
       sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
-      ...(ticket122 ? {
+      ...(ticket122 || ticket123 ? {
         sourceTreeSha256: workingTreeSourceSha256(),
         runId: randomUUID(),
         toolVersions: {
@@ -496,9 +628,11 @@ export async function main() {
           postgresServer: run("docker", ["version", "--format", "{{.Server.Version}}"]).trim(),
         },
       } : {}),
-      ticket: ticket122 ? 122 : ticket121 ? 121 : ticket120 ? 120 : ticket119 ? 119 : ticket118 ? 118 : ticket117 ? 117 : ticket116 ? 116 : ticket115 ? 115 : ticket114 ? 114 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
+      ticket: ticket123 ? 123 : ticket122 ? 122 : ticket121 ? 121 : ticket120 ? 120 : ticket119 ? 119 : ticket118 ? 118 : ticket117 ? 117 : ticket116 ? 116 : ticket115 ? 115 : ticket114 ? 114 : ticket113 ? 113 : ticket112 ? 112 : ticket111 ? 111 : ticket110 ? 110 : 109,
       parent: 106,
-      scope: ticket122
+      scope: ticket123
+        ? "phase5-migration-equivalence-restricted-principal-privacy-and-pooled-scope-isolation"
+        : ticket122
         ? "runtime-assembled-phase5-owner-authoring-review-publication-route-status-relationships-taxonomy-and-security-adapters"
         : ticket121
           ? "bounded-locale-aware-public-discovery-stable-keyset-cursors-controlled-facets-publication-timestamp-order-and-authoritative-visibility"
@@ -528,6 +662,51 @@ export async function main() {
       predecessorSnapshot: "supabase/baselines/phase3.json",
       migrationChecksums: migrations.checksums,
       migrationLedger: cleanSnapshot.migrationLedger,
+      ...(ticket123 ? {
+        phase4ReleaseUpgrade: {
+          baselineLedger: phase4ReleaseLedger,
+          retainedRecordsBeforeAndAfterPhase5: phase4ReleaseRows,
+          cleanAndPhase4UpgradeFinalSchemasEquivalent: true,
+          phase5MigrationChecksums: migrations.checksums.filter(({ file }) => phase5Files.includes(file)),
+          boundedLockTimeout: "5s on every timestamped Phase 5 migration",
+          recoveryLimitations: phase5Files.map((file) => ({
+            file,
+            notes: migrations.contents.get(file).split(/\r?\n/u)
+              .filter((line) => /^\s*--\s*(?:rollback|forward\s+fix)\s*:/i.test(line))
+              .map((line) => line.replace(/^\s*--\s*/u, "").trim()),
+          })),
+          expandContractCompatibility: phase5Files.map((file) => ({ file, ...PHASE5_MIGRATION_COMPATIBILITY[file] })),
+          destructiveContraction: false,
+          schemaSourceOfTruth: "timestamped supabase/migrations only; no runtime or dashboard DDL",
+          migrationReplayNoop: true,
+          generatedTypesMatchFinalCleanSchema: true,
+        },
+        restrictedPrincipalMatrix: [
+          { principal: "anon login", privateContentRead: "denied", privateWrite: "denied", directDatabaseProjectionRead: "denied", publicServiceProjection: "approved-only contract tested in process" },
+          { principal: "authenticated login", privateContentRead: "denied", privateWrite: "denied" },
+          { principal: "shipwithali_application login with configured Owner claims", privateContentRead: "configured Portfolio only", privateWrite: "approved application grants and forced RLS" },
+          { principal: "shipwithali_application login with foreign Portfolio claims", privateContentRead: "denied", privateWrite: "denied" },
+          { principal: "shipwithali_worker login", privateContentRead: "denied", privateWrite: "denied" },
+          { principal: "shipwithali_migration capability", runtimeLogin: "denied", runtimeCredential: false },
+        ],
+        pooledConnectionScope: { verifiedAfter: ["success", "expected rejection", "rollback", "fault"], knownPrivateIdsRequireOwnerAuthorization: true },
+        diagnosticsPrivacy: {
+          auditSuites: report.testResults.filter((suite) => [
+            "tests/database/postgres-transaction-runner.test.ts",
+            "tests/database/postgres-runtime.test.ts",
+            "tests/phase4/owner-session-auth.test.ts",
+            "tests/runtime/runtime-ports.test.ts",
+          ].includes(relative(ROOT, suite.name).replaceAll("\\", "/"))).map((suite) => ({
+            file: relative(ROOT, suite.name).replaceAll("\\", "/"),
+            passed: suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0,
+            failed: suite.assertionResults?.filter((test) => test.status === "failed").length ?? 0,
+            skipped: suite.assertionResults?.filter((test) => test.status === "pending" || test.status === "todo" || test.status === "skipped").length ?? 0,
+          })),
+          safeFaultOutcomes: ["POSTGRES_UNAVAILABLE", "AUTH_PROVIDER_UNAVAILABLE", "RUNTIME_NOT_READY"],
+          redactedValuesCovered: ["database URLs", "provider errors", "Owner subjects", "cookies", "CSRF proofs", "signed URLs", "private log fields"],
+          outcomeCountTelemetry: "sanitized JSON includes passed/failed/skipped assertions and stable failure codes; sensitive payloads are excluded",
+        },
+      } : {}),
       ...(ticket121 ? {
         ticketMigrationSafety: {
           introduced: ["supabase/migrations/20261009100000_index_project_discovery_reads.sql"],
@@ -562,11 +741,32 @@ export async function main() {
         ...(ticket116 ? ["content.project_status_values", "content.project_status_value_history", "content.project_status_history", "taxonomy.project_discovery_locales"] : []),
         ...(ticket118 || ticket119 || ticket120 || ticket121 || ticket122 ? ["taxonomy.roots", "taxonomy.taxonomy_values", "taxonomy.value_history", "content.project_taxonomy_assignments", "content.project_taxonomy_assignment_history", "taxonomy.project_discovery_taxonomy_values"] : []),
         ...(ticket117 ? ["content.project_relationships", "content.project_relationship_views", "content.project_relationship_history"] : [])],
-      databaseTestResults: ((ticket122 ? report.ownerCompositionDatabaseSuite : report.testResults[0]).assertionResults ?? []).map((test) => ({
+      databaseTestResults: (ticket123
+        ? report.testResults.flatMap((suite) => suite.assertionResults ?? [])
+        : (ticket122 ? report.ownerCompositionDatabaseSuite : report.testResults[0]).assertionResults ?? []).map((test) => ({
         name: [...(test.ancestorTitles ?? []), test.title].join(" > "),
         status: test.status,
       })),
-      databaseIntegrationTestsPassed: (ticket122 ? report.ownerCompositionDatabaseSuite : report.testResults[0]).assertionResults?.filter((test) => test.status === "passed").length ?? 0,
+      databaseIntegrationTestsPassed: ticket123
+        ? report.testResults.filter((suite) => [
+          "tests/database/content-authoring.integration.test.ts",
+          "tests/database/owner-composition.integration.test.ts",
+          "tests/database/phase5-security.integration.test.ts",
+        ].includes(relative(ROOT, suite.name).replaceAll("\\", "/"))).reduce((total, suite) =>
+          total + (suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0), 0)
+        : (ticket122 ? report.ownerCompositionDatabaseSuite : report.testResults[0]).assertionResults?.filter((test) => test.status === "passed").length ?? 0,
+      ...(ticket123 ? {
+        databaseIntegrationSuites: report.testResults.filter((suite) => [
+          "tests/database/content-authoring.integration.test.ts",
+          "tests/database/owner-composition.integration.test.ts",
+          "tests/database/phase5-security.integration.test.ts",
+        ].includes(relative(ROOT, suite.name).replaceAll("\\", "/"))).map((suite) => ({
+          file: relative(ROOT, suite.name).replaceAll("\\", "/"),
+          passed: suite.assertionResults?.filter((test) => test.status === "passed").length ?? 0,
+          failed: suite.assertionResults?.filter((test) => test.status === "failed").length ?? 0,
+          skipped: suite.assertionResults?.filter((test) => test.status === "pending" || test.status === "todo" || test.status === "skipped").length ?? 0,
+        })),
+      } : {}),
       ...(ticket122 ? {
         injectedAdapterAndContractTestSuites: report.ownerCompositionInjectedSuites.map((suite) => ({
           file: relative(ROOT, suite.name).replaceAll("\\", "/"),
@@ -676,7 +876,9 @@ export async function main() {
     if (
       /postgres(?:ql)?:\/\/[^\s"']+:[^\s"']+@|SUPABASE_(?:ACCESS_TOKEN|DB_PASSWORD|SERVICE_ROLE_KEY)\s*=\s*\S+|password\s*[=:]\s*[^\s,;]+/i.test(serializedEvidence)
     ) throw new Error("PORTFOLIO_SETTINGS_EVIDENCE_SANITIZATION_FAILED");
-    const evidencePath = ticket122
+    const evidencePath = ticket123
+      ? join(ROOT, "evidence/phase-5-security-migrations-postgres.json")
+      : ticket122
       ? join(ROOT, "evidence/phase-5-owner-composition-postgres.json")
       : ticket121
         ? join(ROOT, "evidence/phase-5-project-discovery-postgres.json")

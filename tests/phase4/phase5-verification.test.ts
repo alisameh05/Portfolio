@@ -60,6 +60,8 @@ describe("Phase 5 verification preparation (#107)", () => {
       expect(packageJson.scripts[`phase5:focus:${entrypoint}`]).toBeDefined();
       expect(packageJson.scripts[`prephase5:focus:${entrypoint}`]).toBe("npm run validation:ready");
     }
+    expect(packageJson.scripts["phase5:focus:database-rls-migrations-concurrency"])
+      .toBe("node scripts/phase5-verification.mjs --suite database");
     expect(packageJson.scripts["phase5:context"]).toBe("node scripts/check-phase5-context.mjs");
     expect(packageJson.scripts["prephase5:smoke"]).toBe("npm run validation:ready");
   });
