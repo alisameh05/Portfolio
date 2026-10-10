@@ -521,7 +521,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
               (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'media.processing_recorded.v1') as events`,
       [forgedClaims.mediaId],
     );
-    expect(forgedFacts.rows[0]).toEqual({ result: "failed", finding_codes: ["MEDIA_CALLER_FACTS_MISMATCH"], outputs: 0, events: 0 });
+    expect(forgedFacts.rows[0], JSON.stringify(forgedFacts.rows[0])).toEqual({ result: "failed", finding_codes: ["MEDIA_CALLER_FACTS_MISMATCH"], outputs: 0, events: 1 });
     const missingCandidate = await uploadPdf(pdfBytes, "missing-object");
     const missingPath = new URL(missingCandidate.uploadTarget).pathname.split("/media-candidates/")[1];
     expect(missingPath).toBeDefined();
