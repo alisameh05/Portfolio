@@ -181,7 +181,15 @@ function dockerBoundedCommand(executable: string, args: readonly string[], outpu
   const directory = dirname(outputPath);
   const mountSource = directory.replace(/\\/gu, "/");
   const containerName = `portfolio-pdf-${randomUUID()}`;
-  const translatedArgs = args.map((argument) => argument.replaceAll(directory, "/work").replaceAll(mountSource, "/work"));
+  const translatedArgs = args.map((argument) => {
+    for (const prefix of [directory, mountSource]) {
+      if (argument === prefix) return "/work";
+      if (argument.startsWith(`${prefix}\\`) || argument.startsWith(`${prefix}/`)) {
+        return `/work/${argument.slice(prefix.length).replace(/^[\\/]+/u, "").replace(/[\\/]+/gu, "/")}`;
+      }
+    }
+    return argument;
+  });
   const command = [
     "run", "--rm", "--pull=never", "--name", containerName, "--network=none", "--read-only", "--memory=1g", "--cpus=1", "--pids-limit=64",
     `--ulimit=fsize=${limits.maxBytes}:${limits.maxBytes}`, "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
