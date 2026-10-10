@@ -535,9 +535,6 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const substitutedCandidate = await uploadPdf(pdfBytes, "substituted-object");
     const substitutedPath = new URL(substitutedCandidate.uploadTarget).pathname.split("/media-candidates/")[1];
     expect(substitutedPath).toBeDefined();
-    const deletedSubstitute = await storageRequest("/object/media-candidates", { method: "DELETE",
-      headers: { ...headers(SERVICE_ROLE_KEY!), "content-type": "application/json" }, body: JSON.stringify({ prefixes: [substitutedPath] }) });
-    expect(deletedSubstitute.ok).toBe(true);
     const replacement = Buffer.from("%PDF-1.4\nsubstituted bytes\n%%EOF\n");
     const installedSubstitute = await storageRequest(`/object/media-candidates/${substitutedPath}`, { method: "POST",
       headers: { ...headers(SERVICE_ROLE_KEY!), "content-type": "application/pdf", "x-upsert": "true" }, body: replacement });
