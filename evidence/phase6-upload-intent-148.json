@@ -2,12 +2,44 @@
   "schemaVersion": 1,
   "ticket": 148,
   "parent": 145,
-  "runId": "7f5eac9e-891f-4b01-b7eb-11933880ca45",
-  "sourceRevision": "2f8de3a2b9417656590210a8244d986260e5ebd8",
-  "sourceTreeSha256": "49458a0f14451e4c30204c7b3f51c889d87c99490875d76294f1689e6bc5cb3c",
-  "startedAt": "2026-10-10T19:47:51.842Z",
-  "completedAt": "2026-10-10T19:48:39.025Z",
+  "runId": "2d75bd71-227f-4e47-bdeb-1987a8132dad",
+  "sourceRevision": "30cbbbe32e31a573c6e70f650aef3a50bbeb6e0b",
+  "sourceTreeSha256": "5359b4c0eaf6e8893b57427fce329e66b49d96213aa08e87b05ba4e1b091061e",
+  "startedAt": "2026-10-10T19:51:57.298Z",
+  "completedAt": "2026-10-10T19:52:41.593Z",
   "scope": "owner-private-scoped-upload-intents-and-encrypted-exact-replay",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6"
+  },
+  "policyIds": {
+    "migration": "20261010100000_create_private_media_upload_intents.sql",
+    "rls": [
+      "media_assets_owner_scope",
+      "media_upload_intents_owner_scope",
+      "media_upload_intent_commands_owner_scope",
+      "media_upload_intent_capabilities_owner_scope"
+    ],
+    "storage": [
+      "media-candidates",
+      "media-processed",
+      "signed upload lifetime 7200 seconds",
+      "no-upsert"
+    ]
+  },
+  "principalScope": {
+    "database": "shipwithali_application constrained by portfolio_id and owner_id RLS",
+    "storage": [
+      "configured Owner signed capability",
+      "anonymous",
+      "authenticated non-Owner"
+    ],
+    "environment": "disposable loopback Supabase"
+  },
   "services": {
     "postgres": true,
     "auth": true,

@@ -335,7 +335,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     );
     appNow += 3 * 60 * 60 * 1000;
     const reconciled = await createService().reconcileAbandoned();
-    expect(reconciled.ok && reconciled.value.reconciled).toBeGreaterThanOrEqual(1);
+    expect(reconciled).toEqual({ ok: true, value: { reconciled: 1 } });
     expect(uploadedPath).toBeDefined();
     const afterCleanup = await storageRequest(`/storage/v1/object/media-candidates/${uploadedPath}`, { headers: headers(SERVICE_ROLE_KEY!) });
     expect(afterCleanup.status).toBeGreaterThanOrEqual(400);

@@ -139,6 +139,7 @@ async function main() {
     const database = await client.query("select current_setting('server_version_num')::int as version_num, current_setting('server_version') as version");
     await client.end();
     if (Number(database.rows[0]?.version_num) < 170000) throw new Error("PHASE6_POSTGRES_VERSION_UNEXPECTED");
+    toolVersions = { ...toolVersions, supabaseCli: supabasePkg.version, postgres: database.rows[0].version };
     const { openIndependentPostgresConnections } = await import("../tests/phase6/fixtures/deterministic.mjs");
     const independentClients = await openIndependentPostgresConnections(status.DB_URL, 2);
     await Promise.all(independentClients.map((connection) => connection.end()));
@@ -275,6 +276,14 @@ async function main() {
       startedAt,
       completedAt: new Date().toISOString(),
       scope: "owner-private-scoped-upload-intents-and-encrypted-exact-replay",
+      runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" },
+      toolVersions,
+      policyIds: {
+        migration: "20261010100000_create_private_media_upload_intents.sql",
+        rls: ["media_assets_owner_scope", "media_upload_intents_owner_scope", "media_upload_intent_commands_owner_scope", "media_upload_intent_capabilities_owner_scope"],
+        storage: ["media-candidates", "media-processed", "signed upload lifetime 7200 seconds", "no-upsert"],
+      },
+      principalScope: { database: "shipwithali_application constrained by portfolio_id and owner_id RLS", storage: ["configured Owner signed capability", "anonymous", "authenticated non-Owner"], environment: "disposable loopback Supabase" },
       services: { postgres: true, auth: true, storage: true },
       checks: uploadIntentChecks,
       cleanup,
