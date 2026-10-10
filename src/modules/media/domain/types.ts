@@ -3,6 +3,7 @@ import type { StableId, DomainEvent } from "@shared/domain";
 export type MediaSafetyStatus = "pending_scan" | "clean" | "quarantined" | "rejected";
 
 export type MediaAcceptanceStatus = "candidate" | "accepted" | "rejected";
+export type MediaFileKind = "image" | "video" | "document";
 
 export interface MediaAccessibilityMetadata {
   readonly nonVisualDescription?: string;
@@ -17,7 +18,18 @@ export interface MediaVariant {
   readonly byteSize: number;
   readonly width?: number;
   readonly height?: number;
+  /** @deprecated Phase 6 uses MediaObjectVariant; keep this shape for callers. */
   readonly storageReference: string;
+}
+
+export interface MediaObjectVariant {
+  readonly variantName: string;
+  readonly mimeType: string;
+  readonly byteSize: number;
+  readonly width?: number;
+  readonly height?: number;
+  /** Stable opaque identity; provider paths and object metadata stay in adapters. */
+  readonly objectId: StableId<"MediaObject">;
 }
 
 export interface MediaAsset {

@@ -24,7 +24,7 @@ import type {
   OwnerMediaUploadIntentView,
   RecordOwnerMediaProcessingApplicationCommand,
   RejectOwnerMediaAssetApplicationCommand,
-} from "../http/owner-media.js";
+} from "../../modules/media/index.js";
 
 export type OwnerMediaFakeMode =
   | { readonly type: "success" }

@@ -47,11 +47,38 @@ describe("GET Current CV adapter (#28)", () => {
     const response = await handleGetCurrentCv(getCvRequest(), { service: fake, logger });
     expect(response.status).toBe(307);
     expect(fake.calls).toHaveLength(1);
+    expect(fake.calls[0]).toMatchObject({ locale: "en", disposition: "inline" });
     expect(response.headers.get("location")).toBe(SIGNED_URL);
     expect(response.headers.get("cache-control")).toBe("no-store");
     const logged = logger.records.find((record) => record.event === "request.completed");
     expect(logged).toBeDefined();
     expect((logged as { fields: Record<string, unknown> }).fields["status"]).toBe(307);
+  });
+
+  it("binds the requested attachment disposition to the application query", async () => {
+    const fake = createCurrentCvTestFake({ type: "redirect" });
+    const response = await handleGetCurrentCv(
+      getCvRequest("locale=en&disposition=attachment"),
+      { service: fake },
+    );
+    expect(response.status).toBe(307);
+    expect(fake.calls[0]).toMatchObject({ locale: "en", disposition: "attachment" });
+  });
+
+  it("streams the declared PDF branch with no-store and safe disposition", async () => {
+    const fake = createCurrentCvTestFake({
+      type: "stream",
+      chunks: [new Uint8Array([37, 80]), new Uint8Array([68, 70])],
+    });
+    const response = await handleGetCurrentCv(
+      getCvRequest("locale=en&disposition=attachment"),
+      { service: fake },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/pdf");
+    expect(response.headers.get("content-disposition")).toBe('attachment; filename="cv.pdf"');
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual([37, 80, 68, 70]);
   });
 
   it.each([
@@ -115,6 +142,8 @@ describe("GET Current CV adapter (#28)", () => {
     const service = createProductionCurrentCvService();
     const direct = await service.downloadCurrentCv({
       actor: { kind: "visitor", consent: "unknown" },
+      locale: "en",
+      disposition: "inline",
     });
     expect(direct.ok).toBe(false);
     if (!direct.ok) {

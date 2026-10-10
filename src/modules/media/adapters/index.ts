@@ -4,6 +4,9 @@ import type {
   MediaRepositoryPort,
   MediaStoragePort,
   MediaScannerPort,
+  MediaProcessorPort,
+  MediaObjectStoragePort,
+  TrustedMediaScannerPort,
 } from "../ports/index.js";
 import type { MediaAsset } from "../domain/index.js";
 
@@ -45,5 +48,36 @@ export class StubMediaScanner implements MediaScannerPort {
     _storageReference: string,
   ): Promise<Result<{ isClean: boolean; reason?: string }, Rejection>> {
     return err({ kind: "temporarily_unavailable", code: "SCANNER_NOT_IMPLEMENTED" });
+  }
+}
+
+/** Fail-closed Phase 6 storage adapter seam. */
+export class StubMediaObjectStorage implements MediaObjectStoragePort {
+  async generateUploadTarget(
+    _assetId: StableId<"MediaAsset">,
+    _mimeType: string,
+  ): Promise<Result<{
+    readonly uploadUrl: string;
+    readonly objectId: StableId<"MediaObject">;
+    readonly expiresAt: string;
+  }, Rejection>> {
+    return err({ kind: "temporarily_unavailable", code: "STORAGE_NOT_IMPLEMENTED" });
+  }
+
+  async getDeliveryTarget(_input: Parameters<MediaObjectStoragePort["getDeliveryTarget"]>[0]) {
+    return err({ kind: "temporarily_unavailable" as const, code: "STORAGE_NOT_IMPLEMENTED" });
+  }
+}
+
+/** Fail-closed Phase 6 scanner seam; raw provider diagnostics stay private. */
+export class StubTrustedMediaScanner implements TrustedMediaScannerPort {
+  async scanObject(_objectId: StableId<"MediaObject">) {
+    return err({ kind: "temporarily_unavailable" as const, code: "SCANNER_NOT_IMPLEMENTED" });
+  }
+}
+
+export class StubMediaProcessor implements MediaProcessorPort {
+  async processAsset(_input: Parameters<MediaProcessorPort["processAsset"]>[0]) {
+    return err({ kind: "temporarily_unavailable" as const, code: "PROCESSOR_NOT_IMPLEMENTED" });
   }
 }

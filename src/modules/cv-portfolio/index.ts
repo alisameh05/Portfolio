@@ -7,6 +7,7 @@
 
 export type {
   CvVersion,
+  CurrentCvDisposition,
   CurrentCvChangedEvent,
 } from "./domain/index.js";
 
@@ -17,9 +18,28 @@ export type {
   GetCurrentCvQuery,
   DownloadCurrentCvQuery,
   CvPortfolioService,
+  LegacyCvPortfolioService,
+} from "./application/index.js";
+
+export type {
+  GetOwnerCvPortfolioQuery,
+  RegisterOwnerCvVersionApplicationCommand,
+  AcceptOwnerCvVersionApplicationCommand,
+  ActivateOwnerCvVersionApplicationCommand,
+  OwnerCvVersionView,
+  OwnerCvActivationView,
+  OwnerCvPortfolioView,
+  RegisterOwnerCvVersionReceipt,
+  OwnerCvCommandReceipt,
+  OwnerCvApplicationService,
+  CvPortfolioRootView,
+  CurrentCvDownloadQuery,
+  CurrentCvDelivery,
+  CvPortfolioApplicationService,
 } from "./application/index.js";
 
 export type {
   CvRepositoryPort,
   CvStoragePort,
+  CvCurrentDeliveryPort,
 } from "./ports/index.js";

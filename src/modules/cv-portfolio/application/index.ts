@@ -5,4 +5,21 @@ export type {
   GetCurrentCvQuery,
   DownloadCurrentCvQuery,
   CvPortfolioService,
+  LegacyCvPortfolioService,
 } from "./service.js";
+export type {
+  GetOwnerCvPortfolioQuery,
+  RegisterOwnerCvVersionApplicationCommand,
+  AcceptOwnerCvVersionApplicationCommand,
+  ActivateOwnerCvVersionApplicationCommand,
+  OwnerCvVersionView,
+  OwnerCvActivationView,
+  OwnerCvPortfolioView,
+  RegisterOwnerCvVersionReceipt,
+  OwnerCvCommandReceipt,
+  OwnerCvApplicationService,
+  CvPortfolioRootView,
+  CurrentCvDownloadQuery,
+  CurrentCvDelivery,
+  CvPortfolioApplicationService,
+} from "./owner-contracts.js";

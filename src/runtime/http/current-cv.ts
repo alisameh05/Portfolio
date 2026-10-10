@@ -6,16 +6,12 @@
  * never blocks access and no unavailable localization is implied).
  * Ordered behavior: establish request context; validate query with the
  * generated strict validator; construct one application query; call one
- * injected application interface once; serialize the declared redirect
+ * injected application interface once; serialize the declared stream/redirect
  * response; complete request logging.
  *
- * Phase 2 exercises the declared temporary-redirect shape without touching
- * storage: the injected fake supplies a short-lived signed location and the
- * adapter returns it as a 307 response with `Location` and
- * `Cache-Control: no-store` headers. The 200 binary stream shape is
- * declared by the accepted contract and arrives with the storage phase; no
- * PDF bytes are fabricated here. Successful fake output with a non-HTTP(S)
- * location fails safely as a generic 500.
+ * The adapter supports the declared 200 byte stream and 307 short-lived
+ * redirect shapes, always with no-store headers. Successful fake output with
+ * an invalid or expired redirect location fails safely as a generic 500.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Queries, results, and rejections crossing the application seam
@@ -25,8 +21,8 @@
 
 import { zGetCurrentCvQuery } from "../../contracts/http/v1/generated/zod.gen.js";
 import type {
-  CvPortfolioService,
-  DownloadCurrentCvQuery,
+  CvPortfolioApplicationService,
+  CurrentCvDownloadQuery,
 } from "../../modules/cv-portfolio/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
 import {
@@ -36,7 +32,7 @@ import {
 } from "./problem.js";
 
 export interface CurrentCvAdapterDeps {
-  service: Pick<CvPortfolioService, "downloadCurrentCv">;
+  service: Pick<CvPortfolioApplicationService, "downloadCurrentCv">;
   logger?: Logger;
 }
 
@@ -57,6 +53,27 @@ function isHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function streamBytes(bytes: AsyncIterable<Uint8Array>): ReadableStream<Uint8Array> {
+  const iterator = bytes[Symbol.asyncIterator]();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const next = await iterator.next();
+        if (next.done) {
+          controller.close();
+        } else {
+          controller.enqueue(next.value);
+        }
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    async cancel() {
+      await iterator.return?.();
+    },
+  });
 }
 
 export async function handleGetCurrentCv(
@@ -97,14 +114,15 @@ export async function handleGetCurrentCv(
       logger?.warn("request.rejected", { traceId, status: 400 });
       return transportProblem("Invalid query parameters.", traceId, instance);
     }
-    // Validated locale and disposition are intentionally transport-only in
-    // Phase 2: the accepted contract offers English only, and the
-    // provider-neutral download query carries only the visitor actor.
-    void queryResult.data.locale;
-    void (queryResult.data.disposition ?? "inline");
+    // The module receives the requested disposition explicitly so storage
+    // capabilities can bind it; locale remains explicit at the same seam.
+    const locale = queryResult.data.locale;
+    const disposition = queryResult.data.disposition ?? "inline";
 
-    const query: DownloadCurrentCvQuery = {
+    const query: CurrentCvDownloadQuery = {
       actor: { kind: "visitor", consent: "unknown" },
+      locale,
+      disposition,
     };
 
     let result: Awaited<ReturnType<typeof deps.service.downloadCurrentCv>>;
@@ -126,8 +144,36 @@ export async function handleGetCurrentCv(
       return rejection;
     }
 
+    if (result.value.disposition !== disposition) {
+      return internalErrorProblem(
+        new Error("Invalid application result"),
+        traceId,
+        instance,
+        logger,
+      );
+    }
+
+    if (result.value.kind === "stream") {
+      logger?.info("request.completed", { traceId, status: 200 });
+      return new Response(streamBytes(result.value.bytes), {
+        status: 200,
+        headers: {
+          "content-type": "application/pdf",
+          "content-disposition": `${disposition}; filename="cv.pdf"`,
+          "cache-control": "no-store",
+        },
+      });
+    }
+
     const location = result.value.downloadUrl;
-    if (typeof location !== "string" || location.length === 0 || !isHttpUrl(location)) {
+    const expiry = Date.parse(result.value.expiresAt);
+    if (
+      typeof location !== "string" ||
+      location.length === 0 ||
+      !isHttpUrl(location) ||
+      !Number.isFinite(expiry) ||
+      expiry <= Date.now()
+    ) {
       return internalErrorProblem(
         new Error("Invalid application result"),
         traceId,
