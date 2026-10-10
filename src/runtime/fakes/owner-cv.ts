@@ -19,7 +19,7 @@ import type {
   OwnerCvPortfolioView,
   RegisterOwnerCvVersionApplicationCommand,
   RegisterOwnerCvVersionReceipt,
-} from "../http/owner-cv.js";
+} from "../../modules/cv-portfolio/index.js";
 
 export type OwnerCvFakeMode =
   | { readonly type: "success" }

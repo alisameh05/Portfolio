@@ -8,13 +8,16 @@
 export type {
   MediaSafetyStatus,
   MediaAcceptanceStatus,
+  MediaFileKind,
   MediaAccessibilityMetadata,
   MediaVariant,
+  MediaObjectVariant,
   MediaAsset,
   MediaDeliveryReference,
   MediaAssetAcceptedEvent,
   MediaAssetRejectedEvent,
 } from "./domain/index.js";
+export { MEDIA_PROCESSING_POLICY, effectiveMediaProcessingLimits } from "./domain/index.js";
 
 export type {
   CreateUploadIntentCommand,
@@ -23,10 +26,38 @@ export type {
   RejectMediaAssetCommand,
   GetMediaDeliveryReferenceQuery,
   MediaService,
+  MediaApplicationService,
+} from "./application/index.js";
+
+export type {
+  GetOwnerMediaAggregateQuery,
+  CreateOwnerMediaUploadIntentApplicationCommand,
+  RecordOwnerMediaProcessingApplicationCommand,
+  OwnerMediaAccessibility,
+  AcceptOwnerMediaAssetApplicationCommand,
+  RejectOwnerMediaAssetApplicationCommand,
+  OwnerMediaProcessingView,
+  OwnerMediaDecisionView,
+  OwnerMediaAggregateView,
+  OwnerMediaUploadIntentView,
+  OwnerMediaCommandReceipt,
+  OwnerMediaApplicationService,
+  GetMediaAcceptanceFactsQuery,
+  MediaAcceptanceFact,
+  GetMediaUsageQuery,
+  MediaUsage,
+  MediaDeliveryPurpose,
+  MediaDeliveryLocale,
+  ResolveMediaDeliveryQuery,
+  MediaDeliveryLocation,
+  MediaReadApplicationService,
 } from "./application/index.js";
 
 export type {
   MediaRepositoryPort,
   MediaStoragePort,
   MediaScannerPort,
+  MediaProcessorPort,
+  MediaObjectStoragePort,
+  TrustedMediaScannerPort,
 } from "./ports/index.js";

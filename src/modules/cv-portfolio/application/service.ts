@@ -24,24 +24,13 @@ export interface DownloadCurrentCvQuery {
   readonly actor: ActorContext;
 }
 
+/** Existing skeleton API retained for source compatibility. */
 export interface CvPortfolioService {
-  registerCandidate(
-    command: RegisterCvCandidateCommand,
-  ): Promise<Result<CvVersion, Rejection>>;
-
-  acceptVersion(
-    command: AcceptCvVersionCommand,
-  ): Promise<Result<CvVersion, Rejection>>;
-
-  activateCurrentCv(
-    command: ActivateCvVersionCommand,
-  ): Promise<Result<CvVersion, Rejection>>;
-
-  getCurrentCv(
-    query: GetCurrentCvQuery,
-  ): Promise<Result<CvVersion, Rejection>>;
-
-  downloadCurrentCv(
-    query: DownloadCurrentCvQuery,
-  ): Promise<Result<{ downloadUrl: string }, Rejection>>;
+  registerCandidate(command: RegisterCvCandidateCommand): Promise<Result<CvVersion, Rejection>>;
+  acceptVersion(command: AcceptCvVersionCommand): Promise<Result<CvVersion, Rejection>>;
+  activateCurrentCv(command: ActivateCvVersionCommand): Promise<Result<CvVersion, Rejection>>;
+  getCurrentCv(query: GetCurrentCvQuery): Promise<Result<CvVersion, Rejection>>;
+  downloadCurrentCv(query: DownloadCurrentCvQuery): Promise<Result<{ downloadUrl: string }, Rejection>>;
 }
+
+export type LegacyCvPortfolioService = CvPortfolioService;
