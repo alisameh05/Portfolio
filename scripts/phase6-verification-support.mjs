@@ -9,10 +9,10 @@ import { observeRuntime, verifyEnvironment } from "./validation-environment.mjs"
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const PHASE6_SCHEMA_VERSION = 1;
 export const PHASE6_TOOL_DEFINITIONS = Object.freeze({
-  scanner: "clamav/clamav:1.4.3",
+  scanner: "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4",
   imageProcessor: "dpokidov/imagemagick:7.1.1-47",
   videoProcessor: "jrottenberg/ffmpeg:7.1-ubuntu2404",
-  pdfProcessor: "jbarlow83/ocrmypdf-alpine:v17.12.1",
+  pdfProcessor: "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c",
 });
 export const PHASE6_FORMATS = Object.freeze([
   { id: "pdf", kind: "document", mimeType: "application/pdf", processor: "pdfProcessor" },
@@ -40,6 +40,7 @@ export function scrubPhase6Environment(source = process.env) {
   for (const key of Object.keys(env)) {
     if (/^(?:SUPABASE_|PHASE[456]_|DATABASE_|OWNER_GITHUB_)/.test(key)) delete env[key];
   }
+  env.SUPABASE_TELEMETRY_DISABLED = "1";
   return env;
 }
 

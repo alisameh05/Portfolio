@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
@@ -452,6 +452,28 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(updatePrivileges.rows[0]).toEqual({ state_identity: false, state_version: true, orphan_identity: false,
       orphan_state: true, claim_identity: false, claim_lease: true });
     const pdfBytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
+    const { createClamAvScanner } = await import("../../src/runtime/adapters/media-processing-tools.js");
+    const productionScan = await createClamAvScanner().scan(pdfBytes);
+    expect(productionScan).toMatchObject({ ok: true, value: { verdict: "clean" } });
+    if (process.platform === "win32") {
+      const { createOcrMyPdfProcessor, runWithBoundedOutput } = await import("../../src/runtime/adapters/media-processing-tools.js");
+      const productionResult = await createOcrMyPdfProcessor().process(pdfBytes);
+      expect(productionResult.ok, "Windows production processor must use the bounded pinned container runtime").toBe(true);
+      const quotaDirectory = mkdtempSync(join(tmpdir(), "phase6-pdf-output-quota-"));
+      const quotaPath = join(quotaDirectory, "oversized.pdf");
+      try {
+        const childCode = "import sys,time; f=open(sys.argv[1],'ab',buffering=0); exec('while True:\\n f.write(bytes([120,120])); time.sleep(0.01)')";
+        const worker = `import subprocess,sys,time; subprocess.Popen([sys.executable, '-c', ${JSON.stringify(childCode)}, sys.argv[1]]); time.sleep(1000)`;
+        await expect(runWithBoundedOutput("python3", ["-c", worker, quotaPath], quotaPath,
+          { maxBytes: 8, timeoutMs: 5_000, python: "python3" })).rejects.toBeDefined();
+        expect(statSync(quotaPath).size).toBeLessThanOrEqual(8);
+        const stoppedSize = statSync(quotaPath).size;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(statSync(quotaPath).size).toBe(stoppedSize);
+      } finally {
+        rmSync(quotaDirectory, { recursive: true, force: true });
+      }
+    }
     const processedFiles: Uint8Array[] = [];
     let scannerExecutions = 0;
     let processorExecutions = 0;
@@ -471,8 +493,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     };
     const normalProcessingStorage = createSupabaseMediaProcessingStorage({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY! });
     const realProcessor = { async process(input: Uint8Array) { processorExecutions += 1; const result = dockerPdfProcessor(input); if (result.ok) processedFiles.push(result.value.bytes); return result; } };
-    const makeMediaProcessing = (storage = normalProcessingStorage, processor: PdfProcessorPort = realProcessor, scanner = { async scan(input: Uint8Array) { scannerExecutions += 1; return dockerScanner(input); } }) => createMediaProcessingApplicationService({
-      scope: { ownerId }, repository: createPostgresMediaProcessingRepository({
+    const makeMediaProcessing = (storage = normalProcessingStorage, processor: PdfProcessorPort = realProcessor,
+      scanner = { async scan(input: Uint8Array) { scannerExecutions += 1; return dockerScanner(input); } },
+      repositoryOverride?: ReturnType<typeof createPostgresMediaProcessingRepository>) => createMediaProcessingApplicationService({
+      scope: { ownerId }, repository: repositoryOverride ?? createPostgresMediaProcessingRepository({
         database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
       }),
       storage,
@@ -485,6 +509,48 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
 
     const safe = await uploadPdf(pdfBytes, "safe");
     const safeHash = createHash("sha256").update(pdfBytes).digest("hex");
+    const forgedClaims = await uploadPdf(pdfBytes, "forged-claims");
+    const forgedResult = await mediaProcessing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
+      idempotencyKey: "phase6-pdf-forged-claims" as never, mediaId: forgedClaims.mediaId, expectedVersion: 1, result: "passed",
+      detectedMediaType: "application/pdf", detectedByteLength: pdfBytes.byteLength, sha256: "f".repeat(64) });
+    expect(forgedResult).toMatchObject({ ok: true });
+    const forgedFacts = await admin.query(
+      `select (select result from media.processing_attempts where media_id = $1::uuid) as result,
+              (select finding_codes from media.processing_attempts where media_id = $1::uuid) as finding_codes,
+              (select count(*)::int from media.processed_objects where media_id = $1::uuid) as outputs,
+              (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'media.processing_recorded.v1') as events`,
+      [forgedClaims.mediaId],
+    );
+    expect(forgedFacts.rows[0]).toEqual({ result: "failed", finding_codes: ["MEDIA_CALLER_FACTS_MISMATCH"], outputs: 0, events: 0 });
+    const missingCandidate = await uploadPdf(pdfBytes, "missing-object");
+    const missingPath = new URL(missingCandidate.uploadTarget).pathname.split("/media-candidates/")[1];
+    expect(missingPath).toBeDefined();
+    const removedCandidate = await storageRequest("/object/media-candidates", { method: "DELETE",
+      headers: { ...headers(SERVICE_ROLE_KEY!), "content-type": "application/json" }, body: JSON.stringify({ prefixes: [missingPath] }) });
+    expect(removedCandidate.ok).toBe(true);
+    const missingResult = await mediaProcessing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
+      idempotencyKey: "phase6-pdf-missing-object" as never, mediaId: missingCandidate.mediaId, expectedVersion: 1, result: "passed",
+      detectedMediaType: "application/pdf", detectedByteLength: pdfBytes.byteLength, sha256: safeHash });
+    expect(missingResult).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_UPLOAD_OBJECT_MISSING" } });
+    const missingFacts = await admin.query("select result, finding_codes from media.processing_attempts where media_id = $1::uuid", [missingCandidate.mediaId]);
+    expect(missingFacts.rows[0]).toEqual({ result: "failed", finding_codes: ["MEDIA_UPLOAD_OBJECT_MISSING"] });
+
+    const substitutedCandidate = await uploadPdf(pdfBytes, "substituted-object");
+    const substitutedPath = new URL(substitutedCandidate.uploadTarget).pathname.split("/media-candidates/")[1];
+    expect(substitutedPath).toBeDefined();
+    const deletedSubstitute = await storageRequest("/object/media-candidates", { method: "DELETE",
+      headers: { ...headers(SERVICE_ROLE_KEY!), "content-type": "application/json" }, body: JSON.stringify({ prefixes: [substitutedPath] }) });
+    expect(deletedSubstitute.ok).toBe(true);
+    const replacement = Buffer.from("%PDF-1.4\nsubstituted bytes\n%%EOF\n");
+    const installedSubstitute = await storageRequest(`/object/media-candidates/${substitutedPath}`, { method: "POST",
+      headers: { ...headers(SERVICE_ROLE_KEY!), "content-type": "application/pdf", "x-upsert": "true" }, body: replacement });
+    expect([200, 201].includes(installedSubstitute.status)).toBe(true);
+    const substituteResult = await mediaProcessing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
+      idempotencyKey: "phase6-pdf-substituted-object" as never, mediaId: substitutedCandidate.mediaId, expectedVersion: 1, result: "passed",
+      detectedMediaType: "application/pdf", detectedByteLength: pdfBytes.byteLength, sha256: safeHash });
+    expect(substituteResult).toMatchObject({ ok: true });
+    const substituteFacts = await admin.query("select result, finding_codes from media.processing_attempts where media_id = $1::uuid", [substitutedCandidate.mediaId]);
+    expect(substituteFacts.rows[0]).toEqual({ result: "failed", finding_codes: ["MEDIA_DECLARATION_MISMATCH"] });
     let applicationResult: Awaited<ReturnType<typeof mediaProcessing.record>> | undefined;
     const operationService = { ...createProductionOwnerMediaService(), recordOwnerMediaProcessing: async (command: Parameters<typeof mediaProcessing.record>[0]) => {
       applicationResult = await mediaProcessing.record(command);
@@ -659,6 +725,40 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(await mediaProcessing.record({ ...retryPayload, idempotencyKey: "phase6-pdf-retry-terminal-tie" as never, expectedVersion: 3 }))
       .toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
     expect(scannerExecutions).toBe(scansBeforeTerminalRetry);
+
+    const staleCandidate = await uploadPdf(pdfBytes, "stale-commit");
+    const staleAsset = await admin.query("select declared_sha256 from media.assets where media_id = $1::uuid", [staleCandidate.mediaId]);
+    const originalDeclaredSha256 = staleAsset.rows[0]?.declared_sha256 as string | undefined;
+    if (originalDeclaredSha256 === undefined) throw new Error("MEDIA_STALE_CANDIDATE_MISSING");
+    const substitutedSha256 = originalDeclaredSha256 === "0".repeat(64) ? "1".repeat(64) : "0".repeat(64);
+    const staleRepository = createPostgresMediaProcessingRepository({
+      database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
+    });
+    const racingRepository: typeof staleRepository = {
+      ...staleRepository,
+      async commitAttempt(command) {
+        await admin.query("update media.assets set declared_sha256 = $2 where media_id = $1::uuid", [staleCandidate.mediaId, substitutedSha256]);
+        return staleRepository.commitAttempt(command);
+      },
+    };
+    const staleService = makeMediaProcessing(normalProcessingStorage, realProcessor, undefined, racingRepository);
+    let staleResult: Awaited<ReturnType<typeof staleService.record>>;
+    try {
+      staleResult = await staleService.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
+        idempotencyKey: "phase6-pdf-stale-commit" as never, mediaId: staleCandidate.mediaId, expectedVersion: 1, result: "passed",
+        detectedMediaType: "application/pdf", detectedByteLength: pdfBytes.byteLength, sha256: safeHash });
+      expect(staleResult).toMatchObject({ ok: false });
+      const staleFacts = await admin.query(
+        `select (select count(*)::int from media.processing_attempts where media_id = $1::uuid and result = 'passed') as passed_attempts,
+                (select count(*)::int from media.processed_objects where media_id = $1::uuid) as outputs,
+                (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'media.processing_recorded.v1') as events,
+                (select count(*)::int from media.processing_orphans where media_id = $1::uuid and state = 'pending') as orphans`,
+        [staleCandidate.mediaId],
+      );
+      expect(staleFacts.rows[0]).toEqual({ passed_attempts: 0, outputs: 0, events: 0, orphans: 0 });
+    } finally {
+      await admin.query("update media.assets set declared_sha256 = $2 where media_id = $1::uuid", [staleCandidate.mediaId, originalDeclaredSha256]);
+    }
 
     const rollbackCandidate = await uploadPdf(pdfBytes, "rollback");
     const suffix = randomBytes(3).toString("hex");

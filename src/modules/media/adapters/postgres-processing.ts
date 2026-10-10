@@ -161,6 +161,11 @@ export function createPostgresMediaProcessingRepository(input: {
               and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
             return err({ kind: "conflict", code: "MEDIA_CANDIDATE_STALE" });
           }
+          if (row.declared_sha256 !== query.candidate.declaredSha256) {
+            await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
+              and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
+            return err({ kind: "conflict", code: "MEDIA_CANDIDATE_STALE" });
+          }
           if (Number(row.current_version) !== query.expectedVersion) {
             await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
               and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
