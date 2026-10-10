@@ -18,6 +18,7 @@ import type {
   CurrentCvDownloadQuery,
   OwnerCvApplicationService,
 } from "../../src/modules/cv-portfolio/index.js";
+import type { TransactionContext } from "../../src/runtime/ports.js";
 
 const mediaOwnerOperations = [
   "getOwnerMediaAggregate",
@@ -65,6 +66,8 @@ const acceptanceQuery: GetMediaAcceptanceFactsQuery = {
   ownerId: "owner" as GetMediaAcceptanceFactsQuery["ownerId"],
   mediaAssetIds: ["asset" as GetMediaAcceptanceFactsQuery["ownerId"]],
 };
+const transaction = { kind: "transaction" } satisfies TransactionContext;
+type AcceptanceFactTransaction = Parameters<MediaReadApplicationService["getAcceptanceFacts"]>[1];
 
 const fact: MediaAcceptanceFact = {
   mediaAssetId: "asset" as MediaAcceptanceFact["mediaAssetId"],
@@ -105,6 +108,7 @@ describe("Media and CV module contracts (#147)", () => {
     expect(dispositionQuery.disposition).toBe("attachment");
     expect(initialRoot.currentVersionId).toBeNull();
     expect(fact).toMatchObject({ accepted: true, safe: true, suitable: true, accessible: true });
+    expect(transaction.kind satisfies AcceptanceFactTransaction["kind"]).toBe("transaction");
     expect(deliveryPurpose).toBe("current-cv");
     expect(processorInput.kind).toBe("image");
     expect(cvDownloadDisposition).toBe("attachment");

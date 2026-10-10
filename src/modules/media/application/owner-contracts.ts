@@ -5,6 +5,7 @@ import type {
   Result,
   StableId,
 } from "@shared/domain";
+import type { TransactionContext } from "../../../runtime/ports.js";
 import type { MediaAccessibilityMetadata, MediaAsset } from "../domain/index.js";
 
 /** Safe Owner reads and commands for the five existing Media operations. */
@@ -121,7 +122,7 @@ export interface OwnerMediaApplicationService {
   ): Promise<Result<OwnerMediaCommandReceipt, Rejection>>;
 }
 
-/** Complete, consistent acceptance facts consumed inside the caller's transaction. */
+/** Complete, consistent acceptance facts read through the caller's transaction. */
 export interface GetMediaAcceptanceFactsQuery {
   readonly ownerId: StableId<string>;
   readonly mediaAssetIds: ReadonlyArray<StableId<string>>;
@@ -172,6 +173,7 @@ export interface MediaReadApplicationService {
   /** Returns one complete fact per distinct requested same-Owner ID. */
   getAcceptanceFacts(
     query: GetMediaAcceptanceFactsQuery,
+    transaction: TransactionContext,
   ): Promise<Result<ReadonlyArray<MediaAcceptanceFact>, Rejection>>;
   getUsage(query: GetMediaUsageQuery): Promise<Result<MediaUsage, Rejection>>;
   resolveDelivery(

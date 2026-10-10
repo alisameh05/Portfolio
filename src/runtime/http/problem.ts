@@ -109,7 +109,9 @@ export function rejectionToProblem(
         status: 404,
         detail: "The requested resource is not available.",
         instance,
-        code: "not_found",
+        // Preserve the two cross-module resource codes required by Media/CV
+        // consumers while retaining the legacy generic code for other reads.
+        code: rejection.code === "CURRENT_CV_NOT_FOUND" ? rejection.code : "not_found",
         traceId,
       });
     case "conflict":
@@ -119,7 +121,9 @@ export function rejectionToProblem(
         status: 409,
         detail: "The request conflicts with the current state of the resource.",
         instance,
-        code: "conflict",
+        // Media usage is an actionable Owner conflict; keep its stable code
+        // visible without changing existing conflict response codes.
+        code: rejection.code === "MEDIA_IN_USE" ? rejection.code : "conflict",
         traceId,
       });
     case "precondition_failed":
