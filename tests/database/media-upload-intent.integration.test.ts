@@ -216,6 +216,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     await appClient.query("select set_config('shipwithali.portfolio_id', $1, true), set_config('shipwithali.owner_id', $2, true)", [portfolioId, ownerId]);
     const scoped = await appClient.query("select media_id::text from media.assets where media_id = $1::uuid", [mediaId]);
     expect(scoped.rowCount).toBe(1);
+    await appClient.query("select set_config('shipwithali.portfolio_id', $1, true)", [createStableId("Portfolio")]);
+    const foreignPortfolio = await appClient.query("select media_id::text from media.assets where media_id = $1::uuid", [mediaId]);
+    expect(foreignPortfolio.rowCount).toBe(0);
+    await appClient.query("select set_config('shipwithali.portfolio_id', $1, true)", [portfolioId]);
     await appClient.query("select set_config('shipwithali.owner_id', $1, true)", [createStableId("Owner")]);
     const foreignScope = await appClient.query("select media_id::text from media.assets where media_id = $1::uuid", [mediaId]);
     expect(foreignScope.rowCount).toBe(0);
