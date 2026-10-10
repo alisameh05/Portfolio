@@ -477,7 +477,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const processedFiles: Uint8Array[] = [];
     let scannerExecutions = 0;
     let processorExecutions = 0;
-    const uploadPdf = async (payload: Uint8Array, suffix: string, originalFileName = `candidate-${suffix}.pdf`) => {
+    const uploadPdf = async (payload: Uint8Array, suffix: string, originalFileName = `candidate-${suffix}.pdf`, uploadBytes = true) => {
       const uploadService = createService();
       const issued = await uploadService.create({
         actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
@@ -487,8 +487,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       });
       expect(issued.ok, JSON.stringify({ issued, storage: lastStorageFailure ?? null })).toBe(true);
       if (!issued.ok) throw new Error("PHASE6_PDF_UPLOAD_INTENT_FAILED");
-      const uploaded = await fetch(issued.value.uploadTarget, { method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" }, body: Buffer.from(payload) });
-      expect([200, 201].includes(uploaded.status)).toBe(true);
+      if (uploadBytes) {
+        const uploaded = await fetch(issued.value.uploadTarget, { method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" }, body: Buffer.from(payload) });
+        expect([200, 201].includes(uploaded.status)).toBe(true);
+      }
       return issued.value;
     };
     const normalProcessingStorage = createSupabaseMediaProcessingStorage({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY! });
@@ -522,12 +524,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       [forgedClaims.mediaId],
     );
     expect(forgedFacts.rows[0], JSON.stringify(forgedFacts.rows[0])).toEqual({ result: "failed", finding_codes: ["MEDIA_CALLER_FACTS_MISMATCH"], outputs: 0, events: 1 });
-    const missingCandidate = await uploadPdf(pdfBytes, "missing-object");
-    const missingPath = new URL(missingCandidate.uploadTarget).pathname.split("/media-candidates/")[1];
-    expect(missingPath).toBeDefined();
-    const removedCandidate = await storageRequest("/object/media-candidates", { method: "DELETE",
-      headers: { ...headers(SERVICE_ROLE_KEY!), "content-type": "application/json" }, body: JSON.stringify({ prefixes: [missingPath] }) });
-    expect(removedCandidate.ok).toBe(true);
+    const missingCandidate = await uploadPdf(pdfBytes, "missing-object", undefined, false);
     const missingResult = await mediaProcessing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
       idempotencyKey: "phase6-pdf-missing-object" as never, mediaId: missingCandidate.mediaId, expectedVersion: 1, result: "passed",
       detectedMediaType: "application/pdf", detectedByteLength: pdfBytes.byteLength, sha256: safeHash });
