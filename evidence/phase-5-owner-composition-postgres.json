@@ -1,7 +1,8 @@
 {
-  "sourceRevision": "9d0b22bb9c772035fb65903ff41c8ecd89b7537b",
-  "sourceTreeSha256": "9bb8843bbd1a8a590a092344b60303e5bfb4ee23084e787cfccbd4d92dc84774",
-  "runId": "dea8ec6a-b7a7-4d4f-93b0-7bed22944401",
+  "sourceRevision": "84efc9e7685d67dd43fd401fdbefe1b9e41de5ce",
+  "sourceTreeSha256": "d02ad7775f02a3312bd15e294cf9be9c9561957c4043674fc8bf83af5f903661",
+  "runId": "475223a1-821a-471e-bd41-fba77c9df253",
+  "startedAt": "2026-10-10T13:25:30.610Z",
   "toolVersions": {
     "node": "24.21.0",
     "npm": "11.19.0",
@@ -196,7 +197,7 @@
   ],
   "databaseTestResults": [
     {
-      "name": "Phase 5 Owner production composition against PostgreSQL > serves real Owner content, histories, Project controls and Taxonomy through the runtime assembly",
+      "name": "Phase 5 Owner production composition against PostgreSQL > preserves core content and Contact/CTA queries when optional capability facts fail in real Owner composition",
       "status": "passed"
     }
   ],
@@ -205,6 +206,18 @@
     {
       "file": "tests/contracts/owner-contract.test.ts",
       "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "tests/phase4/owner-operation-policy.test.ts",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "tests/phase4/owner-request-security.test.ts",
+      "passed": 20,
       "failed": 0,
       "skipped": 0
     },
@@ -241,18 +254,6 @@
     {
       "file": "tests/runtime/owner-taxonomy.test.ts",
       "passed": 35,
-      "failed": 0,
-      "skipped": 0
-    },
-    {
-      "file": "tests/phase4/owner-operation-policy.test.ts",
-      "passed": 11,
-      "failed": 0,
-      "skipped": 0
-    },
-    {
-      "file": "tests/phase4/owner-request-security.test.ts",
-      "passed": 20,
       "failed": 0,
       "skipped": 0
     }
