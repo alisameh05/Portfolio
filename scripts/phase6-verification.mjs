@@ -110,6 +110,7 @@ async function main() {
   const failures = [];
   let uploadIntentChecks;
   let mediaProcessingChecks;
+  let processingCounts;
   let toolVersions = {};
   let status;
   const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], { cwd: ROOT, env, timeout }).stdout;
@@ -212,6 +213,7 @@ async function main() {
     }
     console.log("Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.");
     const testJsonPath = join(workdir, "upload-intent-vitest.json");
+    const processingCountsPath = join(workdir, "media-processing-counts.json");
     const testEnv = {
       ...env,
       PHASE6_UPLOAD_INTENT_DATABASE_URL: status.DB_URL,
@@ -225,10 +227,12 @@ async function main() {
       PHASE6_PDF_PROCESSOR_IMAGE: pdf,
       PHASE6_SCANNER_VERSION: toolVersions.scanner,
       PHASE6_PDF_PROCESSOR_VERSION: toolVersions.pdfProcessor,
+      PHASE6_MEDIA_PROCESSING_COUNTS_FILE: processingCountsPath,
     };
     const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", "tests/database/media-upload-intent.integration.test.ts", "--reporter=json", `--outputFile=${testJsonPath}`], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 300_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
     const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
+    processingCounts = existsSync(processingCountsPath) ? JSON.parse(readFileSync(processingCountsPath, "utf8")) : undefined;
     const allAssertions = (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
     const uploadAssertions = allAssertions.filter((item) => !String(item.fullName ?? "").includes("processes PDF candidates"));
     const processingAssertions = allAssertions.filter((item) => String(item.fullName ?? "").includes("processes PDF candidates"));
@@ -258,6 +262,7 @@ async function main() {
     };
     if (uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
     if (mediaProcessingChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
+    if (MEDIA_PROCESSING_ONLY && (!Number.isSafeInteger(processingCounts?.scannerExecutions) || !Number.isSafeInteger(processingCounts?.processorExecutions))) throw new Error("PHASE6_MEDIA_PROCESSING_TOOL_COUNTS_MISSING");
   } catch (error) {
     failures.push(error instanceof Error ? error.message : "PHASE6_SETUP_FAILED");
   } finally {
@@ -332,9 +337,9 @@ async function main() {
       runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" },
       toolVersions,
       policyIds: { migration: "20261010200000_record_trusted_pdf_processing.sql", processing: "pdf-active-content-deny-1", limits: { pdfBytes: 20 * 1024 * 1024, maxAttemptMs: 60_000, maxPages: 500, maxPdfObjects: 100000, maxOutputBytes: 20 * 1024 * 1024, tempPdfCount: 3 }, storage: ["media-candidates private", "media-processed private", "create-only output"] },
-      services: { postgres: { available: true, majorVersion: 17 }, auth: { available: true }, storage: { available: true, privateBucketVerified: true, executionCount: services.storage?.executionCount }, scanner: { available: true, image: PHASE6_TOOL_DEFINITIONS.scanner, executionCount: 2 }, pdfProcessor: { available: true, image: PHASE6_TOOL_DEFINITIONS.pdfProcessor, executionCount: 1 } },
+      services: { postgres: { available: true, majorVersion: 17 }, auth: { available: true }, storage: { available: true, privateBucketVerified: true, executionCount: services.storage?.executionCount }, scanner: { available: true, image: PHASE6_TOOL_DEFINITIONS.scanner, executionCount: (processingCounts?.scannerExecutions ?? 0) + 1 }, pdfProcessor: { available: true, image: PHASE6_TOOL_DEFINITIONS.pdfProcessor, executionCount: (processingCounts?.processorExecutions ?? 0) + 1 } },
       principalScope: { database: "shipwithali_application constrained by portfolio_id and owner_id RLS", storage: ["server service role for exact candidate read and processed write", "anonymous denied processed object read"], environment: "disposable loopback Supabase" },
-      scenarios: ["real PDF process and byte hash round trip", "exact replay without repeated scan or output", "EICAR harmless malware signature rejected", "malformed PDF rejected", "encrypted PDF rejected", "active-content PDF rejected", "foreign Owner RLS read denied"].map((name) => ({ name, executed: true, status: "passed" })),
+      scenarios: ["real PDF process and byte hash round trip", "exact replay without repeated scan or output", "fresh-key reprocessing after success rejected", "EICAR harmless malware signature rejected", "malformed PDF rejected", "encrypted PDF rejected", "active-content PDF rejected", "foreign Owner RLS read denied"].map((name) => ({ name, executed: true, status: "passed" })),
       checks: mediaProcessingChecks, cleanup,
       verdict: mediaProcessingChecks.verdict === "pass" && cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:media-processing"],

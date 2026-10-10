@@ -78,6 +78,8 @@ export function createPostgresMediaProcessingRepository(input: {
       try {
         return await input.transactions.run(async (context) => {
           const executor = resolvePostgresTransaction(context); await setScope(context, input.scope);
+          await sql`set local lock_timeout = '1s'`.execute(executor);
+          await sql`set local statement_timeout = '3s'`.execute(executor);
           const key = keyHash(query.idempotencyKey);
           const existing = await sql<ReplayRow>`select request_hash, aggregate_version, outcome from media.processing_commands
             where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId} and media_id = ${query.candidate.mediaId}

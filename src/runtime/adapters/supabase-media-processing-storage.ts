@@ -17,6 +17,36 @@ function bucket(value: string | undefined, fallback: string): string {
   return result;
 }
 
+async function readBounded(response: Response, maxBytes: number): Promise<Uint8Array | undefined> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    await response.body?.cancel().catch(() => undefined);
+    return undefined;
+  }
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      total += next.value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return undefined;
+      }
+      chunks.push(next.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return bytes;
+}
+
 /** Reads only the intent-bound candidate and writes create-only processed PDFs. */
 export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProcessingStorageOptions): MediaProcessingStoragePort {
   const base = new URL(options.storageUrl);
@@ -36,14 +66,19 @@ export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProce
   const objectPath = (...parts: string[]) => parts.map((part) => encodeURIComponent(part)).join("/");
   return {
     async readCandidate(input) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4_000);
       try {
         const path = objectPath("candidate", input.portfolioId, input.mediaId, input.uploadIntentId, input.objectId);
-        const response = await request(`/object/${encodeURIComponent(candidateBucket)}/${path}`);
+        const response = await fetcher(new URL(`/storage/v1/object/${encodeURIComponent(candidateBucket)}/${path}`, base), {
+          signal: controller.signal, headers,
+        });
         if (!response.ok) return unavailable();
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        if (bytes.byteLength > 20 * 1024 * 1024) return err({ kind: "validation", code: "MEDIA_BYTES_OUT_OF_BOUNDS" });
+        const bytes = await readBounded(response, 20 * 1024 * 1024);
+        if (!bytes) return err({ kind: "validation", code: "MEDIA_BYTES_OUT_OF_BOUNDS" });
         return ok(bytes);
       } catch { return unavailable(); }
+      finally { clearTimeout(timer); }
     },
     async sealProcessedPdf(input) {
       try {

@@ -21,12 +21,16 @@ const command = {
   expectedVersion: 1, mediaId, result: "passed" as const, detectedMediaType: "application/pdf", detectedByteLength: pdf.byteLength, sha256: sha(pdf),
 };
 
-function harness(options: { readonly state?: MediaProcessingCandidate["state"]; readonly replay?: boolean; readonly commitError?: string; readonly bytes?: Uint8Array } = {}) {
+function harness(options: { readonly state?: MediaProcessingCandidate["state"]; readonly replay?: boolean; readonly commitError?: string; readonly bytes?: Uint8Array; readonly elapsedDuringScanMs?: number } = {}) {
   const commits: Parameters<MediaProcessingRepositoryPort["commitAttempt"]>[0][] = [];
   const orphanCalls: Parameters<MediaProcessingRepositoryPort["recordOrphan"]>[0][] = [];
   const marks: unknown[] = [];
+  let nowMs = Date.parse("2026-10-10T20:00:00.000Z");
   const read = vi.fn(async () => ({ ok: true as const, value: options.bytes ?? pdf }));
-  const scan = vi.fn(async () => ({ ok: true as const, value: { verdict: "clean" as const, version: "ClamAV pinned" } }));
+  const scan = vi.fn(async () => {
+    nowMs += options.elapsedDuringScanMs ?? 0;
+    return { ok: true as const, value: { verdict: "clean" as const, version: "ClamAV pinned" } };
+  });
   const process = vi.fn(async () => ({ ok: true as const, value: { bytes: output, version: "OCRmyPDF pinned", policyVersion: "pdf-policy-1" } }));
   const discard = vi.fn(async () => undefined);
   const repository: MediaProcessingRepositoryPort = {
@@ -51,7 +55,7 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
     scanner: { scan }, processor: { process },
     digest: { sha256: sha },
     ids: { generate(kind) { return kind === "MediaProcessingAttempt" ? "00000000-0000-7000-8000-000000000007" : outputObjectId; } },
-    clock: { now: () => "2026-10-10T20:00:00.000Z" },
+    clock: { now: () => new Date(nowMs).toISOString() },
   });
   return { service, commits, orphanCalls, marks, read, scan, process, discard };
 }
@@ -91,6 +95,20 @@ describe("trusted PDF media processing", () => {
     expect(await replay.service.record(command)).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
     expect(replay.read).not.toHaveBeenCalled();
     expect(replay.commits).toHaveLength(0);
+    const processed = harness({ state: "processed" });
+    expect(await processed.service.record(command)).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
+    expect(processed.read).not.toHaveBeenCalled();
+    expect(processed.scan).not.toHaveBeenCalled();
+    expect(processed.process).not.toHaveBeenCalled();
+    expect(processed.commits).toHaveLength(0);
+  });
+
+  it("records an over-budget processing attempt as a failure before PDF processing", async () => {
+    const h = harness({ elapsedDuringScanMs: 60_001 });
+    const result = await h.service.record(command);
+    expect(result.ok).toBe(true);
+    expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", findings: ["MEDIA_PROCESSING_TIMEOUT"] });
+    expect(h.process).not.toHaveBeenCalled();
   });
 
   it("discards a sealed private output when the commit becomes stale", async () => {

@@ -9,8 +9,9 @@ import type { PdfProcessorPort, TrustedByteScannerPort } from "../../modules/med
 const execFile = promisify(nodeExecFile);
 const MAX_BYTES = 20 * 1024 * 1024;
 const SCAN_TIMEOUT_MS = 8_000;
-const PROCESS_TIMEOUT_MS = 10_000;
+const PROCESS_TIMEOUT_MS = 8_000;
 const POLICY_VERSION = "pdf-active-content-deny-1";
+const PINNED_CLAMAV_VERSION = /^ClamAV 1\.4\.3\/[0-9]+\//u;
 function safeFailure(code: string): Result<never, Rejection> {
   return err({ kind: "temporarily_unavailable", code });
 }
@@ -37,10 +38,13 @@ async function withTempPdf<T>(bytes: Uint8Array, action: (directory: string, inp
 /** Runs the pinned ClamAV binary; exit 0 is clean, 1 is an unsafe signature. */
 export function createClamAvScanner(options: { readonly executable?: string } = {}): TrustedByteScannerPort {
   const executable = options.executable ?? "clamscan";
+  let versionPromise: Promise<string> | undefined;
+  const version = () => versionPromise ??= toolVersion(executable, ["--version"]).catch((error: unknown) => { versionPromise = undefined; throw error; });
   return {
     async scan(bytes) {
       try {
-        const version = await toolVersion(executable, ["--version"]);
+        const scannerVersion = await version();
+        if (!PINNED_CLAMAV_VERSION.test(scannerVersion)) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         const verdict = await withTempPdf(bytes, async (_directory, input) => {
           try {
             await execFile(executable, ["--no-summary", "--stdout", input], { timeout: SCAN_TIMEOUT_MS, maxBuffer: 16 * 1024, windowsHide: true });
@@ -51,7 +55,7 @@ export function createClamAvScanner(options: { readonly executable?: string } = 
             throw new Error("MEDIA_SCANNER_UNAVAILABLE");
           }
         });
-        return ok({ verdict, version });
+        return ok({ verdict, version: scannerVersion });
       } catch {
         return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
       }
@@ -98,7 +102,7 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
           const checked = join(directory, "checked.pdf");
           const output = join(directory, "processed.pdf");
           try {
-            await execFile(python, ["-c", PDF_PREFLIGHT, input, checked], { timeout: 5_000, maxBuffer: 16 * 1024, windowsHide: true });
+            await execFile(python, ["-c", PDF_PREFLIGHT, input, checked], { timeout: 4_000, maxBuffer: 16 * 1024, windowsHide: true });
           } catch (cause) {
             const exitCode = typeof cause === "object" && cause !== null && "code" in cause ? Number((cause as { code: unknown }).code) : 0;
             if ([21, 22, 23, 24, 25].includes(exitCode)) return { unsafe: true as const };
@@ -108,7 +112,7 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
             timeout: PROCESS_TIMEOUT_MS, maxBuffer: 16 * 1024, windowsHide: true,
           });
           const verifiedOutput = join(directory, "verified-output.pdf");
-          try { await execFile(python, ["-c", PDF_PREFLIGHT, output, verifiedOutput], { timeout: 5_000, maxBuffer: 16 * 1024, windowsHide: true }); }
+          try { await execFile(python, ["-c", PDF_PREFLIGHT, output, verifiedOutput], { timeout: 4_000, maxBuffer: 16 * 1024, windowsHide: true }); }
           catch { throw new Error("MEDIA_PDF_OUTPUT_INVALID"); }
           const result = await readFile(verifiedOutput);
           if (result.byteLength < 1 || result.byteLength > MAX_BYTES || !result.subarray(0, 5).equals(Buffer.from("%PDF-"))) throw new Error("MEDIA_PDF_OUTPUT_INVALID");

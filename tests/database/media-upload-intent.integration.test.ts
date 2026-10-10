@@ -35,6 +35,7 @@ const SCANNER_IMAGE = process.env["PHASE6_SCANNER_IMAGE"];
 const PDF_PROCESSOR_IMAGE = process.env["PHASE6_PDF_PROCESSOR_IMAGE"];
 const SCANNER_VERSION = process.env["PHASE6_SCANNER_VERSION"];
 const PDF_PROCESSOR_VERSION = process.env["PHASE6_PDF_PROCESSOR_VERSION"];
+const PROCESSING_COUNTS_FILE = process.env["PHASE6_MEDIA_PROCESSING_COUNTS_FILE"];
 const REQUIRE_REAL = process.env["PHASE6_REQUIRE_UPLOAD_INTENT"] === "1";
 
 if (REQUIRE_REAL && (!DATABASE_URL || !STORAGE_URL || !SERVICE_ROLE_KEY || !ANON_KEY || !REPLAY_KEY || !PDF_FIXTURE || !SCANNER_IMAGE || !PDF_PROCESSOR_IMAGE || !SCANNER_VERSION || !PDF_PROCESSOR_VERSION)) {
@@ -443,6 +444,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const pdfBytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
     const processedFiles: Uint8Array[] = [];
     let scannerExecutions = 0;
+    let processorExecutions = 0;
     const uploadPdf = async (payload: Uint8Array, suffix: string) => {
       const uploadService = createService();
       const issued = await uploadService.create({
@@ -458,7 +460,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       return issued.value;
     };
     const normalProcessingStorage = createSupabaseMediaProcessingStorage({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY! });
-    const realProcessor = { async process(input: Uint8Array) { const result = dockerPdfProcessor(input); if (result.ok) processedFiles.push(result.value.bytes); return result; } };
+    const realProcessor = { async process(input: Uint8Array) { processorExecutions += 1; const result = dockerPdfProcessor(input); if (result.ok) processedFiles.push(result.value.bytes); return result; } };
     const makeMediaProcessing = (storage = normalProcessingStorage, processor: PdfProcessorPort = realProcessor) => createMediaProcessingApplicationService({
       scope: { ownerId }, repository: createPostgresMediaProcessingRepository({
         database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
@@ -496,6 +498,22 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(sameKeyReplay).toMatchObject({ ok: true, value: { aggregateId: safe.mediaId, aggregateVersion: 2, outcome: "media-processing-recorded" } });
     expect(scannerExecutions).toBe(2);
     expect(processedFiles).toHaveLength(1);
+    const freshKeyReplay = await mediaProcessing.record({
+      actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" }, idempotencyKey: "phase6-pdf-process-safe-fresh-key" as never,
+      mediaId: safe.mediaId, expectedVersion: 2, result: "passed", detectedMediaType: "application/pdf",
+      detectedByteLength: pdfBytes.byteLength, sha256: safeHash,
+    });
+    expect(freshKeyReplay).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
+    expect(scannerExecutions).toBe(2);
+    expect(processedFiles).toHaveLength(1);
+    const terminalFacts = await admin.query(
+      `select (select count(*)::int from media.processing_attempts where media_id = $1::uuid) as attempts,
+              (select count(*)::int from media.processed_objects where media_id = $1::uuid) as outputs,
+              (select count(*)::int from media.processing_commands where media_id = $1::uuid) as commands,
+              (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'media.processing_recorded.v1') as events`,
+      [safe.mediaId],
+    );
+    expect(terminalFacts.rows[0]).toEqual({ attempts: 1, outputs: 1, commands: 1, events: 1 });
 
     const persisted = await admin.query(
       `select attempt.result, attempt.input_object_id::text, attempt.input_sha256, attempt.detected_mime_type,
@@ -621,5 +639,6 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       await admin.query(`drop trigger ${triggerName} on operations.outbox_events`);
       await admin.query(`drop function operations.${functionName}()`);
     }
+    if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify({ scannerExecutions, processorExecutions }));
   }, 300_000);
 });

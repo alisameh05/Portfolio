@@ -117,12 +117,16 @@ export function createMediaProcessingApplicationService(deps: {
       const found = await deps.repository.getCandidate({ ownerId: deps.scope.ownerId, mediaId: command.mediaId });
       if (!found.ok) return found;
       const candidate = found.value;
-      if (candidate.state === "accepted" || candidate.state === "rejected") return err({ kind: "conflict", code: "MEDIA_INVALID_TRANSITION" });
+      if (["processed", "accepted", "rejected"].includes(candidate.state)) return err({ kind: "conflict", code: "MEDIA_INVALID_TRANSITION" });
       if (candidate.aggregateVersion !== command.expectedVersion) return err({ kind: "precondition_failed", code: "MEDIA_VERSION_MISMATCH" });
       if (Date.parse(candidate.expiresAt) <= Date.parse(deps.clock.now())) return err({ kind: "conflict", code: "MEDIA_UPLOAD_EXPIRED" });
       if (candidate.kind !== "document" || candidate.declaredMimeType !== "application/pdf") return err({ kind: "validation", code: "MEDIA_PROCESSING_FORMAT_UNSUPPORTED" });
 
       const startedAt = deps.clock.now();
+      const attemptWithinBudget = () => {
+        const startedAtMs = Date.parse(startedAt), currentAtMs = Date.parse(deps.clock.now());
+        return Number.isFinite(startedAtMs) && Number.isFinite(currentAtMs) && currentAtMs - startedAtMs <= MEDIA_PROCESSING_POLICY.maxProcessingAttemptMs;
+      };
       const failedAttempt = async (code: string, facts: { bytes?: Uint8Array; mime?: string; hash?: string; scannerVersion?: string; processorVersion?: string; policyVersion?: string } = {}) => {
         const attempt: MediaProcessingAttempt = { attemptId: deps.ids.generate("MediaProcessingAttempt") as StableId<string>, mediaId: candidate.mediaId,
           result: "failed", startedAt, detectedMimeType: facts.mime ?? "application/octet-stream", detectedByteLength: facts.bytes?.byteLength ?? 0,
@@ -138,6 +142,8 @@ export function createMediaProcessingApplicationService(deps: {
       let downloaded: Result<Uint8Array, Rejection>;
       try { downloaded = await deps.storage.readCandidate({ portfolioId: candidate.portfolioId, mediaId: candidate.mediaId, uploadIntentId: candidate.uploadIntentId, objectId: candidate.mediaObjectId }); }
       catch { return failedAttempt("MEDIA_STORAGE_UNAVAILABLE"); }
+      if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT");
+      if (!downloaded.ok && downloaded.error.code === "MEDIA_BYTES_OUT_OF_BOUNDS") return failedAttempt("MEDIA_BYTES_OUT_OF_BOUNDS");
       if (!downloaded.ok) return failedAttempt(downloaded.error.kind === "not_found" ? "MEDIA_UPLOAD_OBJECT_MISSING" : "MEDIA_STORAGE_UNAVAILABLE");
       const bytes = downloaded.value;
       if (bytes.byteLength < 1 || bytes.byteLength > MEDIA_PROCESSING_POLICY.maxBytesByKind.document) return failedAttempt("MEDIA_BYTES_OUT_OF_BOUNDS", { bytes });
@@ -151,10 +157,12 @@ export function createMediaProcessingApplicationService(deps: {
       }
       let scanned: Awaited<ReturnType<TrustedByteScannerPort["scan"]>>;
       try { scanned = await deps.scanner.scan(bytes); } catch { return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256 }); }
+      if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
       if (!scanned.ok) return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256 });
       if (scanned.value.verdict !== "clean") return failedAttempt(scanned.value.verdict === "unsafe" ? "MEDIA_UNSAFE_CONTENT" : "MEDIA_SCAN_INCONCLUSIVE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
       let processed: Awaited<ReturnType<PdfProcessorPort["process"]>>;
       try { processed = await deps.processor.process(bytes); } catch { return failedAttempt("MEDIA_PROCESSOR_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version }); }
+      if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.ok ? scanned.value.version : "unavailable" });
       if (!processed.ok) return failedAttempt(processed.error.kind === "validation" ? processed.error.code : "MEDIA_PROCESSOR_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
       if (processed.value.bytes.byteLength < 1 || processed.value.bytes.byteLength > MEDIA_PROCESSING_POLICY.maxBytesByKind.document ||
           new TextDecoder("ascii").decode(processed.value.bytes.subarray(0, 5)) !== "%PDF-") return failedAttempt("MEDIA_PDF_OUTPUT_INVALID", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });
@@ -162,6 +170,7 @@ export function createMediaProcessingApplicationService(deps: {
       let outputScan: Awaited<ReturnType<TrustedByteScannerPort["scan"]>>;
       try { outputScan = await deps.scanner.scan(processed.value.bytes); }
       catch { return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion }); }
+      if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });
       if (!outputScan.ok) return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });
       if (outputScan.value.verdict !== "clean") return failedAttempt(outputScan.value.verdict === "unsafe" ? "MEDIA_OUTPUT_UNSAFE" : "MEDIA_SCAN_INCONCLUSIVE", { bytes, mime, hash: sha256, scannerVersion: outputScan.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });
       const expectedOutputObjectId = deps.ids.generate("MediaObject") as StableId<string>;
@@ -174,6 +183,7 @@ export function createMediaProcessingApplicationService(deps: {
         catch { await deps.repository.recordOrphan({ candidate, objectId: sealed.value.objectId, sha256: outputHash }).catch(() => undefined); }
       };
       if (sealed.value.sha256 !== outputHash) { await discardOrRecordOrphan(); return failedAttempt("MEDIA_OUTPUT_HASH_MISMATCH", { bytes, mime, hash: sha256, scannerVersion: outputScan.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion }); }
+      if (!attemptWithinBudget()) { await discardOrRecordOrphan(); return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: outputScan.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion }); }
       const attempt: MediaProcessingAttempt = { attemptId: deps.ids.generate("MediaProcessingAttempt") as StableId<string>, mediaId: candidate.mediaId, result: "passed", startedAt,
         detectedMimeType: mime, detectedByteLength: bytes.byteLength, sha256, inputObjectId: candidate.mediaObjectId, outputObjectId: sealed.value.objectId,
         outputSha256: outputHash, outputByteLength: processed.value.bytes.byteLength, scannerVersion: outputScan.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion,
