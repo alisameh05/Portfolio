@@ -1,0 +1,25 @@
+
+> shipwithali-portfolio@0.0.0 prephase5:focus:owner-adapters-composition
+> node scripts/phase5-scenario-coverage.mjs --invalidate-suite owner && npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase5:focus:owner-adapters-composition
+> node scripts/portfolio-settings-integration.mjs --ticket-122
+
+Starting isolated loopback PostgreSQL clean and Phase 3 upgrade projects.
+Isolated PostgreSQL projects are healthy; clean and Phase 3 upgrade migrations are applied.
+Phase 3 historical database invariants: 107 passed, 0 skipped before Phase 4 migrations.
+Captured the Phase 3 operations contract and seeded rows through restricted capability roles.
+Applied Phase 4 migrations to the Phase 3 upgrade database.
+Captured the clean-install normalized database state.
+Captured the upgraded normalized database state.
+Verified Phase 3 operations grants, policies, and schema objects were preserved.
+Clean and upgraded normalized schemas, grants, constraints, and policies match.
+Generated database types match the clean PostgreSQL schema.
+Owner production PostgreSQL workflow: 1 passed, 0 skipped.
+Injected adapter and contract suites: 186 passed, 0 skipped.

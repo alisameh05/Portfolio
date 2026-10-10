@@ -1,0 +1,53 @@
+
+> shipwithali-portfolio@0.0.0 prephase5:focus:authoring-review-publication-routes
+> node scripts/phase5-scenario-coverage.mjs --invalidate-suite authoring && npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase5:focus:authoring-review-publication-routes
+> node scripts/phase5-verification.mjs --suite authoring
+
+JSON report written to <TEMP>/shipwithali-phase5-authoring-34428-811cce29-a07e-45a3-b52d-6537afe1e2cc.json
+
+{
+  "schemaVersion": 1,
+  "runId": "a9b0cfdc-ff06-4d91-98e1-c1706069e421",
+  "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+  "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+  "suite": "authoring",
+  "startedAt": "2026-10-10T15:57:39.462Z",
+  "verdict": "pass",
+  "scenarioAcceptance": true,
+  "suiteAvailable": true,
+  "counts": {
+    "executed": 36,
+    "failed": 0,
+    "skipped": 0,
+    "total": 36
+  },
+  "partial": false,
+  "dependency": {
+    "required": false,
+    "available": true,
+    "code": "NOT_REQUIRED"
+  },
+  "cleanup": {
+    "attempted": true,
+    "passed": true
+  },
+  "reproduction": [
+    "npm run phase5:focus:authoring-review-publication-routes"
+  ],
+  "details": {
+    "message": "focused suite executed",
+    "files": [
+      "tests/runtime/owner-content-authoring.test.ts",
+      "tests/runtime/owner-content-http.test.ts"
+    ]
+  },
+  "evidence": "evidence\\phase-5-verification-authoring.json"
+}
