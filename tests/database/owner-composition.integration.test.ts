@@ -3,6 +3,7 @@ import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   getOperationsPersistence,
+  getPublicDiscoveryApplicationService,
   getPhase5OwnerApplicationServices,
   initializeDatabaseRuntime,
   resetRuntimeForTests,
@@ -236,13 +237,17 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       statusHistory: [expect.objectContaining({ currentValueId: statusCreated.value.valueId })],
     } });
 
+    const relatedArtifactId = createStableId("SupportingArtifact");
     const relatedCreated = await services.contentAuthoring.createContent({
       actor, idempotencyKey: key("owner-assembly-related-project-create"), correlationId: "owner-assembly-related-project-create",
       payload: {
         contentType: "project", locale: "en", title: "Runtime relationship target", summary: "A second real Project.",
         body: "The relationship is stored by the standard runtime composition.", candidateSlug: "runtime-relationship-target",
         caseStudy: { problem: "No relationship existed.", ownerRole: "Connected a Project.", contributions: ["Created the link."], outcomes: ["Both projects retain the fact."], lessons: "Keep links symmetric." },
-        evidence: { claims: [], artifacts: [] }, externalLinks: [],
+        evidence: {
+          claims: [{ claimId: createStableId("EvidenceClaim"), text: "The second Project is independently reviewed.", artifactIds: [relatedArtifactId] }],
+          artifacts: [{ id: relatedArtifactId, title: "Owner composition evidence", destinationUrl: "https://example.com/related-evidence" }],
+        }, externalLinks: [],
       },
     });
     expect(relatedCreated.ok).toBe(true);
@@ -369,5 +374,122 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
         expect.objectContaining({ valueId: retirementValue.valueId, action: "retired" }),
       ]),
     } });
+
+    const relatedPreview = await services.contentAuthoring.previewRevision({ actor, contentId: relatedCreated.value.contentId, revisionId: relatedCreated.value.revisionId });
+    expect(relatedPreview.ok).toBe(true);
+    if (!relatedPreview.ok) return;
+    const latestRelated = await services.contentAuthoring.getOwnerContentAggregate({ actor, contentId: relatedCreated.value.contentId });
+    expect(latestRelated.ok).toBe(true);
+    if (!latestRelated.ok) return;
+    const relatedReview = await services.contentAuthoring.reviewRevision({
+      actor, contentId: relatedCreated.value.contentId, revisionId: relatedCreated.value.revisionId,
+      expectedVersion: latestRelated.value.aggregateVersion, idempotencyKey: key("owner-assembly-related-review"),
+      correlationId: "owner-assembly-related-review", locale: "en", snapshotHash: relatedPreview.value.snapshotHash,
+      evidenceVersion: relatedPreview.value.evidenceVersion, decision: "accepted", findings: [],
+    });
+    expect(relatedReview.ok).toBe(true);
+    if (!relatedReview.ok) return;
+    const relatedPublished = await services.contentAuthoring.publishLanguageVersion({
+      actor, contentId: relatedCreated.value.contentId, revisionId: relatedCreated.value.revisionId, locale: "en",
+      expectedVersion: relatedReview.value.aggregateVersion, idempotencyKey: key("owner-assembly-related-publish"),
+      correlationId: "owner-assembly-related-publish",
+    });
+    expect(relatedPublished.ok).toBe(true);
+    if (!relatedPublished.ok) return;
+
+    const currentPrimary = await services.project.getOwnerProjectAggregate({ actor, projectId: created.value.contentId as StableId<"Project"> });
+    expect(currentPrimary.ok).toBe(true);
+    if (!currentPrimary.ok) return;
+    const movedRoute = await services.project.changeOwnerProjectPublicSlug({
+      actor, projectId: created.value.contentId as StableId<"Project">, slug: "runtime-assembled-project-v3",
+      expectedVersion: currentPrimary.value.aggregateVersion, idempotencyKey: key("owner-assembly-route-third-slug"),
+      correlationId: "owner-assembly-route-third-slug",
+    });
+    expect(movedRoute.ok).toBe(true);
+    if (!movedRoute.ok) return;
+    const returnedRoute = await services.project.changeOwnerProjectPublicSlug({
+      actor, projectId: created.value.contentId as StableId<"Project">, slug: "runtime-assembled-project-revised",
+      expectedVersion: movedRoute.value.aggregateVersion, idempotencyKey: key("owner-assembly-route-return"),
+      correlationId: "owner-assembly-route-return",
+    });
+    expect(returnedRoute.ok).toBe(true);
+    if (!returnedRoute.ok) return;
+    const reservedSlugCollision = await services.project.changeOwnerProjectPublicSlug({
+      actor, projectId: relatedCreated.value.contentId as StableId<"Project">, slug: "runtime-assembled-project",
+      expectedVersion: relatedPublished.value.aggregateVersion, idempotencyKey: key("owner-assembly-route-reservation-collision"),
+      correlationId: "owner-assembly-route-reservation-collision",
+    });
+    expect(reservedSlugCollision).toMatchObject({ ok: false, error: { kind: "conflict", code: "PUBLIC_SLUG_CONFLICT" } });
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project-v3", locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "redirect", toSlug: "runtime-assembled-project-revised" } });
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "redirect", toSlug: "runtime-assembled-project-revised" } });
+
+    const discovery = await getPublicDiscoveryApplicationService();
+    const taxonomyValueId = createdValue.valueId as StableId<"TaxonomyValue">;
+    const filtered = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [taxonomyValueId], limit: 20 });
+    expect(filtered).toMatchObject({ ok: true, value: { entries: expect.arrayContaining([
+      expect.objectContaining({ projectId: created.value.contentId, slug: "runtime-assembled-project-revised", isFeatured: true,
+        taxonomyValues: expect.arrayContaining([expect.objectContaining({ id: createdValue.valueId, label: "Owner composition integration renamed" })]) }),
+      expect.objectContaining({ projectId: relatedCreated.value.contentId, slug: "runtime-relationship-target",
+        taxonomyValues: expect.arrayContaining([expect.objectContaining({ id: createdValue.valueId, label: "Owner composition integration renamed" })]) }),
+    ]) } });
+    const arabic = await discovery.getPublicDiscovery({ locale: "ar", taxonomyValueIds: [taxonomyValueId], limit: 20 });
+    expect(arabic).toMatchObject({ ok: true, value: { entries: [] } });
+    const publicRelated = await services.contentAuthoring.getPublicRelatedProjects({ projectId: created.value.contentId as StableId<"Project">, locale: "en", limit: 10 });
+    expect(publicRelated).toMatchObject({ ok: true, value: [expect.objectContaining({ projectId: relatedCreated.value.contentId, slug: "runtime-relationship-target" })] });
+    const missingArabicRoute = await services.contentAuthoring.getPublicProject({ slug: "runtime-relationship-target", locale: "ar" });
+    expect(missingArabicRoute.ok).toBe(false);
+
+    const hidden = await services.contentAuthoring.hideContent({
+      actor, contentId: relatedCreated.value.contentId, expectedVersion: relatedPublished.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-related-hide"), correlationId: "owner-assembly-related-hide",
+    });
+    expect(hidden.ok).toBe(true);
+    if (!hidden.ok) return;
+    const afterHide = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [taxonomyValueId], limit: 20 });
+    expect(afterHide).toMatchObject({ ok: true, value: { entries: [expect.objectContaining({ projectId: created.value.contentId })] } });
+    expect(await services.contentAuthoring.getPublicRelatedProjects({ projectId: created.value.contentId as StableId<"Project">, locale: "en" })).toMatchObject({ ok: true, value: [] });
+    expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-relationship-target", locale: "en" })).toMatchObject({ ok: false });
+
+    const restored = await services.contentAuthoring.restoreContent({
+      actor, contentId: relatedCreated.value.contentId, expectedVersion: hidden.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-related-restore"), correlationId: "owner-assembly-related-restore",
+    });
+    expect(restored.ok).toBe(true);
+    if (!restored.ok) return;
+    const afterRestore = await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [taxonomyValueId], limit: 20 });
+    expect(afterRestore).toMatchObject({ ok: true, value: { entries: expect.arrayContaining([expect.objectContaining({ projectId: relatedCreated.value.contentId })]) } });
+
+    const archived = await services.contentAuthoring.archiveContent({
+      actor, contentId: relatedCreated.value.contentId, expectedVersion: restored.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-related-archive"), correlationId: "owner-assembly-related-archive",
+    });
+    expect(archived.ok).toBe(true);
+    if (!archived.ok) return;
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-relationship-target", locale: "en" }))
+      .toMatchObject({ ok: false });
+    const restoredAfterArchive = await services.contentAuthoring.restoreContent({
+      actor, contentId: relatedCreated.value.contentId, expectedVersion: archived.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-related-restore-after-archive"), correlationId: "owner-assembly-related-restore-after-archive",
+    });
+    expect(restoredAfterArchive.ok).toBe(true);
+    if (!restoredAfterArchive.ok) return;
+
+    const primaryHidden = await services.contentAuthoring.hideContent({
+      actor, contentId: created.value.contentId, expectedVersion: returnedRoute.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-primary-hide"), correlationId: "owner-assembly-primary-hide",
+    });
+    expect(primaryHidden.ok).toBe(true);
+    if (!primaryHidden.ok) return;
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" }))
+      .toMatchObject({ ok: false });
+    const primaryRestored = await services.contentAuthoring.restoreContent({
+      actor, contentId: created.value.contentId, expectedVersion: primaryHidden.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-primary-restore"), correlationId: "owner-assembly-primary-restore",
+    });
+    expect(primaryRestored.ok).toBe(true);
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "redirect", toSlug: "runtime-assembled-project-revised" } });
   }, 60_000);
 });

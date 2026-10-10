@@ -105,7 +105,11 @@
     "prephase5:focus:database-rls-migrations-concurrency": "npm run validation:ready",
     "phase5:focus:database-rls-migrations-concurrency": "node scripts/phase5-verification.mjs --suite database",
     "prephase5:focus:owner-adapters-composition": "npm run validation:ready",
-    "phase5:focus:owner-adapters-composition": "node scripts/portfolio-settings-integration.mjs --ticket-122"
+    "phase5:focus:owner-adapters-composition": "node scripts/portfolio-settings-integration.mjs --ticket-122",
+    "prephase5:focus:scenario-traceability": "npm run validation:ready",
+    "phase5:focus:scenario-traceability": "node node_modules/vitest/vitest.mjs run tests/phase4/phase5-scenario-coverage.test.ts",
+    "prephase5:focus:integrated-scenarios": "npm run validation:ready",
+    "phase5:focus:integrated-scenarios": "node scripts/phase5-scenario-coverage.mjs"
   },
   "dependencies": {
     "kysely": "0.29.6",

@@ -2901,7 +2901,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     const scope = await configuredScope();
     const prefix = `discovery-${process.pid}-${randomBytes(3).toString("hex")}`;
     const publishedAt = "2026-10-09T11:30:00.000Z";
-    const content = service(scope, operations, { now: () => publishedAt });
+    const content = service(scope);
     const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
     const taxonomy = taxonomyServiceForMerge(scope);
     const createdValue = await taxonomy.createOwnerTaxonomyValue({
@@ -2931,6 +2931,25 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       expectedVersion: projects[2]!.aggregateVersion, idempotencyKey: key(`${prefix}-hide`), correlationId: `${prefix}-hide` });
     expect(hidden.ok).toBe(true);
 
+    // Separate publish commands observe separate transaction clocks. Align only this fixture's
+    // committed ordering facts so the real PostgreSQL keyset query exercises its tied-time branch.
+    const projectIds = projects.map((project) => project.contentId);
+    let tieFixtureStage = "begin";
+    try {
+      await admin.query("begin");
+      tieFixtureStage = "items";
+      await admin.query("update content.items set first_published_at = $1 where content_id = any($2::uuid[])", [publishedAt, projectIds]);
+      tieFixtureStage = "routes";
+      await admin.query("update content.public_routes set first_published_at = $1 where content_id = any($2::uuid[])", [publishedAt, projectIds]);
+      tieFixtureStage = "projections";
+      await admin.query("update taxonomy.project_discovery_locales set first_published_at = $1 where content_id = any($2::uuid[])", [publishedAt, projectIds]);
+      await admin.query("commit");
+      tieFixtureStage = "committed";
+    } catch {
+      try { await admin.query("rollback"); } catch { /* report the original deterministic setup stage */ }
+      throw new Error(`PHASE5_DISCOVERY_TIE_FIXTURE_FAILED_${tieFixtureStage.toUpperCase()}`);
+    }
+
     const discovery = createPublicDiscoveryService({
       reader: createPostgresPublicDiscoveryReader(scope), transactions: operations.transactions,
     });
@@ -2943,6 +2962,8 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     const ids = [...first.value.entries, ...second.value.entries].map((entry) => entry.projectId);
+    expect(new Set([...first.value.entries, ...second.value.entries].map((entry) => entry.firstPublishedAt)))
+      .toEqual(new Set([publishedAt]));
     expect(ids).toEqual([...ids].sort((a, b) => b.localeCompare(a)));
     expect(new Set(ids).size).toBe(2);
     expect(ids).not.toContain(projects[2]!.contentId);
