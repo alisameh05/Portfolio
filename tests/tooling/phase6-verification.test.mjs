@@ -2,17 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6Setup, isolatedPhase6Config,
-  makePhase6Report, scrubPhase6Environment,
+  loadPhase6PredecessorContexts, makePhase6Report, scrubPhase6Environment,
 } from "../../scripts/phase6-verification-support.mjs";
 import { createBarrier, createDeterministicClock, createUuidV7Sequence } from "../phase6/fixtures/deterministic.mjs";
 
 function passingReport() {
+  const predecessorContexts = loadPhase6PredecessorContexts();
+  predecessorContexts.phase5.sourceTreeSha256 = "tree";
   return makePhase6Report({
     sourceRevision: "abc", sourceTreeSha256: "tree", runtime: { node: "v24.21.0", npm: "11.19.0" },
     startedAt: new Date(Date.now() - 60_000).toISOString(), tools: Object.fromEntries(Object.keys(PHASE6_TOOL_DEFINITIONS).map((name) => [name, `tool-${name}`])),
     services: { postgres: { available: true, executionCount: 3, independentConnections: 2 }, auth: { available: true, executionCount: 1 }, storage: { available: true, privateBucketVerified: true, executionCount: 20 } },
     formats: PHASE6_FORMATS.map((item) => ({ id: item.id, executed: true, status: "passed", storageRoundTrip: true, scannerVerdict: "clean", processorVersion: `tool-${item.processor}` })),
-    cleanup: { attempted: true, success: true }, failures: [],
+    cleanup: { attempted: true, success: true }, failures: [], predecessorContexts,
   });
 }
 
@@ -79,6 +81,16 @@ test("a single PostgreSQL connection cannot certify race-test setup", () => {
   const result = evaluatePhase6Setup(report, { sourceRevision: "abc", sourceTreeSha256: "tree", now: Date.now() + 60_000 });
   assert.equal(result.verdict, "fail");
   assert.ok(result.failures.includes("independent-postgres-connections-unavailable"));
+});
+
+test("predecessor assertions require source-bound Phase 4 and current Phase 5 run evidence", () => {
+  const report = passingReport();
+  report.predecessorContexts.phase4.fixtureResults[0].rejected = false;
+  report.predecessorContexts.phase5.sourceTreeSha256 = "stale-tree";
+  const result = evaluatePhase6Setup(report, { sourceRevision: "abc", sourceTreeSha256: "tree", now: Date.now() + 60_000 });
+  assert.equal(result.verdict, "fail");
+  assert.ok(result.failures.includes("phase4-context-assertions-incomplete"));
+  assert.ok(result.failures.includes("phase5-run-provenance-invalid"));
 });
 
 test("future acceptance tests have deterministic time and UUIDv7 identity factories", () => {

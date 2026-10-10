@@ -44,12 +44,60 @@ export function scrubPhase6Environment(source = process.env) {
 }
 
 export const PHASE6_PREDECESSOR_CONTEXTS = Object.freeze({
-  phase4: Object.freeze({ issue: 90, pullRequest: 105, mergeCommit: "9806af81d4ce705c36d9b22089f77213d16887bc", contextVerdict: "pass", context: "phase4 historical baseline; five public and 39 Owner operations; six negative fixtures rejected" }),
-  phase5: Object.freeze({ issue: 125, pullRequest: 144, mergeCommit: "26d6efb3d9e281265cc9c099195492b5dcbec79d", contextVerdict: "pass", context: "current Phase 5 context; five public and 48 Owner operations" }),
+  phase4: Object.freeze({ issue: 90, pullRequest: 105, mergeCommit: "9806af81d4ce705c36d9b22089f77213d16887bc", evidence: "evidence/phase4-context-90-105.json" }),
+  phase5: Object.freeze({ issue: 125, pullRequest: 144, mergeCommit: "26d6efb3d9e281265cc9c099195492b5dcbec79d", evidence: "evidence/phase-5-context.json" }),
   activationDifferences: Object.freeze({ phase4: ["identity-access", "portfolio-configuration"], phase5: ["content-and-publishing", "taxonomy-and-discovery"], phase6Owned: ["media", "cv-portfolio"] }),
 });
 
-export function makePhase6Report({ sourceRevision, sourceTreeSha256, runtime, startedAt, tools, services, formats, cleanup, failures, predecessorContexts = PHASE6_PREDECESSOR_CONTEXTS }) {
+export function loadPhase6PredecessorContexts(root = ROOT) {
+  const phase4Evidence = JSON.parse(readFileSync(join(root, PHASE6_PREDECESSOR_CONTEXTS.phase4.evidence), "utf8"));
+  const phase5Evidence = JSON.parse(readFileSync(join(root, PHASE6_PREDECESSOR_CONTEXTS.phase5.evidence), "utf8"));
+  const phase4Report = phase4Evidence.report;
+  return {
+    phase4: {
+      ...PHASE6_PREDECESSOR_CONTEXTS.phase4,
+      contextRunId: phase4Evidence.runId,
+      executedAt: phase4Evidence.executedAt,
+      sourceRevision: phase4Evidence.sourceRevision,
+      gitTreeId: phase4Evidence.gitTreeId,
+      contextVerdict: phase4Report?.verdict,
+      operations: phase4Report?.inventory,
+      boundary: phase4Report?.boundary,
+      runtimeArchitecture: phase4Report?.runtimeArchitecture,
+      fixtureResults: phase4Report?.fixtureResults,
+      depcruiseResults: phase4Report?.depcruiseResults,
+    },
+    phase5: {
+      ...PHASE6_PREDECESSOR_CONTEXTS.phase5,
+      contextRunId: phase5Evidence.runId,
+      sourceRevision: phase5Evidence.sourceRevision,
+      sourceTreeSha256: phase5Evidence.sourceTreeSha256,
+      contextVerdict: phase5Evidence.verdict,
+      operations: phase5Evidence.operations,
+      runtimeBoundary: phase5Evidence.runtimeBoundary,
+      runtimeArchitecture: phase5Evidence.runtimeArchitecture,
+    },
+    activationDifferences: PHASE6_PREDECESSOR_CONTEXTS.activationDifferences,
+  };
+}
+
+function predecessorContextFailures(contexts, sourceTreeSha256) {
+  const failures = [];
+  const phase4 = contexts?.phase4;
+  const phase4Fixtures = Array.isArray(phase4?.fixtureResults) ? phase4.fixtureResults : [];
+  const phase4Depcruise = Array.isArray(phase4?.depcruiseResults) ? phase4.depcruiseResults : [];
+  if (phase4?.issue !== 90 || phase4?.pullRequest !== 105 || phase4?.sourceRevision !== PHASE6_PREDECESSOR_CONTEXTS.phase4.mergeCommit || !/^[0-9a-f]{40}$/u.test(phase4?.gitTreeId ?? "") || !/^[0-9a-f-]{36}$/iu.test(phase4?.contextRunId ?? "") || !Number.isFinite(Date.parse(phase4?.executedAt))) failures.push("phase4-run-provenance-invalid");
+  if (phase4?.contextVerdict !== "pass" || phase4?.operations?.publicOperations !== 5 || phase4?.operations?.ownerOperations !== 39 || phase4?.operations?.forbiddenFindings !== 0 || phase4?.boundary !== "pass" || phase4?.runtimeArchitecture !== "pass" || phase4Fixtures.length !== 6 || phase4Fixtures.some((item) => item?.rejected !== true) || phase4Depcruise.length !== 2 || phase4Depcruise.some((item) => item?.rejected !== true)) failures.push("phase4-context-assertions-incomplete");
+
+  const phase5 = contexts?.phase5;
+  if (phase5?.issue !== 125 || phase5?.pullRequest !== 144 || !/^[0-9a-f]{40}$/u.test(phase5?.sourceRevision ?? "") || !/^[0-9a-f-]{36}$/iu.test(phase5?.contextRunId ?? "") || phase5?.sourceTreeSha256 !== sourceTreeSha256) failures.push("phase5-run-provenance-invalid");
+  if (phase5?.contextVerdict !== "pass" || phase5?.operations?.public !== 5 || phase5?.operations?.owner !== 48 || phase5?.operations?.forbiddenFindings !== 0 || phase5?.runtimeBoundary !== "pass" || phase5?.runtimeArchitecture !== "pass") failures.push("phase5-context-assertions-incomplete");
+  const differences = contexts?.activationDifferences;
+  if (JSON.stringify(differences) !== JSON.stringify(PHASE6_PREDECESSOR_CONTEXTS.activationDifferences)) failures.push("predecessor-activation-differences-missing");
+  return failures;
+}
+
+export function makePhase6Report({ sourceRevision, sourceTreeSha256, runtime, startedAt, tools, services, formats, cleanup, failures, predecessorContexts = loadPhase6PredecessorContexts() }) {
   const executed = formats.filter((item) => item.executed).length;
   const failed = formats.filter((item) => item.status === "failed").length;
   const skipped = formats.filter((item) => item.status === "skipped").length;
@@ -90,7 +138,7 @@ export function evaluatePhase6Setup(report, { sourceRevision, sourceTreeSha256, 
   if (report?.sourceRevision !== sourceRevision || report?.sourceTreeSha256 !== sourceTreeSha256) failures.push("evidence-source-stale-or-mismatched");
   if (!Number.isFinite(Date.parse(report?.startedAt)) || !Number.isFinite(Date.parse(report?.completedAt)) || Date.parse(report.completedAt) < Date.parse(report.startedAt) || Date.parse(report.completedAt) > now) failures.push("evidence-time-invalid");
   if (report?.verdict !== "pass") failures.push("report-verdict-not-pass");
-  if (report?.predecessorContexts?.phase4?.contextVerdict !== "pass" || report?.predecessorContexts?.phase5?.contextVerdict !== "pass") failures.push("predecessor-context-evidence-missing");
+  failures.push(...predecessorContextFailures(report?.predecessorContexts, sourceTreeSha256));
   const formatRows = Array.isArray(report?.formats) ? report.formats : [];
   const actualCounts = {
     executed: formatRows.filter((item) => item?.executed === true).length,

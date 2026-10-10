@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 146,
   "parent": 145,
-  "runId": "bceb93ac-60b3-49b9-804b-eeb5e9d57161",
-  "sourceRevision": "26d6efb3d9e281265cc9c099195492b5dcbec79d",
-  "sourceTreeSha256": "32764ddcfb85bf3d08fa8d2b2e64bb82771e957cf7b7175329cfb175c870d3de",
-  "startedAt": "2026-10-10T17:47:52.153Z",
-  "completedAt": "2026-10-10T17:50:16.560Z",
+  "runId": "009737b9-086a-4af4-b044-0e2dd60d0f4b",
+  "sourceRevision": "ce9df577692cbb09e65f55a17556b061136604a6",
+  "sourceTreeSha256": "bfb2ed7aa92b52cb843d5c01beb99e8ec2a1c8883d44a7371586321cafa081cb",
+  "startedAt": "2026-10-10T17:55:50.266Z",
+  "completedAt": "2026-10-10T17:58:27.155Z",
   "scope": "phase6-reproducible-service-and-processor-context",
   "suite": "phase6-setup-context",
   "toolVersions": {
@@ -30,15 +30,86 @@
       "issue": 90,
       "pullRequest": 105,
       "mergeCommit": "9806af81d4ce705c36d9b22089f77213d16887bc",
+      "evidence": "evidence/phase4-context-90-105.json",
+      "contextRunId": "723edcf8-1e56-4b11-bf54-756977a7d8f1",
+      "executedAt": "2026-10-10T17:55:06.3076041Z",
+      "sourceRevision": "9806af81d4ce705c36d9b22089f77213d16887bc",
+      "gitTreeId": "79253c17f7dc440090ad57724d55fbb906e39f1b",
       "contextVerdict": "pass",
-      "context": "phase4 historical baseline; five public and 39 Owner operations; six negative fixtures rejected"
+      "operations": {
+        "publicOperations": 5,
+        "ownerOperations": 39,
+        "forbiddenFindings": 0
+      },
+      "boundary": "pass",
+      "runtimeArchitecture": "pass",
+      "fixtureResults": [
+        {
+          "name": "phase4-provider-leakage",
+          "path": "tests/fixtures/invalid-deps/phase4-provider-leakage/modules/acme/application/leaky.ts",
+          "expectedRule": "no-provider-in-application",
+          "rejected": true
+        },
+        {
+          "name": "phase4-generated-leakage",
+          "path": "tests/fixtures/invalid-deps/phase4-generated-leakage/modules/acme/application/leaky.ts",
+          "expectedRule": "no-generated-code-leakage",
+          "rejected": true
+        },
+        {
+          "name": "phase4-uncontracted-route",
+          "path": "tests/fixtures/invalid-deps/phase4-uncontracted-route/route.ts",
+          "expectedRule": "uncontracted-route-handler",
+          "rejected": true
+        },
+        {
+          "name": "phase4-cross-module-write",
+          "path": "tests/fixtures/invalid-deps/phase4-cross-module-write/modules/consumer/application/writer.ts",
+          "expectedRule": "cross-module-write-no-foreign-adapters",
+          "rejected": true
+        },
+        {
+          "name": "phase4-frontend-lab-surface",
+          "path": "tests/fixtures/invalid-deps/phase4-frontend-lab-surface/component.tsx",
+          "expectedRule": "frontend-browser-lab-surface",
+          "rejected": true
+        },
+        {
+          "name": "phase4-later-phase-activation",
+          "path": "tests/fixtures/invalid-deps/phase4-later-phase-activation/modules/acme/application/activation.ts",
+          "expectedRule": "later-phase-activation-placeholder-bypass",
+          "rejected": true
+        }
+      ],
+      "depcruiseResults": [
+        {
+          "fixture": "tests/fixtures/invalid-deps/phase4-provider-leakage",
+          "expectedRule": "no-provider-in-application",
+          "rejected": true
+        },
+        {
+          "fixture": "tests/fixtures/invalid-deps/phase4-generated-leakage",
+          "expectedRule": "no-generated-code-leakage",
+          "rejected": true
+        }
+      ]
     },
     "phase5": {
       "issue": 125,
       "pullRequest": 144,
       "mergeCommit": "26d6efb3d9e281265cc9c099195492b5dcbec79d",
+      "evidence": "evidence/phase-5-context.json",
+      "contextRunId": "0a9b0dda-83c3-495a-bf45-f0c6f4180991",
+      "sourceRevision": "ce9df577692cbb09e65f55a17556b061136604a6",
+      "sourceTreeSha256": "bfb2ed7aa92b52cb843d5c01beb99e8ec2a1c8883d44a7371586321cafa081cb",
       "contextVerdict": "pass",
-      "context": "current Phase 5 context; five public and 48 Owner operations"
+      "operations": {
+        "public": 5,
+        "owner": 48,
+        "forbiddenFindings": 0
+      },
+      "runtimeBoundary": "pass",
+      "runtimeArchitecture": "pass"
     },
     "activationDifferences": {
       "phase4": [
@@ -97,7 +168,7 @@
       "executed": true,
       "status": "passed",
       "storageRoundTrip": true,
-      "sha256": "d85f6ccf62eb2d934f5f6afd3963f88eee5b2f1ddea8f25f9f446116a823fdf7",
+      "sha256": "cad3099f3f4da15146d56889dce523543f4fbd2f534fe32774bf98e97ea0badb",
       "scannerVerdict": "clean",
       "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
     },
@@ -141,7 +212,7 @@
       "executed": true,
       "status": "passed",
       "storageRoundTrip": true,
-      "sha256": "32ccb10a7b56af837aac9af4739a62e054e3fdc6b2f982b974ae1641886e820c",
+      "sha256": "1ade25e0f4981614c131aa56828379d25eeaa4a994dcc3845f745cf74913e6af",
       "scannerVerdict": "clean",
       "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
     }
