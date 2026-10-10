@@ -1,8 +1,8 @@
 {
-  "sourceRevision": "0e82928a23a9acfce562b8e5ec0d60e8fd267d10",
-  "sourceTreeSha256": "a2d99759fb65c9c85e7589d77a452232aed90a2cfe1487b95ed1ef17d44106ea",
-  "runId": "c69bf290-3578-4653-b341-f0cd37b00e5c",
-  "startedAt": "2026-10-10T14:34:21.265Z",
+  "sourceRevision": "81105e7b7983cca776d18c765fe76fb72609b833",
+  "sourceTreeSha256": "9155b7fb862c65122f3a24d929cb2abde6dd074d58e517aefa3b52c675036b69",
+  "runId": "c3ac250a-d141-4eac-88d5-58a3484e57d8",
+  "startedAt": "2026-10-10T14:42:50.095Z",
   "toolVersions": {
     "node": "24.21.0",
     "npm": "11.19.0",
@@ -214,7 +214,7 @@
     ],
     "retainedRecordsBeforeAndAfterPhase5": {
       "configuredPortfolios": 21,
-      "contactChannels": 38,
+      "contactChannels": 42,
       "ownerLinks": 1,
       "idempotencyRecords": 22,
       "outboxEvents": 14,
@@ -482,6 +482,12 @@
   "diagnosticsPrivacy": {
     "auditSuites": [
       {
+        "file": "tests/runtime/runtime-ports.test.ts",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
         "file": "tests/database/postgres-runtime.test.ts",
         "passed": 7,
         "failed": 0,
@@ -496,12 +502,6 @@
       {
         "file": "tests/phase4/owner-session-auth.test.ts",
         "passed": 13,
-        "failed": 0,
-        "skipped": 0
-      },
-      {
-        "file": "tests/runtime/runtime-ports.test.ts",
-        "passed": 6,
         "failed": 0,
         "skipped": 0
       }
@@ -535,6 +535,30 @@
     "content.revisions"
   ],
   "databaseTestResults": [
+    {
+      "name": "runtime ports (#26) > exposes provider-neutral ports without framework or provider types",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > system clock returns RFC 3339 UTC instants",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > system ID adapter produces UUIDv7 values behind stable-ID semantics",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > Phase 2 transaction fake executes one callback without claiming atomicity",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > structured logging uses stable event names and redacts sensitive values",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > generates server-side correlation and never adopts an inbound identifier",
+      "status": "passed"
+    },
     {
       "name": "Content authoring production PostgreSQL invariants > creates all Draft kinds, saves both locales, and keeps typed snapshots private and unreviewed",
       "status": "passed"
@@ -849,30 +873,6 @@
     },
     {
       "name": "verified GitHub Owner sessions (#80) > keeps raw session material and secrets out of rejection payloads",
-      "status": "passed"
-    },
-    {
-      "name": "runtime ports (#26) > exposes provider-neutral ports without framework or provider types",
-      "status": "passed"
-    },
-    {
-      "name": "runtime ports (#26) > system clock returns RFC 3339 UTC instants",
-      "status": "passed"
-    },
-    {
-      "name": "runtime ports (#26) > system ID adapter produces UUIDv7 values behind stable-ID semantics",
-      "status": "passed"
-    },
-    {
-      "name": "runtime ports (#26) > Phase 2 transaction fake executes one callback without claiming atomicity",
-      "status": "passed"
-    },
-    {
-      "name": "runtime ports (#26) > structured logging uses stable event names and redacts sensitive values",
-      "status": "passed"
-    },
-    {
-      "name": "runtime ports (#26) > generates server-side correlation and never adopts an inbound identifier",
       "status": "passed"
     }
   ],
