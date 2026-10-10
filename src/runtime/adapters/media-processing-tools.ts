@@ -213,7 +213,7 @@ async function toolVersion(executable: string, args: readonly string[]): Promise
     catch { throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED"); }
     throw cause;
   }
-  const version = `${result.stdout.toString().trim()} ${result.stderr.toString().trim()}`.trim().replace(/[^A-Za-z0-9./_ -]/gu, "").slice(0, 150);
+  const version = `${result.stdout.toString().trim()} ${result.stderr.toString().trim()}`.trim().replace(/[^A-Za-z0-9./_: -]/gu, "").slice(0, 150);
   if (version.length < 3) throw new Error("MEDIA_TOOL_VERSION_UNAVAILABLE");
   return version;
 }
