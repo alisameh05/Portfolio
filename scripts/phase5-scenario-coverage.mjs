@@ -45,7 +45,7 @@ export const PHASE5_STORY_COVERAGE = Object.freeze([
   ...group([47], [123], SECURITY_ASSERTION),
   ...group([48], [109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121], STORY_ASSERTION),
   ...group([49], [106, 111, 114, 124], OWNER_ASSERTION),
-  ...group([50], [106, 122], assertionRef(VERIFICATION, "declares separate focused suites for the four Phase 5 verification seams")),
+  ...group([50], [106, 122], assertionRef(VERIFICATION, "declares separate focused suites for the five Phase 5 verification seams")),
   ...group([51], [123], SECURITY_ASSERTION),
   ...group([52], [106, 109, 110, 111, 112, 113, 114, 115, 118, 119, 120], STORY_ASSERTION),
   ...group([53], [124, 125], assertionRef("tests/phase4/phase5-scenario-coverage.test.ts", "rejects incomplete or stale focused evidence and accepts only zero-skip fresh results")),
