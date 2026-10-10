@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "runId": "723edcf8-1e56-4b11-bf54-756977a7d8f1",
+  "executedAt": "2026-10-10T17:55:06.3076041Z",
+  "sourceRevision": "9806af81d4ce705c36d9b22089f77213d16887bc",
+  "gitTreeId": "79253c17f7dc440090ad57724d55fbb906e39f1b",
+  "command": "node scripts/check-phase4-context.mjs",
+  "report": {
+    "ticket": 78,
+    "parent": 77,
+    "scope": "phase-4-verification-prefactor",
+    "phase": "phase4",
+    "verdict": "pass",
+    "failures": [],
+    "inventory": {
+      "publicOperations": 5,
+      "ownerOperations": 39,
+      "forbiddenFindings": 0
+    },
+    "boundary": "pass",
+    "runtimeArchitecture": "pass",
+    "fixtureResults": [
+      {
+        "name": "phase4-provider-leakage",
+        "path": "tests/fixtures/invalid-deps/phase4-provider-leakage/modules/acme/application/leaky.ts",
+        "expectedRule": "no-provider-in-application",
+        "rejected": true
+      },
+      {
+        "name": "phase4-generated-leakage",
+        "path": "tests/fixtures/invalid-deps/phase4-generated-leakage/modules/acme/application/leaky.ts",
+        "expectedRule": "no-generated-code-leakage",
+        "rejected": true
+      },
+      {
+        "name": "phase4-uncontracted-route",
+        "path": "tests/fixtures/invalid-deps/phase4-uncontracted-route/route.ts",
+        "expectedRule": "uncontracted-route-handler",
+        "rejected": true
+      },
+      {
+        "name": "phase4-cross-module-write",
+        "path": "tests/fixtures/invalid-deps/phase4-cross-module-write/modules/consumer/application/writer.ts",
+        "expectedRule": "cross-module-write-no-foreign-adapters",
+        "rejected": true
+      },
+      {
+        "name": "phase4-frontend-lab-surface",
+        "path": "tests/fixtures/invalid-deps/phase4-frontend-lab-surface/component.tsx",
+        "expectedRule": "frontend-browser-lab-surface",
+        "rejected": true
+      },
+      {
+        "name": "phase4-later-phase-activation",
+        "path": "tests/fixtures/invalid-deps/phase4-later-phase-activation/modules/acme/application/activation.ts",
+        "expectedRule": "later-phase-activation-placeholder-bypass",
+        "rejected": true
+      }
+    ],
+    "placeholderScan": {
+      "productionFiles": [],
+      "unexpectedFiles": []
+    },
+    "laterPhaseViolations": [],
+    "depcruiseResults": [
+      {
+        "fixture": "tests/fixtures/invalid-deps/phase4-provider-leakage",
+        "expectedRule": "no-provider-in-application",
+        "rejected": true
+      },
+      {
+        "fixture": "tests/fixtures/invalid-deps/phase4-generated-leakage",
+        "expectedRule": "no-generated-code-leakage",
+        "rejected": true
+      }
+    ],
+    "guarantees": {
+      "historical": "phase2 fake-only and phase3 infrastructure-only restrictions enforceable against original fixtures/baselines",
+      "current": "only Spec #77 identity-access and portfolio-configuration activation permitted",
+      "placeholders": "nine explicit production placeholder adapters recorded; fixture exceptions cannot admit new placeholders",
+      "toolchain": "exact pins preserved; architecture checks not weakened or bypassed"
+    }
+  }
+}
