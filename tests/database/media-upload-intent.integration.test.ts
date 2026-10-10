@@ -528,9 +528,9 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const missingResult = await mediaProcessing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
       idempotencyKey: "phase6-pdf-missing-object" as never, mediaId: missingCandidate.mediaId, expectedVersion: 1, result: "passed",
       detectedMediaType: "application/pdf", detectedByteLength: pdfBytes.byteLength, sha256: safeHash });
-    expect(missingResult).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_UPLOAD_OBJECT_MISSING" } });
+    expect(missingResult).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_STORAGE_UNAVAILABLE" } });
     const missingFacts = await admin.query("select result, finding_codes from media.processing_attempts where media_id = $1::uuid", [missingCandidate.mediaId]);
-    expect(missingFacts.rows[0]).toEqual({ result: "failed", finding_codes: ["MEDIA_UPLOAD_OBJECT_MISSING"] });
+    expect(missingFacts.rows[0]).toEqual({ result: "failed", finding_codes: ["MEDIA_STORAGE_UNAVAILABLE"] });
 
     const substitutedCandidate = await uploadPdf(pdfBytes, "substituted-object");
     const substitutedPath = new URL(substitutedCandidate.uploadTarget).pathname.split("/media-candidates/")[1];
