@@ -105,6 +105,16 @@ function nonnegativeInteger(value) {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
+function isSourceRevisionAncestor(revision, aggregateRevision) {
+  if (revision === aggregateRevision) return true;
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", revision, aggregateRevision], { cwd: ROOT, stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision, sourceTreeSha256) {
   const requirements = [
     { key: "authoring", suite: "authoring" },
@@ -116,7 +126,7 @@ export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision, sou
   const constituents = requirements.map((requirement) => {
     const report = evidence?.[requirement.key];
     const issues = [];
-    if (!report || !/^[a-f0-9]{40}$/i.test(report.sourceRevision ?? "")) issues.push("missing source revision");
+    if (!report || !/^[a-f0-9]{40}$/i.test(report.sourceRevision ?? "") || !isSourceRevisionAncestor(report.sourceRevision, sourceRevision)) issues.push("missing, invalid, or unrelated source revision");
     if (typeof sourceTreeSha256 !== "string" || !/^[a-f0-9]{64}$/i.test(sourceTreeSha256) || report?.sourceTreeSha256 !== sourceTreeSha256) issues.push("missing or stale source tree identity");
     if (typeof report?.runId !== "string" || report.runId.length === 0 || typeof report?.startedAt !== "string" || Number.isNaN(Date.parse(report.startedAt))) issues.push("missing focused run identity");
     if (requirement.suite !== undefined) {
