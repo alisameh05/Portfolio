@@ -2,7 +2,7 @@ import { open, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readBoundedFile } from "../../src/runtime/adapters/media-processing-tools.js";
+import { assertBoundedFile, readBoundedFile } from "../../src/runtime/adapters/media-processing-tools.js";
 
 describe("bounded PDF output reads", () => {
   it("reads a complete output under the configured byte limit", async () => {
@@ -22,6 +22,7 @@ describe("bounded PDF output reads", () => {
     try {
       const file = await open(path, "wx");
       try { await file.truncate(64 * 1024 * 1024); } finally { await file.close(); }
+      await expect(assertBoundedFile(path, 8)).rejects.toThrow("MEDIA_PDF_OUTPUT_INVALID");
       await expect(readBoundedFile(path, 8)).rejects.toThrow("MEDIA_PDF_OUTPUT_INVALID");
     } finally {
       await rm(directory, { recursive: true, force: true });

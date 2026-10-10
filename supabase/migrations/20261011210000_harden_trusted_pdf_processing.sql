@@ -21,6 +21,11 @@ create table media.processing_claims (
   primary key (portfolio_id, owner_id, media_id)
 );
 
+revoke update on media.processing_states, media.processing_orphans, media.processing_claims from shipwithali_application;
+grant update (aggregate_version, latest_attempt_id, updated_at) on media.processing_states to shipwithali_application;
+grant update (state, reconciled_at) on media.processing_orphans to shipwithali_application;
+grant update (idempotency_key_hash, request_hash, claim_id, lease_expires_at) on media.processing_claims to shipwithali_application;
+
 alter table media.processing_claims enable row level security;
 alter table media.processing_claims force row level security;
 grant select, insert, update, delete on media.processing_claims to shipwithali_application;

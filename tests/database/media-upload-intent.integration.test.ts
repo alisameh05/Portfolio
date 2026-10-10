@@ -441,6 +441,16 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
 
   it("processes PDF candidates through the Owner operation with real PostgreSQL, private Storage, ClamAV and OCRmyPDF", async () => {
     appNow = Date.now();
+    const updatePrivileges = await admin.query(`
+      select has_column_privilege('shipwithali_application', 'media.processing_states', 'media_id', 'UPDATE') as state_identity,
+             has_column_privilege('shipwithali_application', 'media.processing_states', 'aggregate_version', 'UPDATE') as state_version,
+             has_column_privilege('shipwithali_application', 'media.processing_orphans', 'object_id', 'UPDATE') as orphan_identity,
+             has_column_privilege('shipwithali_application', 'media.processing_orphans', 'state', 'UPDATE') as orphan_state,
+             has_column_privilege('shipwithali_application', 'media.processing_claims', 'portfolio_id', 'UPDATE') as claim_identity,
+             has_column_privilege('shipwithali_application', 'media.processing_claims', 'lease_expires_at', 'UPDATE') as claim_lease
+    `);
+    expect(updatePrivileges.rows[0]).toEqual({ state_identity: false, state_version: true, orphan_identity: false,
+      orphan_state: true, claim_identity: false, claim_lease: true });
     const pdfBytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
     const processedFiles: Uint8Array[] = [];
     let scannerExecutions = 0;

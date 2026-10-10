@@ -37,6 +37,18 @@ export async function readBoundedFile(path: string, maxBytes: number): Promise<B
   }
 }
 
+export async function assertBoundedFile(path: string, maxBytes: number): Promise<void> {
+  const file = await open(path, "r");
+  try {
+    const info = await file.stat();
+    if (!info.isFile() || !Number.isSafeInteger(info.size) || info.size < 1 || info.size > maxBytes) {
+      throw new Error("MEDIA_PDF_OUTPUT_INVALID");
+    }
+  } finally {
+    await file.close();
+  }
+}
+
 async function toolVersion(executable: string, args: readonly string[]): Promise<string> {
   const result = await execFile(executable, [...args], { timeout: 2_000, maxBuffer: 4 * 1024, windowsHide: true });
   const version = `${result.stdout.trim()} ${result.stderr.trim()}`.trim().replace(/[^A-Za-z0-9./_ -]/gu, "").slice(0, 150);
@@ -129,9 +141,11 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
             if ([21, 22, 23, 24, 25].includes(exitCode)) return { unsafe: true as const };
             throw new Error("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
           }
+          await assertBoundedFile(checked, MAX_BYTES);
           await execFile(ocrmypdf, ["--skip-text", "--output-type", "pdfa-2", "--optimize", "0", "--jobs", "1", "--quiet", checked, output], {
             timeout: PROCESS_TIMEOUT_MS, maxBuffer: 16 * 1024, windowsHide: true,
           });
+          await assertBoundedFile(output, MAX_BYTES);
           const verifiedOutput = join(directory, "verified-output.pdf");
           try { await execFile(python, ["-c", PDF_PREFLIGHT, output, verifiedOutput], { timeout: 4_000, maxBuffer: 16 * 1024, windowsHide: true }); }
           catch { throw new Error("MEDIA_PDF_OUTPUT_INVALID"); }
