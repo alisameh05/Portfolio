@@ -59,7 +59,7 @@ export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProce
   const headers = { apikey: options.serviceRoleKey, authorization: `Bearer ${options.serviceRoleKey}` };
   const request = (path: string, init?: RequestInit) => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4_000);
+    const timer = setTimeout(() => controller.abort(), 3_000);
     return fetcher(new URL(`/storage/v1${path}`, base), { ...init, signal: controller.signal, headers: { ...headers, ...(init?.headers ?? {}) } })
       .finally(() => clearTimeout(timer));
   };
@@ -67,7 +67,7 @@ export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProce
   return {
     async readCandidate(input) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 4_000);
+      const timer = setTimeout(() => controller.abort(), 3_000);
       try {
         const path = objectPath("candidate", input.portfolioId, input.mediaId, input.uploadIntentId, input.objectId);
         const response = await fetcher(new URL(`/storage/v1/object/${encodeURIComponent(candidateBucket)}/${path}`, base), {
