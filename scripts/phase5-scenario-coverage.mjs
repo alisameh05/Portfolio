@@ -12,7 +12,7 @@ const OWNER = "tests/database/owner-composition.integration.test.ts";
 const SECURITY = "tests/database/phase5-security.integration.test.ts";
 const VERIFICATION = "tests/phase4/phase5-verification.test.ts";
 const STORY_ASSERTION = `${CONTENT} :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection`;
-const OWNER_ASSERTION = `${OWNER} :: preserves the committed public route and projection when injected optional delivery consumers fail`;
+const OWNER_ASSERTION = `${OWNER} :: keeps the committed route and projection readable after optional delivery port failures`;
 const DISCOVERY_ASSERTION = `${SECURITY} :: keeps private content private while the in-process discovery query returns only published approved projections`;
 const SECURITY_ASSERTION = `${SECURITY} :: denies actual public, authenticated, worker, and backup logins direct access to private Phase 5 rows`;
 const AUTHORIZATION_ASSERTION = OWNER_ASSERTION;
@@ -72,7 +72,7 @@ export const PHASE5_DEFERRED_SCOPE = Object.freeze([
   "Phase 7: persisted Reactions, Ratings, Feedback, Moderation, and their public aggregates.",
   "Phase 8: production optional workers, exports, alerts, analytics pipelines, backups, and recovery automation.",
   "Phase 9-10 and release: deployed TestSprite, container publication, promotion, load/resilience, and measured backup restore RPO/RTO.",
-  "Phase 5 injects Media, link, analytics, and alert consumer failures after publication and proves the committed outbox event, public Project route, and projection remain available. Production worker integrations remain Phase 6/8 work; required publication acceptance facts remain fail closed.",
+  "Phase 5 passes a persisted publication event to injected Media, link, analytics, and alert delivery ports, confirms each failure, and verifies the outbox event, public Project route, and projection remain readable. Production dispatchers and worker integrations remain Phase 6/8 work; required publication acceptance facts remain fail closed.",
 ]);
 
 const EXPECTED_SCENARIOS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 12, 13, 14, 15]);

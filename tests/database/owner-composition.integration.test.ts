@@ -95,7 +95,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     }
   });
 
-  it("preserves the committed public route and projection when injected optional delivery consumers fail", async () => {
+  it("keeps the committed route and projection readable after optional delivery port failures", async () => {
     const artifactId = createStableId("SupportingArtifact");
     const created = await services.contentAuthoring.createContent({
       actor,
@@ -164,7 +164,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     expect(committedPublication).toMatchObject({ event_type: "content.language_version_published.v1", aggregate_id: created.value.contentId });
     const optionalDeliveryKinds = ["media", "link", "analytics", "alert"] as const;
     for (const kind of optionalDeliveryKinds) {
-      const consumer = {
+      const deliveryPort = {
         async deliver(event: typeof committedPublication) {
           expect(event.event_id).toBe(committedPublication.event_id);
           expect(event.event_type).toBe("content.language_version_published.v1");
@@ -173,7 +173,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
           throw new Error(`INJECTED_${kind.toUpperCase()}_DELIVERY_FAILURE`);
         },
       };
-      await expect(consumer.deliver(committedPublication)).rejects.toThrow(`INJECTED_${kind.toUpperCase()}_DELIVERY_FAILURE`);
+      await expect(deliveryPort.deliver(committedPublication)).rejects.toThrow(`INJECTED_${kind.toUpperCase()}_DELIVERY_FAILURE`);
       expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" }))
         .toMatchObject({ ok: true, value: { type: "canonical", content: { currentSlug: "runtime-assembled-project" } } });
       expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project", locale: "en" }))
