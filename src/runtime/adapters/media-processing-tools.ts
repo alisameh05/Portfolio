@@ -9,7 +9,7 @@ import type { PdfProcessorPort, TrustedByteScannerPort } from "../../modules/med
 
 const execFile = promisify(nodeExecFile);
 const MAX_BYTES = 20 * 1024 * 1024;
-const SCAN_TIMEOUT_MS = 8_000;
+const SCAN_TIMEOUT_MS = 16_000;
 const PROCESS_TIMEOUT_MS = 8_000;
 const POLICY_VERSION = "pdf-active-content-deny-1";
 const BOUNDED_PDF_IMAGE = "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c";
@@ -245,7 +245,7 @@ export function createClamAvScanner(options: { readonly executable?: string } = 
           try {
             const mountSource = directory.replace(/\\/gu, "/");
             const containerName = `portfolio-clamav-${randomUUID()}`;
-            const dockerArgs = ["run", "--rm", "--pull=never", "--name", containerName, "--network=none", "--read-only", "--memory=512m", "--cpus=1", "--pids-limit=32",
+            const dockerArgs = ["run", "--rm", "--pull=never", "--name", containerName, "--network=none", "--read-only", "--memory=2g", "--cpus=1", "--pids-limit=32",
               "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--mount", `type=bind,source=${mountSource},target=/work,readonly`,
               "--workdir", "/work", "--entrypoint", "clamscan", BOUNDED_SCANNER_IMAGE, "--no-summary", "--stdout", "/work/candidate.pdf"];
             await monitorBoundedChildOutput("docker", dockerArgs, input,
