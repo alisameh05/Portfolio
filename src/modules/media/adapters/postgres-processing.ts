@@ -131,6 +131,8 @@ export function createPostgresMediaProcessingRepository(input: {
           await sql`set local lock_timeout = '1s'`.execute(executor);
           await sql`set local statement_timeout = '3s'`.execute(executor);
           const key = keyHash(query.idempotencyKey);
+          const releaseClaim = async () => sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
+            and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
           const existing = await sql<ReplayRow>`select request_hash, aggregate_version, outcome, failure_code from media.processing_commands
             where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId} and media_id = ${query.candidate.mediaId}
               and idempotency_key_hash = ${key} limit 1`.execute(executor);
@@ -157,23 +159,19 @@ export function createPostgresMediaProcessingRepository(input: {
           `.execute(executor);
           const row = locked.rows[0];
           if (!row) {
-            await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
-              and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
+            await releaseClaim();
             return err({ kind: "conflict", code: "MEDIA_CANDIDATE_STALE" });
           }
           if (row.declared_sha256 !== query.candidate.declaredSha256) {
-            await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
-              and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
+            await releaseClaim();
             return err({ kind: "conflict", code: "MEDIA_CANDIDATE_STALE" });
           }
           if (Number(row.current_version) !== query.expectedVersion) {
-            await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
-              and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
+            await releaseClaim();
             return err({ kind: "precondition_failed", code: "MEDIA_VERSION_MISMATCH" });
           }
           if (["accepted", "rejected"].includes(row.current_result ?? "")) {
-            await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
-              and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
+            await releaseClaim();
             return err({ kind: "conflict", code: "MEDIA_INVALID_TRANSITION" });
           }
           const version = Number(row.current_version) + 1;
@@ -205,8 +203,7 @@ export function createPostgresMediaProcessingRepository(input: {
             values (${uuidv7()}, 'media.processing_recorded.v1', 1, ${query.candidate.mediaId}, ${version},
               ${JSON.stringify({ mediaId: query.candidate.mediaId, attemptId: query.attempt.attemptId, result: query.attempt.result })}::jsonb,
               ${key}, transaction_timestamp(), transaction_timestamp())`.execute(executor);
-          await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
-            and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
+          await releaseClaim();
           return ok({ version, outcome: "media-processing-recorded" as const, ...(failureCode ? { failureCode } : {}) });
         });
       } catch { return err({ kind: "temporarily_unavailable", code: "MEDIA_PROCESSING_COMMIT_FAILED" }); }
