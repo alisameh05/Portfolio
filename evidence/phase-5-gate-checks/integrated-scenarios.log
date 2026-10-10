@@ -1,0 +1,116 @@
+
+> shipwithali-portfolio@0.0.0 prephase5:focus:integrated-scenarios
+> node scripts/phase5-scenario-coverage.mjs --invalidate-integrated && npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase5:focus:integrated-scenarios
+> node scripts/phase5-scenario-coverage.mjs
+
+{
+  "verdict": "pass",
+  "counts": {
+    "executed": 124,
+    "failed": 0,
+    "skipped": 0,
+    "total": 124
+  },
+  "constituents": [
+    {
+      "name": "authoring",
+      "ticket": null,
+      "suite": "authoring",
+      "runId": "a9b0cfdc-ff06-4d91-98e1-c1706069e421",
+      "startedAt": "2026-10-10T15:57:39.462Z",
+      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "verdict": "pass",
+      "issues": [],
+      "counts": {
+        "executed": 36,
+        "failed": 0,
+        "skipped": 0,
+        "total": 36
+      }
+    },
+    {
+      "name": "taxonomy",
+      "ticket": null,
+      "suite": "taxonomy",
+      "runId": "09ac7e3c-402b-48b3-9833-9f48f9ecbee0",
+      "startedAt": "2026-10-10T15:57:42.504Z",
+      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "verdict": "pass",
+      "issues": [],
+      "counts": {
+        "executed": 4,
+        "failed": 0,
+        "skipped": 0,
+        "total": 4
+      }
+    },
+    {
+      "name": "traceability",
+      "ticket": null,
+      "suite": "traceability",
+      "runId": "48f0f7cf-df2d-4d1a-8d08-fe8988cb4ade",
+      "startedAt": "2026-10-10T15:57:58.790Z",
+      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "verdict": "pass",
+      "issues": [],
+      "counts": {
+        "executed": 30,
+        "failed": 0,
+        "skipped": 0,
+        "total": 30
+      }
+    },
+    {
+      "name": "owner",
+      "ticket": 122,
+      "suite": null,
+      "runId": "c74e4016-f74b-4130-930c-b993a5cab402",
+      "startedAt": "2026-10-10T15:59:57.602Z",
+      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "verdict": "pass",
+      "issues": [],
+      "counts": {
+        "executed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "total": 1
+      }
+    },
+    {
+      "name": "database",
+      "ticket": 123,
+      "suite": null,
+      "runId": "9bd38f1d-5ba1-43d4-8750-0b4d886f76d6",
+      "startedAt": "2026-10-10T16:02:17.513Z",
+      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "verdict": "pass",
+      "issues": [],
+      "counts": {
+        "executed": 53,
+        "failed": 0,
+        "skipped": 0,
+        "total": 53
+      }
+    }
+  ],
+  "traceability": {
+    "valid": true,
+    "missingStories": [],
+    "missingScenarios": [],
+    "invalidEntries": []
+  },
+  "evidence": "evidence\\phase-5-integrated-scenarios.json"
+}
