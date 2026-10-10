@@ -585,7 +585,7 @@ export const zCreateMediaUploadIntentRequest = z.strictObject({
     kind: zMediaKind,
     originalFileName: z.string().min(1).max(255),
     declaredMediaType: z.string().regex(/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/),
-    byteLength: z.number().int().gte(1).lte(1073741824),
+    byteLength: z.number().int().gte(0).lte(1073741824),
     sha256: z.string().regex(/^[a-f0-9]{64}$/)
 });
 

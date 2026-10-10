@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "ticket": 148,
+  "parent": 145,
+  "runId": "7f5eac9e-891f-4b01-b7eb-11933880ca45",
+  "sourceRevision": "2f8de3a2b9417656590210a8244d986260e5ebd8",
+  "sourceTreeSha256": "49458a0f14451e4c30204c7b3f51c889d87c99490875d76294f1689e6bc5cb3c",
+  "startedAt": "2026-10-10T19:47:51.842Z",
+  "completedAt": "2026-10-10T19:48:39.025Z",
+  "scope": "owner-private-scoped-upload-intents-and-encrypted-exact-replay",
+  "services": {
+    "postgres": true,
+    "auth": true,
+    "storage": true
+  },
+  "checks": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "verdict": "pass"
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:upload-intents"
+  ],
+  "limitations": []
+}

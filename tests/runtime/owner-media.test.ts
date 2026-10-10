@@ -45,7 +45,9 @@ import {
   handleRecordOwnerMediaProcessing,
   handleRejectOwnerMediaAsset,
 } from "../../src/runtime/http/owner-media.js";
-import { ownerTestSecurity, withOwnerTestAuth } from "./owner-test-auth.js";
+import { OWNER_TEST_ACTOR, ownerTestSecurity, withOwnerTestAuth } from "./owner-test-auth.js";
+import { createMediaUploadIntentApplicationService } from "../../src/modules/media/application/upload-intent.js";
+import { err, ok, type StableId } from "../../src/shared/domain/index.js";
 
 const MEDIA_ID = OWNER_MEDIA_ID;
 const IDEMPOTENCY_KEY = "test-key-123";
@@ -306,7 +308,6 @@ describe("Owner Media upload intents (#31)", () => {
     ["missing Idempotency-Key", { idempotencyKey: null, body: intentBody }],
     ["absent body", { body: {} }],
     ["invalid kind", { body: { ...intentBody, kind: "audio" } }],
-    ["out-of-range byteLength", { body: { ...intentBody, byteLength: 0 } }],
     ["invalid sha256", { body: { ...intentBody, sha256: "zzz" } }],
     ["unknown closed-shape property", { body: { ...intentBody, extra: "nope" } }],
     ["out-of-shape body", { rawBody: "[]" }],
@@ -360,6 +361,49 @@ describe("Owner Media upload intents (#31)", () => {
       }
     },
   );
+
+  it("routes zero-byte declarations to safe business validation instead of narrowing the transport contract", async () => {
+    const fake = createOwnerMediaTestFake({ type: "success" });
+    const ownerId = OWNER_TEST_ACTOR.kind === "owner" ? OWNER_TEST_ACTOR.ownerId : "" as never;
+    const application = createMediaUploadIntentApplicationService({
+      scope: {
+        ownerId,
+        portfolioId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea1" as StableId<"Portfolio">,
+      },
+      repository: {
+        async reserve() { return ok({ kind: "reserved" as const }); },
+        async complete() { return ok(undefined); },
+        async abandon() {},
+        async listExpiredAbandoned() { return ok([]); },
+        async markCompensated() { return ok(undefined); },
+      },
+      target: {
+        async prepare() { return err({ kind: "temporarily_unavailable" as const, code: "SHOULD_NOT_PREPARE" }); },
+        async removeAbandoned() { return ok(undefined); },
+      },
+      vault: {
+        isAvailable: () => true,
+        seal: (plaintext) => ({ version: 1, nonce: "AA==", ciphertext: plaintext, authenticationTag: "AA==" }),
+        open: (value) => value.ciphertext,
+      },
+      ids: { generate: () => "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ec0" },
+      clock: { now: () => "2026-10-10T19:00:00.000Z" },
+    });
+    const service = {
+      ...fake,
+      async createOwnerMediaUploadIntent(command: Parameters<typeof application.create>[0]) {
+        return await application.create(command);
+      },
+    };
+    const response = await handleCreateOwnerMediaUploadIntent(
+      intentRequest({ body: { ...intentBody, byteLength: 0 } }),
+      { service, security: ownerTestSecurity() },
+    );
+    expect(response.status).toBe(422);
+    expect(fake.calls.createOwnerMediaUploadIntent).toHaveLength(0);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body["code"]).toBe("unprocessable");
+  });
 
   it("fails safely when intent fake output is contract-invalid", async () => {
     const fake = createOwnerMediaTestFake({ type: "invalid-success" });

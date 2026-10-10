@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { randomUUID, createHash } from "node:crypto";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,8 @@ import {
 const ROOT = phase6Root();
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const EVIDENCE = join(ROOT, "evidence/phase-6-verification-setup.json");
+const UPLOAD_INTENT_EVIDENCE = join(ROOT, "evidence/phase6-upload-intent-148.json");
+const UPLOAD_INTENT_ONLY = process.argv.includes("--upload-intents-only");
 const RUN_TIMEOUT = 180_000;
 
 function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEOUT, input, label = command } = {}) {
@@ -104,11 +106,19 @@ async function main() {
   };
   const formats = [];
   const failures = [];
+  let uploadIntentChecks;
   let toolVersions = {};
   let status;
   const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], { cwd: ROOT, env, timeout }).stdout;
   try {
-    const config = isolatedPhase6Config(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId);
+    let config = isolatedPhase6Config(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId);
+    if (UPLOAD_INTENT_ONLY) {
+      // The disposable Auth instance needs a real non-Owner JWT for the Storage denial matrix.
+      // This change is confined to its temporary config; repository and developer Auth settings stay untouched.
+      config = config
+        .replace(/(\[auth\][\s\S]*?enable_signup = )false/u, "$1true")
+        .replace(/(\[auth\.email\][\s\S]*?enable_signup = )false/u, "$1true");
+    }
     writeFileSync(join(isolatedSupabase, "config.toml"), config, "utf8");
     copyFileSync(join(ROOT, "supabase/seed.sql"), join(isolatedSupabase, "seed.sql"));
     const migrations = join(ROOT, "supabase/migrations");
@@ -154,6 +164,7 @@ async function main() {
     if (bucketMetadata.public !== false) throw new Error("PHASE6_STORAGE_BUCKET_NOT_PRIVATE");
     services.storage = { available: true, privateBucketVerified: true, executionCount: storageExecutions };
 
+    if (!UPLOAD_INTENT_ONLY) {
     console.log("Probing pinned ClamAV, ImageMagick, FFmpeg and OCRmyPDF runtimes.");
     const image = PHASE6_TOOL_DEFINITIONS.imageProcessor;
     const video = PHASE6_TOOL_DEFINITIONS.videoProcessor;
@@ -193,6 +204,34 @@ async function main() {
       services.storage.executionCount += 3;
       console.log(`✓ ${fixture.id}: processor, clean scan and private byte round-trip passed.`);
     }
+    }
+    console.log("Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.");
+    const testJsonPath = join(workdir, "upload-intent-vitest.json");
+    const testEnv = {
+      ...env,
+      PHASE6_UPLOAD_INTENT_DATABASE_URL: status.DB_URL,
+      PHASE6_UPLOAD_INTENT_STORAGE_URL: storageBase,
+      PHASE6_UPLOAD_INTENT_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY,
+      PHASE6_UPLOAD_INTENT_ANON_KEY: status.ANON_KEY,
+      PHASE6_UPLOAD_INTENT_REPLAY_KEY: randomBytes(32).toString("base64"),
+      PHASE6_REQUIRE_UPLOAD_INTENT: "1",
+    };
+    const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", "tests/database/media-upload-intent.integration.test.ts", "--reporter=json", `--outputFile=${testJsonPath}`], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 300_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+    if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
+    const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
+    uploadIntentChecks = {
+      suite: "tests/database/media-upload-intent.integration.test.ts",
+      total: testReport.numTotalTests,
+      passed: testReport.numPassedTests,
+      failed: testReport.numFailedTests,
+      skipped: testReport.numPendingTests,
+      failedTests: (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []).filter((item) => item.status === "failed").map((item) => ({
+        name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
+        reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 3).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
+      })),
+      verdict: testResult.status === 0 && testReport.numTotalTests === 3 && testReport.numPassedTests === 3 && testReport.numFailedTests === 0 && testReport.numPendingTests === 0 ? "pass" : "fail",
+    };
+    if (uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
   } catch (error) {
     failures.push(error instanceof Error ? error.message : "PHASE6_SETUP_FAILED");
   } finally {
@@ -214,16 +253,45 @@ async function main() {
   }
   const finalSource = getPhase6SourceIdentity();
   if (finalSource.sourceRevision !== source.sourceRevision || finalSource.sourceTreeSha256 !== source.sourceTreeSha256) failures.push("PHASE6_SOURCE_CHANGED_DURING_RUN");
-  const report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
-  const evaluated = evaluatePhase6Setup(report, source);
-  if (evaluated.failures.length) {
-    report.failures.push(...evaluated.failures);
-    report.verdict = "fail";
+  let report;
+  if (!UPLOAD_INTENT_ONLY) {
+    report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
+    const evaluated = evaluatePhase6Setup(report, source);
+    if (evaluated.failures.length) {
+      report.failures.push(...evaluated.failures);
+      report.verdict = "fail";
+    }
+    mkdirSync(join(ROOT, "evidence"), { recursive: true });
+    writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   }
-  mkdirSync(join(ROOT, "evidence"), { recursive: true });
-  writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-  console.log(JSON.stringify({ ticket: report.ticket, runId: report.runId, sourceRevision: report.sourceRevision, sourceTreeSha256: report.sourceTreeSha256, verdict: report.verdict, counts: report.counts, services: report.services, cleanup: report.cleanup, failures: report.failures, evidence: "evidence/phase-6-verification-setup.json" }, null, 2));
-  if (report.verdict !== "pass") process.exitCode = 1;
+  if (uploadIntentChecks !== undefined) {
+    const uploadIntentEvidence = {
+      schemaVersion: 1,
+      ticket: 148,
+      parent: 145,
+      runId: randomUUID(),
+      sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      scope: "owner-private-scoped-upload-intents-and-encrypted-exact-replay",
+      services: { postgres: true, auth: true, storage: true },
+      checks: uploadIntentChecks,
+      cleanup,
+      verdict: uploadIntentChecks.verdict === "pass" && cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:upload-intents"],
+      limitations: [],
+    };
+    writeFileSync(UPLOAD_INTENT_EVIDENCE, `${JSON.stringify(uploadIntentEvidence, null, 2)}\n`, "utf8");
+  }
+  if (UPLOAD_INTENT_ONLY) {
+    const uploadEvidence = uploadIntentChecks === undefined ? undefined : JSON.parse(readFileSync(UPLOAD_INTENT_EVIDENCE, "utf8"));
+    console.log(JSON.stringify({ ticket: 148, runId: uploadEvidence?.runId, sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256, verdict: uploadEvidence?.verdict ?? "fail", uploadIntentChecks, cleanup, failures, evidence: uploadEvidence === undefined ? undefined : "evidence/phase6-upload-intent-148.json" }, null, 2));
+    if (uploadEvidence?.verdict !== "pass") process.exitCode = 1;
+  } else {
+    console.log(JSON.stringify({ ticket: report.ticket, runId: report.runId, sourceRevision: report.sourceRevision, sourceTreeSha256: report.sourceTreeSha256, verdict: report.verdict, counts: report.counts, services: report.services, cleanup: report.cleanup, failures: report.failures, uploadIntentChecks, evidence: "evidence/phase-6-verification-setup.json", uploadIntentEvidence: uploadIntentChecks === undefined ? undefined : "evidence/phase6-upload-intent-148.json" }, null, 2));
+    if (report.verdict !== "pass") process.exitCode = 1;
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
