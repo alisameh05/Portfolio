@@ -1,6 +1,6 @@
-import { execFile as nodeExecFile } from "node:child_process";
+import { execFile as nodeExecFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { open, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { open, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { err, ok, type Rejection, type Result } from "@shared/domain";
@@ -47,6 +47,45 @@ export async function assertBoundedFile(path: string, maxBytes: number): Promise
   } finally {
     await file.close();
   }
+}
+
+export function runWithBoundedOutput(executable: string, args: readonly string[], outputPath: string,
+  limits: { readonly maxBytes: number; readonly timeoutMs: number }): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, [...args], { stdio: "ignore", windowsHide: true });
+    let failure: Error | undefined;
+    let checking = false;
+    const timeout = setTimeout(() => {
+      failure = new Error("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
+      child.kill();
+    }, limits.timeoutMs);
+    const monitor = setInterval(() => {
+      if (checking || failure) return;
+      checking = true;
+      void stat(outputPath).then((info) => {
+        if (info.size > limits.maxBytes) {
+          failure = new Error("MEDIA_PDF_OUTPUT_INVALID");
+          child.kill();
+        }
+      }).catch(() => undefined).finally(() => { checking = false; });
+    }, 10);
+    child.once("error", (cause) => {
+      failure ??= cause instanceof Error ? cause : new Error("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
+    });
+    child.once("close", (code, signal) => {
+      clearTimeout(timeout);
+      clearInterval(monitor);
+      void (async () => {
+        try {
+          const info = await stat(outputPath);
+          if (info.size > limits.maxBytes) failure = new Error("MEDIA_PDF_OUTPUT_INVALID");
+        } catch { /* The caller validates expected output existence. */ }
+        if (failure) reject(failure);
+        else if (code === 0) resolve();
+        else reject(Object.assign(new Error("MEDIA_PDF_PROCESSOR_UNAVAILABLE"), { code: code ?? signal }));
+      })();
+    });
+  });
 }
 
 async function toolVersion(executable: string, args: readonly string[]): Promise<string> {
@@ -135,19 +174,18 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
           const checked = join(directory, "checked.pdf");
           const output = join(directory, "processed.pdf");
           try {
-            await execFile(python, ["-c", PDF_PREFLIGHT, input, checked], { timeout: 4_000, maxBuffer: 16 * 1024, windowsHide: true });
+            await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, input, checked], checked, { maxBytes: MAX_BYTES, timeoutMs: 4_000 });
           } catch (cause) {
             const exitCode = typeof cause === "object" && cause !== null && "code" in cause ? Number((cause as { code: unknown }).code) : 0;
             if ([21, 22, 23, 24, 25].includes(exitCode)) return { unsafe: true as const };
             throw new Error("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
           }
           await assertBoundedFile(checked, MAX_BYTES);
-          await execFile(ocrmypdf, ["--skip-text", "--output-type", "pdfa-2", "--optimize", "0", "--jobs", "1", "--quiet", checked, output], {
-            timeout: PROCESS_TIMEOUT_MS, maxBuffer: 16 * 1024, windowsHide: true,
-          });
+          await runWithBoundedOutput(ocrmypdf, ["--skip-text", "--output-type", "pdfa-2", "--optimize", "0", "--jobs", "1", "--quiet", checked, output],
+            output, { maxBytes: MAX_BYTES, timeoutMs: PROCESS_TIMEOUT_MS });
           await assertBoundedFile(output, MAX_BYTES);
           const verifiedOutput = join(directory, "verified-output.pdf");
-          try { await execFile(python, ["-c", PDF_PREFLIGHT, output, verifiedOutput], { timeout: 4_000, maxBuffer: 16 * 1024, windowsHide: true }); }
+          try { await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, output, verifiedOutput], verifiedOutput, { maxBytes: MAX_BYTES, timeoutMs: 4_000 }); }
           catch { throw new Error("MEDIA_PDF_OUTPUT_INVALID"); }
           const result = await readBoundedFile(verifiedOutput, MAX_BYTES);
           if (result.byteLength < 1 || !result.subarray(0, 5).equals(Buffer.from("%PDF-"))) throw new Error("MEDIA_PDF_OUTPUT_INVALID");

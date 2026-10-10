@@ -1,8 +1,8 @@
-import { open, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { open, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { assertBoundedFile, readBoundedFile } from "../../src/runtime/adapters/media-processing-tools.js";
+import { assertBoundedFile, readBoundedFile, runWithBoundedOutput } from "../../src/runtime/adapters/media-processing-tools.js";
 
 describe("bounded PDF output reads", () => {
   it("reads a complete output under the configured byte limit", async () => {
@@ -24,6 +24,19 @@ describe("bounded PDF output reads", () => {
       try { await file.truncate(64 * 1024 * 1024); } finally { await file.close(); }
       await expect(assertBoundedFile(path, 8)).rejects.toThrow("MEDIA_PDF_OUTPUT_INVALID");
       await expect(readBoundedFile(path, 8)).rejects.toThrow("MEDIA_PDF_OUTPUT_INVALID");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("terminates a subprocess while its intermediate output crosses the cap", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "media-processing-tools-"));
+    const path = join(directory, "growing.pdf");
+    const writer = "const fs=require('node:fs');const fd=fs.openSync(process.argv[1],'w');for(let i=0;i<100;i++){fs.writeSync(fd,Buffer.alloc(2));Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10)}fs.closeSync(fd)";
+    try {
+      await expect(runWithBoundedOutput(process.execPath, ["-e", writer, path], path, { maxBytes: 8, timeoutMs: 3_000 }))
+        .rejects.toThrow("MEDIA_PDF_OUTPUT_INVALID");
+      expect((await stat(path)).size).toBeLessThan(200);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

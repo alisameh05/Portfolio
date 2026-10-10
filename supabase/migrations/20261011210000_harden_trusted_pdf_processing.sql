@@ -28,7 +28,7 @@ grant update (idempotency_key_hash, request_hash, claim_id, lease_expires_at) on
 
 alter table media.processing_claims enable row level security;
 alter table media.processing_claims force row level security;
-grant select, insert, update, delete on media.processing_claims to shipwithali_application;
+grant select, insert, delete on media.processing_claims to shipwithali_application;
 grant select on media.processing_claims to shipwithali_backup;
 create policy media_processing_claims_owner_scope on media.processing_claims
   for all to shipwithali_application using (
