@@ -301,7 +301,10 @@ export async function handleCreateOwnerMediaUploadIntent(
       );
     }
     logger?.info("request.completed", { traceId, status: 201 });
-    return Response.json(parsed.data, { status: 201 });
+    return Response.json(parsed.data, {
+      status: 201,
+      headers: { "cache-control": "private, no-store" },
+    });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }

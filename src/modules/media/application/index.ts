@@ -30,3 +30,13 @@ export type {
   MediaDeliveryLocation,
   MediaReadApplicationService,
 } from "./owner-contracts.js";
+export {
+  createMediaUploadIntentApplicationService,
+} from "./upload-intent.js";
+export type {
+  CreateMediaUploadIntentCommand,
+  PreparedUploadTarget,
+  MediaUploadTargetPort,
+  MediaUploadIntentApplicationService,
+  MediaUploadIntentServiceDependencies,
+} from "./upload-intent.js";

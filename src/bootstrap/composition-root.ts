@@ -30,7 +30,9 @@ import type { OwnerTaxonomyApplicationService } from "../runtime/http/owner-taxo
 import type { OwnerPublicationApplicationService } from "../runtime/http/owner-publication.js";
 import type { PublicDiscoveryService } from "../modules/taxonomy-discovery/application/index.js";
 import type { LifecycleResource, ReadinessCheck } from "../runtime/ports.js";
+import { createSystemClock, createSystemIdGenerator } from "../runtime/ports.js";
 import { parseStableId } from "../shared/domain/index.js";
+import type { OwnerMediaApplicationService } from "../modules/media/index.js";
 
 export type { RuntimeConfig } from "./configuration.js";
 
@@ -40,6 +42,7 @@ let currentOwnerConfiguration: OwnerConfigurationApplicationService | undefined;
 let currentContentAuthoring: ContentAuthoringService | undefined;
 let currentOwnerTaxonomy: OwnerTaxonomyApplicationService | undefined;
 let currentPublicDiscovery: PublicDiscoveryService | undefined;
+let currentOwnerMedia: OwnerMediaApplicationService | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -68,6 +71,7 @@ export interface DatabaseRuntimeDependencies {
   readonly contentAuthoring?: ContentAuthoringService;
   readonly ownerTaxonomy?: OwnerTaxonomyApplicationService;
   readonly publicDiscovery?: PublicDiscoveryService;
+  readonly ownerMedia?: OwnerMediaApplicationService;
   readonly resource: LifecycleResource;
   readonly readiness: ReadinessCheck;
 }
@@ -139,6 +143,7 @@ export async function initializeDatabaseRuntime(
         let contentAuthoring: ContentAuthoringService | undefined;
         let ownerTaxonomy: OwnerTaxonomyApplicationService | undefined;
         let publicDiscovery: PublicDiscoveryService | undefined;
+        let ownerMedia: OwnerMediaApplicationService | undefined;
         if (runtimeKind === "application") {
           if (configuredScope === undefined || !configuredScope.portfolioId.ok || !configuredScope.ownerId.ok) {
             throw new RuntimeConfigError("PORTFOLIO_ID", "must be configured for Owner configuration commands");
@@ -223,6 +228,48 @@ export async function initializeDatabaseRuntime(
             scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
             contentAssignments: contentTaxonomyAssignments,
           }), createProductionOwnerTaxonomyService());
+
+          const [
+            { createPostgresMediaUploadIntentRepository },
+            { createUploadCapabilityVault },
+            { createMediaUploadIntentApplicationService },
+            { createSupabaseMediaUploadTargetAdapter },
+            { createProductionOwnerMediaService },
+          ] = await Promise.all([
+            import("../modules/media/adapters/postgres-upload-intents.js"),
+            import("../modules/media/adapters/upload-capability-vault.js"),
+            import("../modules/media/application/upload-intent.js"),
+            import("../runtime/adapters/supabase-media-upload-target.js"),
+            import("../runtime/fakes/owner-media.js"),
+          ]);
+          const uploadIntentTarget = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
+            ? createSupabaseMediaUploadTargetAdapter({
+              storageUrl: env["SUPABASE_URL"],
+              serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
+              ...(env["MEDIA_CANDIDATE_BUCKET"] === undefined ? {} : { candidateBucket: env["MEDIA_CANDIDATE_BUCKET"] }),
+              ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+            })
+            : {
+              async prepare() {
+                return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } };
+              },
+              async removeAbandoned() {
+                return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } };
+              },
+            };
+          const uploadIntent = createMediaUploadIntentApplicationService({
+            scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
+            repository: createPostgresMediaUploadIntentRepository(database.database, operations.transactions),
+            target: uploadIntentTarget,
+            vault: createUploadCapabilityVault(env["MEDIA_UPLOAD_REPLAY_ENCRYPTION_KEY"]),
+            ids: createSystemIdGenerator(),
+            clock: createSystemClock(),
+          });
+          const failClosed = createProductionOwnerMediaService();
+          ownerMedia = {
+            ...failClosed,
+            createOwnerMediaUploadIntent: uploadIntent.create,
+          };
         }
         return {
           operations,
@@ -230,6 +277,7 @@ export async function initializeDatabaseRuntime(
           ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
           ...(ownerTaxonomy === undefined ? {} : { ownerTaxonomy }),
           ...(publicDiscovery === undefined ? {} : { publicDiscovery }),
+          ...(ownerMedia === undefined ? {} : { ownerMedia }),
           resource: database.resource,
           readiness: database.readiness,
         };
@@ -253,6 +301,7 @@ export async function initializeDatabaseRuntime(
     currentContentAuthoring = dependencies.contentAuthoring;
     currentOwnerTaxonomy = dependencies.ownerTaxonomy;
     currentPublicDiscovery = dependencies.publicDiscovery;
+    currentOwnerMedia = dependencies.ownerMedia;
     lifecycle.markReady();
     return Object.freeze({ ...config, runtimeKind });
   } catch (error) {
@@ -293,6 +342,13 @@ export async function getOwnerTaxonomyApplicationService(): Promise<OwnerTaxonom
 export async function getPublicDiscoveryApplicationService(): Promise<PublicDiscoveryService> {
   if (currentPublicDiscovery !== undefined) return currentPublicDiscovery;
   throw new Error("Public discovery requires the configured PostgreSQL application assembly.");
+}
+
+/** The first completed Media Owner command is composed with scoped PostgreSQL and private Storage adapters. */
+export async function getOwnerMediaApplicationService(): Promise<OwnerMediaApplicationService> {
+  if (currentOwnerMedia !== undefined) return currentOwnerMedia;
+  const { createProductionOwnerMediaService } = await import("../runtime/fakes/owner-media.js");
+  return createProductionOwnerMediaService();
 }
 
 /** Project route, status, and Featured operations share the Content transaction boundary. */
@@ -344,5 +400,6 @@ export function resetRuntimeForTests(): void {
   currentContentAuthoring = undefined;
   currentOwnerTaxonomy = undefined;
   currentPublicDiscovery = undefined;
+  currentOwnerMedia = undefined;
   resetLifecycleForTests();
 }

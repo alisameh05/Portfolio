@@ -73,6 +73,8 @@
     "prephase5:context": "npm run validation:ready",
     "phase5:context": "node scripts/check-phase5-context.mjs",
     "phase6:focus:verification": "node scripts/phase6-verification.mjs",
+    "prephase6:focus:upload-intents": "npm run validation:ready",
+    "phase6:focus:upload-intents": "node scripts/phase6-verification.mjs --upload-intents-only",
     "test:phase6:verification": "node --test tests/tooling/phase6-verification.test.mjs",
     "prephase5:smoke": "npm run validation:ready",
     "phase5:smoke": "node scripts/phase5-verification.mjs --smoke",

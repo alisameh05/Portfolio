@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "ticket": 148,
+  "parent": 145,
+  "runId": "9796d458-ae29-4664-97ce-ea215b41295f",
+  "sourceRevision": "d68ce5f02ffb0c4ec91e6dc22a140ec0f00306b9",
+  "sourceTreeSha256": "d34a75865cb3db282ee1884b1cf5f1c53f28a368fe5d3b8be2652d77222779e8",
+  "startedAt": "2026-10-10T20:11:16.969Z",
+  "completedAt": "2026-10-10T20:14:53.351Z",
+  "scope": "owner-private-scoped-upload-intents-and-encrypted-exact-replay",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1"
+  },
+  "policyIds": {
+    "migration": "20261010100000_create_private_media_upload_intents.sql",
+    "rls": [
+      "media_assets_owner_scope",
+      "media_upload_intents_owner_scope",
+      "media_upload_intent_commands_owner_scope",
+      "media_upload_intent_capabilities_owner_scope"
+    ],
+    "storage": [
+      "media-candidates",
+      "media-processed",
+      "signed upload lifetime 7200 seconds",
+      "no-upsert"
+    ]
+  },
+  "principalScope": {
+    "database": "shipwithali_application constrained by portfolio_id and owner_id RLS",
+    "storage": [
+      "configured Owner signed capability",
+      "anonymous",
+      "authenticated non-Owner"
+    ],
+    "environment": "disposable loopback Supabase"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "majorVersion": 17,
+      "independentConnections": 2,
+      "executionCount": 3
+    },
+    "auth": {
+      "available": true,
+      "status": 200,
+      "executionCount": 1
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 20
+    }
+  },
+  "formats": [
+    {
+      "id": "pdf",
+      "kind": "document",
+      "mimeType": "application/pdf",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "17.12.1"
+    },
+    {
+      "id": "png",
+      "kind": "image",
+      "mimeType": "image/png",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "jpeg",
+      "kind": "image",
+      "mimeType": "image/jpeg",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "webp",
+      "kind": "image",
+      "mimeType": "image/webp",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "mp4",
+      "kind": "video",
+      "mimeType": "video/mp4",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    },
+    {
+      "id": "webm",
+      "kind": "video",
+      "mimeType": "video/webm",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    }
+  ],
+  "formatCounts": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0
+  },
+  "checks": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "verdict": "pass"
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:upload-intents"
+  ],
+  "limitations": []
+}

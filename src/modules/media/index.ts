@@ -28,6 +28,16 @@ export type {
   MediaService,
   MediaApplicationService,
 } from "./application/index.js";
+export {
+  createMediaUploadIntentApplicationService,
+} from "./application/index.js";
+export type {
+  CreateMediaUploadIntentCommand,
+  PreparedUploadTarget,
+  MediaUploadTargetPort,
+  MediaUploadIntentApplicationService,
+  MediaUploadIntentServiceDependencies,
+} from "./application/index.js";
 
 export type {
   GetOwnerMediaAggregateQuery,
@@ -60,4 +70,14 @@ export type {
   MediaProcessorPort,
   MediaObjectStoragePort,
   TrustedMediaScannerPort,
+} from "./ports/index.js";
+export type {
+  SealedUploadCapability,
+  UploadIntentReceiptRecord,
+  UploadIntentReservationInput,
+  UploadIntentReservation,
+  CompleteUploadIntentInput,
+  ExpiredUploadIntentCleanup,
+  MediaUploadIntentRepositoryPort,
+  UploadCapabilityVaultPort,
 } from "./ports/index.js";
