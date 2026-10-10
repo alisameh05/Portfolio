@@ -7,7 +7,8 @@ import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
-import { invalidateIntegratedEvidence } from "./phase5-scenario-coverage.mjs";
+import { invalidateSuiteEvidence } from "./phase5-scenario-coverage.mjs";
+import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const VITEST = join(ROOT, "node_modules", "vitest", "vitest.mjs");
@@ -109,6 +110,7 @@ export function localVerificationEnvironment(source = process.env) {
 export function makeVerificationReport({
   runId = randomUUID(),
   sourceRevision,
+  sourceTreeSha256,
   suite,
   result,
   dependency = { required: false, available: true, code: "NOT_REQUIRED" },
@@ -127,6 +129,7 @@ export function makeVerificationReport({
     schemaVersion: 1,
     runId,
     sourceRevision,
+    sourceTreeSha256,
     suite,
     startedAt: new Date().toISOString(),
     verdict: passed ? "pass" : "fail",
@@ -183,9 +186,8 @@ function readReport(path) {
 }
 
 function runFocus(suite) {
-  invalidateIntegratedEvidence(join(EVIDENCE_DIR, `phase-5-verification-${suite}.json`));
+  invalidateSuiteEvidence(suite);
   if (suite === "database") {
-    invalidateIntegratedEvidence(join(EVIDENCE_DIR, "phase-5-security-migrations-postgres.json"));
     const child = spawnSync(process.execPath, [join(ROOT, "scripts", "portfolio-settings-integration.mjs"), "--ticket-123"], {
       cwd: ROOT,
       env: localVerificationEnvironment(),
@@ -200,6 +202,7 @@ function runFocus(suite) {
       evidence?.cleanUpgradeEquivalent === true && evidence?.phase4ReleaseUpgrade !== undefined && executed > 0 && skipped === 0;
     const report = makeVerificationReport({
       sourceRevision: sourceRevision(),
+      sourceTreeSha256: workingTreeSourceSha256(),
       suite,
       result: {
         executed,
@@ -266,6 +269,7 @@ function runFocus(suite) {
 
   const report = makeVerificationReport({
     sourceRevision: sourceRevision(),
+    sourceTreeSha256: workingTreeSourceSha256(),
     suite,
     result,
     dependency,
@@ -326,6 +330,7 @@ function runSmoke({ suite = "smoke", reproduction = ["npm run phase5:smoke"] } =
   }
   const report = makeVerificationReport({
     sourceRevision: sourceRevision(),
+    sourceTreeSha256: workingTreeSourceSha256(),
     suite,
     result,
     dependency,

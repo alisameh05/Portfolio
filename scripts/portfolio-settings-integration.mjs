@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { migrationSha256 } from "./migration-checksum.mjs";
 import { invalidateIntegratedEvidence } from "./phase5-scenario-coverage.mjs";
+import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import {
   assertPhase5MigrationSafety,
   PHASE5_MIGRATION_COMPATIBILITY,
@@ -43,16 +44,6 @@ function run(command, args, options = {}) {
     throw new Error(`${options.errorCode ?? "PORTFOLIO_SETTINGS_COMMAND_FAILED"}${diagnostic === "" ? "" : `:${diagnostic}`}`);
   }
   return result.stdout;
-}
-
-function workingTreeSourceSha256() {
-  const digest = createHash("sha256").update(run("git", ["diff", "origin/master", "--binary", "--", ".", ":(exclude)evidence/**"]));
-  const untracked = run("git", ["ls-files", "--others", "--exclude-standard"])
-    .split(/\r?\n/u)
-    .filter((path) => path !== "" && !path.replaceAll("\\", "/").startsWith("evidence/"))
-    .sort();
-  for (const path of untracked) digest.update(path).update(readFileSync(join(ROOT, path)));
-  return digest.digest("hex");
 }
 
 export function localEnvironment(source = process.env) {

@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE_DIR = join(ROOT, "evidence");
@@ -104,7 +105,7 @@ function nonnegativeInteger(value) {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
-export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision) {
+export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision, sourceTreeSha256) {
   const requirements = [
     { key: "authoring", suite: "authoring" },
     { key: "taxonomy", suite: "taxonomy" },
@@ -115,6 +116,7 @@ export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision) {
     const report = evidence?.[requirement.key];
     const issues = [];
     if (!report || report.sourceRevision !== sourceRevision) issues.push("missing or stale source revision");
+    if (typeof sourceTreeSha256 !== "string" || !/^[a-f0-9]{64}$/i.test(sourceTreeSha256) || report?.sourceTreeSha256 !== sourceTreeSha256) issues.push("missing or stale source tree identity");
     if (typeof report?.runId !== "string" || report.runId.length === 0 || typeof report?.startedAt !== "string" || Number.isNaN(Date.parse(report.startedAt))) issues.push("missing focused run identity");
     if (requirement.suite !== undefined) {
       const counts = report?.counts;
@@ -132,6 +134,7 @@ export function evaluateIntegratedScenarioEvidence(evidence, sourceRevision) {
       runId: report?.runId ?? null,
       startedAt: report?.startedAt ?? null,
       sourceRevision: report?.sourceRevision ?? null,
+      sourceTreeSha256: report?.sourceTreeSha256 ?? null,
       verdict: issues.length === 0 ? "pass" : "fail",
       issues,
       counts: requirement.suite !== undefined
@@ -159,14 +162,15 @@ function readJson(filename) {
   try { return JSON.parse(readFileSync(join(EVIDENCE_DIR, filename), "utf8")); } catch { return null; }
 }
 
-export function buildIntegratedScenarioEvidence({ sourceRevision, evidence, runId = randomUUID(), startedAt = new Date().toISOString() }) {
-  const evaluated = evaluateIntegratedScenarioEvidence(evidence, sourceRevision);
+export function buildIntegratedScenarioEvidence({ sourceRevision, sourceTreeSha256, evidence, runId = randomUUID(), startedAt = new Date().toISOString() }) {
+  const evaluated = evaluateIntegratedScenarioEvidence(evidence, sourceRevision, sourceTreeSha256);
   return {
     schemaVersion: 1,
     runId,
     ticket: 124,
     parent: 106,
     sourceRevision,
+    sourceTreeSha256,
     startedAt,
     verdict: evaluated.verdict,
     scenarioAcceptance: evaluated.verdict === "pass",
@@ -193,6 +197,17 @@ export function invalidateIntegratedEvidence(path) {
   }
 }
 
+export function invalidateSuiteEvidence(suite) {
+  const files = {
+    authoring: ["phase-5-verification-authoring.json"],
+    taxonomy: ["phase-5-verification-taxonomy.json"],
+    owner: ["phase-5-owner-composition-postgres.json"],
+    database: ["phase-5-verification-database.json", "phase-5-security-migrations-postgres.json"],
+  }[suite];
+  if (files === undefined) throw new Error("PHASE5_EVIDENCE_SUITE_INVALID");
+  for (const filename of files) invalidateIntegratedEvidence(join(EVIDENCE_DIR, filename));
+}
+
 function currentRevision() {
   return execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
 }
@@ -200,17 +215,27 @@ function currentRevision() {
 function run() {
   const coverage = validateScenarioCoverage();
   const sourceRevision = currentRevision();
+  const sourceTreeSha256 = workingTreeSourceSha256();
   const evidence = {
     authoring: readJson("phase-5-verification-authoring.json"),
     taxonomy: readJson("phase-5-verification-taxonomy.json"),
     owner: readJson("phase-5-owner-composition-postgres.json"),
     database: readJson("phase-5-security-migrations-postgres.json"),
   };
-  const report = buildIntegratedScenarioEvidence({ sourceRevision, evidence });
+  const report = buildIntegratedScenarioEvidence({ sourceRevision, sourceTreeSha256, evidence });
   const output = join(EVIDENCE_DIR, "phase-5-integrated-scenarios.json");
   writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   console.log(JSON.stringify({ verdict: report.verdict, counts: report.counts, constituents: report.constituents, traceability: coverage, evidence: relative(ROOT, output) }, null, 2));
   return report.verdict === "pass" ? 0 : 1;
 }
 
-if (process.argv[1]?.replaceAll("\\", "/").endsWith("scripts/phase5-scenario-coverage.mjs")) process.exitCode = run();
+if (process.argv[1]?.replaceAll("\\", "/").endsWith("scripts/phase5-scenario-coverage.mjs")) {
+  if (process.argv[2] === "--invalidate-suite") {
+    try {
+      invalidateSuiteEvidence(process.argv[3]);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : "PHASE5_EVIDENCE_INVALIDATION_FAILED");
+      process.exitCode = 2;
+    }
+  } else process.exitCode = run();
+}
