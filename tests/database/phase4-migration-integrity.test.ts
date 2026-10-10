@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   assertPhase4ApplicationRls,
   assertPhase4SnapshotsEquivalent,
+  assertPhase5MigrationSafety,
+  PHASE5_MIGRATION_COMPATIBILITY,
   PHASE4_APPLICATION_TABLES,
   validatePhase3MigrationSnapshot,
 } from "../../scripts/phase4-migration-integrity.mjs";
@@ -107,5 +109,31 @@ describe("Phase 4 migration integrity", () => {
       ...snapshot,
       grants: [{ schema: "portfolio_config", grantee: "shipwithali_worker", privilege: "SELECT", objectType: "r" }],
     })).toThrow("PHASE4_APPLICATION_GRANT_EXPOSURE");
+  });
+
+  it("requires timestamped Phase 5 migrations with bounded lock timeouts and recovery notes", () => {
+    const files = ["20261005001318_create_content_authoring.sql"];
+    const source = "-- Rollback: restore the previous snapshot.\n-- Forward fix: add a reviewed expansion.\nset lock_timeout = '5s';\ncreate table content.items(id uuid);\n";
+    expect(assertPhase5MigrationSafety(files, new Map([[files[0]!, source]]))).toEqual(files);
+    expect(() => assertPhase5MigrationSafety(files, new Map([[files[0]!, source.replace("5s", "0")]])))
+      .toThrow("PHASE5_MIGRATION_LOCK_TIMEOUT_MISSING");
+    expect(() => assertPhase5MigrationSafety(files, new Map([[files[0]!, source.replace("-- Rollback:", "-- Recovery:")]])))
+      .toThrow("PHASE5_MIGRATION_ROLLBACK_NOTE_MISSING");
+  });
+
+  it("rejects destructive Phase 5 contractions without an explicitly reviewed migration path", () => {
+    const file = "20261005001318_create_content_authoring.sql";
+    const source = "-- Rollback: restore the previous snapshot.\nset lock_timeout = '5s';\ndrop table content.items;\n";
+    expect(() => assertPhase5MigrationSafety([file], new Map([[file, source]])))
+      .toThrow("PHASE5_UNREVIEWED_DESTRUCTIVE_CONTRACTION");
+  });
+
+  it("requires an explicit expand or lockstep compatibility boundary for every audited migration", () => {
+    const file = "20261005001318_create_content_authoring.sql";
+    const source = "-- Rollback: restore the previous snapshot.\n-- Forward fix: add a reviewed expansion.\nset lock_timeout = '5s';\ncreate table content.items(id uuid);\n";
+    expect(PHASE5_MIGRATION_COMPATIBILITY[file]?.stage).toBe("expand");
+    expect(PHASE5_MIGRATION_COMPATIBILITY["20261009090000_record_taxonomy_evolution_actor_reason.sql"]?.priorWriterCompatible).toBe(false);
+    expect(() => assertPhase5MigrationSafety([file], new Map([[file, source]]), {} as never))
+      .toThrow("PHASE5_MIGRATION_COMPATIBILITY_UNDOCUMENTED");
   });
 });

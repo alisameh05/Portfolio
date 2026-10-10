@@ -316,7 +316,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
          and reservation.content_id = route.content_id
          and reservation.portfolio_id = route.portfolio_id
        where route.content_id = ${contentId}::uuid and route.portfolio_id = ${scope.portfolioId}::uuid
-       order by reservation.reserved_at desc, reservation.normalized_slug
+       order by reservation.reserved_at, reservation.normalized_slug
        limit 100
     `.execute(executor) : { rows: [] };
     const routeIdentity = routeResult.rows[0]?.route_identity;
@@ -1693,7 +1693,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
           const reservations = await sql<{ normalized_slug: string }>`
             select normalized_slug from content.public_route_reservations
              where route_identity = ${row.route_identity}::uuid and portfolio_id = ${scope.portfolioId}::uuid and not is_current
-             order by reserved_at desc, normalized_slug
+             order by reserved_at, normalized_slug
              limit 100
           `.execute(executor);
           redirects = reservations.rows.map((reservation) => ({ fromSlug: reservation.normalized_slug, toSlug: row.current_slug! }));

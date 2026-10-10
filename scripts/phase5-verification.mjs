@@ -182,7 +182,48 @@ function readReport(path) {
 }
 
 function runFocus(suite) {
-  if (suite === "database") return runSmoke({ suite, reproduction: [`npm run phase5:focus:${FOCUS_ENTRYPOINTS[suite]}`] });
+  if (suite === "database") {
+    const child = spawnSync(process.execPath, [join(ROOT, "scripts", "portfolio-settings-integration.mjs"), "--ticket-123"], {
+      cwd: ROOT,
+      env: localVerificationEnvironment(),
+      encoding: "utf8",
+      timeout: 1_200_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const evidence = readReport(join(EVIDENCE_DIR, "phase-5-security-migrations-postgres.json"));
+    const executed = evidence?.databaseIntegrationTestsPassed ?? 0;
+    const skipped = evidence?.skippedCases ?? 0;
+    const accepted = child.error === undefined && child.status === 0 && evidence?.ticket === 123 &&
+      evidence?.cleanUpgradeEquivalent === true && evidence?.phase4ReleaseUpgrade !== undefined && executed > 0 && skipped === 0;
+    const report = makeVerificationReport({
+      sourceRevision: sourceRevision(),
+      suite,
+      result: {
+        executed,
+        failed: accepted ? 0 : 1,
+        skipped,
+        total: executed + skipped,
+        partial: !accepted,
+        verdict: accepted ? "pass" : "fail",
+        scenarioAcceptance: accepted,
+      },
+      dependency: { required: true, available: accepted, code: accepted ? "PHASE5_REQUIRED_DATABASE_AVAILABLE" : "PHASE5_REQUIRED_DATABASE_UNAVAILABLE" },
+      cleanup: { attempted: true, passed: accepted },
+      suiteAvailable: evidence?.ticket === 123,
+      reproduction: [`npm run phase5:focus:${FOCUS_ENTRYPOINTS[suite]}`],
+      details: accepted ? {
+        migrationCount: evidence.migrationLedger?.length ?? 0,
+        phase5MigrationCount: evidence.phase4ReleaseUpgrade.phase5MigrationChecksums?.length ?? 0,
+        retainedReleaseRecords: evidence.phase4ReleaseUpgrade.retainedRecordsBeforeAndAfterPhase5,
+        zeroSkips: true,
+      } : { outcome: "focused Phase 5 migration and restricted-principal gate failed or produced incomplete evidence" },
+    });
+    const path = writeReport(report);
+    const output = `${child.stdout ?? ""}\n${child.stderr ?? ""}`;
+    if (output.trim() !== "") process.stdout.write(sanitizeVerificationText(output));
+    console.log(JSON.stringify({ ...report, evidence: relative(ROOT, path) }, null, 2));
+    return report.verdict === "pass" ? 0 : 1;
+  }
 
   const directory = join(ROOT, "tests", "phase5", suite);
   const files = filesUnder(directory);

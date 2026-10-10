@@ -1,0 +1,903 @@
+{
+  "sourceRevision": "06e423c28eee401a1009d183ffa1cd68bf4580bc",
+  "sourceTreeSha256": "ff1dc9efc2ceb526794741e2efff0560da6a2ffda68b2115239f3e586baa92f7",
+  "runId": "1157a000-4d16-4fd5-a6fa-8deed4232587",
+  "toolVersions": {
+    "node": "24.21.0",
+    "npm": "11.19.0",
+    "supabaseCli": "2.117.0",
+    "postgresServer": "29.7.2"
+  },
+  "ticket": 123,
+  "parent": 106,
+  "scope": "phase5-migration-equivalence-restricted-principal-privacy-and-pooled-scope-isolation",
+  "predecessorSnapshot": "supabase/baselines/phase3.json",
+  "migrationChecksums": [
+    {
+      "file": "20260922170000_prepare_migration_capability.sql",
+      "sha256": "f626df30438e644254fd6c5af015118be117ef5090fbc976bb0762593ac481fe"
+    },
+    {
+      "file": "20260922171906_establish_database_security_baseline.sql",
+      "sha256": "1406e77b9a2505ec684ef350170545558217ca2bf345675f67eb723a735f6be3"
+    },
+    {
+      "file": "20260922203000_create_operations_primitives.sql",
+      "sha256": "adad38103c83693de591f1691fe4eaabbe7da90423b3e68a02d7b7aa9b76cb98"
+    },
+    {
+      "file": "20261001220000_create_identity_access_owner_links.sql",
+      "sha256": "caa742152a624883937f3204ca1ec2ee947c7c52a812e0760ba794d1195b1205"
+    },
+    {
+      "file": "20261002120000_create_portfolio_configuration_settings.sql",
+      "sha256": "55452f45d7b4b18720993ec5fe4d0e818652c331339bd97c7e15fed6fb6a9c90"
+    },
+    {
+      "file": "20261002130000_allow_versioned_portfolio_profile_updates.sql",
+      "sha256": "533e07ffcad2d12297337fd84a6b7beb29cc5254a8f1632e75024ad73a013fae"
+    },
+    {
+      "file": "20261002140000_allow_owner_contact_channel_replacement.sql",
+      "sha256": "046977710edcffca09133ea794e874dbdd9b68188526cdc548182b3c73843ca4"
+    },
+    {
+      "file": "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+      "sha256": "f05678c118b14daee3ccfaf34736169b3339720b32ed6c1a394366398ded605a"
+    },
+    {
+      "file": "20261005001318_create_content_authoring.sql",
+      "sha256": "9b83a3dfdeed012f5ff6a61a96d765f54ebd8280530a2be428ec0e11eb0c029e"
+    },
+    {
+      "file": "20261007090000_add_immutable_content_revision_reviews.sql",
+      "sha256": "787ce6c713d8c2c719878ed119d1e0095b7e852d13fa634544e73db27e861a02"
+    },
+    {
+      "file": "20261007170000_add_project_publication_routes.sql",
+      "sha256": "a1fccbc91c732890ff8e0d0e5f754385abc927a70008e2017e6bf0b4a462c896"
+    },
+    {
+      "file": "20261007190000_add_achievement_publication_timeline.sql",
+      "sha256": "abeddadfcab69209b95986d036d0a929e916630ba9cf9c55828e2fb477ae441f"
+    },
+    {
+      "file": "20261007200000_publish_localized_testimonials.sql",
+      "sha256": "d262130f861be52c4c5556f45f31d0dd94dfcc10a6471cf22c28ca0390eb0877"
+    },
+    {
+      "file": "20261008090000_preserve_project_route_history.sql",
+      "sha256": "e56f6c1aaa4c40d28cb7f2dc5ab7c17d766c19ea82b72c0549264abd1275e058"
+    },
+    {
+      "file": "20261008120000_add_content_lifecycle_history.sql",
+      "sha256": "b2ef7861b063a20f45bbc2fd7857e6aaee59f3d154512d3c752e8b2f0a6c90c1"
+    },
+    {
+      "file": "20261008130000_add_project_status_and_featured.sql",
+      "sha256": "da301da8f9aa79dcdc754c305e6453e348012d5d450fc689793c562264febbe2"
+    },
+    {
+      "file": "20261008180000_add_project_relationships.sql",
+      "sha256": "0826469828a5534a191fa9fcbf00355b8ef80078db1556d164e68edfef624174"
+    },
+    {
+      "file": "20261008210000_provision_project_taxonomies.sql",
+      "sha256": "c405a2ecb3f425eaf6874557a70d4f277e95d38816970c6ac884b67279c76948"
+    },
+    {
+      "file": "20261009090000_record_taxonomy_evolution_actor_reason.sql",
+      "sha256": "14d9ebfa4266d239eca09f6e6ee944684423624e2ef545bfdf57e9c8aca9114e"
+    },
+    {
+      "file": "20261009100000_index_project_discovery_reads.sql",
+      "sha256": "ad685fa5f79f1f7c3b9ba001c3c5ea73272845ce6881eece0787a25fcd056d48"
+    }
+  ],
+  "migrationLedger": [
+    {
+      "version": "20260922170000",
+      "name": "prepare_migration_capability"
+    },
+    {
+      "version": "20260922171906",
+      "name": "establish_database_security_baseline"
+    },
+    {
+      "version": "20260922203000",
+      "name": "create_operations_primitives"
+    },
+    {
+      "version": "20261001220000",
+      "name": "create_identity_access_owner_links"
+    },
+    {
+      "version": "20261002120000",
+      "name": "create_portfolio_configuration_settings"
+    },
+    {
+      "version": "20261002130000",
+      "name": "allow_versioned_portfolio_profile_updates"
+    },
+    {
+      "version": "20261002140000",
+      "name": "allow_owner_contact_channel_replacement"
+    },
+    {
+      "version": "20261002150000",
+      "name": "allow_versioned_portfolio_cta_updates"
+    },
+    {
+      "version": "20261005001318",
+      "name": "create_content_authoring"
+    },
+    {
+      "version": "20261007090000",
+      "name": "add_immutable_content_revision_reviews"
+    },
+    {
+      "version": "20261007170000",
+      "name": "add_project_publication_routes"
+    },
+    {
+      "version": "20261007190000",
+      "name": "add_achievement_publication_timeline"
+    },
+    {
+      "version": "20261007200000",
+      "name": "publish_localized_testimonials"
+    },
+    {
+      "version": "20261008090000",
+      "name": "preserve_project_route_history"
+    },
+    {
+      "version": "20261008120000",
+      "name": "add_content_lifecycle_history"
+    },
+    {
+      "version": "20261008130000",
+      "name": "add_project_status_and_featured"
+    },
+    {
+      "version": "20261008180000",
+      "name": "add_project_relationships"
+    },
+    {
+      "version": "20261008210000",
+      "name": "provision_project_taxonomies"
+    },
+    {
+      "version": "20261009090000",
+      "name": "record_taxonomy_evolution_actor_reason"
+    },
+    {
+      "version": "20261009100000",
+      "name": "index_project_discovery_reads"
+    }
+  ],
+  "phase4ReleaseUpgrade": {
+    "baselineLedger": [
+      {
+        "version": "20260922170000",
+        "name": "prepare_migration_capability"
+      },
+      {
+        "version": "20260922171906",
+        "name": "establish_database_security_baseline"
+      },
+      {
+        "version": "20260922203000",
+        "name": "create_operations_primitives"
+      },
+      {
+        "version": "20261001220000",
+        "name": "create_identity_access_owner_links"
+      },
+      {
+        "version": "20261002120000",
+        "name": "create_portfolio_configuration_settings"
+      },
+      {
+        "version": "20261002130000",
+        "name": "allow_versioned_portfolio_profile_updates"
+      },
+      {
+        "version": "20261002140000",
+        "name": "allow_owner_contact_channel_replacement"
+      },
+      {
+        "version": "20261002150000",
+        "name": "allow_versioned_portfolio_cta_updates"
+      }
+    ],
+    "retainedRecordsBeforeAndAfterPhase5": {
+      "configuredPortfolios": 21,
+      "contactChannels": 38,
+      "ownerLinks": 1,
+      "idempotencyRecords": 22,
+      "outboxEvents": 14,
+      "jobs": 3
+    },
+    "cleanAndPhase4UpgradeFinalSchemasEquivalent": true,
+    "phase5MigrationChecksums": [
+      {
+        "file": "20261005001318_create_content_authoring.sql",
+        "sha256": "9b83a3dfdeed012f5ff6a61a96d765f54ebd8280530a2be428ec0e11eb0c029e"
+      },
+      {
+        "file": "20261007090000_add_immutable_content_revision_reviews.sql",
+        "sha256": "787ce6c713d8c2c719878ed119d1e0095b7e852d13fa634544e73db27e861a02"
+      },
+      {
+        "file": "20261007170000_add_project_publication_routes.sql",
+        "sha256": "a1fccbc91c732890ff8e0d0e5f754385abc927a70008e2017e6bf0b4a462c896"
+      },
+      {
+        "file": "20261007190000_add_achievement_publication_timeline.sql",
+        "sha256": "abeddadfcab69209b95986d036d0a929e916630ba9cf9c55828e2fb477ae441f"
+      },
+      {
+        "file": "20261007200000_publish_localized_testimonials.sql",
+        "sha256": "d262130f861be52c4c5556f45f31d0dd94dfcc10a6471cf22c28ca0390eb0877"
+      },
+      {
+        "file": "20261008090000_preserve_project_route_history.sql",
+        "sha256": "e56f6c1aaa4c40d28cb7f2dc5ab7c17d766c19ea82b72c0549264abd1275e058"
+      },
+      {
+        "file": "20261008120000_add_content_lifecycle_history.sql",
+        "sha256": "b2ef7861b063a20f45bbc2fd7857e6aaee59f3d154512d3c752e8b2f0a6c90c1"
+      },
+      {
+        "file": "20261008130000_add_project_status_and_featured.sql",
+        "sha256": "da301da8f9aa79dcdc754c305e6453e348012d5d450fc689793c562264febbe2"
+      },
+      {
+        "file": "20261008180000_add_project_relationships.sql",
+        "sha256": "0826469828a5534a191fa9fcbf00355b8ef80078db1556d164e68edfef624174"
+      },
+      {
+        "file": "20261008210000_provision_project_taxonomies.sql",
+        "sha256": "c405a2ecb3f425eaf6874557a70d4f277e95d38816970c6ac884b67279c76948"
+      },
+      {
+        "file": "20261009090000_record_taxonomy_evolution_actor_reason.sql",
+        "sha256": "14d9ebfa4266d239eca09f6e6ee944684423624e2ef545bfdf57e9c8aca9114e"
+      },
+      {
+        "file": "20261009100000_index_project_discovery_reads.sql",
+        "sha256": "ad685fa5f79f1f7c3b9ba001c3c5ea73272845ce6881eece0787a25fcd056d48"
+      }
+    ],
+    "boundedLockTimeout": "5s on every timestamped Phase 5 migration",
+    "recoveryLimitations": [
+      {
+        "file": "20261005001318_create_content_authoring.sql",
+        "notes": [
+          "Rollback: restore the pre-Phase 5 snapshot before deployment.",
+          "Forward fix: correct defects with a new timestamped expand-compatible migration."
+        ]
+      },
+      {
+        "file": "20261007090000_add_immutable_content_revision_reviews.sql",
+        "notes": [
+          "Rollback: restore the pre-Phase 5 snapshot before deployment.",
+          "Forward fix: correct defects with a new timestamped expand-compatible migration."
+        ]
+      },
+      {
+        "file": "20261007170000_add_project_publication_routes.sql",
+        "notes": [
+          "Rollback: restore the pre-Phase 5 snapshot before deployment.",
+          "Forward fix: correct defects with a new timestamped expand-compatible migration."
+        ]
+      },
+      {
+        "file": "20261007190000_add_achievement_publication_timeline.sql",
+        "notes": [
+          "Rollback: restore the pre-Phase 5 snapshot before deployment.",
+          "Forward fix: correct defects with a new timestamped expand-compatible migration."
+        ]
+      },
+      {
+        "file": "20261007200000_publish_localized_testimonials.sql",
+        "notes": [
+          "Rollback: restore the pre-Phase 5 snapshot before deployment.",
+          "Forward fix: correct defects with a new timestamped expand-compatible migration."
+        ]
+      },
+      {
+        "file": "20261008090000_preserve_project_route_history.sql",
+        "notes": [
+          "Rollback: restore the pre-#115 snapshot before deployment.",
+          "Forward fix: correct defects with a new timestamped expand-compatible migration."
+        ]
+      },
+      {
+        "file": "20261008120000_add_content_lifecycle_history.sql",
+        "notes": [
+          "Rollback: restore the pre-Phase 5 snapshot before deployment.",
+          "Forward fix: correct defects with a new timestamped expand-compatible migration."
+        ]
+      },
+      {
+        "file": "20261008130000_add_project_status_and_featured.sql",
+        "notes": [
+          "Rollback: restore the pre-Phase 5 snapshot before deployment.",
+          "Forward fix: correct defects with a new timestamped expand-compatible migration."
+        ]
+      },
+      {
+        "file": "20261008180000_add_project_relationships.sql",
+        "notes": [
+          "Rollback: restore the pre-Phase 5 snapshot before deployment.",
+          "Forward fix: correct defects with a new timestamped expand-compatible migration."
+        ]
+      },
+      {
+        "file": "20261008210000_provision_project_taxonomies.sql",
+        "notes": [
+          "Rollback: restore the pre-Phase 5 snapshot before deployment.",
+          "Forward fix: correct defects with a new timestamped expand-compatible migration."
+        ]
+      },
+      {
+        "file": "20261009090000_record_taxonomy_evolution_actor_reason.sql",
+        "notes": [
+          "Rollback: restore the prior taxonomy migration set before deployment.",
+          "Forward fix: correct defects with a new timestamped expand-compatible migration."
+        ]
+      },
+      {
+        "file": "20261009100000_index_project_discovery_reads.sql",
+        "notes": [
+          "Rollback: drop taxonomy.project_discovery_locale_public_order and taxonomy.project_discovery_value_public_filter."
+        ]
+      }
+    ],
+    "expandContractCompatibility": [
+      {
+        "file": "20261005001318_create_content_authoring.sql",
+        "stage": "expand",
+        "priorWriterCompatible": true,
+        "boundary": "Adds new content item and immutable revision tables; existing Phase 4 write paths are unchanged."
+      },
+      {
+        "file": "20261007090000_add_immutable_content_revision_reviews.sql",
+        "stage": "expand",
+        "priorWriterCompatible": true,
+        "boundary": "Adds review storage and revision identity uniqueness; existing content writes remain valid."
+      },
+      {
+        "file": "20261007170000_add_project_publication_routes.sql",
+        "stage": "expand",
+        "priorWriterCompatible": true,
+        "boundary": "Adds route, publication, history, and discovery tables without removing the previous content contract."
+      },
+      {
+        "file": "20261007190000_add_achievement_publication_timeline.sql",
+        "stage": "expand",
+        "priorWriterCompatible": true,
+        "boundary": "Broadens publication kinds and relaxes route identity for non-Project content; Project publications still require a route identity."
+      },
+      {
+        "file": "20261007200000_publish_localized_testimonials.sql",
+        "stage": "expand",
+        "priorWriterCompatible": true,
+        "boundary": "Adds testimonial publication and projection tables without changing existing write requirements."
+      },
+      {
+        "file": "20261008090000_preserve_project_route_history.sql",
+        "stage": "expand",
+        "priorWriterCompatible": true,
+        "boundary": "Adds immutable route history and broadens Owner discovery scope for lifecycle management."
+      },
+      {
+        "file": "20261008120000_add_content_lifecycle_history.sql",
+        "stage": "expand",
+        "priorWriterCompatible": true,
+        "boundary": "Adds an append-only lifecycle history table; existing content rows and writes remain valid."
+      },
+      {
+        "file": "20261008130000_add_project_status_and_featured.sql",
+        "stage": "expand",
+        "priorWriterCompatible": true,
+        "boundary": "Adds nullable status references and default-false Featured columns; existing Project inserts retain valid defaults."
+      },
+      {
+        "file": "20261008180000_add_project_relationships.sql",
+        "stage": "expand",
+        "priorWriterCompatible": true,
+        "boundary": "Adds relationship, view, and history tables without changing existing content writes."
+      },
+      {
+        "file": "20261008210000_provision_project_taxonomies.sql",
+        "stage": "expand",
+        "priorWriterCompatible": true,
+        "boundary": "Adds Taxonomy and assignment tables plus nullable discovery projection fields; existing Project writes remain valid."
+      },
+      {
+        "file": "20261009090000_record_taxonomy_evolution_actor_reason.sql",
+        "stage": "lockstep",
+        "priorWriterCompatible": false,
+        "boundary": "The new history check requires Owner actor IDs for rename, retire, and merge writes. Deploy the actor-aware #120 writer with this migration and do not keep older actor-less writers online."
+      },
+      {
+        "file": "20261009100000_index_project_discovery_reads.sql",
+        "stage": "expand",
+        "priorWriterCompatible": true,
+        "boundary": "Adds two indexes only; no application contract changes."
+      }
+    ],
+    "destructiveContraction": false,
+    "schemaSourceOfTruth": "timestamped supabase/migrations only; no runtime or dashboard DDL",
+    "migrationReplayNoop": true,
+    "generatedTypesMatchFinalCleanSchema": true
+  },
+  "restrictedPrincipalMatrix": [
+    {
+      "principal": "anon login",
+      "privateContentRead": "denied",
+      "privateWrite": "denied",
+      "directDatabaseProjectionRead": "denied",
+      "publicServiceProjection": "approved-only contract tested in process"
+    },
+    {
+      "principal": "authenticated login",
+      "privateContentRead": "denied",
+      "privateWrite": "denied"
+    },
+    {
+      "principal": "shipwithali_application login with configured Owner claims",
+      "privateContentRead": "configured Portfolio only",
+      "privateWrite": "approved application grants and forced RLS"
+    },
+    {
+      "principal": "shipwithali_application login with foreign Portfolio claims",
+      "privateContentRead": "denied",
+      "privateWrite": "denied"
+    },
+    {
+      "principal": "shipwithali_worker login",
+      "privateContentRead": "denied",
+      "privateWrite": "denied"
+    },
+    {
+      "principal": "shipwithali_migration capability",
+      "runtimeLogin": "denied",
+      "runtimeCredential": false
+    }
+  ],
+  "pooledConnectionScope": {
+    "verifiedAfter": [
+      "success",
+      "expected rejection",
+      "rollback",
+      "fault"
+    ],
+    "knownPrivateIdsRequireOwnerAuthorization": true
+  },
+  "diagnosticsPrivacy": {
+    "auditSuites": [
+      {
+        "file": "tests/database/postgres-runtime.test.ts",
+        "passed": 7,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/database/postgres-transaction-runner.test.ts",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/phase4/owner-session-auth.test.ts",
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/runtime-ports.test.ts",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "safeFaultOutcomes": [
+      "POSTGRES_UNAVAILABLE",
+      "AUTH_PROVIDER_UNAVAILABLE",
+      "RUNTIME_NOT_READY"
+    ],
+    "redactedValuesCovered": [
+      "database URLs",
+      "provider errors",
+      "Owner subjects",
+      "cookies",
+      "CSRF proofs",
+      "signed URLs",
+      "private log fields"
+    ],
+    "outcomeCountTelemetry": "sanitized JSON includes passed/failed/skipped assertions and stable failure codes; sensitive payloads are excluded"
+  },
+  "cleanUpgradeEquivalent": true,
+  "migrationReplayNoop": true,
+  "generatedTypeDrift": false,
+  "phase3OperationsRowsPreserved": {
+    "idempotencyRecords": true,
+    "outboxEvents": true,
+    "jobs": true
+  },
+  "authoringTablesWithForcedRls": [
+    "content.items",
+    "content.revisions"
+  ],
+  "databaseTestResults": [
+    {
+      "name": "Content authoring production PostgreSQL invariants > creates all Draft kinds, saves both locales, and keeps typed snapshots private and unreviewed",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > persists an explicitly selected profile association for a Testimonial",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > orders revision history by locale stream sequence when saved timestamps regress",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > serializes same-key and stale-version races and preserves the original replay receipt",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > persists immutable exact-snapshot reviews atomically and does not transfer them to later Revisions",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back the aggregate version, review, idempotency receipt, and event when review outbox append fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > does not allow a Testimonial association to disclose or reference another Portfolio's Project",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > publishes English and Arabic independently, preserves first publication time, history, and the last valid projection",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > corrects candidate collisions and resolves A to B to C to A directly under one durable route identity",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > changes retained Project routes while hidden and restores matching discovery",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > changes retained Project routes while archived and restores matching discovery",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back route reservations, immutable history, projections, receipt, and event when outbox append fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back a route change when an eligible Discovery projection is missing",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > publishes minimal Testimonials with explicit associations, localized review, and visibility-safe projections",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects invalid evidence, review, and Media facts without creating public state",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects placeholder text in every public Achievement field before publication",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > preserves the last valid locale and both projections when a replacement is rejected",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > reserves a first Project route atomically when two content items race for the same slug",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > serializes simultaneous locale publication on one aggregate and allows the other locale to publish next",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back route, pointer, projection, success receipt, and event after injected writes fail",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > uses fixture-only accepted Media facts and fails closed when production facts are unresolved",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back the root, Revision, receipt, and outbox when the event append fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > hides, archives, and restores all three content kinds through atomic owner lifecycle commands",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > revalidates each exact locale publication before restore and changes none when one Media fact fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects restore of never-published Archived content but allows explicit first publication and safe retries",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back lifecycle state, history, and the receipt when the lifecycle outbox append fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects overwrite, duplicate sequencing, and cross-Portfolio reparenting while denying public roles",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > stores one canonical symmetric relationship, advances both roots, and replays its original safe receipt",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects self, foreign-scope, wrong-kind, and stale initiating Project relationships",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > serializes inverse relationship races and rolls back both roots if the second update fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > returns only currently published related Projects in the requested locale, ordered and bounded",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > keeps Project status identities, histories, Featured state, and published projections atomic",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > keeps status and Featured mutations atomic when the outbox fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > scopes all status tables to one Portfolio and rejects status or Featured writes on Achievements",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > keeps the status registry within the strict Owner list response limit",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > provisions stable Taxonomy roots and commits value creation, Project assignment, and discovery facts atomically",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back assignment, Project version, history, and receipt when projection or outbox persistence fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > renames and retires Taxonomy values while preserving assignments, public labels, and restoration",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rolls back every Project when a multi-Project merge projection or outbox write fails",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > serializes assignment against merge and simultaneous merges on independent connections",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > merges a retired source only into an active same-root survivor and rejects merged sources, self merges, and oversized work",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > preserves Taxonomy root version ordering when merging a previously renamed source",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > serializes Taxonomy retirement against new assignments",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > rejects foreign-scope Taxonomy values and non-Project assignment targets",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring production PostgreSQL invariants > queries only current published locale projections with stable tied-time cursors and controlled facets",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 5 Owner production composition against PostgreSQL > serves real Owner content, histories, Project controls and Taxonomy through the runtime assembly",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 5 restricted-principal and migration security against PostgreSQL > keeps private content private while the in-process discovery query returns only published approved projections",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 5 restricted-principal and migration security against PostgreSQL > enforces immutable revisions and reviews plus same-locale publication pointers in PostgreSQL",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 5 restricted-principal and migration security against PostgreSQL > denies actual public, authenticated, worker, and backup logins direct access to private Phase 5 rows",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 5 restricted-principal and migration security against PostgreSQL > limits the application login to its configured Owner and Portfolio and keeps migration access off runtime credentials",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 5 restricted-principal and migration security against PostgreSQL > resets transaction-local claims after success, expected rejection, rollback, and a database fault on a reused pool connection",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL runtime composition (#47) > requires DATABASE_URL without exposing it or a provider handle",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL runtime composition (#47) > waits for tracked work and closes the database resource exactly once",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL runtime composition (#47) > closes the database resource when the readiness check throws",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL runtime composition (#47) > keeps readiness false while a registered dependency is unavailable and recovers",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL runtime composition (#47) > keeps the migration credential out of runtime composition and redacts startup failures",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL runtime composition (#47) > surfaces database loss and recovery through the safe readiness route",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL runtime composition (#47) > reports bounded unready without throwing when PostgreSQL is unreachable",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL transaction runner (#48) > runs callbacks in READ COMMITTED with bounded timeouts and an opaque context",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL transaction runner (#48) > rolls back and redacts provider failures without leaking SQL",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL transaction runner (#48) > redacts even a provider-thrown TypeError as infrastructure",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL transaction runner (#48) > redacts a publicly constructed validation error from a transaction callback",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL transaction runner (#48) > honors explicit rollback outcomes as a rolled-back value",
+      "status": "passed"
+    },
+    {
+      "name": "PostgreSQL transaction runner (#48) > rejects resolving a transaction outside the runner with a safe error",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > resolves a valid Owner session to a stable provider-neutral actor",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > rejects forged signatures as unauthenticated",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > rejects disallowed algorithms and unknown keys as unauthenticated",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > rejects wrong issuer, audience, expired, and malformed sessions as unauthenticated",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > rejects non-object JWT segments without throwing",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > verifies ES256 and rejects public-key HMAC confusion and wrong curves",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > ignores spoofed username/email/metadata and caller Owner IDs",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > rejects non-GitHub identities and verified non-Owners as forbidden",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > denies continued access after allowlist removal",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > enforces revocation and expiry even for otherwise valid JWTs",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > maps provider outages safely without exposing provider errors or identity subjects",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > validates Owner auth configuration with redacted diagnostics",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > keeps raw session material and secrets out of rejection payloads",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > exposes provider-neutral ports without framework or provider types",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > system clock returns RFC 3339 UTC instants",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > system ID adapter produces UUIDv7 values behind stable-ID semantics",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > Phase 2 transaction fake executes one callback without claiming atomicity",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > structured logging uses stable event names and redacts sensitive values",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > generates server-side correlation and never adopts an inbound identifier",
+      "status": "passed"
+    }
+  ],
+  "databaseIntegrationTestsPassed": 53,
+  "databaseIntegrationSuites": [
+    {
+      "file": "tests/database/content-authoring.integration.test.ts",
+      "passed": 47,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "tests/database/owner-composition.integration.test.ts",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "file": "tests/database/phase5-security.integration.test.ts",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "skippedCases": 0,
+  "isolatedLoopbackProjects": true,
+  "credentialsRecorded": false,
+  "secretValuesRecorded": false
+}

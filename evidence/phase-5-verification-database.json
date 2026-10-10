@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "runId": "4e7b0476-d158-44e0-90df-a51119de072e",
-  "sourceRevision": "b9b3cb34272045b3c63f954cbd921a081d1bb228",
+  "runId": "c1ef460c-3735-4d01-838a-50de90202f92",
+  "sourceRevision": "06e423c28eee401a1009d183ffa1cd68bf4580bc",
   "suite": "database",
-  "startedAt": "2026-10-04T21:47:27.315Z",
+  "startedAt": "2026-10-10T11:17:05.073Z",
   "verdict": "pass",
-  "scenarioAcceptance": false,
-  "suiteAvailable": false,
+  "scenarioAcceptance": true,
+  "suiteAvailable": true,
   "counts": {
-    "executed": 24,
+    "executed": 53,
     "failed": 0,
     "skipped": 0,
-    "total": 24
+    "total": 53
   },
   "partial": false,
   "dependency": {
@@ -27,12 +27,16 @@
     "npm run phase5:focus:database-rls-migrations-concurrency"
   ],
   "details": {
-    "workflow": "existing real PostgreSQL Owner Configuration fixture used only to prove disposable DB harness behavior",
-    "phase5ScenariosAccepted": false,
-    "isolatedLoopback": true,
-    "restrictedPrincipalCount": 7,
-    "restrictedRolesVerified": true,
-    "credentialsRecorded": false,
-    "secretValuesRecorded": false
+    "migrationCount": 20,
+    "phase5MigrationCount": 12,
+    "retainedReleaseRecords": {
+      "configuredPortfolios": 21,
+      "contactChannels": 38,
+      "ownerLinks": 1,
+      "idempotencyRecords": 22,
+      "outboxEvents": 14,
+      "jobs": 3
+    },
+    "zeroSkips": true
   }
 }
