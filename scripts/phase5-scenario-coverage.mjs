@@ -12,7 +12,7 @@ const OWNER = "tests/database/owner-composition.integration.test.ts";
 const SECURITY = "tests/database/phase5-security.integration.test.ts";
 const VERIFICATION = "tests/phase4/phase5-verification.test.ts";
 const STORY_ASSERTION = `${CONTENT} :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection`;
-const OWNER_ASSERTION = `${OWNER} :: serves real Owner content, histories, Project controls and Taxonomy through the runtime assembly`;
+const OWNER_ASSERTION = `${OWNER} :: preserves core content and Contact/CTA queries when optional capability facts fail in real Owner composition`;
 const DISCOVERY_ASSERTION = `${SECURITY} :: keeps private content private while the in-process discovery query returns only published approved projections`;
 const SECURITY_ASSERTION = `${SECURITY} :: denies actual public, authenticated, worker, and backup logins direct access to private Phase 5 rows`;
 const AUTHORIZATION_ASSERTION = OWNER_ASSERTION;
@@ -26,8 +26,8 @@ export const PHASE5_STORY_COVERAGE = Object.freeze([
   ...group([1, 2, 3, 4, 5, 6, 7, 8, 9], [109, 110, 111], STORY_ASSERTION),
   ...group([10, 11], [111, 121], DISCOVERY_ASSERTION),
   ...group([12, 13], [111], STORY_ASSERTION),
-  ...group([14], [112], STORY_ASSERTION),
-  ...group([15, 16], [113], STORY_ASSERTION),
+  ...group([14], [112], assertionRef(CONTENT, "publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline")),
+  ...group([15, 16], [113], assertionRef(CONTENT, "publishes minimal Testimonials with explicit associations, localized review, and visibility-safe projections")),
   ...group([17, 18], [110, 111, 112, 113, 114], STORY_ASSERTION),
   ...group([19, 20, 21], [114], ROUTE_ASSERTION),
   ...group([22, 23], [114, 117, 121], DISCOVERY_ASSERTION),
@@ -44,7 +44,7 @@ export const PHASE5_STORY_COVERAGE = Object.freeze([
   ...group([44, 45, 46], [109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120], STORY_ASSERTION),
   ...group([47], [123], SECURITY_ASSERTION),
   ...group([48], [109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121], STORY_ASSERTION),
-  ...group([49], [106, 111, 114], assertionRef(CONTENT, "rejects invalid evidence, review, and Media facts without creating public state")),
+  ...group([49], [106, 111, 114, 124], OWNER_ASSERTION),
   ...group([50], [106, 122], assertionRef(VERIFICATION, "declares separate focused suites for the four Phase 5 verification seams")),
   ...group([51], [123], SECURITY_ASSERTION),
   ...group([52], [106, 109, 110, 111, 112, 113, 114, 115, 118, 119, 120], STORY_ASSERTION),
@@ -72,7 +72,7 @@ export const PHASE5_DEFERRED_SCOPE = Object.freeze([
   "Phase 7: persisted Reactions, Ratings, Feedback, Moderation, and their public aggregates.",
   "Phase 8: production optional workers, exports, alerts, analytics pipelines, backups, and recovery automation.",
   "Phase 9-10 and release: deployed TestSprite, container publication, promotion, load/resilience, and measured backup restore RPO/RTO.",
-  "Optional Media/link/analytics/alert delivery adapters are not Phase 5 runtime dependencies; publication acceptance facts remain required and fail closed.",
+  "Phase 5 proves public content and Configuration/Contact/CTA queries remain available when optional capability facts fail. Real Media/link delivery and analytics/alert workers are Phase 6/8 ports not present in the Phase 5 runtime; required publication acceptance facts remain fail closed.",
 ]);
 
 const EXPECTED_SCENARIOS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 12, 13, 14, 15]);
@@ -208,6 +208,10 @@ export function invalidateSuiteEvidence(suite) {
   for (const filename of files) invalidateIntegratedEvidence(join(EVIDENCE_DIR, filename));
 }
 
+export function invalidateIntegratedScenarioReport(path = join(EVIDENCE_DIR, "phase-5-integrated-scenarios.json")) {
+  invalidateIntegratedEvidence(path);
+}
+
 function currentRevision() {
   return execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
 }
@@ -233,6 +237,13 @@ if (process.argv[1]?.replaceAll("\\", "/").endsWith("scripts/phase5-scenario-cov
   if (process.argv[2] === "--invalidate-suite") {
     try {
       invalidateSuiteEvidence(process.argv[3]);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : "PHASE5_EVIDENCE_INVALIDATION_FAILED");
+      process.exitCode = 2;
+    }
+  } else if (process.argv[2] === "--invalidate-integrated") {
+    try {
+      invalidateIntegratedScenarioReport();
     } catch (error) {
       console.error(error instanceof Error ? error.message : "PHASE5_EVIDENCE_INVALIDATION_FAILED");
       process.exitCode = 2;

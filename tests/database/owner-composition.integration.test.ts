@@ -8,7 +8,7 @@ import {
   initializeDatabaseRuntime,
   resetRuntimeForTests,
 } from "../../src/bootstrap/composition-root.js";
-import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
+import { createPortfolioSettingsReader, createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createStableId, type IdempotencyKey, type StableId } from "../../src/shared/domain/index.js";
 import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
@@ -76,7 +76,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     });
     const provisioned = await settings.provision({
       profile: { displayName: "Integration Owner", headline: "Phase 5 Owner", bio: "Private test fixture." },
-      contactChannels: [],
+      contactChannels: [{ channel: "email", label: "Email", destination: "mailto:owner@example.com", availableLocales: ["en"] }],
       globalCta: { label: "Contact", destination: "https://example.com/contact", unavailableFallback: "Unavailable" },
     });
     expect(provisioned.ok).toBe(true);
@@ -95,7 +95,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     }
   });
 
-  it("serves real Owner content, histories, Project controls and Taxonomy through the runtime assembly", async () => {
+  it("preserves core content and Contact/CTA queries when optional capability facts fail in real Owner composition", async () => {
     const artifactId = createStableId("SupportingArtifact");
     const created = await services.contentAuthoring.createContent({
       actor,
@@ -482,6 +482,23 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
     const missingArabicRoute = await services.contentAuthoring.getPublicProject({ slug: "runtime-relationship-target", locale: "ar" });
     expect(missingArabicRoute.ok).toBe(false);
 
+    const optionalCapabilities = createPortfolioSettingsReader({
+      repository: createPostgresPortfolioSettingsRepository(),
+      transactions: getOperationsPersistence().transactions,
+      scope,
+      capabilityReader: { async getFacts() { throw new Error("optional capability provider unavailable"); } },
+    });
+    const availableCoreConfiguration = await optionalCapabilities.getPublicConfiguration({ locale: "en" });
+    expect(availableCoreConfiguration).toMatchObject({ ok: true, value: {
+      profile: { displayName: "Integration Owner", headline: "Phase 5 Owner" },
+      contactChannels: [expect.objectContaining({ channel: "email", label: "Email" })],
+      globalCta: { availability: "unavailable", label: "Contact", unavailableFallback: "Unavailable" },
+      capabilities: { currentCvAvailable: false, externalLinksAvailable: false },
+    } });
+    expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project-revised", locale: "en" })).toMatchObject({
+      ok: true, value: { title: "Runtime assembled Project", slug: "runtime-assembled-project-revised" },
+    });
+
     const currentRelatedContent = await services.contentAuthoring.getOwnerContentAggregate({ actor, contentId: relatedCreated.value.contentId });
     expect(currentRelatedContent.ok).toBe(true);
     if (!currentRelatedContent.ok) return;
@@ -533,7 +550,29 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       idempotencyKey: key("owner-assembly-primary-restore"), correlationId: "owner-assembly-primary-restore",
     });
     expect(primaryRestored.ok).toBe(true);
+    if (!primaryRestored.ok) return;
     expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" }))
       .toMatchObject({ ok: true, value: { type: "redirect", toSlug: "runtime-assembled-project-revised" } });
+    expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project-revised", locale: "ar" })).toMatchObject({ ok: false });
+    const primaryArchived = await services.contentAuthoring.archiveContent({
+      actor, contentId: created.value.contentId, expectedVersion: primaryRestored.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-primary-archive"), correlationId: "owner-assembly-primary-archive",
+    });
+    expect(primaryArchived.ok).toBe(true);
+    if (!primaryArchived.ok) return;
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" })).toMatchObject({ ok: false });
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project-revised", locale: "en" })).toMatchObject({ ok: false });
+    const primaryRestoredAfterArchive = await services.contentAuthoring.restoreContent({
+      actor, contentId: created.value.contentId, expectedVersion: primaryArchived.value.aggregateVersion,
+      idempotencyKey: key("owner-assembly-primary-restore-after-archive"), correlationId: "owner-assembly-primary-restore-after-archive",
+    });
+    expect(primaryRestoredAfterArchive.ok).toBe(true);
+    if (!primaryRestoredAfterArchive.ok) return;
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project", locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "redirect", toSlug: "runtime-assembled-project-revised" } });
+    expect(await services.contentAuthoring.resolvePublicProjectRoute({ slug: "runtime-assembled-project-v3", locale: "en" }))
+      .toMatchObject({ ok: true, value: { type: "redirect", toSlug: "runtime-assembled-project-revised" } });
+    expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project-revised", locale: "en" })).toMatchObject({ ok: true });
+    expect(await services.contentAuthoring.getPublicProject({ slug: "runtime-assembled-project-revised", locale: "ar" })).toMatchObject({ ok: false });
   }, 60_000);
 });

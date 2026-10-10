@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   evaluateIntegratedScenarioEvidence,
-  invalidateIntegratedEvidence,
+  invalidateIntegratedScenarioReport,
   PHASE5_SCENARIO_COVERAGE,
   PHASE5_STORY_COVERAGE,
   validateScenarioCoverage,
@@ -17,7 +17,7 @@ describe("Phase 5 integrated scenario evidence", () => {
     try {
       writeFileSync(path, "{\"verdict\":\"pass\"}", "utf8");
       expect(existsSync(path)).toBe(true);
-      invalidateIntegratedEvidence(path);
+      invalidateIntegratedScenarioReport(path);
       expect(existsSync(path)).toBe(false);
     } finally {
       rmSync(directory, { recursive: true, force: true });
@@ -34,6 +34,9 @@ describe("Phase 5 integrated scenario evidence", () => {
       expect(entry.tickets.length, `ticket mapping for ${entry.id}`).toBeGreaterThan(0);
       expect(entry.assertions.length, `assertion mapping for ${entry.id}`).toBeGreaterThan(0);
     }
+    expect(PHASE5_STORY_COVERAGE.find((entry) => entry.id === 14)?.assertions[0]).toContain("publishes reviewed Achievements with internal or public evidence");
+    expect(PHASE5_STORY_COVERAGE.find((entry) => entry.id === 15)?.assertions[0]).toContain("publishes minimal Testimonials with explicit associations");
+    expect(PHASE5_STORY_COVERAGE.find((entry) => entry.id === 16)?.assertions[0]).toBe(PHASE5_STORY_COVERAGE.find((entry) => entry.id === 15)?.assertions[0]);
     expect(validateScenarioCoverage(PHASE5_STORY_COVERAGE.slice(1), PHASE5_SCENARIO_COVERAGE).missingStories).toContain(1);
     expect(validateScenarioCoverage(PHASE5_STORY_COVERAGE, PHASE5_SCENARIO_COVERAGE.slice(1)).missingScenarios).toContain(1);
     const nonexistentAssertion = PHASE5_STORY_COVERAGE.map((entry, index) => index === 0
