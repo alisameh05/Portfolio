@@ -39,7 +39,7 @@ export const PHASE5_STORY_COVERAGE = Object.freeze([
   ...group([35, 36], [119], TAXONOMY_ASSERTION),
   ...group([37, 38, 39], [120], TAXONOMY_ASSERTION),
   ...group([40, 41], [121], DISCOVERY_ASSERTION),
-  ...group([42], [112], STORY_ASSERTION),
+  ...group([42], [112], assertionRef(CONTENT, "publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline")),
   ...group([43], [109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122], AUTHORIZATION_ASSERTION),
   ...group([44, 45, 46], [109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120], STORY_ASSERTION),
   ...group([47], [123], SECURITY_ASSERTION),

@@ -35,6 +35,7 @@ describe("Phase 5 integrated scenario evidence", () => {
       expect(entry.assertions.length, `assertion mapping for ${entry.id}`).toBeGreaterThan(0);
     }
     expect(PHASE5_STORY_COVERAGE.find((entry) => entry.id === 14)?.assertions[0]).toContain("publishes reviewed Achievements with internal or public evidence");
+    expect(PHASE5_STORY_COVERAGE.find((entry) => entry.id === 42)?.assertions[0]).toContain("publishes reviewed Achievements with internal or public evidence");
     expect(PHASE5_STORY_COVERAGE.find((entry) => entry.id === 15)?.assertions[0]).toContain("publishes minimal Testimonials with explicit associations");
     expect(PHASE5_STORY_COVERAGE.find((entry) => entry.id === 16)?.assertions[0]).toBe(PHASE5_STORY_COVERAGE.find((entry) => entry.id === 15)?.assertions[0]);
     expect(validateScenarioCoverage(PHASE5_STORY_COVERAGE.slice(1), PHASE5_SCENARIO_COVERAGE).missingStories).toContain(1);
