@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { Client } from "pg";
+import { sql } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { handleCreateOwnerMediaUploadIntent } from "../../src/runtime/http/owner-media.js";
 import { handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-media.js";
@@ -12,6 +13,11 @@ import { withOwnerTestAuth } from "../runtime/owner-test-auth.js";
 import { createOwnerSecurityTestStub } from "../../src/runtime/http/owner-security.js";
 import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
+import { createContentAuthoringService } from "../../src/modules/content-publishing/application/authoring.js";
+import type { MediaAcceptancePort } from "../../src/modules/content-publishing/application/service.js";
+import { createPostgresContentAuthoringRepository } from "../../src/modules/content-publishing/adapters/postgres-authoring.js";
+import { createPostgresProjectDiscoveryProjectionWriter } from "../../src/modules/taxonomy-discovery/adapters/index.js";
+import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import { createPostgresMediaUploadIntentRepository } from "../../src/modules/media/adapters/postgres-upload-intents.js";
 import { createPostgresMediaProcessingRepository } from "../../src/modules/media/adapters/postgres-processing.js";
 import { createPostgresMediaAcceptanceRepository } from "../../src/modules/media/adapters/postgres-acceptance.js";
@@ -22,7 +28,7 @@ import { createMediaAcceptanceApplicationService } from "../../src/modules/media
 import type { OwnerMediaAccessibility } from "../../src/modules/media/application/owner-contracts.js";
 import { createSupabaseMediaUploadTargetAdapter } from "../../src/runtime/adapters/supabase-media-upload-target.js";
 import { createSupabaseMediaProcessingStorage } from "../../src/runtime/adapters/supabase-media-processing-storage.js";
-import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
+import { createPostgresRuntimeDatabase, resolvePostgresTransaction } from "../../src/shared/adapters/postgres/runtime.js";
 import { createProductionOwnerMediaService } from "../../src/runtime/fakes/owner-media.js";
 import { createStableId } from "../../src/shared/domain/index.js";
 import { createSystemIdGenerator } from "../../src/runtime/ports.js";
@@ -187,6 +193,121 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
       }),
     });
+  }
+
+  function contentMediaAcceptancePort(acceptance = createAcceptanceService()): MediaAcceptancePort {
+    return {
+      async getAcceptanceFacts(query, transaction) {
+        const result = await acceptance.getAcceptanceFacts({
+          ownerId: query.ownerId, mediaAssetIds: query.mediaAssetIds, intendedUse: "supporting-artifact",
+        }, transaction);
+        if (!result.ok) return result;
+        return { ok: true, value: {
+          consistencyVersion: result.value[0]?.consistencyVersion ?? "media-acceptance-v1:empty",
+          facts: result.value.map(({ mediaAssetId, ownerId: factOwnerId, assetVersion, accepted, safe, suitable, accessible }) => ({
+            mediaAssetId, ownerId: factOwnerId, accepted, safe, suitable, accessible, version: assetVersion,
+          })),
+        } };
+      },
+    };
+  }
+
+  function createContentService(
+    mediaAcceptance: MediaAcceptancePort,
+    repository = createPostgresContentAuthoringRepository(),
+  ) {
+    const discoveryProjection = createPostgresProjectDiscoveryProjectionWriter();
+    return createContentAuthoringService({
+      repository,
+      operations: createPostgresOperationsPersistence(appDatabase.database),
+      scope: { portfolioId, ownerId },
+      discoveryProjection,
+      mediaAcceptance,
+    });
+  }
+
+  async function publishContentWithMedia(
+    content: ReturnType<typeof createContentService>,
+    contentType: "project" | "achievement",
+    mediaAssetId: StableId<"MediaAsset">,
+    prefix: string,
+    onReviewReady?: (input: { readonly contentId: StableId<string>; readonly expectedVersion: number }) => void,
+    expectPublished = true,
+  ) {
+    const artifactId = createStableId("SupportingArtifact");
+    const owner = { kind: "owner" as const, ownerId, sessionId: "phase6-content-media-owner" };
+    const payload = contentType === "project" ? {
+      contentType: "project" as const, locale: "en" as const, title: `${prefix} Project`,
+      summary: "A reviewed project summary.", body: "The published project body.", candidateSlug: `${prefix}-project`,
+      caseStudy: { problem: "A real workflow problem.", ownerRole: "Built the workflow.", contributions: ["Shipped the implementation."], outcomes: ["The task completed reliably."], lessons: "Keep evidence current." },
+      evidence: { claims: [{ claimId: createStableId("EvidenceClaim"), text: "The accepted Media supports this implementation.", artifactIds: [artifactId] }],
+        artifacts: [{ id: artifactId, title: "Accepted PDF evidence", destinationUrl: "https://example.com/evidence", mediaAssetId }] },
+      externalLinks: [{ id: createStableId("ExternalLink"), label: "Project details", destination: "https://example.com/details", isAvailableInArabic: true }],
+    } : {
+      contentType: "achievement" as const, locale: "en" as const, title: `${prefix} Achievement`,
+      summary: "A reviewed achievement summary.", body: "The published achievement account.", achievedOn: "2026-10-10",
+      evidence: { claims: [{ claimId: createStableId("EvidenceClaim"), text: "The accepted Media supports this milestone.", artifactIds: [artifactId] }],
+        artifacts: [{ id: artifactId, title: "Accepted PDF evidence", destinationUrl: "https://example.com/achievement", mediaAssetId }] },
+    };
+    const created = await content.createContent({ actor: owner, idempotencyKey: `${prefix}-create` as never, correlationId: `${prefix}-create`, payload });
+    expect(created.ok, JSON.stringify(created)).toBe(true);
+    if (!created.ok) throw new Error("PHASE6_CONTENT_MEDIA_CREATE_FAILED");
+    const preview = await content.previewRevision({ actor: owner, contentId: created.value.contentId, revisionId: created.value.revisionId });
+    expect(preview.ok, JSON.stringify(preview)).toBe(true);
+    if (!preview.ok) throw new Error("PHASE6_CONTENT_MEDIA_PREVIEW_FAILED");
+    const reviewed = await content.reviewRevision({ actor: owner, contentId: created.value.contentId, revisionId: created.value.revisionId,
+      expectedVersion: created.value.aggregateVersion, idempotencyKey: `${prefix}-review` as never, correlationId: `${prefix}-review`,
+      locale: "en", snapshotHash: preview.value.snapshotHash, evidenceVersion: preview.value.evidenceVersion,
+      decision: "accepted", findings: ["Reviewed against accepted Media evidence."] });
+    expect(reviewed.ok, JSON.stringify(reviewed)).toBe(true);
+    if (!reviewed.ok) throw new Error("PHASE6_CONTENT_MEDIA_REVIEW_FAILED");
+    onReviewReady?.({ contentId: created.value.contentId, expectedVersion: reviewed.value.aggregateVersion });
+    const published = await content.publishLanguageVersion({ actor: owner, contentId: created.value.contentId,
+      expectedVersion: reviewed.value.aggregateVersion, idempotencyKey: `${prefix}-publish` as never, correlationId: `${prefix}-publish`,
+      locale: "en", revisionId: created.value.revisionId });
+    if (expectPublished) expect(published.ok, JSON.stringify(published)).toBe(true);
+    return { contentId: created.value.contentId, revisionId: created.value.revisionId, published };
+  }
+
+  async function publishArabicProjectRevision(
+    content: ReturnType<typeof createContentService>,
+    contentId: StableId<string>,
+    expectedVersion: number,
+    mediaAssetId: StableId<"MediaAsset">,
+  ) {
+    const owner = { kind: "owner" as const, ownerId, sessionId: "phase6-content-media-owner" };
+    const artifactId = createStableId("SupportingArtifact");
+    const draft = await content.saveRevision({ actor: owner, contentId, expectedVersion,
+      idempotencyKey: "phase6-content-media-arabic-save" as never, correlationId: "phase6-content-media-arabic-save",
+      locale: "ar", title: "مشروع موثق", summary: "ملخص عربي للمشروع", body: "هذا وصف عربي مستقل للمشروع.",
+      draftData: { contentType: "project", caseStudy: { problem: "مشكلة عربية واضحة.", ownerRole: "قاد التنفيذ.",
+        contributions: ["بنى الخدمة."], outcomes: ["تحسن سير العمل."], lessons: "قِس أثر العمل." },
+        evidence: { claims: [{ claimId: createStableId("EvidenceClaim"), text: "يدعم هذا الملف الدليل المنشور.", artifactIds: [artifactId] }],
+          artifacts: [{ id: artifactId, title: "دليل المشروع", destinationUrl: "https://example.com/ar/evidence", mediaAssetId }] },
+        externalLinks: [{ id: createStableId("ExternalLink"), label: "تفاصيل المشروع", destination: "https://example.com/ar/details", isAvailableInArabic: true }] },
+    });
+    expect(draft.ok, JSON.stringify(draft)).toBe(true);
+    if (!draft.ok) throw new Error("PHASE6_ARABIC_MEDIA_DRAFT_FAILED");
+    const preview = await content.previewRevision({ actor: owner, contentId, revisionId: draft.value.revisionId });
+    expect(preview.ok, JSON.stringify(preview)).toBe(true);
+    if (!preview.ok) throw new Error("PHASE6_ARABIC_MEDIA_PREVIEW_FAILED");
+    const reviewed = await content.reviewRevision({ actor: owner, contentId, revisionId: draft.value.revisionId,
+      expectedVersion: draft.value.aggregateVersion, idempotencyKey: "phase6-content-media-arabic-review" as never,
+      correlationId: "phase6-content-media-arabic-review", locale: "ar", snapshotHash: preview.value.snapshotHash,
+      evidenceVersion: preview.value.evidenceVersion, decision: "accepted", findings: [] });
+    expect(reviewed.ok, JSON.stringify(reviewed)).toBe(true);
+    if (!reviewed.ok) throw new Error("PHASE6_ARABIC_MEDIA_REVIEW_FAILED");
+    const published = await content.publishLanguageVersion({ actor: owner, contentId, expectedVersion: reviewed.value.aggregateVersion,
+      idempotencyKey: "phase6-content-media-arabic-publish" as never, correlationId: "phase6-content-media-arabic-publish",
+      locale: "ar", revisionId: draft.value.revisionId });
+    expect(published.ok, JSON.stringify(published)).toBe(true);
+    if (!published.ok) throw new Error("PHASE6_ARABIC_MEDIA_PUBLICATION_FAILED");
+    const arabic = await content.getPublicProject({ slug: "phase6-accepted-project-project", locale: "ar" });
+    expect(arabic).toMatchObject({ ok: true, value: { revisionId: draft.value.revisionId, locale: "ar",
+      title: "مشروع موثق", summary: "ملخص عربي للمشروع", body: "هذا وصف عربي مستقل للمشروع." } });
+    expect(await content.getPublicProject({ slug: "phase6-accepted-project-project", locale: "en" }))
+      .toMatchObject({ ok: true, value: { title: "phase6-accepted-project Project", locale: "en" } });
+    return published.value.aggregateVersion;
   }
 
   async function acceptAndVerify(mediaId: StableId<"MediaAsset">, accessibility: OwnerMediaAccessibility, keySuffix: string) {
@@ -920,6 +1041,198 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       expect(acceptanceBatch.value.every(({ consistencyVersion }) => consistencyVersion === acceptanceBatch.value[0]?.consistencyVersion)).toBe(true);
       expect(acceptanceBatch.value.find(({ mediaAssetId }) => decorativeMediaIds.has(mediaAssetId))?.accessible).toBe(false);
     }
+
+    const describedImageId = acceptedMediaIds.find((mediaId) => !decorativeMediaIds.has(mediaId) && mediaId !== safe.mediaId) as StableId<"MediaAsset"> | undefined;
+    expect(describedImageId).toBeDefined();
+    if (!describedImageId) throw new Error("PHASE6_CONTENT_MEDIA_IMAGE_FIXTURE_REQUIRED");
+    let withholdAccessibility = false;
+    const realAcceptancePort = contentMediaAcceptancePort(acceptedPdf.acceptance);
+    const publicationLockOrder: string[] = [];
+    const changingAcceptancePort: MediaAcceptancePort = {
+      async getAcceptanceFacts(query, transaction) {
+        publicationLockOrder.push("media-shared-locks");
+        const result = await realAcceptancePort.getAcceptanceFacts(query, transaction);
+        if (!withholdAccessibility || !result.ok) return result;
+        return { ok: true, value: { ...result.value, facts: result.value.facts.map((fact) => ({ ...fact, accessible: false })) } };
+      },
+    };
+    const baseContentRepository = createPostgresContentAuthoringRepository();
+    let continueProjectWrite!: () => void;
+    let projectWriteReached!: () => void;
+    const projectWriteHeld = new Promise<void>((resolve) => { continueProjectWrite = resolve; });
+    const projectWriteStarted = new Promise<void>((resolve) => { projectWriteReached = resolve; });
+    const publicationRepository = new Proxy(baseContentRepository, {
+      get(target, property, receiver) {
+        const method = Reflect.get(target, property, receiver) as unknown;
+        if (property !== "publishProjectLanguage" || typeof method !== "function") return typeof method === "function" ? method.bind(target) : method;
+        return async (...args: Parameters<typeof target.publishProjectLanguage>) => {
+          publicationLockOrder.push("content-root-write");
+          const result = await target.publishProjectLanguage(...args);
+          projectWriteReached();
+          await projectWriteHeld;
+          return result;
+        };
+      },
+    });
+    const content = createContentService(changingAcceptancePort, publicationRepository);
+    const decorativeMediaId = [...decorativeMediaIds][0];
+    if (!decorativeMediaId) throw new Error("PHASE6_CONTENT_MEDIA_DECORATIVE_FIXTURE_REQUIRED");
+    const decorativeContent = await publishContentWithMedia(content, "project", decorativeMediaId,
+      "phase6-decorative-only-content", undefined, false);
+    expect(decorativeContent.published).toMatchObject({ ok: false, error: { kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" } });
+    expect(await admin.query(`select count(*)::int as publications from content.language_publications where content_id = $1::uuid`,
+      [decorativeContent.contentId])).toMatchObject({ rows: [{ publications: 0 }] });
+
+    let releaseExclusiveMediaLock!: () => void;
+    let exclusiveMediaLockReady!: () => void;
+    const exclusiveMediaLockHeld = new Promise<void>((resolve) => { releaseExclusiveMediaLock = resolve; });
+    const exclusiveMediaLockStarted = new Promise<void>((resolve) => { exclusiveMediaLockReady = resolve; });
+    const exclusiveMediaLock = appDatabase.transactions.run(async (transaction) => {
+      await sql`select pg_advisory_xact_lock(hashtextextended(${safe.mediaId}::text, 0))`
+        .execute(resolvePostgresTransaction(transaction));
+      exclusiveMediaLockReady();
+      await exclusiveMediaLockHeld;
+    });
+    await exclusiveMediaLockStarted;
+    const timedOutProject = await publishContentWithMedia(content, "project", safe.mediaId as StableId<"MediaAsset">,
+      "phase6-media-lock-timeout", undefined, false);
+    expect(timedOutProject.published).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_ACCEPTANCE_LOCK_TIMEOUT" } });
+    releaseExclusiveMediaLock();
+    await exclusiveMediaLock;
+    const timeoutState = await admin.query(`select
+      (select lifecycle from content.items where content_id = $1::uuid) as lifecycle,
+      (select count(*)::int from content.language_publications where content_id = $1::uuid) as publications,
+      (select count(*)::int from content.publication_history where content_id = $1::uuid) as history,
+      (select count(*)::int from content.public_routes where content_id = $1::uuid) as routes,
+      (select count(*)::int from content.public_project_locales where content_id = $1::uuid) as projection,
+      (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.language_version_published.v1') as events`,
+    [timedOutProject.contentId]);
+    expect(timeoutState.rows[0]).toEqual({ lifecycle: "draft", publications: 0, history: 0, routes: 0, projection: 0, events: 0 });
+
+    let projectContentId: StableId<string> | undefined;
+    const publicationOrderStart = publicationLockOrder.length;
+    const pendingProject = publishContentWithMedia(content, "project", safe.mediaId as StableId<"MediaAsset">, "phase6-accepted-project",
+      (ready) => { projectContentId = ready.contentId; });
+    await projectWriteStarted;
+    expect(publicationLockOrder.slice(publicationOrderStart)).toEqual(["media-shared-locks", "content-root-write"]);
+    expect(projectContentId).toBeDefined();
+    const publicationNotCommitted = await admin.query("select lifecycle from content.items where content_id = $1::uuid", [projectContentId]);
+    expect(publicationNotCommitted.rows[0]?.lifecycle).toBe("draft");
+    const publicationLockProbe = await appDatabase.transactions.run(async (transaction) => {
+      const rows = await sql<{ acquired: boolean }>`
+        select pg_try_advisory_xact_lock(hashtextextended(${safe.mediaId}::text, 0)) as acquired
+      `.execute(resolvePostgresTransaction(transaction));
+      return rows.rows[0]?.acquired;
+    });
+    expect(publicationLockProbe).toBe(false);
+    continueProjectWrite();
+    const project = await pendingProject;
+    expect(project.published.ok).toBe(true);
+    if (!project.published.ok) throw new Error("PHASE6_REAL_MEDIA_PROJECT_PUBLICATION_FAILED");
+    const englishProjectAggregateVersion = project.published.value.aggregateVersion;
+    const achievement = await publishContentWithMedia(content, "achievement", describedImageId, "phase6-accepted-achievement");
+    expect(achievement.published.ok).toBe(true);
+    if (!achievement.published.ok) throw new Error("PHASE6_REAL_MEDIA_ACHIEVEMENT_PUBLICATION_FAILED");
+    const contentHashMismatchSha256 = "a".repeat(64);
+    expect(contentHashMismatchSha256).not.toBe(safeHash);
+    await admin.query("update media.assets set declared_sha256 = $2 where media_id = $1::uuid", [safe.mediaId, contentHashMismatchSha256]);
+    try {
+      const hashMismatch = await publishContentWithMedia(content, "project", safe.mediaId as StableId<"MediaAsset">,
+        "phase6-media-hash-mismatch", undefined, false);
+      expect(hashMismatch.published).toMatchObject({ ok: false, error: { kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" } });
+      expect(await admin.query("select lifecycle, (select count(*)::int from content.language_publications where content_id = i.content_id) as publications from content.items i where content_id = $1::uuid",
+        [hashMismatch.contentId])).toMatchObject({ rows: [{ lifecycle: "draft", publications: 0 }] });
+    } finally {
+      await admin.query("update media.assets set declared_sha256 = $2 where media_id = $1::uuid", [safe.mediaId, safeHash]);
+    }
+    expect(await content.getPublicProject({ slug: "phase6-accepted-project-project", locale: "en" }))
+      .toMatchObject({ ok: true, value: { title: "phase6-accepted-project Project" } });
+    const arabicAggregateVersion = await publishArabicProjectRevision(content, project.contentId,
+      englishProjectAggregateVersion, safe.mediaId as StableId<"MediaAsset">);
+    expect(arabicAggregateVersion).toBeGreaterThan(englishProjectAggregateVersion);
+    expect(await content.getPublicAchievementTimeline({ locale: "en", limit: 10 }))
+      .toMatchObject({ ok: true, value: expect.arrayContaining([expect.objectContaining({ contentId: achievement.contentId })]) });
+
+    const achievementHidden = await content.hideContent({ actor: { kind: "owner", ownerId, sessionId: "phase6-content-media-owner" },
+      contentId: achievement.contentId, expectedVersion: achievement.published.value.aggregateVersion,
+      idempotencyKey: "phase6-accepted-achievement-hide" as never, correlationId: "phase6-accepted-achievement-hide" });
+    expect(achievementHidden.ok).toBe(true);
+    if (!achievementHidden.ok) throw new Error("PHASE6_MEDIA_ACHIEVEMENT_HIDE_FAILED");
+    const hiddenAchievementTimeline = await content.getPublicAchievementTimeline({ locale: "en", limit: 10 });
+    expect(hiddenAchievementTimeline.ok).toBe(true);
+    if (hiddenAchievementTimeline.ok) expect(hiddenAchievementTimeline.value.map(({ contentId }) => contentId)).not.toContain(achievement.contentId);
+    const achievementRestored = await content.restoreContent({ actor: { kind: "owner", ownerId, sessionId: "phase6-content-media-owner" },
+      contentId: achievement.contentId, expectedVersion: achievementHidden.value.aggregateVersion,
+      idempotencyKey: "phase6-accepted-achievement-restore" as never, correlationId: "phase6-accepted-achievement-restore" });
+    expect(achievementRestored.ok).toBe(true);
+    if (!achievementRestored.ok) throw new Error("PHASE6_MEDIA_ACHIEVEMENT_RESTORE_FAILED");
+    expect(await content.getPublicAchievementTimeline({ locale: "en", limit: 10 }))
+      .toMatchObject({ ok: true, value: expect.arrayContaining([expect.objectContaining({ contentId: achievement.contentId })]) });
+
+    const visibleUsage = async (mediaAssetId: StableId<"MediaAsset">) => await appDatabase.transactions.run((transaction) =>
+      content.getVisibleMediaUsage({ ownerId, mediaAssetIds: [mediaAssetId] }, transaction));
+    expect(await visibleUsage(safe.mediaId as StableId<"MediaAsset">))
+      .toMatchObject({ ok: true, value: { facts: [{ mediaAssetId: safe.mediaId, inUse: true }] } });
+    const owner = { kind: "owner" as const, ownerId, sessionId: "phase6-content-media-owner" };
+    const hidden = await content.hideContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: project.published.value.aggregateVersion, idempotencyKey: "phase6-accepted-project-hide" as never,
+      correlationId: "phase6-accepted-project-hide" });
+    expect(hidden.ok).toBe(true);
+    expect(await visibleUsage(safe.mediaId as StableId<"MediaAsset">))
+      .toMatchObject({ ok: true, value: { facts: [{ mediaAssetId: safe.mediaId, inUse: false }] } });
+
+    withholdAccessibility = true;
+    const rejectedRestore = await content.restoreContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: hidden.ok ? hidden.value.aggregateVersion : 0, idempotencyKey: "phase6-accepted-project-restore-stale" as never,
+      correlationId: "phase6-accepted-project-restore-stale" });
+    expect(rejectedRestore).toMatchObject({ ok: false, error: { kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" } });
+    expect(await content.getOwnerContentAggregate({ actor: owner, contentId: project.contentId }))
+      .toMatchObject({ ok: true, value: { lifecycle: "hidden" } });
+    expect(await content.getPublicProject({ slug: "phase6-accepted-project-project", locale: "en" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found" } });
+
+    withholdAccessibility = false;
+    const baseRestoreRepository = createPostgresContentAuthoringRepository();
+    let continueRestore!: () => void;
+    let restoreWriteReached!: () => void;
+    const restoreWriteHeld = new Promise<void>((resolve) => { continueRestore = resolve; });
+    const restoreWriteStarted = new Promise<void>((resolve) => { restoreWriteReached = resolve; });
+    const restoreRepository = new Proxy(baseRestoreRepository, {
+      get(target, property, receiver) {
+        const method = Reflect.get(target, property, receiver) as unknown;
+        if (property !== "changeLifecycle" || typeof method !== "function") return typeof method === "function" ? method.bind(target) : method;
+        return async (...args: Parameters<typeof target.changeLifecycle>) => {
+          if (args[0].lifecycle !== "published") return await target.changeLifecycle(...args);
+          publicationLockOrder.push("content-lifecycle-write");
+          const result = await target.changeLifecycle(...args);
+          restoreWriteReached();
+          await restoreWriteHeld;
+          return result;
+        };
+      },
+    });
+    const restoringContent = createContentService(changingAcceptancePort, restoreRepository);
+    const restoreOrderStart = publicationLockOrder.length;
+    const pendingRestore = restoringContent.restoreContent({ actor: owner, contentId: project.contentId,
+      expectedVersion: hidden.ok ? hidden.value.aggregateVersion : 0, idempotencyKey: "phase6-accepted-project-restore" as never,
+      correlationId: "phase6-accepted-project-restore" });
+    await restoreWriteStarted;
+    expect(publicationLockOrder.slice(restoreOrderStart)).toEqual(["media-shared-locks", "content-lifecycle-write"]);
+    const restoreLockProbe = await appDatabase.transactions.run(async (transaction) => {
+      const rows = await sql<{ acquired: boolean }>`
+        select pg_try_advisory_xact_lock(hashtextextended(${safe.mediaId}::text, 0)) as acquired
+      `.execute(resolvePostgresTransaction(transaction));
+      return rows.rows[0]?.acquired;
+    });
+    expect(restoreLockProbe).toBe(false);
+    const restoreNotCommitted = await admin.query("select lifecycle from content.items where content_id = $1::uuid", [project.contentId]);
+    expect(restoreNotCommitted.rows[0]?.lifecycle).toBe("hidden");
+    continueRestore();
+    const restored = await pendingRestore;
+    expect(restored.ok).toBe(true);
+    expect(await visibleUsage(safe.mediaId as StableId<"MediaAsset">))
+      .toMatchObject({ ok: true, value: { facts: [{ mediaAssetId: safe.mediaId, inUse: true }] } });
+
     const acceptanceRollback = await uploadPdf(pdfBytes, "acceptance-rollback");
     const rollbackProcessing = await mediaProcessing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-media-acceptance-owner" },
       idempotencyKey: `phase6-accept-rollback-process-${randomBytes(8).toString("hex")}` as never,

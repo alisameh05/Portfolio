@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "ticket": 153,
+  "parent": 152,
+  "runId": "20a2da88-3e49-4a68-8ee6-e3b49082886b",
+  "sourceRevision": "b44bef4a3adb95bc0866bf10b0a338d29c79dc0c",
+  "sourceTreeSha256": "ad0b3f198ba9b074564b4d76d97e1c6d365c2fc5984733104f21559bf5f8b6b4",
+  "startedAt": "2026-10-11T19:20:53.123Z",
+  "completedAt": "2026-10-11T19:27:54.518Z",
+  "scope": "real-Media-gated-Project-Achievement-publication-and-restoration",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1",
+    "sharp": "sharp-0.35.4;libvips-8.18.6"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 20
+    },
+    "scanner": {
+      "available": true,
+      "version": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+      "executions": 24
+    },
+    "processors": {
+      "pdf": "17.12.1",
+      "image": "sharp-0.35.4;libvips-8.18.6",
+      "video": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+      "executions": {
+        "pdf": 1,
+        "image": 5,
+        "video": 5
+      }
+    }
+  },
+  "formats": [
+    {
+      "id": "pdf",
+      "kind": "document",
+      "mimeType": "application/pdf",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "17.12.1"
+    },
+    {
+      "id": "png",
+      "kind": "image",
+      "mimeType": "image/png",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "jpeg",
+      "kind": "image",
+      "mimeType": "image/jpeg",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "webp",
+      "kind": "image",
+      "mimeType": "image/webp",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "mp4",
+      "kind": "video",
+      "mimeType": "video/mp4",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    },
+    {
+      "id": "webm",
+      "kind": "video",
+      "mimeType": "video/webm",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    }
+  ],
+  "checks": {
+    "mediaIntegration": {
+      "suite": "tests/database/media-upload-intent.integration.test.ts",
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "failedTests": [],
+      "verdict": "pass"
+    },
+    "contentAuthoring": {
+      "suite": "tests/database/content-authoring.integration.test.ts",
+      "total": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "failedTests": [],
+      "verdict": "pass"
+    },
+    "mediaApplication": {
+      "suites": [
+        "tests/modules/media-acceptance.test.ts",
+        "tests/modules/media-cv-contracts.test.ts"
+      ],
+      "total": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "verdict": "pass"
+    },
+    "acceptanceOperations": 6
+  },
+  "scenarios": [
+    {
+      "name": "T08-01 real accepted Media publishes and restores Projects and Achievements through production services",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T08-02 malformed, missing, foreign, unsafe, unaccepted, unsuitable, inaccessible, stale, duplicate and incomplete Media facts preserve the prior publication",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T08-03 decorative-only acceptance cannot publish meaningful evidence",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T08-04 Hidden, Archived, Draft and superseded content grants no delivery; publication and restore recheck current facts",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T08-05 Content usage follows every current published locale pointer and immutable Revision, not public projections",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T08-06 publication and restore acquire shared Media locks first, retain them through commit, and return a recoverable lock timeout",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T08-07 independently reviewed Arabic Content reuses accepted English Media and serves the Arabic Revision without fallback",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T08-08 no-Media route, publication, discovery and lifecycle behavior remains covered with no new public routes",
+      "executed": true,
+      "status": "passed"
+    }
+  ],
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:publication-media"
+  ],
+  "limitations": []
+}

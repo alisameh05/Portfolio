@@ -4,7 +4,8 @@ import { createSystemClock, createSystemIdGenerator } from "../../../runtime/por
 import { hashCanonicalRequest } from "../../../shared/application/idempotency.js";
 import type { OperationsPersistencePorts, SafeResultEnvelope } from "../../portability-operations/index.js";
 import type { ContentHistoryEntry, ContentHistoryPage, ContentKind, CreateDraftPayload, LocalizedDraftData, PrivateRevisionPreview, SupportedLocale } from "../domain/index.js";
-import type { ChangePublicSlugCommand, CorrectCandidateSlugCommand, MediaAcceptancePort, ProjectCommandReceipt, PublishLanguageVersionCommand, ReviewRevisionCommand } from "./service.js";
+import type { ChangePublicSlugCommand, CorrectCandidateSlugCommand, MediaAcceptancePort, ProjectCommandReceipt, PublishLanguageVersionCommand, ReviewRevisionCommand,
+  VisibleMediaUsageBatch, VisibleMediaUsageQuery } from "./service.js";
 
 export interface ContentAuthoringScope {
   readonly portfolioId: StableId<"Portfolio">;
@@ -413,6 +414,7 @@ export interface ProjectTaxonomyAssignmentFactsPort {
 
 export interface ContentAuthoringRepository {
   projectExists(projectId: StableId<"Project">, scope: ContentAuthoringScope, context: TransactionContext): Promise<boolean>;
+  getVisibleMediaUsage(input: { readonly mediaAssetIds: readonly StableId<"MediaAsset">[]; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<VisibleMediaUsageBatch, Rejection>>;
   create(input: CreateContentPersistenceInput, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
   get(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext, revisionHistoryLimit?: number): Promise<Result<ContentAuthoringRecord, Rejection>>;
   correctCandidateSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
@@ -526,6 +528,7 @@ export interface OwnerContentAggregateView {
 }
 
 export interface ContentAuthoringService {
+  getVisibleMediaUsage(query: VisibleMediaUsageQuery, transaction: TransactionContext): Promise<Result<VisibleMediaUsageBatch, Rejection>>;
   createContent(command: CreateOwnerContentCommand): Promise<Result<CreateContentReceipt, Rejection>>;
   getOwnerContentAggregate(query: GetOwnerContentAggregateQuery): Promise<Result<OwnerContentAggregateView, Rejection>>;
   saveRevision(command: SaveContentRevisionCommand): Promise<Result<SaveContentRevisionReceipt, Rejection>>;
@@ -1043,6 +1046,17 @@ export function createContentAuthoringService(input: {
   }
 
   return {
+    async getVisibleMediaUsage(query, transaction) {
+      if (query.ownerId !== input.scope.ownerId) return err({ kind: "forbidden", code: "OWNER_SCOPE_MISMATCH" });
+      if (transaction?.kind !== "transaction") return err({ kind: "validation", code: "CONTENT_TRANSACTION_REQUIRED" });
+      const mediaAssetIds = [...new Set(query.mediaAssetIds)];
+      if (mediaAssetIds.length > 100 || mediaAssetIds.some((mediaAssetId) =>
+        typeof mediaAssetId !== "string" || !parseStableId("MediaAsset", mediaAssetId).ok)) {
+        return err({ kind: "validation", code: "CONTENT_MEDIA_USAGE_QUERY_INVALID" });
+      }
+      return input.repository.getVisibleMediaUsage({ mediaAssetIds: mediaAssetIds.sort(), scope: input.scope }, transaction);
+    },
+
     async createContent(command) {
       if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
       if (!validCorrelation(command.correlationId) || !payloadIsValid(command.payload)) {

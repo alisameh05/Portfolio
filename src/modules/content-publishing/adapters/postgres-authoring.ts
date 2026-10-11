@@ -388,6 +388,65 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
       }
     },
 
+    async getVisibleMediaUsage(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      let savepointActive = false;
+      try {
+        await sql`savepoint content_visible_media_usage`.execute(executor);
+        savepointActive = true;
+        await setTrustedScope(context, input.scope);
+        await sql`select set_config('lock_timeout', '3s', true), set_config('statement_timeout', '5s', true), set_config('transaction_timeout', '10s', true)`.execute(executor);
+        const requested = [...new Set(input.mediaAssetIds)].sort();
+        if (requested.length === 0) {
+          await sql`release savepoint content_visible_media_usage`.execute(executor);
+          savepointActive = false;
+          return { ok: true, value: { facts: [] } };
+        }
+        const rows = await sql<{ media_asset_id: string; in_use: boolean }>`
+          with requested(media_asset_id) as (
+            select unnest(${requested}::uuid[])
+          )
+          select requested.media_asset_id::text as media_asset_id,
+                 exists (
+                   select 1
+                     from content.language_publications publication
+                     join content.items item
+                       on item.content_id = publication.content_id
+                      and item.portfolio_id = publication.portfolio_id
+                      and item.content_type = publication.content_type
+                      and item.lifecycle = 'published'
+                     join content.revisions revision
+                       on revision.revision_id = publication.revision_id
+                      and revision.content_id = publication.content_id
+                      and revision.portfolio_id = publication.portfolio_id
+                      and revision.locale = publication.locale
+                    where publication.portfolio_id = ${input.scope.portfolioId}::uuid
+                      and publication.content_type in ('project', 'achievement')
+                      and revision.content_type in ('project', 'achievement')
+                      and revision.payload #> '{evidence,artifacts}' @>
+                        jsonb_build_array(jsonb_build_object('mediaAssetId', requested.media_asset_id::text))
+                 ) as in_use
+            from requested
+           order by requested.media_asset_id
+        `.execute(executor);
+        if (rows.rows.length !== requested.length) throw new PostgresInfrastructureError();
+        await sql`release savepoint content_visible_media_usage`.execute(executor);
+        savepointActive = false;
+        return { ok: true, value: { facts: rows.rows.map((row) => ({
+          mediaAssetId: row.media_asset_id as StableId<"MediaAsset">, inUse: row.in_use,
+        })) } };
+      } catch {
+        if (!savepointActive) throw new PostgresInfrastructureError();
+        try {
+          await sql`rollback to savepoint content_visible_media_usage`.execute(executor);
+          await sql`release savepoint content_visible_media_usage`.execute(executor);
+        } catch {
+          throw new PostgresInfrastructureError();
+        }
+        return { ok: false, error: { kind: "temporarily_unavailable", code: "CONTENT_MEDIA_USAGE_UNAVAILABLE" } };
+      }
+    },
+
     async create(input: CreateContentPersistenceInput, context: TransactionContext) {
       const executor = resolvePostgresTransaction(context);
       const scope = { portfolioId: input.portfolioId, ownerId: input.ownerId };
