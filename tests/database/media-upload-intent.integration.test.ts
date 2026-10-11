@@ -1907,7 +1907,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       expectedVersion: Number(currentCvRoot.rows[0]?.aggregate_version),
       mediaId: unsafeUpload.mediaId as StableId<"MediaAsset">, locale: "en", label: "Rejected unsafe media",
     });
-    expect(rejectedUnsafeRegistration).toMatchObject({ ok: false, error: { kind: "validation" } });
+    expect(rejectedUnsafeRegistration).toMatchObject({ ok: false, error: { kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" } });
     const oversized = await realVideoProcessor.process(new Uint8Array(50 * 1024 * 1024 + 1));
     expect(oversized).toMatchObject({ ok: false, error: { kind: "validation", code: "MEDIA_BYTES_OUT_OF_BOUNDS" } });
     expect(videoProcessorExecutions).toBe(5);
