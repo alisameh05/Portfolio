@@ -5,6 +5,7 @@ import type { ContentAuthoringService } from "../../modules/content-publishing/a
 export function createProductionContentAuthoringService(): ContentAuthoringService {
   const unavailable = err({ kind: "temporarily_unavailable" as const, code: "RUNTIME_NOT_IMPLEMENTED" });
   return {
+    async getVisibleMediaUsage() { return unavailable; },
     async createContent() { return unavailable; },
     async getOwnerContentAggregate() { return unavailable; },
     async saveRevision() { return unavailable; },

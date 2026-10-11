@@ -13,6 +13,7 @@ import {
 const ROOT = phase6Root();
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const EVIDENCE = join(ROOT, "evidence/phase-6-verification-setup.json");
+const PUBLICATION_MEDIA_EVIDENCE = join(ROOT, "evidence/phase6-publication-media-153.json");
 const UPLOAD_INTENT_EVIDENCE = join(ROOT, "evidence/phase6-upload-intent-148.json");
 const MEDIA_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-media-processing-149.json");
 const IMAGE_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-image-processing-150.json");
@@ -23,6 +24,8 @@ const MEDIA_PROCESSING_ONLY = process.argv.includes("--media-processing-only");
 const IMAGE_PROCESSING_ONLY = process.argv.includes("--image-processing-only");
 const VIDEO_PROCESSING_ONLY = process.argv.includes("--video-processing-only");
 const MEDIA_ACCEPTANCE_ONLY = process.argv.includes("--media-acceptance-only");
+const PUBLICATION_MEDIA_ONLY = process.argv.includes("--publication-media-only");
+const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || PUBLICATION_MEDIA_ONLY;
 const RUN_TIMEOUT = 180_000;
 
 function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEOUT, input, label = command } = {}) {
@@ -116,6 +119,8 @@ async function main() {
   const failures = [];
   let uploadIntentChecks;
   let mediaProcessingChecks;
+  let acceptanceUnitChecks;
+  let publicationChecks;
   let imageUnitChecks;
   let processingCounts;
   let toolVersions = {};
@@ -123,7 +128,7 @@ async function main() {
   const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], { cwd: ROOT, env, timeout }).stdout;
   try {
     let config = isolatedPhase6Config(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId);
-    if (UPLOAD_INTENT_ONLY || MEDIA_PROCESSING_ONLY || IMAGE_PROCESSING_ONLY || VIDEO_PROCESSING_ONLY || MEDIA_ACCEPTANCE_ONLY) {
+    if (UPLOAD_INTENT_ONLY || MEDIA_PROCESSING_ONLY || IMAGE_PROCESSING_ONLY || VIDEO_PROCESSING_ONLY || RUN_MEDIA_ACCEPTANCE) {
       // The disposable Auth instance needs a real non-Owner JWT for the Storage denial matrix.
       // This change is confined to its temporary config; repository and developer Auth settings stay untouched.
       config = config
@@ -198,7 +203,7 @@ async function main() {
         videoProcessor: serviceVersion(video, "ffprobe", "-version"),
         pdfProcessor: serviceVersion(pdf, "ocrmypdf"),
       };
-      if (MEDIA_ACCEPTANCE_ONLY) {
+      if (RUN_MEDIA_ACCEPTANCE) {
         const sharpModule = await import("sharp");
         toolVersions.sharp = `sharp-${sharpModule.default.versions.sharp};libvips-${sharpModule.default.versions.vips ?? "unknown"}`;
       }
@@ -259,9 +264,9 @@ async function main() {
       PHASE6_IMAGE_FIXTURE_PNG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.png"),
       PHASE6_IMAGE_FIXTURE_JPEG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.jpeg"),
       PHASE6_IMAGE_FIXTURE_WEBP: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.webp"),
-      PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY || MEDIA_ACCEPTANCE_ONLY ? "1" : "0",
-      PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || MEDIA_ACCEPTANCE_ONLY ? "1" : "0",
-      PHASE6_MEDIA_ACCEPTANCE_ONLY: MEDIA_ACCEPTANCE_ONLY ? "1" : "0",
+      PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY || RUN_MEDIA_ACCEPTANCE ? "1" : "0",
+      PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || RUN_MEDIA_ACCEPTANCE ? "1" : "0",
+      PHASE6_MEDIA_ACCEPTANCE_ONLY: RUN_MEDIA_ACCEPTANCE ? "1" : "0",
       PHASE6_VIDEO_PROCESSING_MP4_FIXTURE: join(fixturesDir, "fixture.mp4"),
       PHASE6_VIDEO_PROCESSING_WEBM_FIXTURE: join(fixturesDir, "fixture.webm"),
       PHASE6_VIDEO_PROCESSING_UNSUPPORTED_FIXTURE: join(fixturesDir, "fixture-unsupported.mp4"),
@@ -272,23 +277,55 @@ async function main() {
       PHASE6_PDF_PROCESSOR_VERSION: toolVersions.pdfProcessor,
       PHASE6_MEDIA_PROCESSING_COUNTS_FILE: processingCountsPath,
     };
+    if (PUBLICATION_MEDIA_ONLY) {
+      testEnv.PHASE5_CONTENT_AUTHORING_DATABASE_URL = status.DB_URL;
+      testEnv.PHASE5_REQUIRE_CONTENT_AUTHORING = "1";
+    }
     const testArgs = ["run", "tests/database/media-upload-intent.integration.test.ts", "--reporter=json", `--outputFile=${testJsonPath}`];
     if (VIDEO_PROCESSING_ONLY) testArgs.push("-t", "processes MP4 and WebM candidates");
     else if (IMAGE_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images");
     else if (MEDIA_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates");
     else if (MEDIA_ACCEPTANCE_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates");
+    else if (PUBLICATION_MEDIA_ONLY) {
+      testArgs.push("tests/database/content-authoring.integration.test.ts", "-t",
+        "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates|reports only Media referenced by currently published Project and Achievement locales|preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable|rejects invalid evidence, review, and Media facts without creating public state|publishes English and Arabic independently, preserves first publication time, history, and the last valid projection|publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline|hides, archives, and restores all three content kinds through atomic owner lifecycle commands|revalidates each exact locale publication before restore and changes none when one Media fact fails");
+    }
     const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 300_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
     const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
     processingCounts = existsSync(processingCountsPath) ? JSON.parse(readFileSync(processingCountsPath, "utf8")) : undefined;
     const allAssertions = (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
     const uploadAssertions = allAssertions.filter((item) => !/processes (?:PDF|MP4 and WebM|PNG, JPEG and WebP) candidates/u.test(String(item.fullName ?? "")));
-    const processingAssertions = allAssertions.filter((item) => MEDIA_ACCEPTANCE_ONLY
+    const processingAssertions = allAssertions.filter((item) => RUN_MEDIA_ACCEPTANCE
       ? String(item.fullName ?? "").includes("processes PDF candidates and real PNG JPEG WebP images") || String(item.fullName ?? "").includes("processes MP4 and WebM candidates")
       : VIDEO_PROCESSING_ONLY
       ? String(item.fullName ?? "").includes("processes MP4 and WebM candidates")
       : IMAGE_PROCESSING_ONLY ? String(item.fullName ?? "").includes("processes PNG, JPEG and WebP candidates")
         : String(item.fullName ?? "").includes("processes PDF candidates"));
+    if (PUBLICATION_MEDIA_ONLY) {
+      const publicationTestNames = [
+        "reports only Media referenced by currently published Project and Achievement locales",
+        "preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable",
+        "rejects invalid evidence, review, and Media facts without creating public state",
+        "publishes English and Arabic independently, preserves first publication time, history, and the last valid projection",
+        "publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline",
+        "hides, archives, and restores all three content kinds through atomic owner lifecycle commands",
+        "revalidates each exact locale publication before restore and changes none when one Media fact fails",
+      ];
+      const selectedAssertions = allAssertions.filter((item) => publicationTestNames.some((name) => String(item.fullName ?? "").includes(name)));
+      publicationChecks = {
+        suite: "tests/database/content-authoring.integration.test.ts",
+        total: selectedAssertions.length,
+        passed: selectedAssertions.filter((item) => item.status === "passed").length,
+        failed: selectedAssertions.filter((item) => item.status === "failed").length,
+        skipped: selectedAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length,
+        failedTests: selectedAssertions.filter((item) => item.status === "failed").map((item) => ({
+          name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
+          reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
+        })),
+        verdict: testResult.status === 0 && selectedAssertions.length === publicationTestNames.length && selectedAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
+      };
+    }
     uploadIntentChecks = {
       suite: "tests/database/media-upload-intent.integration.test.ts",
       total: uploadAssertions.length,
@@ -299,7 +336,7 @@ async function main() {
         name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
         reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
       })),
-      verdict: testResult.status === 0 && (VIDEO_PROCESSING_ONLY || MEDIA_ACCEPTANCE_ONLY || (uploadAssertions.length === 3 && uploadAssertions.every((item) => item.status === "passed"))) ? "pass" : "fail",
+      verdict: testResult.status === 0 && (VIDEO_PROCESSING_ONLY || RUN_MEDIA_ACCEPTANCE || (uploadAssertions.length === 3 && uploadAssertions.every((item) => item.status === "passed"))) ? "pass" : "fail",
     };
     mediaProcessingChecks = {
       suite: "tests/database/media-upload-intent.integration.test.ts",
@@ -311,9 +348,9 @@ async function main() {
         name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
         reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
       })),
-      verdict: testResult.status === 0 && processingAssertions.length === (MEDIA_ACCEPTANCE_ONLY ? 2 : 1) && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
+      verdict: testResult.status === 0 && processingAssertions.length === (RUN_MEDIA_ACCEPTANCE ? 2 : 1) && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
     };
-    if (!VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
+    if (!VIDEO_PROCESSING_ONLY && !RUN_MEDIA_ACCEPTANCE && uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
     if (mediaProcessingChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
     if (IMAGE_PROCESSING_ONLY) {
       const imageUnitJsonPath = join(workdir, "image-unit-vitest.json");
@@ -347,7 +384,8 @@ async function main() {
     }
     if (IMAGE_PROCESSING_ONLY && (!Number.isSafeInteger(processingCounts?.scannerExecutions) || !Number.isSafeInteger(processingCounts?.imageProcessorExecutions))) throw new Error("PHASE6_IMAGE_PROCESSING_TOOL_COUNTS_MISSING");
     if (VIDEO_PROCESSING_ONLY && (!Number.isSafeInteger(processingCounts?.scannerExecutions) || !Number.isSafeInteger(processingCounts?.videoProcessorExecutions))) throw new Error("PHASE6_VIDEO_PROCESSING_TOOL_COUNTS_MISSING");
-    if (MEDIA_ACCEPTANCE_ONLY && processingCounts?.acceptanceExecutions !== PHASE6_FORMATS.length) throw new Error("PHASE6_MEDIA_ACCEPTANCE_FORMAT_COUNTS_MISSING");
+    if (RUN_MEDIA_ACCEPTANCE && processingCounts?.acceptanceExecutions !== PHASE6_FORMATS.length) throw new Error("PHASE6_MEDIA_ACCEPTANCE_FORMAT_COUNTS_MISSING");
+    if (PUBLICATION_MEDIA_ONLY && publicationChecks?.verdict !== "pass") throw new Error("PHASE6_PUBLICATION_MEDIA_ASSERTION_COUNTS_INVALID");
   } catch (error) {
     failures.push(error instanceof Error ? error.message : "PHASE6_SETUP_FAILED");
   } finally {
@@ -370,7 +408,7 @@ async function main() {
   const finalSource = getPhase6SourceIdentity();
   if (finalSource.sourceRevision !== source.sourceRevision || finalSource.sourceTreeSha256 !== source.sourceTreeSha256) failures.push("PHASE6_SOURCE_CHANGED_DURING_RUN");
   let report;
-  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY) {
+  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !PUBLICATION_MEDIA_ONLY) {
     report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
     const evaluated = evaluatePhase6Setup(report, source);
     if (evaluated.failures.length) {
@@ -380,7 +418,7 @@ async function main() {
     mkdirSync(join(ROOT, "evidence"), { recursive: true });
     writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   }
-  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY) {
+  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !PUBLICATION_MEDIA_ONLY) {
     const uploadIntentEvidence = {
       schemaVersion: 1,
       ticket: 148,
@@ -500,12 +538,11 @@ async function main() {
     };
     writeFileSync(IMAGE_PROCESSING_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
   }
-  if (MEDIA_ACCEPTANCE_ONLY) {
+  if (RUN_MEDIA_ACCEPTANCE) {
     const unitJsonPath = join(tmpdir(), `phase6-media-acceptance-units-${randomUUID()}.json`);
     const unitSuites = ["tests/modules/media-acceptance.test.ts", "tests/modules/media-cv-contracts.test.ts"];
     const unitResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", ...unitSuites,
       "--reporter=json", `--outputFile=${unitJsonPath}`], { cwd: ROOT, env, encoding: "utf8", timeout: 120_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
-    let acceptanceUnitChecks;
     try {
       if (unitResult.error || !existsSync(unitJsonPath)) throw new Error("PHASE6_MEDIA_ACCEPTANCE_UNIT_REPORT_MISSING");
       const unitReport = JSON.parse(readFileSync(unitJsonPath, "utf8"));
@@ -517,6 +554,8 @@ async function main() {
         verdict: unitResult.status === 0 && assertions.length > 0 && assertions.every((item) => item.status === "passed") ? "pass" : "fail" };
     } finally { if (existsSync(unitJsonPath)) rmSync(unitJsonPath, { force: true }); }
     if (acceptanceUnitChecks?.verdict !== "pass") failures.push("PHASE6_MEDIA_ACCEPTANCE_UNIT_ASSERTIONS_INVALID");
+  }
+  if (MEDIA_ACCEPTANCE_ONLY) {
     const scenarios = [
       "T07-01 exact candidate hash, current processing version, same Owner and current kind policy are required",
       "T07-02 image alt or decorative classification and video/document summaries match actual kind",
@@ -562,6 +601,49 @@ async function main() {
       acceptanceOperations: processingCounts?.acceptanceExecutions, formats: formats.map(({ id, status }) => ({ id, status })),
       integration: mediaProcessingChecks, application: acceptanceUnitChecks, cleanup, failures,
       evidence: "evidence/phase6-media-acceptance-152.json" }, null, 2));
+    if (evidence.verdict !== "pass") process.exitCode = 1;
+  } else if (PUBLICATION_MEDIA_ONLY) {
+    const allChecksPass = mediaProcessingChecks?.verdict === "pass" && publicationChecks?.verdict === "pass" &&
+      acceptanceUnitChecks?.verdict === "pass";
+    const criteria = [
+      "T08-01 real accepted Media publishes and restores Projects and Achievements through production services",
+      "T08-02 malformed, missing, foreign, unsafe, unaccepted, unsuitable, inaccessible, stale, duplicate and incomplete Media facts preserve the prior publication",
+      "T08-03 decorative-only acceptance cannot publish meaningful evidence",
+      "T08-04 Hidden, Archived, Draft and superseded content grants no delivery; publication and restore recheck current facts",
+      "T08-05 Content usage follows every current published locale pointer and immutable Revision, not public projections",
+      "T08-06 publication and restore acquire shared Media locks first, retain them through commit, and return a recoverable lock timeout",
+      "T08-07 independently reviewed Arabic Content reuses accepted English Media and serves the Arabic Revision without fallback",
+      "T08-08 no-Media route, publication, discovery and lifecycle behavior remains covered with no new public routes",
+    ].map((name) => ({ name, executed: allChecksPass, status: allChecksPass ? "passed" : "failed" }));
+    const evidence = {
+      schemaVersion: 1, ticket: 153, parent: 152, runId: randomUUID(), sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256, startedAt, completedAt: new Date().toISOString(),
+      scope: "real-Media-gated-Project-Achievement-publication-and-restoration",
+      runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" },
+      toolVersions,
+      services: { postgres: { available: services.postgres.available, majorVersion: services.postgres.majorVersion,
+          independentConnections: services.postgres.independentConnections }, auth: services.auth, storage: services.storage,
+        scanner: { available: true, version: toolVersions.scanner, executions: processingCounts?.scannerExecutions },
+        processors: { pdf: toolVersions.pdfProcessor, image: toolVersions.sharp ?? toolVersions.imageProcessor,
+          video: toolVersions.videoProcessor, executions: { pdf: processingCounts?.processorExecutions,
+            image: processingCounts?.imageProcessorExecutions, video: processingCounts?.videoProcessorExecutions } } },
+      formats: formats.map(({ id, kind, mimeType, executed, status, storageRoundTrip, scannerVerdict, processorVersion }) =>
+        ({ id, kind, mimeType, executed, status, storageRoundTrip, scannerVerdict, processorVersion })),
+      checks: { mediaIntegration: mediaProcessingChecks, contentAuthoring: publicationChecks,
+        mediaApplication: acceptanceUnitChecks, acceptanceOperations: processingCounts?.acceptanceExecutions ?? 0 },
+      scenarios: criteria, cleanup,
+      verdict: allChecksPass && processingCounts?.acceptanceExecutions === PHASE6_FORMATS.length &&
+        formats.length === PHASE6_FORMATS.length && formats.every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:publication-media"],
+      limitations: [],
+    };
+    writeFileSync(PUBLICATION_MEDIA_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+    console.log(JSON.stringify({ ticket: 153, runId: evidence.runId, sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256, verdict: evidence.verdict,
+      acceptanceOperations: processingCounts?.acceptanceExecutions, formats: formats.map(({ id, status }) => ({ id, status })),
+      integration: mediaProcessingChecks, contentAuthoring: publicationChecks, application: acceptanceUnitChecks,
+      cleanup, failures, evidence: "evidence/phase6-publication-media-153.json" }, null, 2));
     if (evidence.verdict !== "pass") process.exitCode = 1;
   } else if (VIDEO_PROCESSING_ONLY) {
     const evidence = mediaProcessingChecks === undefined ? undefined : JSON.parse(readFileSync(VIDEO_PROCESSING_EVIDENCE, "utf8"));

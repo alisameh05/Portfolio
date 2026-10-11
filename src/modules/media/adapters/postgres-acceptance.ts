@@ -167,11 +167,17 @@ export function createPostgresMediaAcceptanceRepository(input: {
     async getAcceptanceFacts(query, transaction) {
       if (query.ownerId !== input.scope.ownerId) return err({ kind: "forbidden", code: "OWNER_SCOPE_MISMATCH" });
       const executor = resolvePostgresTransaction(transaction);
+      let savepointActive = false;
       try {
         await setScope(transaction, input.scope);
-          for (const mediaAssetId of [...new Set(query.mediaAssetIds)].sort()) {
-            await sql`select pg_advisory_xact_lock_shared(hashtextextended(${mediaAssetId}::text, 0))`.execute(executor);
-          }
+        await sql`savepoint media_acceptance_facts`.execute(executor);
+        savepointActive = true;
+        await sql`select set_config('lock_timeout', '3s', true), set_config('statement_timeout', '5s', true), set_config('transaction_timeout', '10s', true)`.execute(executor);
+        // Lock Media identities before Content locks publication roots; transaction advisory locks
+        // remain held until the caller commits or rolls back the complete correctness transaction.
+        for (const mediaAssetId of [...new Set(query.mediaAssetIds)].sort()) {
+          await sql`select pg_advisory_xact_lock_shared(hashtextextended(${mediaAssetId}::text, 0))`.execute(executor);
+        }
         const rows = await sql<{
           readonly media_id: string; readonly owner_id: string; readonly asset_version: number | string;
           readonly accepted: boolean; readonly safe: boolean; readonly suitable: boolean; readonly accessible: boolean;
@@ -215,9 +221,21 @@ export function createPostgresMediaAcceptanceRepository(input: {
             accepted: row.accepted, safe: row.safe, suitable: row.suitable, accessible: row.accessible,
             policyVersion: row.policy_version };
         });
+        await sql`release savepoint media_acceptance_facts`.execute(executor);
+        savepointActive = false;
         if (facts.length !== new Set(query.mediaAssetIds).size) return err({ kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INCOMPLETE" });
         return ok(facts);
-      } catch {
+      } catch (error) {
+        if (!savepointActive) throw error;
+        try {
+          await sql`rollback to savepoint media_acceptance_facts`.execute(executor);
+          await sql`release savepoint media_acceptance_facts`.execute(executor);
+        } catch {
+          throw error;
+        }
+        if (typeof error === "object" && error !== null && "code" in error && error.code === "55P03") {
+          return err({ kind: "temporarily_unavailable", code: "MEDIA_ACCEPTANCE_LOCK_TIMEOUT" });
+        }
         return err({ kind: "temporarily_unavailable", code: "MEDIA_ACCEPTANCE_FACTS_UNAVAILABLE" });
       }
     },

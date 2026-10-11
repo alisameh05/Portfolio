@@ -1,0 +1,7 @@
+# Media publication locking
+
+Content publication and restoration use one transaction for Media eligibility facts and Content writes. When a command references Media, it first obtains shared transaction-scoped Media locks in ascending stable Media ID order. Only after those locks are held may it lock the Content root and change the publication or lifecycle state. The lock timeout is three seconds; statement and transaction timeouts are five and ten seconds.
+
+The shared Media locks remain held until Content commits or rolls back its route, public projection, history, receipt, and outbox changes. Media withdrawal uses the same order: take its exclusive Media lock, then read Content's currently visible references through the Content-owned usage interface in that transaction. The usage read follows the current `content.language_publications` pointers and published Content lifecycle, with the referenced immutable revision payload as the evidence source. It does not infer visibility from a delayed public or discovery projection.
+
+The current Media set is the union of references from all currently published English and Arabic Project and Achievement revisions. Drafts, Hidden and Archived roots, superseded Revisions, and unaccepted Media facts do not create public delivery entitlement.
