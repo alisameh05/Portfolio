@@ -918,6 +918,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       if (!REQUIRE_VIDEO) return;
     }
 
+    const scansBeforePdfProcessing = scannerExecutions;
     const pdfBytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
     const { createClamAvScanner } = await import("../../src/runtime/adapters/media-processing-tools.js");
     const productionScan = await createClamAvScanner().scan(pdfBytes, { timeoutMs: 24_000 });
@@ -1011,14 +1012,14 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(operationBody).toMatchObject({ aggregateId: safe.mediaId, aggregateVersion: 2, outcome: "media-processing-recorded" });
     expect(JSON.stringify(operationBody)).not.toContain("uploadTarget");
     expect(JSON.stringify(operationBody)).not.toContain("token=");
-    expect(scannerExecutions).toBe(2);
+    expect(scannerExecutions - scansBeforePdfProcessing).toBe(2);
     const sameKeyReplay = await mediaProcessing.record({
       actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" }, idempotencyKey: "phase6-pdf-process-safe-key" as never,
       mediaId: safe.mediaId, expectedVersion: 1, result: "passed", detectedMediaType: "application/pdf",
       detectedByteLength: pdfBytes.byteLength, sha256: safeHash,
     });
     expect(sameKeyReplay).toMatchObject({ ok: true, value: { aggregateId: safe.mediaId, aggregateVersion: 2, outcome: "media-processing-recorded" } });
-    expect(scannerExecutions).toBe(2);
+    expect(scannerExecutions - scansBeforePdfProcessing).toBe(2);
     expect(processedFiles).toHaveLength(1);
     const freshKeyReplay = await mediaProcessing.record({
       actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" }, idempotencyKey: "phase6-pdf-process-safe-fresh-key" as never,
@@ -1026,7 +1027,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       detectedByteLength: pdfBytes.byteLength, sha256: safeHash,
     });
     expect(freshKeyReplay).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
-    expect(scannerExecutions).toBe(2);
+    expect(scannerExecutions - scansBeforePdfProcessing).toBe(2);
     expect(processedFiles).toHaveLength(1);
     const terminalFacts = await admin.query(
       `select (select count(*)::int from media.processing_attempts where media_id = $1::uuid) as attempts,
