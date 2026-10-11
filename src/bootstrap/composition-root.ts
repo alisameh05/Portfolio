@@ -299,7 +299,7 @@ export async function initializeDatabaseRuntime(
               scanner: createClamAvScanner({
                 ...(env["CLAMSCAN_PATH"] === undefined ? {} : { executable: env["CLAMSCAN_PATH"] }),
                 maxBytes: 50 * 1024 * 1024,
-                timeoutMs: 14_000,
+                timeoutMs: 25_000,
               }),
               processor: createOcrMyPdfProcessor({
                 ...(env["PYTHON_PATH"] === undefined ? {} : { python: env["PYTHON_PATH"] }),

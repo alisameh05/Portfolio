@@ -1003,12 +1003,24 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
   it("processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg", async () => {
     appNow = Date.now();
     const { createClamAvScanner, createFfmpegVideoProcessor } = await import("../../src/runtime/adapters/media-processing-tools.js");
-    const realScanner = createClamAvScanner({ maxBytes: 50 * 1024 * 1024, timeoutMs: 14_000 });
+    const realScanner = createClamAvScanner({ maxBytes: 50 * 1024 * 1024, timeoutMs: 25_000 });
     const realVideoProcessor = createFfmpegVideoProcessor();
     let videoProcessorExecutions = 0;
     let scannerExecutions = 0;
-    const videoProcessor: VideoProcessorPort = { async process(input) { videoProcessorExecutions += 1; return await realVideoProcessor.process(input); } };
-    const realByteScanner = { async scan(input: Uint8Array) { scannerExecutions += 1; return await realScanner.scan(input); } };
+    let lastVideoProcessorOutcome = "not-run";
+    let lastScannerOutcome = "not-run";
+    const videoProcessor: VideoProcessorPort = { async process(input, options) {
+      videoProcessorExecutions += 1;
+      const result = await realVideoProcessor.process(input, options);
+      lastVideoProcessorOutcome = result.ok ? "passed" : result.error.code;
+      return result;
+    } };
+    const realByteScanner = { async scan(input: Uint8Array, options?: { readonly timeoutMs?: number }) {
+      scannerExecutions += 1;
+      const result = await realScanner.scan(input, options);
+      lastScannerOutcome = result.ok ? result.value.verdict : result.error.code;
+      return result;
+    } };
     const storage = createSupabaseMediaProcessingStorage({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY! });
     const processing = createMediaProcessingApplicationService({
       scope: { ownerId }, repository: createPostgresMediaProcessingRepository({
@@ -1044,7 +1056,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         mediaId: upload.mediaId, expectedVersion: 1, result: "passed" as const, detectedMediaType: fixture.mime,
         detectedByteLength: source.byteLength, sha256: sourceHash };
       const result = await processing.record(command);
-      expect(result, `processor/scan ${fixture.mime}: ${JSON.stringify(result)}`).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+      expect(result, `processor/scan ${fixture.mime}: ${JSON.stringify(result)}; scanner calls=${scannerExecutions} (${lastScannerOutcome}); video processor calls=${videoProcessorExecutions} (${lastVideoProcessorOutcome})`).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
       const saved = await admin.query(
         `select attempt.result, attempt.detected_mime_type, attempt.detected_byte_length, attempt.input_sha256,
                 attempt.scanner_version, attempt.processor_version, attempt.policy_version, attempt.output_variants,
@@ -1088,9 +1100,9 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const malformedResult = await processing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-video-processing-owner" },
       idempotencyKey: "phase6-video-malformed" as never, mediaId: malformedUpload.mediaId, expectedVersion: 1, result: "passed",
       detectedMediaType: "video/mp4", detectedByteLength: malformed.byteLength, sha256: createHash("sha256").update(malformed).digest("hex") });
-    expect(malformedResult).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_PROCESSOR_UNAVAILABLE" } });
+    expect(malformedResult).toMatchObject({ ok: true, value: { aggregateVersion: 2, outcome: "media-processing-recorded" } });
     expect((await admin.query("select result, finding_codes from media.processing_attempts where media_id = $1::uuid", [malformedUpload.mediaId])).rows[0])
-      .toMatchObject({ result: "failed", finding_codes: ["MEDIA_PROCESSOR_UNAVAILABLE"] });
+      .toMatchObject({ result: "failed", finding_codes: ["MEDIA_VIDEO_INPUT_INVALID"] });
 
     const mismatchSource = new Uint8Array(readFileSync(VIDEO_FIXTURE_MP4!));
     const mismatchUpload = await uploadVideo(mismatchSource, "video/mp4", "extension-mismatch", "mismatch.webm");

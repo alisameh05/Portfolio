@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 151,
   "parent": 145,
-  "runId": "bcddea98-44ac-4ea2-b03d-b20867d62b14",
-  "sourceRevision": "945618732fc7dee277237c92a82c23c605758ed8",
-  "sourceTreeSha256": "42a75b6e629e40d1979fd5b43d7bbc044895bcd4c1abe879c826feb0ad91818a",
-  "startedAt": "2026-10-11T14:01:53.084Z",
-  "completedAt": "2026-10-11T14:04:52.693Z",
+  "runId": "9cdbd49f-9e08-47e2-ad14-b08481b8a6ff",
+  "sourceRevision": "9e21ea508b7f9da26e2334c1b360c0cc5260b633",
+  "sourceTreeSha256": "2a557f88b57b6272ac37d91ef29ead78008491ecc5a3ff289aee41fca562ec79",
+  "startedAt": "2026-10-11T16:24:38.504Z",
+  "completedAt": "2026-10-11T16:27:38.240Z",
   "scope": "bounded-mp4-webm-processing-with-sealed-private-variants",
   "runtime": {
     "node": "v24.21.0",
@@ -17,11 +17,14 @@
     "postgres": "17.6",
     "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
     "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
-    "videoProcessor": "ffmpeg version 7.1 Copyright (c) 2000-2024 the FFmpeg developers",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
     "pdfProcessor": "17.12.1"
   },
   "policyIds": {
-    "migration": "20261011220000_record_bounded_video_variants.sql",
+    "migrations": [
+      "20261011220000_record_bounded_video_variants.sql",
+      "20261012000000_restore_video_variant_policy_after_images.sql"
+    ],
     "processing": "mp4-webm-bounded-variants-1",
     "limits": {
       "inputBytes": 52428800,
@@ -89,7 +92,7 @@
       "storageRoundTrip": true,
       "sha256": "7426629be79bc282dfabce15c8bf8974546b565f618ce020dbc5b7ad1df9de3b",
       "scannerVerdict": "clean",
-      "processorVersion": "ffmpeg version 7.1 Copyright (c) 2000-2024 the FFmpeg developers"
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
     },
     {
       "id": "webm",
@@ -98,9 +101,9 @@
       "executed": true,
       "status": "passed",
       "storageRoundTrip": true,
-      "sha256": "cd529764be4f691314b6854b2bac03b348d18b2c858af5207a74776d9dc95014",
+      "sha256": "ee34d8959856d5349fc7ad4a2e1754cd83dec800dfd8eb34e568409eacf63cff",
       "scannerVerdict": "clean",
-      "processorVersion": "ffmpeg version 7.1 Copyright (c) 2000-2024 the FFmpeg developers"
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
     }
   ],
   "scenarios": [
