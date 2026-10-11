@@ -489,7 +489,7 @@ export function createMediaProcessingApplicationService(deps: {
       if (!sourceScanTimeoutMs) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
       try { scanned = await deps.scanner.scan(bytes, { timeoutMs: sourceScanTimeoutMs }); } catch { return failedAttempt(attemptWithinBudget() ? "MEDIA_SCANNER_UNAVAILABLE" : "MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 }); }
       if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
-      if (!scanned.ok) return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256 });
+      if (!scanned.ok) return failedAttempt(scanned.error.code === "MEDIA_PROCESSING_TIMEOUT" ? "MEDIA_PROCESSING_TIMEOUT" : "MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256 });
       if (scanned.value.verdict !== "clean") return failedAttempt(scanned.value.verdict === "unsafe" ? "MEDIA_UNSAFE_CONTENT" : "MEDIA_SCAN_INCONCLUSIVE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
       if (candidate.kind === "video") {
         if (!deps.videoProcessor) return failedAttempt("MEDIA_PROCESSOR_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
@@ -526,7 +526,7 @@ export function createMediaProcessingApplicationService(deps: {
           if (!attemptWithinBudget()) { await cleanupVideoOutputs(); return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
           if (!outputScan.ok || outputScan.value.verdict !== "clean") {
             await cleanupVideoOutputs();
-            const code = !outputScan.ok ? "MEDIA_SCANNER_UNAVAILABLE" : outputScan.value.verdict === "unsafe" ? "MEDIA_OUTPUT_UNSAFE" : "MEDIA_SCAN_INCONCLUSIVE";
+            const code = !outputScan.ok ? outputScan.error.code === "MEDIA_PROCESSING_TIMEOUT" ? "MEDIA_PROCESSING_TIMEOUT" : "MEDIA_SCANNER_UNAVAILABLE" : outputScan.value.verdict === "unsafe" ? "MEDIA_OUTPUT_UNSAFE" : "MEDIA_SCAN_INCONCLUSIVE";
             return failedAttempt(code, { bytes, mime, hash: sha256, scannerVersion: outputScan.ok ? outputScan.value.version : scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion });
           }
           const outputHash = deps.digest.sha256(variant.bytes);

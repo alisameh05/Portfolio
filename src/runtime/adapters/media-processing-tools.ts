@@ -80,7 +80,10 @@ export function stopActionWithinDeadline(stop: () => Promise<void>, timeoutMs: n
 }
 
 export function monitorBoundedChildOutput(executable: string, args: readonly string[], outputPath: string,
-  limits: { readonly maxBytes: number; readonly timeoutMs: number }, stopExternal?: () => Promise<void>): Promise<void> {
+  limits: { readonly maxBytes: number; readonly timeoutMs: number; readonly timeoutCode?: string }, stopExternal?: () => Promise<void>): Promise<void> {
+  const cleanupReserveMs = stopExternal ? 3_000 : process.platform === "win32" ? 750 : 0;
+  const timeoutCode = limits.timeoutCode ?? "MEDIA_PDF_PROCESSOR_UNAVAILABLE";
+  if (limits.timeoutMs <= cleanupReserveMs) return Promise.reject(new Error(timeoutCode));
   return new Promise((resolve, reject) => {
     const windows = process.platform === "win32";
     const child = spawn(executable, [...args], { stdio: "ignore", windowsHide: true, detached: !windows });
@@ -112,9 +115,9 @@ export function monitorBoundedChildOutput(executable: string, args: readonly str
       })().finally(finish);
     });
     const timeout = setTimeout(() => {
-      failure = new Error("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
+      failure = new Error(timeoutCode);
       void stopTree();
-    }, limits.timeoutMs);
+    }, limits.timeoutMs - cleanupReserveMs);
     const monitor = setInterval(() => {
       if (checking || failure) return;
       checking = true;
@@ -216,14 +219,15 @@ async function toolVersion(executable: string, args: readonly string[], timeoutM
   const image = scanner ? BOUNDED_SCANNER_IMAGE : BOUNDED_PDF_IMAGE;
   const entrypoint = scanner ? "clamscan" : executable;
   const containerName = `portfolio-version-${randomUUID()}`;
+  const executionTimeoutMs = timeoutMs - 1_000;
+  if (executionTimeoutMs < 1) throw new Error("MEDIA_PROCESSING_TIMEOUT");
   let result: Awaited<ReturnType<typeof execFile>>;
   try {
     result = await execFile("docker", ["run", "--rm", "--pull=never", "--name", containerName, "--network=none", "--read-only", "--memory=512m", "--cpus=1", "--pids-limit=32",
       "--ulimit=fsize=4096:4096", "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--entrypoint", entrypoint, image, ...args],
-    { encoding: "utf8", timeout: Math.max(1, Math.min(2_000, timeoutMs)), maxBuffer: 4 * 1024, windowsHide: true });
+    { encoding: "utf8", timeout: Math.min(2_000, executionTimeoutMs), maxBuffer: 4 * 1024, windowsHide: true });
   } catch (cause) {
-    try { await stopDockerContainer(containerName); }
-    catch { throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED"); }
+    if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 1_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
     throw cause;
   }
   const version = `${result.stdout.toString().trim()} ${result.stderr.toString().trim()}`.trim().replace(/[^A-Za-z0-9./_: -]/gu, "").slice(0, 150);
@@ -258,7 +262,7 @@ export function createClamAvScanner(options: { readonly executable?: string; rea
       const remainingMs = () => Math.max(0, deadline - Date.now());
       try {
         if (executable !== "clamscan") return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
-        const versionTimeoutMs = Math.min(2_000, remainingMs());
+        const versionTimeoutMs = Math.min(3_000, remainingMs());
         if (!versionTimeoutMs) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         const scannerVersion = await version(versionTimeoutMs);
         if (!isPinnedClamAvVersion(scannerVersion)) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
@@ -272,16 +276,18 @@ export function createClamAvScanner(options: { readonly executable?: string; rea
               "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--mount", `type=bind,source=${mountSource},target=/work,readonly`,
               "--workdir", "/work", "--entrypoint", "clamscan", BOUNDED_SCANNER_IMAGE, "--no-summary", "--stdout", "/work/candidate.pdf"];
             await monitorBoundedChildOutput("docker", dockerArgs, input,
-              { maxBytes: options.maxBytes ?? MAX_BYTES, timeoutMs: scanTimeoutMs }, () => stopDockerContainer(containerName));
+              { maxBytes: options.maxBytes ?? MAX_BYTES, timeoutMs: scanTimeoutMs, timeoutCode: "MEDIA_PROCESSING_TIMEOUT" }, () => stopDockerContainer(containerName));
             return "clean" as const;
           } catch (cause) {
             const code = typeof cause === "object" && cause !== null && "code" in cause ? String((cause as { code: unknown }).code) : "";
             if (code === "1") return "unsafe" as const;
+            if (cause instanceof Error && cause.message === "MEDIA_PROCESSING_TIMEOUT") throw cause;
             throw new Error("MEDIA_SCANNER_UNAVAILABLE");
           }
         }, options.maxBytes ?? MAX_BYTES);
         return ok({ verdict, version: scannerVersion });
-      } catch {
+      } catch (cause) {
+        if (cause instanceof Error && cause.message === "MEDIA_PROCESSING_TIMEOUT") return safeFailure("MEDIA_PROCESSING_TIMEOUT");
         return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
       }
     },
@@ -426,15 +432,21 @@ function isWebMContainer(bytes: Uint8Array): boolean {
 
 const MP4_BRANDS = new Set(["isom", "iso2", "iso3", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "M4V ", "M4VH", "M4VP", "dash"]);
 
-function isMp4Container(bytes: Uint8Array): boolean {
+export function isMp4Container(bytes: Uint8Array): boolean {
   if (bytes.byteLength < 16 || Buffer.from(bytes.subarray(4, 8)).toString("ascii") !== "ftyp") return false;
   const boxSize = Buffer.from(bytes.subarray(0, 4)).readUInt32BE(0);
   if (boxSize < 16 || boxSize > 4_096 || boxSize > bytes.byteLength || boxSize % 4 !== 0) return false;
   const majorBrand = Buffer.from(bytes.subarray(8, 12)).toString("ascii");
-  return MP4_BRANDS.has(majorBrand);
+  if (MP4_BRANDS.has(majorBrand)) return true;
+  for (let offset = 16; offset < boxSize; offset += 4) {
+    if (MP4_BRANDS.has(Buffer.from(bytes.subarray(offset, offset + 4)).toString("ascii"))) return true;
+  }
+  return false;
 }
 
 async function runVideoTool(executable: string, args: readonly string[], directory: string, timeoutMs: number): Promise<string> {
+  const executionTimeoutMs = timeoutMs - 1_000;
+  if (executionTimeoutMs < 1) throw new Error("MEDIA_VIDEO_PROCESSOR_TIMEOUT");
   const mountSource = directory.replace(/\\/gu, "/");
   const containerName = `portfolio-video-${randomUUID()}`;
   const translated = args.map((argument) => argument.startsWith(`${directory}${process.platform === "win32" ? "\\" : "/"}`)
@@ -443,10 +455,10 @@ async function runVideoTool(executable: string, args: readonly string[], directo
     const result = await execFile("docker", ["run", "--rm", "--pull=never", "--name", containerName, "--network=none", "--read-only",
       "--memory=1g", "--cpus=1", "--pids-limit=64", "--ulimit=fsize=52428800:52428800", "--tmpfs", "/tmp:rw,noexec,nosuid,size=128m",
       "--mount", `type=bind,source=${mountSource},target=/work`, "--workdir", "/work", "--entrypoint", executable, VIDEO_IMAGE, ...translated],
-    { encoding: "utf8", timeout: timeoutMs, maxBuffer: 128 * 1024, windowsHide: true });
+    { encoding: "utf8", timeout: Math.min(timeoutMs, executionTimeoutMs), maxBuffer: 128 * 1024, windowsHide: true });
     return result.stdout.toString();
   } catch (cause) {
-    try { await stopDockerContainer(containerName); } catch { throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED"); }
+    if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 1_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
     const code = typeof cause === "object" && cause !== null && "code" in cause ? String((cause as { code: unknown }).code) : "";
     if (code === "ETIMEDOUT") throw new Error("MEDIA_VIDEO_PROCESSOR_TIMEOUT");
     throw new Error("MEDIA_VIDEO_PROCESSOR_UNAVAILABLE");
@@ -514,7 +526,7 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
             : ["-nostdin", "-v", "error", "-xerror", "-err_detect", "explode", "-i", input, "-map", "0:v:0", "-an", "-sn", "-dn", "-frames:v", String(VIDEO_MAX_FRAMES),
               "-t", String(VIDEO_MAX_DURATION_SECONDS), "-vf", "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
               "-threads", "1", "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "0", "-crf", "40", "-f", "webm", "-y", output];
-          const limits = { maxBytes: VIDEO_MAX_BYTES, timeoutMs: remaining(VIDEO_PROCESS_TIMEOUT_MS), image: VIDEO_IMAGE };
+          const limits = { maxBytes: VIDEO_MAX_BYTES, timeoutMs: remaining(VIDEO_PROCESS_TIMEOUT_MS), image: VIDEO_IMAGE, timeoutCode: "MEDIA_VIDEO_PROCESSOR_TIMEOUT" };
           const command = dockerBoundedCommand("ffmpeg", videoArgs, output, limits);
           await monitorBoundedChildOutput(command.executable, command.args, output, limits, command.stop);
           const outputStat = await assertBoundedFile(output, VIDEO_MAX_BYTES);
