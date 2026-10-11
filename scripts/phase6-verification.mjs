@@ -17,10 +17,12 @@ const UPLOAD_INTENT_EVIDENCE = join(ROOT, "evidence/phase6-upload-intent-148.jso
 const MEDIA_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-media-processing-149.json");
 const IMAGE_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-image-processing-150.json");
 const VIDEO_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-video-processing-151.json");
+const MEDIA_ACCEPTANCE_EVIDENCE = join(ROOT, "evidence/phase6-media-acceptance-152.json");
 const UPLOAD_INTENT_ONLY = process.argv.includes("--upload-intents-only");
 const MEDIA_PROCESSING_ONLY = process.argv.includes("--media-processing-only");
 const IMAGE_PROCESSING_ONLY = process.argv.includes("--image-processing-only");
 const VIDEO_PROCESSING_ONLY = process.argv.includes("--video-processing-only");
+const MEDIA_ACCEPTANCE_ONLY = process.argv.includes("--media-acceptance-only");
 const RUN_TIMEOUT = 180_000;
 
 function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEOUT, input, label = command } = {}) {
@@ -121,7 +123,7 @@ async function main() {
   const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], { cwd: ROOT, env, timeout }).stdout;
   try {
     let config = isolatedPhase6Config(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId);
-    if (UPLOAD_INTENT_ONLY || MEDIA_PROCESSING_ONLY || IMAGE_PROCESSING_ONLY || VIDEO_PROCESSING_ONLY) {
+    if (UPLOAD_INTENT_ONLY || MEDIA_PROCESSING_ONLY || IMAGE_PROCESSING_ONLY || VIDEO_PROCESSING_ONLY || MEDIA_ACCEPTANCE_ONLY) {
       // The disposable Auth instance needs a real non-Owner JWT for the Storage denial matrix.
       // This change is confined to its temporary config; repository and developer Auth settings stay untouched.
       config = config
@@ -196,6 +198,10 @@ async function main() {
         videoProcessor: serviceVersion(video, "ffprobe", "-version"),
         pdfProcessor: serviceVersion(pdf, "ocrmypdf"),
       };
+      if (MEDIA_ACCEPTANCE_ONLY) {
+        const sharpModule = await import("sharp");
+        toolVersions.sharp = `sharp-${sharpModule.default.versions.sharp};libvips-${sharpModule.default.versions.vips ?? "unknown"}`;
+      }
     }
     if (!IMAGE_PROCESSING_ONLY) writeFileSync(join(fixturesDir, "fixture.pdf"), pdfFixture());
     const activeFormats = MEDIA_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
@@ -253,8 +259,9 @@ async function main() {
       PHASE6_IMAGE_FIXTURE_PNG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.png"),
       PHASE6_IMAGE_FIXTURE_JPEG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.jpeg"),
       PHASE6_IMAGE_FIXTURE_WEBP: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.webp"),
-      PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY ? "1" : "0",
-      PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY ? "1" : "0",
+      PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY || MEDIA_ACCEPTANCE_ONLY ? "1" : "0",
+      PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || MEDIA_ACCEPTANCE_ONLY ? "1" : "0",
+      PHASE6_MEDIA_ACCEPTANCE_ONLY: MEDIA_ACCEPTANCE_ONLY ? "1" : "0",
       PHASE6_VIDEO_PROCESSING_MP4_FIXTURE: join(fixturesDir, "fixture.mp4"),
       PHASE6_VIDEO_PROCESSING_WEBM_FIXTURE: join(fixturesDir, "fixture.webm"),
       PHASE6_VIDEO_PROCESSING_UNSUPPORTED_FIXTURE: join(fixturesDir, "fixture-unsupported.mp4"),
@@ -269,13 +276,16 @@ async function main() {
     if (VIDEO_PROCESSING_ONLY) testArgs.push("-t", "processes MP4 and WebM candidates");
     else if (IMAGE_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images");
     else if (MEDIA_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates");
+    else if (MEDIA_ACCEPTANCE_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates");
     const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 300_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
     const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
     processingCounts = existsSync(processingCountsPath) ? JSON.parse(readFileSync(processingCountsPath, "utf8")) : undefined;
     const allAssertions = (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
     const uploadAssertions = allAssertions.filter((item) => !/processes (?:PDF|MP4 and WebM|PNG, JPEG and WebP) candidates/u.test(String(item.fullName ?? "")));
-    const processingAssertions = allAssertions.filter((item) => VIDEO_PROCESSING_ONLY
+    const processingAssertions = allAssertions.filter((item) => MEDIA_ACCEPTANCE_ONLY
+      ? String(item.fullName ?? "").includes("processes PDF candidates and real PNG JPEG WebP images") || String(item.fullName ?? "").includes("processes MP4 and WebM candidates")
+      : VIDEO_PROCESSING_ONLY
       ? String(item.fullName ?? "").includes("processes MP4 and WebM candidates")
       : IMAGE_PROCESSING_ONLY ? String(item.fullName ?? "").includes("processes PNG, JPEG and WebP candidates")
         : String(item.fullName ?? "").includes("processes PDF candidates"));
@@ -289,7 +299,7 @@ async function main() {
         name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
         reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
       })),
-      verdict: testResult.status === 0 && (VIDEO_PROCESSING_ONLY || (uploadAssertions.length === 3 && uploadAssertions.every((item) => item.status === "passed"))) ? "pass" : "fail",
+      verdict: testResult.status === 0 && (VIDEO_PROCESSING_ONLY || MEDIA_ACCEPTANCE_ONLY || (uploadAssertions.length === 3 && uploadAssertions.every((item) => item.status === "passed"))) ? "pass" : "fail",
     };
     mediaProcessingChecks = {
       suite: "tests/database/media-upload-intent.integration.test.ts",
@@ -301,9 +311,9 @@ async function main() {
         name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
         reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
       })),
-      verdict: testResult.status === 0 && processingAssertions.length === 1 && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
+      verdict: testResult.status === 0 && processingAssertions.length === (MEDIA_ACCEPTANCE_ONLY ? 2 : 1) && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
     };
-    if (!VIDEO_PROCESSING_ONLY && uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
+    if (!VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
     if (mediaProcessingChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
     if (IMAGE_PROCESSING_ONLY) {
       const imageUnitJsonPath = join(workdir, "image-unit-vitest.json");
@@ -337,6 +347,7 @@ async function main() {
     }
     if (IMAGE_PROCESSING_ONLY && (!Number.isSafeInteger(processingCounts?.scannerExecutions) || !Number.isSafeInteger(processingCounts?.imageProcessorExecutions))) throw new Error("PHASE6_IMAGE_PROCESSING_TOOL_COUNTS_MISSING");
     if (VIDEO_PROCESSING_ONLY && (!Number.isSafeInteger(processingCounts?.scannerExecutions) || !Number.isSafeInteger(processingCounts?.videoProcessorExecutions))) throw new Error("PHASE6_VIDEO_PROCESSING_TOOL_COUNTS_MISSING");
+    if (MEDIA_ACCEPTANCE_ONLY && processingCounts?.acceptanceExecutions !== PHASE6_FORMATS.length) throw new Error("PHASE6_MEDIA_ACCEPTANCE_FORMAT_COUNTS_MISSING");
   } catch (error) {
     failures.push(error instanceof Error ? error.message : "PHASE6_SETUP_FAILED");
   } finally {
@@ -359,7 +370,7 @@ async function main() {
   const finalSource = getPhase6SourceIdentity();
   if (finalSource.sourceRevision !== source.sourceRevision || finalSource.sourceTreeSha256 !== source.sourceTreeSha256) failures.push("PHASE6_SOURCE_CHANGED_DURING_RUN");
   let report;
-  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY) {
+  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY) {
     report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
     const evaluated = evaluatePhase6Setup(report, source);
     if (evaluated.failures.length) {
@@ -489,7 +500,70 @@ async function main() {
     };
     writeFileSync(IMAGE_PROCESSING_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
   }
-  if (VIDEO_PROCESSING_ONLY) {
+  if (MEDIA_ACCEPTANCE_ONLY) {
+    const unitJsonPath = join(tmpdir(), `phase6-media-acceptance-units-${randomUUID()}.json`);
+    const unitSuites = ["tests/modules/media-acceptance.test.ts", "tests/modules/media-cv-contracts.test.ts"];
+    const unitResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", ...unitSuites,
+      "--reporter=json", `--outputFile=${unitJsonPath}`], { cwd: ROOT, env, encoding: "utf8", timeout: 120_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+    let acceptanceUnitChecks;
+    try {
+      if (unitResult.error || !existsSync(unitJsonPath)) throw new Error("PHASE6_MEDIA_ACCEPTANCE_UNIT_REPORT_MISSING");
+      const unitReport = JSON.parse(readFileSync(unitJsonPath, "utf8"));
+      const assertions = (unitReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
+      acceptanceUnitChecks = { suites: unitSuites, total: assertions.length,
+        passed: assertions.filter((item) => item.status === "passed").length,
+        failed: assertions.filter((item) => item.status === "failed").length,
+        skipped: assertions.filter((item) => item.status === "pending" || item.status === "disabled").length,
+        verdict: unitResult.status === 0 && assertions.length > 0 && assertions.every((item) => item.status === "passed") ? "pass" : "fail" };
+    } finally { if (existsSync(unitJsonPath)) rmSync(unitJsonPath, { force: true }); }
+    if (acceptanceUnitChecks?.verdict !== "pass") failures.push("PHASE6_MEDIA_ACCEPTANCE_UNIT_ASSERTIONS_INVALID");
+    const scenarios = [
+      "T07-01 exact candidate hash, current processing version, same Owner and current kind policy are required",
+      "T07-02 image alt or decorative classification and video/document summaries match actual kind",
+      "T07-03 ownership and public suitability attestations are retained separately from scanner evidence",
+      "T07-04 exact receipt replay is stable and new-key acceptance/reprocessing is rejected after decision",
+      "T07-05 outbox fault rolls back decision, version, receipt and event",
+      "T07-06 distinct-owner batch is complete, sorted, and carries a bounded opaque consistency token",
+      "T07-07 missing, duplicate, foreign and malformed facts fail closed; decorative-only evidence cannot satisfy meaningful use",
+      "T07-08 shared fact read locks block acceptance until the referencing transaction ends",
+      "T07-09 facts and receipts expose no private names, sealed paths, bearer capabilities or provider internals",
+      "T07-10 all six supported formats use real scanner, processor and private Storage evidence",
+    ].map((name) => ({ name, executed: mediaProcessingChecks?.verdict === "pass" && acceptanceUnitChecks?.verdict === "pass",
+      status: mediaProcessingChecks?.verdict === "pass" && acceptanceUnitChecks?.verdict === "pass" ? "passed" : "failed" }));
+    const evidence = { schemaVersion: 1, ticket: 152, parent: 145, runId: randomUUID(), sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256, startedAt, completedAt: new Date().toISOString(),
+      scope: "explicit-media-acceptance-accessibility-attestations-and-transaction-consistent-facts",
+      runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" },
+      toolVersions, services: { postgres: { available: services.postgres.available, majorVersion: services.postgres.majorVersion,
+          independentConnections: services.postgres.independentConnections }, auth: services.auth,
+        storage: services.storage, scanner: { available: true, version: toolVersions.scanner, executions: processingCounts?.scannerExecutions },
+        processors: { pdf: toolVersions.pdfProcessor, image: toolVersions.sharp ?? toolVersions.imageProcessor,
+          video: toolVersions.videoProcessor, executions: { pdf: processingCounts?.processorExecutions,
+            image: processingCounts?.imageProcessorExecutions, video: processingCounts?.videoProcessorExecutions } } },
+      policyIds: { migration: "20261012010000_accept_media_with_editorial_accessibility.sql",
+        processing: { document: "pdf-active-content-deny-1", image: "image-webp-variants-v1", video: "mp4-webm-bounded-variants-1" },
+        acceptance: "media-acceptance-v1", limits: { maxVariants: 8, maxAttemptMs: 60_000 } },
+      principalScope: { database: "shipwithali_application constrained by portfolio_id and owner_id RLS",
+        storage: ["server scoped candidate read and create-only processed outputs", "anonymous denied private processed reads"],
+        environment: "disposable loopback Supabase" },
+      formats: formats.map(({ id, kind, mimeType, executed, status, storageRoundTrip, scannerVerdict, processorVersion }) =>
+        ({ id, kind, mimeType, executed, status, storageRoundTrip, scannerVerdict, processorVersion })),
+      checks: { integration: mediaProcessingChecks, application: acceptanceUnitChecks,
+        acceptanceOperations: processingCounts?.acceptanceExecutions ?? 0 }, scenarios, cleanup,
+      verdict: mediaProcessingChecks?.verdict === "pass" && acceptanceUnitChecks?.verdict === "pass" &&
+        processingCounts?.acceptanceExecutions === PHASE6_FORMATS.length && formats.length === PHASE6_FORMATS.length &&
+        formats.every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:media-acceptance"],
+      limitations: ["This ticket proves Media acceptance and fact consistency; integrated Content/CV workflows and the full Phase 6 gate remain separate tickets."] };
+    writeFileSync(MEDIA_ACCEPTANCE_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+    console.log(JSON.stringify({ ticket: 152, runId: evidence.runId, sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256, verdict: evidence.verdict,
+      acceptanceOperations: processingCounts?.acceptanceExecutions, formats: formats.map(({ id, status }) => ({ id, status })),
+      integration: mediaProcessingChecks, application: acceptanceUnitChecks, cleanup, failures,
+      evidence: "evidence/phase6-media-acceptance-152.json" }, null, 2));
+    if (evidence.verdict !== "pass") process.exitCode = 1;
+  } else if (VIDEO_PROCESSING_ONLY) {
     const evidence = mediaProcessingChecks === undefined ? undefined : JSON.parse(readFileSync(VIDEO_PROCESSING_EVIDENCE, "utf8"));
     console.log(JSON.stringify({ ticket: 151, runId: evidence?.runId, sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256,
       verdict: evidence?.verdict ?? "fail", mediaProcessingChecks, cleanup, failures, evidence: evidence === undefined ? undefined : "evidence/phase6-video-processing-151.json" }, null, 2));

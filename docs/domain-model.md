@@ -189,6 +189,11 @@ Evidence state is internal editorial information. It must not be rendered as an 
 - Uploading creates no public entitlement. A Media asset remains private until its type, safety, ownership, and public suitability are accepted.
 - Meaningful images require an approved non-visual description; decorative images require an explicit decorative classification.
 - Meaningful video requires the approved caption or summary appropriate to its public use.
+- Acceptance snapshots the exact current processing evidence and outputs together with separate Owner attestations of ownership and public suitability; it does not replace scanner or processor evidence.
+- Acceptance is a terminal decision for the current candidate. A different idempotency key cannot create a second acceptance or restart processing after that decision.
+- Acceptance facts are read inside the caller's transaction and hold shared per-asset locks until it ends. Acceptance and processing commits take the corresponding exclusive lock, so a referencing decision cannot race with a facts read.
+- A consistency version is an opaque, bounded token over the complete, sorted fact set, intended use, and current processing policy. Missing or foreign assets fail the batch closed.
+- A decorative-only image can satisfy an explicitly decorative use, but cannot satisfy a supporting-artifact use that requires meaningful visual content.
 - A Revision may reference a Media asset only by stable identity. Moving storage providers or regenerating variants does not change that identity.
 - A public page must remain useful when rich media cannot load; media failure cannot block its core message or navigation.
 
