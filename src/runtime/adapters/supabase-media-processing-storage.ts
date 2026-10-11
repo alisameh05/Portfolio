@@ -57,9 +57,9 @@ export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProce
   if (candidateBucket === processedBucket) throw new TypeError("Candidate and processed buckets must be separate.");
   const fetcher = options.fetcher ?? fetch;
   const headers = { apikey: options.serviceRoleKey, authorization: `Bearer ${options.serviceRoleKey}` };
-  const request = (path: string, init?: RequestInit) => {
+  const request = (path: string, init?: RequestInit, timeoutMs = 10_000) => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10_000);
+    const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(10_000, timeoutMs)));
     return fetcher(new URL(`/storage/v1${path}`, base), { ...init, signal: controller.signal, headers: { ...headers, ...(init?.headers ?? {}) } })
       .finally(() => clearTimeout(timer));
   };
@@ -67,7 +67,7 @@ export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProce
   return {
     async readCandidate(input) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 10_000);
+      const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(10_000, input.timeoutMs ?? 10_000)));
       try {
         const path = objectPath("candidate", input.portfolioId, input.mediaId, input.uploadIntentId, input.objectId);
         const response = await fetcher(new URL(`/storage/v1/object/${encodeURIComponent(candidateBucket)}/${path}`, base), {
@@ -101,18 +101,18 @@ export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProce
     },
   };
 
-  async function sealProcessed(input: { readonly portfolioId: StableId<string>; readonly mediaId: StableId<string>; readonly outputObjectId: StableId<string>; readonly sourceObjectId: StableId<string>; readonly bytes: Uint8Array; readonly sha256: string }, mimeType: string, extension: string): Promise<Result<{ readonly objectId: StableId<string>; readonly sha256: string }, Rejection>> {
-      try {
-        const digest = createHash("sha256").update(input.bytes).digest("hex");
-        if (digest !== input.sha256 || !/^[0-9a-f]{64}$/.test(input.sha256)) return err({ kind: "validation", code: "MEDIA_OUTPUT_HASH_MISMATCH" });
-        const path = objectPath("processed", input.portfolioId, input.mediaId, input.outputObjectId, `${input.sha256}.${extension}`);
-        const response = await request(`/object/${encodeURIComponent(processedBucket)}/${path}`, {
-          method: "POST",
-          headers: { "content-type": mimeType, "x-upsert": "false" },
-          body: (() => { const copy = new ArrayBuffer(input.bytes.byteLength); new Uint8Array(copy).set(input.bytes); return copy; })(),
-        });
-        if (!response.ok) return unavailable();
-        return ok({ objectId: input.outputObjectId as StableId<string>, sha256: digest });
-      } catch { return unavailable(); }
-    }
+  async function sealProcessed(input: { readonly portfolioId: StableId<string>; readonly mediaId: StableId<string>; readonly outputObjectId: StableId<string>; readonly sourceObjectId: StableId<string>; readonly bytes: Uint8Array; readonly sha256: string; readonly timeoutMs?: number }, mimeType: string, extension: string): Promise<Result<{ readonly objectId: StableId<string>; readonly sha256: string }, Rejection>> {
+    try {
+      const digest = createHash("sha256").update(input.bytes).digest("hex");
+      if (digest !== input.sha256 || !/^[0-9a-f]{64}$/.test(input.sha256)) return err({ kind: "validation", code: "MEDIA_OUTPUT_HASH_MISMATCH" });
+      const path = objectPath("processed", input.portfolioId, input.mediaId, input.outputObjectId, `${input.sha256}.${extension}`);
+      const response = await request(`/object/${encodeURIComponent(processedBucket)}/${path}`, {
+        method: "POST",
+        headers: { "content-type": mimeType, "x-upsert": "false" },
+        body: (() => { const copy = new ArrayBuffer(input.bytes.byteLength); new Uint8Array(copy).set(input.bytes); return copy; })(),
+      }, input.timeoutMs ?? 10_000);
+      if (!response.ok) return unavailable();
+      return ok({ objectId: input.outputObjectId as StableId<string>, sha256: digest });
+    } catch { return unavailable(); }
+  }
 }

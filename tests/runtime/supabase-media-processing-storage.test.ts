@@ -38,6 +38,17 @@ describe("Supabase Media processing Storage adapter", () => {
     expect(chunksRead).toBe(0);
   });
 
+  it("aborts a candidate fetch when its remaining processing budget expires", async () => {
+    let aborted = false;
+    const fetcher: typeof fetch = async (_input, init) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => { aborted = true; reject(new Error("aborted")); }, { once: true });
+    });
+    const storage = createSupabaseMediaProcessingStorage({ storageUrl: "http://127.0.0.1:57321", serviceRoleKey: "local-service-role", fetcher });
+    const result = await storage.readCandidate({ ...ids, timeoutMs: 5 });
+    expect(aborted).toBe(true);
+    expect(result).toMatchObject({ ok: false, error: { code: "MEDIA_STORAGE_UNAVAILABLE" } });
+  });
+
   it("seals a create-only private WebM with its verified digest and removes the exact variant on cleanup", async () => {
     const requests: Array<{ readonly url: URL; readonly method: string; readonly headers: Headers; readonly body?: BodyInit | null }> = [];
     const fetcher: typeof fetch = async (input, init) => {

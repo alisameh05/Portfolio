@@ -523,6 +523,7 @@ export function createMediaProcessingApplicationService(deps: {
           if (!outputScanTimeoutMs) { await cleanupVideoOutputs(); return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
           try { outputScan = await deps.scanner.scan(variant.bytes, { timeoutMs: outputScanTimeoutMs }); }
           catch { await cleanupVideoOutputs(); return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
+          if (!attemptWithinBudget()) { await cleanupVideoOutputs(); return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
           if (!outputScan.ok || outputScan.value.verdict !== "clean") {
             await cleanupVideoOutputs();
             const code = !outputScan.ok ? "MEDIA_SCANNER_UNAVAILABLE" : outputScan.value.verdict === "unsafe" ? "MEDIA_OUTPUT_UNSAFE" : "MEDIA_SCAN_INCONCLUSIVE";

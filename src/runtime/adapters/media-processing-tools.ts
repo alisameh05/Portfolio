@@ -211,7 +211,7 @@ export function runWithBoundedOutput(executable: string, args: readonly string[]
   return monitorBoundedChildOutput(command.executable, command.args, outputPath, limits, command.stop);
 }
 
-async function toolVersion(executable: string, args: readonly string[]): Promise<string> {
+async function toolVersion(executable: string, args: readonly string[], timeoutMs = 2_000): Promise<string> {
   const scanner = executable === "clamscan";
   const image = scanner ? BOUNDED_SCANNER_IMAGE : BOUNDED_PDF_IMAGE;
   const entrypoint = scanner ? "clamscan" : executable;
@@ -220,7 +220,7 @@ async function toolVersion(executable: string, args: readonly string[]): Promise
   try {
     result = await execFile("docker", ["run", "--rm", "--pull=never", "--name", containerName, "--network=none", "--read-only", "--memory=512m", "--cpus=1", "--pids-limit=32",
       "--ulimit=fsize=4096:4096", "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--entrypoint", entrypoint, image, ...args],
-    { encoding: "utf8", timeout: 2_000, maxBuffer: 4 * 1024, windowsHide: true });
+    { encoding: "utf8", timeout: Math.max(1, Math.min(2_000, timeoutMs)), maxBuffer: 4 * 1024, windowsHide: true });
   } catch (cause) {
     try { await stopDockerContainer(containerName); }
     catch { throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED"); }
@@ -247,12 +247,12 @@ async function withTempPdf<T>(bytes: Uint8Array, action: (directory: string, inp
 export function createClamAvScanner(options: { readonly executable?: string; readonly maxBytes?: number; readonly timeoutMs?: number } = {}): TrustedByteScannerPort {
   const executable = options.executable ?? "clamscan";
   let versionPromise: Promise<string> | undefined;
-  const version = () => versionPromise ??= toolVersion(executable, ["--version"]).catch((error: unknown) => { versionPromise = undefined; throw error; });
+  const version = (timeoutMs: number) => versionPromise ??= toolVersion(executable, ["--version"], timeoutMs).catch((error: unknown) => { versionPromise = undefined; throw error; });
   return {
     async scan(bytes, scanOptions) {
       try {
         if (executable !== "clamscan") return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
-        const scannerVersion = await version();
+        const scannerVersion = await version(Math.min(2_000, scanOptions?.timeoutMs ?? SCAN_TIMEOUT_MS));
         if (!isPinnedClamAvVersion(scannerVersion)) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         const verdict = await withTempPdf(bytes, async (directory, input) => {
           try {
@@ -443,18 +443,18 @@ async function runVideoTool(executable: string, args: readonly string[], directo
   }
 }
 
-async function probeVideo(path: string, directory: string): Promise<VideoProbe> {
+async function probeVideo(path: string, directory: string, timeoutMs: number): Promise<VideoProbe> {
   const output = await runVideoTool("ffprobe", ["-v", "error", "-err_detect", "explode", "-read_intervals", "%+61", "-count_frames", "-select_streams", "v:0", "-show_entries",
-    "format=format_name,duration:stream=codec_type,codec_name,width,height,avg_frame_rate,nb_read_frames", "-of", "json", path], directory, 3_000);
+    "format=format_name,duration:stream=codec_type,codec_name,width,height,avg_frame_rate,nb_read_frames", "-of", "json", path], directory, timeoutMs);
   try { return JSON.parse(output) as VideoProbe; } catch { throw new Error("MEDIA_VIDEO_INPUT_INVALID"); }
 }
 
 /** Detects actual MP4/WebM structure, bounds decoded work, transcodes one normalized private variant, then re-probes it. */
 export function createFfmpegVideoProcessor(): VideoProcessorPort {
   let versionPromise: Promise<string> | undefined;
-  const version = () => versionPromise ??= (async () => {
+  const version = (timeoutMs: number) => versionPromise ??= (async () => {
     const directory = await mkdtemp(join(tmpdir(), "portfolio-video-version-"));
-    try { return await runVideoTool("ffmpeg", ["-version"], directory, 2_000); }
+    try { return await runVideoTool("ffmpeg", ["-version"], directory, timeoutMs); }
     finally { await rm(directory, { recursive: true, force: true }).catch(() => undefined); }
   })().then((value) => {
       const firstLine = value.split(/\r?\n/u, 1)[0] ?? "";
@@ -462,19 +462,25 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
       return firstLine.replace(/[^A-Za-z0-9./_: -]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, 150);
     }).catch((error: unknown) => { versionPromise = undefined; throw error; });
   return {
-    async process(bytes) {
+    async process(bytes, processOptions) {
+      const deadline = Date.now() + Math.max(1, Math.min(60_000, processOptions?.timeoutMs ?? 60_000));
+      const remaining = (maximum: number) => {
+        const value = Math.min(maximum, deadline - Date.now());
+        if (value < 1) throw new Error("MEDIA_VIDEO_PROCESSOR_TIMEOUT");
+        return value;
+      };
       if (bytes.byteLength < 12 || bytes.byteLength > VIDEO_MAX_BYTES) return err({ kind: "validation", code: "MEDIA_BYTES_OUT_OF_BOUNDS" });
       const detectedMimeType = isWebMContainer(bytes) ? "video/webm"
         : isMp4Container(bytes) ? "video/mp4" : undefined;
       if (!detectedMimeType) return err({ kind: "validation", code: "MEDIA_VIDEO_INPUT_INVALID" });
       try {
-        const processorVersion = await version();
+        const processorVersion = await version(remaining(2_000));
         const directory = await mkdtemp(join(tmpdir(), "portfolio-video-"));
         const input = join(directory, detectedMimeType === "video/mp4" ? "candidate.mp4" : "candidate.webm");
         const output = join(directory, detectedMimeType === "video/mp4" ? "normalized.mp4" : "normalized.webm");
         try {
           await writeFile(input, bytes, { flag: "wx", mode: 0o600 });
-          const source = await probeVideo(input, directory);
+          const source = await probeVideo(input, directory, remaining(3_000));
           const format = source.format?.format_name ?? "";
           const stream = source.streams?.[0];
           const duration = Number(source.format?.duration);
@@ -496,13 +502,13 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
             : ["-nostdin", "-v", "error", "-xerror", "-err_detect", "explode", "-i", input, "-map", "0:v:0", "-an", "-sn", "-dn", "-frames:v", String(VIDEO_MAX_FRAMES),
               "-t", String(VIDEO_MAX_DURATION_SECONDS), "-vf", "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
               "-threads", "1", "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "0", "-crf", "40", "-f", "webm", "-y", output];
-          const limits = { maxBytes: VIDEO_MAX_BYTES, timeoutMs: VIDEO_PROCESS_TIMEOUT_MS, image: VIDEO_IMAGE };
+          const limits = { maxBytes: VIDEO_MAX_BYTES, timeoutMs: remaining(VIDEO_PROCESS_TIMEOUT_MS), image: VIDEO_IMAGE };
           const command = dockerBoundedCommand("ffmpeg", videoArgs, output, limits);
           await monitorBoundedChildOutput(command.executable, command.args, output, limits, command.stop);
           const outputStat = await assertBoundedFile(output, VIDEO_MAX_BYTES);
           void outputStat;
           const outputBytes = await readBoundedFile(output, VIDEO_MAX_BYTES);
-          const outputProbe = await probeVideo(output, directory);
+          const outputProbe = await probeVideo(output, directory, remaining(3_000));
           const outputStream = outputProbe.streams?.[0];
           const outputFormat = outputProbe.format?.format_name ?? "";
           const outputCodec = outputStream?.codec_name ?? "";

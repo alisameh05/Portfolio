@@ -130,7 +130,9 @@ export function createPostgresMediaProcessingRepository(input: {
           const executor = resolvePostgresTransaction(context); await setScope(context, input.scope);
           const timeoutMs = Math.max(1, Math.min(3_000, query.timeoutMs ?? 3_000));
           await sql`select set_config('lock_timeout', ${`${Math.min(1_000, timeoutMs)}ms`}, true)`.execute(executor);
-          await sql`select set_config('statement_timeout', ${`${timeoutMs}ms`}, true)`.execute(executor);
+          await sql`select set_config('statement_timeout', '3s', true)`.execute(executor);
+          // PostgreSQL 17 transaction_timeout bounds the whole multi-statement receipt commit.
+          await sql`select set_config('transaction_timeout', ${`${timeoutMs}ms`}, true)`.execute(executor);
           const key = keyHash(query.idempotencyKey);
           const releaseClaim = async () => sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
             and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);

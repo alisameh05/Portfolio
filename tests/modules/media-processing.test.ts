@@ -30,7 +30,8 @@ const videoCommand = { ...command, detectedMediaType: "video/mp4", detectedByteL
 function harness(options: { readonly state?: MediaProcessingCandidate["state"]; readonly replay?: boolean; readonly commitError?: string; readonly bytes?: Uint8Array;
   readonly elapsedDuringScanMs?: number; readonly fileName?: string; readonly scannerUnavailable?: boolean; readonly sealedObjectId?: StableId<"MediaObject">;
   readonly mediaCandidate?: MediaProcessingCandidate; readonly videoProcessorUnavailable?: boolean; readonly videoSealUnavailable?: boolean; readonly candidateUnavailable?: boolean;
-  readonly videoVariantCount?: number; readonly malformedVideoOutput?: boolean; readonly elapsedDuringVideoSealMs?: number } = {}) {
+  readonly videoVariantCount?: number; readonly malformedVideoOutput?: boolean; readonly elapsedDuringVideoSealMs?: number;
+  readonly elapsedDuringVideoProcessMs?: number; readonly elapsedDuringVideoOutputScanMs?: number } = {}) {
   const target = options.mediaCandidate ?? candidate;
   const commits: Parameters<MediaProcessingRepositoryPort["commitAttempt"]>[0][] = [];
   const orphanCalls: Parameters<MediaProcessingRepositoryPort["recordOrphan"]>[0][] = [];
@@ -39,8 +40,10 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
   const read = vi.fn(async () => options.candidateUnavailable
     ? { ok: false as const, error: { kind: "not_found" as const, code: "MEDIA_UPLOAD_OBJECT_MISSING" } }
     : { ok: true as const, value: options.bytes ?? (target.kind === "video" ? mp4 : pdf) });
+  let scanCount = 0;
   const scan = vi.fn(async () => {
-    nowMs += options.elapsedDuringScanMs ?? 0;
+    scanCount += 1;
+    nowMs += scanCount === 1 ? options.elapsedDuringScanMs ?? 0 : options.elapsedDuringVideoOutputScanMs ?? 0;
     return { ok: true as const, value: { verdict: "clean" as const, version: "ClamAV pinned" } };
   });
   const process = vi.fn(async () => ({ ok: true as const, value: { bytes: output, version: "OCRmyPDF pinned", policyVersion: "pdf-policy-1" } }));
@@ -75,8 +78,9 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
       discardSealedObject: discard,
     },
     scanner: { scan: options.scannerUnavailable ? vi.fn(async () => ({ ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_SCANNER_UNAVAILABLE" } })) : scan }, processor: { process },
-    ...(target.kind === "video" ? { videoProcessor: { async process() {
+    ...(target.kind === "video" ? { videoProcessor: { async process(_bytes: Uint8Array, _options?: { readonly timeoutMs?: number }) {
       if (options.videoProcessorUnavailable) return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_PROCESSOR_UNAVAILABLE" } };
+      nowMs += options.elapsedDuringVideoProcessMs ?? 0;
       const variants = Array.from({ length: options.videoVariantCount ?? 1 }, (_, index) => ({ variantName: `variant-${index}`,
         mimeType: "video/mp4" as const, bytes: videoOutput, width: 16, height: 16, codec: options.malformedVideoOutput ? "not-valid" : "h264" }));
       return { ok: true as const, value: { detectedMimeType: "video/mp4" as const, variants, version: "ffmpeg pinned", policyVersion: "video-policy-1" } };
@@ -220,6 +224,13 @@ describe("trusted media processing", () => {
     const nearDeadline = harness({ mediaCandidate: videoCandidate, elapsedDuringVideoSealMs: 59_000 });
     expect(await nearDeadline.service.record(videoCommand)).toMatchObject({ ok: true });
     expect(nearDeadline.commits[0]).toMatchObject({ timeoutMs: 1_000, attempt: { result: "passed", processingDurationMs: 59_000 } });
+  });
+
+  it("passes the final scanner its remaining timeout and records timeout when it overruns", async () => {
+    const h = harness({ mediaCandidate: videoCandidate, elapsedDuringVideoProcessMs: 59_500, elapsedDuringVideoOutputScanMs: 1_000 });
+    expect(await h.service.record(videoCommand)).toMatchObject({ ok: false, error: { code: "MEDIA_PROCESSING_TIMEOUT" } });
+    expect(h.scan).toHaveBeenNthCalledWith(2, videoOutput, { timeoutMs: 500 });
+    expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", findings: ["MEDIA_PROCESSING_TIMEOUT"], processingDurationMs: 60_500 });
   });
 
   it("rejects malformed video variants and more than eight outputs", async () => {
