@@ -2,9 +2,27 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, isolatedPhase6Config,
-  loadPhase6PredecessorContexts, makePhase6Report, scrubPhase6Environment,
+  loadPhase6PredecessorContexts, makePhase6Report, phase6CvScenarioProof, scrubPhase6Environment,
 } from "../../scripts/phase6-verification-support.mjs";
 import { createBarrier, createDeterministicClock, createUuidV7Sequence } from "../phase6/fixtures/deterministic.mjs";
+
+test("CV evidence requires recorded execution of every T09 criterion", () => {
+  const counts = { cvScenarios: Array.from({ length: 9 }, (_, index) => ({
+    name: `T09-0${index + 1} actual assertion`, executed: true, status: "passed",
+  })) };
+  assert.equal(phase6CvScenarioProof(counts), true);
+  assert.equal(phase6CvScenarioProof(undefined), false);
+  assert.equal(phase6CvScenarioProof({ cvScenarios: [] }), false);
+  const missing = structuredClone(counts);
+  missing.cvScenarios[8].name = "T09-01 duplicate";
+  assert.equal(phase6CvScenarioProof(missing), false);
+  const skipped = structuredClone(counts);
+  skipped.cvScenarios[0].executed = false;
+  assert.equal(phase6CvScenarioProof(skipped), false);
+  const failed = structuredClone(counts);
+  failed.cvScenarios[0].status = "failed";
+  assert.equal(phase6CvScenarioProof(failed), false);
+});
 
 test("the complete real integration gate rejects skipped, missing, failed, and partial test reports", () => {
   const report = {

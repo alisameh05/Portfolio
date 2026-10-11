@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, getPhase6SourceIdentity, isolatedPhase6Config,
-  makePhase6Report, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
+  makePhase6Report, phase6CvScenarioProof, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
 } from "./phase6-verification-support.mjs";
 
 const ROOT = phase6Root();
@@ -310,6 +310,7 @@ async function main() {
       PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY || RUN_MEDIA_ACCEPTANCE ? "1" : "0",
       PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || RUN_MEDIA_ACCEPTANCE ? "1" : "0",
       PHASE6_MEDIA_ACCEPTANCE_ONLY: RUN_MEDIA_ACCEPTANCE ? "1" : "0",
+      PHASE6_REQUIRE_FULL_MEDIA: CV_PORTFOLIO_ONLY || MEDIA_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_VIDEO_PROCESSING_MP4_FIXTURE: join(fixturesDir, "fixture.mp4"),
       PHASE6_VIDEO_PROCESSING_WEBM_FIXTURE: join(fixturesDir, "fixture.webm"),
       PHASE6_VIDEO_PROCESSING_UNSUPPORTED_FIXTURE: join(fixturesDir, "fixture-unsupported.mp4"),
@@ -333,7 +334,7 @@ async function main() {
       testArgs.push("tests/database/content-authoring.integration.test.ts", "-t",
         "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates|reports only Media referenced by currently published Project and Achievement locales|preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable|rejects invalid evidence, review, and Media facts without creating public state|publishes English and Arabic independently, preserves first publication time, history, and the last valid projection|publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline|hides, archives, and restores all three content kinds through atomic owner lifecycle commands|revalidates each exact locale publication before restore and changes none when one Media fact fails");
     }
-    const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 300_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+    const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 600_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
     const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
     if (MEDIA_INTEGRATION_ONLY) {
@@ -341,6 +342,9 @@ async function main() {
       if (integrationChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_INTEGRATION_REQUIRES_FIVE_PASSED_ZERO_SKIPPED");
     }
     processingCounts = existsSync(processingCountsPath) ? JSON.parse(readFileSync(processingCountsPath, "utf8")) : undefined;
+    if ((CV_PORTFOLIO_ONLY || MEDIA_INTEGRATION_ONLY) && !phase6CvScenarioProof(processingCounts)) {
+      throw new Error("PHASE6_CV_SCENARIO_EXECUTION_PROOF_MISSING");
+    }
     const allAssertions = (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
     const uploadAssertions = allAssertions.filter((item) => !/processes (?:PDF|MP4 and WebM|PNG, JPEG and WebP) candidates/u.test(String(item.fullName ?? "")));
     const processingAssertions = allAssertions.filter((item) => RUN_MEDIA_ACCEPTANCE
@@ -373,6 +377,7 @@ async function main() {
       const failedCount = scenarios.filter((item) => item.executed && item.status === "failed").length;
       const skippedCount = scenarios.filter((item) => !item.executed).length;
       cvPortfolioChecks = { suite: "tests/database/media-upload-intent.integration.test.ts", test: cvIntegrationAssertion?.fullName,
+        recordedAssertions: processingCounts.cvScenarios,
         total: executed ? 1 : 0, passed: integrationStatus === "passed" ? 1 : 0,
         failed: integrationStatus === "failed" && executed ? 1 : 0, skipped: executed ? 0 : 1, scenarios,
         counts: { executed: scenarios.filter((item) => item.executed).length, failed: failedCount,

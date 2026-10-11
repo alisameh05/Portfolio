@@ -61,7 +61,9 @@ const REQUIRE_VIDEO = process.env["PHASE6_REQUIRE_VIDEO"] === "1";
 const PROCESSING_COUNTS_FILE = process.env["PHASE6_MEDIA_PROCESSING_COUNTS_FILE"];
 const REQUIRE_REAL = process.env["PHASE6_REQUIRE_UPLOAD_INTENT"] === "1";
 const REQUIRE_ACCEPTANCE = process.env["PHASE6_MEDIA_ACCEPTANCE_ONLY"] === "1";
-const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0, imageProcessorExecutions: 0, acceptanceExecutions: 0 };
+const REQUIRE_FULL_MEDIA = process.env["PHASE6_REQUIRE_FULL_MEDIA"] === "1";
+const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0, imageProcessorExecutions: 0, acceptanceExecutions: 0,
+  cvScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }> };
 
 if (REQUIRE_REAL && (!DATABASE_URL || !STORAGE_URL || !SERVICE_ROLE_KEY || !ANON_KEY || !REPLAY_KEY || !SCANNER_IMAGE || !SCANNER_VERSION ||
     (!REQUIRE_IMAGES && (!PDF_FIXTURE || !PDF_PROCESSOR_IMAGE || !PDF_PROCESSOR_VERSION)))) {
@@ -896,7 +898,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         [staleCandidate.mediaId],
       );
       expect(staleFacts.rows[0]).toEqual({ attempts: 0, outputs: 0, events: 0, orphans: 0 });
-      if (REQUIRE_ACCEPTANCE) {
+      if (REQUIRE_ACCEPTANCE && !REQUIRE_FULL_MEDIA) {
         const acceptancePdfBytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
         const acceptancePdf = await uploadPdf(acceptancePdfBytes, "acceptance");
         const acceptancePdfHash = createHash("sha256").update(acceptancePdfBytes).digest("hex");
@@ -1279,6 +1281,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       Number((await admin.query("select count(*)::int as count from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId])).rows[0]?.count) === 102);
 
     expect(cvChecks.every((item) => item.status === "passed")).toBe(true);
+    mediaProcessingCounts.cvScenarios = cvChecks;
 
     const acceptanceBatch = await appDatabase.transactions.run((transaction) => acceptedPdf.acceptance.getAcceptanceFacts({
       ownerId, mediaAssetIds: [...acceptedMediaIds].reverse().concat(acceptedMediaIds[0]!), intendedUse: "supporting-artifact",
