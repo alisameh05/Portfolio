@@ -219,7 +219,7 @@ describe("trusted media processing", () => {
 
     const stale = harness({ mediaCandidate: videoCandidate, commitError: "MEDIA_VERSION_MISMATCH" });
     expect(await stale.service.record(videoCommand)).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
-    expect(stale.discard).toHaveBeenCalledWith({ portfolioId: videoCandidate.portfolioId, mediaId, objectId: outputObjectId, sha256: sha(videoOutput) });
+    expect(stale.discard).toHaveBeenCalledWith({ portfolioId: videoCandidate.portfolioId, mediaId, objectId: outputObjectId, sha256: sha(videoOutput), mimeType: "video/mp4" });
   });
 
   it("bounds the video commit by the remaining processing budget and records elapsed time", async () => {
