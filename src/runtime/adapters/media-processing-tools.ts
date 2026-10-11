@@ -377,6 +377,43 @@ function rational(value: string | undefined): number | undefined {
   return numerator / denominator;
 }
 
+function readEbmlVint(bytes: Uint8Array, offset: number, elementId: boolean): { readonly length: number; readonly value: bigint } | undefined {
+  if (offset >= bytes.byteLength) return undefined;
+  const first = bytes[offset]!;
+  let marker = 0x80;
+  let length = 1;
+  while (length <= 8 && (first & marker) === 0) { marker >>= 1; length += 1; }
+  if (length > 8 || offset + length > bytes.byteLength || (elementId && length > 4)) return undefined;
+  let value = BigInt(elementId ? first : first & (marker - 1));
+  for (let index = 1; index < length; index += 1) value = value * 256n + BigInt(bytes[offset + index]!);
+  return { length, value };
+}
+
+function isWebMContainer(bytes: Uint8Array): boolean {
+  if (bytes.byteLength < 5 || bytes[0] !== 0x1a || bytes[1] !== 0x45 || bytes[2] !== 0xdf || bytes[3] !== 0xa3) return false;
+  const headerSize = readEbmlVint(bytes, 4, false);
+  if (!headerSize) return false;
+  const unknownSize = (1n << BigInt(7 * headerSize.length)) - 1n;
+  const headerStart = 4 + headerSize.length;
+  const headerEndBig = BigInt(headerStart) + headerSize.value;
+  if (headerSize.value === unknownSize || headerSize.value > 1024n || headerEndBig > BigInt(bytes.byteLength)) return false;
+  const headerEnd = Number(headerEndBig);
+  let offset = headerStart;
+  while (offset < headerEnd) {
+    const id = readEbmlVint(bytes, offset, true);
+    if (!id) return false;
+    offset += id.length;
+    const size = readEbmlVint(bytes, offset, false);
+    if (!size) return false;
+    offset += size.length;
+    const end = BigInt(offset) + size.value;
+    if (size.value === (1n << BigInt(7 * size.length)) - 1n || end > BigInt(headerEnd)) return false;
+    if (id.value === 0x4282n) return size.value === 4n && Buffer.from(bytes.subarray(offset, Number(end))).toString("ascii") === "webm";
+    offset = Number(end);
+  }
+  return false;
+}
+
 async function runVideoTool(executable: string, args: readonly string[], directory: string, timeoutMs: number): Promise<string> {
   const mountSource = directory.replace(/\\/gu, "/");
   const containerName = `portfolio-video-${randomUUID()}`;
@@ -397,7 +434,7 @@ async function runVideoTool(executable: string, args: readonly string[], directo
 }
 
 async function probeVideo(path: string, directory: string): Promise<VideoProbe> {
-  const output = await runVideoTool("ffprobe", ["-v", "error", "-read_intervals", "%+61", "-count_frames", "-select_streams", "v:0", "-show_entries",
+  const output = await runVideoTool("ffprobe", ["-v", "error", "-err_detect", "explode", "-read_intervals", "%+61", "-count_frames", "-select_streams", "v:0", "-show_entries",
     "format=format_name,duration:stream=codec_type,codec_name,width,height,avg_frame_rate,nb_read_frames", "-of", "json", path], directory, 3_000);
   try { return JSON.parse(output) as VideoProbe; } catch { throw new Error("MEDIA_VIDEO_INPUT_INVALID"); }
 }
@@ -417,7 +454,7 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
   return {
     async process(bytes) {
       if (bytes.byteLength < 12 || bytes.byteLength > VIDEO_MAX_BYTES) return err({ kind: "validation", code: "MEDIA_BYTES_OUT_OF_BOUNDS" });
-      const detectedMimeType = bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3 ? "video/webm"
+      const detectedMimeType = isWebMContainer(bytes) ? "video/webm"
         : new TextDecoder("ascii").decode(bytes.subarray(4, 8)) === "ftyp" ? "video/mp4" : undefined;
       if (!detectedMimeType) return err({ kind: "validation", code: "MEDIA_VIDEO_INPUT_INVALID" });
       try {
@@ -433,7 +470,7 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
           const duration = Number(source.format?.duration);
           const frameRate = rational(stream?.avg_frame_rate);
           const frames = Number(stream?.nb_read_frames);
-          const expectedFormat = detectedMimeType === "video/mp4" ? /(?:^|,)mov(?:,|$)/u.test(format) : /webm|matroska/u.test(format);
+          const expectedFormat = detectedMimeType === "video/mp4" ? /(?:^|,)mov(?:,|$)/u.test(format) : isWebMContainer(bytes);
           const supportedCodec = detectedMimeType === "video/mp4" ? stream?.codec_name === "h264" : ["vp8", "vp9"].includes(stream?.codec_name ?? "");
           if (!expectedFormat || !stream || stream.codec_type !== "video" || !supportedCodec ||
               !Number.isFinite(duration) || duration <= 0 || duration > VIDEO_MAX_DURATION_SECONDS ||
@@ -443,10 +480,10 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
             return err({ kind: "validation", code: "MEDIA_VIDEO_INPUT_UNSUPPORTED" });
           }
           const videoArgs = detectedMimeType === "video/mp4"
-            ? ["-nostdin", "-v", "error", "-i", input, "-map", "0:v:0", "-an", "-sn", "-dn", "-frames:v", String(VIDEO_MAX_FRAMES),
+            ? ["-nostdin", "-v", "error", "-xerror", "-err_detect", "explode", "-i", input, "-map", "0:v:0", "-an", "-sn", "-dn", "-frames:v", String(VIDEO_MAX_FRAMES),
               "-t", String(VIDEO_MAX_DURATION_SECONDS), "-vf", "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
               "-threads", "1", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-f", "mp4", "-y", output]
-            : ["-nostdin", "-v", "error", "-i", input, "-map", "0:v:0", "-an", "-sn", "-dn", "-frames:v", String(VIDEO_MAX_FRAMES),
+            : ["-nostdin", "-v", "error", "-xerror", "-err_detect", "explode", "-i", input, "-map", "0:v:0", "-an", "-sn", "-dn", "-frames:v", String(VIDEO_MAX_FRAMES),
               "-t", String(VIDEO_MAX_DURATION_SECONDS), "-vf", "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
               "-threads", "1", "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "0", "-crf", "40", "-f", "webm", "-y", output];
           const limits = { maxBytes: VIDEO_MAX_BYTES, timeoutMs: VIDEO_PROCESS_TIMEOUT_MS, image: VIDEO_IMAGE };
@@ -454,6 +491,7 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
           await monitorBoundedChildOutput(command.executable, command.args, output, limits, command.stop);
           const outputStat = await assertBoundedFile(output, VIDEO_MAX_BYTES);
           void outputStat;
+          const outputBytes = await readBoundedFile(output, VIDEO_MAX_BYTES);
           const outputProbe = await probeVideo(output, directory);
           const outputStream = outputProbe.streams?.[0];
           const outputFormat = outputProbe.format?.format_name ?? "";
@@ -461,13 +499,13 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
           const expectedOutputCodec = detectedMimeType === "video/mp4" ? "h264" : "vp9";
           const outputWidth = outputStream?.width, outputHeight = outputStream?.height;
           const outputFrames = Number(outputStream?.nb_read_frames), outputDuration = Number(outputProbe.format?.duration);
-          if (!(detectedMimeType === "video/mp4" ? /(?:^|,)mov(?:,|$)/u.test(outputFormat) : /webm|matroska/u.test(outputFormat)) ||
+          if (!(detectedMimeType === "video/mp4" ? /(?:^|,)mov(?:,|$)/u.test(outputFormat) : isWebMContainer(outputBytes)) ||
               outputStream?.codec_type !== "video" || outputCodec !== expectedOutputCodec || !Number.isSafeInteger(outputWidth) || !Number.isSafeInteger(outputHeight) ||
               outputWidth! < 1 || outputWidth! > 1280 || outputHeight! < 1 || outputHeight! > 720 || !Number.isSafeInteger(outputFrames) || outputFrames < 1 || outputFrames > VIDEO_MAX_FRAMES ||
-              !Number.isFinite(outputDuration) || outputDuration <= 0 || outputDuration > VIDEO_MAX_DURATION_SECONDS) {
+              !Number.isFinite(outputDuration) || outputDuration <= 0 || outputDuration > VIDEO_MAX_DURATION_SECONDS ||
+              outputFrames !== frames || Math.abs(outputDuration - duration) > 0.1) {
             return err({ kind: "validation", code: "MEDIA_VIDEO_OUTPUT_INVALID" });
           }
-          const outputBytes = await readBoundedFile(output, VIDEO_MAX_BYTES);
           return ok({ detectedMimeType, variants: [{ variantName: "normalized", mimeType: detectedMimeType, bytes: new Uint8Array(outputBytes),
             width: outputWidth!, height: outputHeight!, codec: outputCodec }], version: processorVersion, policyVersion: VIDEO_POLICY_VERSION });
         } finally { await rm(directory, { recursive: true, force: true }).catch(() => undefined); }
