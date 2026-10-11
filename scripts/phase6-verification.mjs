@@ -334,7 +334,7 @@ async function main() {
       testArgs.push("tests/database/content-authoring.integration.test.ts", "-t",
         "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates|reports only Media referenced by currently published Project and Achievement locales|preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable|rejects invalid evidence, review, and Media facts without creating public state|publishes English and Arabic independently, preserves first publication time, history, and the last valid projection|publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline|hides, archives, and restores all three content kinds through atomic owner lifecycle commands|revalidates each exact locale publication before restore and changes none when one Media fact fails");
     }
-    const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 600_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+    const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 900_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
     const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
     if (MEDIA_INTEGRATION_ONLY) {

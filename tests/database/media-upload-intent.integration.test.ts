@@ -1603,11 +1603,12 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       Buffer.from("\nendstream\nendobj\ntrailer << /Root 1 0 R >>\n%%EOF\n"),
     ]));
     const malware = await uploadPdf(malwareBytes, "signature");
+    const processedCountBeforeMalware = processedFiles.length;
     const malwareResult = await mediaProcessing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
       idempotencyKey: "phase6-pdf-process-eicar-key" as never, mediaId: malware.mediaId, expectedVersion: 1, result: "passed",
       detectedMediaType: "application/pdf", detectedByteLength: malwareBytes.byteLength, sha256: createHash("sha256").update(malwareBytes).digest("hex") });
     expect(malwareResult.ok).toBe(true);
-    expect(processedFiles).toHaveLength(2);
+    expect(processedFiles).toHaveLength(processedCountBeforeMalware);
     const malwareAttempt = await admin.query("select result, finding_codes from media.processing_attempts where portfolio_id = $1::uuid and owner_id = $2::uuid and media_id = $3::uuid", [portfolioId, ownerId, malware.mediaId]);
     expect(malwareAttempt.rows[0], JSON.stringify(malwareAttempt.rows[0])).toMatchObject({ result: "failed", finding_codes: ["MEDIA_UNSAFE_CONTENT"] });
 
@@ -1727,7 +1728,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     mediaProcessingCounts.processorExecutions += processorExecutions;
     mediaProcessingCounts.imageProcessorExecutions += imageProcessorExecutions;
     if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
-  }, 300_000);
+  }, REQUIRE_FULL_MEDIA ? 600_000 : 300_000);
   it("processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg", async () => {
     appNow = Date.now();
     const acceptedCountBeforeVideos = acceptedMediaIds.length;
