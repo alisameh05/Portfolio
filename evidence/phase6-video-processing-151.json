@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 151,
   "parent": 145,
-  "runId": "2447c590-907d-4ed2-92eb-6662371cdcc5",
-  "sourceRevision": "e34b169500a2ba13a8c2ef1ed612a2cf6039d335",
-  "sourceTreeSha256": "5c188f8c9f096741bb2899ffa33b982a49cfb1f37da527b49fb4b41beaed76a0",
-  "startedAt": "2026-10-11T13:33:20.434Z",
-  "completedAt": "2026-10-11T13:36:19.619Z",
+  "runId": "bcddea98-44ac-4ea2-b03d-b20867d62b14",
+  "sourceRevision": "945618732fc7dee277237c92a82c23c605758ed8",
+  "sourceTreeSha256": "42a75b6e629e40d1979fd5b43d7bbc044895bcd4c1abe879c826feb0ad91818a",
+  "startedAt": "2026-10-11T14:01:53.084Z",
+  "completedAt": "2026-10-11T14:04:52.693Z",
   "scope": "bounded-mp4-webm-processing-with-sealed-private-variants",
   "runtime": {
     "node": "v24.21.0",
@@ -98,7 +98,7 @@
       "executed": true,
       "status": "passed",
       "storageRoundTrip": true,
-      "sha256": "d2e7dd84cfc5f0e98a6758602347734ebcac883a9745534d1dd65f56203fc592",
+      "sha256": "cd529764be4f691314b6854b2bac03b348d18b2c858af5207a74776d9dc95014",
       "scannerVerdict": "clean",
       "processorVersion": "ffmpeg version 7.1 Copyright (c) 2000-2024 the FFmpeg developers"
     }
@@ -140,7 +140,7 @@
       "status": "passed"
     },
     {
-      "name": "unsafe scanner verdict creates failed evidence and no output",
+      "name": "fault-injected unsafe scanner verdict creates failed evidence and no output",
       "executed": true,
       "status": "passed"
     },
@@ -161,6 +161,16 @@
     },
     {
       "name": "anonymous output reads are denied",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "candidate upload token and upsert cannot replace sealed output",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "processing leaves lifecycle as candidate pending later acceptance",
       "executed": true,
       "status": "passed"
     }
@@ -185,6 +195,7 @@
     "npm run phase6:focus:video-processing"
   ],
   "limitations": [
+    "Pinned ClamAV 1.4.3 did not detect EICAR embedded in tested MP4 mdat/free/subtitle containers; unsafe verdict behavior is fault-injected while real ClamAV scans supported inputs and outputs.",
     "The focused video ticket evidence does not certify image processing or the final Phase 6 gate."
   ]
 }
