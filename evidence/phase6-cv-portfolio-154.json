@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 154,
   "parent": 145,
-  "runId": "2309d20b-9f2f-486a-8307-0238c68865b5",
-  "sourceRevision": "63b210ec6ebd05f3543eadafc7402799f66fb0c5",
-  "sourceTreeSha256": "889248816d375d236ab4bb76fdc41250c78a37cba68adb8f23c3b15465194ddc",
-  "startedAt": "2026-10-11T20:51:43.726Z",
-  "completedAt": "2026-10-11T20:58:17.226Z",
+  "runId": "a984aa67-fdef-4ca7-bd8e-362d989284e2",
+  "sourceRevision": "413c8f354639a52db5ec8b2aec11b991447dca07",
+  "sourceTreeSha256": "e9b1cba19731fe3c8d1d6c06e6c3751350867afe768dcc897b777321afdec3ab",
+  "startedAt": "2026-10-11T22:19:11.394Z",
+  "completedAt": "2026-10-11T22:25:48.365Z",
   "scope": "versioned-CV-Portfolio-root-and-accepted-English-PDF-registration",
   "runtime": {
     "node": "v24.21.0",
@@ -52,6 +52,14 @@
         "video": 5
       }
     }
+  },
+  "migrationUpgrade": {
+    "migration": "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+    "preexistingConfiguredOwners": 1,
+    "migrationLedgerContainsTarget": true,
+    "backfilledRoots": 1,
+    "aggregateVersion": 1,
+    "verdict": "pass"
   },
   "policyIds": {
     "migration": "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
@@ -144,7 +152,7 @@
       "scenarios": [
         {
           "id": "T09-01",
-          "name": "competing empty-root initialization and migration backfill",
+          "name": "concurrent empty-root initialization and authenticated empty Owner view",
           "executed": true,
           "status": "passed"
         },
@@ -192,7 +200,7 @@
         },
         {
           "id": "T09-09",
-          "name": "scope constraints, forced RLS and indexes",
+          "name": "scope constraints, forced RLS, indexes and preexisting-owner migration backfill",
           "executed": true,
           "status": "passed"
         }
@@ -221,8 +229,8 @@
         "tests/modules/media-cv-contracts.test.ts",
         "tests/modules/cv-portfolio.test.ts"
       ],
-      "total": 17,
-      "passed": 17,
+      "total": 21,
+      "passed": 21,
       "failed": 0,
       "skipped": 0,
       "verdict": "pass"
@@ -239,7 +247,7 @@
   "scenarios": [
     {
       "id": "T09-01",
-      "name": "competing empty-root initialization and migration backfill",
+      "name": "concurrent empty-root initialization and authenticated empty Owner view",
       "executed": true,
       "status": "passed"
     },
@@ -287,7 +295,7 @@
     },
     {
       "id": "T09-09",
-      "name": "scope constraints, forced RLS and indexes",
+      "name": "scope constraints, forced RLS, indexes and preexisting-owner migration backfill",
       "executed": true,
       "status": "passed"
     }
