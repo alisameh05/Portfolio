@@ -262,10 +262,10 @@ export function createClamAvScanner(options: { readonly executable?: string; rea
         if (!versionTimeoutMs) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         const scannerVersion = await version(versionTimeoutMs);
         if (!isPinnedClamAvVersion(scannerVersion)) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
-        const scanTimeoutMs = remainingMs();
-        if (!scanTimeoutMs) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         const verdict = await withTempPdf(bytes, async (directory, input) => {
           try {
+            const scanTimeoutMs = remainingMs();
+            if (!scanTimeoutMs) throw new Error("MEDIA_SCANNER_TIMEOUT");
             const mountSource = directory.replace(/\\/gu, "/");
             const containerName = `portfolio-clamav-${randomUUID()}`;
             const dockerArgs = ["run", "--rm", "--pull=never", "--name", containerName, "--network=none", "--read-only", "--memory=2g", "--cpus=1", "--pids-limit=32",
