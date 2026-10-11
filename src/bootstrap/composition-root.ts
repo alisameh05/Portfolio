@@ -238,6 +238,7 @@ export async function initializeDatabaseRuntime(
             { createSupabaseMediaUploadTargetAdapter },
             { createSupabaseMediaProcessingStorage },
             { createClamAvScanner, createOcrMyPdfProcessor },
+            { createSharpMediaImageProcessor },
             { createNodeMediaDigest },
             { createProductionOwnerMediaService },
           ] = await Promise.all([
@@ -249,6 +250,7 @@ export async function initializeDatabaseRuntime(
             import("../runtime/adapters/supabase-media-upload-target.js"),
             import("../runtime/adapters/supabase-media-processing-storage.js"),
             import("../runtime/adapters/media-processing-tools.js"),
+            import("../runtime/adapters/media-image-processing.js"),
             import("../runtime/adapters/media-digest.js"),
             import("../runtime/fakes/owner-media.js"),
           ]);
@@ -299,6 +301,7 @@ export async function initializeDatabaseRuntime(
                 ...(env["PYTHON_PATH"] === undefined ? {} : { python: env["PYTHON_PATH"] }),
                 ...(env["OCRMY_PDF_PATH"] === undefined ? {} : { ocrmypdf: env["OCRMY_PDF_PATH"] }),
               }),
+              imageProcessor: createSharpMediaImageProcessor(),
               digest: createNodeMediaDigest(),
               ids: createSystemIdGenerator(),
               clock: createSystemClock(),

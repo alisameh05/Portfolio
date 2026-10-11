@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createSupabaseMediaProcessingStorage } from "../../src/runtime/adapters/supabase-media-processing-storage.js";
+import { createHash } from "node:crypto";
 
 const ids = {
   portfolioId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea1" as never,
@@ -36,5 +37,23 @@ describe("Supabase Media processing Storage adapter", () => {
     const result = await storage.readCandidate(ids);
     expect(result).toMatchObject({ ok: false, error: { code: "MEDIA_BYTES_OUT_OF_BOUNDS" } });
     expect(chunksRead).toBe(0);
+  });
+
+  it("seals WebP variants create-only and removes only the exact extension-bound output", async () => {
+    const bytes = new TextEncoder().encode("verified-webp-output");
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const requests: { readonly url: string; readonly init?: RequestInit }[] = [];
+    const storage = createSupabaseMediaProcessingStorage({ storageUrl: "http://127.0.0.1:57321", serviceRoleKey: "local-service-role",
+      fetcher: async (input, init) => { requests.push({ url: input.toString(), ...(init === undefined ? {} : { init }) }); return new Response("{}", { status: 200 }); } });
+
+    const sealed = await storage.sealProcessedObject({ ...ids, outputObjectId: "00000000-0000-7000-8000-000000000106" as never,
+      sourceObjectId: ids.objectId, bytes, sha256, mimeType: "image/webp" });
+    expect(sealed).toMatchObject({ ok: true, value: { sha256 } });
+    expect(requests[0]?.url).toContain(`${sha256}.webp`);
+    expect(requests[0]?.init?.headers).toMatchObject({ "content-type": "image/webp", "x-upsert": "false" });
+
+    await storage.discardSealedObject({ ...ids, sha256, mimeType: "image/webp" });
+    expect(requests[1]?.url).toMatch(/\/storage\/v1\/object\/media-processed$/u);
+    expect(String(requests[1]?.init?.body)).toContain(`${sha256}.webp`);
   });
 });

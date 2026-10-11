@@ -16,7 +16,7 @@ import { createPostgresMediaUploadIntentRepository } from "../../src/modules/med
 import { createPostgresMediaProcessingRepository } from "../../src/modules/media/adapters/postgres-processing.js";
 import { createUploadCapabilityVault } from "../../src/modules/media/adapters/upload-capability-vault.js";
 import { createMediaUploadIntentApplicationService } from "../../src/modules/media/application/upload-intent.js";
-import { createMediaProcessingApplicationService, type PdfProcessorPort } from "../../src/modules/media/application/processing.js";
+import { createMediaProcessingApplicationService, type PdfProcessorPort, type MediaImageProcessorPort, type TrustedByteScannerPort, type MediaProcessingRepositoryPort } from "../../src/modules/media/application/processing.js";
 import { createSupabaseMediaUploadTargetAdapter } from "../../src/runtime/adapters/supabase-media-upload-target.js";
 import { createSupabaseMediaProcessingStorage } from "../../src/runtime/adapters/supabase-media-processing-storage.js";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
@@ -35,12 +35,20 @@ const SCANNER_IMAGE = process.env["PHASE6_SCANNER_IMAGE"];
 const PDF_PROCESSOR_IMAGE = process.env["PHASE6_PDF_PROCESSOR_IMAGE"];
 const SCANNER_VERSION = process.env["PHASE6_SCANNER_VERSION"];
 const PDF_PROCESSOR_VERSION = process.env["PHASE6_PDF_PROCESSOR_VERSION"];
+const IMAGE_FIXTURES = {
+  "image/png": process.env["PHASE6_IMAGE_FIXTURE_PNG"],
+  "image/jpeg": process.env["PHASE6_IMAGE_FIXTURE_JPEG"],
+  "image/webp": process.env["PHASE6_IMAGE_FIXTURE_WEBP"],
+} as const;
+const REQUIRE_IMAGES = process.env["PHASE6_REQUIRE_IMAGES"] === "1";
 const PROCESSING_COUNTS_FILE = process.env["PHASE6_MEDIA_PROCESSING_COUNTS_FILE"];
 const REQUIRE_REAL = process.env["PHASE6_REQUIRE_UPLOAD_INTENT"] === "1";
 
-if (REQUIRE_REAL && (!DATABASE_URL || !STORAGE_URL || !SERVICE_ROLE_KEY || !ANON_KEY || !REPLAY_KEY || !PDF_FIXTURE || !SCANNER_IMAGE || !PDF_PROCESSOR_IMAGE || !SCANNER_VERSION || !PDF_PROCESSOR_VERSION)) {
+if (REQUIRE_REAL && (!DATABASE_URL || !STORAGE_URL || !SERVICE_ROLE_KEY || !ANON_KEY || !REPLAY_KEY || !SCANNER_IMAGE || !SCANNER_VERSION ||
+    (!REQUIRE_IMAGES && (!PDF_FIXTURE || !PDF_PROCESSOR_IMAGE || !PDF_PROCESSOR_VERSION)))) {
   throw new Error("PHASE6_UPLOAD_INTENT_SERVICES_REQUIRED");
 }
+if (REQUIRE_IMAGES && Object.values(IMAGE_FIXTURES).some((path) => !path)) throw new Error("PHASE6_IMAGE_PROCESSING_FIXTURES_REQUIRED");
 
 const describeReal = DATABASE_URL && STORAGE_URL && SERVICE_ROLE_KEY && ANON_KEY && REPLAY_KEY ? describe : describe.skip;
 const bytes = Buffer.from("Phase 6 private Media candidate fixture.", "utf8");
@@ -56,17 +64,31 @@ function quoteTestRole(value: string): string {
   return `"${value}"`;
 }
 
-function dockerResult(args: readonly string[], input?: Uint8Array): { readonly status: number; readonly stdout: Uint8Array } {
-  const result = spawnSync("docker", [...args], { input, encoding: "buffer", timeout: 15_000, maxBuffer: 24 * 1024 * 1024, windowsHide: true });
+function dockerResult(args: readonly string[], input?: Uint8Array, timeoutMs = 30_000): { readonly status: number; readonly stdout: Uint8Array } {
+  const result = spawnSync("docker", [...args], { input, encoding: "buffer", timeout: timeoutMs, maxBuffer: 24 * 1024 * 1024, windowsHide: true });
   if (result.error || result.status === null) throw new Error("PHASE6_PROCESSING_TOOL_UNAVAILABLE");
   return { status: result.status, stdout: result.stdout };
 }
 
-function dockerScanner(bytes: Uint8Array) {
+function dockerScanner(bytes: Uint8Array, timeoutMs = 24_000) {
   const directory = mkdtempSync(join(tmpdir(), "phase6-media-scan-"));
   try {
     writeFileSync(join(directory, "input.bin"), bytes, { flag: "wx", mode: 0o600 });
-    const result = dockerResult(["run", "--rm", "--entrypoint", "clamscan", "-v", `${directory}:/scan:ro`, SCANNER_IMAGE!, "--no-summary", "/scan/input.bin"]);
+    const result = dockerResult(["run", "--rm", "--entrypoint", "clamscan", "-v", `${directory}:/scan:ro`, SCANNER_IMAGE!, "--no-summary", "/scan/input.bin"], undefined, timeoutMs);
+    if (result.status === 0) return { ok: true as const, value: { verdict: "clean" as const, version: SCANNER_VERSION! } };
+    if (result.status === 1) return { ok: true as const, value: { verdict: "unsafe" as const, version: SCANNER_VERSION! } };
+    return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_SCANNER_UNAVAILABLE" } };
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+}
+
+function dockerScannerMany(files: readonly Uint8Array[], timeoutMs = 24_000) {
+  const directory = mkdtempSync(join(tmpdir(), "phase6-media-scan-"));
+  try {
+    const paths = files.map((bytes, index) => {
+      writeFileSync(join(directory, `input-${index}.bin`), bytes, { flag: "wx", mode: 0o600 });
+      return `/scan/input-${index}.bin`;
+    });
+    const result = dockerResult(["run", "--rm", "--entrypoint", "clamscan", "-v", `${directory}:/scan:ro`, SCANNER_IMAGE!, "--no-summary", ...paths], undefined, timeoutMs);
     if (result.status === 0) return { ok: true as const, value: { verdict: "clean" as const, version: SCANNER_VERSION! } };
     if (result.status === 1) return { ok: true as const, value: { verdict: "unsafe" as const, version: SCANNER_VERSION! } };
     return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_SCANNER_UNAVAILABLE" } };
@@ -439,7 +461,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     await admin.query(`drop function media.${functionName}()`);
   });
 
-  it("processes PDF candidates through the Owner operation with real PostgreSQL, private Storage, ClamAV and OCRmyPDF", async () => {
+  it("processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors", async () => {
     appNow = Date.now();
     const updatePrivileges = await admin.query(`
       select has_column_privilege('shipwithali_application', 'media.processing_states', 'media_id', 'UPDATE') as state_identity,
@@ -451,10 +473,201 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     `);
     expect(updatePrivileges.rows[0]).toEqual({ state_identity: false, state_version: true, orphan_identity: false,
       orphan_state: true, claim_identity: false, claim_lease: true });
+    const processedFiles: Uint8Array[] = [];
+    let scannerExecutions = 0;
+    let processorExecutions = 0;
+    let imageProcessorExecutions = 0;
+    const uploadPdf = async (payload: Uint8Array, suffix: string, originalFileName = `candidate-${suffix}.pdf`, uploadBytes = true, uploadPayload = payload) => {
+      const uploadService = createService();
+      const issued = await uploadService.create({
+        actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
+        idempotencyKey: `phase6-pdf-${suffix}-${randomBytes(12).toString("hex")}` as never,
+        kind: "document", originalFileName, declaredMediaType: "application/pdf",
+        byteLength: payload.byteLength, sha256: createHash("sha256").update(payload).digest("hex"),
+      });
+      expect(issued.ok, JSON.stringify({ issued, storage: lastStorageFailure ?? null })).toBe(true);
+      if (!issued.ok) throw new Error("PHASE6_PDF_UPLOAD_INTENT_FAILED");
+      if (uploadBytes) {
+        const uploaded = await fetch(issued.value.uploadTarget, { method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" }, body: Buffer.from(uploadPayload) });
+        expect([200, 201].includes(uploaded.status)).toBe(true);
+      }
+      return issued.value;
+    };
+    const uploadImage = async (payload: Uint8Array, imageMimeType: "image/png" | "image/jpeg" | "image/webp", suffix: string, originalFileName = `candidate-${suffix}.${imageMimeType === "image/jpeg" ? "jpeg" : imageMimeType.slice("image/".length)}`) => {
+      const uploadService = createService();
+      const issued = await uploadService.create({
+        actor: { kind: "owner", ownerId, sessionId: "phase6-image-processing-owner" },
+        idempotencyKey: `phase6-image-${suffix}-${randomBytes(12).toString("hex")}` as never,
+        kind: "image", originalFileName, declaredMediaType: imageMimeType,
+        byteLength: payload.byteLength, sha256: createHash("sha256").update(payload).digest("hex"),
+      });
+      expect(issued.ok, JSON.stringify({ issued, storage: lastStorageFailure ?? null })).toBe(true);
+      if (!issued.ok) throw new Error("PHASE6_IMAGE_UPLOAD_INTENT_FAILED");
+      const uploaded = await fetch(issued.value.uploadTarget, { method: "PUT", headers: { "content-type": imageMimeType, "x-upsert": "false" }, body: Buffer.from(payload) });
+      expect([200, 201].includes(uploaded.status)).toBe(true);
+      return issued.value;
+    };
+    const normalProcessingStorage = createSupabaseMediaProcessingStorage({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY! });
+    const realProcessor = { async process(input: Uint8Array) { processorExecutions += 1; const result = dockerPdfProcessor(input); if (result.ok) processedFiles.push(result.value.bytes); return result; } };
+    const { createSharpMediaImageProcessor } = await import("../../src/runtime/adapters/media-image-processing.js");
+    const sharpProcessor = createSharpMediaImageProcessor();
+    const realImageProcessor: MediaImageProcessorPort = { async process(input, detectedMimeType) {
+      imageProcessorExecutions += 1;
+      return await sharpProcessor.process(input, detectedMimeType);
+    } };
+    const realScanner: TrustedByteScannerPort = {
+        async scan(input: Uint8Array, options?: { readonly timeoutMs?: number }) { scannerExecutions += 1; return dockerScanner(input, options?.timeoutMs); },
+        async scanMany(inputs: readonly Uint8Array[], options?: { readonly timeoutMs?: number }) { scannerExecutions += inputs.length; return dockerScannerMany(inputs, options?.timeoutMs); },
+      };
+    const makeMediaProcessing = (storage = normalProcessingStorage, processor: PdfProcessorPort = realProcessor,
+      scanner: TrustedByteScannerPort = realScanner,
+      repositoryOverride?: ReturnType<typeof createPostgresMediaProcessingRepository>, imageProcessor: MediaImageProcessorPort = realImageProcessor) => createMediaProcessingApplicationService({
+      scope: { ownerId }, repository: repositoryOverride ?? createPostgresMediaProcessingRepository({
+        database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
+      }),
+      storage,
+      scanner,
+      processor,
+      imageProcessor,
+      digest: { sha256(input) { return createHash("sha256").update(input).digest("hex"); } },
+      ids: createSystemIdGenerator(), clock: { now: () => new Date(appNow).toISOString() },
+    });
+    const mediaProcessing = makeMediaProcessing();
+
+    if (Object.values(IMAGE_FIXTURES).every((path) => Boolean(path))) {
+      for (const [imageMimeType, fixturePath] of Object.entries(IMAGE_FIXTURES) as ["image/png" | "image/jpeg" | "image/webp", string][]) {
+        const imageBytes = new Uint8Array(readFileSync(fixturePath));
+        const image = await uploadImage(imageBytes, imageMimeType, imageMimeType.slice("image/".length));
+        const imageSha = createHash("sha256").update(imageBytes).digest("hex");
+        const imageCommand = { actor: { kind: "owner" as const, ownerId, sessionId: "phase6-image-processing-owner" },
+          idempotencyKey: `phase6-image-process-${imageMimeType.replace("/", "-")}-${randomBytes(8).toString("hex")}` as never,
+          mediaId: image.mediaId, expectedVersion: 1, result: "passed" as const, detectedMediaType: imageMimeType,
+          detectedByteLength: imageBytes.byteLength, sha256: imageSha };
+        const scannerCountBefore = scannerExecutions;
+        const processorCountBefore = imageProcessorExecutions;
+        expect(await mediaProcessing.record(imageCommand)).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+        expect(await mediaProcessing.record(imageCommand)).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+        expect(scannerExecutions - scannerCountBefore).toBe(3);
+        expect(imageProcessorExecutions - processorCountBefore).toBe(1);
+        const persistedVariants = await admin.query(
+        `select variant.variant_name, variant.width, variant.height, variant.source_sha256, attempt.processing_duration_ms,
+                  object.object_id::text, object.sha256, object.byte_length, object.mime_type
+             from media.processing_attempt_variants variant
+             join media.processed_objects object on object.object_id = variant.object_id
+             join media.processing_attempts attempt on attempt.attempt_id = variant.attempt_id
+            where attempt.portfolio_id = $1::uuid and attempt.owner_id = $2::uuid and attempt.media_id = $3::uuid
+            order by variant.variant_name`,
+          [portfolioId, ownerId, image.mediaId],
+        );
+        expect(persistedVariants.rowCount).toBe(2);
+        expect(persistedVariants.rows.map((row) => row.variant_name)).toEqual(["display", "thumbnail"]);
+        for (const variant of persistedVariants.rows) {
+          expect(variant.mime_type).toBe("image/webp");
+          expect(Number(variant.processing_duration_ms)).toBeGreaterThanOrEqual(0);
+          expect(Number(variant.processing_duration_ms)).toBeLessThan(60_000);
+          expect(variant.source_sha256).toBe(imageSha);
+          expect(Number(variant.width)).toBeGreaterThan(0);
+          expect(Number(variant.height)).toBeGreaterThan(0);
+          const variantPath = `/storage/v1/object/media-processed/processed/${portfolioId}/${image.mediaId}/${variant.object_id}/${variant.sha256}.webp`;
+          const downloadedVariant = await storageRequest(variantPath, { headers: headers(SERVICE_ROLE_KEY!) });
+          expect(downloadedVariant.ok).toBe(true);
+          const variantBytes = new Uint8Array(await downloadedVariant.arrayBuffer());
+          expect(createHash("sha256").update(variantBytes).digest("hex")).toBe(variant.sha256);
+          const anonymousVariant = await storageRequest(variantPath, { headers: headers(ANON_KEY!) });
+          expect(anonymousVariant.status).toBeGreaterThanOrEqual(400);
+          const overwriteVariant = await storageRequest(variantPath, { method: "POST", headers: { ...headers(SERVICE_ROLE_KEY!), "content-type": "image/webp", "x-upsert": "false" }, body: variantBytes });
+          expect(overwriteVariant.status).toBeGreaterThanOrEqual(400);
+        }
+        const replayed = await admin.query("select count(*)::int as attempts from media.processing_attempts where media_id = $1::uuid", [image.mediaId]);
+        expect(replayed.rows[0]?.attempts).toBe(1);
+        const freshKeyReprocessing = await mediaProcessing.record({ ...imageCommand,
+          idempotencyKey: `phase6-image-fresh-${randomBytes(8).toString("hex")}` as never });
+        expect(freshKeyReprocessing.ok).toBe(false);
+        if (!freshKeyReprocessing.ok) expect(["conflict", "precondition_failed"]).toContain(freshKeyReprocessing.error.kind);
+        const uploadTargetSubstitution = new URL(image.uploadTarget);
+        uploadTargetSubstitution.pathname = uploadTargetSubstitution.pathname.replace("/object/upload/sign/media-candidates/candidate/", "/object/upload/sign/media-processed/processed/");
+        const substitutedUpload = await fetch(uploadTargetSubstitution, { method: "PUT", headers: { "content-type": "image/webp", "x-upsert": "false" }, body: Buffer.from("substitute") });
+        expect(substitutedUpload.status).toBeGreaterThanOrEqual(400);
+      }
+    }
+    if (REQUIRE_IMAGES) {
+      const retryBytes = new Uint8Array(readFileSync(IMAGE_FIXTURES["image/png"]!));
+      const retryCandidate = await uploadImage(retryBytes, "image/png", "retryable-failure");
+      let failFirstScan = true;
+      const retryScanner: TrustedByteScannerPort = {
+        async scan(input, options) {
+          if (failFirstScan) {
+            failFirstScan = false;
+            return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_SCANNER_UNAVAILABLE" } };
+          }
+          return realScanner.scan(input, options);
+        },
+        scanMany: (inputs, options) => realScanner.scanMany!(inputs, options),
+      };
+      const retryService = makeMediaProcessing(normalProcessingStorage, realProcessor, retryScanner);
+      const retryCommand = { actor: { kind: "owner" as const, ownerId, sessionId: "phase6-image-processing-owner" },
+        mediaId: retryCandidate.mediaId, expectedVersion: 1, result: "passed" as const, detectedMediaType: "image/png",
+        detectedByteLength: retryBytes.byteLength, sha256: createHash("sha256").update(retryBytes).digest("hex") };
+      const firstRetry = await retryService.record({ ...retryCommand, idempotencyKey: `phase6-image-retry-failed-${randomBytes(8).toString("hex")}` as never });
+      expect(firstRetry).toMatchObject({ ok: false, error: { code: "MEDIA_SCANNER_UNAVAILABLE" } });
+      const secondRetry = await retryService.record({ ...retryCommand, expectedVersion: 2, idempotencyKey: `phase6-image-retry-fresh-${randomBytes(8).toString("hex")}` as never });
+      expect(secondRetry).toMatchObject({ ok: true, value: { aggregateVersion: 3 } });
+      const retryFacts = await admin.query(
+        `select (select count(*)::int from media.processing_attempts where media_id = $1::uuid) as attempts,
+                (select count(*)::int from media.processing_attempts where media_id = $1::uuid and result = 'passed') as passed,
+                (select count(*)::int from media.processed_objects where media_id = $1::uuid) as outputs`,
+        [retryCandidate.mediaId],
+      );
+      expect(retryFacts.rows[0]).toEqual({ attempts: 2, passed: 1, outputs: 2 });
+
+      const staleBytes = new Uint8Array(readFileSync(IMAGE_FIXTURES["image/png"]!));
+      const staleCandidate = await uploadImage(staleBytes, "image/png", "stale-commit");
+      const staleOutputs: { readonly objectId: StableId<"MediaObject">; readonly sha256: string }[] = [];
+      const staleStorage = {
+        readCandidate: (input: Parameters<typeof normalProcessingStorage.readCandidate>[0]) => normalProcessingStorage.readCandidate(input),
+        async sealProcessedObject(input: Parameters<typeof normalProcessingStorage.sealProcessedObject>[0]) {
+          const result = await normalProcessingStorage.sealProcessedObject(input);
+          if (result.ok) staleOutputs.push({ objectId: result.value.objectId as StableId<"MediaObject">, sha256: result.value.sha256 });
+          return result;
+        },
+        discardSealedObject: (input: Parameters<typeof normalProcessingStorage.discardSealedObject>[0]) => normalProcessingStorage.discardSealedObject(input),
+      };
+      const staleBaseRepository = createPostgresMediaProcessingRepository({ database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId } });
+      const staleOriginalSha256 = createHash("sha256").update(staleBytes).digest("hex");
+      const staleSubstitutedSha256 = "f".repeat(64);
+      const staleRepository: MediaProcessingRepositoryPort = { ...staleBaseRepository, async commitAttempt(command) {
+        await admin.query("update media.assets set declared_sha256 = $2 where media_id = $1::uuid", [staleCandidate.mediaId, staleSubstitutedSha256]);
+        return staleBaseRepository.commitAttempt(command);
+      } };
+      const staleService = makeMediaProcessing(staleStorage, realProcessor, realScanner, staleRepository);
+      const staleResult = await staleService.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-image-processing-owner" },
+        idempotencyKey: `phase6-image-stale-${randomBytes(8).toString("hex")}` as never, mediaId: staleCandidate.mediaId, expectedVersion: 1,
+        result: "passed", detectedMediaType: "image/png", detectedByteLength: staleBytes.byteLength,
+        sha256: staleOriginalSha256 });
+      expect(staleResult).toMatchObject({ ok: false, error: { code: "MEDIA_CANDIDATE_STALE" } });
+      await admin.query("update media.assets set declared_sha256 = $2 where media_id = $1::uuid", [staleCandidate.mediaId, staleOriginalSha256]);
+      expect(staleOutputs).toHaveLength(2);
+      for (const output of staleOutputs) {
+        const objectPath = `/storage/v1/object/media-processed/processed/${portfolioId}/${staleCandidate.mediaId}/${output.objectId}/${output.sha256}.webp`;
+        const removed = await storageRequest(objectPath, { headers: headers(SERVICE_ROLE_KEY!) });
+        expect([400, 404]).toContain(removed.status);
+      }
+      const staleFacts = await admin.query(
+        `select (select count(*)::int from media.processing_attempts where media_id = $1::uuid) as attempts,
+                (select count(*)::int from media.processed_objects where media_id = $1::uuid) as outputs,
+                (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'media.processing_recorded.v1') as events,
+                (select count(*)::int from media.processing_orphans where media_id = $1::uuid and state = 'pending') as orphans`,
+        [staleCandidate.mediaId],
+      );
+      expect(staleFacts.rows[0]).toEqual({ attempts: 0, outputs: 0, events: 0, orphans: 0 });
+      if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify({ scannerExecutions, processorExecutions, imageProcessorExecutions }));
+      return;
+    }
+
     const pdfBytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
     const { createClamAvScanner } = await import("../../src/runtime/adapters/media-processing-tools.js");
-    const productionScan = await createClamAvScanner().scan(pdfBytes);
-    expect(productionScan).toMatchObject({ ok: true, value: { verdict: "clean" } });
+    const productionScan = await createClamAvScanner().scan(pdfBytes, { timeoutMs: 24_000 });
+    expect(productionScan, JSON.stringify(productionScan)).toMatchObject({ ok: true, value: { verdict: "clean" } });
     if (process.platform === "win32") {
       const { createOcrMyPdfProcessor, runWithBoundedOutput } = await import("../../src/runtime/adapters/media-processing-tools.js");
       const productionResult = await createOcrMyPdfProcessor().process(pdfBytes);
@@ -479,40 +692,6 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         rmSync(quotaDirectory, { recursive: true, force: true });
       }
     }
-    const processedFiles: Uint8Array[] = [];
-    let scannerExecutions = 0;
-    let processorExecutions = 0;
-    const uploadPdf = async (payload: Uint8Array, suffix: string, originalFileName = `candidate-${suffix}.pdf`, uploadBytes = true, uploadPayload = payload) => {
-      const uploadService = createService();
-      const issued = await uploadService.create({
-        actor: { kind: "owner", ownerId, sessionId: "phase6-pdf-processing-owner" },
-        idempotencyKey: `phase6-pdf-${suffix}-${randomBytes(12).toString("hex")}` as never,
-        kind: "document", originalFileName, declaredMediaType: "application/pdf",
-        byteLength: payload.byteLength, sha256: createHash("sha256").update(payload).digest("hex"),
-      });
-      expect(issued.ok, JSON.stringify({ issued, storage: lastStorageFailure ?? null })).toBe(true);
-      if (!issued.ok) throw new Error("PHASE6_PDF_UPLOAD_INTENT_FAILED");
-      if (uploadBytes) {
-        const uploaded = await fetch(issued.value.uploadTarget, { method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" }, body: Buffer.from(uploadPayload) });
-        expect([200, 201].includes(uploaded.status)).toBe(true);
-      }
-      return issued.value;
-    };
-    const normalProcessingStorage = createSupabaseMediaProcessingStorage({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY! });
-    const realProcessor = { async process(input: Uint8Array) { processorExecutions += 1; const result = dockerPdfProcessor(input); if (result.ok) processedFiles.push(result.value.bytes); return result; } };
-    const makeMediaProcessing = (storage = normalProcessingStorage, processor: PdfProcessorPort = realProcessor,
-      scanner = { async scan(input: Uint8Array) { scannerExecutions += 1; return dockerScanner(input); } },
-      repositoryOverride?: ReturnType<typeof createPostgresMediaProcessingRepository>) => createMediaProcessingApplicationService({
-      scope: { ownerId }, repository: repositoryOverride ?? createPostgresMediaProcessingRepository({
-        database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
-      }),
-      storage,
-      scanner,
-      processor,
-      digest: { sha256(input) { return createHash("sha256").update(input).digest("hex"); } },
-      ids: createSystemIdGenerator(), clock: { now: () => new Date(appNow).toISOString() },
-    });
-    const mediaProcessing = makeMediaProcessing();
 
     const safe = await uploadPdf(pdfBytes, "safe");
     const safeHash = createHash("sha256").update(pdfBytes).digest("hex");
@@ -812,6 +991,6 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       await admin.query(`drop trigger ${triggerName} on operations.outbox_events`);
       await admin.query(`drop function operations.${functionName}()`);
     }
-    if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify({ scannerExecutions, processorExecutions }));
+    if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify({ scannerExecutions, processorExecutions, imageProcessorExecutions }));
   }, 300_000);
 });

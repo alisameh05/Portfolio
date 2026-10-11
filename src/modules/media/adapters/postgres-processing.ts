@@ -16,6 +16,7 @@ interface CandidateRow {
 }
 interface ReplayRow { readonly request_hash: string; readonly aggregate_version: number | string; readonly outcome: string; readonly failure_code: string | null; }
 interface LockedRow extends CandidateRow { readonly current_version: number | string; readonly current_result: string | null; }
+interface OrphanRow { readonly media_id: string; readonly portfolio_id: string; readonly object_id: string; readonly sha256: string; readonly mime_type: string; }
 
 function keyHash(key: IdempotencyKey): string { return createHash("sha256").update(key, "utf8").digest("hex"); }
 function time(value: Date | string): string { const parsed = value instanceof Date ? value : new Date(value); if (!Number.isFinite(parsed.getTime())) throw new PostgresInfrastructureError(); return parsed.toISOString(); }
@@ -126,10 +127,12 @@ export function createPostgresMediaProcessingRepository(input: {
     },
     async commitAttempt(query) {
       try {
+        const statementTimeoutMs = Number.isSafeInteger(query.timeoutMs) && (query.timeoutMs ?? 0) > 0
+          ? Math.min(3_000, query.timeoutMs!) : 3_000;
         return await input.transactions.run(async (context) => {
           const executor = resolvePostgresTransaction(context); await setScope(context, input.scope);
-          await sql`set local lock_timeout = '1s'`.execute(executor);
-          await sql`set local statement_timeout = '3s'`.execute(executor);
+          await sql`select set_config('lock_timeout', ${`${Math.min(1_000, statementTimeoutMs)}ms`}, true),
+                           set_config('statement_timeout', ${`${statementTimeoutMs}ms`}, true)`.execute(executor);
           const key = keyHash(query.idempotencyKey);
           const releaseClaim = async () => sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId} and owner_id = ${input.scope.ownerId}
             and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key} and claim_id = ${query.claimId}`.execute(executor);
@@ -177,18 +180,39 @@ export function createPostgresMediaProcessingRepository(input: {
           const version = Number(row.current_version) + 1;
           if (query.attempt.result === "passed") {
             if (!query.attempt.outputObjectId || !query.attempt.outputSha256 || !query.attempt.outputByteLength) throw new PostgresInfrastructureError();
-            await sql`insert into media.processed_objects (object_id, portfolio_id, owner_id, media_id, source_object_id, sha256, byte_length, mime_type, object_version)
-              values (${query.attempt.outputObjectId}, ${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId},
-                ${query.attempt.inputObjectId}, ${query.attempt.outputSha256}, ${query.attempt.outputByteLength}, 'application/pdf', ${query.attempt.outputSha256})`.execute(executor);
+            if (query.candidate.kind === "image") {
+              const variants = query.attempt.variants ?? [];
+              const display = variants.find(({ name }) => name === "display");
+              if (variants.length !== 2 || !display || display.objectId !== query.attempt.outputObjectId ||
+                  display.sha256 !== query.attempt.outputSha256 || display.byteLength !== query.attempt.outputByteLength || display.mimeType !== "image/webp") {
+                throw new PostgresInfrastructureError();
+              }
+              for (const variant of variants) {
+                await sql`insert into media.processed_objects (object_id, portfolio_id, owner_id, media_id, source_object_id, sha256, byte_length, mime_type, object_version)
+                  values (${variant.objectId}, ${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId},
+                    ${query.attempt.inputObjectId}, ${variant.sha256}, ${variant.byteLength}, ${variant.mimeType}, ${variant.sha256})`.execute(executor);
+              }
+            } else {
+              if (query.attempt.variants?.length || (query.attempt.outputMimeType ?? "application/pdf") !== "application/pdf") throw new PostgresInfrastructureError();
+              await sql`insert into media.processed_objects (object_id, portfolio_id, owner_id, media_id, source_object_id, sha256, byte_length, mime_type, object_version)
+                values (${query.attempt.outputObjectId}, ${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId},
+                  ${query.attempt.inputObjectId}, ${query.attempt.outputSha256}, ${query.attempt.outputByteLength}, 'application/pdf', ${query.attempt.outputSha256})`.execute(executor);
+            }
           }
           await sql`insert into media.processing_attempts (attempt_id, portfolio_id, owner_id, media_id, input_object_id, input_sha256,
               detected_mime_type, detected_byte_length, result, output_object_id, output_sha256, scanner_version, processor_version,
-              policy_version, finding_codes, started_at, finished_at)
+              policy_version, finding_codes, started_at, finished_at, processing_duration_ms)
             values (${query.attempt.attemptId}, ${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId},
               ${query.attempt.inputObjectId}, ${query.attempt.sha256}, ${query.attempt.detectedMimeType}, ${query.attempt.detectedByteLength},
               ${query.attempt.result}, ${query.attempt.outputObjectId ?? null}, ${query.attempt.outputSha256 ?? null},
               ${query.attempt.scannerVersion}, ${query.attempt.processorVersion}, ${query.attempt.policyVersion},
-              ${JSON.stringify(query.attempt.findings)}::jsonb, ${query.attempt.startedAt}, ${query.attempt.recordedAt})`.execute(executor);
+              ${JSON.stringify(query.attempt.findings)}::jsonb, ${query.attempt.startedAt}, ${query.attempt.recordedAt}, ${query.attempt.processingDurationMs ?? null})`.execute(executor);
+          for (const variant of query.attempt.variants ?? []) {
+            await sql`insert into media.processing_attempt_variants (attempt_id, object_id, portfolio_id, owner_id, media_id,
+                variant_name, source_sha256, width, height)
+              values (${query.attempt.attemptId}, ${variant.objectId}, ${input.scope.portfolioId}, ${input.scope.ownerId},
+                ${query.candidate.mediaId}, ${variant.name}, ${query.attempt.sha256}, ${variant.width}, ${variant.height})`.execute(executor);
+          }
           await sql`insert into media.processing_states (media_id, portfolio_id, owner_id, aggregate_version, latest_attempt_id, updated_at)
               values (${query.candidate.mediaId}, ${query.candidate.portfolioId}, ${query.candidate.ownerId}, ${version}, ${query.attempt.attemptId}, transaction_timestamp())
             on conflict (media_id) do update set aggregate_version = excluded.aggregate_version,
@@ -210,10 +234,13 @@ export function createPostgresMediaProcessingRepository(input: {
     },
     async recordOrphan(query) {
       try {
+        const statementTimeoutMs = Number.isSafeInteger(query.timeoutMs) && (query.timeoutMs ?? 0) > 0
+          ? Math.min(3_000, query.timeoutMs!) : 3_000;
         return await input.transactions.run(async (context) => {
           const executor = resolvePostgresTransaction(context); await setScope(context, input.scope);
-          await sql`insert into media.processing_orphans (object_id, portfolio_id, owner_id, media_id, sha256)
-            values (${query.objectId}, ${query.candidate.portfolioId}, ${query.candidate.ownerId}, ${query.candidate.mediaId}, ${query.sha256})
+          await sql`select set_config('statement_timeout', ${`${statementTimeoutMs}ms`}, true)`.execute(executor);
+          await sql`insert into media.processing_orphans (object_id, portfolio_id, owner_id, media_id, sha256, mime_type)
+            values (${query.objectId}, ${query.candidate.portfolioId}, ${query.candidate.ownerId}, ${query.candidate.mediaId}, ${query.sha256}, ${query.mimeType ?? "application/pdf"})
             on conflict (object_id) do nothing`.execute(executor);
           return ok(undefined);
         });
@@ -223,15 +250,16 @@ export function createPostgresMediaProcessingRepository(input: {
       try {
         return await input.transactions.run(async (context) => {
           const executor = resolvePostgresTransaction(context); await setScope(context, input.scope);
-          const rows = await sql<{ readonly media_id: string; readonly portfolio_id: string; readonly object_id: string; readonly sha256: string }>`
-            select media_id, portfolio_id, object_id, sha256 from media.processing_orphans
+          const rows = await sql<OrphanRow>`
+            select media_id, portfolio_id, object_id, sha256, mime_type from media.processing_orphans
              where owner_id = ${query.ownerId} and state = 'pending'
              order by created_at, object_id limit ${Math.max(1, Math.min(query.limit, 20))}
           `.execute(executor);
           const result = rows.rows.map((row) => {
             const mediaId = parseStableId("MediaAsset", row.media_id), portfolioId = parseStableId("Portfolio", row.portfolio_id), objectId = parseStableId("MediaObject", row.object_id);
             if (!mediaId.ok || !portfolioId.ok || !objectId.ok || !/^[0-9a-f]{64}$/.test(row.sha256)) throw new PostgresInfrastructureError();
-            return { mediaId: mediaId.value, portfolioId: portfolioId.value, objectId: objectId.value, sha256: row.sha256 };
+            if (!new Set(["application/pdf", "image/webp"]).has(row.mime_type)) throw new PostgresInfrastructureError();
+            return { mediaId: mediaId.value, portfolioId: portfolioId.value, objectId: objectId.value, sha256: row.sha256, mimeType: row.mime_type };
           });
           return ok(result);
         });
