@@ -15,7 +15,7 @@ interface CandidateRow {
   readonly aggregate_version: number | string | null; readonly latest_result: string | null;
 }
 interface ReplayRow { readonly request_hash: string; readonly aggregate_version: number | string; readonly outcome: string; readonly failure_code: string | null; }
-interface LockedRow extends CandidateRow { readonly current_version: number | string; readonly current_result: string | null; }
+interface LockedRow extends CandidateRow { readonly current_version: number | string; readonly current_result: string | null; readonly terminal_decision: boolean; }
 
 function keyHash(key: IdempotencyKey): string { return createHash("sha256").update(key, "utf8").digest("hex"); }
 function time(value: Date | string): string { const parsed = value instanceof Date ? value : new Date(value); if (!Number.isFinite(parsed.getTime())) throw new PostgresInfrastructureError(); return parsed.toISOString(); }
@@ -92,9 +92,11 @@ export function createPostgresMediaProcessingRepository(input: {
           }
           await sql`delete from media.processing_claims where portfolio_id = ${input.scope.portfolioId}
             and owner_id = ${input.scope.ownerId} and lease_expires_at <= transaction_timestamp()`.execute(executor);
-          const currentRows = await sql<{ readonly current_version: number | string; readonly latest_result: string | null; readonly expired: boolean }>`
+          const currentRows = await sql<{ readonly current_version: number | string; readonly latest_result: string | null; readonly expired: boolean; readonly terminal_decision: boolean }>`
             select coalesce(s.aggregate_version, 1) as current_version, latest.result as latest_result,
-                   (i.expires_at <= transaction_timestamp()) as expired
+                   (i.expires_at <= transaction_timestamp()) as expired,
+                   exists (select 1 from media.decision_history decision where decision.media_id = a.media_id
+                     and decision.portfolio_id = a.portfolio_id and decision.owner_id = a.owner_id) as terminal_decision
               from media.assets a join media.upload_intents i on i.media_id = a.media_id
               left join media.processing_states s on s.media_id = a.media_id
               left join media.processing_attempts latest on latest.attempt_id = s.latest_attempt_id
@@ -106,6 +108,7 @@ export function createPostgresMediaProcessingRepository(input: {
           if (!current) return ok({ kind: "candidate-stale" } as const);
           if (current.expired) return ok({ kind: "expired" } as const);
           if (Number(current.current_version) !== query.expectedVersion) return ok({ kind: "version-mismatch" } as const);
+          if (current.terminal_decision) return ok({ kind: "invalid-transition" } as const);
           if (current.latest_result === "passed") return ok({ kind: "invalid-transition" } as const);
           const claimed = await sql`insert into media.processing_claims
               (portfolio_id, owner_id, media_id, idempotency_key_hash, request_hash, claim_id, lease_expires_at)
@@ -152,13 +155,15 @@ export function createPostgresMediaProcessingRepository(input: {
             select a.media_id, a.portfolio_id, a.owner_id, a.kind, a.original_file_name, a.declared_media_type, a.declared_byte_length,
                    a.declared_sha256, i.upload_intent_id, i.media_object_id, i.expires_at,
                    coalesce(s.aggregate_version, 1) as current_version,
-                   latest.result as current_result
+                   latest.result as current_result,
+                   exists (select 1 from media.decision_history decision where decision.media_id = a.media_id
+                     and decision.portfolio_id = a.portfolio_id and decision.owner_id = a.owner_id) as terminal_decision
               from media.assets a join media.upload_intents i on i.media_id = a.media_id
               left join media.processing_states s on s.media_id = a.media_id
               left join media.processing_attempts latest on latest.attempt_id = s.latest_attempt_id
              where a.media_id = ${query.candidate.mediaId} and a.owner_id = ${input.scope.ownerId}
                and a.portfolio_id = ${input.scope.portfolioId} and i.upload_intent_id = ${query.candidate.uploadIntentId}
-               and i.media_object_id = ${query.candidate.mediaObjectId} and i.expires_at > transaction_timestamp()
+                and i.media_object_id = ${query.candidate.mediaObjectId} and i.expires_at > transaction_timestamp()
           `.execute(executor);
           const row = locked.rows[0];
           if (!row) {
@@ -172,6 +177,10 @@ export function createPostgresMediaProcessingRepository(input: {
           if (Number(row.current_version) !== query.expectedVersion) {
             await releaseClaim();
             return err({ kind: "precondition_failed", code: "MEDIA_VERSION_MISMATCH" });
+          }
+          if (row.terminal_decision) {
+            await releaseClaim();
+            return err({ kind: "conflict", code: "MEDIA_INVALID_TRANSITION" });
           }
           if (["accepted", "rejected"].includes(row.current_result ?? "")) {
             await releaseClaim();

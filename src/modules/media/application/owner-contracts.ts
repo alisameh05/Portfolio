@@ -124,19 +124,20 @@ export interface OwnerMediaApplicationService {
 
 /** Complete, consistent acceptance facts read through the caller's transaction. */
 export interface GetMediaAcceptanceFactsQuery {
-  readonly ownerId: StableId<string>;
-  readonly mediaAssetIds: ReadonlyArray<StableId<string>>;
+  readonly ownerId: StableId<"Owner">;
+  readonly mediaAssetIds: ReadonlyArray<StableId<"MediaAsset">>;
+  readonly intendedUse: "supporting-artifact" | "decorative";
 }
 
 export interface MediaAcceptanceFact {
-  readonly mediaAssetId: StableId<string>;
-  readonly ownerId: StableId<string>;
+  readonly mediaAssetId: StableId<"MediaAsset">;
+  readonly ownerId: StableId<"Owner">;
   readonly assetVersion: number;
   readonly accepted: boolean;
   readonly safe: boolean;
   readonly suitable: boolean;
   readonly accessible: boolean;
-  readonly consistencyVersion: number;
+  readonly consistencyVersion: string;
 }
 
 export interface GetMediaUsageQuery {

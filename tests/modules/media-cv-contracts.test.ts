@@ -64,7 +64,8 @@ const initialRoot: CvPortfolioRootView = {
 
 const acceptanceQuery: GetMediaAcceptanceFactsQuery = {
   ownerId: "owner" as GetMediaAcceptanceFactsQuery["ownerId"],
-  mediaAssetIds: ["asset" as GetMediaAcceptanceFactsQuery["ownerId"]],
+  mediaAssetIds: ["asset" as GetMediaAcceptanceFactsQuery["mediaAssetIds"][number]],
+  intendedUse: "supporting-artifact",
 };
 const transaction = { kind: "transaction" } satisfies TransactionContext;
 type AcceptanceFactTransaction = Parameters<MediaReadApplicationService["getAcceptanceFacts"]>[1];
@@ -77,7 +78,7 @@ const fact: MediaAcceptanceFact = {
   safe: true,
   suitable: true,
   accessible: true,
-  consistencyVersion: 3,
+  consistencyVersion: "media-acceptance-v1:0000000000000000000000000000000000000000000000000000000000000000",
 };
 
 const deliveryPurpose: MediaDeliveryPurpose = "current-cv";

@@ -14,9 +14,12 @@ import { createPortfolioSettingsService } from "../../src/modules/portfolio-conf
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createPostgresMediaUploadIntentRepository } from "../../src/modules/media/adapters/postgres-upload-intents.js";
 import { createPostgresMediaProcessingRepository } from "../../src/modules/media/adapters/postgres-processing.js";
+import { createPostgresMediaAcceptanceRepository } from "../../src/modules/media/adapters/postgres-acceptance.js";
 import { createUploadCapabilityVault } from "../../src/modules/media/adapters/upload-capability-vault.js";
 import { createMediaUploadIntentApplicationService } from "../../src/modules/media/application/upload-intent.js";
 import { createMediaProcessingApplicationService, type PdfProcessorPort, type VideoProcessorPort, type MediaImageProcessorPort, type TrustedByteScannerPort, type MediaProcessingRepositoryPort } from "../../src/modules/media/application/processing.js";
+import { createMediaAcceptanceApplicationService } from "../../src/modules/media/application/acceptance.js";
+import type { OwnerMediaAccessibility } from "../../src/modules/media/application/owner-contracts.js";
 import { createSupabaseMediaUploadTargetAdapter } from "../../src/runtime/adapters/supabase-media-upload-target.js";
 import { createSupabaseMediaProcessingStorage } from "../../src/runtime/adapters/supabase-media-processing-storage.js";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
@@ -48,7 +51,8 @@ const REQUIRE_IMAGES = process.env["PHASE6_REQUIRE_IMAGES"] === "1";
 const REQUIRE_VIDEO = process.env["PHASE6_REQUIRE_VIDEO"] === "1";
 const PROCESSING_COUNTS_FILE = process.env["PHASE6_MEDIA_PROCESSING_COUNTS_FILE"];
 const REQUIRE_REAL = process.env["PHASE6_REQUIRE_UPLOAD_INTENT"] === "1";
-const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0, imageProcessorExecutions: 0 };
+const REQUIRE_ACCEPTANCE = process.env["PHASE6_MEDIA_ACCEPTANCE_ONLY"] === "1";
+const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0, imageProcessorExecutions: 0, acceptanceExecutions: 0 };
 
 if (REQUIRE_REAL && (!DATABASE_URL || !STORAGE_URL || !SERVICE_ROLE_KEY || !ANON_KEY || !REPLAY_KEY || !SCANNER_IMAGE || !SCANNER_VERSION ||
     (!REQUIRE_IMAGES && (!PDF_FIXTURE || !PDF_PROCESSOR_IMAGE || !PDF_PROCESSOR_VERSION)))) {
@@ -162,6 +166,8 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
   let signingCalls = 0;
   let lastStorageFailure: string | undefined;
   let appNow = Date.now();
+  const acceptedMediaIds: StableId<"MediaAsset">[] = [];
+  const decorativeMediaIds = new Set<StableId<"MediaAsset">>();
 
   function createService(target = targetAdapter) {
     return createMediaUploadIntentApplicationService({
@@ -172,6 +178,73 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       ids: createSystemIdGenerator(),
       clock: { now: () => new Date(appNow).toISOString() },
     });
+  }
+
+  function createAcceptanceService() {
+    return createMediaAcceptanceApplicationService({
+      scope: { ownerId },
+      repository: createPostgresMediaAcceptanceRepository({
+        database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
+      }),
+    });
+  }
+
+  async function acceptAndVerify(mediaId: StableId<"MediaAsset">, accessibility: OwnerMediaAccessibility, keySuffix: string) {
+    const acceptance = createAcceptanceService();
+    const command = {
+      actor: { kind: "owner" as const, ownerId, sessionId: "phase6-media-acceptance-owner" },
+      idempotencyKey: `phase6-accept-${keySuffix}-${randomBytes(8).toString("hex")}` as never,
+      expectedVersion: 2, mediaId, accessibility,
+    };
+    let releaseRead!: () => void;
+    let readReady!: () => void;
+    const heldRead = new Promise<void>((resolve) => { releaseRead = resolve; });
+    const readLocked = new Promise<void>((resolve) => { readReady = resolve; });
+    const read = appDatabase.transactions.run(async (transaction) => {
+      const facts = await acceptance.getAcceptanceFacts({ ownerId, mediaAssetIds: [mediaId], intendedUse: "supporting-artifact" }, transaction);
+      expect(facts.ok).toBe(true);
+      readReady();
+      await heldRead;
+      return facts;
+    });
+    await readLocked;
+    let acceptanceFinished = false;
+    const pendingAcceptance = acceptance.acceptOwnerMediaAsset(command).then((result) => { acceptanceFinished = true; return result; });
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(acceptanceFinished).toBe(false);
+    releaseRead();
+    const beforeAcceptance = await read;
+    expect(beforeAcceptance).toMatchObject({ ok: true, value: [{ accepted: false }] });
+    const accepted = await pendingAcceptance;
+    expect(accepted, JSON.stringify(accepted)).toMatchObject({ ok: true, value: { aggregateId: mediaId, aggregateVersion: 3, outcome: "media-accepted" } });
+    if (accepted.ok) mediaProcessingCounts.acceptanceExecutions += 1;
+    const replay = await acceptance.acceptOwnerMediaAsset(command);
+    expect(replay).toEqual(accepted);
+    const differentKey = await acceptance.acceptOwnerMediaAsset({ ...command, expectedVersion: 3, idempotencyKey: `phase6-accept-new-${randomBytes(8).toString("hex")}` as never });
+    expect(differentKey).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
+    const use = accessibility.kind === "decorative-image" ? "decorative" as const : "supporting-artifact" as const;
+    const facts = await appDatabase.transactions.run((transaction) => acceptance.getAcceptanceFacts({ ownerId, mediaAssetIds: [mediaId], intendedUse: use }, transaction));
+    expect(facts).toMatchObject({ ok: true, value: [{ mediaAssetId: mediaId, ownerId, assetVersion: 3, accepted: true, safe: true, suitable: true, accessible: true }] });
+    if (!facts.ok) throw new Error("PHASE6_ACCEPTANCE_FACTS_UNAVAILABLE");
+    expect(facts.value[0]?.consistencyVersion).toMatch(/^media-acceptance-v1:[0-9a-f]{64}$/u);
+    const decision = await admin.query(`select decision, aggregate_version, processing_policy_version, sealed_outputs, accessibility,
+        ownership_attested_by::text, ownership_attested_at, public_suitability_attested_by::text, public_suitability_attested_at,
+        decided_by::text from media.decision_history where media_id = $1::uuid`, [mediaId]);
+    expect(decision.rowCount).toBe(1);
+    expect(decision.rows[0]).toMatchObject({ decision: "accepted", aggregate_version: 3, accessibility,
+      ownership_attested_by: ownerId, public_suitability_attested_by: ownerId, decided_by: ownerId });
+    expect(decision.rows[0]?.sealed_outputs).toEqual(expect.arrayContaining([expect.objectContaining({ objectId: expect.any(String), sha256: expect.any(String), mimeType: expect.any(String) })]));
+    expect(new Date(decision.rows[0]?.ownership_attested_at).toISOString()).toBe(new Date(decision.rows[0]?.public_suitability_attested_at).toISOString());
+    const event = await admin.query(`select event_type, aggregate_version, payload from operations.outbox_events
+      where aggregate_id = $1::uuid and event_type = 'media.asset_accepted.v1'`, [mediaId]);
+    expect(event.rows).toEqual([{ event_type: "media.asset_accepted.v1", aggregate_version: 3, payload: { mediaId } }]);
+    acceptedMediaIds.push(mediaId);
+    if (accessibility.kind === "decorative-image") decorativeMediaIds.add(mediaId);
+    const duplicateBatch = await appDatabase.transactions.run((transaction) => acceptance.getAcceptanceFacts({
+      ownerId, mediaAssetIds: [mediaId, mediaId], intendedUse: "supporting-artifact",
+    }, transaction));
+    expect(duplicateBatch).toMatchObject({ ok: true, value: [{ mediaAssetId: mediaId, accepted: true }] });
+    return { acceptance, command, accepted };
   }
 
   function ownerService(uploadIntents: ReturnType<typeof createService>) {
@@ -595,6 +668,20 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         uploadTargetSubstitution.pathname = uploadTargetSubstitution.pathname.replace("/object/upload/sign/media-candidates/candidate/", "/object/upload/sign/media-processed/processed/");
         const substitutedUpload = await fetch(uploadTargetSubstitution, { method: "PUT", headers: { "content-type": "image/webp", "x-upsert": "false" }, body: Buffer.from("substitute") });
         expect(substitutedUpload.status).toBeGreaterThanOrEqual(400);
+        const accepted = await acceptAndVerify(image.mediaId as StableId<"MediaAsset">,
+          imageMimeType === "image/jpeg" ? { kind: "decorative-image" } : { kind: "described-image", altText: `A ${imageMimeType} image` },
+          imageMimeType.replace("/", "-"));
+        const scansBeforeReprocess = scannerExecutions;
+        const afterAcceptance = await mediaProcessing.record({ ...imageCommand, expectedVersion: 3,
+          idempotencyKey: `phase6-image-post-accept-${randomBytes(8).toString("hex")}` as never });
+        expect(afterAcceptance).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
+        expect(scannerExecutions).toBe(scansBeforeReprocess);
+        if (imageMimeType === "image/jpeg") {
+          const meaningfulFacts = await appDatabase.transactions.run((transaction) => accepted.acceptance.getAcceptanceFacts({
+            ownerId, mediaAssetIds: [image.mediaId as StableId<"MediaAsset">], intendedUse: "supporting-artifact",
+          }, transaction));
+          expect(meaningfulFacts).toMatchObject({ ok: true, value: [{ accepted: true, safe: true, suitable: true, accessible: false }] });
+        }
       }
     }
     if (REQUIRE_IMAGES) {
@@ -667,8 +754,24 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         [staleCandidate.mediaId],
       );
       expect(staleFacts.rows[0]).toEqual({ attempts: 0, outputs: 0, events: 0, orphans: 0 });
+      if (REQUIRE_ACCEPTANCE) {
+        const acceptancePdfBytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
+        const acceptancePdf = await uploadPdf(acceptancePdfBytes, "acceptance");
+        const acceptancePdfHash = createHash("sha256").update(acceptancePdfBytes).digest("hex");
+        const acceptancePdfProcessing = await mediaProcessing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-media-acceptance-owner" },
+          idempotencyKey: "phase6-acceptance-pdf-processing" as never, mediaId: acceptancePdf.mediaId, expectedVersion: 1,
+          result: "passed", detectedMediaType: "application/pdf", detectedByteLength: acceptancePdfBytes.byteLength, sha256: acceptancePdfHash });
+        expect(acceptancePdfProcessing, JSON.stringify(acceptancePdfProcessing)).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+        await acceptAndVerify(acceptancePdf.mediaId as StableId<"MediaAsset">,
+          { kind: "document", summary: "A readable one page PDF document." }, "pdf");
+        mediaProcessingCounts.scannerExecutions += scannerExecutions;
+        mediaProcessingCounts.processorExecutions += processorExecutions;
+        mediaProcessingCounts.imageProcessorExecutions += imageProcessorExecutions;
+        if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
+        return;
+      }
       if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify({ scannerExecutions, processorExecutions, imageProcessorExecutions }));
-      return;
+      if (!REQUIRE_VIDEO) return;
     }
 
     const pdfBytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
@@ -789,6 +892,62 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       [safe.mediaId],
     );
     expect(terminalFacts.rows[0]).toEqual({ attempts: 1, outputs: 1, commands: 1, events: 1 });
+    const incompatibleAcceptance = await createAcceptanceService().acceptOwnerMediaAsset({
+      actor: { kind: "owner", ownerId, sessionId: "phase6-media-acceptance-owner" },
+      idempotencyKey: "phase6-accept-pdf-wrong-kind" as never, expectedVersion: 2,
+      mediaId: safe.mediaId, accessibility: { kind: "video", summary: "Wrong asset metadata." },
+    });
+    expect(incompatibleAcceptance).toMatchObject({ ok: false, error: { code: "MEDIA_ACCESSIBILITY_KIND_MISMATCH" } });
+    const acceptedPdf = await acceptAndVerify(safe.mediaId as StableId<"MediaAsset">,
+      { kind: "document", summary: "A readable one page PDF document." }, "pdf");
+    const scansBeforePdfReprocess = scannerExecutions;
+    const pdfReprocess = await mediaProcessing.record({ ...acceptedPdf.command, expectedVersion: 3,
+      result: "passed", detectedMediaType: "application/pdf", detectedByteLength: pdfBytes.byteLength, sha256: safeHash,
+      idempotencyKey: `phase6-pdf-post-accept-${randomBytes(8).toString("hex")}` as never });
+    expect(pdfReprocess).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
+    expect(scannerExecutions).toBe(scansBeforePdfReprocess);
+    const pdfMeaningfulFacts = await appDatabase.transactions.run((transaction) => acceptedPdf.acceptance.getAcceptanceFacts({
+      ownerId, mediaAssetIds: [safe.mediaId as StableId<"MediaAsset">], intendedUse: "supporting-artifact",
+    }, transaction));
+    expect(pdfMeaningfulFacts).toMatchObject({ ok: true, value: [{ accepted: true, safe: true, suitable: true, accessible: true }] });
+    const acceptanceBatch = await appDatabase.transactions.run((transaction) => acceptedPdf.acceptance.getAcceptanceFacts({
+      ownerId, mediaAssetIds: [...acceptedMediaIds].reverse().concat(acceptedMediaIds[0]!), intendedUse: "supporting-artifact",
+    }, transaction));
+    expect(acceptanceBatch.ok).toBe(true);
+    if (acceptanceBatch.ok) {
+      expect(acceptanceBatch.value).toHaveLength(acceptedMediaIds.length);
+      expect(acceptanceBatch.value.map(({ mediaAssetId }) => mediaAssetId)).toEqual([...acceptedMediaIds].sort());
+      expect(acceptanceBatch.value.every(({ consistencyVersion }) => consistencyVersion === acceptanceBatch.value[0]?.consistencyVersion)).toBe(true);
+      expect(acceptanceBatch.value.find(({ mediaAssetId }) => decorativeMediaIds.has(mediaAssetId))?.accessible).toBe(false);
+    }
+    const acceptanceRollback = await uploadPdf(pdfBytes, "acceptance-rollback");
+    const rollbackProcessing = await mediaProcessing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-media-acceptance-owner" },
+      idempotencyKey: `phase6-accept-rollback-process-${randomBytes(8).toString("hex")}` as never,
+      mediaId: acceptanceRollback.mediaId, expectedVersion: 1, result: "passed", detectedMediaType: "application/pdf",
+      detectedByteLength: pdfBytes.byteLength, sha256: safeHash });
+    expect(rollbackProcessing).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+    const rollbackSuffix = randomBytes(3).toString("hex");
+    const rollbackFunction = `test_accept_outbox_fail_${rollbackSuffix}`;
+    const rollbackTrigger = `test_accept_outbox_fail_${rollbackSuffix}`;
+    await admin.query(`create function operations.${rollbackFunction}() returns trigger language plpgsql as $$ begin if new.event_type = 'media.asset_accepted.v1' and new.aggregate_id = '${acceptanceRollback.mediaId}'::uuid then raise exception 'MEDIA_ACCEPTANCE_OUTBOX_INJECTED'; end if; return new; end $$`);
+    await admin.query(`create trigger ${rollbackTrigger} before insert on operations.outbox_events for each row execute function operations.${rollbackFunction}()`);
+    try {
+      const failedAcceptance = await createAcceptanceService().acceptOwnerMediaAsset({
+        actor: { kind: "owner", ownerId, sessionId: "phase6-media-acceptance-owner" },
+        idempotencyKey: `phase6-accept-rollback-${randomBytes(8).toString("hex")}` as never,
+        expectedVersion: 2, mediaId: acceptanceRollback.mediaId, accessibility: { kind: "document", summary: "Rollback fixture." },
+      });
+      expect(failedAcceptance).toMatchObject({ ok: false, error: { code: "MEDIA_ACCEPTANCE_COMMIT_FAILED" } });
+      const rolledBack = await admin.query(`select
+        (select aggregate_version from media.processing_states where media_id = $1::uuid) as aggregate_version,
+        (select count(*)::int from media.decision_history where media_id = $1::uuid) as decisions,
+        (select count(*)::int from media.acceptance_commands where media_id = $1::uuid) as receipts,
+        (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'media.asset_accepted.v1') as events`, [acceptanceRollback.mediaId]);
+      expect(rolledBack.rows[0]).toEqual({ aggregate_version: 2, decisions: 0, receipts: 0, events: 0 });
+    } finally {
+      await admin.query(`drop trigger ${rollbackTrigger} on operations.outbox_events`);
+      await admin.query(`drop function operations.${rollbackFunction}()`);
+    }
 
     const concurrent = await uploadPdf(pdfBytes, "concurrent");
     const concurrentKey = "phase6-pdf-process-concurrent-key" as never;
@@ -998,7 +1157,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       await admin.query(`drop trigger ${triggerName} on operations.outbox_events`);
       await admin.query(`drop function operations.${functionName}()`);
     }
-    if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify({ scannerExecutions, processorExecutions, imageProcessorExecutions }));
+    mediaProcessingCounts.scannerExecutions += scannerExecutions;
+    mediaProcessingCounts.processorExecutions += processorExecutions;
+    mediaProcessingCounts.imageProcessorExecutions += imageProcessorExecutions;
+    if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
   }, 300_000);
   it("processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg", async () => {
     appNow = Date.now();
@@ -1093,6 +1255,22 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       expect(videoProcessorExecutions).toBe(fixtureEntries.indexOf(fixture) + 1);
       expect((await admin.query("select count(*)::int as count from media.processing_attempts where media_id = $1::uuid", [upload.mediaId])).rows[0]?.count).toBe(1);
       expect((await admin.query("select count(*)::int as count from media.processing_attempt_outputs where media_id = $1::uuid", [upload.mediaId])).rows[0]?.count).toBe(outputsBeforeReplay.rows[0]?.count);
+      await acceptAndVerify(upload.mediaId as StableId<"MediaAsset">,
+        { kind: "video", summary: `A short ${fixture.mime} clip.` }, fixture.mime.slice(6));
+      const scansBeforeReprocess = scannerExecutions;
+      const afterAcceptance = await processing.record({ ...command, expectedVersion: 3,
+        idempotencyKey: `phase6-video-post-accept-${randomBytes(8).toString("hex")}` as never });
+      expect(afterAcceptance).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
+      expect(scannerExecutions).toBe(scansBeforeReprocess);
+    }
+    const videoAcceptance = createAcceptanceService();
+    const videoBatch = await appDatabase.transactions.run((transaction) => videoAcceptance.getAcceptanceFacts({
+      ownerId, mediaAssetIds: [...acceptedMediaIds].reverse().concat(acceptedMediaIds.at(-1)!), intendedUse: "decorative",
+    }, transaction));
+    expect(videoBatch.ok).toBe(true);
+    if (videoBatch.ok) {
+      expect(videoBatch.value).toHaveLength(acceptedMediaIds.length);
+      expect(videoBatch.value.every((fact) => fact.accepted && fact.safe && fact.suitable && fact.accessible)).toBe(true);
     }
 
     const malformed = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from("ftypisommalformed")]);
