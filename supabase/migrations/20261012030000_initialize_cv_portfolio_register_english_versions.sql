@@ -92,20 +92,6 @@ create index cv_versions_owner_history_idx
 create index cv_activation_history_owner_recent_idx
   on cv_portfolio.activation_history (portfolio_id, owner_id, activated_at desc, activation_id desc);
 
-alter table cv_portfolio.portfolios enable row level security;
-alter table cv_portfolio.portfolios force row level security;
-alter table cv_portfolio.versions enable row level security;
-alter table cv_portfolio.versions force row level security;
-alter table cv_portfolio.registration_commands enable row level security;
-alter table cv_portfolio.registration_commands force row level security;
-alter table cv_portfolio.activation_history enable row level security;
-alter table cv_portfolio.activation_history force row level security;
-
-grant usage on schema cv_portfolio to shipwithali_application;
-grant select, insert, update on cv_portfolio.portfolios to shipwithali_application;
-grant select, insert on cv_portfolio.versions, cv_portfolio.activation_history to shipwithali_application;
-grant select, insert on cv_portfolio.registration_commands to shipwithali_application;
-
 create policy cv_portfolios_owner_scope on cv_portfolio.portfolios
   for all to shipwithali_application
   using (
@@ -176,8 +162,33 @@ revoke delete, truncate, references, trigger on cv_portfolio.portfolios
 
 -- Backfill roots for already-configured owners. Future owners are initialized
 -- lazily by the existing authenticated CV read/register application interface.
+-- Temporarily suspend forced RLS in this atomic migration transaction so the
+-- migration role can read every configured owner and insert each private root.
+-- The new root table remains inaccessible until the backfill completes.
+alter table portfolio_config.settings no force row level security;
+alter table portfolio_config.settings disable row level security;
+
 insert into cv_portfolio.portfolios (portfolio_id, owner_id, aggregate_version)
 select portfolio_id, owner_id, 1 from portfolio_config.settings
 on conflict (portfolio_id) do nothing;
+
+set constraints all immediate;
+alter table portfolio_config.settings enable row level security;
+alter table portfolio_config.settings force row level security;
+
+alter table cv_portfolio.portfolios enable row level security;
+alter table cv_portfolio.portfolios force row level security;
+alter table cv_portfolio.versions enable row level security;
+alter table cv_portfolio.versions force row level security;
+alter table cv_portfolio.registration_commands enable row level security;
+alter table cv_portfolio.registration_commands force row level security;
+alter table cv_portfolio.activation_history enable row level security;
+alter table cv_portfolio.activation_history force row level security;
+
+-- Grant application access only after every CV table has forced RLS.
+grant usage on schema cv_portfolio to shipwithali_application;
+grant select, insert, update on cv_portfolio.portfolios to shipwithali_application;
+grant select, insert on cv_portfolio.versions, cv_portfolio.activation_history to shipwithali_application;
+grant select, insert on cv_portfolio.registration_commands to shipwithali_application;
 
 reset role;

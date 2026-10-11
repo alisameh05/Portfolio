@@ -11,6 +11,9 @@ import { handleCreateOwnerMediaUploadIntent } from "../../src/runtime/http/owner
 import { handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-media.js";
 import { withOwnerTestAuth } from "../runtime/owner-test-auth.js";
 import { createOwnerSecurityTestStub } from "../../src/runtime/http/owner-security.js";
+import { handleGetOwnerCvPortfolio, handleRegisterOwnerCvVersion } from "../../src/runtime/http/owner-cv.js";
+import { getOwnerCvApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
+import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
 import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createContentAuthoringService } from "../../src/modules/content-publishing/application/authoring.js";
@@ -25,8 +28,6 @@ import { createUploadCapabilityVault } from "../../src/modules/media/adapters/up
 import { createMediaUploadIntentApplicationService } from "../../src/modules/media/application/upload-intent.js";
 import { createMediaProcessingApplicationService, type PdfProcessorPort, type VideoProcessorPort, type MediaImageProcessorPort, type TrustedByteScannerPort, type MediaProcessingRepositoryPort } from "../../src/modules/media/application/processing.js";
 import { createMediaAcceptanceApplicationService } from "../../src/modules/media/application/acceptance.js";
-import { createOwnerCvApplicationService } from "../../src/modules/cv-portfolio/application/owner-service.js";
-import { createPostgresCvPortfolioRepository } from "../../src/modules/cv-portfolio/adapters/postgres-portfolio.js";
 import type { OwnerMediaAccessibility } from "../../src/modules/media/application/owner-contracts.js";
 import { createSupabaseMediaUploadTargetAdapter } from "../../src/runtime/adapters/supabase-media-upload-target.js";
 import { createSupabaseMediaProcessingStorage } from "../../src/runtime/adapters/supabase-media-processing-storage.js";
@@ -166,6 +167,8 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
   let admin: Client;
   let appClient: Client;
   let appDatabase: ReturnType<typeof createPostgresRuntimeDatabase>;
+  let applicationDatabaseUrl: string;
+  let databaseRuntimeInitialized = false;
   let roleName: string;
   let storageBase: string;
   let ownerId: StableId<"Owner">;
@@ -420,6 +423,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const appUrl = new URL(DATABASE_URL!);
     appUrl.username = roleName;
     appUrl.password = password;
+    applicationDatabaseUrl = appUrl.toString();
     appDatabase = createPostgresRuntimeDatabase(appUrl.toString());
     appClient = new Client({ connectionString: appUrl.toString() });
     await appClient.connect();
@@ -437,6 +441,17 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       globalCta: { label: "Contact", destination: "https://example.invalid/contact", unavailableFallback: "Unavailable" },
     });
     expect(provisioned.ok).toBe(true);
+    await initializeDatabaseRuntime({
+      NODE_ENV: "test",
+      APP_BASE_URL: "https://portfolio.example.test",
+      DATABASE_URL: applicationDatabaseUrl,
+      PORTFOLIO_ID: portfolioId,
+      OWNER_ID: ownerId,
+      SUPABASE_URL: STORAGE_URL!,
+      SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY!,
+      MEDIA_UPLOAD_REPLAY_ENCRYPTION_KEY: REPLAY_KEY!,
+    }, "application");
+    databaseRuntimeInitialized = true;
     const realFetch = fetch;
     targetAdapter = createSupabaseMediaUploadTargetAdapter({
       storageUrl: STORAGE_URL!,
@@ -456,6 +471,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
   }, 60_000);
 
   afterAll(async () => {
+    if (databaseRuntimeInitialized) {
+      await getLifecycleCoordinator().shutdown();
+      resetRuntimeForTests();
+    }
     if (appClient !== undefined) await appClient.end();
     if (appDatabase !== undefined) await appDatabase.resource.close();
     if (admin !== undefined) {
@@ -1034,14 +1053,11 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     }, transaction));
     expect(pdfMeaningfulFacts).toMatchObject({ ok: true, value: [{ accepted: true, safe: true, suitable: true, accessible: true }] });
 
-    const cvRepository = createPostgresCvPortfolioRepository({
-      database: appDatabase.database,
-      transactions: appDatabase.transactions,
-      scope: { portfolioId, ownerId },
-      media: acceptedPdf.acceptance,
-    });
-    const cvService = createOwnerCvApplicationService({ ownerId, repository: cvRepository });
+    const cvService = await getOwnerCvApplicationService();
     const cvOwner = { kind: "owner" as const, ownerId, sessionId: "phase6-cv-registration-owner" };
+    const getCvThroughHttp = () => handleGetOwnerCvPortfolio(new Request("https://example.com/api/owner/v1/cv", {
+      method: "GET", headers: withOwnerTestAuth({}),
+    }), { service: cvService, security: ownerSecurity() });
     const cvChecks: Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }> = [];
     const cvScenario = (name: string, passed: boolean) => {
       cvChecks.push({ name, executed: true, status: passed ? "passed" : "failed" });
@@ -1049,20 +1065,13 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     };
 
     await admin.query("delete from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
-    await admin.query(`insert into cv_portfolio.portfolios (portfolio_id, owner_id, aggregate_version)
-      select portfolio_id, owner_id, 1 from portfolio_config.settings
-      where portfolio_id = $1::uuid and owner_id = $2::uuid
-      on conflict (portfolio_id) do nothing`, [portfolioId, ownerId]);
-    const migrationBackfill = await admin.query(`select aggregate_version from cv_portfolio.portfolios
-      where portfolio_id = $1::uuid and owner_id = $2::uuid`, [portfolioId, ownerId]);
-    const migrationBackfillPasses = Number(migrationBackfill.rows[0]?.aggregate_version) === 1;
-    await admin.query("delete from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
-    const [emptyCvA, emptyCvB] = await Promise.all([
-      cvService.getOwnerCvPortfolio({ actor: cvOwner }),
-      cvService.getOwnerCvPortfolio({ actor: cvOwner }),
-    ]);
-    expect(emptyCvA).toMatchObject({ ok: true, value: { aggregateVersion: 1, currentVersionId: null, versions: [], activationHistory: [] } });
-    expect(emptyCvB).toMatchObject({ ok: true, value: { aggregateVersion: 1, currentVersionId: null, versions: [], activationHistory: [] } });
+    const [emptyResponseA, emptyResponseB] = await Promise.all([getCvThroughHttp(), getCvThroughHttp()]);
+    expect(emptyResponseA.status).toBe(200);
+    expect(emptyResponseB.status).toBe(200);
+    const emptyCvA = await emptyResponseA.json();
+    const emptyCvB = await emptyResponseB.json();
+    expect(emptyCvA).toMatchObject({ aggregateVersion: 1, currentVersionId: null, versions: [], activationHistory: [] });
+    expect(emptyCvB).toMatchObject({ aggregateVersion: 1, currentVersionId: null, versions: [], activationHistory: [] });
     const rootCount = await admin.query("select count(*)::int as count from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
     cvScenario("T09-01 concurrent authenticated reads initialize one empty version-1 scoped root", Number(rootCount.rows[0]?.count) === 1);
     const noScopeRead = await appDatabase.transactions.run(async (transaction) => {
@@ -1096,8 +1105,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       cvDatabasePolicy.rows[0]?.rls_tables === 4 && cvDatabasePolicy.rows[0]?.policies === 4 &&
       cvDatabasePolicy.rows[0]?.indexes >= 2 && cvDatabasePolicy.rows[0]?.scoped_foreign_keys >= 2 &&
       cvDatabasePolicy.rows[0]?.version_checks >= 6 &&
-      cvDatabasePolicy.rows[0]?.app_read === true && cvDatabasePolicy.rows[0]?.anon_read === false &&
-      migrationBackfillPasses);
+      cvDatabasePolicy.rows[0]?.app_read === true && cvDatabasePolicy.rows[0]?.anon_read === false);
 
     const registerCv = (overrides: Partial<Parameters<typeof cvService.registerOwnerCvVersion>[0]> = {}) =>
       cvService.registerOwnerCvVersion({
@@ -1109,7 +1117,29 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         label: "  CV October 2026  ",
         ...overrides,
       });
-    const cvRegistration = await registerCv();
+    const registerCvThroughHttp = (options: { readonly idempotencyKey?: string; readonly ifMatch?: string; readonly mediaId?: string } = {}) => handleRegisterOwnerCvVersion(new Request("https://example.com/api/owner/v1/cv/versions", {
+      method: "POST",
+      headers: withOwnerTestAuth({ "content-type": "application/json", "idempotency-key": options.idempotencyKey ?? "phase6-cv-register-primary", "if-match": options.ifMatch ?? "\"1\"" }),
+      body: JSON.stringify({ mediaId: options.mediaId ?? safe.mediaId, locale: "en", label: "  CV October 2026  " }),
+    }), { service: cvService, security: ownerSecurity() });
+    await admin.query("select pg_advisory_lock(hashtextextended($1::text, 0))", [safe.mediaId]);
+    const concurrentRegistrations = Promise.all([registerCvThroughHttp(), registerCvThroughHttp()]);
+    let waitingForMediaLock = 0;
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const waiting = await admin.query(`select count(*)::int as count from pg_stat_activity
+        where usename = $1 and wait_event_type = 'Lock' and query ilike '%pg_advisory_xact_lock_shared%'`, [roleName]);
+      waitingForMediaLock = Number(waiting.rows[0]?.count ?? 0);
+      if (waitingForMediaLock === 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    await admin.query("select pg_advisory_unlock(hashtextextended($1::text, 0))", [safe.mediaId]);
+    const [httpRegistrationA, httpRegistrationB] = await concurrentRegistrations;
+    expect(waitingForMediaLock, "both Owner requests must pass the initial receipt lookup and wait at the shared Media lock").toBe(2);
+    const [httpReceiptA, httpReceiptB] = await Promise.all([httpRegistrationA.json(), httpRegistrationB.json()]);
+    expect(httpRegistrationA.status).toBe(201);
+    expect(httpRegistrationB.status).toBe(201);
+    expect(httpReceiptA).toEqual(httpReceiptB);
+    const cvRegistration = { ok: true as const, value: httpReceiptA };
     expect(cvRegistration).toMatchObject({ ok: true, value: { aggregateVersion: 2, outcome: "cv-version-registered" } });
     if (!cvRegistration.ok) throw new Error("PHASE6_CV_REGISTRATION_FAILED");
     const savedCv = await admin.query(`select version_id::text, media_id::text, media_asset_version, version_number, locale, label, state
@@ -1126,9 +1156,14 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect((await admin.query("select count(*)::int as count from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId])).rows[0]?.count).toBe(0);
     const registeredEvent = await admin.query(`select count(*)::int as count from operations.outbox_events
       where aggregate_id = $1::uuid and event_type = 'cv.version_registered.v1'`, [portfolioId]);
+    const registrationReceiptCount = await admin.query("select count(*)::int as count from cv_portfolio.registration_commands where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
+    cvScenario("T09-02 concurrent authenticated Owner POSTs replay one shared receipt after both miss the initial lookup",
+      waitingForMediaLock === 2 && httpRegistrationA.status === 201 && httpRegistrationB.status === 201 &&
+      JSON.stringify(httpReceiptA) === JSON.stringify(httpReceiptB) && savedCv.rowCount === 1 &&
+      registrationReceiptCount.rows[0]?.count === 1 && registeredEvent.rows[0]?.count === 1);
     cvScenario("T09-03 and T09-05 accepted same-Owner PDF facts are snapshot-bound to a UUIDv7 English registered version",
       savedCv.rowCount === 1 && savedCv.rows[0]?.media_asset_version === 3 && savedCv.rows[0]?.version_number === 1 &&
-      savedCv.rows[0]?.state === "registered" && registeredEvent.rows[0]?.count === 1);
+      savedCv.rows[0]?.state === "registered" && registrationReceiptCount.rows[0]?.count === 1 && registeredEvent.rows[0]?.count === 1);
     cvScenario("T09-06 registration increments the root and records one event without accepting or activating the CV",
       cvRegistration.value.aggregateVersion === 2 && savedCv.rows[0]?.state === "registered" &&
       (await cvService.getOwnerCvPortfolio({ actor: cvOwner })).ok);
@@ -1138,18 +1173,38 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const replay = await registerCv();
     const changedReplay = await registerCv({ label: "A different CV" });
     const staleRegistration = await registerCv({ idempotencyKey: "phase6-cv-register-stale" as never, expectedVersion: 1 });
+    const beforeStaleHttp = await admin.query(`select portfolio.aggregate_version,
+      (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid) as versions,
+      (select count(*)::int from cv_portfolio.registration_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
+      (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.version_registered.v1') as events
+      from cv_portfolio.portfolios portfolio where portfolio.portfolio_id = $1::uuid and portfolio.owner_id = $2::uuid`, [portfolioId, ownerId]);
+    const staleHttpRegistration = await registerCvThroughHttp({ idempotencyKey: "phase6-cv-register-stale-http", ifMatch: "\"1\"" });
+    const staleHttpProblem = await staleHttpRegistration.json();
+    const afterStaleHttp = await admin.query(`select portfolio.aggregate_version,
+      (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid) as versions,
+      (select count(*)::int from cv_portfolio.registration_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
+      (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.version_registered.v1') as events
+      from cv_portfolio.portfolios portfolio where portfolio.portfolio_id = $1::uuid and portfolio.owner_id = $2::uuid`, [portfolioId, ownerId]);
     cvScenario("T09-07 exact replay preserves the original receipt; changed intent conflicts and a fresh stale root version fails",
       JSON.stringify(replay) === JSON.stringify(cvRegistration) &&
       (!changedReplay.ok && changedReplay.error.code === "IDEMPOTENCY_CONFLICT") &&
-      (!staleRegistration.ok && staleRegistration.error.kind === "precondition_failed"));
+      (!staleRegistration.ok && staleRegistration.error.kind === "precondition_failed") &&
+      staleHttpRegistration.status === 412 && staleHttpProblem?.type === "about:blank" &&
+      JSON.stringify(afterStaleHttp.rows[0]) === JSON.stringify(beforeStaleHttp.rows[0]));
 
+    const mutationCountsBeforeRejectedIntents = await admin.query(`select
+      (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid) as versions,
+      (select count(*)::int from cv_portfolio.registration_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
+      (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.version_registered.v1') as events`, [portfolioId, ownerId]);
     const unprocessedPdf = await uploadPdf(pdfBytes, "cv-unprocessed");
     const unprocessedRegistration = await registerCv({
       idempotencyKey: "phase6-cv-register-unprocessed" as never,
       expectedVersion: 2,
       mediaId: unprocessedPdf.mediaId as StableId<"MediaAsset">,
     });
-    const wrongKindId = acceptedMediaIds.find((mediaId) => mediaId !== safe.mediaId);
+    const wrongKindFacts = await admin.query(
+      "select media_id::text, kind from media.assets where media_id = any($1::uuid[]) and lifecycle = 'accepted' and kind = 'image' limit 1", [acceptedMediaIds]);
+    const wrongKindId = wrongKindFacts.rows[0]?.media_id as StableId<"MediaAsset"> | undefined;
     const wrongKindRegistration = wrongKindId === undefined ? undefined : await registerCv({
       idempotencyKey: "phase6-cv-register-image" as never,
       expectedVersion: 2,
@@ -1176,9 +1231,14 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       locale: "ar" as "en",
       label: "Arabic CV",
     });
-    cvScenario("T09-04 unprocessed, foreign, missing, non-PDF and non-English registration intents reject safely",
-      (!unprocessedRegistration.ok && (!wrongKindRegistration || !wrongKindRegistration.ok) && !missingRegistration.ok &&
-       !foreignActorRegistration.ok && !wrongLocale.ok));
+    const mutationCountsAfterRejectedIntents = await admin.query(`select
+      (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid) as versions,
+      (select count(*)::int from cv_portfolio.registration_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
+      (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.version_registered.v1') as events`, [portfolioId, ownerId]);
+    cvScenario("T09-04 unprocessed raw PDF, accepted non-PDF image, missing, foreign Owner, and non-English intents reject without writes",
+      !unprocessedRegistration.ok && (!wrongKindRegistration || !wrongKindRegistration.ok) && wrongKindFacts.rows[0]?.kind === "image" &&
+      !missingRegistration.ok && !foreignActorRegistration.ok && !wrongLocale.ok &&
+      JSON.stringify(mutationCountsAfterRejectedIntents.rows[0]) === JSON.stringify(mutationCountsBeforeRejectedIntents.rows[0]));
 
     let expectedCvVersion = 2;
     for (let index = 0; index < 101; index += 1) {
@@ -1666,6 +1726,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
   }, 300_000);
   it("processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg", async () => {
     appNow = Date.now();
+    const acceptedCountBeforeVideos = acceptedMediaIds.length;
     const { createClamAvScanner, createFfmpegVideoProcessor } = await import("../../src/runtime/adapters/media-processing-tools.js");
     const realScanner = createClamAvScanner({ maxBytes: 50 * 1024 * 1024, timeoutMs: 25_000 });
     const realVideoProcessor = createFfmpegVideoProcessor();
@@ -1765,6 +1826,17 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       expect(afterAcceptance).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
       expect(scannerExecutions).toBe(scansBeforeReprocess);
     }
+    const acceptedVideoId = acceptedMediaIds[acceptedCountBeforeVideos];
+    expect(acceptedVideoId).toBeDefined();
+    const cvService = await getOwnerCvApplicationService();
+    const currentCvRoot = await admin.query("select aggregate_version from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
+    const videoRegistration = await cvService.registerOwnerCvVersion({
+      actor: { kind: "owner", ownerId, sessionId: "phase6-cv-registration-owner" },
+      idempotencyKey: "phase6-cv-register-accepted-video" as never,
+      expectedVersion: Number(currentCvRoot.rows[0]?.aggregate_version),
+      mediaId: acceptedVideoId!, locale: "en", label: "A video is not a CV PDF",
+    });
+    expect(videoRegistration).toMatchObject({ ok: false, error: { kind: "validation" } });
     const videoAcceptance = createAcceptanceService();
     const videoBatch = await appDatabase.transactions.run((transaction) => videoAcceptance.getAcceptanceFacts({
       ownerId, mediaAssetIds: [...acceptedMediaIds].reverse().concat(acceptedMediaIds.at(-1)!), intendedUse: "decorative",
@@ -1824,6 +1896,13 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect((await admin.query("select result, finding_codes from media.processing_attempts where media_id = $1::uuid", [unsafeUpload.mediaId])).rows[0])
       .toMatchObject({ result: "failed", finding_codes: ["MEDIA_UNSAFE_CONTENT"] });
     expect((await admin.query("select count(*)::int as count from media.processed_objects where media_id = $1::uuid", [unsafeUpload.mediaId])).rows[0]?.count).toBe(0);
+    const rejectedUnsafeRegistration = await cvService.registerOwnerCvVersion({
+      actor: { kind: "owner", ownerId, sessionId: "phase6-cv-registration-owner" },
+      idempotencyKey: "phase6-cv-register-rejected-unsafe" as never,
+      expectedVersion: Number(currentCvRoot.rows[0]?.aggregate_version),
+      mediaId: unsafeUpload.mediaId as StableId<"MediaAsset">, locale: "en", label: "Rejected unsafe media",
+    });
+    expect(rejectedUnsafeRegistration).toMatchObject({ ok: false, error: { kind: "validation" } });
     const oversized = await realVideoProcessor.process(new Uint8Array(50 * 1024 * 1024 + 1));
     expect(oversized).toMatchObject({ ok: false, error: { kind: "validation", code: "MEDIA_BYTES_OUT_OF_BOUNDS" } });
     expect(videoProcessorExecutions).toBe(5);

@@ -187,6 +187,16 @@ export function createPostgresCvPortfolioRepository(input: {
             for update`.execute(executor);
           const current = locked.rows[0];
           if (current === undefined) throw new PostgresInfrastructureError();
+          const committedReplay = await sql<ReplayRow>`select request_hash, version_id::text as version_id, aggregate_version
+            from cv_portfolio.registration_commands
+            where portfolio_id = ${input.scope.portfolioId}::uuid and owner_id = ${input.scope.ownerId}::uuid
+              and idempotency_key_hash = ${idempotencyKeyHash}`.execute(executor);
+          const committed = committedReplay.rows[0];
+          if (committed !== undefined) {
+            if (committed.request_hash !== command.requestHash) return err({ kind: "conflict", code: "IDEMPOTENCY_CONFLICT" });
+            return ok({ versionId: stableId("CvVersion", committed.version_id),
+              aggregateVersion: Number(committed.aggregate_version), outcome: "cv-version-registered" });
+          }
           if (Number(current.aggregate_version) !== command.expectedVersion) {
             return { ok: false, error: { kind: "precondition_failed", code: "CV_PORTFOLIO_VERSION_MISMATCH", currentVersion: Number(current.aggregate_version) } };
           }

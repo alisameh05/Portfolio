@@ -66,6 +66,9 @@ describe("Owner CV registration application service (#154)", () => {
     { ...command, label: " " },
     { ...command, label: "bad\u0000label" },
     { ...command, label: "x".repeat(121) },
+    { ...command, idempotencyKey: "x".repeat(129) as never },
+    { ...command, idempotencyKey: "has space" as never },
+    { ...command, idempotencyKey: "non-ASCII-é" as never },
     { ...command, locale: "ar" as "en" },
   ])("rejects malformed registration intent before persistence", async (invalid) => {
     const persistence = repository();
@@ -75,6 +78,17 @@ describe("Owner CV registration application service (#154)", () => {
 
     expect(result).toMatchObject({ ok: false, error: { kind: "validation" } });
     expect(persistence.registerOwnerCvVersion).not.toHaveBeenCalled();
+  });
+
+  it("accepts a 128-character visible ASCII idempotency key", async () => {
+    const persistence = repository();
+    const service = createOwnerCvApplicationService({ ownerId, repository: persistence });
+    const key = "!".repeat(128);
+
+    const result = await service.registerOwnerCvVersion({ ...command, idempotencyKey: key as never });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(persistence.registerOwnerCvVersion).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: key }));
   });
 
   it("returns the initially empty portfolio without changing its root version", async () => {

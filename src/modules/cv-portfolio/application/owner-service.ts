@@ -15,7 +15,7 @@ function isAuthorizedOwner(actor: ActorContext, ownerId: StableId<"Owner">): boo
 }
 
 function validIdempotencyKey(key: IdempotencyKey): boolean {
-  return typeof key === "string" && key.length >= 1 && key.length <= 255 && !/[\u0000-\u001f\u007f]/u.test(key);
+  return typeof key === "string" && /^[\x21-\x7e]{1,128}$/u.test(key);
 }
 
 function validLabel(label: string): string | undefined {

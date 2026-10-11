@@ -34,7 +34,7 @@ function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEO
   const result = spawnSync(command, args, { cwd, env, encoding: "utf8", input, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], timeout, maxBuffer: 16 * 1024 * 1024 });
   if (result.error || result.status !== 0) {
     const detail = result.error?.code === "ETIMEDOUT" ? "timeout" : result.error?.code === "ENOENT" ? "missing-executable" : "nonzero-exit";
-    const diagnostic = (result.stderr ?? "").trim().split(/\r?\n/u).slice(-4).join(" | ")
+    const diagnostic = `${result.stderr ?? ""}\n${result.stdout ?? ""}`.trim().split(/\r?\n/u).slice(-8).join(" | ")
       .replace(/https?:\/\/\S+/gu, "[url]")
       .replace(/(?:Bearer\s+|token=|apikey[=: ]+|password[=: ]+)\S+/giu, "[credential]")
       .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gu, "[token]")
@@ -128,6 +128,7 @@ async function main() {
   let mediaProcessingChecks;
   let acceptanceUnitChecks;
   let cvPortfolioChecks;
+  let cvMigrationUpgrade;
   let publicationChecks;
   let imageUnitChecks;
   let processingCounts;
@@ -150,6 +151,9 @@ async function main() {
     const migrations = join(ROOT, "supabase/migrations");
     const { cpSync } = await import("node:fs");
     cpSync(migrations, join(isolatedSupabase, "migrations"), { recursive: true });
+    const cvMigrationName = "20261012030000_initialize_cv_portfolio_register_english_versions.sql";
+    const isolatedCvMigration = join(isolatedSupabase, "migrations", cvMigrationName);
+    if (CV_PORTFOLIO_ONLY) rmSync(isolatedCvMigration, { force: true });
     run("docker", ["network", "create", "-o", "com.docker.network.bridge.host_binding_ipv4=127.0.0.1", network], { env, timeout: 20_000 });
     networkCreated = true;
     attemptedStart = true;
@@ -165,6 +169,33 @@ async function main() {
     const database = await client.query("select current_setting('server_version_num')::int as version_num, current_setting('server_version') as version");
     await client.end();
     if (Number(database.rows[0]?.version_num) < 170000) throw new Error("PHASE6_POSTGRES_VERSION_UNEXPECTED");
+    if (CV_PORTFOLIO_ONLY) {
+      const upgradeFixture = {
+        portfolioId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ef0",
+        ownerId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ef1",
+      };
+      const upgradeClient = new Client({ connectionString: status.DB_URL, connectionTimeoutMillis: 5000 });
+      await upgradeClient.connect();
+      await upgradeClient.query(`insert into portfolio_config.settings
+        (portfolio_id, owner_id, display_name, headline, bio, global_cta_label, global_cta_destination, global_cta_unavailable_fallback)
+        values ($1::uuid, $2::uuid, 'Upgrade fixture', 'Legacy configured Owner', 'Pre-CV migration settings row',
+          'Contact', 'https://example.test/contact', 'Contact unavailable')`, [upgradeFixture.portfolioId, upgradeFixture.ownerId]);
+      await upgradeClient.end();
+      copyFileSync(join(migrations, cvMigrationName), isolatedCvMigration);
+      const migrationUpOutput = invoke(["migration", "up", "--local"], 120_000);
+      console.log(`Applying the deferred CV migration: ${migrationUpOutput.trim().slice(0, 400)}`);
+      const verificationClient = new Client({ connectionString: status.DB_URL, connectionTimeoutMillis: 5000 });
+      await verificationClient.connect();
+      const backfill = await verificationClient.query(`select aggregate_version from cv_portfolio.portfolios
+        where portfolio_id = $1::uuid and owner_id = $2::uuid`, [upgradeFixture.portfolioId, upgradeFixture.ownerId]);
+      const targetMigrationLedger = await verificationClient.query("select 1 from supabase_migrations.schema_migrations where version = $1", [cvMigrationName.slice(0, 14)]);
+      await verificationClient.end();
+      cvMigrationUpgrade = { migration: cvMigrationName, preexistingConfiguredOwners: 1,
+        migrationLedgerContainsTarget: targetMigrationLedger.rowCount === 1,
+        backfilledRoots: backfill.rowCount ?? 0, aggregateVersion: Number(backfill.rows[0]?.aggregate_version),
+        verdict: backfill.rowCount === 1 && Number(backfill.rows[0]?.aggregate_version) === 1 ? "pass" : "fail" };
+      if (cvMigrationUpgrade.verdict !== "pass") throw new Error("PHASE6_CV_MIGRATION_UPGRADE_BACKFILL_FAILED");
+    }
     toolVersions = { ...toolVersions, supabaseCli: supabasePkg.version, postgres: database.rows[0].version };
     const { openIndependentPostgresConnections } = await import("../tests/phase6/fixtures/deterministic.mjs");
     const independentClients = await openIndependentPostgresConnections(status.DB_URL, 2);
@@ -315,9 +346,9 @@ async function main() {
     if (CV_PORTFOLIO_ONLY) {
       const cvIntegrationAssertion = allAssertions.find((item) => String(item.fullName ?? "").includes("processes PDF candidates and real PNG JPEG WebP images"));
       const executed = cvIntegrationAssertion !== undefined;
-      const status = cvIntegrationAssertion?.status === "passed" ? "passed" : "failed";
+      const integrationStatus = cvIntegrationAssertion?.status === "passed" ? "passed" : "failed";
       const names = [
-        "competing empty-root initialization and migration backfill",
+        "concurrent empty-root initialization and authenticated empty Owner view",
         "If-Match and idempotency on registration",
         "same-Owner accepted accessible PDF snapshot",
         "strict English PDF and scope eligibility",
@@ -325,15 +356,22 @@ async function main() {
         "atomic root, version, receipt and event with rollback",
         "exact replay, changed intent and stale version",
         "derived current flags and bounded retained histories",
-        "scope constraints, forced RLS and indexes",
+        "scope constraints, forced RLS, indexes and preexisting-owner migration backfill",
       ];
-      const scenarios = names.map((name, index) => ({ id: `T09-0${index + 1}`, name, executed, status }));
+      const scenarios = names.map((name, index) => {
+        const scenarioExecuted = executed && (index !== 8 || cvMigrationUpgrade !== undefined);
+        const scenarioPassed = integrationStatus === "passed" && (index !== 8 || cvMigrationUpgrade?.verdict === "pass");
+        return { id: `T09-0${index + 1}`, name, executed: scenarioExecuted,
+          status: scenarioPassed ? "passed" : "failed" };
+      });
+      const failedCount = scenarios.filter((item) => item.executed && item.status === "failed").length;
+      const skippedCount = scenarios.filter((item) => !item.executed).length;
       cvPortfolioChecks = { suite: "tests/database/media-upload-intent.integration.test.ts", test: cvIntegrationAssertion?.fullName,
-        total: executed ? 1 : 0, passed: status === "passed" ? 1 : 0, failed: status === "failed" && executed ? 1 : 0,
-        skipped: executed ? 0 : 1, scenarios,
-        counts: { executed: executed ? 9 : 0, failed: status === "failed" && executed ? 9 : 0,
-          skipped: executed ? 0 : 9, insertedVersions: 102, retainedAfterProjection: 100 },
-        verdict: executed && status === "passed" ? "pass" : "fail" };
+        total: executed ? 1 : 0, passed: integrationStatus === "passed" ? 1 : 0,
+        failed: integrationStatus === "failed" && executed ? 1 : 0, skipped: executed ? 0 : 1, scenarios,
+        counts: { executed: scenarios.filter((item) => item.executed).length, failed: failedCount,
+          skipped: skippedCount, insertedVersions: 102, retainedAfterProjection: 100 },
+        verdict: executed && failedCount === 0 && skippedCount === 0 ? "pass" : "fail" };
     }
     if (PUBLICATION_MEDIA_ONLY) {
       const publicationTestNames = [
@@ -655,6 +693,7 @@ async function main() {
         processors: { pdf: toolVersions.pdfProcessor, image: toolVersions.sharp ?? toolVersions.imageProcessor,
           video: toolVersions.videoProcessor, executions: { pdf: processingCounts?.processorExecutions,
             image: processingCounts?.imageProcessorExecutions, video: processingCounts?.videoProcessorExecutions } } },
+      migrationUpgrade: cvMigrationUpgrade,
       policyIds: { migration: "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
         RLS: ["cv_portfolios_owner_scope", "cv_versions_owner_scope", "cv_registration_commands_owner_scope", "cv_activation_history_owner_scope"],
         projections: { versionLimit: 100, activationHistoryLimit: 100 } },
@@ -751,7 +790,12 @@ async function main() {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { await main(); } catch (error) {
-    console.error(error instanceof Error && /^(?:VALIDATION_NOT_READY|PHASE6_|LOCAL_)/u.test(error.message) ? error.message : "PHASE6_VERIFICATION_FAILED: diagnostic output suppressed.");
+    const message = error instanceof Error ? error.message : "unknown-error";
+    const safeMessage = message.replace(/(?:postgres(?:ql)?:\/\/)[^\s]+/giu, "[database-url]")
+      .replace(/https?:\/\/[^\s]+/giu, "[url]")
+      .replace(/(?:Bearer\s+|token=|apikey[=: ]+|password[=: ]+)\S+/giu, "[credential]")
+      .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gu, "[token]").slice(0, 800);
+    console.error(`PHASE6_VERIFICATION_FAILED:${safeMessage}`);
     process.exitCode = 1;
   }
 }
