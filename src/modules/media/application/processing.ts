@@ -463,7 +463,7 @@ export function createMediaProcessingApplicationService(deps: {
       const readTimeoutMs = Math.min(10_000, remainingBudgetMs());
       if (!readTimeoutMs) return failedAttempt("MEDIA_PROCESSING_TIMEOUT");
       try { downloaded = await deps.storage.readCandidate({ portfolioId: candidate.portfolioId, mediaId: candidate.mediaId, uploadIntentId: candidate.uploadIntentId, objectId: candidate.mediaObjectId, maxBytes: MEDIA_PROCESSING_POLICY.maxBytesByKind[candidate.kind], timeoutMs: readTimeoutMs }); }
-      catch { return failedAttempt("MEDIA_STORAGE_UNAVAILABLE"); }
+      catch { return failedAttempt(attemptWithinBudget() ? "MEDIA_STORAGE_UNAVAILABLE" : "MEDIA_PROCESSING_TIMEOUT"); }
       if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT");
       if (!downloaded.ok && downloaded.error.code === "MEDIA_BYTES_OUT_OF_BOUNDS") return failedAttempt("MEDIA_BYTES_OUT_OF_BOUNDS");
       if (!downloaded.ok) return failedAttempt(downloaded.error.kind === "not_found" ? "MEDIA_UPLOAD_OBJECT_MISSING" : "MEDIA_STORAGE_UNAVAILABLE");
@@ -487,7 +487,7 @@ export function createMediaProcessingApplicationService(deps: {
       let scanned: Awaited<ReturnType<TrustedByteScannerPort["scan"]>>;
       const sourceScanTimeoutMs = Math.min(14_000, remainingBudgetMs());
       if (!sourceScanTimeoutMs) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
-      try { scanned = await deps.scanner.scan(bytes, { timeoutMs: sourceScanTimeoutMs }); } catch { return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256 }); }
+      try { scanned = await deps.scanner.scan(bytes, { timeoutMs: sourceScanTimeoutMs }); } catch { return failedAttempt(attemptWithinBudget() ? "MEDIA_SCANNER_UNAVAILABLE" : "MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 }); }
       if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
       if (!scanned.ok) return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256 });
       if (scanned.value.verdict !== "clean") return failedAttempt(scanned.value.verdict === "unsafe" ? "MEDIA_UNSAFE_CONTENT" : "MEDIA_SCAN_INCONCLUSIVE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
@@ -497,9 +497,9 @@ export function createMediaProcessingApplicationService(deps: {
         const processorTimeoutMs = remainingBudgetMs();
         if (!processorTimeoutMs) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
         try { processedVideo = await deps.videoProcessor.process(bytes, { timeoutMs: processorTimeoutMs }); }
-        catch { return failedAttempt("MEDIA_PROCESSOR_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version }); }
+        catch { return failedAttempt(attemptWithinBudget() ? "MEDIA_PROCESSOR_UNAVAILABLE" : "MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version }); }
         if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
-        if (!processedVideo.ok) return failedAttempt(processedVideo.error.kind === "validation" ? processedVideo.error.code : "MEDIA_PROCESSOR_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
+        if (!processedVideo.ok) return failedAttempt(processedVideo.error.kind === "validation" || processedVideo.error.code === "MEDIA_PROCESSING_TIMEOUT" ? processedVideo.error.code : "MEDIA_PROCESSOR_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
         if (processedVideo.value.detectedMimeType !== mime || processedVideo.value.variants.length < 1 || processedVideo.value.variants.length > MEDIA_PROCESSING_POLICY.maxVariants) {
           return failedAttempt("MEDIA_VIDEO_OUTPUT_INVALID", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion });
         }
@@ -522,7 +522,7 @@ export function createMediaProcessingApplicationService(deps: {
           const outputScanTimeoutMs = Math.min(14_000, remainingBudgetMs());
           if (!outputScanTimeoutMs) { await cleanupVideoOutputs(); return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
           try { outputScan = await deps.scanner.scan(variant.bytes, { timeoutMs: outputScanTimeoutMs }); }
-          catch { await cleanupVideoOutputs(); return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
+          catch { await cleanupVideoOutputs(); return failedAttempt(attemptWithinBudget() ? "MEDIA_SCANNER_UNAVAILABLE" : "MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
           if (!attemptWithinBudget()) { await cleanupVideoOutputs(); return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
           if (!outputScan.ok || outputScan.value.verdict !== "clean") {
             await cleanupVideoOutputs();
@@ -536,7 +536,8 @@ export function createMediaProcessingApplicationService(deps: {
           if (!sealTimeoutMs) { await cleanupVideoOutputs(); return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: outputScan.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
           try { sealed = await deps.storage.sealProcessedObject({ portfolioId: candidate.portfolioId, mediaId: candidate.mediaId, outputObjectId,
             sourceObjectId: candidate.mediaObjectId, bytes: variant.bytes, sha256: outputHash, mimeType: variant.mimeType, timeoutMs: sealTimeoutMs }); }
-          catch { await cleanupVideoOutputs(); return failedAttempt("MEDIA_OUTPUT_SEAL_FAILED", { bytes, mime, hash: sha256, scannerVersion: outputScan.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
+          catch { await cleanupVideoOutputs(); return failedAttempt(attemptWithinBudget() ? "MEDIA_OUTPUT_SEAL_FAILED" : "MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: outputScan.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
+          if (!attemptWithinBudget()) { if (sealed.ok) { try { await deps.storage.discardSealedObject({ portfolioId: candidate.portfolioId, mediaId: candidate.mediaId, objectId: sealed.value.objectId, sha256: sealed.value.sha256, mimeType: variant.mimeType }); } catch { await deps.repository.recordOrphan({ candidate, objectId: sealed.value.objectId, sha256: sealed.value.sha256, mimeType: variant.mimeType }).catch(() => undefined); } } await cleanupVideoOutputs(); return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: outputScan.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
           if (!sealed.ok || sealed.value.objectId !== outputObjectId || sealed.value.sha256 !== outputHash) {
             if (sealed.ok) {
               try { await deps.storage.discardSealedObject({ portfolioId: candidate.portfolioId, mediaId: candidate.mediaId, objectId: sealed.value.objectId, sha256: sealed.value.sha256, mimeType: variant.mimeType }); }

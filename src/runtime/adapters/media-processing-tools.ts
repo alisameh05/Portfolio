@@ -246,14 +246,24 @@ async function withTempPdf<T>(bytes: Uint8Array, action: (directory: string, inp
 /** Runs the pinned ClamAV binary; exit 0 is clean, 1 is an unsafe signature. */
 export function createClamAvScanner(options: { readonly executable?: string; readonly maxBytes?: number; readonly timeoutMs?: number } = {}): TrustedByteScannerPort {
   const executable = options.executable ?? "clamscan";
-  let versionPromise: Promise<string> | undefined;
-  const version = (timeoutMs: number) => versionPromise ??= toolVersion(executable, ["--version"], timeoutMs).catch((error: unknown) => { versionPromise = undefined; throw error; });
+  let versionValue: string | undefined;
+  const version = async (timeoutMs: number) => {
+    if (versionValue) return versionValue;
+    versionValue = await toolVersion(executable, ["--version"], timeoutMs);
+    return versionValue;
+  };
   return {
     async scan(bytes, scanOptions) {
+      const deadline = Date.now() + Math.max(1, Math.min(options.timeoutMs ?? SCAN_TIMEOUT_MS, scanOptions?.timeoutMs ?? SCAN_TIMEOUT_MS));
+      const remainingMs = () => Math.max(0, deadline - Date.now());
       try {
         if (executable !== "clamscan") return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
-        const scannerVersion = await version(Math.min(2_000, scanOptions?.timeoutMs ?? SCAN_TIMEOUT_MS));
+        const versionTimeoutMs = Math.min(2_000, remainingMs());
+        if (!versionTimeoutMs) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
+        const scannerVersion = await version(versionTimeoutMs);
         if (!isPinnedClamAvVersion(scannerVersion)) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
+        const scanTimeoutMs = remainingMs();
+        if (!scanTimeoutMs) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         const verdict = await withTempPdf(bytes, async (directory, input) => {
           try {
             const mountSource = directory.replace(/\\/gu, "/");
@@ -262,7 +272,7 @@ export function createClamAvScanner(options: { readonly executable?: string; rea
               "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--mount", `type=bind,source=${mountSource},target=/work,readonly`,
               "--workdir", "/work", "--entrypoint", "clamscan", BOUNDED_SCANNER_IMAGE, "--no-summary", "--stdout", "/work/candidate.pdf"];
             await monitorBoundedChildOutput("docker", dockerArgs, input,
-              { maxBytes: options.maxBytes ?? MAX_BYTES, timeoutMs: Math.min(options.timeoutMs ?? SCAN_TIMEOUT_MS, scanOptions?.timeoutMs ?? SCAN_TIMEOUT_MS) }, () => stopDockerContainer(containerName));
+              { maxBytes: options.maxBytes ?? MAX_BYTES, timeoutMs: scanTimeoutMs }, () => stopDockerContainer(containerName));
             return "clean" as const;
           } catch (cause) {
             const code = typeof cause === "object" && cause !== null && "code" in cause ? String((cause as { code: unknown }).code) : "";
@@ -451,16 +461,18 @@ async function probeVideo(path: string, directory: string, timeoutMs: number): P
 
 /** Detects actual MP4/WebM structure, bounds decoded work, transcodes one normalized private variant, then re-probes it. */
 export function createFfmpegVideoProcessor(): VideoProcessorPort {
-  let versionPromise: Promise<string> | undefined;
-  const version = (timeoutMs: number) => versionPromise ??= (async () => {
+  let versionValue: string | undefined;
+  const version = async (timeoutMs: number) => {
+    if (versionValue) return versionValue;
     const directory = await mkdtemp(join(tmpdir(), "portfolio-video-version-"));
-    try { return await runVideoTool("ffmpeg", ["-version"], directory, timeoutMs); }
+    let value: string;
+    try { value = await runVideoTool("ffmpeg", ["-version"], directory, timeoutMs); }
     finally { await rm(directory, { recursive: true, force: true }).catch(() => undefined); }
-  })().then((value) => {
       const firstLine = value.split(/\r?\n/u, 1)[0] ?? "";
       if (!/^ffmpeg version 7\.1(?:\s|$)/u.test(firstLine)) throw new Error("MEDIA_VIDEO_PROCESSOR_UNAVAILABLE");
-      return firstLine.replace(/[^A-Za-z0-9./_: -]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, 150);
-    }).catch((error: unknown) => { versionPromise = undefined; throw error; });
+    versionValue = firstLine.replace(/[^A-Za-z0-9./_: -]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, 150);
+    return versionValue;
+  };
   return {
     async process(bytes, processOptions) {
       const deadline = Date.now() + Math.max(1, Math.min(60_000, processOptions?.timeoutMs ?? 60_000));

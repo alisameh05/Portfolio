@@ -36,6 +36,7 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
   const commits: Parameters<MediaProcessingRepositoryPort["commitAttempt"]>[0][] = [];
   const orphanCalls: Parameters<MediaProcessingRepositoryPort["recordOrphan"]>[0][] = [];
   const marks: unknown[] = [];
+  const videoProcessorCalls: { readonly timeoutMs?: number }[] = [];
   let nowMs = Date.parse("2026-10-10T20:00:00.000Z");
   const read = vi.fn(async () => options.candidateUnavailable
     ? { ok: false as const, error: { kind: "not_found" as const, code: "MEDIA_UPLOAD_OBJECT_MISSING" } }
@@ -79,6 +80,7 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
     },
     scanner: { scan: options.scannerUnavailable ? vi.fn(async () => ({ ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_SCANNER_UNAVAILABLE" } })) : scan }, processor: { process },
     ...(target.kind === "video" ? { videoProcessor: { async process(_bytes: Uint8Array, _options?: { readonly timeoutMs?: number }) {
+      videoProcessorCalls.push(_options ?? {});
       if (options.videoProcessorUnavailable) return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_PROCESSOR_UNAVAILABLE" } };
       nowMs += options.elapsedDuringVideoProcessMs ?? 0;
       const variants = Array.from({ length: options.videoVariantCount ?? 1 }, (_, index) => ({ variantName: `variant-${index}`,
@@ -89,7 +91,7 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
     ids: { generate(kind) { return kind === "MediaProcessingAttempt" ? "00000000-0000-7000-8000-000000000007" : outputObjectId; } },
     clock: { now: () => new Date(nowMs).toISOString() },
   });
-  return { service, commits, orphanCalls, marks, read, scan, process, discard };
+  return { service, commits, orphanCalls, marks, read, scan, process, discard, videoProcessorCalls };
 }
 
 describe("trusted media processing", () => {
@@ -224,13 +226,15 @@ describe("trusted media processing", () => {
     const nearDeadline = harness({ mediaCandidate: videoCandidate, elapsedDuringVideoSealMs: 59_000 });
     expect(await nearDeadline.service.record(videoCommand)).toMatchObject({ ok: true });
     expect(nearDeadline.commits[0]).toMatchObject({ timeoutMs: 1_000, attempt: { result: "passed", processingDurationMs: 59_000 } });
+    expect(nearDeadline.videoProcessorCalls).toEqual([{ timeoutMs: 60_000 }]);
   });
 
-  it("passes the final scanner its remaining timeout and records timeout when it overruns", async () => {
-    const h = harness({ mediaCandidate: videoCandidate, elapsedDuringVideoProcessMs: 59_500, elapsedDuringVideoOutputScanMs: 1_000 });
+  it("passes the final scanner its remaining timeout and records timeout at the deadline", async () => {
+    const h = harness({ mediaCandidate: videoCandidate, elapsedDuringVideoProcessMs: 59_500, elapsedDuringVideoOutputScanMs: 500 });
     expect(await h.service.record(videoCommand)).toMatchObject({ ok: false, error: { code: "MEDIA_PROCESSING_TIMEOUT" } });
+    expect(h.videoProcessorCalls).toEqual([{ timeoutMs: 60_000 }]);
     expect(h.scan).toHaveBeenNthCalledWith(2, videoOutput, { timeoutMs: 500 });
-    expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", findings: ["MEDIA_PROCESSING_TIMEOUT"], processingDurationMs: 60_500 });
+    expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", findings: ["MEDIA_PROCESSING_TIMEOUT"], processingDurationMs: 60_000 });
   });
 
   it("rejects malformed video variants and more than eight outputs", async () => {
