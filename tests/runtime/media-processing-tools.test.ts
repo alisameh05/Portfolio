@@ -2,9 +2,20 @@ import { open, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { assertBoundedFile, createClamAvScanner, isPinnedClamAvVersion, monitorBoundedChildOutput, readBoundedFile, runWithBoundedOutput, stopActionWithinDeadline } from "../../src/runtime/adapters/media-processing-tools.js";
+import { assertBoundedFile, createClamAvScanner, isMp4Container, isPinnedClamAvVersion, monitorBoundedChildOutput, readBoundedFile, runWithBoundedOutput, stopActionWithinDeadline } from "../../src/runtime/adapters/media-processing-tools.js";
 
 describe("bounded PDF output reads", () => {
+  it("accepts supported MP4 major or compatible brands from a bounded ftyp box", () => {
+    const ftyp = (major: string, compatible: readonly string[]) => {
+      const size = 16 + compatible.length * 4;
+      return Buffer.concat([Buffer.from([size >>> 24, size >>> 16, size >>> 8, size]), Buffer.from("ftyp"), Buffer.from(major), Buffer.alloc(4), ...compatible.map((brand) => Buffer.from(brand))]);
+    };
+    expect(isMp4Container(ftyp("mp42", []))).toBe(true);
+    expect(isMp4Container(ftyp("iso8", ["mp42"]))).toBe(true);
+    expect(isMp4Container(ftyp("iso8", ["avif", "heic"]))).toBe(false);
+    expect(isMp4Container(ftyp("iso8", ["mp42"]).subarray(0, 19))).toBe(false);
+  });
+
   it("accepts only the recorded ClamAV runtime and definition version", () => {
     expect(isPinnedClamAvVersion("ClamAV 1.4.3/27927/Sun Mar 1 07:24:39 2026")).toBe(true);
     expect(isPinnedClamAvVersion("ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026")).toBe(true);
@@ -49,6 +60,8 @@ describe("bounded PDF output reads", () => {
       await expect(monitorBoundedChildOutput(process.execPath, ["-e", writer, path], path, { maxBytes: 8, timeoutMs: 3_000 }))
         .rejects.toThrow("MEDIA_PDF_OUTPUT_INVALID");
       const finalSize = (await stat(path)).size;
+      // OS scheduling changes the final write count; assert the watcher observed a cap crossing and stopped before all 200 bytes.
+      expect(finalSize).toBeGreaterThan(8);
       expect(finalSize).toBeLessThan(200);
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -76,6 +89,20 @@ describe("bounded PDF output reads", () => {
     const startedAt = Date.now();
     await expect(stopActionWithinDeadline(() => new Promise<void>(() => undefined), 100)).resolves.toBe(false);
     expect(Date.now() - startedAt).toBeLessThan(1_000);
+  });
+
+  it("reserves the child shutdown window even when the external cleanup hook stalls", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "media-processing-tools-timeout-"));
+    const path = join(directory, "worker.out");
+    const startedAt = Date.now();
+    try {
+      await expect(monitorBoundedChildOutput(process.execPath, ["-e", "setInterval(() => {}, 1000)"], path,
+        { maxBytes: 8, timeoutMs: 5_000, timeoutCode: "MEDIA_PROCESSING_TIMEOUT" }, () => new Promise<void>(() => undefined)))
+        .rejects.toThrow("MEDIA_CONTAINER_CLEANUP_FAILED");
+      expect(Date.now() - startedAt).toBeLessThan(5_000);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it("reports container cleanup failures instead of treating them as success", async () => {

@@ -63,23 +63,37 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      # The Phase 3 predecessor assertions reject later domain activations.
+      # Replay Phase 4 on its immutable release with that release's lockfile.
+      # Current-source boundaries/contracts are checked by the validation job;
+      # current media database acceptance uses the Phase 6 focused gates.
+      - name: Check out the historical Phase 4 release (PR 105)
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: 9806af81d4ce705c36d9b22089f77213d16887bc
+          path: phase4-release
+          persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version-file: .nvmrc
+          node-version-file: phase4-release/.nvmrc
           cache: npm
+          cache-dependency-path: phase4-release/package-lock.json
       - name: Select pinned npm
+        working-directory: phase4-release
         run: |
           npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).engines.npm')"
           npm install --global "npm@$npm_version" --no-audit --no-fund
       - name: Install locked development dependencies
+        working-directory: phase4-release
         run: npm run setup:validation
-      - name: Require real migration, restricted-role, and settings verification with zero skips
+      - name: Require historical Phase 4 real migration, restricted-role, and settings verification with zero skips
+        working-directory: phase4-release
         run: npm run phase4:focus:settings
       - name: Publish sanitized Phase 4 database evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: phase4-database-integrity
-          path: evidence/phase-4-database-integrity.json
+          path: phase4-release/evidence/phase-4-database-integrity.json
           if-no-files-found: error
           retention-days: 14
 
