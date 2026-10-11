@@ -30,7 +30,7 @@ const videoCommand = { ...command, detectedMediaType: "video/mp4", detectedByteL
 function harness(options: { readonly state?: MediaProcessingCandidate["state"]; readonly replay?: boolean; readonly commitError?: string; readonly bytes?: Uint8Array;
   readonly elapsedDuringScanMs?: number; readonly fileName?: string; readonly scannerUnavailable?: boolean; readonly sealedObjectId?: StableId<"MediaObject">;
   readonly mediaCandidate?: MediaProcessingCandidate; readonly videoProcessorUnavailable?: boolean; readonly videoSealUnavailable?: boolean; readonly candidateUnavailable?: boolean;
-  readonly videoVariantCount?: number; readonly malformedVideoOutput?: boolean } = {}) {
+  readonly videoVariantCount?: number; readonly malformedVideoOutput?: boolean; readonly elapsedDuringVideoSealMs?: number } = {}) {
   const target = options.mediaCandidate ?? candidate;
   const commits: Parameters<MediaProcessingRepositoryPort["commitAttempt"]>[0][] = [];
   const orphanCalls: Parameters<MediaProcessingRepositoryPort["recordOrphan"]>[0][] = [];
@@ -66,9 +66,12 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
     scope: { ownerId }, repository,
     storage: {
       readCandidate: read,
-      async sealProcessedObject(input) { return options.videoSealUnavailable && input.mimeType.startsWith("video/")
-        ? { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } }
-        : { ok: true as const, value: { objectId: options.sealedObjectId ?? input.outputObjectId, sha256: input.sha256 } }; },
+      async sealProcessedObject(input) {
+        if (input.mimeType.startsWith("video/")) nowMs += options.elapsedDuringVideoSealMs ?? 0;
+        return options.videoSealUnavailable && input.mimeType.startsWith("video/")
+          ? { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } }
+          : { ok: true as const, value: { objectId: options.sealedObjectId ?? input.outputObjectId, sha256: input.sha256 } };
+      },
       discardSealedObject: discard,
     },
     scanner: { scan: options.scannerUnavailable ? vi.fn(async () => ({ ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_SCANNER_UNAVAILABLE" } })) : scan }, processor: { process },
@@ -211,6 +214,12 @@ describe("trusted media processing", () => {
     const stale = harness({ mediaCandidate: videoCandidate, commitError: "MEDIA_VERSION_MISMATCH" });
     expect(await stale.service.record(videoCommand)).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
     expect(stale.discard).toHaveBeenCalledWith({ portfolioId: videoCandidate.portfolioId, mediaId, objectId: outputObjectId, sha256: sha(videoOutput) });
+  });
+
+  it("bounds the video commit by the remaining processing budget and records elapsed time", async () => {
+    const nearDeadline = harness({ mediaCandidate: videoCandidate, elapsedDuringVideoSealMs: 59_000 });
+    expect(await nearDeadline.service.record(videoCommand)).toMatchObject({ ok: true });
+    expect(nearDeadline.commits[0]).toMatchObject({ timeoutMs: 1_000, attempt: { result: "passed", processingDurationMs: 59_000 } });
   });
 
   it("rejects malformed video variants and more than eight outputs", async () => {

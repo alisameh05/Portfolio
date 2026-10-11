@@ -414,6 +414,16 @@ function isWebMContainer(bytes: Uint8Array): boolean {
   return false;
 }
 
+const MP4_BRANDS = new Set(["isom", "iso2", "iso3", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "M4V ", "M4VH", "M4VP", "dash"]);
+
+function isMp4Container(bytes: Uint8Array): boolean {
+  if (bytes.byteLength < 16 || Buffer.from(bytes.subarray(4, 8)).toString("ascii") !== "ftyp") return false;
+  const boxSize = Buffer.from(bytes.subarray(0, 4)).readUInt32BE(0);
+  if (boxSize < 16 || boxSize > 4_096 || boxSize > bytes.byteLength || boxSize % 4 !== 0) return false;
+  const majorBrand = Buffer.from(bytes.subarray(8, 12)).toString("ascii");
+  return MP4_BRANDS.has(majorBrand);
+}
+
 async function runVideoTool(executable: string, args: readonly string[], directory: string, timeoutMs: number): Promise<string> {
   const mountSource = directory.replace(/\\/gu, "/");
   const containerName = `portfolio-video-${randomUUID()}`;
@@ -455,7 +465,7 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
     async process(bytes) {
       if (bytes.byteLength < 12 || bytes.byteLength > VIDEO_MAX_BYTES) return err({ kind: "validation", code: "MEDIA_BYTES_OUT_OF_BOUNDS" });
       const detectedMimeType = isWebMContainer(bytes) ? "video/webm"
-        : new TextDecoder("ascii").decode(bytes.subarray(4, 8)) === "ftyp" ? "video/mp4" : undefined;
+        : isMp4Container(bytes) ? "video/mp4" : undefined;
       if (!detectedMimeType) return err({ kind: "validation", code: "MEDIA_VIDEO_INPUT_INVALID" });
       try {
         const processorVersion = await version();
@@ -470,7 +480,7 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
           const duration = Number(source.format?.duration);
           const frameRate = rational(stream?.avg_frame_rate);
           const frames = Number(stream?.nb_read_frames);
-          const expectedFormat = detectedMimeType === "video/mp4" ? /(?:^|,)mov(?:,|$)/u.test(format) : isWebMContainer(bytes);
+          const expectedFormat = detectedMimeType === "video/mp4" ? isMp4Container(bytes) && /(?:^|,)mov(?:,|$)/u.test(format) : isWebMContainer(bytes);
           const supportedCodec = detectedMimeType === "video/mp4" ? stream?.codec_name === "h264" : ["vp8", "vp9"].includes(stream?.codec_name ?? "");
           if (!expectedFormat || !stream || stream.codec_type !== "video" || !supportedCodec ||
               !Number.isFinite(duration) || duration <= 0 || duration > VIDEO_MAX_DURATION_SECONDS ||
@@ -499,7 +509,7 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
           const expectedOutputCodec = detectedMimeType === "video/mp4" ? "h264" : "vp9";
           const outputWidth = outputStream?.width, outputHeight = outputStream?.height;
           const outputFrames = Number(outputStream?.nb_read_frames), outputDuration = Number(outputProbe.format?.duration);
-          if (!(detectedMimeType === "video/mp4" ? /(?:^|,)mov(?:,|$)/u.test(outputFormat) : isWebMContainer(outputBytes)) ||
+          if (!(detectedMimeType === "video/mp4" ? isMp4Container(outputBytes) && /(?:^|,)mov(?:,|$)/u.test(outputFormat) : isWebMContainer(outputBytes)) ||
               outputStream?.codec_type !== "video" || outputCodec !== expectedOutputCodec || !Number.isSafeInteger(outputWidth) || !Number.isSafeInteger(outputHeight) ||
               outputWidth! < 1 || outputWidth! > 1280 || outputHeight! < 1 || outputHeight! > 720 || !Number.isSafeInteger(outputFrames) || outputFrames < 1 || outputFrames > VIDEO_MAX_FRAMES ||
               !Number.isFinite(outputDuration) || outputDuration <= 0 || outputDuration > VIDEO_MAX_DURATION_SECONDS ||
