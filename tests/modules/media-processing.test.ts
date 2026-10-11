@@ -55,7 +55,7 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
     scope: { ownerId }, repository,
     storage: {
       readCandidate: read,
-      async sealProcessedPdf(input) { return { ok: true, value: { objectId: options.sealedObjectId ?? outputObjectId, sha256: input.sha256 } }; },
+      async sealProcessedObject(input) { return { ok: true, value: { objectId: options.sealedObjectId ?? outputObjectId, sha256: input.sha256 } }; },
       discardSealedObject: discard,
     },
     scanner: { scan: options.scannerUnavailable ? vi.fn(async () => ({ ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_SCANNER_UNAVAILABLE" } })) : scan }, processor: { process },
@@ -110,7 +110,7 @@ describe("trusted PDF media processing", () => {
     const wrongId = "00000000-0000-7000-8000-000000000099" as StableId<"MediaObject">;
     const h = harness({ sealedObjectId: wrongId });
     expect(await h.service.record(command)).toMatchObject({ ok: true });
-    expect(h.discard).toHaveBeenCalledWith({ portfolioId: candidate.portfolioId, mediaId, objectId: wrongId, sha256: sha(output) });
+    expect(h.discard).toHaveBeenCalledWith({ portfolioId: candidate.portfolioId, mediaId, objectId: wrongId, sha256: sha(output), mimeType: "application/pdf" });
     expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", findings: ["MEDIA_OUTPUT_OBJECT_MISMATCH"] });
   });
 
@@ -141,7 +141,7 @@ describe("trusted PDF media processing", () => {
   it("discards a sealed private output when the commit becomes stale", async () => {
     const h = harness({ commitError: "MEDIA_VERSION_MISMATCH" });
     expect((await h.service.record(command)).ok).toBe(false);
-    expect(h.discard).toHaveBeenCalledWith({ portfolioId: candidate.portfolioId, mediaId, objectId: outputObjectId, sha256: sha(output) });
+    expect(h.discard).toHaveBeenCalledWith({ portfolioId: candidate.portfolioId, mediaId, objectId: outputObjectId, sha256: sha(output), mimeType: "application/pdf" });
   });
 
   it("records private orphan metadata when cleanup fails and retries only the exact object", async () => {

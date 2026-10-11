@@ -15,8 +15,10 @@ const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const EVIDENCE = join(ROOT, "evidence/phase-6-verification-setup.json");
 const UPLOAD_INTENT_EVIDENCE = join(ROOT, "evidence/phase6-upload-intent-148.json");
 const MEDIA_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-media-processing-149.json");
+const IMAGE_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-image-processing-150.json");
 const UPLOAD_INTENT_ONLY = process.argv.includes("--upload-intents-only");
 const MEDIA_PROCESSING_ONLY = process.argv.includes("--media-processing-only");
+const IMAGE_PROCESSING_ONLY = process.argv.includes("--image-processing-only");
 const RUN_TIMEOUT = 180_000;
 
 function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEOUT, input, label = command } = {}) {
@@ -110,13 +112,14 @@ async function main() {
   const failures = [];
   let uploadIntentChecks;
   let mediaProcessingChecks;
+  let imageUnitChecks;
   let processingCounts;
   let toolVersions = {};
   let status;
   const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], { cwd: ROOT, env, timeout }).stdout;
   try {
     let config = isolatedPhase6Config(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId);
-    if (UPLOAD_INTENT_ONLY || MEDIA_PROCESSING_ONLY) {
+    if (UPLOAD_INTENT_ONLY || MEDIA_PROCESSING_ONLY || IMAGE_PROCESSING_ONLY) {
       // The disposable Auth instance needs a real non-Owner JWT for the Storage denial matrix.
       // This change is confined to its temporary config; repository and developer Auth settings stay untouched.
       config = config
@@ -169,22 +172,40 @@ async function main() {
     if (bucketMetadata.public !== false) throw new Error("PHASE6_STORAGE_BUCKET_NOT_PRIVATE");
     services.storage = { available: true, privateBucketVerified: true, executionCount: storageExecutions };
 
-    console.log("Probing pinned ClamAV, ImageMagick, FFmpeg and OCRmyPDF runtimes.");
     const image = PHASE6_TOOL_DEFINITIONS.imageProcessor;
     const video = PHASE6_TOOL_DEFINITIONS.videoProcessor;
     const pdf = PHASE6_TOOL_DEFINITIONS.pdfProcessor;
     const scanner = PHASE6_TOOL_DEFINITIONS.scanner;
-    toolVersions = {
-      supabaseCli: supabasePkg.version,
-      postgres: database.rows[0].version,
-      scanner: serviceVersion(scanner, "clamscan"),
-      imageProcessor: serviceVersion(image, "magick"),
-      videoProcessor: serviceVersion(video, "ffprobe", "-version"),
-      pdfProcessor: serviceVersion(pdf, "ocrmypdf"),
-    };
-    writeFileSync(join(fixturesDir, "fixture.pdf"), pdfFixture());
-    const activeFormats = MEDIA_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf") : PHASE6_FORMATS;
-    if (!MEDIA_PROCESSING_ONLY) {
+    if (IMAGE_PROCESSING_ONLY) {
+      const sharpModule = await import("sharp");
+      toolVersions = {
+        supabaseCli: supabasePkg.version,
+        postgres: database.rows[0].version,
+        scanner: serviceVersion(scanner, "clamscan"),
+        sharp: `sharp-${sharpModule.default.versions.sharp};libvips-${sharpModule.default.versions.vips ?? "unknown"}`,
+      };
+    } else {
+      console.log("Probing pinned ClamAV, ImageMagick, FFmpeg and OCRmyPDF runtimes.");
+      toolVersions = {
+        supabaseCli: supabasePkg.version,
+        postgres: database.rows[0].version,
+        scanner: serviceVersion(scanner, "clamscan"),
+        imageProcessor: serviceVersion(image, "magick"),
+        videoProcessor: serviceVersion(video, "ffprobe", "-version"),
+        pdfProcessor: serviceVersion(pdf, "ocrmypdf"),
+      };
+    }
+    if (!IMAGE_PROCESSING_ONLY) writeFileSync(join(fixturesDir, "fixture.pdf"), pdfFixture());
+    const activeFormats = MEDIA_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
+      : IMAGE_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ kind }) => kind === "image") : PHASE6_FORMATS;
+    if (IMAGE_PROCESSING_ONLY) {
+      const sharpModule = await import("sharp");
+      const sharp = sharpModule.default;
+      const imageInput = { create: { width: 4, height: 4, channels: 3, background: { r: 36, g: 104, b: 172 } } };
+      await sharp(imageInput).png().toFile(join(fixturesDir, "fixture.png"));
+      await sharp(imageInput).jpeg().toFile(join(fixturesDir, "fixture.jpeg"));
+      await sharp(imageInput).webp().toFile(join(fixturesDir, "fixture.webp"));
+    } else if (!MEDIA_PROCESSING_ONLY) {
       console.log("Generating safe fixtures with the pinned image and video processors.");
       run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.png"], { label: "fixture-generate-png" });
       run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.jpeg"], { label: "fixture-generate-jpeg" });
@@ -195,9 +216,10 @@ async function main() {
     const fixtures = activeFormats.map((definition) => ({ ...definition, path: join(fixturesDir, `fixture.${definition.id}`) }));
     for (const fixture of fixtures) {
       console.log(`Scanning, processing and round-tripping ${fixture.id}.`);
-      let processorVersion = toolVersions[fixture.processor];
-      if (fixture.processor === "imageProcessor") run("docker", ["run", "--rm", "--entrypoint", "identify", "-v", `${fixturesDir}:/fixtures:ro`, image, `/fixtures/fixture.${fixture.id}`], { label: `process-${fixture.id}` });
-      else if (fixture.processor === "videoProcessor") run("docker", ["run", "--rm", "--entrypoint", "ffprobe", "-v", `${fixturesDir}:/fixtures:ro`, video, "-v", "error", "-show_entries", "format=format_name", "-of", "default=noprint_wrappers=1:nokey=1", `/fixtures/fixture.${fixture.id}`], { label: `process-${fixture.id}` });
+      let processorVersion = toolVersions[fixture.processor] ?? (fixture.processor === "imageProcessor" ? toolVersions.sharp : undefined);
+      if (fixture.processor === "imageProcessor") {
+        if (!IMAGE_PROCESSING_ONLY) run("docker", ["run", "--rm", "--entrypoint", "identify", "-v", `${fixturesDir}:/fixtures:ro`, image, `/fixtures/fixture.${fixture.id}`], { label: `process-${fixture.id}` });
+      } else if (fixture.processor === "videoProcessor") run("docker", ["run", "--rm", "--entrypoint", "ffprobe", "-v", `${fixturesDir}:/fixtures:ro`, video, "-v", "error", "-show_entries", "format=format_name", "-of", "default=noprint_wrappers=1:nokey=1", `/fixtures/fixture.${fixture.id}`], { label: `process-${fixture.id}` });
       else {
         const bytes = readFileSync(fixture.path);
         const processed = run("docker", ["run", "--rm", "-i", "--entrypoint", "ocrmypdf", pdf, "--skip-text", "-", "-"], { input: bytes, timeout: RUN_TIMEOUT, label: `process-${fixture.id}` });
@@ -223,6 +245,10 @@ async function main() {
       PHASE6_UPLOAD_INTENT_REPLAY_KEY: randomBytes(32).toString("base64"),
       PHASE6_REQUIRE_UPLOAD_INTENT: "1",
       PHASE6_PDF_PROCESSING_FIXTURE: join(fixturesDir, "fixture.pdf"),
+      PHASE6_IMAGE_FIXTURE_PNG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.png"),
+      PHASE6_IMAGE_FIXTURE_JPEG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.jpeg"),
+      PHASE6_IMAGE_FIXTURE_WEBP: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.webp"),
+      PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY ? "1" : "0",
       PHASE6_SCANNER_IMAGE: scanner,
       PHASE6_PDF_PROCESSOR_IMAGE: pdf,
       PHASE6_SCANNER_VERSION: toolVersions.scanner,
@@ -262,7 +288,37 @@ async function main() {
     };
     if (uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
     if (mediaProcessingChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
-    if (MEDIA_PROCESSING_ONLY && (!Number.isSafeInteger(processingCounts?.scannerExecutions) || !Number.isSafeInteger(processingCounts?.processorExecutions))) throw new Error("PHASE6_MEDIA_PROCESSING_TOOL_COUNTS_MISSING");
+    if (IMAGE_PROCESSING_ONLY) {
+      const imageUnitJsonPath = join(workdir, "image-unit-vitest.json");
+      const imageUnitSuites = [
+        "tests/runtime/media-image-processing.test.ts",
+        "tests/modules/media-image-processing.test.ts",
+        "tests/runtime/supabase-media-processing-storage.test.ts",
+      ];
+      const unitResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", ...imageUnitSuites,
+        "--reporter=json", `--outputFile=${imageUnitJsonPath}`], { cwd: ROOT, env, encoding: "utf8", timeout: 120_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+      if (unitResult.error || !existsSync(imageUnitJsonPath)) throw new Error("PHASE6_IMAGE_UNIT_TEST_REPORT_MISSING");
+      const unitReport = JSON.parse(readFileSync(imageUnitJsonPath, "utf8"));
+      const imageUnitAssertions = (unitReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
+      imageUnitChecks = {
+        suites: imageUnitSuites,
+        total: imageUnitAssertions.length,
+        passed: imageUnitAssertions.filter((item) => item.status === "passed").length,
+        failed: imageUnitAssertions.filter((item) => item.status === "failed").length,
+        skipped: imageUnitAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length,
+        failedTests: imageUnitAssertions.filter((item) => item.status === "failed").map((item) => ({
+          name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
+          reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").slice(0, 800) : "assertion-failed",
+        })),
+        scenarios: imageUnitAssertions.map((item) => ({ name: item.fullName ?? "unnamed-test", executed: item.status === "passed" || item.status === "failed", status: item.status === "passed" ? "passed" : item.status === "failed" ? "failed" : "skipped" })),
+        verdict: unitResult.status === 0 && imageUnitAssertions.length > 0 && imageUnitAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
+      };
+      if (imageUnitChecks.verdict !== "pass") throw new Error("PHASE6_IMAGE_UNIT_ASSERTION_COUNTS_INVALID");
+    }
+    if ((MEDIA_PROCESSING_ONLY || IMAGE_PROCESSING_ONLY) && (!Number.isSafeInteger(processingCounts?.scannerExecutions) ||
+        !Number.isSafeInteger(processingCounts?.processorExecutions) || !Number.isSafeInteger(processingCounts?.imageProcessorExecutions))) {
+      throw new Error("PHASE6_MEDIA_PROCESSING_TOOL_COUNTS_MISSING");
+    }
   } catch (error) {
     failures.push(error instanceof Error ? error.message : "PHASE6_SETUP_FAILED");
   } finally {
@@ -285,7 +341,7 @@ async function main() {
   const finalSource = getPhase6SourceIdentity();
   if (finalSource.sourceRevision !== source.sourceRevision || finalSource.sourceTreeSha256 !== source.sourceTreeSha256) failures.push("PHASE6_SOURCE_CHANGED_DURING_RUN");
   let report;
-  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY) {
+  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY) {
     report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
     const evaluated = evaluatePhase6Setup(report, source);
     if (evaluated.failures.length) {
@@ -295,7 +351,7 @@ async function main() {
     mkdirSync(join(ROOT, "evidence"), { recursive: true });
     writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   }
-  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY) {
+  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY) {
     const uploadIntentEvidence = {
       schemaVersion: 1,
       ticket: 148,
@@ -347,10 +403,50 @@ async function main() {
     };
     writeFileSync(MEDIA_PROCESSING_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
   }
+  if (IMAGE_PROCESSING_ONLY && mediaProcessingChecks !== undefined) {
+    const evidence = {
+      schemaVersion: 1, ticket: 150, parent: 145, runId: randomUUID(), sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256, startedAt, completedAt: new Date().toISOString(),
+      scope: "trusted-byte-bound-PNG-JPEG-WebP-variants-with-immutable-private-outputs",
+      runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" },
+      toolVersions,
+      policyIds: { migration: "20261011230000_process_bounded_media_image_variants.sql", processing: "image-webp-variants-v1",
+        limits: { imageBytes: 10 * 1024 * 1024, maxImagePixels: 40_000_000, maxVariants: 8, maxAttemptMs: 60_000,
+          processingDuration: "processing_duration_ms measures byte reads, scans, decode/re-encode and seals; bounded cleanup and failure audit are recorded separately",
+          storageOperationTimeoutMs: 3_000, databaseAuditStatementTimeoutMs: 3_000 },
+        storage: ["media-candidates private", "media-processed private", "create-only WebP output variants"] },
+      services: { postgres: { available: true, majorVersion: 17, independentConnections: 2 }, auth: { available: true },
+        storage: { available: true, privateBucketVerified: true, executionCount: services.storage?.executionCount },
+        scanner: { available: true, image: PHASE6_TOOL_DEFINITIONS.scanner, executionCount: processingCounts?.scannerExecutions },
+        imageProcessor: { available: true, package: "sharp", version: toolVersions.sharp, executionCount: processingCounts?.imageProcessorExecutions } },
+      principalScope: { database: "shipwithali_application constrained by portfolio_id and owner_id RLS",
+        storage: ["server service role for exact candidate read and processed write", "anonymous denied processed object read"], environment: "disposable loopback Supabase" },
+      formats: formats.map(({ id, kind, mimeType, executed, status, storageRoundTrip, sha256, scannerVerdict, processorVersion }) =>
+        ({ id, kind, mimeType, executed, status, storageRoundTrip, sha256, scannerVerdict, processorVersion })),
+      checks: { integration: mediaProcessingChecks, units: imageUnitChecks }, cleanup,
+      scenarios: [
+        ...formats.map((format) => ({ name: `real ${format.id} image pipeline, ClamAV scan and private Storage round-trip`, executed: format.executed, status: format.status })),
+        { name: mediaProcessingChecks.suite, executed: mediaProcessingChecks.total === 1 && mediaProcessingChecks.passed === 1 && mediaProcessingChecks.skipped === 0,
+          status: mediaProcessingChecks.verdict === "pass" ? "passed" : "failed" },
+        ...(imageUnitChecks?.scenarios ?? []),
+      ],
+      verdict: mediaProcessingChecks.verdict === "pass" && imageUnitChecks?.verdict === "pass" && formats.length === 3 && formats.every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:media-image-processing"],
+      limitations: ["Video processing and the final Phase 6 gate remain separate tickets."]
+    };
+    writeFileSync(IMAGE_PROCESSING_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+  }
   if (MEDIA_PROCESSING_ONLY) {
     const evidence = mediaProcessingChecks === undefined ? undefined : JSON.parse(readFileSync(MEDIA_PROCESSING_EVIDENCE, "utf8"));
     console.log(JSON.stringify({ ticket: 149, runId: evidence?.runId, sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256, verdict: evidence?.verdict ?? "fail", mediaProcessingChecks, cleanup, failures, evidence: evidence === undefined ? undefined : "evidence/phase6-media-processing-149.json" }, null, 2));
     if (evidence?.verdict !== "pass") process.exitCode = 1;
+  } else if (IMAGE_PROCESSING_ONLY) {
+    const imageEvidence = mediaProcessingChecks === undefined ? undefined : JSON.parse(readFileSync(IMAGE_PROCESSING_EVIDENCE, "utf8"));
+    console.log(JSON.stringify({ ticket: 150, runId: imageEvidence?.runId, sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256,
+      verdict: imageEvidence?.verdict ?? "fail", formatCounts: { total: formats.length, passed: formats.filter(({ status }) => status === "passed").length },
+      mediaProcessingChecks, imageUnitChecks, cleanup, failures, evidence: imageEvidence === undefined ? undefined : "evidence/phase6-image-processing-150.json" }, null, 2));
+    if (imageEvidence?.verdict !== "pass") process.exitCode = 1;
   } else if (UPLOAD_INTENT_ONLY) {
     const uploadEvidence = uploadIntentChecks === undefined ? undefined : JSON.parse(readFileSync(UPLOAD_INTENT_EVIDENCE, "utf8"));
     console.log(JSON.stringify({ ticket: 148, runId: uploadEvidence?.runId, sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256, verdict: uploadEvidence?.verdict ?? "fail", formatCounts: uploadEvidence?.formatCounts, uploadIntentChecks, cleanup, failures, evidence: uploadEvidence === undefined ? undefined : "evidence/phase6-upload-intent-148.json" }, null, 2));
