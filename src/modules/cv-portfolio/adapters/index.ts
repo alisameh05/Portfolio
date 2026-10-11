@@ -52,3 +52,4 @@ export class StubCvCurrentDelivery implements CvCurrentDeliveryPort {
     return err({ kind: "temporarily_unavailable", code: "STORAGE_NOT_IMPLEMENTED" });
   }
 }
+export { createPostgresCvPortfolioRepository } from "./postgres-portfolio.js";

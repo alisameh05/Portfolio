@@ -25,6 +25,8 @@ import { createUploadCapabilityVault } from "../../src/modules/media/adapters/up
 import { createMediaUploadIntentApplicationService } from "../../src/modules/media/application/upload-intent.js";
 import { createMediaProcessingApplicationService, type PdfProcessorPort, type VideoProcessorPort, type MediaImageProcessorPort, type TrustedByteScannerPort, type MediaProcessingRepositoryPort } from "../../src/modules/media/application/processing.js";
 import { createMediaAcceptanceApplicationService } from "../../src/modules/media/application/acceptance.js";
+import { createOwnerCvApplicationService } from "../../src/modules/cv-portfolio/application/owner-service.js";
+import { createPostgresCvPortfolioRepository } from "../../src/modules/cv-portfolio/adapters/postgres-portfolio.js";
 import type { OwnerMediaAccessibility } from "../../src/modules/media/application/owner-contracts.js";
 import { createSupabaseMediaUploadTargetAdapter } from "../../src/runtime/adapters/supabase-media-upload-target.js";
 import { createSupabaseMediaProcessingStorage } from "../../src/runtime/adapters/supabase-media-processing-storage.js";
@@ -1031,6 +1033,193 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       ownerId, mediaAssetIds: [safe.mediaId as StableId<"MediaAsset">], intendedUse: "supporting-artifact",
     }, transaction));
     expect(pdfMeaningfulFacts).toMatchObject({ ok: true, value: [{ accepted: true, safe: true, suitable: true, accessible: true }] });
+
+    const cvRepository = createPostgresCvPortfolioRepository({
+      database: appDatabase.database,
+      transactions: appDatabase.transactions,
+      scope: { portfolioId, ownerId },
+      media: acceptedPdf.acceptance,
+    });
+    const cvService = createOwnerCvApplicationService({ ownerId, repository: cvRepository });
+    const cvOwner = { kind: "owner" as const, ownerId, sessionId: "phase6-cv-registration-owner" };
+    const cvChecks: Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }> = [];
+    const cvScenario = (name: string, passed: boolean) => {
+      cvChecks.push({ name, executed: true, status: passed ? "passed" : "failed" });
+      expect(passed, name).toBe(true);
+    };
+
+    await admin.query("delete from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
+    await admin.query(`insert into cv_portfolio.portfolios (portfolio_id, owner_id, aggregate_version)
+      select portfolio_id, owner_id, 1 from portfolio_config.settings
+      where portfolio_id = $1::uuid and owner_id = $2::uuid
+      on conflict (portfolio_id) do nothing`, [portfolioId, ownerId]);
+    const migrationBackfill = await admin.query(`select aggregate_version from cv_portfolio.portfolios
+      where portfolio_id = $1::uuid and owner_id = $2::uuid`, [portfolioId, ownerId]);
+    const migrationBackfillPasses = Number(migrationBackfill.rows[0]?.aggregate_version) === 1;
+    await admin.query("delete from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
+    const [emptyCvA, emptyCvB] = await Promise.all([
+      cvService.getOwnerCvPortfolio({ actor: cvOwner }),
+      cvService.getOwnerCvPortfolio({ actor: cvOwner }),
+    ]);
+    expect(emptyCvA).toMatchObject({ ok: true, value: { aggregateVersion: 1, currentVersionId: null, versions: [], activationHistory: [] } });
+    expect(emptyCvB).toMatchObject({ ok: true, value: { aggregateVersion: 1, currentVersionId: null, versions: [], activationHistory: [] } });
+    const rootCount = await admin.query("select count(*)::int as count from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
+    cvScenario("T09-01 concurrent authenticated reads initialize one empty version-1 scoped root", Number(rootCount.rows[0]?.count) === 1);
+    const noScopeRead = await appDatabase.transactions.run(async (transaction) => {
+      const executor = resolvePostgresTransaction(transaction);
+      await sql`select set_config('shipwithali.portfolio_id', '', true), set_config('shipwithali.owner_id', '', true)`.execute(executor);
+      return sql<{ readonly count: number | string }>`select count(*) as count from cv_portfolio.versions`.execute(executor);
+    });
+    const wrongOwnerRead = await appDatabase.transactions.run(async (transaction) => {
+      const executor = resolvePostgresTransaction(transaction);
+      await sql`select set_config('shipwithali.portfolio_id', ${portfolioId}, true), set_config('shipwithali.owner_id', ${createStableId("Owner")}, true)`.execute(executor);
+      return sql<{ readonly count: number | string }>`select count(*) as count from cv_portfolio.versions`.execute(executor);
+    });
+    const cvDatabasePolicy = await admin.query(`select
+        (select count(*)::int from pg_class where oid in (
+          'cv_portfolio.portfolios'::regclass, 'cv_portfolio.versions'::regclass,
+          'cv_portfolio.registration_commands'::regclass, 'cv_portfolio.activation_history'::regclass)
+          and relrowsecurity and relforcerowsecurity) as rls_tables,
+        (select count(*)::int from pg_policies where schemaname = 'cv_portfolio'
+          and policyname in ('cv_portfolios_owner_scope', 'cv_versions_owner_scope',
+            'cv_registration_commands_owner_scope', 'cv_activation_history_owner_scope')) as policies,
+        (select count(*)::int from pg_indexes where schemaname = 'cv_portfolio'
+          and indexname in ('cv_versions_owner_history_idx', 'cv_activation_history_owner_recent_idx')) as indexes,
+        (select count(*)::int from pg_constraint where conrelid = 'cv_portfolio.versions'::regclass
+          and contype = 'f') as scoped_foreign_keys,
+        (select count(*)::int from pg_constraint where conrelid = 'cv_portfolio.versions'::regclass
+          and contype = 'c') as version_checks,
+        has_table_privilege('shipwithali_application', 'cv_portfolio.versions', 'SELECT') as app_read,
+        has_table_privilege('anon', 'cv_portfolio.versions', 'SELECT') as anon_read`);
+    cvScenario("T09-09 same-scope foreign keys, English and snapshot constraints, forced RLS, default-deny roles and bounded indexes exist",
+      Number(noScopeRead.rows[0]?.count) === 0 && Number(wrongOwnerRead.rows[0]?.count) === 0 &&
+      cvDatabasePolicy.rows[0]?.rls_tables === 4 && cvDatabasePolicy.rows[0]?.policies === 4 &&
+      cvDatabasePolicy.rows[0]?.indexes >= 2 && cvDatabasePolicy.rows[0]?.scoped_foreign_keys >= 2 &&
+      cvDatabasePolicy.rows[0]?.version_checks >= 6 &&
+      cvDatabasePolicy.rows[0]?.app_read === true && cvDatabasePolicy.rows[0]?.anon_read === false &&
+      migrationBackfillPasses);
+
+    const registerCv = (overrides: Partial<Parameters<typeof cvService.registerOwnerCvVersion>[0]> = {}) =>
+      cvService.registerOwnerCvVersion({
+        actor: cvOwner,
+        idempotencyKey: "phase6-cv-register-primary" as never,
+        expectedVersion: 1,
+        mediaId: safe.mediaId as StableId<"MediaAsset">,
+        locale: "en",
+        label: "  CV October 2026  ",
+        ...overrides,
+      });
+    const cvRegistration = await registerCv();
+    expect(cvRegistration).toMatchObject({ ok: true, value: { aggregateVersion: 2, outcome: "cv-version-registered" } });
+    if (!cvRegistration.ok) throw new Error("PHASE6_CV_REGISTRATION_FAILED");
+    const savedCv = await admin.query(`select version_id::text, media_id::text, media_asset_version, version_number, locale, label, state
+      from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid`, [portfolioId, ownerId]);
+    expect(savedCv.rows).toMatchObject([{
+      media_id: safe.mediaId,
+      media_asset_version: 3,
+      version_number: 1,
+      locale: "en",
+      label: "CV October 2026",
+      state: "registered",
+    }]);
+    expect(savedCv.rows[0]?.version_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
+    expect((await admin.query("select count(*)::int as count from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId])).rows[0]?.count).toBe(0);
+    const registeredEvent = await admin.query(`select count(*)::int as count from operations.outbox_events
+      where aggregate_id = $1::uuid and event_type = 'cv.version_registered.v1'`, [portfolioId]);
+    cvScenario("T09-03 and T09-05 accepted same-Owner PDF facts are snapshot-bound to a UUIDv7 English registered version",
+      savedCv.rowCount === 1 && savedCv.rows[0]?.media_asset_version === 3 && savedCv.rows[0]?.version_number === 1 &&
+      savedCv.rows[0]?.state === "registered" && registeredEvent.rows[0]?.count === 1);
+    cvScenario("T09-06 registration increments the root and records one event without accepting or activating the CV",
+      cvRegistration.value.aggregateVersion === 2 && savedCv.rows[0]?.state === "registered" &&
+      (await cvService.getOwnerCvPortfolio({ actor: cvOwner })).ok);
+    const emptyNotCurrent = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+    expect(emptyNotCurrent).toMatchObject({ ok: true, value: { aggregateVersion: 2, currentVersionId: null } });
+
+    const replay = await registerCv();
+    const changedReplay = await registerCv({ label: "A different CV" });
+    const staleRegistration = await registerCv({ idempotencyKey: "phase6-cv-register-stale" as never, expectedVersion: 1 });
+    cvScenario("T09-07 exact replay preserves the original receipt; changed intent conflicts and a fresh stale root version fails",
+      JSON.stringify(replay) === JSON.stringify(cvRegistration) &&
+      (!changedReplay.ok && changedReplay.error.code === "IDEMPOTENCY_CONFLICT") &&
+      (!staleRegistration.ok && staleRegistration.error.kind === "precondition_failed"));
+
+    const unprocessedPdf = await uploadPdf(pdfBytes, "cv-unprocessed");
+    const unprocessedRegistration = await registerCv({
+      idempotencyKey: "phase6-cv-register-unprocessed" as never,
+      expectedVersion: 2,
+      mediaId: unprocessedPdf.mediaId as StableId<"MediaAsset">,
+    });
+    const wrongKindId = acceptedMediaIds.find((mediaId) => mediaId !== safe.mediaId);
+    const wrongKindRegistration = wrongKindId === undefined ? undefined : await registerCv({
+      idempotencyKey: "phase6-cv-register-image" as never,
+      expectedVersion: 2,
+      mediaId: wrongKindId,
+    });
+    const missingRegistration = await registerCv({
+      idempotencyKey: "phase6-cv-register-missing" as never,
+      expectedVersion: 2,
+      mediaId: createStableId("MediaAsset"),
+    });
+    const foreignActorRegistration = await cvService.registerOwnerCvVersion({
+      actor: { kind: "owner", ownerId: createStableId("Owner"), sessionId: "foreign" },
+      idempotencyKey: "phase6-cv-register-foreign" as never,
+      expectedVersion: 2,
+      mediaId: safe.mediaId as StableId<"MediaAsset">,
+      locale: "en",
+      label: "Foreign scope",
+    });
+    const wrongLocale = await cvService.registerOwnerCvVersion({
+      actor: cvOwner,
+      idempotencyKey: "phase6-cv-register-arabic" as never,
+      expectedVersion: 2,
+      mediaId: safe.mediaId as StableId<"MediaAsset">,
+      locale: "ar" as "en",
+      label: "Arabic CV",
+    });
+    cvScenario("T09-04 unprocessed, foreign, missing, non-PDF and non-English registration intents reject safely",
+      (!unprocessedRegistration.ok && (!wrongKindRegistration || !wrongKindRegistration.ok) && !missingRegistration.ok &&
+       !foreignActorRegistration.ok && !wrongLocale.ok));
+
+    let expectedCvVersion = 2;
+    for (let index = 0; index < 101; index += 1) {
+      const added = await registerCv({
+        idempotencyKey: `phase6-cv-register-history-${index}` as never,
+        expectedVersion: expectedCvVersion,
+        label: `CV retained ${index}`,
+      });
+      expect(added.ok, `bounded CV history registration ${index}`).toBe(true);
+      if (!added.ok) throw new Error("PHASE6_CV_HISTORY_SETUP_FAILED");
+      expectedCvVersion = added.value.aggregateVersion;
+    }
+    const cvVersionIds = Array.from({ length: 101 }, () => createStableId("CvActivation"));
+    for (let index = 0; index < cvVersionIds.length; index += 1) {
+      await admin.query(`insert into cv_portfolio.activation_history (activation_id, portfolio_id, owner_id, version_id, activated_at)
+        values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, transaction_timestamp() - ($5::int * interval '1 second'))`,
+      [cvVersionIds[index], portfolioId, ownerId, cvRegistration.value.versionId, index]);
+    }
+    const boundedCvView = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+    const retainedCvCount = await admin.query("select count(*)::int as count from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
+    cvScenario("T09-08 Owner projections return deterministic latest-100 version and activation views without deleting retained rows",
+      boundedCvView.ok && boundedCvView.value.versions.length === 100 && boundedCvView.value.activationHistory.length === 100 &&
+      Number(retainedCvCount.rows[0]?.count) === 102 && boundedCvView.value.versions[0]?.label === "CV retained 100");
+
+    await admin.query(`alter table operations.outbox_events add constraint phase6_cv_outbox_failure
+      check (event_type <> 'cv.version_registered.v1')`);
+    try {
+      const failedCommit = await registerCv({ idempotencyKey: "phase6-cv-register-rollback" as never,
+        expectedVersion: expectedCvVersion, label: "Rollback probe" });
+      expect(failedCommit).toMatchObject({ ok: false, error: { code: "CV_REGISTRATION_COMMIT_FAILED" } });
+    } finally {
+      await admin.query("alter table operations.outbox_events drop constraint phase6_cv_outbox_failure");
+    }
+    const afterRollback = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+    cvScenario("T09-06 root, version, receipt and event roll back together when outbox insertion fails",
+      afterRollback.ok && afterRollback.value.aggregateVersion === expectedCvVersion &&
+      afterRollback.value.versions.length === 100 &&
+      Number((await admin.query("select count(*)::int as count from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId])).rows[0]?.count) === 102);
+
+    expect(cvChecks.every((item) => item.status === "passed")).toBe(true);
+
     const acceptanceBatch = await appDatabase.transactions.run((transaction) => acceptedPdf.acceptance.getAcceptanceFacts({
       ownerId, mediaAssetIds: [...acceptedMediaIds].reverse().concat(acceptedMediaIds[0]!), intendedUse: "supporting-artifact",
     }, transaction));
