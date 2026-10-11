@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6Setup, getPhase6SourceIdentity, isolatedPhase6Config,
+  PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, getPhase6SourceIdentity, isolatedPhase6Config,
   makePhase6Report, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
 } from "./phase6-verification-support.mjs";
 
@@ -27,7 +27,8 @@ const VIDEO_PROCESSING_ONLY = process.argv.includes("--video-processing-only");
 const MEDIA_ACCEPTANCE_ONLY = process.argv.includes("--media-acceptance-only");
 const CV_PORTFOLIO_ONLY = process.argv.includes("--cv-portfolio-only");
 const PUBLICATION_MEDIA_ONLY = process.argv.includes("--publication-media-only");
-const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || CV_PORTFOLIO_ONLY || PUBLICATION_MEDIA_ONLY;
+const MEDIA_INTEGRATION_ONLY = process.argv.includes("--media-integration-only");
+const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || CV_PORTFOLIO_ONLY || PUBLICATION_MEDIA_ONLY || MEDIA_INTEGRATION_ONLY;
 const RUN_TIMEOUT = 180_000;
 
 function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEOUT, input, label = command } = {}) {
@@ -132,6 +133,7 @@ async function main() {
   let publicationChecks;
   let imageUnitChecks;
   let processingCounts;
+  let integrationChecks;
   let toolVersions = {};
   let status;
   const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], {
@@ -334,6 +336,10 @@ async function main() {
     const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 300_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
     const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
+    if (MEDIA_INTEGRATION_ONLY) {
+      integrationChecks = evaluatePhase6IntegrationTests(testReport, testResult.status);
+      if (integrationChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_INTEGRATION_REQUIRES_FIVE_PASSED_ZERO_SKIPPED");
+    }
     processingCounts = existsSync(processingCountsPath) ? JSON.parse(readFileSync(processingCountsPath, "utf8")) : undefined;
     const allAssertions = (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
     const uploadAssertions = allAssertions.filter((item) => !/processes (?:PDF|MP4 and WebM|PNG, JPEG and WebP) candidates/u.test(String(item.fullName ?? "")));
@@ -484,7 +490,7 @@ async function main() {
   const finalSource = getPhase6SourceIdentity();
   if (finalSource.sourceRevision !== source.sourceRevision || finalSource.sourceTreeSha256 !== source.sourceTreeSha256) failures.push("PHASE6_SOURCE_CHANGED_DURING_RUN");
   let report;
-  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !CV_PORTFOLIO_ONLY && !PUBLICATION_MEDIA_ONLY) {
+  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !CV_PORTFOLIO_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY) {
     report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
     const evaluated = evaluatePhase6Setup(report, source);
     if (evaluated.failures.length) {
@@ -494,7 +500,7 @@ async function main() {
     mkdirSync(join(ROOT, "evidence"), { recursive: true });
     writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   }
-  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !CV_PORTFOLIO_ONLY && !PUBLICATION_MEDIA_ONLY) {
+  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !CV_PORTFOLIO_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY) {
     const uploadIntentEvidence = {
       schemaVersion: 1,
       ticket: 148,
@@ -632,7 +638,22 @@ async function main() {
     } finally { if (existsSync(unitJsonPath)) rmSync(unitJsonPath, { force: true }); }
     if (acceptanceUnitChecks?.verdict !== "pass") failures.push("PHASE6_MEDIA_ACCEPTANCE_UNIT_ASSERTIONS_INVALID");
   }
-  if (MEDIA_ACCEPTANCE_ONLY) {
+  if (MEDIA_INTEGRATION_ONLY) {
+    const evidence = {
+      schemaVersion: 1, runId: randomUUID(), ...source, startedAt, completedAt: new Date().toISOString(),
+      scope: "all-five-real-media-postgres-storage-integration-tests", toolVersions, services, formats,
+      checks: integrationChecks, processingCounts, cleanup, failures,
+      verdict: integrationChecks?.verdict === "pass" && formats.length === PHASE6_FORMATS.length &&
+        formats.every((format) => format.executed && format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        processingCounts?.acceptanceExecutions === PHASE6_FORMATS.length && cleanup.success && failures.length === 0 ? "pass" : "fail",
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:media-integration"],
+    };
+    mkdirSync(join(ROOT, "evidence"), { recursive: true });
+    writeFileSync(join(ROOT, "evidence/phase6-media-integration.json"), `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+    console.log(JSON.stringify({ verdict: evidence.verdict, checks: integrationChecks, cleanup, failures,
+      evidence: "evidence/phase6-media-integration.json" }, null, 2));
+    if (evidence.verdict !== "pass") process.exitCode = 1;
+  } else if (MEDIA_ACCEPTANCE_ONLY) {
     const scenarios = [
       "T07-01 exact candidate hash, current processing version, same Owner and current kind policy are required",
       "T07-02 image alt or decorative classification and video/document summaries match actual kind",

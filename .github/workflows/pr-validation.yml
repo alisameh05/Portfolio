@@ -97,6 +97,42 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  phase6-media-cv:
+    name: Phase 6 Media and CV real-PostgreSQL-Storage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Select pinned npm
+        run: |
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).engines.npm')"
+          npm install --global "npm@$npm_version" --no-audit --no-fund
+      - name: Install locked development dependencies
+        run: npm run setup:validation
+      - name: Require all five real Media integration tests with zero skips
+        # Remove committed evidence so an early failure cannot upload an old pass.
+        run: |
+          node --input-type=module -e 'import { rmSync } from "node:fs"; for (const path of ["evidence/phase6-media-integration.json", "evidence/phase6-cv-portfolio-154.json"]) rmSync(path, { force: true });'
+          npm run phase6:focus:media-integration
+      - name: Require CV registration and migration upgrade acceptance
+        run: npm run phase6:focus:cv-portfolio
+      - name: Publish sanitized current-source evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase6-media-cv-integration
+          path: |
+            evidence/phase6-media-integration.json
+            evidence/phase6-cv-portfolio-154.json
+          if-no-files-found: error
+          retention-days: 14
+
   cloud-bootstrap:
     name: Cloud bootstrap from Node 20
     runs-on: ubuntu-24.04

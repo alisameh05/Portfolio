@@ -1,10 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6Setup, isolatedPhase6Config,
+  PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, isolatedPhase6Config,
   loadPhase6PredecessorContexts, makePhase6Report, scrubPhase6Environment,
 } from "../../scripts/phase6-verification-support.mjs";
 import { createBarrier, createDeterministicClock, createUuidV7Sequence } from "../phase6/fixtures/deterministic.mjs";
+
+test("the complete real integration gate rejects skipped, missing, failed, and partial test reports", () => {
+  const report = {
+    success: true, numTotalTests: 5, numPassedTests: 5, numFailedTests: 0, numPendingTests: 0,
+    testResults: [{ assertionResults: Array.from({ length: 5 }, () => ({ status: "passed" })) }],
+  };
+  assert.deepEqual(evaluatePhase6IntegrationTests(report, 0), { total: 5, passed: 5, failed: 0, skipped: 0, verdict: "pass" });
+  assert.equal(evaluatePhase6IntegrationTests(report, 1).verdict, "fail");
+  assert.equal(evaluatePhase6IntegrationTests(undefined, 0).verdict, "fail");
+  for (const status of ["pending", "disabled", "todo", "failed"]) {
+    const changed = structuredClone(report);
+    changed.testResults[0].assertionResults[0].status = status;
+    assert.equal(evaluatePhase6IntegrationTests(changed, 0).verdict, "fail");
+  }
+  const partial = structuredClone(report);
+  partial.testResults[0].assertionResults.pop();
+  assert.equal(evaluatePhase6IntegrationTests(partial, 0).verdict, "fail");
+  assert.equal(evaluatePhase6IntegrationTests({ ...report, numPendingTests: 1 }, 0).verdict, "fail");
+});
 
 function passingReport() {
   const predecessorContexts = loadPhase6PredecessorContexts();

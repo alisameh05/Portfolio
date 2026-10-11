@@ -44,6 +44,19 @@ export function scrubPhase6Environment(source = process.env) {
   return env;
 }
 
+export function evaluatePhase6IntegrationTests(report, exitStatus) {
+  const assertions = (report?.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
+  const counts = {
+    total: assertions.length,
+    passed: assertions.filter((item) => item.status === "passed").length,
+    failed: assertions.filter((item) => item.status === "failed").length,
+    skipped: assertions.filter((item) => item.status !== "passed" && item.status !== "failed").length,
+  };
+  return { ...counts, verdict: exitStatus === 0 && counts.total === 5 && counts.passed === 5 &&
+    report?.numTotalTests === 5 && report?.numPassedTests === 5 && report?.numFailedTests === 0 &&
+    report?.numPendingTests === 0 && report?.success === true ? "pass" : "fail" };
+}
+
 export const PHASE6_PREDECESSOR_CONTEXTS = Object.freeze({
   phase4: Object.freeze({ issue: 90, pullRequest: 105, mergeCommit: "9806af81d4ce705c36d9b22089f77213d16887bc", evidence: "evidence/phase4-context-90-105.json" }),
   phase5: Object.freeze({ issue: 125, pullRequest: 144, mergeCommit: "26d6efb3d9e281265cc9c099195492b5dcbec79d", evidence: "evidence/phase-5-context.json" }),
