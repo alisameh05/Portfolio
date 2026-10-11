@@ -5,7 +5,7 @@ import { open, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { err, ok, type Rejection, type Result } from "@shared/domain";
-import type { PdfProcessorPort, TrustedByteScannerPort } from "../../modules/media/application/processing.js";
+import type { PdfProcessorPort, TrustedByteScannerPort, VideoProcessorPort } from "../../modules/media/application/processing.js";
 
 const execFile = promisify(nodeExecFile);
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -182,10 +182,10 @@ async function stopDockerContainer(containerName: string): Promise<void> {
 }
 
 function dockerBoundedCommand(executable: string, args: readonly string[], outputPath: string,
-  limits: { readonly maxBytes: number }): { executable: string; args: string[]; stop: () => Promise<void> } {
+  limits: { readonly maxBytes: number; readonly image?: string }): { executable: string; args: string[]; stop: () => Promise<void> } {
   const directory = dirname(outputPath);
   const mountSource = directory.replace(/\\/gu, "/");
-  const containerName = `portfolio-pdf-${randomUUID()}`;
+  const containerName = `portfolio-media-${randomUUID()}`;
   const translatedArgs = args.map((argument) => {
     for (const prefix of [directory, mountSource]) {
       if (argument === prefix) return "/work";
@@ -199,14 +199,14 @@ function dockerBoundedCommand(executable: string, args: readonly string[], outpu
     "run", "--rm", "--pull=never", "--name", containerName, "--network=none", "--read-only", "--memory=1g", "--cpus=1", "--pids-limit=64",
     `--ulimit=fsize=${limits.maxBytes}:${limits.maxBytes}`, "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
     "--mount", `type=bind,source=${mountSource},target=/work`, "--workdir", "/work", "--entrypoint", executable,
-    BOUNDED_PDF_IMAGE, ...translatedArgs,
+    limits.image ?? BOUNDED_PDF_IMAGE, ...translatedArgs,
   ];
   return { executable: "docker", args: command, stop: () => stopDockerContainer(containerName) };
 }
 
 /** Uses the pinned processor container and Docker hard limits on every supported host. */
 export function runWithBoundedOutput(executable: string, args: readonly string[], outputPath: string,
-  limits: { readonly maxBytes: number; readonly timeoutMs: number; readonly python: string }): Promise<void> {
+  limits: { readonly maxBytes: number; readonly timeoutMs: number; readonly python?: string; readonly image?: string }): Promise<void> {
   const command = dockerBoundedCommand(executable, args, outputPath, limits);
   return monitorBoundedChildOutput(command.executable, command.args, outputPath, limits, command.stop);
 }
@@ -231,8 +231,8 @@ async function toolVersion(executable: string, args: readonly string[]): Promise
   return version;
 }
 
-async function withTempPdf<T>(bytes: Uint8Array, action: (directory: string, input: string) => Promise<T>): Promise<T> {
-  if (bytes.byteLength < 1 || bytes.byteLength > MAX_BYTES) throw new Error("MEDIA_BYTES_OUT_OF_BOUNDS");
+async function withTempPdf<T>(bytes: Uint8Array, action: (directory: string, input: string) => Promise<T>, maxBytes = MAX_BYTES): Promise<T> {
+  if (bytes.byteLength < 1 || bytes.byteLength > maxBytes) throw new Error("MEDIA_BYTES_OUT_OF_BOUNDS");
   const directory = await mkdtemp(join(tmpdir(), "portfolio-media-"));
   const input = join(directory, "candidate.pdf");
   try {
@@ -244,7 +244,7 @@ async function withTempPdf<T>(bytes: Uint8Array, action: (directory: string, inp
 }
 
 /** Runs the pinned ClamAV binary; exit 0 is clean, 1 is an unsafe signature. */
-export function createClamAvScanner(options: { readonly executable?: string } = {}): TrustedByteScannerPort {
+export function createClamAvScanner(options: { readonly executable?: string; readonly maxBytes?: number; readonly timeoutMs?: number } = {}): TrustedByteScannerPort {
   const executable = options.executable ?? "clamscan";
   let versionPromise: Promise<string> | undefined;
   const version = () => versionPromise ??= toolVersion(executable, ["--version"]).catch((error: unknown) => { versionPromise = undefined; throw error; });
@@ -262,14 +262,14 @@ export function createClamAvScanner(options: { readonly executable?: string } = 
               "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--mount", `type=bind,source=${mountSource},target=/work,readonly`,
               "--workdir", "/work", "--entrypoint", "clamscan", BOUNDED_SCANNER_IMAGE, "--no-summary", "--stdout", "/work/candidate.pdf"];
             await monitorBoundedChildOutput("docker", dockerArgs, input,
-              { maxBytes: MAX_BYTES, timeoutMs: SCAN_TIMEOUT_MS }, () => stopDockerContainer(containerName));
+              { maxBytes: options.maxBytes ?? MAX_BYTES, timeoutMs: options.timeoutMs ?? SCAN_TIMEOUT_MS }, () => stopDockerContainer(containerName));
             return "clean" as const;
           } catch (cause) {
             const code = typeof cause === "object" && cause !== null && "code" in cause ? String((cause as { code: unknown }).code) : "";
             if (code === "1") return "unsafe" as const;
             throw new Error("MEDIA_SCANNER_UNAVAILABLE");
           }
-        });
+        }, options.maxBytes ?? MAX_BYTES);
         return ok({ verdict, version: scannerVersion });
       } catch {
         return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
@@ -342,6 +342,130 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
         if (message === "MEDIA_BYTES_OUT_OF_BOUNDS") return err({ kind: "validation", code: message });
         if (message === "MEDIA_PDF_OUTPUT_INVALID") return err({ kind: "validation", code: message });
         return safeFailure("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
+      }
+    },
+  };
+}
+
+const VIDEO_IMAGE = "jrottenberg/ffmpeg:7.1-ubuntu2404";
+const VIDEO_POLICY_VERSION = "mp4-webm-bounded-variants-1";
+const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+const VIDEO_MAX_FRAMES = 1_800;
+const VIDEO_MAX_DURATION_SECONDS = 60;
+const VIDEO_PROCESS_TIMEOUT_MS = 8_000;
+
+interface VideoProbe {
+  readonly format?: { readonly format_name?: string; readonly duration?: string };
+  readonly streams?: readonly { readonly codec_type?: string; readonly codec_name?: string; readonly width?: number; readonly height?: number;
+    readonly avg_frame_rate?: string; readonly nb_read_frames?: string }[];
+}
+
+function rational(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const [numerator, denominator] = value.split("/").map(Number);
+  if (numerator === undefined || denominator === undefined || !Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) return undefined;
+  return numerator / denominator;
+}
+
+async function runVideoTool(executable: string, args: readonly string[], directory: string, timeoutMs: number): Promise<string> {
+  const mountSource = directory.replace(/\\/gu, "/");
+  const containerName = `portfolio-video-${randomUUID()}`;
+  const translated = args.map((argument) => argument.startsWith(`${directory}${process.platform === "win32" ? "\\" : "/"}`)
+    ? `/work/${argument.slice(directory.length).replace(/^[\\/]+/u, "").replace(/[\\/]+/gu, "/")}` : argument);
+  try {
+    const result = await execFile("docker", ["run", "--rm", "--pull=never", "--name", containerName, "--network=none", "--read-only",
+      "--memory=1g", "--cpus=1", "--pids-limit=64", "--ulimit=fsize=52428800:52428800", "--tmpfs", "/tmp:rw,noexec,nosuid,size=128m",
+      "--mount", `type=bind,source=${mountSource},target=/work`, "--workdir", "/work", "--entrypoint", executable, VIDEO_IMAGE, ...translated],
+    { encoding: "utf8", timeout: timeoutMs, maxBuffer: 128 * 1024, windowsHide: true });
+    return result.stdout.toString();
+  } catch (cause) {
+    try { await stopDockerContainer(containerName); } catch { throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED"); }
+    const code = typeof cause === "object" && cause !== null && "code" in cause ? String((cause as { code: unknown }).code) : "";
+    if (code === "ETIMEDOUT") throw new Error("MEDIA_VIDEO_PROCESSOR_TIMEOUT");
+    throw new Error("MEDIA_VIDEO_PROCESSOR_UNAVAILABLE");
+  }
+}
+
+async function probeVideo(path: string, directory: string): Promise<VideoProbe> {
+  const output = await runVideoTool("ffprobe", ["-v", "error", "-read_intervals", "%+61", "-count_frames", "-select_streams", "v:0", "-show_entries",
+    "format=format_name,duration:stream=codec_type,codec_name,width,height,avg_frame_rate,nb_read_frames", "-of", "json", path], directory, 3_000);
+  try { return JSON.parse(output) as VideoProbe; } catch { throw new Error("MEDIA_VIDEO_INPUT_INVALID"); }
+}
+
+/** Detects actual MP4/WebM structure, bounds decoded work, transcodes one normalized private variant, then re-probes it. */
+export function createFfmpegVideoProcessor(): VideoProcessorPort {
+  let versionPromise: Promise<string> | undefined;
+  const version = () => versionPromise ??= (async () => {
+    const directory = await mkdtemp(join(tmpdir(), "portfolio-video-version-"));
+    try { return await runVideoTool("ffmpeg", ["-version"], directory, 2_000); }
+    finally { await rm(directory, { recursive: true, force: true }).catch(() => undefined); }
+  })().then((value) => {
+      const firstLine = value.split(/\r?\n/u, 1)[0] ?? "";
+      if (!/^ffmpeg version 7\.1(?:\s|$)/u.test(firstLine)) throw new Error("MEDIA_VIDEO_PROCESSOR_UNAVAILABLE");
+      return firstLine.replace(/[^A-Za-z0-9./_: -]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, 150);
+    }).catch((error: unknown) => { versionPromise = undefined; throw error; });
+  return {
+    async process(bytes) {
+      if (bytes.byteLength < 12 || bytes.byteLength > VIDEO_MAX_BYTES) return err({ kind: "validation", code: "MEDIA_BYTES_OUT_OF_BOUNDS" });
+      const detectedMimeType = bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3 ? "video/webm"
+        : new TextDecoder("ascii").decode(bytes.subarray(4, 8)) === "ftyp" ? "video/mp4" : undefined;
+      if (!detectedMimeType) return err({ kind: "validation", code: "MEDIA_VIDEO_INPUT_INVALID" });
+      try {
+        const processorVersion = await version();
+        const directory = await mkdtemp(join(tmpdir(), "portfolio-video-"));
+        const input = join(directory, detectedMimeType === "video/mp4" ? "candidate.mp4" : "candidate.webm");
+        const output = join(directory, detectedMimeType === "video/mp4" ? "normalized.mp4" : "normalized.webm");
+        try {
+          await writeFile(input, bytes, { flag: "wx", mode: 0o600 });
+          const source = await probeVideo(input, directory);
+          const format = source.format?.format_name ?? "";
+          const stream = source.streams?.[0];
+          const duration = Number(source.format?.duration);
+          const frameRate = rational(stream?.avg_frame_rate);
+          const frames = Number(stream?.nb_read_frames);
+          const expectedFormat = detectedMimeType === "video/mp4" ? /(?:^|,)mov(?:,|$)/u.test(format) : /webm|matroska/u.test(format);
+          const supportedCodec = detectedMimeType === "video/mp4" ? stream?.codec_name === "h264" : ["vp8", "vp9"].includes(stream?.codec_name ?? "");
+          if (!expectedFormat || !stream || stream.codec_type !== "video" || !supportedCodec ||
+              !Number.isFinite(duration) || duration <= 0 || duration > VIDEO_MAX_DURATION_SECONDS ||
+              !Number.isSafeInteger(frames) || frames < 1 || frames > VIDEO_MAX_FRAMES ||
+              !Number.isSafeInteger(stream.width) || !Number.isSafeInteger(stream.height) || stream.width! < 1 || stream.width! > 1920 || stream.height! < 1 || stream.height! > 1080 ||
+              !Number.isFinite(frameRate) || frameRate! <= 0 || frameRate! > 30) {
+            return err({ kind: "validation", code: "MEDIA_VIDEO_INPUT_UNSUPPORTED" });
+          }
+          const videoArgs = detectedMimeType === "video/mp4"
+            ? ["-nostdin", "-v", "error", "-i", input, "-map", "0:v:0", "-an", "-sn", "-dn", "-frames:v", String(VIDEO_MAX_FRAMES),
+              "-t", String(VIDEO_MAX_DURATION_SECONDS), "-vf", "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+              "-threads", "1", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-f", "mp4", "-y", output]
+            : ["-nostdin", "-v", "error", "-i", input, "-map", "0:v:0", "-an", "-sn", "-dn", "-frames:v", String(VIDEO_MAX_FRAMES),
+              "-t", String(VIDEO_MAX_DURATION_SECONDS), "-vf", "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+              "-threads", "1", "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "0", "-crf", "40", "-f", "webm", "-y", output];
+          const limits = { maxBytes: VIDEO_MAX_BYTES, timeoutMs: VIDEO_PROCESS_TIMEOUT_MS, image: VIDEO_IMAGE };
+          const command = dockerBoundedCommand("ffmpeg", videoArgs, output, limits);
+          await monitorBoundedChildOutput(command.executable, command.args, output, limits, command.stop);
+          const outputStat = await assertBoundedFile(output, VIDEO_MAX_BYTES);
+          void outputStat;
+          const outputProbe = await probeVideo(output, directory);
+          const outputStream = outputProbe.streams?.[0];
+          const outputFormat = outputProbe.format?.format_name ?? "";
+          const outputCodec = outputStream?.codec_name ?? "";
+          const expectedOutputCodec = detectedMimeType === "video/mp4" ? "h264" : "vp9";
+          const outputWidth = outputStream?.width, outputHeight = outputStream?.height;
+          const outputFrames = Number(outputStream?.nb_read_frames), outputDuration = Number(outputProbe.format?.duration);
+          if (!(detectedMimeType === "video/mp4" ? /(?:^|,)mov(?:,|$)/u.test(outputFormat) : /webm|matroska/u.test(outputFormat)) ||
+              outputStream?.codec_type !== "video" || outputCodec !== expectedOutputCodec || !Number.isSafeInteger(outputWidth) || !Number.isSafeInteger(outputHeight) ||
+              outputWidth! < 1 || outputWidth! > 1280 || outputHeight! < 1 || outputHeight! > 720 || !Number.isSafeInteger(outputFrames) || outputFrames < 1 || outputFrames > VIDEO_MAX_FRAMES ||
+              !Number.isFinite(outputDuration) || outputDuration <= 0 || outputDuration > VIDEO_MAX_DURATION_SECONDS) {
+            return err({ kind: "validation", code: "MEDIA_VIDEO_OUTPUT_INVALID" });
+          }
+          const outputBytes = await readBoundedFile(output, VIDEO_MAX_BYTES);
+          return ok({ detectedMimeType, variants: [{ variantName: "normalized", mimeType: detectedMimeType, bytes: new Uint8Array(outputBytes),
+            width: outputWidth!, height: outputHeight!, codec: outputCodec }], version: processorVersion, policyVersion: VIDEO_POLICY_VERSION });
+        } finally { await rm(directory, { recursive: true, force: true }).catch(() => undefined); }
+      } catch (cause) {
+        const code = cause instanceof Error ? cause.message : "";
+        if (code === "MEDIA_VIDEO_PROCESSOR_TIMEOUT") return safeFailure("MEDIA_PROCESSING_TIMEOUT");
+        if (code === "MEDIA_VIDEO_INPUT_INVALID" || code === "MEDIA_VIDEO_OUTPUT_INVALID") return err({ kind: "validation", code });
+        return safeFailure("MEDIA_PROCESSOR_UNAVAILABLE");
       }
     },
   };

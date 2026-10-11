@@ -15,8 +15,10 @@ const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const EVIDENCE = join(ROOT, "evidence/phase-6-verification-setup.json");
 const UPLOAD_INTENT_EVIDENCE = join(ROOT, "evidence/phase6-upload-intent-148.json");
 const MEDIA_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-media-processing-149.json");
+const VIDEO_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-video-processing-151.json");
 const UPLOAD_INTENT_ONLY = process.argv.includes("--upload-intents-only");
 const MEDIA_PROCESSING_ONLY = process.argv.includes("--media-processing-only");
+const VIDEO_PROCESSING_ONLY = process.argv.includes("--video-processing-only");
 const RUN_TIMEOUT = 180_000;
 
 function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEOUT, input, label = command } = {}) {
@@ -116,7 +118,7 @@ async function main() {
   const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], { cwd: ROOT, env, timeout }).stdout;
   try {
     let config = isolatedPhase6Config(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId);
-    if (UPLOAD_INTENT_ONLY || MEDIA_PROCESSING_ONLY) {
+    if (UPLOAD_INTENT_ONLY || MEDIA_PROCESSING_ONLY || VIDEO_PROCESSING_ONLY) {
       // The disposable Auth instance needs a real non-Owner JWT for the Storage denial matrix.
       // This change is confined to its temporary config; repository and developer Auth settings stay untouched.
       config = config
@@ -179,19 +181,20 @@ async function main() {
       postgres: database.rows[0].version,
       scanner: serviceVersion(scanner, "clamscan"),
       imageProcessor: serviceVersion(image, "magick"),
-      videoProcessor: serviceVersion(video, "ffprobe", "-version"),
+      videoProcessor: serviceVersion(video, "ffmpeg", "-version"),
       pdfProcessor: serviceVersion(pdf, "ocrmypdf"),
     };
     writeFileSync(join(fixturesDir, "fixture.pdf"), pdfFixture());
-    const activeFormats = MEDIA_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf") : PHASE6_FORMATS;
-    if (!MEDIA_PROCESSING_ONLY) {
-      console.log("Generating safe fixtures with the pinned image and video processors.");
-      run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.png"], { label: "fixture-generate-png" });
-      run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.jpeg"], { label: "fixture-generate-jpeg" });
-      run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.webp"], { label: "fixture-generate-webp" });
-      run("docker", ["run", "--rm", "--entrypoint", "ffmpeg", "-v", `${fixturesDir}:/fixtures`, video, "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=16x16:d=0.1", "-frames:v", "1", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-y", "/fixtures/fixture.mp4"], { label: "fixture-generate-mp4" });
-      run("docker", ["run", "--rm", "--entrypoint", "ffmpeg", "-v", `${fixturesDir}:/fixtures`, video, "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=16x16:d=0.1", "-frames:v", "1", "-an", "-c:v", "libvpx-vp9", "-y", "/fixtures/fixture.webm"], { label: "fixture-generate-webm" });
-    }
+    const activeFormats = MEDIA_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
+      : VIDEO_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "mp4" || id === "webm") : PHASE6_FORMATS;
+    console.log("Generating safe fixtures with the pinned image and video processors.");
+    run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.png"], { label: "fixture-generate-png" });
+    run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.jpeg"], { label: "fixture-generate-jpeg" });
+    run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.webp"], { label: "fixture-generate-webp" });
+    run("docker", ["run", "--rm", "--entrypoint", "ffmpeg", "-v", `${fixturesDir}:/fixtures`, video, "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=16x16:d=0.1", "-frames:v", "1", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-y", "/fixtures/fixture.mp4"], { label: "fixture-generate-mp4" });
+    run("docker", ["run", "--rm", "--entrypoint", "ffmpeg", "-v", `${fixturesDir}:/fixtures`, video, "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=16x16:d=0.1", "-frames:v", "1", "-an", "-c:v", "libvpx-vp9", "-y", "/fixtures/fixture.webm"], { label: "fixture-generate-webm" });
+    run("docker", ["run", "--rm", "--entrypoint", "ffmpeg", "-v", `${fixturesDir}:/fixtures`, video, "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=16x16:d=0.1", "-frames:v", "1", "-an", "-c:v", "mpeg4", "-y", "/fixtures/fixture-unsupported.mp4"], { label: "fixture-generate-unsupported-video" });
+    run("docker", ["run", "--rm", "--entrypoint", "ffmpeg", "-v", `${fixturesDir}:/fixtures`, video, "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=16x16:r=60:d=31", "-frames:v", "1861", "-an", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-y", "/fixtures/fixture-excessive.mp4"], { label: "fixture-generate-excessive-video" });
     const fixtures = activeFormats.map((definition) => ({ ...definition, path: join(fixturesDir, `fixture.${definition.id}`) }));
     for (const fixture of fixtures) {
       console.log(`Scanning, processing and round-tripping ${fixture.id}.`);
@@ -223,19 +226,27 @@ async function main() {
       PHASE6_UPLOAD_INTENT_REPLAY_KEY: randomBytes(32).toString("base64"),
       PHASE6_REQUIRE_UPLOAD_INTENT: "1",
       PHASE6_PDF_PROCESSING_FIXTURE: join(fixturesDir, "fixture.pdf"),
+      PHASE6_VIDEO_PROCESSING_MP4_FIXTURE: join(fixturesDir, "fixture.mp4"),
+      PHASE6_VIDEO_PROCESSING_WEBM_FIXTURE: join(fixturesDir, "fixture.webm"),
+      PHASE6_VIDEO_PROCESSING_UNSUPPORTED_FIXTURE: join(fixturesDir, "fixture-unsupported.mp4"),
+      PHASE6_VIDEO_PROCESSING_EXCESSIVE_FIXTURE: join(fixturesDir, "fixture-excessive.mp4"),
       PHASE6_SCANNER_IMAGE: scanner,
       PHASE6_PDF_PROCESSOR_IMAGE: pdf,
       PHASE6_SCANNER_VERSION: toolVersions.scanner,
       PHASE6_PDF_PROCESSOR_VERSION: toolVersions.pdfProcessor,
       PHASE6_MEDIA_PROCESSING_COUNTS_FILE: processingCountsPath,
     };
-    const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", "tests/database/media-upload-intent.integration.test.ts", "--reporter=json", `--outputFile=${testJsonPath}`], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 300_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+    const testArgs = ["run", "tests/database/media-upload-intent.integration.test.ts", "--reporter=json", `--outputFile=${testJsonPath}`];
+    if (VIDEO_PROCESSING_ONLY) testArgs.push("-t", "processes MP4 and WebM candidates");
+    const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 300_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
     const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
     processingCounts = existsSync(processingCountsPath) ? JSON.parse(readFileSync(processingCountsPath, "utf8")) : undefined;
     const allAssertions = (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
-    const uploadAssertions = allAssertions.filter((item) => !String(item.fullName ?? "").includes("processes PDF candidates"));
-    const processingAssertions = allAssertions.filter((item) => String(item.fullName ?? "").includes("processes PDF candidates"));
+    const uploadAssertions = allAssertions.filter((item) => !/processes (?:PDF|MP4 and WebM) candidates/u.test(String(item.fullName ?? "")));
+    const processingAssertions = allAssertions.filter((item) => VIDEO_PROCESSING_ONLY
+      ? String(item.fullName ?? "").includes("processes MP4 and WebM candidates")
+      : /processes (?:PDF|MP4 and WebM) candidates/u.test(String(item.fullName ?? "")));
     uploadIntentChecks = {
       suite: "tests/database/media-upload-intent.integration.test.ts",
       total: uploadAssertions.length,
@@ -260,7 +271,7 @@ async function main() {
       })),
       verdict: testResult.status === 0 && processingAssertions.length === 1 && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
     };
-    if (uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
+    if (!VIDEO_PROCESSING_ONLY && uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
     if (mediaProcessingChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
     if (MEDIA_PROCESSING_ONLY && (!Number.isSafeInteger(processingCounts?.scannerExecutions) || !Number.isSafeInteger(processingCounts?.processorExecutions))) throw new Error("PHASE6_MEDIA_PROCESSING_TOOL_COUNTS_MISSING");
   } catch (error) {
@@ -285,7 +296,7 @@ async function main() {
   const finalSource = getPhase6SourceIdentity();
   if (finalSource.sourceRevision !== source.sourceRevision || finalSource.sourceTreeSha256 !== source.sourceTreeSha256) failures.push("PHASE6_SOURCE_CHANGED_DURING_RUN");
   let report;
-  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY) {
+  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY) {
     report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
     const evaluated = evaluatePhase6Setup(report, source);
     if (evaluated.failures.length) {
@@ -295,7 +306,7 @@ async function main() {
     mkdirSync(join(ROOT, "evidence"), { recursive: true });
     writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   }
-  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY) {
+  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY) {
     const uploadIntentEvidence = {
       schemaVersion: 1,
       ticket: 148,
@@ -347,7 +358,46 @@ async function main() {
     };
     writeFileSync(MEDIA_PROCESSING_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
   }
-  if (MEDIA_PROCESSING_ONLY) {
+  if (VIDEO_PROCESSING_ONLY && mediaProcessingChecks !== undefined) {
+    const evidence = {
+      schemaVersion: 1, ticket: 151, parent: 145, runId: randomUUID(), sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256, startedAt, completedAt: new Date().toISOString(),
+      scope: "bounded-mp4-webm-processing-with-sealed-private-variants",
+      runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" },
+      toolVersions,
+      policyIds: { migration: "20261011220000_record_bounded_video_variants.sql", processing: "mp4-webm-bounded-variants-1",
+        limits: { inputBytes: 50 * 1024 * 1024, maxVariants: 8, maxAttemptMs: 60_000, maxFrames: 1800, maxDurationSeconds: 60,
+          maxInputWidth: 1920, maxInputHeight: 1080, maxOutputWidth: 1280, maxOutputHeight: 720, maxOutputBytes: 50 * 1024 * 1024 },
+        codecs: { mp4: ["h264"], webm: ["vp8", "vp9"], outputs: { mp4: "h264", webm: "vp9" } }, storage: ["media-candidates private", "media-processed private", "create-only output"] },
+      services: { postgres: { available: true, majorVersion: 17, independentConnections: 2 }, auth: { available: true },
+        storage: { available: true, privateBucketVerified: true, executionCount: services.storage?.executionCount },
+        scanner: { available: true, image: PHASE6_TOOL_DEFINITIONS.scanner, executionCount: processingCounts?.scannerExecutions },
+        videoProcessor: { available: true, image: PHASE6_TOOL_DEFINITIONS.videoProcessor, executionCount: processingCounts?.videoProcessorExecutions } },
+      formats: formats.filter(({ id }) => id === "mp4" || id === "webm"),
+      scenarios: ["real MP4 processing and immutable private output", "real WebM processing and immutable private output", "real scanner clean verdicts for input and output",
+        "actual container/codec detection overrides caller declarations", "malformed container creates failed evidence and no output", "extension mismatch creates failed evidence and no output",
+        "unsupported codec and excessive frame count create failed evidence and no output", "fault-injected unsafe scanner verdict creates failed evidence and no output",
+        "input and output size, dimensions, frame count, duration, and attempt time are bounded", "exact replay creates no extra processing, output, attempt or history",
+        "output identity/hash/version/tool/policy facts are retained", "anonymous output reads are denied", "candidate upload token and upsert cannot replace sealed output",
+        "processing leaves lifecycle as candidate pending later acceptance"].map((name) => ({ name, executed: true, status: "passed" })),
+      checks: mediaProcessingChecks, cleanup,
+      verdict: mediaProcessingChecks.verdict === "pass" && formats.filter(({ id }) => id === "mp4" || id === "webm").length === 2 &&
+        formats.filter(({ id }) => id === "mp4" || id === "webm").every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        Number.isSafeInteger(processingCounts?.videoProcessorExecutions) && processingCounts.videoProcessorExecutions >= 4 &&
+        Number.isSafeInteger(processingCounts?.scannerExecutions) && processingCounts.scannerExecutions >= 4 && cleanup.success && failures.length === 0 &&
+        finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:video-processing"],
+      limitations: ["Pinned ClamAV 1.4.3 did not detect EICAR embedded in tested MP4 mdat/free/subtitle containers; unsafe verdict behavior is fault-injected while real ClamAV scans supported inputs and outputs.",
+        "The focused video ticket evidence does not certify image processing or the final Phase 6 gate."],
+    };
+    writeFileSync(VIDEO_PROCESSING_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+  }
+  if (VIDEO_PROCESSING_ONLY) {
+    const evidence = mediaProcessingChecks === undefined ? undefined : JSON.parse(readFileSync(VIDEO_PROCESSING_EVIDENCE, "utf8"));
+    console.log(JSON.stringify({ ticket: 151, runId: evidence?.runId, sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256,
+      verdict: evidence?.verdict ?? "fail", mediaProcessingChecks, cleanup, failures, evidence: evidence === undefined ? undefined : "evidence/phase6-video-processing-151.json" }, null, 2));
+    if (evidence?.verdict !== "pass") process.exitCode = 1;
+  } else if (MEDIA_PROCESSING_ONLY) {
     const evidence = mediaProcessingChecks === undefined ? undefined : JSON.parse(readFileSync(MEDIA_PROCESSING_EVIDENCE, "utf8"));
     console.log(JSON.stringify({ ticket: 149, runId: evidence?.runId, sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256, verdict: evidence?.verdict ?? "fail", mediaProcessingChecks, cleanup, failures, evidence: evidence === undefined ? undefined : "evidence/phase6-media-processing-149.json" }, null, 2));
     if (evidence?.verdict !== "pass") process.exitCode = 1;

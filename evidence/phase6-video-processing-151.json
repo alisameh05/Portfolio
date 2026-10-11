@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "ticket": 151,
+  "parent": 145,
+  "runId": "2447c590-907d-4ed2-92eb-6662371cdcc5",
+  "sourceRevision": "e34b169500a2ba13a8c2ef1ed612a2cf6039d335",
+  "sourceTreeSha256": "5c188f8c9f096741bb2899ffa33b982a49cfb1f37da527b49fb4b41beaed76a0",
+  "startedAt": "2026-10-11T13:33:20.434Z",
+  "completedAt": "2026-10-11T13:36:19.619Z",
+  "scope": "bounded-mp4-webm-processing-with-sealed-private-variants",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffmpeg version 7.1 Copyright (c) 2000-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1"
+  },
+  "policyIds": {
+    "migration": "20261011220000_record_bounded_video_variants.sql",
+    "processing": "mp4-webm-bounded-variants-1",
+    "limits": {
+      "inputBytes": 52428800,
+      "maxVariants": 8,
+      "maxAttemptMs": 60000,
+      "maxFrames": 1800,
+      "maxDurationSeconds": 60,
+      "maxInputWidth": 1920,
+      "maxInputHeight": 1080,
+      "maxOutputWidth": 1280,
+      "maxOutputHeight": 720,
+      "maxOutputBytes": 52428800
+    },
+    "codecs": {
+      "mp4": [
+        "h264"
+      ],
+      "webm": [
+        "vp8",
+        "vp9"
+      ],
+      "outputs": {
+        "mp4": "h264",
+        "webm": "vp9"
+      }
+    },
+    "storage": [
+      "media-candidates private",
+      "media-processed private",
+      "create-only output"
+    ]
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 8
+    },
+    "scanner": {
+      "available": true,
+      "image": "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4",
+      "executionCount": 7
+    },
+    "videoProcessor": {
+      "available": true,
+      "image": "jrottenberg/ffmpeg:7.1-ubuntu2404",
+      "executionCount": 5
+    }
+  },
+  "formats": [
+    {
+      "id": "mp4",
+      "kind": "video",
+      "mimeType": "video/mp4",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "7426629be79bc282dfabce15c8bf8974546b565f618ce020dbc5b7ad1df9de3b",
+      "scannerVerdict": "clean",
+      "processorVersion": "ffmpeg version 7.1 Copyright (c) 2000-2024 the FFmpeg developers"
+    },
+    {
+      "id": "webm",
+      "kind": "video",
+      "mimeType": "video/webm",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "d2e7dd84cfc5f0e98a6758602347734ebcac883a9745534d1dd65f56203fc592",
+      "scannerVerdict": "clean",
+      "processorVersion": "ffmpeg version 7.1 Copyright (c) 2000-2024 the FFmpeg developers"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "real MP4 processing and immutable private output",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "real WebM processing and immutable private output",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "real scanner clean verdicts for input and output",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "actual container/codec detection overrides caller declarations",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "malformed container creates failed evidence and no output",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "extension mismatch creates failed evidence and no output",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "unsupported codec and excessive frame count create failed evidence and no output",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "unsafe scanner verdict creates failed evidence and no output",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "input and output size, dimensions, frame count, duration, and attempt time are bounded",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "exact replay creates no extra processing, output, attempt or history",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "output identity/hash/version/tool/policy facts are retained",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "anonymous output reads are denied",
+      "executed": true,
+      "status": "passed"
+    }
+  ],
+  "checks": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "verdict": "pass"
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:video-processing"
+  ],
+  "limitations": [
+    "The focused video ticket evidence does not certify image processing or the final Phase 6 gate."
+  ]
+}

@@ -49,8 +49,9 @@ describe("bounded PDF output reads", () => {
       await expect(monitorBoundedChildOutput(process.execPath, ["-e", writer, path], path, { maxBytes: 8, timeoutMs: 3_000 }))
         .rejects.toThrow("MEDIA_PDF_OUTPUT_INVALID");
       const finalSize = (await stat(path)).size;
-      if (process.platform === "win32") expect(finalSize).toBe(200);
-      else expect(finalSize).toBeLessThan(200);
+      // OS scheduling changes the final write count; assert the watcher observed a cap crossing and stopped before all 200 bytes.
+      expect(finalSize).toBeGreaterThan(8);
+      expect(finalSize).toBeLessThan(200);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

@@ -47,7 +47,7 @@ async function readBounded(response: Response, maxBytes: number): Promise<Uint8A
   return bytes;
 }
 
-/** Reads only the intent-bound candidate and writes create-only processed PDFs. */
+/** Reads only the intent-bound candidate and writes create-only processed outputs. */
 export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProcessingStorageOptions): MediaProcessingStoragePort {
   const base = new URL(options.storageUrl);
   if (base.protocol !== "https:" && !(base.protocol === "http:" && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(base.hostname))) throw new TypeError("Media Storage must use HTTPS outside loopback.");
@@ -59,7 +59,7 @@ export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProce
   const headers = { apikey: options.serviceRoleKey, authorization: `Bearer ${options.serviceRoleKey}` };
   const request = (path: string, init?: RequestInit) => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3_000);
+    const timer = setTimeout(() => controller.abort(), 10_000);
     return fetcher(new URL(`/storage/v1${path}`, base), { ...init, signal: controller.signal, headers: { ...headers, ...(init?.headers ?? {}) } })
       .finally(() => clearTimeout(timer));
   };
@@ -67,43 +67,52 @@ export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProce
   return {
     async readCandidate(input) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3_000);
+      const timer = setTimeout(() => controller.abort(), 10_000);
       try {
         const path = objectPath("candidate", input.portfolioId, input.mediaId, input.uploadIntentId, input.objectId);
         const response = await fetcher(new URL(`/storage/v1/object/${encodeURIComponent(candidateBucket)}/${path}`, base), {
           signal: controller.signal, headers,
         });
         if (!response.ok) return unavailable();
-        const bytes = await readBounded(response, 20 * 1024 * 1024);
+        const bytes = await readBounded(response, input.maxBytes ?? 20 * 1024 * 1024);
         if (!bytes) return err({ kind: "validation", code: "MEDIA_BYTES_OUT_OF_BOUNDS" });
         return ok(bytes);
       } catch { return unavailable(); }
       finally { clearTimeout(timer); }
     },
     async sealProcessedPdf(input) {
+      return await sealProcessed(input, "application/pdf", "pdf");
+    },
+    async sealProcessedVideo(input) {
+      return await sealProcessed(input, input.mimeType, input.mimeType === "video/mp4" ? "mp4" : "webm");
+    },
+    async discardSealedObject(input) {
+      if (!/^[0-9a-f-]{36}$/i.test(input.objectId) || !/^[0-9a-f]{64}$/.test(input.sha256)) return;
+      try {
+        for (const extension of ["pdf", "mp4", "webm"]) {
+          const exactPath = objectPath("processed", input.portfolioId, input.mediaId, input.objectId, `${input.sha256}.${extension}`);
+          const response = await request(`/object/${encodeURIComponent(processedBucket)}`, {
+            method: "DELETE", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ prefixes: [decodeURIComponent(exactPath)] }),
+          });
+          if (!response.ok && response.status !== 404) throw new Error("MEDIA_STORAGE_CLEANUP_UNAVAILABLE");
+        }
+      } catch { throw new Error("MEDIA_STORAGE_CLEANUP_UNAVAILABLE"); }
+    },
+  };
+
+  async function sealProcessed(input: { readonly portfolioId: StableId<string>; readonly mediaId: StableId<string>; readonly outputObjectId: StableId<string>; readonly sourceObjectId: StableId<string>; readonly bytes: Uint8Array; readonly sha256: string }, mimeType: string, extension: string): Promise<Result<{ readonly objectId: StableId<string>; readonly sha256: string }, Rejection>> {
       try {
         const digest = createHash("sha256").update(input.bytes).digest("hex");
         if (digest !== input.sha256 || !/^[0-9a-f]{64}$/.test(input.sha256)) return err({ kind: "validation", code: "MEDIA_OUTPUT_HASH_MISMATCH" });
-        const path = objectPath("processed", input.portfolioId, input.mediaId, input.outputObjectId, `${input.sha256}.pdf`);
+        const path = objectPath("processed", input.portfolioId, input.mediaId, input.outputObjectId, `${input.sha256}.${extension}`);
         const response = await request(`/object/${encodeURIComponent(processedBucket)}/${path}`, {
           method: "POST",
-          headers: { "content-type": "application/pdf", "x-upsert": "false" },
+          headers: { "content-type": mimeType, "x-upsert": "false" },
           body: (() => { const copy = new ArrayBuffer(input.bytes.byteLength); new Uint8Array(copy).set(input.bytes); return copy; })(),
         });
         if (!response.ok) return unavailable();
         return ok({ objectId: input.outputObjectId as StableId<string>, sha256: digest });
       } catch { return unavailable(); }
-    },
-    async discardSealedObject(input) {
-      if (!/^[0-9a-f-]{36}$/i.test(input.objectId) || !/^[0-9a-f]{64}$/.test(input.sha256)) return;
-      const exactPath = objectPath("processed", input.portfolioId, input.mediaId, input.objectId, `${input.sha256}.pdf`);
-      try {
-        const response = await request(`/object/${encodeURIComponent(processedBucket)}`, {
-          method: "DELETE", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ prefixes: [decodeURIComponent(exactPath)] }),
-        });
-        if (!response.ok && response.status !== 404) throw new Error("MEDIA_STORAGE_CLEANUP_UNAVAILABLE");
-      } catch { throw new Error("MEDIA_STORAGE_CLEANUP_UNAVAILABLE"); }
-    },
-  };
+    }
 }

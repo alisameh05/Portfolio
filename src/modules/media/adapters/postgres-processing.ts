@@ -177,18 +177,32 @@ export function createPostgresMediaProcessingRepository(input: {
           const version = Number(row.current_version) + 1;
           if (query.attempt.result === "passed") {
             if (!query.attempt.outputObjectId || !query.attempt.outputSha256 || !query.attempt.outputByteLength) throw new PostgresInfrastructureError();
-            await sql`insert into media.processed_objects (object_id, portfolio_id, owner_id, media_id, source_object_id, sha256, byte_length, mime_type, object_version)
-              values (${query.attempt.outputObjectId}, ${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId},
-                ${query.attempt.inputObjectId}, ${query.attempt.outputSha256}, ${query.attempt.outputByteLength}, 'application/pdf', ${query.attempt.outputSha256})`.execute(executor);
+            const outputs = query.attempt.outputVariants?.length ? query.attempt.outputVariants : [{
+              variantName: "document", objectId: query.attempt.outputObjectId, mimeType: "application/pdf",
+              sha256: query.attempt.outputSha256, byteLength: query.attempt.outputByteLength, objectVersion: query.attempt.outputSha256,
+            }];
+            for (const output of outputs) {
+              await sql`insert into media.processed_objects (object_id, portfolio_id, owner_id, media_id, source_object_id, sha256, byte_length, mime_type, object_version)
+                values (${output.objectId}, ${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId},
+                  ${query.attempt.inputObjectId}, ${output.sha256}, ${output.byteLength}, ${output.mimeType}, ${output.objectVersion})`.execute(executor);
+            }
           }
           await sql`insert into media.processing_attempts (attempt_id, portfolio_id, owner_id, media_id, input_object_id, input_sha256,
               detected_mime_type, detected_byte_length, result, output_object_id, output_sha256, scanner_version, processor_version,
-              policy_version, finding_codes, started_at, finished_at)
+              policy_version, finding_codes, started_at, finished_at, output_variants)
             values (${query.attempt.attemptId}, ${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId},
               ${query.attempt.inputObjectId}, ${query.attempt.sha256}, ${query.attempt.detectedMimeType}, ${query.attempt.detectedByteLength},
               ${query.attempt.result}, ${query.attempt.outputObjectId ?? null}, ${query.attempt.outputSha256 ?? null},
               ${query.attempt.scannerVersion}, ${query.attempt.processorVersion}, ${query.attempt.policyVersion},
-              ${JSON.stringify(query.attempt.findings)}::jsonb, ${query.attempt.startedAt}, ${query.attempt.recordedAt})`.execute(executor);
+              ${JSON.stringify(query.attempt.findings)}::jsonb, ${query.attempt.startedAt}, ${query.attempt.recordedAt},
+              ${JSON.stringify(query.attempt.outputVariants ?? [])}::jsonb)`.execute(executor);
+          for (const output of query.attempt.outputVariants ?? []) {
+            await sql`insert into media.processing_attempt_outputs (attempt_id, portfolio_id, owner_id, media_id, object_id,
+                variant_name, mime_type, sha256, byte_length, object_version, width, height, codec)
+              values (${query.attempt.attemptId}, ${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId},
+                ${output.objectId}, ${output.variantName}, ${output.mimeType}, ${output.sha256}, ${output.byteLength},
+                ${output.objectVersion}, ${output.width ?? null}, ${output.height ?? null}, ${output.codec})`.execute(executor);
+          }
           await sql`insert into media.processing_states (media_id, portfolio_id, owner_id, aggregate_version, latest_attempt_id, updated_at)
               values (${query.candidate.mediaId}, ${query.candidate.portfolioId}, ${query.candidate.ownerId}, ${version}, ${query.attempt.attemptId}, transaction_timestamp())
             on conflict (media_id) do update set aggregate_version = excluded.aggregate_version,

@@ -75,6 +75,8 @@
     "phase6:focus:verification": "node scripts/phase6-verification.mjs",
     "prephase6:focus:media-processing": "npm run validation:ready",
     "phase6:focus:media-processing": "node scripts/phase6-verification.mjs --media-processing-only",
+    "prephase6:focus:video-processing": "npm run validation:ready",
+    "phase6:focus:video-processing": "node scripts/phase6-verification.mjs --video-processing-only",
     "prephase6:focus:upload-intents": "npm run validation:ready",
     "phase6:focus:upload-intents": "node scripts/phase6-verification.mjs --upload-intents-only",
     "test:phase6:verification": "node --test tests/tooling/phase6-verification.test.mjs",

@@ -16,7 +16,7 @@ import { createPostgresMediaUploadIntentRepository } from "../../src/modules/med
 import { createPostgresMediaProcessingRepository } from "../../src/modules/media/adapters/postgres-processing.js";
 import { createUploadCapabilityVault } from "../../src/modules/media/adapters/upload-capability-vault.js";
 import { createMediaUploadIntentApplicationService } from "../../src/modules/media/application/upload-intent.js";
-import { createMediaProcessingApplicationService, type PdfProcessorPort } from "../../src/modules/media/application/processing.js";
+import { createMediaProcessingApplicationService, type PdfProcessorPort, type VideoProcessorPort } from "../../src/modules/media/application/processing.js";
 import { createSupabaseMediaUploadTargetAdapter } from "../../src/runtime/adapters/supabase-media-upload-target.js";
 import { createSupabaseMediaProcessingStorage } from "../../src/runtime/adapters/supabase-media-processing-storage.js";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
@@ -35,10 +35,15 @@ const SCANNER_IMAGE = process.env["PHASE6_SCANNER_IMAGE"];
 const PDF_PROCESSOR_IMAGE = process.env["PHASE6_PDF_PROCESSOR_IMAGE"];
 const SCANNER_VERSION = process.env["PHASE6_SCANNER_VERSION"];
 const PDF_PROCESSOR_VERSION = process.env["PHASE6_PDF_PROCESSOR_VERSION"];
+const VIDEO_FIXTURE_MP4 = process.env["PHASE6_VIDEO_PROCESSING_MP4_FIXTURE"];
+const VIDEO_FIXTURE_WEBM = process.env["PHASE6_VIDEO_PROCESSING_WEBM_FIXTURE"];
+const VIDEO_FIXTURE_UNSUPPORTED = process.env["PHASE6_VIDEO_PROCESSING_UNSUPPORTED_FIXTURE"];
+const VIDEO_FIXTURE_EXCESSIVE = process.env["PHASE6_VIDEO_PROCESSING_EXCESSIVE_FIXTURE"];
 const PROCESSING_COUNTS_FILE = process.env["PHASE6_MEDIA_PROCESSING_COUNTS_FILE"];
 const REQUIRE_REAL = process.env["PHASE6_REQUIRE_UPLOAD_INTENT"] === "1";
+const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0 };
 
-if (REQUIRE_REAL && (!DATABASE_URL || !STORAGE_URL || !SERVICE_ROLE_KEY || !ANON_KEY || !REPLAY_KEY || !PDF_FIXTURE || !SCANNER_IMAGE || !PDF_PROCESSOR_IMAGE || !SCANNER_VERSION || !PDF_PROCESSOR_VERSION)) {
+if (REQUIRE_REAL && (!DATABASE_URL || !STORAGE_URL || !SERVICE_ROLE_KEY || !ANON_KEY || !REPLAY_KEY || !PDF_FIXTURE || !VIDEO_FIXTURE_MP4 || !VIDEO_FIXTURE_WEBM || !VIDEO_FIXTURE_UNSUPPORTED || !VIDEO_FIXTURE_EXCESSIVE || !SCANNER_IMAGE || !PDF_PROCESSOR_IMAGE || !SCANNER_VERSION || !PDF_PROCESSOR_VERSION)) {
   throw new Error("PHASE6_UPLOAD_INTENT_SERVICES_REQUIRED");
 }
 
@@ -498,17 +503,32 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       }
       return issued.value;
     };
+    const uploadVideo = async (payload: Uint8Array, mime: "video/mp4" | "video/webm", suffix: string, originalFileName = `candidate-${suffix}.${mime === "video/mp4" ? "mp4" : "webm"}`) => {
+      const uploadService = createService();
+      const issued = await uploadService.create({
+        actor: { kind: "owner", ownerId, sessionId: "phase6-video-processing-owner" },
+        idempotencyKey: `phase6-video-${suffix}-${randomBytes(12).toString("hex")}` as never,
+        kind: "video", originalFileName, declaredMediaType: mime, byteLength: payload.byteLength,
+        sha256: createHash("sha256").update(payload).digest("hex"),
+      });
+      expect(issued.ok, JSON.stringify({ issued, storage: lastStorageFailure ?? null })).toBe(true);
+      if (!issued.ok) throw new Error("PHASE6_VIDEO_UPLOAD_INTENT_FAILED");
+      const uploaded = await fetch(issued.value.uploadTarget, { method: "PUT", headers: { "content-type": mime, "x-upsert": "false" }, body: Buffer.from(payload) });
+      expect([200, 201].includes(uploaded.status)).toBe(true);
+      return issued.value;
+    };
     const normalProcessingStorage = createSupabaseMediaProcessingStorage({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY! });
     const realProcessor = { async process(input: Uint8Array) { processorExecutions += 1; const result = dockerPdfProcessor(input); if (result.ok) processedFiles.push(result.value.bytes); return result; } };
     const makeMediaProcessing = (storage = normalProcessingStorage, processor: PdfProcessorPort = realProcessor,
       scanner = { async scan(input: Uint8Array) { scannerExecutions += 1; return dockerScanner(input); } },
-      repositoryOverride?: ReturnType<typeof createPostgresMediaProcessingRepository>) => createMediaProcessingApplicationService({
+      repositoryOverride?: ReturnType<typeof createPostgresMediaProcessingRepository>, videoProcessor?: VideoProcessorPort) => createMediaProcessingApplicationService({
       scope: { ownerId }, repository: repositoryOverride ?? createPostgresMediaProcessingRepository({
         database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
       }),
       storage,
       scanner,
       processor,
+      ...(videoProcessor ? { videoProcessor } : {}),
       digest: { sha256(input) { return createHash("sha256").update(input).digest("hex"); } },
       ids: createSystemIdGenerator(), clock: { now: () => new Date(appNow).toISOString() },
     });
@@ -812,6 +832,147 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       await admin.query(`drop trigger ${triggerName} on operations.outbox_events`);
       await admin.query(`drop function operations.${functionName}()`);
     }
-    if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify({ scannerExecutions, processorExecutions }));
+    mediaProcessingCounts.scannerExecutions += scannerExecutions;
+    mediaProcessingCounts.processorExecutions += processorExecutions;
+  }, 300_000);
+
+  it("processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg", async () => {
+    appNow = Date.now();
+    const { createClamAvScanner, createFfmpegVideoProcessor } = await import("../../src/runtime/adapters/media-processing-tools.js");
+    const realScanner = createClamAvScanner({ maxBytes: 50 * 1024 * 1024, timeoutMs: 14_000 });
+    const realVideoProcessor = createFfmpegVideoProcessor();
+    let videoProcessorExecutions = 0;
+    let scannerExecutions = 0;
+    const videoProcessor: VideoProcessorPort = { async process(input) { videoProcessorExecutions += 1; return await realVideoProcessor.process(input); } };
+    const realByteScanner = { async scan(input: Uint8Array) { scannerExecutions += 1; return await realScanner.scan(input); } };
+    const storage = createSupabaseMediaProcessingStorage({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY! });
+    const processing = createMediaProcessingApplicationService({
+      scope: { ownerId }, repository: createPostgresMediaProcessingRepository({
+        database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
+      }), storage, scanner: realByteScanner,
+      processor: { async process() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_PDF_PROCESSOR_UNAVAILABLE" } }; } },
+      videoProcessor, digest: { sha256(input) { return createHash("sha256").update(input).digest("hex"); } },
+      ids: createSystemIdGenerator(), clock: { now: () => new Date(appNow).toISOString() },
+    });
+    const uploadVideo = async (payload: Uint8Array, mime: "video/mp4" | "video/webm", suffix: string, originalFileName = `candidate-${suffix}.${mime === "video/mp4" ? "mp4" : "webm"}`) => {
+      const issued = await createService().create({
+        actor: { kind: "owner", ownerId, sessionId: "phase6-video-processing-owner" },
+        idempotencyKey: `phase6-video-${suffix}-${randomBytes(12).toString("hex")}` as never,
+        kind: "video", originalFileName, declaredMediaType: mime, byteLength: payload.byteLength,
+        sha256: createHash("sha256").update(payload).digest("hex"),
+      });
+      expect(issued.ok, JSON.stringify({ issued, storage: lastStorageFailure ?? null })).toBe(true);
+      if (!issued.ok) throw new Error("PHASE6_VIDEO_UPLOAD_INTENT_FAILED");
+      const uploaded = await fetch(issued.value.uploadTarget, { method: "PUT", headers: { "content-type": mime, "x-upsert": "false" }, body: Buffer.from(payload) });
+      expect([200, 201].includes(uploaded.status)).toBe(true);
+      return issued.value;
+    };
+    const fixtureEntries = [
+      { path: VIDEO_FIXTURE_MP4!, mime: "video/mp4" as const },
+      { path: VIDEO_FIXTURE_WEBM!, mime: "video/webm" as const },
+    ];
+    for (const fixture of fixtureEntries) {
+      const source = new Uint8Array(readFileSync(fixture.path));
+      const upload = await uploadVideo(source, fixture.mime, fixture.mime.slice(6));
+      const sourceHash = createHash("sha256").update(source).digest("hex");
+      const command = { actor: { kind: "owner" as const, ownerId, sessionId: "phase6-video-processing-owner" },
+        idempotencyKey: `phase6-video-process-${fixture.mime.slice(6)}-${randomBytes(12).toString("hex")}` as never,
+        mediaId: upload.mediaId, expectedVersion: 1, result: "passed" as const, detectedMediaType: fixture.mime,
+        detectedByteLength: source.byteLength, sha256: sourceHash };
+      const result = await processing.record(command);
+      expect(result, `processor/scan ${fixture.mime}: ${JSON.stringify(result)}`).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+      const saved = await admin.query(
+        `select attempt.result, attempt.detected_mime_type, attempt.detected_byte_length, attempt.input_sha256,
+                attempt.scanner_version, attempt.processor_version, attempt.policy_version, attempt.output_variants,
+                output.variant_name, output.mime_type, output.sha256, output.byte_length, output.object_version,
+                output.width, output.height, output.codec, output.object_id::text
+           from media.processing_attempts attempt
+           join media.processing_attempt_outputs output on output.attempt_id = attempt.attempt_id
+          where attempt.media_id = $1::uuid`, [upload.mediaId]);
+      expect(saved.rowCount).toBe(1);
+      expect(saved.rows[0]).toMatchObject({ result: "passed", detected_mime_type: fixture.mime, detected_byte_length: String(source.byteLength),
+        input_sha256: sourceHash, variant_name: "normalized", mime_type: fixture.mime, width: expect.any(Number), height: expect.any(Number),
+        codec: fixture.mime === "video/mp4" ? "h264" : "vp9" });
+      expect(saved.rows[0]?.scanner_version).not.toBe("unavailable");
+      expect(saved.rows[0]?.processor_version).toMatch(/^ffmpeg version 7\.1/u);
+      expect(saved.rows[0]?.policy_version).toBe("mp4-webm-bounded-variants-1");
+      const objectPath = `/storage/v1/object/media-processed/processed/${portfolioId}/${upload.mediaId}/${saved.rows[0]?.object_id}/${saved.rows[0]?.sha256}.${fixture.mime === "video/mp4" ? "mp4" : "webm"}`;
+      const anonymous = await storageRequest(objectPath, { headers: headers(ANON_KEY!) });
+      expect(anonymous.status).toBeGreaterThanOrEqual(400);
+      const privateRead = await storageRequest(objectPath, { headers: headers(SERVICE_ROLE_KEY!) });
+      expect(privateRead.status).toBe(200);
+      const outputBytes = new Uint8Array(await privateRead.arrayBuffer());
+      expect(createHash("sha256").update(outputBytes).digest("hex")).toBe(saved.rows[0]?.sha256);
+      const uploadCapability = new URL(upload.uploadTarget);
+      uploadCapability.pathname = objectPath;
+      for (const upsert of ["false", "true"]) {
+        const substitutedWrite = await fetch(uploadCapability, { method: "PUT", headers: { ...headers(ANON_KEY!), "content-type": fixture.mime, "x-upsert": upsert }, body: outputBytes });
+        expect(substitutedWrite.status, `candidate upload token cannot modify a sealed output (upsert=${upsert})`).toBeGreaterThanOrEqual(400);
+      }
+      const lifecycle = await admin.query("select lifecycle from media.assets where media_id = $1::uuid", [upload.mediaId]);
+      expect(lifecycle.rows[0]?.lifecycle).toBe("candidate");
+      const outputsBeforeReplay = await admin.query("select count(*)::int as count from media.processing_attempt_outputs where media_id = $1::uuid", [upload.mediaId]);
+      const replay = await processing.record(command);
+      expect(replay).toEqual(result);
+      expect(videoProcessorExecutions).toBe(fixtureEntries.indexOf(fixture) + 1);
+      expect((await admin.query("select count(*)::int as count from media.processing_attempts where media_id = $1::uuid", [upload.mediaId])).rows[0]?.count).toBe(1);
+      expect((await admin.query("select count(*)::int as count from media.processing_attempt_outputs where media_id = $1::uuid", [upload.mediaId])).rows[0]?.count).toBe(outputsBeforeReplay.rows[0]?.count);
+    }
+
+    const malformed = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from("ftypisommalformed")]);
+    const malformedUpload = await uploadVideo(malformed, "video/mp4", "malformed");
+    const malformedResult = await processing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-video-processing-owner" },
+      idempotencyKey: "phase6-video-malformed" as never, mediaId: malformedUpload.mediaId, expectedVersion: 1, result: "passed",
+      detectedMediaType: "video/mp4", detectedByteLength: malformed.byteLength, sha256: createHash("sha256").update(malformed).digest("hex") });
+    expect(malformedResult).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_PROCESSOR_UNAVAILABLE" } });
+    expect((await admin.query("select result, finding_codes from media.processing_attempts where media_id = $1::uuid", [malformedUpload.mediaId])).rows[0])
+      .toMatchObject({ result: "failed", finding_codes: ["MEDIA_PROCESSOR_UNAVAILABLE"] });
+
+    const mismatchSource = new Uint8Array(readFileSync(VIDEO_FIXTURE_MP4!));
+    const mismatchUpload = await uploadVideo(mismatchSource, "video/mp4", "extension-mismatch", "mismatch.webm");
+    const mismatchResult = await processing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-video-processing-owner" },
+      idempotencyKey: "phase6-video-extension-mismatch" as never, mediaId: mismatchUpload.mediaId, expectedVersion: 1, result: "passed",
+      detectedMediaType: "video/mp4", detectedByteLength: mismatchSource.byteLength, sha256: createHash("sha256").update(mismatchSource).digest("hex") });
+    expect(mismatchResult).toMatchObject({ ok: true });
+    expect((await admin.query("select result, finding_codes from media.processing_attempts where media_id = $1::uuid", [mismatchUpload.mediaId])).rows[0])
+      .toMatchObject({ result: "failed", finding_codes: ["MEDIA_EXTENSION_MISMATCH"] });
+    const processRejectedFixture = async (fixturePath: string, suffix: string, expectedCode: string, sourceMime: "video/mp4" | "video/webm" = "video/mp4") => {
+      const source = new Uint8Array(readFileSync(fixturePath));
+      const upload = await uploadVideo(source, sourceMime, suffix);
+      const failed = await processing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-video-processing-owner" },
+        idempotencyKey: `phase6-video-${suffix}` as never, mediaId: upload.mediaId, expectedVersion: 1, result: "passed",
+        detectedMediaType: sourceMime, detectedByteLength: source.byteLength, sha256: createHash("sha256").update(source).digest("hex") });
+      expect(failed).toMatchObject({ ok: true });
+      const facts = await admin.query("select result, finding_codes from media.processing_attempts where media_id = $1::uuid", [upload.mediaId]);
+      expect(facts.rows[0]).toMatchObject({ result: "failed", finding_codes: [expectedCode] });
+      expect((await admin.query("select count(*)::int as count from media.processed_objects where media_id = $1::uuid", [upload.mediaId])).rows[0]?.count).toBe(0);
+    };
+    await processRejectedFixture(VIDEO_FIXTURE_UNSUPPORTED!, "unsupported-codec", "MEDIA_VIDEO_INPUT_UNSUPPORTED");
+    await processRejectedFixture(VIDEO_FIXTURE_EXCESSIVE!, "excessive-frames", "MEDIA_VIDEO_INPUT_UNSUPPORTED");
+    const unsafe = new Uint8Array(readFileSync(VIDEO_FIXTURE_MP4!));
+    const unsafeUpload = await uploadVideo(unsafe, "video/mp4", "unsafe-content");
+    // ClamAV 1.4.3 cleanly scanned MP4 even with EICAR in mdat/free/subtitle data in local probes; inject an unsafe verdict here to verify fail-closed behavior.
+    const unsafeProcessing = createMediaProcessingApplicationService({
+      scope: { ownerId }, repository: createPostgresMediaProcessingRepository({
+        database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
+      }), storage,
+      scanner: { async scan() { return { ok: true as const, value: { verdict: "unsafe" as const, version: SCANNER_VERSION! } }; } },
+      processor: { async process() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_PDF_PROCESSOR_UNAVAILABLE" } }; } },
+      videoProcessor, digest: { sha256(input) { return createHash("sha256").update(input).digest("hex"); } },
+      ids: createSystemIdGenerator(), clock: { now: () => new Date(appNow).toISOString() },
+    });
+    const unsafeResult = await unsafeProcessing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-video-processing-owner" },
+      idempotencyKey: "phase6-video-unsafe-content" as never, mediaId: unsafeUpload.mediaId, expectedVersion: 1, result: "passed",
+      detectedMediaType: "video/mp4", detectedByteLength: unsafe.byteLength, sha256: createHash("sha256").update(unsafe).digest("hex") });
+    expect(unsafeResult, JSON.stringify(unsafeResult)).toMatchObject({ ok: true });
+    expect((await admin.query("select result, finding_codes from media.processing_attempts where media_id = $1::uuid", [unsafeUpload.mediaId])).rows[0])
+      .toMatchObject({ result: "failed", finding_codes: ["MEDIA_UNSAFE_CONTENT"] });
+    expect((await admin.query("select count(*)::int as count from media.processed_objects where media_id = $1::uuid", [unsafeUpload.mediaId])).rows[0]?.count).toBe(0);
+    const oversized = await realVideoProcessor.process(new Uint8Array(50 * 1024 * 1024 + 1));
+    expect(oversized).toMatchObject({ ok: false, error: { kind: "validation", code: "MEDIA_BYTES_OUT_OF_BOUNDS" } });
+    expect(videoProcessorExecutions).toBe(5);
+    mediaProcessingCounts.scannerExecutions += scannerExecutions;
+    mediaProcessingCounts.videoProcessorExecutions += videoProcessorExecutions;
+    if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
   }, 300_000);
 });
