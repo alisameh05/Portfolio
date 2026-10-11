@@ -177,6 +177,17 @@ export function createPostgresMediaProcessingRepository(input: {
           const version = Number(row.current_version) + 1;
           if (query.attempt.result === "passed") {
             if (!query.attempt.outputObjectId || !query.attempt.outputSha256 || !query.attempt.outputByteLength) throw new PostgresInfrastructureError();
+            if (query.candidate.kind === "image") {
+              const variants = query.attempt.variants ?? [];
+              const display = variants.find(({ name }) => name === "display");
+              if (variants.length !== 2 || !display || display.objectId !== query.attempt.outputObjectId ||
+                  display.sha256 !== query.attempt.outputSha256 || display.byteLength !== query.attempt.outputByteLength) throw new PostgresInfrastructureError();
+              for (const variant of variants) {
+                await sql`insert into media.processed_objects (object_id, portfolio_id, owner_id, media_id, source_object_id, sha256, byte_length, mime_type, object_version)
+                  values (${variant.objectId}, ${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId},
+                    ${query.attempt.inputObjectId}, ${variant.sha256}, ${variant.byteLength}, ${variant.mimeType}, ${variant.sha256})`.execute(executor);
+              }
+            } else {
             const outputs = query.attempt.outputVariants?.length ? query.attempt.outputVariants : [{
               variantName: "document", objectId: query.attempt.outputObjectId, mimeType: "application/pdf",
               sha256: query.attempt.outputSha256, byteLength: query.attempt.outputByteLength, objectVersion: query.attempt.outputSha256,
@@ -186,16 +197,23 @@ export function createPostgresMediaProcessingRepository(input: {
                 values (${output.objectId}, ${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId},
                   ${query.attempt.inputObjectId}, ${output.sha256}, ${output.byteLength}, ${output.mimeType}, ${output.objectVersion})`.execute(executor);
             }
+            }
           }
           await sql`insert into media.processing_attempts (attempt_id, portfolio_id, owner_id, media_id, input_object_id, input_sha256,
               detected_mime_type, detected_byte_length, result, output_object_id, output_sha256, scanner_version, processor_version,
-              policy_version, finding_codes, started_at, finished_at, output_variants)
+              policy_version, finding_codes, started_at, finished_at, processing_duration_ms, output_variants)
             values (${query.attempt.attemptId}, ${input.scope.portfolioId}, ${input.scope.ownerId}, ${query.candidate.mediaId},
               ${query.attempt.inputObjectId}, ${query.attempt.sha256}, ${query.attempt.detectedMimeType}, ${query.attempt.detectedByteLength},
               ${query.attempt.result}, ${query.attempt.outputObjectId ?? null}, ${query.attempt.outputSha256 ?? null},
               ${query.attempt.scannerVersion}, ${query.attempt.processorVersion}, ${query.attempt.policyVersion},
               ${JSON.stringify(query.attempt.findings)}::jsonb, ${query.attempt.startedAt}, ${query.attempt.recordedAt},
-              ${JSON.stringify(query.attempt.outputVariants ?? [])}::jsonb)`.execute(executor);
+              ${query.attempt.processingDurationMs ?? null}, ${JSON.stringify(query.attempt.outputVariants ?? [])}::jsonb)`.execute(executor);
+          for (const variant of query.attempt.variants ?? []) {
+            await sql`insert into media.processing_attempt_variants (attempt_id, object_id, portfolio_id, owner_id, media_id,
+                variant_name, source_sha256, width, height)
+              values (${query.attempt.attemptId}, ${variant.objectId}, ${input.scope.portfolioId}, ${input.scope.ownerId},
+                ${query.candidate.mediaId}, ${variant.name}, ${query.attempt.sha256}, ${variant.width}, ${variant.height})`.execute(executor);
+          }
           for (const output of query.attempt.outputVariants ?? []) {
             await sql`insert into media.processing_attempt_outputs (attempt_id, portfolio_id, owner_id, media_id, object_id,
                 variant_name, mime_type, sha256, byte_length, object_version, width, height, codec)
@@ -226,8 +244,8 @@ export function createPostgresMediaProcessingRepository(input: {
       try {
         return await input.transactions.run(async (context) => {
           const executor = resolvePostgresTransaction(context); await setScope(context, input.scope);
-          await sql`insert into media.processing_orphans (object_id, portfolio_id, owner_id, media_id, sha256)
-            values (${query.objectId}, ${query.candidate.portfolioId}, ${query.candidate.ownerId}, ${query.candidate.mediaId}, ${query.sha256})
+          await sql`insert into media.processing_orphans (object_id, portfolio_id, owner_id, media_id, sha256, mime_type)
+            values (${query.objectId}, ${query.candidate.portfolioId}, ${query.candidate.ownerId}, ${query.candidate.mediaId}, ${query.sha256}, ${query.mimeType ?? "application/pdf"})
             on conflict (object_id) do nothing`.execute(executor);
           return ok(undefined);
         });
@@ -237,15 +255,15 @@ export function createPostgresMediaProcessingRepository(input: {
       try {
         return await input.transactions.run(async (context) => {
           const executor = resolvePostgresTransaction(context); await setScope(context, input.scope);
-          const rows = await sql<{ readonly media_id: string; readonly portfolio_id: string; readonly object_id: string; readonly sha256: string }>`
-            select media_id, portfolio_id, object_id, sha256 from media.processing_orphans
+          const rows = await sql<{ readonly media_id: string; readonly portfolio_id: string; readonly object_id: string; readonly sha256: string; readonly mime_type: string }>`
+            select media_id, portfolio_id, object_id, sha256, mime_type from media.processing_orphans
              where owner_id = ${query.ownerId} and state = 'pending'
              order by created_at, object_id limit ${Math.max(1, Math.min(query.limit, 20))}
           `.execute(executor);
           const result = rows.rows.map((row) => {
             const mediaId = parseStableId("MediaAsset", row.media_id), portfolioId = parseStableId("Portfolio", row.portfolio_id), objectId = parseStableId("MediaObject", row.object_id);
             if (!mediaId.ok || !portfolioId.ok || !objectId.ok || !/^[0-9a-f]{64}$/.test(row.sha256)) throw new PostgresInfrastructureError();
-            return { mediaId: mediaId.value, portfolioId: portfolioId.value, objectId: objectId.value, sha256: row.sha256 };
+            return { mediaId: mediaId.value, portfolioId: portfolioId.value, objectId: objectId.value, sha256: row.sha256, mimeType: row.mime_type };
           });
           return ok(result);
         });

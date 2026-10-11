@@ -48,7 +48,7 @@ describe("Supabase Media processing Storage adapter", () => {
     const bytes = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x01]);
     const sha256 = createHash("sha256").update(bytes).digest("hex");
     const storage = createSupabaseMediaProcessingStorage({ storageUrl: "http://127.0.0.1:57321", serviceRoleKey: "local-service-role", fetcher });
-    const sealed = await storage.sealProcessedVideo({ ...ids, outputObjectId: ids.objectId, sourceObjectId: ids.objectId, bytes, sha256, mimeType: "video/webm" });
+    const sealed = await storage.sealProcessedObject({ ...ids, outputObjectId: ids.objectId, sourceObjectId: ids.objectId, bytes, sha256, mimeType: "video/webm" });
     expect(sealed).toMatchObject({ ok: true, value: { objectId: ids.objectId, sha256 } });
     expect(requests[0]?.url.pathname).toContain(`${sha256}.webm`);
     expect(requests[0]?.headers.get("content-type")).toBe("video/webm");

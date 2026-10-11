@@ -249,7 +249,7 @@ export function createClamAvScanner(options: { readonly executable?: string; rea
   let versionPromise: Promise<string> | undefined;
   const version = () => versionPromise ??= toolVersion(executable, ["--version"]).catch((error: unknown) => { versionPromise = undefined; throw error; });
   return {
-    async scan(bytes) {
+    async scan(bytes, scanOptions) {
       try {
         if (executable !== "clamscan") return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         const scannerVersion = await version();
@@ -262,7 +262,7 @@ export function createClamAvScanner(options: { readonly executable?: string; rea
               "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--mount", `type=bind,source=${mountSource},target=/work,readonly`,
               "--workdir", "/work", "--entrypoint", "clamscan", BOUNDED_SCANNER_IMAGE, "--no-summary", "--stdout", "/work/candidate.pdf"];
             await monitorBoundedChildOutput("docker", dockerArgs, input,
-              { maxBytes: options.maxBytes ?? MAX_BYTES, timeoutMs: options.timeoutMs ?? SCAN_TIMEOUT_MS }, () => stopDockerContainer(containerName));
+              { maxBytes: options.maxBytes ?? MAX_BYTES, timeoutMs: Math.min(options.timeoutMs ?? SCAN_TIMEOUT_MS, scanOptions?.timeoutMs ?? SCAN_TIMEOUT_MS) }, () => stopDockerContainer(containerName));
             return "clean" as const;
           } catch (cause) {
             const code = typeof cause === "object" && cause !== null && "code" in cause ? String((cause as { code: unknown }).code) : "";
@@ -274,6 +274,16 @@ export function createClamAvScanner(options: { readonly executable?: string; rea
       } catch {
         return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
       }
+    },
+    async scanMany(inputs, scanOptions) {
+      let version = "";
+      for (const input of inputs) {
+        const result = await this.scan(input, scanOptions);
+        if (!result.ok) return result;
+        version = result.value.version;
+        if (result.value.verdict !== "clean") return ok({ verdict: result.value.verdict, version });
+      }
+      return ok({ verdict: "clean" as const, version });
     },
   };
 }

@@ -80,16 +80,16 @@ export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProce
       } catch { return unavailable(); }
       finally { clearTimeout(timer); }
     },
-    async sealProcessedPdf(input) {
-      return await sealProcessed(input, "application/pdf", "pdf");
-    },
-    async sealProcessedVideo(input) {
-      return await sealProcessed(input, input.mimeType, input.mimeType === "video/mp4" ? "mp4" : "webm");
+    async sealProcessedObject(input) {
+      const extension = input.mimeType === "application/pdf" ? "pdf" : input.mimeType === "image/webp" ? "webp"
+        : input.mimeType === "video/mp4" ? "mp4" : input.mimeType === "video/webm" ? "webm" : undefined;
+      if (!extension) return err({ kind: "validation", code: "MEDIA_OUTPUT_FORMAT_UNSUPPORTED" });
+      return await sealProcessed(input, input.mimeType, extension);
     },
     async discardSealedObject(input) {
       if (!/^[0-9a-f-]{36}$/i.test(input.objectId) || !/^[0-9a-f]{64}$/.test(input.sha256)) return;
       try {
-        for (const extension of ["pdf", "mp4", "webm"]) {
+        for (const extension of ["pdf", "webp", "mp4", "webm"]) {
           const exactPath = objectPath("processed", input.portfolioId, input.mediaId, input.objectId, `${input.sha256}.${extension}`);
           const response = await request(`/object/${encodeURIComponent(processedBucket)}`, {
             method: "DELETE", headers: { "content-type": "application/json" },

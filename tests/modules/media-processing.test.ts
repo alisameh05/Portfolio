@@ -66,10 +66,9 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
     scope: { ownerId }, repository,
     storage: {
       readCandidate: read,
-      async sealProcessedPdf(input) { return { ok: true, value: { objectId: options.sealedObjectId ?? outputObjectId, sha256: input.sha256 } }; },
-      async sealProcessedVideo(input) { return options.videoSealUnavailable
+      async sealProcessedObject(input) { return options.videoSealUnavailable && input.mimeType.startsWith("video/")
         ? { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } }
-        : { ok: true as const, value: { objectId: input.outputObjectId, sha256: input.sha256 } }; },
+        : { ok: true as const, value: { objectId: options.sealedObjectId ?? input.outputObjectId, sha256: input.sha256 } }; },
       discardSealedObject: discard,
     },
     scanner: { scan: options.scannerUnavailable ? vi.fn(async () => ({ ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_SCANNER_UNAVAILABLE" } })) : scan }, processor: { process },

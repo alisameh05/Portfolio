@@ -73,6 +73,8 @@
     "prephase5:context": "npm run validation:ready",
     "phase5:context": "node scripts/check-phase5-context.mjs",
     "phase6:focus:verification": "node scripts/phase6-verification.mjs",
+    "prephase6:focus:media-image-processing": "npm run validation:ready",
+    "phase6:focus:media-image-processing": "node scripts/phase6-verification.mjs --image-processing-only",
     "prephase6:focus:media-processing": "npm run validation:ready",
     "phase6:focus:media-processing": "node scripts/phase6-verification.mjs --media-processing-only",
     "prephase6:focus:video-processing": "npm run validation:ready",
@@ -125,7 +127,8 @@
     "next": "15.5.25",
     "pg": "8.23.0",
     "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react-dom": "19.1.1",
+    "sharp": "0.35.4"
   },
   "devDependencies": {
     "@hey-api/openapi-ts": "0.99.0",
