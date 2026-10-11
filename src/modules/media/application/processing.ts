@@ -3,6 +3,8 @@ import { hashCanonicalRequest } from "../../../shared/application/idempotency.js
 import type { Clock } from "../../../runtime/ports.js";
 import { MEDIA_PROCESSING_POLICY } from "../domain/policy.js";
 
+const VIDEO_SCAN_TIMEOUT_MS = 25_000;
+
 export interface MediaProcessingCandidate {
   readonly mediaId: StableId<string>;
   readonly ownerId: StableId<string>;
@@ -485,7 +487,7 @@ export function createMediaProcessingApplicationService(deps: {
         return failedAttempt("MEDIA_CALLER_FACTS_MISMATCH", { bytes, mime, hash: sha256 });
       }
       let scanned: Awaited<ReturnType<TrustedByteScannerPort["scan"]>>;
-      const sourceScanTimeoutMs = Math.min(14_000, remainingBudgetMs());
+      const sourceScanTimeoutMs = Math.min(candidate.kind === "video" ? VIDEO_SCAN_TIMEOUT_MS : 14_000, remainingBudgetMs());
       if (!sourceScanTimeoutMs) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
       try { scanned = await deps.scanner.scan(bytes, { timeoutMs: sourceScanTimeoutMs }); } catch { return failedAttempt(attemptWithinBudget() ? "MEDIA_SCANNER_UNAVAILABLE" : "MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 }); }
       if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
@@ -519,7 +521,7 @@ export function createMediaProcessingApplicationService(deps: {
             return failedAttempt("MEDIA_VIDEO_OUTPUT_INVALID", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion });
           }
           let outputScan: Awaited<ReturnType<TrustedByteScannerPort["scan"]>>;
-          const outputScanTimeoutMs = Math.min(14_000, remainingBudgetMs());
+          const outputScanTimeoutMs = Math.min(VIDEO_SCAN_TIMEOUT_MS, remainingBudgetMs());
           if (!outputScanTimeoutMs) { await cleanupVideoOutputs(); return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }
           try { outputScan = await deps.scanner.scan(variant.bytes, { timeoutMs: outputScanTimeoutMs }); }
           catch { await cleanupVideoOutputs(); return failedAttempt(attemptWithinBudget() ? "MEDIA_SCANNER_UNAVAILABLE" : "MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processedVideo.value.version, policyVersion: processedVideo.value.policyVersion }); }

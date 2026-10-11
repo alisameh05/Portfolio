@@ -378,7 +378,9 @@ const VIDEO_POLICY_VERSION = "mp4-webm-bounded-variants-1";
 const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 const VIDEO_MAX_FRAMES = 1_800;
 const VIDEO_MAX_DURATION_SECONDS = 60;
-const VIDEO_PROCESS_TIMEOUT_MS = 8_000;
+// Docker startup and constrained FFmpeg work can exceed eight seconds on a cold host.
+// This remains one stage inside the processor's shared 60-second attempt deadline.
+const VIDEO_PROCESS_TIMEOUT_MS = 25_000;
 
 interface VideoProbe {
   readonly format?: { readonly format_name?: string; readonly duration?: string };
@@ -498,13 +500,13 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
         : isMp4Container(bytes) ? "video/mp4" : undefined;
       if (!detectedMimeType) return err({ kind: "validation", code: "MEDIA_VIDEO_INPUT_INVALID" });
       try {
-        const processorVersion = await version(remaining(2_000));
+        const processorVersion = await version(remaining(5_000));
         const directory = await mkdtemp(join(tmpdir(), "portfolio-video-"));
         const input = join(directory, detectedMimeType === "video/mp4" ? "candidate.mp4" : "candidate.webm");
         const output = join(directory, detectedMimeType === "video/mp4" ? "normalized.mp4" : "normalized.webm");
         try {
           await writeFile(input, bytes, { flag: "wx", mode: 0o600 });
-          const source = await probeVideo(input, directory, remaining(3_000));
+          const source = await probeVideo(input, directory, remaining(8_000));
           const format = source.format?.format_name ?? "";
           const stream = source.streams?.[0];
           const duration = Number(source.format?.duration);
@@ -532,7 +534,7 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
           const outputStat = await assertBoundedFile(output, VIDEO_MAX_BYTES);
           void outputStat;
           const outputBytes = await readBoundedFile(output, VIDEO_MAX_BYTES);
-          const outputProbe = await probeVideo(output, directory, remaining(3_000));
+          const outputProbe = await probeVideo(output, directory, remaining(8_000));
           const outputStream = outputProbe.streams?.[0];
           const outputFormat = outputProbe.format?.format_name ?? "";
           const outputCodec = outputStream?.codec_name ?? "";
