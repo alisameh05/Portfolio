@@ -30,7 +30,9 @@ export type {
 } from "./application/index.js";
 export {
   createMediaUploadIntentApplicationService,
+  createMediaProcessingApplicationService,
 } from "./application/index.js";
+export type { MediaProcessingApplicationService, MediaProcessingRepositoryPort, MediaProcessingStoragePort, TrustedByteScannerPort, PdfProcessorPort, MediaDigestPort, RecordMediaProcessingCommand } from "./application/index.js";
 export type {
   CreateMediaUploadIntentCommand,
   PreparedUploadTarget,
@@ -71,6 +73,7 @@ export type {
   MediaObjectStoragePort,
   TrustedMediaScannerPort,
 } from "./ports/index.js";
+export { createPostgresMediaProcessingRepository } from "./adapters/index.js";
 export type {
   SealedUploadCapability,
   UploadIntentReceiptRecord,

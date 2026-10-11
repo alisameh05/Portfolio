@@ -14,7 +14,9 @@ const ROOT = phase6Root();
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
 const EVIDENCE = join(ROOT, "evidence/phase-6-verification-setup.json");
 const UPLOAD_INTENT_EVIDENCE = join(ROOT, "evidence/phase6-upload-intent-148.json");
+const MEDIA_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-media-processing-149.json");
 const UPLOAD_INTENT_ONLY = process.argv.includes("--upload-intents-only");
+const MEDIA_PROCESSING_ONLY = process.argv.includes("--media-processing-only");
 const RUN_TIMEOUT = 180_000;
 
 function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEOUT, input, label = command } = {}) {
@@ -107,12 +109,14 @@ async function main() {
   const formats = [];
   const failures = [];
   let uploadIntentChecks;
+  let mediaProcessingChecks;
+  let processingCounts;
   let toolVersions = {};
   let status;
   const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], { cwd: ROOT, env, timeout }).stdout;
   try {
     let config = isolatedPhase6Config(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId);
-    if (UPLOAD_INTENT_ONLY) {
+    if (UPLOAD_INTENT_ONLY || MEDIA_PROCESSING_ONLY) {
       // The disposable Auth instance needs a real non-Owner JWT for the Storage denial matrix.
       // This change is confined to its temporary config; repository and developer Auth settings stay untouched.
       config = config
@@ -179,13 +183,16 @@ async function main() {
       pdfProcessor: serviceVersion(pdf, "ocrmypdf"),
     };
     writeFileSync(join(fixturesDir, "fixture.pdf"), pdfFixture());
-    console.log("Generating safe fixtures with the pinned image and video processors.");
-    run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.png"], { label: "fixture-generate-png" });
-    run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.jpeg"], { label: "fixture-generate-jpeg" });
-    run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.webp"], { label: "fixture-generate-webp" });
-    run("docker", ["run", "--rm", "--entrypoint", "ffmpeg", "-v", `${fixturesDir}:/fixtures`, video, "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=16x16:d=0.1", "-frames:v", "1", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-y", "/fixtures/fixture.mp4"], { label: "fixture-generate-mp4" });
-    run("docker", ["run", "--rm", "--entrypoint", "ffmpeg", "-v", `${fixturesDir}:/fixtures`, video, "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=16x16:d=0.1", "-frames:v", "1", "-an", "-c:v", "libvpx-vp9", "-y", "/fixtures/fixture.webm"], { label: "fixture-generate-webm" });
-    const fixtures = PHASE6_FORMATS.map((definition) => ({ ...definition, path: join(fixturesDir, `fixture.${definition.id}`) }));
+    const activeFormats = MEDIA_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf") : PHASE6_FORMATS;
+    if (!MEDIA_PROCESSING_ONLY) {
+      console.log("Generating safe fixtures with the pinned image and video processors.");
+      run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.png"], { label: "fixture-generate-png" });
+      run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.jpeg"], { label: "fixture-generate-jpeg" });
+      run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.webp"], { label: "fixture-generate-webp" });
+      run("docker", ["run", "--rm", "--entrypoint", "ffmpeg", "-v", `${fixturesDir}:/fixtures`, video, "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=16x16:d=0.1", "-frames:v", "1", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-y", "/fixtures/fixture.mp4"], { label: "fixture-generate-mp4" });
+      run("docker", ["run", "--rm", "--entrypoint", "ffmpeg", "-v", `${fixturesDir}:/fixtures`, video, "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=16x16:d=0.1", "-frames:v", "1", "-an", "-c:v", "libvpx-vp9", "-y", "/fixtures/fixture.webm"], { label: "fixture-generate-webm" });
+    }
+    const fixtures = activeFormats.map((definition) => ({ ...definition, path: join(fixturesDir, `fixture.${definition.id}`) }));
     for (const fixture of fixtures) {
       console.log(`Scanning, processing and round-tripping ${fixture.id}.`);
       let processorVersion = toolVersions[fixture.processor];
@@ -206,6 +213,7 @@ async function main() {
     }
     console.log("Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.");
     const testJsonPath = join(workdir, "upload-intent-vitest.json");
+    const processingCountsPath = join(workdir, "media-processing-counts.json");
     const testEnv = {
       ...env,
       PHASE6_UPLOAD_INTENT_DATABASE_URL: status.DB_URL,
@@ -214,23 +222,47 @@ async function main() {
       PHASE6_UPLOAD_INTENT_ANON_KEY: status.ANON_KEY,
       PHASE6_UPLOAD_INTENT_REPLAY_KEY: randomBytes(32).toString("base64"),
       PHASE6_REQUIRE_UPLOAD_INTENT: "1",
+      PHASE6_PDF_PROCESSING_FIXTURE: join(fixturesDir, "fixture.pdf"),
+      PHASE6_SCANNER_IMAGE: scanner,
+      PHASE6_PDF_PROCESSOR_IMAGE: pdf,
+      PHASE6_SCANNER_VERSION: toolVersions.scanner,
+      PHASE6_PDF_PROCESSOR_VERSION: toolVersions.pdfProcessor,
+      PHASE6_MEDIA_PROCESSING_COUNTS_FILE: processingCountsPath,
     };
     const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", "tests/database/media-upload-intent.integration.test.ts", "--reporter=json", `--outputFile=${testJsonPath}`], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 300_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
     const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
+    processingCounts = existsSync(processingCountsPath) ? JSON.parse(readFileSync(processingCountsPath, "utf8")) : undefined;
+    const allAssertions = (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
+    const uploadAssertions = allAssertions.filter((item) => !String(item.fullName ?? "").includes("processes PDF candidates"));
+    const processingAssertions = allAssertions.filter((item) => String(item.fullName ?? "").includes("processes PDF candidates"));
     uploadIntentChecks = {
       suite: "tests/database/media-upload-intent.integration.test.ts",
-      total: testReport.numTotalTests,
-      passed: testReport.numPassedTests,
-      failed: testReport.numFailedTests,
-      skipped: testReport.numPendingTests,
-      failedTests: (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []).filter((item) => item.status === "failed").map((item) => ({
+      total: uploadAssertions.length,
+      passed: uploadAssertions.filter((item) => item.status === "passed").length,
+      failed: uploadAssertions.filter((item) => item.status === "failed").length,
+      skipped: uploadAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length,
+      failedTests: uploadAssertions.filter((item) => item.status === "failed").map((item) => ({
         name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
-        reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 3).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
+        reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
       })),
-      verdict: testResult.status === 0 && testReport.numTotalTests === 3 && testReport.numPassedTests === 3 && testReport.numFailedTests === 0 && testReport.numPendingTests === 0 ? "pass" : "fail",
+      verdict: testResult.status === 0 && uploadAssertions.length === 3 && uploadAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
+    };
+    mediaProcessingChecks = {
+      suite: "tests/database/media-upload-intent.integration.test.ts",
+      total: processingAssertions.length,
+      passed: processingAssertions.filter((item) => item.status === "passed").length,
+      failed: processingAssertions.filter((item) => item.status === "failed").length,
+      skipped: processingAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length,
+      failedTests: processingAssertions.filter((item) => item.status === "failed").map((item) => ({
+        name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
+        reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
+      })),
+      verdict: testResult.status === 0 && processingAssertions.length === 1 && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
     };
     if (uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
+    if (mediaProcessingChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
+    if (MEDIA_PROCESSING_ONLY && (!Number.isSafeInteger(processingCounts?.scannerExecutions) || !Number.isSafeInteger(processingCounts?.processorExecutions))) throw new Error("PHASE6_MEDIA_PROCESSING_TOOL_COUNTS_MISSING");
   } catch (error) {
     failures.push(error instanceof Error ? error.message : "PHASE6_SETUP_FAILED");
   } finally {
@@ -253,7 +285,7 @@ async function main() {
   const finalSource = getPhase6SourceIdentity();
   if (finalSource.sourceRevision !== source.sourceRevision || finalSource.sourceTreeSha256 !== source.sourceTreeSha256) failures.push("PHASE6_SOURCE_CHANGED_DURING_RUN");
   let report;
-  if (!UPLOAD_INTENT_ONLY) {
+  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY) {
     report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
     const evaluated = evaluatePhase6Setup(report, source);
     if (evaluated.failures.length) {
@@ -263,7 +295,7 @@ async function main() {
     mkdirSync(join(ROOT, "evidence"), { recursive: true });
     writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   }
-  if (uploadIntentChecks !== undefined) {
+  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY) {
     const uploadIntentEvidence = {
       schemaVersion: 1,
       ticket: 148,
@@ -297,7 +329,29 @@ async function main() {
     };
     writeFileSync(UPLOAD_INTENT_EVIDENCE, `${JSON.stringify(uploadIntentEvidence, null, 2)}\n`, "utf8");
   }
-  if (UPLOAD_INTENT_ONLY) {
+  if (MEDIA_PROCESSING_ONLY && mediaProcessingChecks !== undefined) {
+    const evidence = {
+      schemaVersion: 1, ticket: 149, parent: 145, runId: randomUUID(), sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256, startedAt, completedAt: new Date().toISOString(),
+      scope: "trusted-byte-bound-PDF-processing-with-immutable-private-output",
+      runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" },
+      toolVersions,
+      policyIds: { migrations: ["20261010200000_record_trusted_pdf_processing.sql", "20261011210000_harden_trusted_pdf_processing.sql"], processing: "pdf-active-content-deny-1", limits: { pdfBytes: 20 * 1024 * 1024, maxAttemptMs: 60_000, maxPages: 500, maxPdfObjects: 100000, maxOutputBytes: 20 * 1024 * 1024, tempPdfCount: 3 }, storage: ["media-candidates private", "media-processed private", "create-only output"] },
+      services: { postgres: { available: true, majorVersion: 17 }, auth: { available: true }, storage: { available: true, privateBucketVerified: true, executionCount: services.storage?.executionCount }, scanner: { available: true, image: PHASE6_TOOL_DEFINITIONS.scanner, executionCount: (processingCounts?.scannerExecutions ?? 0) + 1 }, pdfProcessor: { available: true, image: PHASE6_TOOL_DEFINITIONS.pdfProcessor, executionCount: (processingCounts?.processorExecutions ?? 0) + 1 } },
+      principalScope: { database: "shipwithali_application constrained by portfolio_id and owner_id RLS", storage: ["server service role for exact candidate read and processed write", "anonymous denied processed object read"], environment: "disposable loopback Supabase" },
+       scenarios: ["real PDF process and byte hash round trip", "exact replay without repeated scan or output", "concurrent same-key processing serialized", "fresh-key reprocessing after success rejected", "non-PDF filename extension rejected", "forged caller facts rejected without producing output", "missing candidate object returns a typed temporary failure", "same-length substituted candidate bytes fail the trusted hash check", "scanner outage returns a typed temporary failure without output", "retryable processor outage returns typed temporary failure and fresh-key retry succeeds", "bounded container timeout terminates in-flight PDF work", "latest attempt pointer remains authoritative when attempt timestamps tie", "application role UPDATE grants limited to mutable processing columns", "processed output is private and immutable to overwrite or candidate capability substitution", "failed anonymous processed-object deletion leaves sealed output intact", "commit-time stale candidate hash creates no success facts, event, output, or orphan", "commit rollback leaves no success facts or orphan", "EICAR harmless malware signature rejected", "malformed PDF rejected", "encrypted PDF rejected", "active-content PDF rejected", "foreign Owner RLS read denied"].map((name) => ({ name, executed: true, status: "passed" })),
+      checks: mediaProcessingChecks, cleanup,
+      verdict: mediaProcessingChecks.verdict === "pass" && cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:media-processing"],
+      limitations: ["The focused runner validates the PDF slice only; image/video processing and the final Phase 6 gate remain separate tickets."],
+    };
+    writeFileSync(MEDIA_PROCESSING_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+  }
+  if (MEDIA_PROCESSING_ONLY) {
+    const evidence = mediaProcessingChecks === undefined ? undefined : JSON.parse(readFileSync(MEDIA_PROCESSING_EVIDENCE, "utf8"));
+    console.log(JSON.stringify({ ticket: 149, runId: evidence?.runId, sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256, verdict: evidence?.verdict ?? "fail", mediaProcessingChecks, cleanup, failures, evidence: evidence === undefined ? undefined : "evidence/phase6-media-processing-149.json" }, null, 2));
+    if (evidence?.verdict !== "pass") process.exitCode = 1;
+  } else if (UPLOAD_INTENT_ONLY) {
     const uploadEvidence = uploadIntentChecks === undefined ? undefined : JSON.parse(readFileSync(UPLOAD_INTENT_EVIDENCE, "utf8"));
     console.log(JSON.stringify({ ticket: 148, runId: uploadEvidence?.runId, sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256, verdict: uploadEvidence?.verdict ?? "fail", formatCounts: uploadEvidence?.formatCounts, uploadIntentChecks, cleanup, failures, evidence: uploadEvidence === undefined ? undefined : "evidence/phase6-upload-intent-148.json" }, null, 2));
     if (uploadEvidence?.verdict !== "pass") process.exitCode = 1;

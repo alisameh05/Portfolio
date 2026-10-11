@@ -33,6 +33,8 @@ export type {
 export {
   createMediaUploadIntentApplicationService,
 } from "./upload-intent.js";
+export { createMediaProcessingApplicationService } from "./processing.js";
+export type { MediaProcessingApplicationService, MediaProcessingRepositoryPort, MediaProcessingStoragePort, TrustedByteScannerPort, PdfProcessorPort, MediaDigestPort, RecordMediaProcessingCommand } from "./processing.js";
 export type {
   CreateMediaUploadIntentCommand,
   PreparedUploadTarget,

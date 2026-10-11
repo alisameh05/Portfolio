@@ -24,6 +24,8 @@ test("isolated configuration enables only the local API, Auth and Storage on res
   assert.match(result, /port = 57321/u);
   assert.match(result, /port = 57322/u);
   assert.match(result, /\[storage\.buckets\.phase6-private-fixtures\]\s+public = false/u);
+  assert.match(result, /\[storage\.buckets\.media-candidates\]\s+public = false\s+file_size_limit = "50MiB"/u);
+  assert.match(result, /\[storage\.buckets\.media-processed\]\s+public = false\s+file_size_limit = "50MiB"/u);
   assert.doesNotMatch(result, /\[studio\][\s\S]*?enabled = true/u);
 });
 
