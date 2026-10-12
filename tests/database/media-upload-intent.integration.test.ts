@@ -646,6 +646,24 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     ] as const, true);
     expect(Number(restoreRaceResult.ok) + Number(rejectDuringRestoreResult.ok)).toBe(1);
 
+    const cvRaceService = createOwnerCvApplicationService({
+      ownerId,
+      repository: createPostgresCvPortfolioRepository({
+        database: appDatabase.database,
+        transactions: appDatabase.transactions,
+        scope: { portfolioId, ownerId },
+        media: createMediaAcceptanceApplicationService({
+          scope: { portfolioId, ownerId },
+          repository: createPostgresMediaAcceptanceRepository({
+            database: appDatabase.database,
+            transactions: appDatabase.transactions,
+            scope: { portfolioId, ownerId },
+          }),
+          preflight: async () => ({ ok: true as const, value: undefined }),
+        }),
+      }),
+      ids: createSystemIdGenerator(),
+    });
     const cvRaceMediaId = await createAcceptedRejectionCandidate("cv-activation-race");
     const cvRegister = await cv.registerOwnerCvVersion({ actor, mediaId: cvRaceMediaId, locale: "en", label: "CV activation race",
       expectedVersion: secondCv.aggregateVersion, idempotencyKey: "phase6-rejection-cv-race-register" as never });
@@ -656,7 +674,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(cvAccept.ok).toBe(true);
     if (!cvAccept.ok) throw new Error("PHASE6_REJECTION_CV_RACE_ACCEPT_FAILED");
     const [activationRaceResult, cvRejectionRaceResult] = await contendAtMediaLock(cvRaceMediaId, [
-      () => cv.activateOwnerCvVersion({ actor, versionId: cvRegister.value.versionId,
+      () => cvRaceService.activateOwnerCvVersion({ actor, versionId: cvRegister.value.versionId,
         expectedVersion: cvAccept.value.aggregateVersion, idempotencyKey: "phase6-rejection-cv-race-activate" as never }),
       () => media.rejectOwnerMediaAsset({ actor, mediaId: cvRaceMediaId, expectedVersion: 3,
         idempotencyKey: "phase6-rejection-cv-race-reject" as never, reason }),
