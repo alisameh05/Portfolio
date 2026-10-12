@@ -921,7 +921,9 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const scansBeforePdfProcessing = scannerExecutions;
     const pdfBytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
     const { createClamAvScanner } = await import("../../src/runtime/adapters/media-processing-tools.js");
-    const productionScan = await createClamAvScanner().scan(pdfBytes, { timeoutMs: 24_000 });
+    // This standalone tool probe requests 24s. The factory's 14s production
+    // default is a tighter cap intended for the complete 60s PDF attempt.
+    const productionScan = await createClamAvScanner({ timeoutMs: 24_000 }).scan(pdfBytes, { timeoutMs: 24_000 });
     expect(productionScan, JSON.stringify(productionScan)).toMatchObject({ ok: true, value: { verdict: "clean" } });
     if (process.platform === "win32") {
       const { createOcrMyPdfProcessor, runWithBoundedOutput } = await import("../../src/runtime/adapters/media-processing-tools.js");
