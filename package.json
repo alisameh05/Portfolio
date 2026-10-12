@@ -10,6 +10,8 @@
     "npm": "11.19.0"
   },
   "scripts": {
+    "docker:phase6": "node scripts/docker-validation.mjs phase6",
+    "docker:checks": "node scripts/docker-validation.mjs checks",
     "setup:validation": "node scripts/setup-validation.mjs",
     "validation:ready": "node scripts/validation-environment.mjs",
     "test:setup": "node --test --test-isolation=none tests/tooling/*.test.mjs",
@@ -81,6 +83,10 @@
     "phase6:focus:video-processing": "node scripts/phase6-verification.mjs --video-processing-only",
     "prephase6:focus:media-acceptance": "npm run validation:ready",
     "phase6:focus:media-acceptance": "node scripts/phase6-verification.mjs --media-acceptance-only",
+    "prephase6:focus:cv-portfolio": "npm run validation:ready",
+    "phase6:focus:cv-portfolio": "node scripts/phase6-verification.mjs --cv-portfolio-only",
+    "prephase6:focus:media-integration": "npm run validation:ready",
+    "phase6:focus:media-integration": "node scripts/phase6-verification.mjs --media-integration-only",
     "prephase6:focus:publication-media": "npm run validation:ready",
     "phase6:focus:publication-media": "node scripts/phase6-verification.mjs --publication-media-only",
     "prephase6:focus:upload-intents": "npm run validation:ready",

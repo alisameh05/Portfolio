@@ -44,6 +44,42 @@ export function scrubPhase6Environment(source = process.env) {
   return env;
 }
 
+export function evaluatePhase6IntegrationTests(report, exitStatus) {
+  const assertions = (report?.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
+  const counts = {
+    total: assertions.length,
+    passed: assertions.filter((item) => item.status === "passed").length,
+    failed: assertions.filter((item) => item.status === "failed").length,
+    skipped: assertions.filter((item) => item.status !== "passed" && item.status !== "failed").length,
+  };
+  const safeCodes = ["MEDIA_SCANNER_UNAVAILABLE", "MEDIA_PROCESSING_TIMEOUT", "MEDIA_PROCESSOR_UNAVAILABLE",
+    "MEDIA_PDF_PROCESSOR_UNAVAILABLE", "MEDIA_PDF_OUTPUT_INVALID", "MEDIA_VIDEO_PROCESSOR_UNAVAILABLE",
+    "MEDIA_VIDEO_PROCESSOR_TIMEOUT", "MEDIA_CONTAINER_CLEANUP_FAILED", "MEDIA_STORAGE_UNAVAILABLE",
+    "MEDIA_VIDEO_INPUT_INVALID", "MEDIA_VIDEO_OUTPUT_INVALID", "CV_MEDIA_NOT_ELIGIBLE"];
+  const failedTests = assertions.filter((item) => item.status === "failed").map((item) => {
+    const failure = String(item.failureMessages?.[0] ?? "");
+    const codes = safeCodes.filter((code) => failure.includes(code));
+    const criteria = [...new Set(failure.match(/\bT09-0[1-9]\b/gu) ?? [])];
+    return {
+    name: item.fullName ?? "unknown-test",
+    // Auth assertions can embed entire credential-bearing responses. Retain
+    // only an error category and the known test's source location, never payloads.
+    reason: String(item.failureMessages?.[0] ?? "").match(/AssertionError|TypeError|Test timed out|Error/u)?.[0] ?? "assertion-failed",
+    location: failure.match(/tests[\\/]database[\\/]media-upload-intent\.integration\.test\.ts:\d+:\d+/u)?.[0] ?? "unknown-location",
+    ...(codes.length ? { codes } : {}), ...(criteria.length ? { criteria } : {}),
+  }; });
+  return { ...counts, ...(failedTests.length ? { failedTests } : {}), verdict: exitStatus === 0 && counts.total === 5 && counts.passed === 5 &&
+    report?.numTotalTests === 5 && report?.numPassedTests === 5 && report?.numFailedTests === 0 &&
+    report?.numPendingTests === 0 && report?.success === true ? "pass" : "fail" };
+}
+
+export function phase6CvScenarioProof(processingCounts) {
+  const checks = processingCounts?.cvScenarios;
+  if (!Array.isArray(checks) || checks.length !== 9 || checks.some((item) => item?.executed !== true || item?.status !== "passed")) return false;
+  const ids = new Set(checks.flatMap((item) => typeof item.name === "string" ? item.name.match(/T09-0[1-9]/gu) ?? [] : []));
+  return ids.size === 9;
+}
+
 export const PHASE6_PREDECESSOR_CONTEXTS = Object.freeze({
   phase4: Object.freeze({ issue: 90, pullRequest: 105, mergeCommit: "9806af81d4ce705c36d9b22089f77213d16887bc", evidence: "evidence/phase4-context-90-105.json" }),
   phase5: Object.freeze({ issue: 125, pullRequest: 144, mergeCommit: "26d6efb3d9e281265cc9c099195492b5dcbec79d", evidence: "evidence/phase-5-context.json" }),

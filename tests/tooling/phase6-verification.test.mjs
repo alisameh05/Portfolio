@@ -1,10 +1,69 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6Setup, isolatedPhase6Config,
-  loadPhase6PredecessorContexts, makePhase6Report, scrubPhase6Environment,
+  PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, isolatedPhase6Config,
+  loadPhase6PredecessorContexts, makePhase6Report, phase6CvScenarioProof, scrubPhase6Environment,
 } from "../../scripts/phase6-verification-support.mjs";
 import { createBarrier, createDeterministicClock, createUuidV7Sequence } from "../phase6/fixtures/deterministic.mjs";
+
+test("CV evidence requires recorded execution of every T09 criterion", () => {
+  const counts = { cvScenarios: Array.from({ length: 9 }, (_, index) => ({
+    name: `T09-0${index + 1} actual assertion`, executed: true, status: "passed",
+  })) };
+  assert.equal(phase6CvScenarioProof(counts), true);
+  assert.equal(phase6CvScenarioProof(undefined), false);
+  assert.equal(phase6CvScenarioProof({ cvScenarios: [] }), false);
+  const missing = structuredClone(counts);
+  missing.cvScenarios[8].name = "T09-01 duplicate";
+  assert.equal(phase6CvScenarioProof(missing), false);
+  const skipped = structuredClone(counts);
+  skipped.cvScenarios[0].executed = false;
+  assert.equal(phase6CvScenarioProof(skipped), false);
+  const failed = structuredClone(counts);
+  failed.cvScenarios[0].status = "failed";
+  assert.equal(phase6CvScenarioProof(failed), false);
+});
+
+test("the complete real integration gate rejects skipped, missing, failed, and partial test reports", () => {
+  const report = {
+    success: true, numTotalTests: 5, numPassedTests: 5, numFailedTests: 0, numPendingTests: 0,
+    testResults: [{ assertionResults: Array.from({ length: 5 }, () => ({ status: "passed" })) }],
+  };
+  assert.deepEqual(evaluatePhase6IntegrationTests(report, 0), { total: 5, passed: 5, failed: 0, skipped: 0, verdict: "pass" });
+  assert.equal(evaluatePhase6IntegrationTests(report, 1).verdict, "fail");
+  assert.equal(evaluatePhase6IntegrationTests(undefined, 0).verdict, "fail");
+  for (const status of ["pending", "disabled", "todo", "failed"]) {
+    const changed = structuredClone(report);
+    changed.testResults[0].assertionResults[0].status = status;
+    assert.equal(evaluatePhase6IntegrationTests(changed, 0).verdict, "fail");
+  }
+  const partial = structuredClone(report);
+  partial.testResults[0].assertionResults.pop();
+  assert.equal(evaluatePhase6IntegrationTests(partial, 0).verdict, "fail");
+  assert.equal(evaluatePhase6IntegrationTests({ ...report, numPendingTests: 1 }, 0).verdict, "fail");
+});
+
+test("integration diagnostics retain source locations without arbitrary Auth or database payloads", () => {
+  const message = 'AssertionError: {"password":"fixture-secret","apikey":"fixture-secret","refresh_token":"fixture-secret","access_token":"fixture-secret","serviceRoleKey":"fixture-secret","replayKey":"fixture-secret"} Bearer fixture-secret https://example.test/upload?token=fixture-secret postgresql://user:fixture-secret@localhost/test eyJfixture.fixture.signature\n at tests/database/media-upload-intent.integration.test.ts:605:9';
+  const result = evaluatePhase6IntegrationTests({ testResults: [{ assertionResults: [{
+    fullName: "known integration assertion", status: "failed", failureMessages: [message],
+  }] }] }, 1);
+  assert.equal(result.verdict, "fail");
+  assert.deepEqual(result.failedTests, [{ name: "known integration assertion", reason: "AssertionError",
+    location: "tests/database/media-upload-intent.integration.test.ts:605:9" }]);
+  assert.doesNotMatch(JSON.stringify(result), /fixture-secret|eyJfixture|postgresql:|https:/u);
+});
+
+test("integration diagnostics retain only known Media codes and CV criterion IDs", () => {
+  const result = evaluatePhase6IntegrationTests({ testResults: [{ assertionResults: [{
+    fullName: "safe assertion", status: "failed", failureMessages: [
+      "AssertionError: T09-04 MEDIA_SCANNER_UNAVAILABLE token=fixture-secret MEDIA_PRIVATE_SECRET at tests/database/media-upload-intent.integration.test.ts:100:2",
+    ],
+  }] }] }, 1);
+  assert.deepEqual(result.failedTests[0].codes, ["MEDIA_SCANNER_UNAVAILABLE"]);
+  assert.deepEqual(result.failedTests[0].criteria, ["T09-04"]);
+  assert.doesNotMatch(JSON.stringify(result), /fixture-secret|MEDIA_PRIVATE_SECRET|token=/u);
+});
 
 function passingReport() {
   const predecessorContexts = loadPhase6PredecessorContexts();

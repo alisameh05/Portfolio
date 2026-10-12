@@ -9,19 +9,24 @@ import type { PdfProcessorPort, TrustedByteScannerPort, VideoProcessorPort } fro
 
 const execFile = promisify(nodeExecFile);
 const MAX_BYTES = 20 * 1024 * 1024;
-// Leave time for storage reads/seals and the database commit inside the 60s
-// application attempt budget. The external-work ceiling is 52s:
-// 2s scanner version + 2x14s scans + 16s PDF preflight/process/version work,
-// plus two 3s Storage operations. The commit statement is capped at 3s,
-// leaving 5s for cleanup and application overhead.
-const SCAN_TIMEOUT_MS = 14_000;
+// Stage caps include cleanup and share the application's 60s deadline.
+// Docker startup, the pinned definition load and cleanup share this cap.
+const SCAN_TIMEOUT_MS = 24_000;
 const PROCESS_TIMEOUT_MS = 8_000;
+// Allow 2s of preflight work plus the mandatory 3s container cleanup reserve.
+const PDF_PREFLIGHT_TIMEOUT_MS = 5_000;
+const PDF_TOTAL_TIMEOUT_MS = 24_000;
 const POLICY_VERSION = "pdf-active-content-deny-1";
 const BOUNDED_PDF_IMAGE = "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c";
 const BOUNDED_SCANNER_IMAGE = "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4";
 const PINNED_CLAMAV_VERSION = "ClamAV 1.4.3/27927/Sun Mar 1 07:24:39 2026";
 function safeFailure(code: string): Result<never, Rejection> {
   return err({ kind: "temporarily_unavailable", code });
+}
+
+export function resolveScannerTimeoutMs(factoryTimeoutMs?: number, requestTimeoutMs?: number): number {
+  const configured = factoryTimeoutMs ?? SCAN_TIMEOUT_MS;
+  return Math.max(1, Math.min(configured, requestTimeoutMs ?? configured));
 }
 
 export function isPinnedClamAvVersion(version: string): boolean {
@@ -184,6 +189,13 @@ async function stopDockerContainer(containerName: string): Promise<void> {
   throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
 }
 
+export function dockerBindMountUserArgs(identity = { uid: process.getuid?.(), gid: process.getgid?.() }): string[] {
+  // Bind-mounted inputs are private (0600 in 0700 directories). Match their
+  // owner rather than opening them to the pinned image's default uid 1000.
+  return identity.uid !== undefined && identity.gid !== undefined
+    ? ["--user", `${identity.uid}:${identity.gid}`] : [];
+}
+
 function dockerBoundedCommand(executable: string, args: readonly string[], outputPath: string,
   limits: { readonly maxBytes: number; readonly image?: string }): { executable: string; args: string[]; stop: () => Promise<void> } {
   const directory = dirname(outputPath);
@@ -199,7 +211,7 @@ function dockerBoundedCommand(executable: string, args: readonly string[], outpu
     return argument;
   });
   const command = [
-    "run", "--rm", "--pull=never", "--name", containerName, "--network=none", "--read-only", "--memory=1g", "--cpus=1", "--pids-limit=64",
+    "run", "--rm", "--pull=never", "--name", containerName, ...dockerBindMountUserArgs(), "--network=none", "--read-only", "--memory=1g", "--cpus=1", "--pids-limit=64",
     `--ulimit=fsize=${limits.maxBytes}:${limits.maxBytes}`, "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
     "--mount", `type=bind,source=${mountSource},target=/work`, "--workdir", "/work", "--entrypoint", executable,
     limits.image ?? BOUNDED_PDF_IMAGE, ...translatedArgs,
@@ -225,7 +237,7 @@ async function toolVersion(executable: string, args: readonly string[], timeoutM
   try {
     result = await execFile("docker", ["run", "--rm", "--pull=never", "--name", containerName, "--network=none", "--read-only", "--memory=512m", "--cpus=1", "--pids-limit=32",
       "--ulimit=fsize=4096:4096", "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--entrypoint", entrypoint, image, ...args],
-    { encoding: "utf8", timeout: Math.min(2_000, executionTimeoutMs), maxBuffer: 4 * 1024, windowsHide: true });
+    { encoding: "utf8", timeout: executionTimeoutMs, maxBuffer: 4 * 1024, windowsHide: true });
   } catch (cause) {
     if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 1_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
     throw cause;
@@ -258,11 +270,13 @@ export function createClamAvScanner(options: { readonly executable?: string; rea
   };
   return {
     async scan(bytes, scanOptions) {
-      const deadline = Date.now() + Math.max(1, Math.min(options.timeoutMs ?? SCAN_TIMEOUT_MS, scanOptions?.timeoutMs ?? SCAN_TIMEOUT_MS));
+      const deadline = Date.now() + resolveScannerTimeoutMs(options.timeoutMs, scanOptions?.timeoutMs);
       const remainingMs = () => Math.max(0, deadline - Date.now());
       try {
         if (executable !== "clamscan") return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
-        const versionTimeoutMs = Math.min(3_000, remainingMs());
+        // Include Docker Desktop/container startup and cleanup in this stage.
+        // This still consumes the scanner's shared deadline.
+        const versionTimeoutMs = Math.min(5_000, remainingMs());
         if (!versionTimeoutMs) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         const scannerVersion = await version(versionTimeoutMs);
         if (!isPinnedClamAvVersion(scannerVersion)) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
@@ -335,16 +349,23 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
   const python = options.python ?? "python3";
   const ocrmypdf = options.ocrmypdf ?? "ocrmypdf";
   return {
-    async process(bytes) {
+    async process(bytes, processOptions) {
+      if ((processOptions?.timeoutMs ?? PDF_TOTAL_TIMEOUT_MS) <= 0) return safeFailure("MEDIA_PROCESSING_TIMEOUT");
+      const deadline = Date.now() + Math.min(PDF_TOTAL_TIMEOUT_MS, processOptions?.timeoutMs ?? PDF_TOTAL_TIMEOUT_MS);
+      const remaining = (cap: number) => {
+        const timeoutMs = Math.min(cap, deadline - Date.now());
+        if (timeoutMs <= 0) throw new Error("MEDIA_PROCESSING_TIMEOUT");
+        return timeoutMs;
+      };
       try {
         if (python !== "python3" || ocrmypdf !== "ocrmypdf") return safeFailure("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
-        const version = await toolVersion(ocrmypdf, ["--version"]);
-        const pikepdfVersion = await toolVersion(python, ["-c", "import pikepdf; print(pikepdf.__version__)"]);
+        const version = await toolVersion(ocrmypdf, ["--version"], remaining(4_000));
+        const pikepdfVersion = await toolVersion(python, ["-c", "import pikepdf; print(pikepdf.__version__)"], remaining(4_000));
         const processed = await withTempPdf(bytes, async (directory, input) => {
           const checked = join(directory, "checked.pdf");
           const output = join(directory, "processed.pdf");
           try {
-            await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, input, checked], checked, { maxBytes: MAX_BYTES, timeoutMs: 2_000, python });
+            await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, input, checked], checked, { maxBytes: MAX_BYTES, timeoutMs: remaining(PDF_PREFLIGHT_TIMEOUT_MS), python });
           } catch (cause) {
             const exitCode = typeof cause === "object" && cause !== null && "code" in cause ? Number((cause as { code: unknown }).code) : 0;
             if ([21, 22, 23, 24, 25].includes(exitCode)) return { unsafe: true as const };
@@ -352,10 +373,10 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
           }
           await assertBoundedFile(checked, MAX_BYTES);
           await runWithBoundedOutput(ocrmypdf, ["--skip-text", "--output-type", "pdfa-2", "--optimize", "0", "--jobs", "1", "--quiet", checked, output],
-            output, { maxBytes: MAX_BYTES, timeoutMs: PROCESS_TIMEOUT_MS, python });
+            output, { maxBytes: MAX_BYTES, timeoutMs: remaining(PROCESS_TIMEOUT_MS), python });
           await assertBoundedFile(output, MAX_BYTES);
           const verifiedOutput = join(directory, "verified-output.pdf");
-          try { await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, output, verifiedOutput], verifiedOutput, { maxBytes: MAX_BYTES, timeoutMs: 2_000, python }); }
+          try { await runWithBoundedOutput(python, ["-c", PDF_PREFLIGHT, output, verifiedOutput], verifiedOutput, { maxBytes: MAX_BYTES, timeoutMs: remaining(PDF_PREFLIGHT_TIMEOUT_MS), python }); }
           catch { throw new Error("MEDIA_PDF_OUTPUT_INVALID"); }
           const result = await readBoundedFile(verifiedOutput, MAX_BYTES);
           if (result.byteLength < 1 || !result.subarray(0, 5).equals(Buffer.from("%PDF-"))) throw new Error("MEDIA_PDF_OUTPUT_INVALID");
@@ -365,6 +386,7 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
         return ok({ bytes: processed.bytes, version: `${version};pikepdf-${pikepdfVersion}`.slice(0, 150), policyVersion: POLICY_VERSION });
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "";
+        if (message === "MEDIA_PROCESSING_TIMEOUT") return safeFailure(message);
         if (message === "MEDIA_BYTES_OUT_OF_BOUNDS") return err({ kind: "validation", code: message });
         if (message === "MEDIA_PDF_OUTPUT_INVALID") return err({ kind: "validation", code: message });
         return safeFailure("MEDIA_PDF_PROCESSOR_UNAVAILABLE");

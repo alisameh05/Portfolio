@@ -33,6 +33,7 @@ import type { LifecycleResource, ReadinessCheck } from "../runtime/ports.js";
 import { createSystemClock, createSystemIdGenerator } from "../runtime/ports.js";
 import { parseStableId } from "../shared/domain/index.js";
 import type { OwnerMediaApplicationService } from "../modules/media/index.js";
+import type { OwnerCvApplicationService } from "../modules/cv-portfolio/index.js";
 
 export type { RuntimeConfig } from "./configuration.js";
 
@@ -43,6 +44,7 @@ let currentContentAuthoring: ContentAuthoringService | undefined;
 let currentOwnerTaxonomy: OwnerTaxonomyApplicationService | undefined;
 let currentPublicDiscovery: PublicDiscoveryService | undefined;
 let currentOwnerMedia: OwnerMediaApplicationService | undefined;
+let currentOwnerCv: OwnerCvApplicationService | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -72,6 +74,7 @@ export interface DatabaseRuntimeDependencies {
   readonly ownerTaxonomy?: OwnerTaxonomyApplicationService;
   readonly publicDiscovery?: PublicDiscoveryService;
   readonly ownerMedia?: OwnerMediaApplicationService;
+  readonly ownerCv?: OwnerCvApplicationService;
   readonly resource: LifecycleResource;
   readonly readiness: ReadinessCheck;
 }
@@ -144,6 +147,7 @@ export async function initializeDatabaseRuntime(
         let ownerTaxonomy: OwnerTaxonomyApplicationService | undefined;
         let publicDiscovery: PublicDiscoveryService | undefined;
         let ownerMedia: OwnerMediaApplicationService | undefined;
+        let ownerCv: OwnerCvApplicationService | undefined;
         if (runtimeKind === "application") {
           if (configuredScope === undefined || !configuredScope.portfolioId.ok || !configuredScope.ownerId.ok) {
             throw new RuntimeConfigError("PORTFOLIO_ID", "must be configured for Owner configuration commands");
@@ -313,6 +317,36 @@ export async function initializeDatabaseRuntime(
             });
             ownerMedia = { ...ownerMedia, recordOwnerMediaProcessing: processing.record };
           }
+          const [
+            { createPostgresMediaAcceptanceRepository },
+            { createMediaAcceptanceApplicationService },
+            { createPostgresCvPortfolioRepository },
+            { createOwnerCvApplicationService },
+          ] = await Promise.all([
+            import("../modules/media/adapters/postgres-acceptance.js"),
+            import("../modules/media/application/acceptance.js"),
+            import("../modules/cv-portfolio/adapters/postgres-portfolio.js"),
+            import("../modules/cv-portfolio/application/owner-service.js"),
+          ]);
+          const scope = { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value };
+          const mediaAcceptance = createMediaAcceptanceApplicationService({
+            scope: { ownerId: scope.ownerId },
+            repository: createPostgresMediaAcceptanceRepository({
+              database: database.database,
+              transactions: operations.transactions,
+              scope,
+            }),
+          });
+          ownerCv = createOwnerCvApplicationService({
+            ownerId: scope.ownerId,
+            repository: createPostgresCvPortfolioRepository({
+              database: database.database,
+              transactions: operations.transactions,
+              scope,
+              media: mediaAcceptance,
+            }),
+            ids: createSystemIdGenerator(),
+          });
         }
         return {
           operations,
@@ -321,6 +355,7 @@ export async function initializeDatabaseRuntime(
           ...(ownerTaxonomy === undefined ? {} : { ownerTaxonomy }),
           ...(publicDiscovery === undefined ? {} : { publicDiscovery }),
           ...(ownerMedia === undefined ? {} : { ownerMedia }),
+          ...(ownerCv === undefined ? {} : { ownerCv }),
           resource: database.resource,
           readiness: database.readiness,
         };
@@ -345,6 +380,7 @@ export async function initializeDatabaseRuntime(
     currentOwnerTaxonomy = dependencies.ownerTaxonomy;
     currentPublicDiscovery = dependencies.publicDiscovery;
     currentOwnerMedia = dependencies.ownerMedia;
+    currentOwnerCv = dependencies.ownerCv;
     lifecycle.markReady();
     return Object.freeze({ ...config, runtimeKind });
   } catch (error) {
@@ -392,6 +428,13 @@ export async function getOwnerMediaApplicationService(): Promise<OwnerMediaAppli
   if (currentOwnerMedia !== undefined) return currentOwnerMedia;
   const { createProductionOwnerMediaService } = await import("../runtime/fakes/owner-media.js");
   return createProductionOwnerMediaService();
+}
+
+/** CV registration and Owner reads share the configured PostgreSQL and Media acceptance transaction boundary. */
+export async function getOwnerCvApplicationService(): Promise<OwnerCvApplicationService> {
+  if (currentOwnerCv !== undefined) return currentOwnerCv;
+  const { createProductionOwnerCvService } = await import("../runtime/fakes/owner-cv.js");
+  return createProductionOwnerCvService();
 }
 
 /** Project route, status, and Featured operations share the Content transaction boundary. */
@@ -444,5 +487,6 @@ export function resetRuntimeForTests(): void {
   currentOwnerTaxonomy = undefined;
   currentPublicDiscovery = undefined;
   currentOwnerMedia = undefined;
+  currentOwnerCv = undefined;
   resetLifecycleForTests();
 }

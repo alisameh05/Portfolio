@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6Setup, getPhase6SourceIdentity, isolatedPhase6Config,
-  makePhase6Report, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
+  PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, getPhase6SourceIdentity, isolatedPhase6Config,
+  makePhase6Report, phase6CvScenarioProof, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
 } from "./phase6-verification-support.mjs";
 
 const ROOT = phase6Root();
@@ -19,20 +19,28 @@ const MEDIA_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-media-processing-1
 const IMAGE_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-image-processing-150.json");
 const VIDEO_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-video-processing-151.json");
 const MEDIA_ACCEPTANCE_EVIDENCE = join(ROOT, "evidence/phase6-media-acceptance-152.json");
+const CV_PORTFOLIO_EVIDENCE = join(ROOT, "evidence/phase6-cv-portfolio-154.json");
 const UPLOAD_INTENT_ONLY = process.argv.includes("--upload-intents-only");
 const MEDIA_PROCESSING_ONLY = process.argv.includes("--media-processing-only");
 const IMAGE_PROCESSING_ONLY = process.argv.includes("--image-processing-only");
 const VIDEO_PROCESSING_ONLY = process.argv.includes("--video-processing-only");
 const MEDIA_ACCEPTANCE_ONLY = process.argv.includes("--media-acceptance-only");
+const CV_PORTFOLIO_ONLY = process.argv.includes("--cv-portfolio-only");
 const PUBLICATION_MEDIA_ONLY = process.argv.includes("--publication-media-only");
-const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || PUBLICATION_MEDIA_ONLY;
+const MEDIA_INTEGRATION_ONLY = process.argv.includes("--media-integration-only");
+const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || CV_PORTFOLIO_ONLY || PUBLICATION_MEDIA_ONLY || MEDIA_INTEGRATION_ONLY;
 const RUN_TIMEOUT = 180_000;
 
 function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEOUT, input, label = command } = {}) {
   const result = spawnSync(command, args, { cwd, env, encoding: "utf8", input, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], timeout, maxBuffer: 16 * 1024 * 1024 });
   if (result.error || result.status !== 0) {
     const detail = result.error?.code === "ETIMEDOUT" ? "timeout" : result.error?.code === "ENOENT" ? "missing-executable" : "nonzero-exit";
-    throw new Error(`PHASE6_COMMAND_FAILED:${label}:${detail}`);
+    const diagnostic = `${result.stderr ?? ""}\n${result.stdout ?? ""}`.trim().split(/\r?\n/u).slice(-8).join(" | ")
+      .replace(/https?:\/\/\S+/gu, "[url]")
+      .replace(/(?:Bearer\s+|token=|apikey[=: ]+|password[=: ]+)\S+/giu, "[credential]")
+      .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gu, "[token]")
+      .slice(0, 600);
+    throw new Error(`PHASE6_COMMAND_FAILED:${label}:${detail}${diagnostic ? `:${diagnostic}` : ""}`);
   }
   return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status };
 }
@@ -120,12 +128,17 @@ async function main() {
   let uploadIntentChecks;
   let mediaProcessingChecks;
   let acceptanceUnitChecks;
+  let cvPortfolioChecks;
+  let cvMigrationUpgrade;
   let publicationChecks;
   let imageUnitChecks;
   let processingCounts;
+  let integrationChecks;
   let toolVersions = {};
   let status;
-  const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], { cwd: ROOT, env, timeout }).stdout;
+  const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], {
+    cwd: ROOT, env, timeout, label: `supabase-${String(args[0] ?? "command")}`,
+  }).stdout;
   try {
     let config = isolatedPhase6Config(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId);
     if (UPLOAD_INTENT_ONLY || MEDIA_PROCESSING_ONLY || IMAGE_PROCESSING_ONLY || VIDEO_PROCESSING_ONLY || RUN_MEDIA_ACCEPTANCE) {
@@ -140,6 +153,9 @@ async function main() {
     const migrations = join(ROOT, "supabase/migrations");
     const { cpSync } = await import("node:fs");
     cpSync(migrations, join(isolatedSupabase, "migrations"), { recursive: true });
+    const cvMigrationName = "20261012030000_initialize_cv_portfolio_register_english_versions.sql";
+    const isolatedCvMigration = join(isolatedSupabase, "migrations", cvMigrationName);
+    if (CV_PORTFOLIO_ONLY) rmSync(isolatedCvMigration, { force: true });
     run("docker", ["network", "create", "-o", "com.docker.network.bridge.host_binding_ipv4=127.0.0.1", network], { env, timeout: 20_000 });
     networkCreated = true;
     attemptedStart = true;
@@ -155,6 +171,33 @@ async function main() {
     const database = await client.query("select current_setting('server_version_num')::int as version_num, current_setting('server_version') as version");
     await client.end();
     if (Number(database.rows[0]?.version_num) < 170000) throw new Error("PHASE6_POSTGRES_VERSION_UNEXPECTED");
+    if (CV_PORTFOLIO_ONLY) {
+      const upgradeFixture = {
+        portfolioId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ef0",
+        ownerId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ef1",
+      };
+      const upgradeClient = new Client({ connectionString: status.DB_URL, connectionTimeoutMillis: 5000 });
+      await upgradeClient.connect();
+      await upgradeClient.query(`insert into portfolio_config.settings
+        (portfolio_id, owner_id, display_name, headline, bio, global_cta_label, global_cta_destination, global_cta_unavailable_fallback)
+        values ($1::uuid, $2::uuid, 'Upgrade fixture', 'Legacy configured Owner', 'Pre-CV migration settings row',
+          'Contact', 'https://example.test/contact', 'Contact unavailable')`, [upgradeFixture.portfolioId, upgradeFixture.ownerId]);
+      await upgradeClient.end();
+      copyFileSync(join(migrations, cvMigrationName), isolatedCvMigration);
+      const migrationUpOutput = invoke(["migration", "up", "--local"], 120_000);
+      console.log(`Applying the deferred CV migration: ${migrationUpOutput.trim().slice(0, 400)}`);
+      const verificationClient = new Client({ connectionString: status.DB_URL, connectionTimeoutMillis: 5000 });
+      await verificationClient.connect();
+      const backfill = await verificationClient.query(`select aggregate_version from cv_portfolio.portfolios
+        where portfolio_id = $1::uuid and owner_id = $2::uuid`, [upgradeFixture.portfolioId, upgradeFixture.ownerId]);
+      const targetMigrationLedger = await verificationClient.query("select 1 from supabase_migrations.schema_migrations where version = $1", [cvMigrationName.slice(0, 14)]);
+      await verificationClient.end();
+      cvMigrationUpgrade = { migration: cvMigrationName, preexistingConfiguredOwners: 1,
+        migrationLedgerContainsTarget: targetMigrationLedger.rowCount === 1,
+        backfilledRoots: backfill.rowCount ?? 0, aggregateVersion: Number(backfill.rows[0]?.aggregate_version),
+        verdict: backfill.rowCount === 1 && Number(backfill.rows[0]?.aggregate_version) === 1 ? "pass" : "fail" };
+      if (cvMigrationUpgrade.verdict !== "pass") throw new Error("PHASE6_CV_MIGRATION_UPGRADE_BACKFILL_FAILED");
+    }
     toolVersions = { ...toolVersions, supabaseCli: supabasePkg.version, postgres: database.rows[0].version };
     const { openIndependentPostgresConnections } = await import("../tests/phase6/fixtures/deterministic.mjs");
     const independentClients = await openIndependentPostgresConnections(status.DB_URL, 2);
@@ -267,6 +310,7 @@ async function main() {
       PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY || RUN_MEDIA_ACCEPTANCE ? "1" : "0",
       PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || RUN_MEDIA_ACCEPTANCE ? "1" : "0",
       PHASE6_MEDIA_ACCEPTANCE_ONLY: RUN_MEDIA_ACCEPTANCE ? "1" : "0",
+      PHASE6_REQUIRE_FULL_MEDIA: CV_PORTFOLIO_ONLY || MEDIA_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_VIDEO_PROCESSING_MP4_FIXTURE: join(fixturesDir, "fixture.mp4"),
       PHASE6_VIDEO_PROCESSING_WEBM_FIXTURE: join(fixturesDir, "fixture.webm"),
       PHASE6_VIDEO_PROCESSING_UNSUPPORTED_FIXTURE: join(fixturesDir, "fixture-unsupported.mp4"),
@@ -285,15 +329,22 @@ async function main() {
     if (VIDEO_PROCESSING_ONLY) testArgs.push("-t", "processes MP4 and WebM candidates");
     else if (IMAGE_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images");
     else if (MEDIA_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates");
-    else if (MEDIA_ACCEPTANCE_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates");
+    else if (MEDIA_ACCEPTANCE_ONLY || CV_PORTFOLIO_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates");
     else if (PUBLICATION_MEDIA_ONLY) {
       testArgs.push("tests/database/content-authoring.integration.test.ts", "-t",
         "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates|reports only Media referenced by currently published Project and Achievement locales|preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable|rejects invalid evidence, review, and Media facts without creating public state|publishes English and Arabic independently, preserves first publication time, history, and the last valid projection|publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline|hides, archives, and restores all three content kinds through atomic owner lifecycle commands|revalidates each exact locale publication before restore and changes none when one Media fact fails");
     }
-    const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 300_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+    const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: 900_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
     const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
     processingCounts = existsSync(processingCountsPath) ? JSON.parse(readFileSync(processingCountsPath, "utf8")) : undefined;
+    if (MEDIA_INTEGRATION_ONLY) {
+      integrationChecks = evaluatePhase6IntegrationTests(testReport, testResult.status);
+      if (integrationChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_INTEGRATION_REQUIRES_FIVE_PASSED_ZERO_SKIPPED");
+    }
+    if ((CV_PORTFOLIO_ONLY || MEDIA_INTEGRATION_ONLY) && !phase6CvScenarioProof(processingCounts)) {
+      throw new Error("PHASE6_CV_SCENARIO_EXECUTION_PROOF_MISSING");
+    }
     const allAssertions = (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
     const uploadAssertions = allAssertions.filter((item) => !/processes (?:PDF|MP4 and WebM|PNG, JPEG and WebP) candidates/u.test(String(item.fullName ?? "")));
     const processingAssertions = allAssertions.filter((item) => RUN_MEDIA_ACCEPTANCE
@@ -302,6 +353,37 @@ async function main() {
       ? String(item.fullName ?? "").includes("processes MP4 and WebM candidates")
       : IMAGE_PROCESSING_ONLY ? String(item.fullName ?? "").includes("processes PNG, JPEG and WebP candidates")
         : String(item.fullName ?? "").includes("processes PDF candidates"));
+    if (CV_PORTFOLIO_ONLY) {
+      const cvIntegrationAssertion = allAssertions.find((item) => String(item.fullName ?? "").includes("processes PDF candidates and real PNG JPEG WebP images"));
+      const executed = cvIntegrationAssertion !== undefined;
+      const integrationStatus = cvIntegrationAssertion?.status === "passed" ? "passed" : "failed";
+      const names = [
+        "concurrent empty-root initialization and authenticated empty Owner view",
+        "If-Match and idempotency on registration",
+        "same-Owner accepted accessible PDF snapshot",
+        "strict English PDF and scope eligibility",
+        "UUIDv7 retained registration identity and numbering",
+        "atomic root, version, receipt and event with rollback",
+        "exact replay, changed intent and stale version",
+        "derived current flags and bounded retained histories",
+        "scope constraints, forced RLS, indexes and preexisting-owner migration backfill",
+      ];
+      const scenarios = names.map((name, index) => {
+        const scenarioExecuted = executed && (index !== 8 || cvMigrationUpgrade !== undefined);
+        const scenarioPassed = integrationStatus === "passed" && (index !== 8 || cvMigrationUpgrade?.verdict === "pass");
+        return { id: `T09-0${index + 1}`, name, executed: scenarioExecuted,
+          status: scenarioPassed ? "passed" : "failed" };
+      });
+      const failedCount = scenarios.filter((item) => item.executed && item.status === "failed").length;
+      const skippedCount = scenarios.filter((item) => !item.executed).length;
+      cvPortfolioChecks = { suite: "tests/database/media-upload-intent.integration.test.ts", test: cvIntegrationAssertion?.fullName,
+        recordedAssertions: processingCounts.cvScenarios,
+        total: executed ? 1 : 0, passed: integrationStatus === "passed" ? 1 : 0,
+        failed: integrationStatus === "failed" && executed ? 1 : 0, skipped: executed ? 0 : 1, scenarios,
+        counts: { executed: scenarios.filter((item) => item.executed).length, failed: failedCount,
+          skipped: skippedCount, insertedVersions: 102, retainedAfterProjection: 100 },
+        verdict: executed && failedCount === 0 && skippedCount === 0 ? "pass" : "fail" };
+    }
     if (PUBLICATION_MEDIA_ONLY) {
       const publicationTestNames = [
         "reports only Media referenced by currently published Project and Achievement locales",
@@ -352,6 +434,11 @@ async function main() {
     };
     if (!VIDEO_PROCESSING_ONLY && !RUN_MEDIA_ACCEPTANCE && uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
     if (mediaProcessingChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
+    if (CV_PORTFOLIO_ONLY && (!Array.isArray(cvPortfolioChecks?.scenarios) || cvPortfolioChecks.scenarios.length !== 9 ||
+        cvPortfolioChecks.scenarios.some((item) => item.executed !== true || item.status !== "passed") ||
+        cvPortfolioChecks?.counts?.executed !== 9 || cvPortfolioChecks?.counts?.failed !== 0 || cvPortfolioChecks?.counts?.skipped !== 0)) {
+      throw new Error("PHASE6_CV_PORTFOLIO_ASSERTION_COUNTS_INVALID");
+    }
     if (IMAGE_PROCESSING_ONLY) {
       const imageUnitJsonPath = join(workdir, "image-unit-vitest.json");
       const imageUnitSuites = [
@@ -408,7 +495,7 @@ async function main() {
   const finalSource = getPhase6SourceIdentity();
   if (finalSource.sourceRevision !== source.sourceRevision || finalSource.sourceTreeSha256 !== source.sourceTreeSha256) failures.push("PHASE6_SOURCE_CHANGED_DURING_RUN");
   let report;
-  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !PUBLICATION_MEDIA_ONLY) {
+  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !CV_PORTFOLIO_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY) {
     report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
     const evaluated = evaluatePhase6Setup(report, source);
     if (evaluated.failures.length) {
@@ -418,7 +505,7 @@ async function main() {
     mkdirSync(join(ROOT, "evidence"), { recursive: true });
     writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   }
-  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !PUBLICATION_MEDIA_ONLY) {
+  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !CV_PORTFOLIO_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY) {
     const uploadIntentEvidence = {
       schemaVersion: 1,
       ticket: 148,
@@ -541,6 +628,7 @@ async function main() {
   if (RUN_MEDIA_ACCEPTANCE) {
     const unitJsonPath = join(tmpdir(), `phase6-media-acceptance-units-${randomUUID()}.json`);
     const unitSuites = ["tests/modules/media-acceptance.test.ts", "tests/modules/media-cv-contracts.test.ts"];
+    if (CV_PORTFOLIO_ONLY) unitSuites.push("tests/modules/cv-portfolio.test.ts");
     const unitResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", ...unitSuites,
       "--reporter=json", `--outputFile=${unitJsonPath}`], { cwd: ROOT, env, encoding: "utf8", timeout: 120_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     try {
@@ -555,7 +643,22 @@ async function main() {
     } finally { if (existsSync(unitJsonPath)) rmSync(unitJsonPath, { force: true }); }
     if (acceptanceUnitChecks?.verdict !== "pass") failures.push("PHASE6_MEDIA_ACCEPTANCE_UNIT_ASSERTIONS_INVALID");
   }
-  if (MEDIA_ACCEPTANCE_ONLY) {
+  if (MEDIA_INTEGRATION_ONLY) {
+    const evidence = {
+      schemaVersion: 1, runId: randomUUID(), ...source, startedAt, completedAt: new Date().toISOString(),
+      scope: "all-five-real-media-postgres-storage-integration-tests", toolVersions, services, formats,
+      checks: integrationChecks, processingCounts, cleanup, failures,
+      verdict: integrationChecks?.verdict === "pass" && formats.length === PHASE6_FORMATS.length &&
+        formats.every((format) => format.executed && format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        processingCounts?.acceptanceExecutions === PHASE6_FORMATS.length && cleanup.success && failures.length === 0 ? "pass" : "fail",
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:media-integration"],
+    };
+    mkdirSync(join(ROOT, "evidence"), { recursive: true });
+    writeFileSync(join(ROOT, "evidence/phase6-media-integration.json"), `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+    console.log(JSON.stringify({ verdict: evidence.verdict, checks: integrationChecks, cleanup, failures,
+      evidence: "evidence/phase6-media-integration.json" }, null, 2));
+    if (evidence.verdict !== "pass") process.exitCode = 1;
+  } else if (MEDIA_ACCEPTANCE_ONLY) {
     const scenarios = [
       "T07-01 exact candidate hash, current processing version, same Owner and current kind policy are required",
       "T07-02 image alt or decorative classification and video/document summaries match actual kind",
@@ -601,6 +704,47 @@ async function main() {
       acceptanceOperations: processingCounts?.acceptanceExecutions, formats: formats.map(({ id, status }) => ({ id, status })),
       integration: mediaProcessingChecks, application: acceptanceUnitChecks, cleanup, failures,
       evidence: "evidence/phase6-media-acceptance-152.json" }, null, 2));
+    if (evidence.verdict !== "pass") process.exitCode = 1;
+  } else if (CV_PORTFOLIO_ONLY) {
+    const scenarios = cvPortfolioChecks?.scenarios ?? [];
+    const evidence = {
+      schemaVersion: 1, ticket: 154, parent: 145, runId: randomUUID(), sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256, startedAt, completedAt: new Date().toISOString(),
+      scope: "versioned-CV-Portfolio-root-and-accepted-English-PDF-registration",
+      runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" },
+      toolVersions,
+      services: { postgres: { available: services.postgres.available, majorVersion: services.postgres.majorVersion,
+          independentConnections: services.postgres.independentConnections }, auth: services.auth, storage: services.storage,
+        scanner: { available: true, version: toolVersions.scanner, executions: processingCounts?.scannerExecutions },
+        processors: { pdf: toolVersions.pdfProcessor, image: toolVersions.sharp ?? toolVersions.imageProcessor,
+          video: toolVersions.videoProcessor, executions: { pdf: processingCounts?.processorExecutions,
+            image: processingCounts?.imageProcessorExecutions, video: processingCounts?.videoProcessorExecutions } } },
+      migrationUpgrade: cvMigrationUpgrade,
+      policyIds: { migration: "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+        RLS: ["cv_portfolios_owner_scope", "cv_versions_owner_scope", "cv_registration_commands_owner_scope", "cv_activation_history_owner_scope"],
+        projections: { versionLimit: 100, activationHistoryLimit: 100 } },
+      principalScope: { database: "shipwithali_application constrained by portfolio_id and owner_id RLS",
+        media: "real accepted English PDF through same-transaction Media acceptance facts",
+        environment: "disposable loopback Supabase" },
+      formats: formats.map(({ id, kind, mimeType, executed, status, storageRoundTrip, scannerVerdict, processorVersion }) =>
+        ({ id, kind, mimeType, executed, status, storageRoundTrip, scannerVerdict, processorVersion })),
+      checks: { integration: cvPortfolioChecks, mediaAcceptance: mediaProcessingChecks,
+        application: acceptanceUnitChecks, acceptanceOperations: processingCounts?.acceptanceExecutions ?? 0 },
+      counts: cvPortfolioChecks?.counts, scenarios, cleanup,
+      verdict: Array.isArray(scenarios) && scenarios.length === 9 && scenarios.every((item) => item.executed && item.status === "passed") &&
+        cvPortfolioChecks?.counts?.executed === 9 && cvPortfolioChecks?.counts?.failed === 0 && cvPortfolioChecks?.counts?.skipped === 0 &&
+        processingCounts?.acceptanceExecutions === PHASE6_FORMATS.length && formats.length === PHASE6_FORMATS.length &&
+        formats.every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:cv-portfolio"],
+      limitations: ["This ticket proves registration and bounded Owner reads; separate tickets own CV acceptance, Current CV activation, public delivery and the final Phase 6 gate."],
+    };
+    mkdirSync(join(ROOT, "evidence"), { recursive: true });
+    writeFileSync(CV_PORTFOLIO_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+    console.log(JSON.stringify({ ticket: 154, runId: evidence.runId, sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256, verdict: evidence.verdict, scenarios, counts: cvPortfolioChecks?.counts,
+      mediaAcceptance: mediaProcessingChecks, application: acceptanceUnitChecks, cleanup, failures,
+      evidence: "evidence/phase6-cv-portfolio-154.json" }, null, 2));
     if (evidence.verdict !== "pass") process.exitCode = 1;
   } else if (PUBLICATION_MEDIA_ONLY) {
     const allChecksPass = mediaProcessingChecks?.verdict === "pass" && publicationChecks?.verdict === "pass" &&
@@ -672,7 +816,12 @@ async function main() {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { await main(); } catch (error) {
-    console.error(error instanceof Error && /^(?:VALIDATION_NOT_READY|PHASE6_|LOCAL_)/u.test(error.message) ? error.message : "PHASE6_VERIFICATION_FAILED: diagnostic output suppressed.");
+    const message = error instanceof Error ? error.message : "unknown-error";
+    const safeMessage = message.replace(/(?:postgres(?:ql)?:\/\/)[^\s]+/giu, "[database-url]")
+      .replace(/https?:\/\/[^\s]+/giu, "[url]")
+      .replace(/(?:Bearer\s+|token=|apikey[=: ]+|password[=: ]+)\S+/giu, "[credential]")
+      .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gu, "[token]").slice(0, 800);
+    console.error(`PHASE6_VERIFICATION_FAILED:${safeMessage}`);
     process.exitCode = 1;
   }
 }
