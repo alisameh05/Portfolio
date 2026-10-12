@@ -83,6 +83,8 @@
     "phase6:focus:video-processing": "node scripts/phase6-verification.mjs --video-processing-only",
     "prephase6:focus:media-acceptance": "npm run validation:ready",
     "phase6:focus:media-acceptance": "node scripts/phase6-verification.mjs --media-acceptance-only",
+    "prephase6:focus:media-rejection": "npm run validation:ready",
+    "phase6:focus:media-rejection": "node scripts/phase6-verification.mjs --media-rejection-only",
     "prephase6:focus:cv-portfolio": "npm run validation:ready",
     "phase6:focus:cv-portfolio": "node scripts/phase6-verification.mjs --cv-portfolio-only",
     "prephase6:focus:cv-acceptance": "npm run validation:ready",

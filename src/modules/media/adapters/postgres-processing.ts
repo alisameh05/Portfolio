@@ -96,7 +96,9 @@ export function createPostgresMediaProcessingRepository(input: {
             select coalesce(s.aggregate_version, 1) as current_version, latest.result as latest_result,
                    (i.expires_at <= transaction_timestamp()) as expired,
                    exists (select 1 from media.decision_history decision where decision.media_id = a.media_id
-                     and decision.portfolio_id = a.portfolio_id and decision.owner_id = a.owner_id) as terminal_decision
+                     and decision.portfolio_id = a.portfolio_id and decision.owner_id = a.owner_id)
+                     or exists (select 1 from media.rejection_history rejection where rejection.media_id = a.media_id
+                     and rejection.portfolio_id = a.portfolio_id and rejection.owner_id = a.owner_id) as terminal_decision
               from media.assets a join media.upload_intents i on i.media_id = a.media_id
               left join media.processing_states s on s.media_id = a.media_id
               left join media.processing_attempts latest on latest.attempt_id = s.latest_attempt_id
@@ -157,7 +159,9 @@ export function createPostgresMediaProcessingRepository(input: {
                    coalesce(s.aggregate_version, 1) as current_version,
                    latest.result as current_result,
                    exists (select 1 from media.decision_history decision where decision.media_id = a.media_id
-                     and decision.portfolio_id = a.portfolio_id and decision.owner_id = a.owner_id) as terminal_decision
+                     and decision.portfolio_id = a.portfolio_id and decision.owner_id = a.owner_id)
+                     or exists (select 1 from media.rejection_history rejection where rejection.media_id = a.media_id
+                     and rejection.portfolio_id = a.portfolio_id and rejection.owner_id = a.owner_id) as terminal_decision
               from media.assets a join media.upload_intents i on i.media_id = a.media_id
               left join media.processing_states s on s.media_id = a.media_id
               left join media.processing_attempts latest on latest.attempt_id = s.latest_attempt_id
