@@ -249,7 +249,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     contentType: "project" | "achievement",
     mediaAssetId: StableId<"MediaAsset">,
     prefix: string,
-    onReviewReady?: (input: { readonly contentId: StableId<string>; readonly expectedVersion: number }) => void,
+    onReviewReady?: (input: { readonly contentId: StableId<string>; readonly expectedVersion: number }) => void | Promise<void>,
     expectPublished = true,
   ) {
     const artifactId = createStableId("SupportingArtifact");
@@ -279,7 +279,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       decision: "accepted", findings: ["Reviewed against accepted Media evidence."] });
     expect(reviewed.ok, JSON.stringify(reviewed)).toBe(true);
     if (!reviewed.ok) throw new Error("PHASE6_CONTENT_MEDIA_REVIEW_FAILED");
-    onReviewReady?.({ contentId: created.value.contentId, expectedVersion: reviewed.value.aggregateVersion });
+    await onReviewReady?.({ contentId: created.value.contentId, expectedVersion: reviewed.value.aggregateVersion });
     const published = await content.publishLanguageVersion({ actor: owner, contentId: created.value.contentId,
       expectedVersion: reviewed.value.aggregateVersion, idempotencyKey: `${prefix}-publish` as never, correlationId: `${prefix}-publish`,
       locale: "en", revisionId: created.value.revisionId });
@@ -422,10 +422,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     }> {
       await admin.query("begin");
       const pending: Promise<unknown>[] = [];
+      const outcomes: unknown[] = [];
       let released = false;
       try {
         await admin.query("select pg_advisory_xact_lock(hashtextextended($1::text, 0))", [mediaId]);
-        const start = (index: number) => pending.push(commands[index]!());
         const waitFor = async (expected: number) => {
           let waiting = 0;
           for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -439,16 +439,20 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
           if (waiting !== expected) {
             const sessions = await admin.query(`select pid, state, wait_event_type, wait_event, left(query, 180) as query
               from pg_stat_activity where usename = $1`, [roleName]);
-            expect(waiting, `expected ${expected} ungranted Media advisory locks; sessions=${JSON.stringify(sessions.rows)}`)
+            expect(waiting, `expected ${expected} ungranted Media advisory locks; outcomes=${JSON.stringify(outcomes)}; sessions=${JSON.stringify(sessions.rows)}`)
               .toBe(expected);
           }
         };
         if (stageFirst) {
-          start(0);
+          pending.push(commands[0]!().then((outcome) => { outcomes[0] = outcome; return outcome; }));
           await waitFor(1);
-          for (let index = 1; index < commands.length; index += 1) start(index);
+          for (let index = 1; index < commands.length; index += 1) {
+            pending.push(commands[index]!().then((outcome) => { outcomes[index] = outcome; return outcome; }));
+          }
         } else {
-          for (let index = 0; index < commands.length; index += 1) start(index);
+          for (let index = 0; index < commands.length; index += 1) {
+            pending.push(commands[index]!().then((outcome) => { outcomes[index] = outcome; return outcome; }));
+          }
         }
         await waitFor(commands.length);
         await admin.query("commit");
@@ -621,17 +625,31 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     // publication uses a separate transaction. Shared/exclusive Media locks
     // must serialize the decision with its authoritative current references.
     const raceMediaId = await createAcceptedRejectionCandidate("publish-race");
-    let rejectInRace: Promise<Awaited<ReturnType<typeof media.rejectOwnerMediaAsset>>> | undefined;
-    const racePublication = await publishContentWithMedia(content, "project", raceMediaId, "phase6-rejection-race", () => {
-      rejectInRace = media.rejectOwnerMediaAsset({ actor, mediaId: raceMediaId, expectedVersion: 3,
-        idempotencyKey: "phase6-rejection-race-reject" as never, reason });
+    let readyToPublish!: () => void;
+    let allowPublish!: () => void;
+    const publicationReady = new Promise<void>((resolve) => { readyToPublish = resolve; });
+    const publishPermission = new Promise<void>((resolve) => { allowPublish = resolve; });
+    const pendingPublication = publishContentWithMedia(content, "project", raceMediaId, "phase6-rejection-race", async () => {
+      readyToPublish();
+      await publishPermission;
     }, false);
-    if (rejectInRace === undefined) throw new Error("PHASE6_REJECTION_RACE_NOT_STARTED");
-    const [raceRejected] = await Promise.all([rejectInRace]);
+    await publicationReady;
+    const [racePublication, raceRejected] = await contendAtMediaLock(raceMediaId, [
+      async () => { allowPublish(); return await pendingPublication; },
+      () => media.rejectOwnerMediaAsset({ actor, mediaId: raceMediaId, expectedVersion: 3,
+        idempotencyKey: "phase6-rejection-race-reject" as never, reason }),
+    ] as const, true);
     const racePublished = racePublication.published;
     expect(racePublished.ok || raceRejected.ok).toBe(true);
-    if (racePublished.ok) expect(raceRejected).toMatchObject({ ok: false, error: { code: "MEDIA_IN_USE" } });
-    else expect(raceRejected).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+    if (racePublished.ok) {
+      expect(raceRejected).toMatchObject({ ok: false, error: { code: "MEDIA_IN_USE" } });
+      expect(await content.getPublicProject({ slug: "phase6-rejection-race-project", locale: "en" })).toMatchObject({ ok: true });
+      expect((await admin.query("select 1 from media.rejection_history where media_id = $1::uuid", [raceMediaId])).rowCount).toBe(0);
+    } else {
+      expect(raceRejected).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+      expect(await content.getPublicProject({ slug: "phase6-rejection-race-project", locale: "en" })).toMatchObject({ ok: false });
+      expect((await admin.query("select 1 from media.rejection_history where media_id = $1::uuid", [raceMediaId])).rowCount).toBe(1);
+    }
 
     const restoreRaceMediaId = await createAcceptedRejectionCandidate("restore-race");
     const restoreRacePublication = await publishContentWithMedia(content, "project", restoreRaceMediaId, "phase6-rejection-restore-race");
