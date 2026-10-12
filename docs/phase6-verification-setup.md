@@ -61,6 +61,9 @@ Docker-capable local host or the PR's Linux CI job for real acceptance.
 The existing CI job runs the gates on its Linux host and additionally builds
 this runner to catch broken tool images or Dockerfile dependencies. Production
 processor containers retain their network, memory, CPU, PID and file limits.
+PDF source/output scans each allow up to 24 seconds for Docker startup, pinned
+definition loading and cleanup, capped by the remaining 60-second application
+attempt. PDF processor stages also share a bounded 24-second processor budget.
 
 Issue #146 establishes a disposable real-service setup probe for the Phase 6 Media/CV tickets. It uses Node `24.21.0` and npm `11.19.0`, plus the repository-locked Supabase CLI. Complete network-enabled dependency setup before running validation:
 

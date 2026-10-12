@@ -98,6 +98,12 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
 }
 
 describe("trusted media processing", () => {
+  it("caps the PDF output scan by the remaining whole-attempt deadline", async () => {
+    const h = harness({ elapsedDuringPdfProcessMs: 55_000 });
+    expect(await h.service.record(command)).toMatchObject({ ok: true });
+    expect(h.scan).toHaveBeenNthCalledWith(1, pdf, { timeoutMs: 24_000 });
+    expect(h.scan).toHaveBeenNthCalledWith(2, output, { timeoutMs: 5_000 });
+  });
   it("passes the remaining deadline to PDF work and rejects an over-budget result", async () => {
     const h = harness({ elapsedDuringScanMs: 59_000, elapsedDuringPdfProcessMs: 1_001 });
     expect(await h.service.record(command)).toMatchObject({ ok: false, error: { code: "MEDIA_PROCESSING_TIMEOUT" } });

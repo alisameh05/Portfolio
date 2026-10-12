@@ -10,7 +10,8 @@ import type { PdfProcessorPort, TrustedByteScannerPort, VideoProcessorPort } fro
 const execFile = promisify(nodeExecFile);
 const MAX_BYTES = 20 * 1024 * 1024;
 // Stage caps include cleanup and share the application's 60s deadline.
-const SCAN_TIMEOUT_MS = 14_000;
+// Docker startup, the pinned definition load and cleanup share this cap.
+const SCAN_TIMEOUT_MS = 24_000;
 const PROCESS_TIMEOUT_MS = 8_000;
 // Allow 2s of preflight work plus the mandatory 3s container cleanup reserve.
 const PDF_PREFLIGHT_TIMEOUT_MS = 5_000;

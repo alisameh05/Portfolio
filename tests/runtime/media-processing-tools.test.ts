@@ -6,10 +6,10 @@ import { assertBoundedFile, createClamAvScanner, createOcrMyPdfProcessor, docker
 
 describe("bounded PDF output reads", () => {
   it("allows a standalone scanner probe to raise the production timeout cap", () => {
-    expect(resolveScannerTimeoutMs()).toBe(14_000);
-    expect(resolveScannerTimeoutMs(24_000)).toBe(24_000);
-    expect(resolveScannerTimeoutMs(24_000, 8_000)).toBe(8_000);
-    expect(resolveScannerTimeoutMs(undefined, 24_000)).toBe(14_000);
+    expect(resolveScannerTimeoutMs()).toBe(24_000);
+    expect(resolveScannerTimeoutMs(40_000)).toBe(40_000);
+    expect(resolveScannerTimeoutMs(40_000, 8_000)).toBe(8_000);
+    expect(resolveScannerTimeoutMs(undefined, 40_000)).toBe(24_000);
   });
 
   it("matches the owner of private bind-mounted files on Linux", () => {

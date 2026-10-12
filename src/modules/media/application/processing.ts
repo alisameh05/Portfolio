@@ -487,7 +487,7 @@ export function createMediaProcessingApplicationService(deps: {
         return failedAttempt("MEDIA_CALLER_FACTS_MISMATCH", { bytes, mime, hash: sha256 });
       }
       let scanned: Awaited<ReturnType<TrustedByteScannerPort["scan"]>>;
-      const sourceScanTimeoutMs = Math.min(candidate.kind === "video" ? VIDEO_SCAN_TIMEOUT_MS : 14_000, remainingBudgetMs());
+      const sourceScanTimeoutMs = Math.min(candidate.kind === "video" ? VIDEO_SCAN_TIMEOUT_MS : 24_000, remainingBudgetMs());
       if (!sourceScanTimeoutMs) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
       try { scanned = await deps.scanner.scan(bytes, { timeoutMs: sourceScanTimeoutMs }); } catch { return failedAttempt(attemptWithinBudget() ? "MEDIA_SCANNER_UNAVAILABLE" : "MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 }); }
       if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
@@ -578,7 +578,9 @@ export function createMediaProcessingApplicationService(deps: {
           new TextDecoder("ascii").decode(processed.value.bytes.subarray(0, 5)) !== "%PDF-") return failedAttempt("MEDIA_PDF_OUTPUT_INVALID", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });
       const outputHash = deps.digest.sha256(processed.value.bytes);
       let outputScan: Awaited<ReturnType<TrustedByteScannerPort["scan"]>>;
-      try { outputScan = await deps.scanner.scan(processed.value.bytes); }
+      const outputScanTimeoutMs = Math.min(24_000, remainingBudgetMs());
+      if (!outputScanTimeoutMs) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });
+      try { outputScan = await deps.scanner.scan(processed.value.bytes, { timeoutMs: outputScanTimeoutMs }); }
       catch { return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion }); }
       if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });
       if (!outputScan.ok) return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });

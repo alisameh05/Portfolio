@@ -922,9 +922,8 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const scansBeforePdfProcessing = scannerExecutions;
     const pdfBytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
     const { createClamAvScanner } = await import("../../src/runtime/adapters/media-processing-tools.js");
-    // This standalone tool probe requests 24s. The factory's 14s production
-    // default is a tighter cap intended for the complete 60s PDF attempt.
-    const productionScan = await createClamAvScanner({ timeoutMs: 24_000 }).scan(pdfBytes);
+    // Exercise the production default, including container startup and cleanup.
+    const productionScan = await createClamAvScanner().scan(pdfBytes);
     expect(productionScan, JSON.stringify(productionScan)).toMatchObject({ ok: true, value: { verdict: "clean" } });
     const { createOcrMyPdfProcessor, runWithBoundedOutput } = await import("../../src/runtime/adapters/media-processing-tools.js");
     const productionResult = await createOcrMyPdfProcessor().process(pdfBytes);
@@ -1209,8 +1208,15 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       expectedVersion: 2,
       mediaId: unprocessedPdf.mediaId as StableId<"MediaAsset">,
     });
-    const wrongKindFacts = await admin.query(
-      "select media_id::text, kind from media.assets where media_id = any($1::uuid[]) and lifecycle = 'accepted' and kind = 'image' limit 1", [acceptedMediaIds]);
+    const wrongKindFacts = await admin.query(`select asset.media_id::text, asset.kind
+      from media.assets asset
+      join media.processing_states state on state.media_id = asset.media_id
+        and state.portfolio_id = asset.portfolio_id and state.owner_id = asset.owner_id
+      join media.decision_history decision on decision.media_id = asset.media_id
+        and decision.portfolio_id = asset.portfolio_id and decision.owner_id = asset.owner_id
+        and decision.aggregate_version = state.aggregate_version and decision.decision = 'accepted'
+      where asset.media_id = any($1::uuid[]) and asset.kind = 'image'
+      order by asset.media_id limit 1`, [acceptedMediaIds]);
     const wrongKindId = wrongKindFacts.rows[0]?.media_id as StableId<"MediaAsset"> | undefined;
     const wrongKindRegistration = wrongKindId === undefined ? undefined : await registerCv({
       idempotencyKey: "phase6-cv-register-image" as never,
