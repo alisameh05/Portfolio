@@ -696,7 +696,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         idempotencyKey: "phase6-rejection-cv-accept-race-accept" as never }),
       () => media.rejectOwnerMediaAsset({ actor, mediaId: cvAcceptRaceId, expectedVersion: 3,
         idempotencyKey: "phase6-rejection-cv-accept-race-reject" as never, reason }),
-    ] as const);
+    ] as const, true);
     expect(cvRejectDuringAccept).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
     if (cvAcceptRaceResult.ok) {
       const activationAfterRejectedMedia = await cv.activateOwnerCvVersion({ actor, versionId: cvAcceptRaceRegistration.value.versionId,
