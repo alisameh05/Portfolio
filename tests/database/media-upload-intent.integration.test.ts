@@ -1270,8 +1270,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       boundedCvView.ok && boundedCvView.value.versions.length === 100 && boundedCvView.value.activationHistory.length === 100 &&
       Number(retainedCvCount.rows[0]?.count) === 102 && boundedCvView.value.versions[0]?.label === "CV retained 100");
 
+    // Reject the next event without rejecting the retained events that prove
+    // successful registrations earlier in this same disposable database.
     await admin.query(`alter table operations.outbox_events add constraint phase6_cv_outbox_failure
-      check (event_type <> 'cv.version_registered.v1')`);
+      check (event_type <> 'cv.version_registered.v1') not valid`);
     try {
       const failedCommit = await registerCv({ idempotencyKey: "phase6-cv-register-rollback" as never,
         expectedVersion: expectedCvVersion, label: "Rollback probe" });
