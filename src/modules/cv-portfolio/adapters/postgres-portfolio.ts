@@ -5,9 +5,9 @@ import { err, ok, parseStableId, type Rejection, type Result, type StableId } fr
 import type { TransactionContext, TransactionRunner } from "../../../runtime/ports.js";
 import { PostgresInfrastructureError, resolvePostgresTransaction } from "../../../shared/adapters/postgres/runtime.js";
 import type { DB } from "../../../shared/adapters/postgres/database.generated.js";
-import type { MediaReadApplicationService } from "../../media/index.js";
+import type { AcceptedPdfSnapshot, MediaReadApplicationService } from "../../media/index.js";
 import type { OwnerCvActivationView, OwnerCvCommandReceipt, OwnerCvPortfolioView, OwnerCvVersionView, RegisterOwnerCvVersionReceipt } from "../application/owner-contracts.js";
-import type { AcceptCvPortfolioVersionInput, CvPortfolioRepositoryPort, RegisterCvPortfolioVersionInput } from "../application/repository.js";
+import type { AcceptCvPortfolioVersionInput, ActivateCvPortfolioVersionInput, CvPortfolioRepositoryPort, GetCurrentCvMediaUsageInput, RegisterCvPortfolioVersionInput } from "../application/repository.js";
 
 interface RootRow {
   readonly portfolio_id: string;
@@ -23,6 +23,7 @@ interface VersionRow {
   readonly label: string;
   readonly state: string;
   readonly version_number: number | string;
+  readonly is_current: boolean;
 }
 
 interface ActivationRow {
@@ -52,6 +53,12 @@ interface AcceptanceReplayRow {
   readonly aggregate_version: number | string;
 }
 
+interface ActivationReplayRow {
+  readonly request_hash: string;
+  readonly version_id: string;
+  readonly aggregate_version: number | string;
+}
+
 function keyHash(key: string): string {
   return createHash("sha256").update(key, "utf8").digest("hex");
 }
@@ -66,13 +73,14 @@ function mapVersion(row: VersionRow, currentVersionId: string | null): OwnerCvVe
   if (row.locale !== "en" || (row.state !== "registered" && row.state !== "accepted")) {
     throw new PostgresInfrastructureError();
   }
+  if (row.is_current !== (row.version_id === currentVersionId)) throw new PostgresInfrastructureError();
   return {
     versionId: stableId("CvVersion", row.version_id),
     mediaId: stableId("MediaAsset", row.media_id),
     locale: "en",
     label: row.label,
     state: row.state,
-    isCurrent: row.version_id === currentVersionId,
+    isCurrent: row.is_current,
   };
 }
 
@@ -82,11 +90,23 @@ function isoInstant(value: Date | string): string {
   return result;
 }
 
+function activationMediaSnapshotMatches(
+  media: AcceptedPdfSnapshot,
+  registered: CvSnapshotRow,
+  mediaAssetId: StableId<"MediaAsset">,
+  ownerId: StableId<"Owner">,
+): boolean {
+  return media.mediaAssetId === mediaAssetId && media.ownerId === ownerId &&
+    media.assetVersion === Number(registered.media_asset_version) &&
+    media.decisionId === registered.media_decision_id && media.objectId === registered.media_object_id &&
+    media.sha256 === registered.media_sha256 && media.objectVersion === registered.media_object_version;
+}
+
 export function createPostgresCvPortfolioRepository(input: {
   readonly database: Kysely<DB>;
   readonly transactions: TransactionRunner;
   readonly scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> };
-  readonly media: Pick<MediaReadApplicationService, "getAcceptedPdfSnapshot">;
+  readonly media: Pick<MediaReadApplicationService, "getAcceptedPdfSnapshot" | "preflightAcceptedPdfObject">;
 }): CvPortfolioRepositoryPort {
   const setScope = async (context: TransactionContext): Promise<void> => {
     const executor = resolvePostgresTransaction(context);
@@ -123,7 +143,7 @@ export function createPostgresCvPortfolioRepository(input: {
           if (root === undefined) return err({ kind: "not_found", code: "CV_PORTFOLIO_NOT_CONFIGURED" });
           const executor = resolvePostgresTransaction(context);
           const versions = await sql<VersionRow>`select version_id::text as version_id, media_id::text as media_id,
-              locale, label, state, version_number
+              locale, label, state, version_number, is_current
             from cv_portfolio.versions
             where portfolio_id = ${input.scope.portfolioId}::uuid and owner_id = ${input.scope.ownerId}::uuid
             order by version_number desc, version_id desc limit 100`.execute(executor);
@@ -351,6 +371,193 @@ export function createPostgresCvPortfolioRepository(input: {
           return err({ kind: "temporarily_unavailable", code: "CV_ACCEPTANCE_LOCK_TIMEOUT" });
         }
         return err({ kind: "temporarily_unavailable", code: "CV_ACCEPTANCE_COMMIT_FAILED" });
+      }
+    },
+
+    async activateOwnerCvVersion(command: ActivateCvPortfolioVersionInput): Promise<Result<OwnerCvCommandReceipt, Rejection>> {
+      if (command.ownerId !== input.scope.ownerId) return err({ kind: "forbidden", code: "OWNER_SCOPE_MISMATCH" });
+      const idempotencyKeyHash = keyHash(command.idempotencyKey);
+      const readReplay = async (context: TransactionContext): Promise<Result<OwnerCvCommandReceipt, Rejection> | undefined> => {
+        const rows = await sql<ActivationReplayRow>`select request_hash, version_id::text as version_id, aggregate_version
+          from cv_portfolio.activation_commands
+          where portfolio_id = ${input.scope.portfolioId}::uuid and owner_id = ${input.scope.ownerId}::uuid
+            and idempotency_key_hash = ${idempotencyKeyHash}`.execute(resolvePostgresTransaction(context));
+        const previous = rows.rows[0];
+        if (previous === undefined) return undefined;
+        if (previous.request_hash !== command.requestHash) return err({ kind: "conflict", code: "IDEMPOTENCY_CONFLICT" });
+        if (previous.version_id !== command.versionId) throw new PostgresInfrastructureError();
+        return ok({ aggregateId: stableId("CvVersion", previous.version_id),
+          aggregateVersion: Number(previous.aggregate_version), outcome: "current-cv-activated" });
+      };
+
+      try {
+        // Check Storage outside the activation transaction. The immutable
+        // Media snapshot is read under the normal application role here and
+        // revalidated again inside the write transaction below.
+        type ActivationPreflight =
+          | { readonly kind: "replay"; readonly receipt: OwnerCvCommandReceipt }
+          | { readonly kind: "error"; readonly error: Rejection }
+          | { readonly kind: "preflight"; readonly snapshot: AcceptedPdfSnapshot };
+        const preflight = await input.transactions.run<Result<ActivationPreflight, Rejection>>(async (context) => {
+          const executor = resolvePostgresTransaction(context);
+          await setScope(context);
+          const replay = await readReplay(context);
+          if (replay !== undefined) return replay.ok
+            ? ok({ kind: "replay" as const, receipt: replay.value })
+            : ok({ kind: "error" as const, error: replay.error });
+          const registered = await sql<CvSnapshotRow>`select version.media_id::text as media_id,
+              version.media_asset_version, version.state,
+              version.media_decision_id::text as media_decision_id, version.media_object_id::text as media_object_id,
+              version.media_sha256, version.media_object_version
+            from cv_portfolio.versions version
+            where version.version_id = ${command.versionId}::uuid
+              and version.portfolio_id = ${input.scope.portfolioId}::uuid
+              and version.owner_id = ${input.scope.ownerId}::uuid`.execute(executor);
+          const candidate = registered.rows[0];
+          if (candidate === undefined) return err({ kind: "not_found", code: "CV_VERSION_NOT_FOUND" });
+          if (candidate.state !== "accepted") return err({ kind: "conflict", code: "CV_VERSION_NOT_ACTIVATABLE" });
+          const mediaAssetId = stableId("MediaAsset", candidate.media_id);
+          const accepted = await input.media.getAcceptedPdfSnapshot({ ownerId: input.scope.ownerId, mediaAssetId }, context);
+          if (!accepted.ok) return accepted;
+          if (accepted.value.status !== "accepted") return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
+          const snapshot = accepted.value.snapshot;
+          if (!activationMediaSnapshotMatches(snapshot, candidate, mediaAssetId, input.scope.ownerId)) {
+            return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
+          }
+          return ok({ kind: "preflight" as const, snapshot });
+        });
+        if (!preflight.ok) return preflight;
+        if (preflight.value.kind === "error") return err(preflight.value.error);
+        if (preflight.value.kind === "replay") return ok(preflight.value.receipt);
+        const storage = await input.media.preflightAcceptedPdfObject({ portfolioId: input.scope.portfolioId, snapshot: preflight.value.snapshot });
+        if (!storage.ok) return storage;
+
+        return await input.transactions.run(async (context) => {
+          const executor = resolvePostgresTransaction(context);
+          await setScope(context);
+          await sql`select set_config('lock_timeout', '3s', true),
+                           set_config('statement_timeout', '5s', true),
+                           set_config('transaction_timeout', '8s', true)`.execute(executor);
+
+          const earlyReplay = await readReplay(context);
+          if (earlyReplay !== undefined) return earlyReplay;
+
+          // Read the immutable registration to learn its Media identity, then
+          // acquire the shared Media lock before taking the CV root lock.
+          const registered = await sql<CvSnapshotRow>`select version.media_id::text as media_id,
+              version.media_asset_version, version.state,
+              version.media_decision_id::text as media_decision_id, version.media_object_id::text as media_object_id,
+              version.media_sha256, version.media_object_version
+            from cv_portfolio.versions version
+            where version.version_id = ${command.versionId}::uuid
+              and version.portfolio_id = ${input.scope.portfolioId}::uuid
+              and version.owner_id = ${input.scope.ownerId}::uuid`.execute(executor);
+          const snapshot = registered.rows[0];
+          if (snapshot === undefined) return err({ kind: "not_found", code: "CV_VERSION_NOT_FOUND" });
+          if (snapshot.state !== "accepted") return err({ kind: "conflict", code: "CV_VERSION_NOT_ACTIVATABLE" });
+
+          const mediaAssetId = stableId("MediaAsset", snapshot.media_id);
+          const mediaResult = await input.media.getAcceptedPdfSnapshot({
+            ownerId: input.scope.ownerId,
+            mediaAssetId,
+          }, context);
+          if (!mediaResult.ok) return mediaResult;
+          if (mediaResult.value.status !== "accepted") return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
+          const currentMedia = mediaResult.value.snapshot;
+          if (!activationMediaSnapshotMatches(currentMedia, snapshot, mediaAssetId, input.scope.ownerId)) {
+            return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
+          }
+
+          // Acceptance's Media fact query uses bounded local limits. Restore
+          // this transaction's total budget before locking the root.
+          await sql`select set_config('transaction_timeout', '8s', true)`.execute(executor);
+          const roots = await sql<RootRow>`select portfolio_id::text as portfolio_id, owner_id::text as owner_id,
+              aggregate_version, current_version_id::text as current_version_id
+            from cv_portfolio.portfolios
+            where portfolio_id = ${input.scope.portfolioId}::uuid and owner_id = ${input.scope.ownerId}::uuid
+            for update`.execute(executor);
+          const root = roots.rows[0];
+          if (root === undefined) return err({ kind: "not_found", code: "CV_PORTFOLIO_NOT_CONFIGURED" });
+
+          const committedReplay = await readReplay(context);
+          if (committedReplay !== undefined) return committedReplay;
+          if (Number(root.aggregate_version) !== command.expectedVersion) {
+            return { ok: false, error: { kind: "precondition_failed", code: "CV_PORTFOLIO_VERSION_MISMATCH", currentVersion: Number(root.aggregate_version) } };
+          }
+
+          const aggregateVersion = Number(root.aggregate_version);
+          const currentVersionId = root.current_version_id;
+          if (currentVersionId === command.versionId) {
+            await sql`insert into cv_portfolio.activation_commands
+                (portfolio_id, owner_id, idempotency_key_hash, request_hash, version_id, aggregate_version)
+              values (${input.scope.portfolioId}::uuid, ${input.scope.ownerId}::uuid,
+                ${idempotencyKeyHash}, ${command.requestHash}, ${command.versionId}::uuid, ${aggregateVersion})`.execute(executor);
+            return ok({ aggregateId: command.versionId, aggregateVersion, outcome: "current-cv-activated" });
+          }
+
+          const nextAggregateVersion = command.expectedVersion + 1;
+          const eventTime = await sql<{ readonly activated_at: Date | string }>`
+            select transaction_timestamp() as activated_at`.execute(executor);
+          const activationTimestamp = isoInstant(eventTime.rows[0]?.activated_at ?? "");
+          if (currentVersionId !== null) {
+            const oldDesignation = await sql`update cv_portfolio.versions set is_current = false
+              where version_id = ${currentVersionId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+                and owner_id = ${input.scope.ownerId}::uuid and is_current`.execute(executor);
+            if (Number(oldDesignation.numAffectedRows ?? 0n) !== 1) throw new PostgresInfrastructureError();
+          }
+          const newDesignation = await sql`update cv_portfolio.versions set is_current = true
+            where version_id = ${command.versionId}::uuid and portfolio_id = ${input.scope.portfolioId}::uuid
+              and owner_id = ${input.scope.ownerId}::uuid and state = 'accepted' and locale = 'en' and not is_current`.execute(executor);
+          if (Number(newDesignation.numAffectedRows ?? 0n) !== 1) return err({ kind: "conflict", code: "CV_VERSION_NOT_ACTIVATABLE" });
+          const changedRoot = await sql`update cv_portfolio.portfolios
+              set current_version_id = ${command.versionId}::uuid,
+                  aggregate_version = ${nextAggregateVersion}, updated_at = transaction_timestamp()
+            where portfolio_id = ${input.scope.portfolioId}::uuid and owner_id = ${input.scope.ownerId}::uuid
+              and aggregate_version = ${command.expectedVersion}`.execute(executor);
+          if (Number(changedRoot.numAffectedRows ?? 0n) !== 1) throw new PostgresInfrastructureError();
+
+          await sql`insert into cv_portfolio.activation_history
+              (activation_id, portfolio_id, owner_id, version_id, activated_at)
+            values (${uuidv7()}::uuid, ${input.scope.portfolioId}::uuid, ${input.scope.ownerId}::uuid,
+              ${command.versionId}::uuid, transaction_timestamp())`.execute(executor);
+          await sql`insert into cv_portfolio.activation_commands
+              (portfolio_id, owner_id, idempotency_key_hash, request_hash, version_id, aggregate_version)
+            values (${input.scope.portfolioId}::uuid, ${input.scope.ownerId}::uuid,
+              ${idempotencyKeyHash}, ${command.requestHash}, ${command.versionId}::uuid, ${nextAggregateVersion})`.execute(executor);
+          await sql`insert into operations.outbox_events
+              (event_id, event_type, schema_version, aggregate_id, aggregate_version, payload, correlation_id, occurred_at, available_at)
+            values (${uuidv7()}::uuid, 'cv.current_changed.v1', 1, ${input.scope.portfolioId}::uuid, ${nextAggregateVersion},
+              ${JSON.stringify({ ...(currentVersionId === null ? {} : { previousCurrentCvId: currentVersionId }),
+                newCurrentCvId: command.versionId, activatedAt: activationTimestamp })}::jsonb,
+              ${idempotencyKeyHash}, transaction_timestamp(), transaction_timestamp())`.execute(executor);
+          return ok({ aggregateId: command.versionId, aggregateVersion: nextAggregateVersion, outcome: "current-cv-activated" });
+        });
+      } catch (error) {
+        if (typeof error === "object" && error !== null && "code" in error && error.code === "55P03") {
+          return err({ kind: "temporarily_unavailable", code: "CV_ACTIVATION_LOCK_TIMEOUT" });
+        }
+        return err({ kind: "temporarily_unavailable", code: "CV_ACTIVATION_COMMIT_FAILED" });
+      }
+    },
+
+    async getCurrentCvMediaUsage(query: GetCurrentCvMediaUsageInput): Promise<Result<boolean, Rejection>> {
+      if (query.ownerId !== input.scope.ownerId) return err({ kind: "forbidden", code: "OWNER_SCOPE_MISMATCH" });
+      try {
+        const executor = resolvePostgresTransaction(query.transaction);
+        await setScope(query.transaction);
+        const usage = await sql`select 1
+          from cv_portfolio.portfolios portfolio
+          join cv_portfolio.versions version
+            on version.version_id = portfolio.current_version_id
+           and version.portfolio_id = portfolio.portfolio_id
+           and version.owner_id = portfolio.owner_id
+         where portfolio.portfolio_id = ${input.scope.portfolioId}::uuid
+           and portfolio.owner_id = ${input.scope.ownerId}::uuid
+           and version.media_id = ${query.mediaAssetId}::uuid
+         limit 1`.execute(executor);
+        return ok(usage.rows.length > 0);
+      } catch {
+        return err({ kind: "temporarily_unavailable", code: "CV_CURRENT_USAGE_READ_FAILED" });
       }
     },
   };

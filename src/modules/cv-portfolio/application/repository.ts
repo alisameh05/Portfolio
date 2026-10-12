@@ -24,6 +24,14 @@ export interface AcceptCvPortfolioVersionInput {
   readonly versionId: StableId<"CvVersion">;
 }
 
+export interface ActivateCvPortfolioVersionInput extends AcceptCvPortfolioVersionInput {}
+
+export interface GetCurrentCvMediaUsageInput {
+  readonly ownerId: StableId<"Owner">;
+  readonly mediaAssetId: StableId<"MediaAsset">;
+  readonly transaction: import("../../../runtime/ports.js").TransactionContext;
+}
+
 /** Persistence boundary for the Owner CV Portfolio registration workflow. */
 export interface CvPortfolioRepositoryPort {
   /** Creates the configured empty root once, then returns bounded safe views. */
@@ -38,4 +46,12 @@ export interface CvPortfolioRepositoryPort {
   acceptOwnerCvVersion(
     input: AcceptCvPortfolioVersionInput,
   ): Promise<Result<OwnerCvCommandReceipt, Rejection>>;
+  /** Rechecks accepted immutable Media and atomically activates a CV version. */
+  activateOwnerCvVersion(
+    input: ActivateCvPortfolioVersionInput,
+  ): Promise<Result<OwnerCvCommandReceipt, Rejection>>;
+  /** Authoritative CV-owned use query; must run in the caller's transaction. */
+  getCurrentCvMediaUsage(
+    input: GetCurrentCvMediaUsageInput,
+  ): Promise<Result<boolean, Rejection>>;
 }

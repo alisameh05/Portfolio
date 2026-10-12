@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { err, ok, type Rejection, type Result, type StableId } from "@shared/domain";
 import type { MediaProcessingStoragePort } from "../../modules/media/application/processing.js";
+import type { AcceptedPdfSnapshot } from "../../modules/media/application/owner-contracts.js";
 
 export interface SupabaseMediaProcessingStorageOptions {
   readonly storageUrl: string;
@@ -8,6 +9,10 @@ export interface SupabaseMediaProcessingStorageOptions {
   readonly candidateBucket?: string;
   readonly processedBucket?: string;
   readonly fetcher?: typeof fetch;
+}
+
+export interface MediaStorageObjectPreflightPort {
+  preflightAcceptedPdfObject(input: { readonly portfolioId: StableId<"Portfolio">; readonly snapshot: AcceptedPdfSnapshot }): Promise<Result<void, Rejection>>;
 }
 
 function unavailable(): Result<never, Rejection> { return err({ kind: "temporarily_unavailable", code: "MEDIA_STORAGE_UNAVAILABLE" }); }
@@ -48,7 +53,7 @@ async function readBounded(response: Response, maxBytes: number): Promise<Uint8A
 }
 
 /** Reads only the intent-bound candidate and writes create-only processed outputs. */
-export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProcessingStorageOptions): MediaProcessingStoragePort {
+export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProcessingStorageOptions): MediaProcessingStoragePort & MediaStorageObjectPreflightPort {
   const base = new URL(options.storageUrl);
   if (base.protocol !== "https:" && !(base.protocol === "http:" && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(base.hostname))) throw new TypeError("Media Storage must use HTTPS outside loopback.");
   if (options.serviceRoleKey.trim() === "") throw new TypeError("Media Storage service role key is required.");
@@ -65,6 +70,18 @@ export function createSupabaseMediaProcessingStorage(options: SupabaseMediaProce
   };
   const objectPath = (...parts: string[]) => parts.map((part) => encodeURIComponent(part)).join("/");
   return {
+    async preflightAcceptedPdfObject(input) {
+      if (input.snapshot.objectVersion !== input.snapshot.sha256 || !/^[0-9a-f]{64}$/.test(input.snapshot.sha256)) {
+        return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
+      }
+      const path = objectPath("processed", input.portfolioId, input.snapshot.mediaAssetId, input.snapshot.objectId, `${input.snapshot.sha256}.pdf`);
+      try {
+        const response = await request(`/object/info/${encodeURIComponent(processedBucket)}/${path}`, { method: "HEAD" });
+        if (response.ok) return ok(undefined);
+        if (response.status === 404) return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
+        return unavailable();
+      } catch { return unavailable(); }
+    },
     async readCandidate(input) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(10_000, input.timeoutMs ?? 10_000)));

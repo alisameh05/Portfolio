@@ -49,6 +49,53 @@ describe("Supabase Media processing Storage adapter", () => {
     expect(result).toMatchObject({ ok: false, error: { code: "MEDIA_STORAGE_UNAVAILABLE" } });
   });
 
+  it("checks the exact accepted PDF path before CV activation", async () => {
+    const requests: Array<{ readonly url: URL; readonly method: string; readonly headers: Headers }> = [];
+    const fetcher: typeof fetch = async (input, init) => {
+      requests.push({ url: new URL(input.toString()), method: init?.method ?? "GET", headers: new Headers(init?.headers) });
+      return new Response(null, { status: 200 });
+    };
+    const storage = createSupabaseMediaProcessingStorage({ storageUrl: "http://127.0.0.1:57321", serviceRoleKey: "local-service-role", fetcher });
+    const sha256 = "a".repeat(64);
+    const result = await storage.preflightAcceptedPdfObject({
+      portfolioId: ids.portfolioId,
+      snapshot: {
+        mediaAssetId: ids.mediaId,
+        ownerId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ec3" as never,
+        assetVersion: 4,
+        decisionId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ec4" as never,
+        objectId: ids.objectId,
+        sha256,
+        objectVersion: sha256,
+      },
+    });
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(requests[0]?.method).toBe("HEAD");
+    expect(requests[0]?.url.pathname).toBe(`/storage/v1/object/info/media-processed/processed/${ids.portfolioId}/${ids.mediaId}/${ids.objectId}/${sha256}.pdf`);
+    expect(requests[0]?.headers.get("authorization")).toBe("Bearer local-service-role");
+  });
+
+  it("rejects a missing immutable PDF object and fails closed on Storage outages", async () => {
+    const statuses = [404, 503];
+    const results = [];
+    for (const status of statuses) {
+      const storage = createSupabaseMediaProcessingStorage({
+        storageUrl: "http://127.0.0.1:57321", serviceRoleKey: "local-service-role",
+        fetcher: async () => new Response(null, { status }),
+      });
+      results.push(await storage.preflightAcceptedPdfObject({
+        portfolioId: ids.portfolioId,
+        snapshot: {
+          mediaAssetId: ids.mediaId, ownerId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ec3" as never,
+          assetVersion: 4, decisionId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ec4" as never,
+          objectId: ids.objectId, sha256: "a".repeat(64), objectVersion: "a".repeat(64),
+        },
+      }));
+    }
+    expect(results[0]).toMatchObject({ ok: false, error: { kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" } });
+    expect(results[1]).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_STORAGE_UNAVAILABLE" } });
+  });
+
   it("seals a create-only private WebM with its verified digest and removes the exact variant on cleanup", async () => {
     const requests: Array<{ readonly url: URL; readonly method: string; readonly headers: Headers; readonly body?: BodyInit | null }> = [];
     const fetcher: typeof fetch = async (input, init) => {

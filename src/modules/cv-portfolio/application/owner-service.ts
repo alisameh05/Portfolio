@@ -1,4 +1,4 @@
-import { err, type ActorContext, type IdempotencyKey, type Rejection, type StableId } from "@shared/domain";
+import { err, type ActorContext, type IdempotencyKey, type StableId } from "@shared/domain";
 import { hashCanonicalRequest } from "../../../shared/application/idempotency.js";
 import { createSystemIdGenerator, type StableIdGenerator } from "../../../runtime/ports.js";
 import type {
@@ -22,10 +22,6 @@ function validLabel(label: string): string | undefined {
   if (typeof label !== "string" || /[\u0000-\u001f\u007f]/u.test(label)) return undefined;
   const normalized = label.trim();
   return normalized.length >= 1 && normalized.length <= 120 ? normalized : undefined;
-}
-
-function unavailable(): { readonly ok: false; readonly error: Rejection } {
-  return { ok: false, error: { kind: "temporarily_unavailable", code: "CV_WORKFLOW_NOT_IMPLEMENTED" } };
 }
 
 export function createOwnerCvApplicationService(input: {
@@ -95,8 +91,34 @@ export function createOwnerCvApplicationService(input: {
       });
     },
 
-    async activateOwnerCvVersion(_command: ActivateOwnerCvVersionApplicationCommand) {
-      return unavailable();
+    async activateOwnerCvVersion(command: ActivateOwnerCvVersionApplicationCommand) {
+      if (!isAuthorizedOwner(command.actor, input.ownerId)) {
+        return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      }
+      if (!Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1 ||
+          !validIdempotencyKey(command.idempotencyKey) || typeof command.versionId !== "string" ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(command.versionId)) {
+        return err({ kind: "validation", code: "CV_ACTIVATION_INVALID" });
+      }
+      const requestHash = await hashCanonicalRequest({
+        ownerId: input.ownerId,
+        versionId: command.versionId,
+        expectedVersion: command.expectedVersion,
+      });
+      return input.repository.activateOwnerCvVersion({
+        ownerId: input.ownerId,
+        idempotencyKey: command.idempotencyKey,
+        requestHash,
+        expectedVersion: command.expectedVersion,
+        versionId: command.versionId as StableId<"CvVersion">,
+      });
+    },
+
+    async getCurrentCvMediaUsage(query) {
+      if (query.ownerId !== input.ownerId || !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(query.mediaAssetId)) {
+        return err({ kind: "forbidden", code: "OWNER_SCOPE_MISMATCH" });
+      }
+      return input.repository.getCurrentCvMediaUsage(query);
     },
   };
 }

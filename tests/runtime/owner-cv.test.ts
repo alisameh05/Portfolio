@@ -547,6 +547,9 @@ describe("Owner CV version acceptance and activation (#31)", () => {
       async activateOwnerCvVersion(): Promise<never> {
         throw new Error("unreachable");
       },
+      async getCurrentCvMediaUsage(): Promise<never> {
+        throw new Error("unreachable");
+      },
     };
     const response = await handleGetOwnerCvPortfolio(portfolioRequest(), {
       service: throwing,

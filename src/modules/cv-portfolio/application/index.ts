@@ -12,6 +12,7 @@ export type {
   RegisterOwnerCvVersionApplicationCommand,
   AcceptOwnerCvVersionApplicationCommand,
   ActivateOwnerCvVersionApplicationCommand,
+  GetCurrentCvMediaUsageQuery,
   OwnerCvVersionView,
   OwnerCvActivationView,
   OwnerCvPortfolioView,
@@ -24,4 +25,4 @@ export type {
   CvPortfolioApplicationService,
 } from "./owner-contracts.js";
 export { createOwnerCvApplicationService } from "./owner-service.js";
-export type { AcceptCvPortfolioVersionInput, CvPortfolioRepositoryPort, RegisterCvPortfolioVersionInput } from "./repository.js";
+export type { AcceptCvPortfolioVersionInput, ActivateCvPortfolioVersionInput, CvPortfolioRepositoryPort, GetCurrentCvMediaUsageInput, RegisterCvPortfolioVersionInput } from "./repository.js";

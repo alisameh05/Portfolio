@@ -202,6 +202,11 @@ export interface MediaReadApplicationService {
     query: GetAcceptedPdfSnapshotQuery,
     transaction: TransactionContext,
   ): Promise<Result<AcceptedPdfSnapshotResult, Rejection>>;
+  /** Bounded Storage existence check for the exact immutable accepted PDF object. */
+  preflightAcceptedPdfObject(input: {
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly snapshot: AcceptedPdfSnapshot;
+  }): Promise<Result<void, Rejection>>;
   getUsage(query: GetMediaUsageQuery): Promise<Result<MediaUsage, Rejection>>;
   resolveDelivery(
     query: ResolveMediaDeliveryQuery,

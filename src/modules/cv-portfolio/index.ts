@@ -21,7 +21,13 @@ export type {
   LegacyCvPortfolioService,
 } from "./application/index.js";
 export { createOwnerCvApplicationService } from "./application/index.js";
-export type { AcceptCvPortfolioVersionInput, CvPortfolioRepositoryPort, RegisterCvPortfolioVersionInput } from "./application/index.js";
+export type {
+  AcceptCvPortfolioVersionInput,
+  ActivateCvPortfolioVersionInput,
+  CvPortfolioRepositoryPort,
+  GetCurrentCvMediaUsageInput,
+  RegisterCvPortfolioVersionInput,
+} from "./application/index.js";
 export { createPostgresCvPortfolioRepository } from "./adapters/index.js";
 
 export type {
@@ -29,6 +35,7 @@ export type {
   RegisterOwnerCvVersionApplicationCommand,
   AcceptOwnerCvVersionApplicationCommand,
   ActivateOwnerCvVersionApplicationCommand,
+  GetCurrentCvMediaUsageQuery,
   OwnerCvVersionView,
   OwnerCvActivationView,
   OwnerCvPortfolioView,
