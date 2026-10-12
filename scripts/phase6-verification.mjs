@@ -431,7 +431,7 @@ async function main() {
           scenarios: scenarioNames, counts: { executed: scenarioNames.filter((item) => item.executed).length,
             failed: scenarioNames.filter((item) => item.executed && item.status !== "passed").length,
             skipped: scenarioNames.filter((item) => !item.executed).length, criteriaCovered: criterionIds.size },
-          verdict: executed && allCriteriaPresent && scenarioNames.length === 14 &&
+          verdict: executed && allCriteriaPresent && scenarioNames.length === 16 &&
             scenarioNames.every((item) => item.executed && item.status === "passed") ? "pass" : "fail" };
       }
     }
@@ -490,7 +490,7 @@ async function main() {
         cvPortfolioChecks?.counts?.executed !== 9 || cvPortfolioChecks?.counts?.failed !== 0 || cvPortfolioChecks?.counts?.skipped !== 0)) {
       throw new Error("PHASE6_CV_PORTFOLIO_ASSERTION_COUNTS_INVALID");
     }
-    if (CV_ACCEPTANCE_ONLY && (!Array.isArray(cvAcceptanceChecks?.scenarios) || cvAcceptanceChecks.scenarios.length !== 14 ||
+    if (CV_ACCEPTANCE_ONLY && (!Array.isArray(cvAcceptanceChecks?.scenarios) || cvAcceptanceChecks.scenarios.length !== 16 ||
         cvAcceptanceChecks.scenarios.some((item) => item.executed !== true || item.status !== "passed") ||
         cvAcceptanceChecks?.counts?.criteriaCovered !== 8 || cvAcceptanceChecks?.counts?.failed !== 0 ||
         cvAcceptanceChecks?.counts?.skipped !== 0 || cvAcceptanceChecks?.verdict !== "pass")) {
@@ -831,7 +831,7 @@ async function main() {
         mediaAcceptance: mediaProcessingChecks, application: acceptanceUnitChecks,
         acceptanceOperations: processingCounts?.acceptanceExecutions ?? 0 },
       counts: cvAcceptanceChecks?.counts, scenarios, cleanup,
-      verdict: cvAcceptanceChecks?.verdict === "pass" && scenarios.length === 14 &&
+      verdict: cvAcceptanceChecks?.verdict === "pass" && scenarios.length === 16 &&
         scenarios.every((item) => item.executed && item.status === "passed") && cvAcceptanceChecks?.counts?.criteriaCovered === 8 &&
         cvMigrationUpgrade?.verdict === "pass" && processingCounts?.acceptanceExecutions === PHASE6_FORMATS.length &&
         formats.length === PHASE6_FORMATS.length && formats.every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&

@@ -1341,6 +1341,34 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       idempotencyKey: "phase6-cv-accept-foreign" as never, expectedVersion: expectedCvVersion, versionId: cvRegistration.value.versionId });
     const missingAccept = await cvService.acceptOwnerCvVersion({ actor: cvOwner, idempotencyKey: "phase6-cv-accept-missing" as never,
       expectedVersion: expectedCvVersion, versionId: createStableId("CvVersion") as never });
+    const foreignPortfolioId = createStableId("Portfolio");
+    const foreignOwnerId = createStableId("Owner");
+    const foreignVersionId = createStableId("CvVersion");
+    const foreignSnapshot = await admin.query(`select media_id, media_asset_version, media_decision_id, media_object_id,
+        media_sha256, media_object_version from cv_portfolio.versions where version_id = $1::uuid`, [cvRegistration.value.versionId]);
+    if (!foreignSnapshot.rows[0]) throw new Error("PHASE6_CV_FOREIGN_VERSION_FIXTURE_FAILED");
+    await admin.query("begin");
+    try {
+      await admin.query("set local session_replication_role = replica");
+      await admin.query(`insert into cv_portfolio.portfolios (portfolio_id, owner_id, aggregate_version) values ($1::uuid, $2::uuid, 1)`,
+        [foreignPortfolioId, foreignOwnerId]);
+      await admin.query(`insert into cv_portfolio.versions
+          (version_id, portfolio_id, owner_id, media_id, media_asset_version, media_decision_id, media_object_id,
+           media_sha256, media_object_version, version_number, locale, label, state)
+        values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6::uuid, $7::uuid, $8, $9, 1, 'en', 'Foreign private CV', 'registered')`,
+      [foreignVersionId, foreignPortfolioId, foreignOwnerId, foreignSnapshot.rows[0].media_id,
+        foreignSnapshot.rows[0].media_asset_version, foreignSnapshot.rows[0].media_decision_id,
+        foreignSnapshot.rows[0].media_object_id, foreignSnapshot.rows[0].media_sha256, foreignSnapshot.rows[0].media_object_version]);
+      await admin.query("commit");
+    } catch (error) {
+      await admin.query("rollback");
+      throw error;
+    }
+    const foreignVersionAccept = await cvService.acceptOwnerCvVersion({ actor: cvOwner,
+      idempotencyKey: "phase6-cv-accept-foreign-version" as never, expectedVersion: expectedCvVersion, versionId: foreignVersionId });
+    const foreignVersionCount = await admin.query("select count(*)::int as count from cv_portfolio.versions where version_id = $1::uuid", [foreignVersionId]);
+    await admin.query("delete from cv_portfolio.versions where version_id = $1::uuid", [foreignVersionId]);
+    await admin.query("delete from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [foreignPortfolioId, foreignOwnerId]);
     const noMutationBeforeAccept = await admin.query(`select portfolio.aggregate_version,
         (select count(*)::int from cv_portfolio.acceptance_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
         (select count(*)::int from cv_portfolio.acceptance_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
@@ -1348,7 +1376,8 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       from cv_portfolio.portfolios portfolio where portfolio.portfolio_id = $1::uuid and portfolio.owner_id = $2::uuid`, [portfolioId, ownerId]);
     cvAcceptanceScenario("T10-01 only the configured Owner can accept a same-Portfolio registered English PDF; missing and foreign versions disclose no private facts",
       !invalidAcceptOwner.ok && invalidAcceptOwner.error.code === "OWNER_REQUIRED" && !missingAccept.ok &&
-      missingAccept.error.kind === "not_found" && Number(noMutationBeforeAccept.rows[0]?.aggregate_version) === expectedCvVersion &&
+      missingAccept.error.kind === "not_found" && !foreignVersionAccept.ok && foreignVersionAccept.error.kind === "not_found" &&
+      Number(foreignVersionCount.rows[0]?.count) === 1 && Number(noMutationBeforeAccept.rows[0]?.aggregate_version) === expectedCvVersion &&
       noMutationBeforeAccept.rows[0]?.histories === 0 && noMutationBeforeAccept.rows[0]?.receipts === 0 && noMutationBeforeAccept.rows[0]?.events === 0);
 
     await admin.query("select pg_advisory_lock(hashtextextended($1::text, 0))", [safe.mediaId]);
@@ -1471,6 +1500,32 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(secondRegistration).toMatchObject({ ok: true });
     if (!secondRegistration.ok) throw new Error("PHASE6_CV_ACCEPTANCE_FIXTURE_REGISTRATION_FAILED");
     const rootBeforeAcceptanceRollback = expectedCvVersion + 5;
+    const rollbackSnapshot = () => admin.query(`select portfolio.aggregate_version, version.state,
+        (select count(*)::int from cv_portfolio.acceptance_history where version_id = $3::uuid) as histories,
+        (select count(*)::int from cv_portfolio.acceptance_commands where version_id = $3::uuid) as receipts,
+        (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.version_accepted.v1') as events
+      from cv_portfolio.portfolios portfolio join cv_portfolio.versions version on version.version_id = $3::uuid
+      where portfolio.portfolio_id = $1::uuid and portfolio.owner_id = $2::uuid`, [portfolioId, ownerId, secondRegistration.value.versionId]);
+    for (const fault of ["history", "receipt"] as const) {
+      const table = fault === "history" ? "cv_portfolio.acceptance_history" : "cv_portfolio.acceptance_commands";
+      const constraint = `phase6_cv_acceptance_${fault}_failure`;
+      await admin.query(`alter table ${table} add constraint ${constraint}
+        check (version_id <> '${secondRegistration.value.versionId}'::uuid) not valid`);
+      let failedWrite;
+      try {
+        failedWrite = await cvService.acceptOwnerCvVersion({ actor: cvOwner,
+          idempotencyKey: `phase6-cv-accept-${fault}-rollback` as never, expectedVersion: rootBeforeAcceptanceRollback,
+          versionId: secondRegistration.value.versionId });
+      } finally {
+        await admin.query(`alter table ${table} drop constraint ${constraint}`);
+      }
+      const afterFailedWrite = await rollbackSnapshot();
+      cvAcceptanceScenario(`T10-04 injected ${fault} failure rolls back CV state, root version, approval and success receipt`,
+        !failedWrite?.ok && failedWrite?.error.code === "CV_ACCEPTANCE_COMMIT_FAILED" &&
+        afterFailedWrite.rows[0]?.aggregate_version === rootBeforeAcceptanceRollback &&
+        afterFailedWrite.rows[0]?.state === "registered" && afterFailedWrite.rows[0]?.histories === 0 &&
+        afterFailedWrite.rows[0]?.receipts === 0 && afterFailedWrite.rows[0]?.events === 1);
+    }
     await admin.query(`alter table operations.outbox_events add constraint phase6_cv_acceptance_outbox_failure
       check (event_type <> 'cv.version_accepted.v1') not valid`);
     let failedAcceptanceCommit;
@@ -1481,12 +1536,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     } finally {
       await admin.query("alter table operations.outbox_events drop constraint phase6_cv_acceptance_outbox_failure");
     }
-    const afterAcceptanceRollback = await admin.query(`select portfolio.aggregate_version, version.state,
-        (select count(*)::int from cv_portfolio.acceptance_history where version_id = $3::uuid) as histories,
-        (select count(*)::int from cv_portfolio.acceptance_commands where version_id = $3::uuid) as receipts,
-        (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.version_accepted.v1') as events
-      from cv_portfolio.portfolios portfolio join cv_portfolio.versions version on version.version_id = $3::uuid
-      where portfolio.portfolio_id = $1::uuid and portfolio.owner_id = $2::uuid`, [portfolioId, ownerId, secondRegistration.value.versionId]);
+    const afterAcceptanceRollback = await rollbackSnapshot();
     cvAcceptanceScenario("T10-04 injected outbox failure rolls back CV state, approval history, root version and success receipt",
       !failedAcceptanceCommit?.ok && failedAcceptanceCommit?.error.code === "CV_ACCEPTANCE_COMMIT_FAILED" &&
       afterAcceptanceRollback.rows[0]?.aggregate_version === rootBeforeAcceptanceRollback &&
