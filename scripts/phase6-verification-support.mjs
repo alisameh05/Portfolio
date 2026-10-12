@@ -52,7 +52,14 @@ export function evaluatePhase6IntegrationTests(report, exitStatus) {
     failed: assertions.filter((item) => item.status === "failed").length,
     skipped: assertions.filter((item) => item.status !== "passed" && item.status !== "failed").length,
   };
-  return { ...counts, verdict: exitStatus === 0 && counts.total === 5 && counts.passed === 5 &&
+  const failedTests = assertions.filter((item) => item.status === "failed").map((item) => ({
+    name: item.fullName ?? "unknown-test",
+    reason: String(item.failureMessages?.[0] ?? "assertion-failed").split(/\r?\n/u).slice(0, 12).join(" | ")
+      .replace(/(?:postgres(?:ql)?|https?):\/\/\S+/giu, "[url]")
+      .replace(/(?:Bearer\s+|token=|apikey[=: ]+|password[=: ]+)\S+/giu, "[credential]")
+      .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gu, "[token]").slice(0, 1400),
+  }));
+  return { ...counts, ...(failedTests.length ? { failedTests } : {}), verdict: exitStatus === 0 && counts.total === 5 && counts.passed === 5 &&
     report?.numTotalTests === 5 && report?.numPassedTests === 5 && report?.numFailedTests === 0 &&
     report?.numPendingTests === 0 && report?.success === true ? "pass" : "fail" };
 }
