@@ -14,6 +14,7 @@ import type {
   AcceptOwnerCvVersionApplicationCommand,
   ActivateOwnerCvVersionApplicationCommand,
   GetOwnerCvPortfolioQuery,
+  GetCurrentCvMediaUsageQuery,
   OwnerCvApplicationService,
   OwnerCvCommandReceipt,
   OwnerCvPortfolioView,
@@ -32,6 +33,7 @@ export interface OwnerCvTestFake extends OwnerCvApplicationService {
     readonly registerOwnerCvVersion: ReadonlyArray<RegisterOwnerCvVersionApplicationCommand>;
     readonly acceptOwnerCvVersion: ReadonlyArray<AcceptOwnerCvVersionApplicationCommand>;
     readonly activateOwnerCvVersion: ReadonlyArray<ActivateOwnerCvVersionApplicationCommand>;
+    readonly getCurrentCvMediaUsage: ReadonlyArray<GetCurrentCvMediaUsageQuery>;
   };
 }
 
@@ -121,6 +123,7 @@ export function createOwnerCvTestFake(mode: OwnerCvFakeMode): OwnerCvTestFake {
   const registerCalls: RegisterOwnerCvVersionApplicationCommand[] = [];
   const acceptCalls: AcceptOwnerCvVersionApplicationCommand[] = [];
   const activateCalls: ActivateOwnerCvVersionApplicationCommand[] = [];
+  const currentUsageCalls: GetCurrentCvMediaUsageQuery[] = [];
   return {
     get calls() {
       return {
@@ -128,6 +131,7 @@ export function createOwnerCvTestFake(mode: OwnerCvFakeMode): OwnerCvTestFake {
         registerOwnerCvVersion: registerCalls,
         acceptOwnerCvVersion: acceptCalls,
         activateOwnerCvVersion: activateCalls,
+        getCurrentCvMediaUsage: currentUsageCalls,
       };
     },
     async getOwnerCvPortfolio(query: GetOwnerCvPortfolioQuery) {
@@ -180,6 +184,17 @@ export function createOwnerCvTestFake(mode: OwnerCvFakeMode): OwnerCvTestFake {
           return { ok: true as const, value: invalidCommandReceipt() };
       }
     },
+    async getCurrentCvMediaUsage(query: GetCurrentCvMediaUsageQuery) {
+      currentUsageCalls.push(query);
+      switch (mode.type) {
+        case "success":
+          return { ok: true as const, value: query.mediaAssetId === OWNER_CV_MEDIA_ID };
+        case "rejection":
+          return { ok: false as const, error: mode.rejection };
+        case "invalid-success":
+          return { ok: true as const, value: "yes" as unknown as boolean };
+      }
+    },
   };
 }
 
@@ -209,6 +224,9 @@ export function createProductionOwnerCvService(): OwnerCvApplicationService {
       return failure;
     },
     async activateOwnerCvVersion(_command: ActivateOwnerCvVersionApplicationCommand) {
+      return failure;
+    },
+    async getCurrentCvMediaUsage(_query: GetCurrentCvMediaUsageQuery) {
       return failure;
     },
   };

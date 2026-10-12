@@ -12,7 +12,7 @@ import { handleCreateOwnerMediaUploadIntent } from "../../src/runtime/http/owner
 import { handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-media.js";
 import { withOwnerTestAuth } from "../runtime/owner-test-auth.js";
 import { createOwnerSecurityTestStub } from "../../src/runtime/http/owner-security.js";
-import { handleAcceptOwnerCvVersion, handleGetOwnerCvPortfolio, handleRegisterOwnerCvVersion } from "../../src/runtime/http/owner-cv.js";
+import { handleAcceptOwnerCvVersion, handleActivateOwnerCvVersion, handleGetOwnerCvPortfolio, handleRegisterOwnerCvVersion } from "../../src/runtime/http/owner-cv.js";
 import { getOwnerCvApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
 import { createOwnerCvApplicationService } from "../../src/modules/cv-portfolio/application/owner-service.js";
 import { createPostgresCvPortfolioRepository } from "../../src/modules/cv-portfolio/adapters/postgres-portfolio.js";
@@ -65,9 +65,11 @@ const PROCESSING_COUNTS_FILE = process.env["PHASE6_MEDIA_PROCESSING_COUNTS_FILE"
 const REQUIRE_REAL = process.env["PHASE6_REQUIRE_UPLOAD_INTENT"] === "1";
 const REQUIRE_ACCEPTANCE = process.env["PHASE6_MEDIA_ACCEPTANCE_ONLY"] === "1";
 const REQUIRE_FULL_MEDIA = process.env["PHASE6_REQUIRE_FULL_MEDIA"] === "1";
+const REQUIRE_CV_ACTIVATION = process.env["PHASE6_CV_ACTIVATION_ONLY"] === "1";
 const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0, imageProcessorExecutions: 0, acceptanceExecutions: 0,
   cvScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
-  cvAcceptanceScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }> };
+  cvAcceptanceScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
+  cvActivationScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }> };
 
 if (REQUIRE_REAL && (!DATABASE_URL || !STORAGE_URL || !SERVICE_ROLE_KEY || !ANON_KEY || !REPLAY_KEY || !SCANNER_IMAGE || !SCANNER_VERSION ||
     (!REQUIRE_IMAGES && (!PDF_FIXTURE || !PDF_PROCESSOR_IMAGE || !PDF_PROCESSOR_VERSION)))) {
@@ -1165,6 +1167,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         method: "POST", headers: withOwnerTestAuth({ "idempotency-key": options.idempotencyKey ?? `phase6-cv-accept-${options.versionId}`,
           "if-match": options.ifMatch ?? `"${expectedCvVersion}"` }),
       }), { versionId: options.versionId }, { service: cvService, security: ownerSecurity() });
+    const activateCvThroughHttp = (options: { readonly versionId: string; readonly idempotencyKey: string; readonly ifMatch: string }) =>
+      handleActivateOwnerCvVersion(new Request(`https://example.com/api/owner/v1/cv/versions/${options.versionId}/commands/activate`, {
+        method: "POST", headers: withOwnerTestAuth({ "idempotency-key": options.idempotencyKey, "if-match": options.ifMatch }),
+      }), { versionId: options.versionId }, { service: cvService, security: ownerSecurity() });
     await admin.query("select pg_advisory_lock(hashtextextended($1::text, 0))", [safe.mediaId]);
     const concurrentRegistrations = Promise.all([registerCvThroughHttp(), registerCvThroughHttp()]);
     let waitingForMediaLock = 0;
@@ -1641,8 +1647,16 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     // Model an already-current accepted version. Activation is a separate
     // operation; this acceptance must leave the existing pointer and its event
     // history untouched.
-    await admin.query(`update cv_portfolio.portfolios set current_version_id = $3::uuid
-      where portfolio_id = $1::uuid and owner_id = $2::uuid`, [portfolioId, ownerId, cvRegistration.value.versionId]);
+    await admin.query("begin");
+    try {
+      await admin.query(`update cv_portfolio.versions set is_current = true where version_id = $1::uuid`, [cvRegistration.value.versionId]);
+      await admin.query(`update cv_portfolio.portfolios set current_version_id = $3::uuid
+        where portfolio_id = $1::uuid and owner_id = $2::uuid`, [portfolioId, ownerId, cvRegistration.value.versionId]);
+      await admin.query("commit");
+    } catch (error) {
+      await admin.query("rollback");
+      throw error;
+    }
     const currentBeforeReplacement = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
     expect(currentBeforeReplacement.ok).toBe(true);
     if (!currentBeforeReplacement.ok) throw new Error("PHASE6_CV_ACCEPTANCE_CURRENT_ROOT_READ_FAILED");
@@ -1663,10 +1677,322 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       replacementAcceptance.ok && currentAfterReplacement.rows[0]?.current_version_id === cvRegistration.value.versionId &&
       currentAfterReplacement.rows[0]?.aggregate_version === currentBeforeReplacement.value.aggregateVersion + 2 &&
       currentAfterReplacement.rows[0]?.current_events === existingCurrentEvents.rows[0]?.count);
-    await admin.query(`update cv_portfolio.portfolios set current_version_id = null
-      where portfolio_id = $1::uuid and owner_id = $2::uuid`, [portfolioId, ownerId]);
+    await admin.query("begin");
+    try {
+      await admin.query("set local session_replication_role = replica");
+      await admin.query(`update cv_portfolio.versions set is_current = false
+        where version_id = $1::uuid`, [cvRegistration.value.versionId]);
+      await admin.query(`update cv_portfolio.portfolios set current_version_id = null, ever_activated = false
+        where portfolio_id = $1::uuid and owner_id = $2::uuid`, [portfolioId, ownerId]);
+      await admin.query("commit");
+    } catch (error) {
+      await admin.query("rollback");
+      throw error;
+    }
     expect(cvAcceptanceChecks.every((item) => item.status === "passed")).toBe(true);
     mediaProcessingCounts.cvAcceptanceScenarios = cvAcceptanceChecks;
+
+    if (REQUIRE_CV_ACTIVATION) {
+      const cvActivationChecks: Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }> = [];
+      const cvActivationScenario = (name: string, passed: boolean) => {
+        cvActivationChecks.push({ name, executed: true, status: passed ? "passed" : "failed" });
+        expect(passed, name).toBe(true);
+      };
+      const initialActivationView = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      if (!initialActivationView.ok) throw new Error("PHASE6_CV_ACTIVATION_EMPTY_ROOT_READ_FAILED");
+      const initialActivationRoot = await admin.query(`select current_version_id::text as current_version_id,
+          ever_activated, (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid and is_current) as current_flags
+        from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid`, [portfolioId, ownerId]);
+      cvActivationScenario("T11-01 an unactivated portfolio has zero current flags; the first activation creates one coherent accepted English current version",
+        initialActivationView.value.currentVersionId === null && initialActivationRoot.rows[0]?.current_version_id === null &&
+        initialActivationRoot.rows[0]?.ever_activated === false && initialActivationRoot.rows[0]?.current_flags === 0 &&
+        initialActivationView.value.versions.every((version) => !version.isCurrent));
+
+      const initialActivationKey = "phase6-cv-activate-first";
+      const firstActivationResponse = await activateCvThroughHttp({ versionId: cvRegistration.value.versionId,
+        idempotencyKey: initialActivationKey, ifMatch: `"${initialActivationView.value.aggregateVersion}"` });
+      const firstActivationBody = await firstActivationResponse.json();
+      const firstActivationView = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      const firstActivationState = await admin.query(`select portfolio.aggregate_version, portfolio.current_version_id::text as current_version_id,
+          portfolio.ever_activated, version.is_current,
+          (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
+          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events
+        from cv_portfolio.portfolios portfolio join cv_portfolio.versions version
+          on version.version_id = portfolio.current_version_id and version.portfolio_id = portfolio.portfolio_id and version.owner_id = portfolio.owner_id
+        where portfolio.portfolio_id = $1::uuid and portfolio.owner_id = $2::uuid`, [portfolioId, ownerId]);
+      const firstActivationEvent = await admin.query(`select payload from operations.outbox_events
+        where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1'`, [portfolioId]);
+      const firstEventPayload = firstActivationEvent.rows[0]?.payload as Record<string, unknown> | undefined;
+      cvActivationScenario("T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event",
+        firstActivationResponse.status === 200 && firstActivationBody.outcome === "current-cv-activated" &&
+        firstActivationView.ok && firstActivationView.value.currentVersionId === cvRegistration.value.versionId &&
+        firstActivationView.value.versions.find(({ versionId }) => versionId === cvRegistration.value.versionId)?.isCurrent === true &&
+        firstActivationState.rows[0]?.current_version_id === cvRegistration.value.versionId &&
+        firstActivationState.rows[0]?.ever_activated === true && firstActivationState.rows[0]?.is_current === true &&
+        firstActivationState.rows[0]?.histories === 1 && firstActivationState.rows[0]?.events === 1 &&
+        Object.keys(firstEventPayload ?? {}).sort().join(",") === "activatedAt,newCurrentCvId" &&
+        firstEventPayload?.["newCurrentCvId"] === cvRegistration.value.versionId);
+
+      const rejectedDirectMutations: boolean[] = [];
+      for (const mutation of [
+        { statement: "update cv_portfolio.portfolios set current_version_id = null where portfolio_id = $1::uuid and owner_id = $2::uuid", parameters: [portfolioId, ownerId] },
+        { statement: "update cv_portfolio.versions set state = 'registered' where version_id = $1::uuid and portfolio_id = $2::uuid and owner_id = $3::uuid", parameters: [cvRegistration.value.versionId, portfolioId, ownerId] },
+        { statement: "update cv_portfolio.portfolios set current_version_id = $3::uuid where portfolio_id = $1::uuid and owner_id = $2::uuid", parameters: [portfolioId, ownerId, createStableId("CvVersion")] },
+        { statement: "update cv_portfolio.portfolios set current_version_locale = 'ar' where portfolio_id = $1::uuid and owner_id = $2::uuid", parameters: [portfolioId, ownerId] },
+        { statement: "update cv_portfolio.versions set is_current = true where version_id = $1::uuid and portfolio_id = $2::uuid and owner_id = $3::uuid", parameters: [replacementRegistration.value.versionId, portfolioId, ownerId] },
+        { statement: "update cv_portfolio.portfolios set owner_id = $3::uuid where portfolio_id = $1::uuid and owner_id = $2::uuid", parameters: [portfolioId, ownerId, createStableId("Owner")] },
+      ]) {
+        await appClient.query("begin");
+        try {
+          await appClient.query("select set_config('shipwithali.portfolio_id', $1, true), set_config('shipwithali.owner_id', $2, true)", [portfolioId, ownerId]);
+          await appClient.query(mutation.statement, mutation.parameters);
+          await appClient.query("set constraints all immediate");
+          await appClient.query("commit");
+          rejectedDirectMutations.push(false);
+        } catch {
+          await appClient.query("rollback");
+          rejectedDirectMutations.push(true);
+        }
+      }
+      cvActivationScenario("T11-02 constrained application-role SQL rejects clearing the active pointer, downgrading an accepted current CV, unknown references and cross-Owner scope changes",
+        rejectedDirectMutations.length === 6 && rejectedDirectMutations.every(Boolean));
+
+      let releaseActivationMediaLock!: () => void;
+      let activationMediaLockReady!: () => void;
+      const heldActivationMediaLock = new Promise<void>((resolve) => { releaseActivationMediaLock = resolve; });
+      const activationMediaLockStarted = new Promise<void>((resolve) => { activationMediaLockReady = resolve; });
+      const activationMediaLock = appDatabase.transactions.run(async (transaction) => {
+        await sql`select pg_advisory_xact_lock(hashtextextended(${safe.mediaId}::text, 0))`
+          .execute(resolvePostgresTransaction(transaction));
+        activationMediaLockReady();
+        await heldActivationMediaLock;
+      });
+      await activationMediaLockStarted;
+      const competingActivationVersion = replacementRegistration.value.versionId;
+      const competingIfMatch = `"${firstActivationView.ok ? firstActivationView.value.aggregateVersion : 0}"`;
+      const competingActivations = Promise.all([
+        activateCvThroughHttp({ versionId: competingActivationVersion, idempotencyKey: "phase6-cv-activate-race-a", ifMatch: competingIfMatch }),
+        activateCvThroughHttp({ versionId: competingActivationVersion, idempotencyKey: "phase6-cv-activate-race-b", ifMatch: competingIfMatch }),
+      ]);
+      let waitingForActivationMediaLock = 0;
+      for (let attempt = 0; attempt < 80; attempt += 1) {
+        const waiting = await admin.query(`select count(*)::int as count from pg_stat_activity
+          where usename = $1 and wait_event_type = 'Lock' and query ilike '%pg_advisory_xact_lock_shared%'`, [roleName]);
+        waitingForActivationMediaLock = Number(waiting.rows[0]?.count ?? 0);
+        if (waitingForActivationMediaLock === 2) break;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      releaseActivationMediaLock();
+      await activationMediaLock;
+      const competingResponses = await competingActivations;
+      const competingBodies = await Promise.all(competingResponses.map(async (response) => await response.json() as Record<string, unknown>));
+      const competingSuccesses = competingResponses.filter((response) => response.status === 200).length;
+      const competingPreconditions = competingBodies.filter((body) => body["code"] === "CV_PORTFOLIO_VERSION_MISMATCH").length;
+      const afterCompetingView = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      cvActivationScenario("T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins",
+        waitingForActivationMediaLock === 2 && competingSuccesses === 1 && competingPreconditions === 1 &&
+        afterCompetingView.ok && afterCompetingView.value.currentVersionId === competingActivationVersion &&
+        afterCompetingView.value.versions.filter(({ isCurrent }) => isCurrent).length === 1);
+
+      const replayOfFirstActivation = await activateCvThroughHttp({ versionId: cvRegistration.value.versionId,
+        idempotencyKey: initialActivationKey, ifMatch: `"${initialActivationView.value.aggregateVersion}"` });
+      const replayOfFirstBody = await replayOfFirstActivation.json();
+      const changedActivationIntent = await activateCvThroughHttp({ versionId: competingActivationVersion,
+        idempotencyKey: initialActivationKey, ifMatch: `"${initialActivationView.value.aggregateVersion}"` });
+      const changedActivationBody = await changedActivationIntent.json() as Record<string, unknown>;
+      const staleActivation = await activateCvThroughHttp({ versionId: cvRegistration.value.versionId,
+        idempotencyKey: "phase6-cv-activate-stale", ifMatch: `"${initialActivationView.value.aggregateVersion}"` });
+      const staleActivationBody = await staleActivation.json() as Record<string, unknown>;
+      cvActivationScenario("T11-06 exact replay returns the earlier receipt after replacement; changed-key intent and fresh stale versions conflict",
+        replayOfFirstActivation.status === 200 && replayOfFirstBody.aggregateVersion === initialActivationView.value.aggregateVersion + 1 &&
+        changedActivationIntent.status === 409 && changedActivationBody["code"] === "IDEMPOTENCY_CONFLICT" &&
+        staleActivation.status === 412 && staleActivationBody["code"] === "CV_PORTFOLIO_VERSION_MISMATCH");
+
+      if (!afterCompetingView.ok) throw new Error("PHASE6_CV_ACTIVATION_CURRENT_VIEW_FAILED");
+      const historyAndEventCountBeforeNoop = await admin.query(`select
+          (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
+          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events`,
+      [portfolioId, ownerId]);
+      const noOpKey = "phase6-cv-activate-noop";
+      const noOpActivation = await activateCvThroughHttp({ versionId: competingActivationVersion, idempotencyKey: noOpKey,
+        ifMatch: `"${afterCompetingView.value.aggregateVersion}"` });
+      const noOpBody = await noOpActivation.json();
+      const noOpReplay = await activateCvThroughHttp({ versionId: competingActivationVersion, idempotencyKey: noOpKey,
+        ifMatch: `"${afterCompetingView.value.aggregateVersion}"` });
+      const noOpAfter = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      const historyAndEventCountAfterNoop = await admin.query(`select
+          (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
+          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events`,
+      [portfolioId, ownerId]);
+      cvActivationScenario("T11-07 activation of the already-current version records and replays a receipt without changing root version, history or events",
+        noOpActivation.status === 200 && noOpBody.aggregateVersion === afterCompetingView.value.aggregateVersion && noOpReplay.status === 200 &&
+        noOpAfter.ok && noOpAfter.value.aggregateVersion === afterCompetingView.value.aggregateVersion &&
+        historyAndEventCountAfterNoop.rows[0]?.histories === historyAndEventCountBeforeNoop.rows[0]?.histories &&
+        historyAndEventCountAfterNoop.rows[0]?.events === historyAndEventCountBeforeNoop.rows[0]?.events);
+
+      const beforeReactivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      if (!beforeReactivation.ok) throw new Error("PHASE6_CV_REACTIVATION_VIEW_FAILED");
+      const reactivatePrior = await activateCvThroughHttp({ versionId: cvRegistration.value.versionId,
+        idempotencyKey: "phase6-cv-reactivate-prior", ifMatch: `"${beforeReactivation.value.aggregateVersion}"` });
+      const afterReactivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      cvActivationScenario("T11-08 an eligible retained prior CV version can be reactivated with a fresh key and root version",
+        reactivatePrior.status === 200 && afterReactivation.ok && afterReactivation.value.aggregateVersion === beforeReactivation.value.aggregateVersion + 1 &&
+        afterReactivation.value.currentVersionId === cvRegistration.value.versionId &&
+        afterReactivation.value.activationHistory.filter(({ versionId }) => versionId === cvRegistration.value.versionId).length >= 2);
+
+      const observerBaseline = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      if (!observerBaseline.ok) throw new Error("PHASE6_CV_ACTIVATION_OBSERVER_BASELINE_FAILED");
+      const observerTriggerFunction = "phase6_cv_activation_observer_barrier";
+      const observerTrigger = "phase6_cv_activation_observer_barrier_trigger";
+      await admin.query(`create function cv_portfolio.${observerTriggerFunction}() returns trigger language plpgsql as $$
+        begin perform pg_advisory_xact_lock(781560156); return new; end $$`);
+      await admin.query(`create trigger ${observerTrigger} before update of current_version_id on cv_portfolio.portfolios
+        for each row when (old.current_version_id is distinct from new.current_version_id)
+        execute function cv_portfolio.${observerTriggerFunction}()`);
+      await admin.query("begin");
+      await admin.query("select pg_advisory_xact_lock(781560156)");
+      try {
+        const observerActivationPromise = activateCvThroughHttp({ versionId: competingActivationVersion,
+          idempotencyKey: "phase6-cv-activate-observer", ifMatch: `\"${observerBaseline.value.aggregateVersion}\"` });
+        let observerReachedBarrier = false;
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+          const waiting = await admin.query(`select count(*)::int as count from pg_stat_activity
+            where usename = $1 and wait_event_type = 'Lock' and query ilike '%current_version_id%'`, [roleName]);
+          if (Number(waiting.rows[0]?.count ?? 0) > 0) { observerReachedBarrier = true; break; }
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        const duringReplacement = await admin.query(`select portfolio.current_version_id::text as current_version_id,
+            count(*) filter (where version.is_current)::int as current_flags
+          from cv_portfolio.portfolios portfolio join cv_portfolio.versions version
+            on version.portfolio_id = portfolio.portfolio_id and version.owner_id = portfolio.owner_id
+          where portfolio.portfolio_id = $1::uuid and portfolio.owner_id = $2::uuid
+          group by portfolio.current_version_id`, [portfolioId, ownerId]);
+        const observerSawOld = observerReachedBarrier && duringReplacement.rows[0]?.current_version_id === cvRegistration.value.versionId &&
+          duringReplacement.rows[0]?.current_flags === 1;
+        await admin.query("commit");
+        const observerActivation = await observerActivationPromise;
+        const observerAfter = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+        cvActivationScenario("T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit",
+          observerSawOld && observerActivation.status === 200 && observerAfter.ok &&
+          observerAfter.value.currentVersionId === competingActivationVersion &&
+          observerAfter.value.versions.filter(({ isCurrent }) => isCurrent).length === 1);
+      } catch (error) {
+        await admin.query("rollback");
+        throw error;
+      } finally {
+        await admin.query(`drop trigger ${observerTrigger} on cv_portfolio.portfolios`);
+        await admin.query(`drop function cv_portfolio.${observerTriggerFunction}()`);
+      }
+
+      const rejectionDecisionId = createStableId("MediaDecision");
+      await admin.query(`with changed as (
+          update media.processing_states set aggregate_version = aggregate_version + 1, updated_at = transaction_timestamp()
+           where media_id = $1::uuid and portfolio_id = $2::uuid and owner_id = $3::uuid returning aggregate_version
+        )
+        insert into media.decision_history
+          (decision_id, portfolio_id, owner_id, media_id, aggregate_version, decision, processing_attempt_id,
+           input_object_id, input_sha256, detected_mime_type, detected_byte_length, scanner_version, processor_version,
+           processing_policy_version, sealed_outputs, accessibility, ownership_attested_by, ownership_attested_at,
+           public_suitability_attested_by, public_suitability_attested_at, decided_by, decided_at, reason_code)
+        select $4::uuid, decision.portfolio_id, decision.owner_id, decision.media_id, changed.aggregate_version,
+               'rejected', decision.processing_attempt_id, decision.input_object_id, decision.input_sha256,
+               decision.detected_mime_type, decision.detected_byte_length, decision.scanner_version, decision.processor_version,
+               decision.processing_policy_version, decision.sealed_outputs, decision.accessibility,
+               decision.owner_id, transaction_timestamp(), decision.owner_id, transaction_timestamp(), decision.owner_id,
+               transaction_timestamp(), 'OWNER_REJECTED'
+          from changed join media.decision_history decision on decision.media_id = $1::uuid
+            and decision.portfolio_id = $2::uuid and decision.owner_id = $3::uuid
+            and decision.aggregate_version = changed.aggregate_version - 1 and decision.decision = 'accepted'`,
+      [safe.mediaId, portfolioId, ownerId, rejectionDecisionId]);
+      const beforeRejectedActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      const rejectedActivation = beforeRejectedActivation.ok ? await activateCvThroughHttp({ versionId: cvRegistration.value.versionId,
+        idempotencyKey: "phase6-cv-activate-media-rejected", ifMatch: `"${beforeRejectedActivation.value.aggregateVersion}"` }) : undefined;
+      const rejectedActivationBody = rejectedActivation ? await rejectedActivation.json() as Record<string, unknown> : undefined;
+      const afterRejectedActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      const rejectedActivationCounts = await admin.query(`select
+          (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
+          (select count(*)::int from cv_portfolio.activation_commands where portfolio_id = $1::uuid and owner_id = $2::uuid and idempotency_key_hash = $3) as receipts,
+          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events`,
+      [portfolioId, ownerId, createHash("sha256").update("phase6-cv-activate-media-rejected").digest("hex")]);
+      await admin.query("delete from media.decision_history where decision_id = $1::uuid and media_id = $2::uuid", [rejectionDecisionId, safe.mediaId]);
+      await admin.query(`update media.processing_states set aggregate_version = aggregate_version - 1
+        where media_id = $1::uuid and portfolio_id = $2::uuid and owner_id = $3::uuid`, [safe.mediaId, portfolioId, ownerId]);
+      cvActivationScenario("T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event",
+        rejectedActivation?.status === 409 && rejectedActivationBody?.["code"] === "CV_MEDIA_NOT_ELIGIBLE" &&
+        beforeRejectedActivation.ok && afterRejectedActivation.ok && beforeRejectedActivation.value.currentVersionId === afterRejectedActivation.value.currentVersionId &&
+        beforeRejectedActivation.value.aggregateVersion === afterRejectedActivation.value.aggregateVersion &&
+        rejectedActivationCounts.rows[0]?.histories === beforeRejectedActivation.value.activationHistory.length &&
+        rejectedActivationCounts.rows[0]?.receipts === 0 && rejectedActivationCounts.rows[0]?.events === historyAndEventCountAfterNoop.rows[0]?.events + 1);
+
+      const beforeUnavailableMedia = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      if (!beforeUnavailableMedia.ok) throw new Error("PHASE6_CV_ACTIVATION_MEDIA_BASELINE_FAILED");
+      const unavailableMediaRepository = createPostgresCvPortfolioRepository({
+        database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
+        media: { async getAcceptedPdfSnapshot() {
+          return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } };
+        } },
+      });
+      const unavailableMediaService = createOwnerCvApplicationService({ ownerId, repository: unavailableMediaRepository });
+      const unavailableMediaActivation = await unavailableMediaService.activateOwnerCvVersion({ actor: cvOwner,
+        idempotencyKey: "phase6-cv-activate-media-outage" as never, expectedVersion: beforeUnavailableMedia.value.aggregateVersion,
+        versionId: cvRegistration.value.versionId });
+      const afterUnavailableMedia = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      cvActivationScenario("T11-09 an unavailable accepted-Media preflight preserves the current portfolio state",
+        !unavailableMediaActivation.ok && unavailableMediaActivation.error.kind === "temporarily_unavailable" && afterUnavailableMedia.ok &&
+        afterUnavailableMedia.value.aggregateVersion === beforeUnavailableMedia.value.aggregateVersion &&
+        afterUnavailableMedia.value.currentVersionId === beforeUnavailableMedia.value.currentVersionId);
+
+      const currentUsage = await appDatabase.transactions.run((transaction) => cvService.getCurrentCvMediaUsage({
+        ownerId, mediaAssetId: safe.mediaId as StableId<"MediaAsset">, transaction,
+      }));
+      const nonCurrentUsage = await appDatabase.transactions.run((transaction) => cvService.getCurrentCvMediaUsage({
+        ownerId, mediaAssetId: createStableId("MediaAsset"), transaction,
+      }));
+      cvActivationScenario("T11-10 the CV-owned current-Media use query returns an authoritative scoped result in the caller transaction",
+        currentUsage.ok && currentUsage.value && nonCurrentUsage.ok && !nonCurrentUsage.value);
+
+      const activationRootBeforeFaults = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      if (!activationRootBeforeFaults.ok) throw new Error("PHASE6_CV_ACTIVATION_FAULT_BASELINE_FAILED");
+      const activationFaults = [
+        { name: "old current flag", table: "cv_portfolio.versions", event: "before update of is_current", when: "old.is_current and not new.is_current" },
+        { name: "new current flag", table: "cv_portfolio.versions", event: "before update of is_current", when: "not old.is_current and new.is_current" },
+        { name: "authoritative pointer", table: "cv_portfolio.portfolios", event: "before update of current_version_id", when: undefined },
+        { name: "activation history", table: "cv_portfolio.activation_history", event: "before insert", when: undefined },
+        { name: "activation receipt", table: "cv_portfolio.activation_commands", event: "before insert", when: undefined },
+        { name: "outbox event", table: "operations.outbox_events", event: "before insert", when: undefined },
+      ] as const;
+      for (const [index, fault] of activationFaults.entries()) {
+        const functionName = `phase6_cv_activation_fault_${index}`;
+        const triggerName = `phase6_cv_activation_fault_trigger_${index}`;
+        await admin.query(`create function cv_portfolio.${functionName}() returns trigger language plpgsql as $$ begin raise exception 'CV_ACTIVATION_INJECTED'; end $$`);
+        await admin.query(`create trigger ${triggerName} ${fault.event} on ${fault.table} for each row ${fault.when === undefined ? "" : `when (${fault.when})`} execute function cv_portfolio.${functionName}()`);
+        try {
+          const expected = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+          if (!expected.ok) throw new Error("PHASE6_CV_ACTIVATION_FAULT_VERSION_FAILED");
+          const failedActivation = await activateCvThroughHttp({ versionId: competingActivationVersion,
+            idempotencyKey: `phase6-cv-activation-fault-${index}`, ifMatch: `"${expected.value.aggregateVersion}"` });
+          const failureBody = await failedActivation.json() as Record<string, unknown>;
+          const afterFault = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+          const persistedAfterFault = await admin.query(`select
+              (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
+              (select count(*)::int from cv_portfolio.activation_commands where portfolio_id = $1::uuid and owner_id = $2::uuid and idempotency_key_hash = $3) as receipts,
+              (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events`,
+          [portfolioId, ownerId, createHash("sha256").update(`phase6-cv-activation-fault-${index}`).digest("hex")]);
+          cvActivationScenario(`T11-05 ${fault.name} failure rolls back root, current flags, history, receipt and event`,
+            failedActivation.status === 503 && failureBody["code"] === "CV_ACTIVATION_COMMIT_FAILED" && afterFault.ok &&
+            afterFault.value.aggregateVersion === expected.value.aggregateVersion && afterFault.value.currentVersionId === expected.value.currentVersionId &&
+            afterFault.value.versions.filter(({ isCurrent }) => isCurrent).length === 1 &&
+            persistedAfterFault.rows[0]?.histories === expected.value.activationHistory.length &&
+            persistedAfterFault.rows[0]?.receipts === 0 && persistedAfterFault.rows[0]?.events === historyAndEventCountAfterNoop.rows[0]?.events + 1);
+        } finally {
+          await admin.query(`drop trigger ${triggerName} on ${fault.table}`);
+          await admin.query(`drop function cv_portfolio.${functionName}()`);
+        }
+      }
+
+      expect(cvActivationChecks.every((item) => item.status === "passed")).toBe(true);
+      mediaProcessingCounts.cvActivationScenarios = cvActivationChecks;
+    }
 
     expect(cvChecks.every((item) => item.status === "passed")).toBe(true);
     mediaProcessingCounts.cvScenarios = cvChecks;

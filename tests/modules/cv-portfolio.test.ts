@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createOwnerCvApplicationService, type CvPortfolioRepositoryPort } from "../../src/modules/cv-portfolio/index.js";
-import type { AcceptOwnerCvVersionApplicationCommand, RegisterOwnerCvVersionApplicationCommand } from "../../src/modules/cv-portfolio/index.js";
+import type { AcceptOwnerCvVersionApplicationCommand, ActivateOwnerCvVersionApplicationCommand, RegisterOwnerCvVersionApplicationCommand } from "../../src/modules/cv-portfolio/index.js";
 import type { StableId } from "../../src/shared/domain/index.js";
 
 const ownerId = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ec1" as StableId<"Owner">;
@@ -20,6 +20,12 @@ const acceptCommand: AcceptOwnerCvVersionApplicationCommand = {
   expectedVersion: 2,
   versionId,
 };
+const activateCommand: ActivateOwnerCvVersionApplicationCommand = {
+  actor: command.actor,
+  idempotencyKey: "activate-cv-once" as never,
+  expectedVersion: 3,
+  versionId,
+};
 
 function repository(): CvPortfolioRepositoryPort {
   return {
@@ -35,6 +41,11 @@ function repository(): CvPortfolioRepositoryPort {
       ok: true as const,
       value: { aggregateId: input.versionId, aggregateVersion: input.expectedVersion + 1, outcome: "cv-version-accepted" as const },
     })),
+    activateOwnerCvVersion: vi.fn(async (input) => ({
+      ok: true as const,
+      value: { aggregateId: input.versionId, aggregateVersion: input.expectedVersion + 1, outcome: "current-cv-activated" as const },
+    })),
+    getCurrentCvMediaUsage: vi.fn(async () => ({ ok: true as const, value: false })),
   };
 }
 
@@ -148,5 +159,53 @@ describe("Owner CV registration application service (#154)", () => {
       expect(result).toMatchObject({ ok: false, error: { kind: "validation", code: "CV_ACCEPTANCE_INVALID" } });
     }
     expect(persistence.acceptOwnerCvVersion).not.toHaveBeenCalled();
+  });
+
+  it("authorizes and delegates a portfolio-versioned, idempotent activation", async () => {
+    const persistence = repository();
+    const service = createOwnerCvApplicationService({ ownerId, repository: persistence });
+
+    const result = await service.activateOwnerCvVersion(activateCommand);
+
+    expect(result).toMatchObject({ ok: true, value: { aggregateId: versionId, aggregateVersion: 4, outcome: "current-cv-activated" } });
+    expect(persistence.activateOwnerCvVersion).toHaveBeenCalledWith(expect.objectContaining({
+      ownerId,
+      expectedVersion: 3,
+      versionId,
+      idempotencyKey: activateCommand.idempotencyKey,
+      requestHash: expect.stringMatching(/^[0-9a-f]{64}$/u),
+    }));
+  });
+
+  it("rejects foreign Owners and malformed activation intent before persistence", async () => {
+    const persistence = repository();
+    const service = createOwnerCvApplicationService({ ownerId, repository: persistence });
+    const foreign = await service.activateOwnerCvVersion({
+      ...activateCommand,
+      actor: { kind: "owner", ownerId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ec2" as StableId<"Owner">, sessionId: "foreign" },
+    });
+    expect(foreign).toMatchObject({ ok: false, error: { kind: "forbidden", code: "OWNER_REQUIRED" } });
+    expect(persistence.activateOwnerCvVersion).not.toHaveBeenCalled();
+
+    for (const invalid of [
+      { ...activateCommand, expectedVersion: 0 },
+      { ...activateCommand, idempotencyKey: "has space" as never },
+      { ...activateCommand, versionId: "0196a1b2-7c3d-4e11-9f22-3a4b5c6d7ed2" as never },
+    ]) {
+      const result = await service.activateOwnerCvVersion(invalid);
+      expect(result).toMatchObject({ ok: false, error: { kind: "validation", code: "CV_ACTIVATION_INVALID" } });
+    }
+    expect(persistence.activateOwnerCvVersion).not.toHaveBeenCalled();
+  });
+
+  it("delegates the scoped Current CV Media-use query in the caller transaction", async () => {
+    const persistence = repository();
+    const service = createOwnerCvApplicationService({ ownerId, repository: persistence });
+    const transaction = {} as never;
+
+    const result = await service.getCurrentCvMediaUsage({ ownerId, mediaAssetId: mediaId, transaction });
+
+    expect(result).toEqual({ ok: true, value: false });
+    expect(persistence.getCurrentCvMediaUsage).toHaveBeenCalledWith({ ownerId, mediaAssetId: mediaId, transaction });
   });
 });

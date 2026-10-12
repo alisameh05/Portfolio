@@ -6,6 +6,7 @@ import type {
   StableId,
 } from "@shared/domain";
 import type { CurrentCvDisposition } from "../domain/index.js";
+import type { TransactionContext } from "../../../runtime/ports.js";
 
 /** Owner view distinguishes retained registrations from accepted CV versions. */
 export interface GetOwnerCvPortfolioQuery {
@@ -33,6 +34,12 @@ export interface ActivateOwnerCvVersionApplicationCommand {
   readonly idempotencyKey: IdempotencyKey;
   readonly expectedVersion: number;
   readonly versionId: StableId<string>;
+}
+
+export interface GetCurrentCvMediaUsageQuery {
+  readonly ownerId: StableId<"Owner">;
+  readonly mediaAssetId: StableId<"MediaAsset">;
+  readonly transaction: TransactionContext;
 }
 
 export interface OwnerCvVersionView {
@@ -81,6 +88,9 @@ export interface OwnerCvApplicationService {
   activateOwnerCvVersion(
     command: ActivateOwnerCvVersionApplicationCommand,
   ): Promise<Result<OwnerCvCommandReceipt, Rejection>>;
+  getCurrentCvMediaUsage(
+    query: GetCurrentCvMediaUsageQuery,
+  ): Promise<Result<boolean, Rejection>>;
 }
 
 /** Initial root view is available before the first CV registration. */
