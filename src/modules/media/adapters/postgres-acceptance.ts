@@ -5,7 +5,7 @@ import { sql, type Kysely } from "kysely";
 import type { TransactionContext, TransactionRunner } from "../../../runtime/ports.js";
 import { PostgresInfrastructureError, resolvePostgresTransaction } from "../../../shared/adapters/postgres/runtime.js";
 import type { DB } from "../../../shared/adapters/postgres/database.generated.js";
-import type { AcceptOwnerMediaAssetApplicationCommand } from "../application/owner-contracts.js";
+import type { AcceptOwnerMediaAssetApplicationCommand, AcceptedPdfSnapshot, GetAcceptedPdfSnapshotQuery } from "../application/owner-contracts.js";
 import type { MediaAcceptanceRepositoryFact, MediaAcceptanceRepositoryPort } from "../application/acceptance.js";
 
 interface AcceptanceRow {
@@ -236,6 +236,52 @@ export function createPostgresMediaAcceptanceRepository(input: {
         if (typeof error === "object" && error !== null && "code" in error && error.code === "55P03") {
           return err({ kind: "temporarily_unavailable", code: "MEDIA_ACCEPTANCE_LOCK_TIMEOUT" });
         }
+        return err({ kind: "temporarily_unavailable", code: "MEDIA_ACCEPTANCE_FACTS_UNAVAILABLE" });
+      }
+    },
+
+    async getAcceptedPdfSnapshot(query: GetAcceptedPdfSnapshotQuery, transaction: TransactionContext) {
+      if (query.ownerId !== input.scope.ownerId) return err({ kind: "forbidden", code: "OWNER_SCOPE_MISMATCH" });
+      const executor = resolvePostgresTransaction(transaction);
+      try {
+        await setScope(transaction, input.scope);
+        const rows = await sql<{ readonly media_id: string; readonly owner_id: string; readonly asset_version: number | string;
+          readonly decision_id: string; readonly object_id: string; readonly sha256: string; readonly object_version: string }>`
+          select asset.media_id::text as media_id, asset.owner_id::text as owner_id,
+                 state.aggregate_version as asset_version, decision.decision_id::text as decision_id,
+                 output.object_id::text as object_id, output.sha256, output.object_version
+            from media.assets asset
+            join media.processing_states state on state.media_id = asset.media_id
+              and state.portfolio_id = asset.portfolio_id and state.owner_id = asset.owner_id
+            join media.decision_history decision on decision.media_id = asset.media_id
+              and decision.portfolio_id = asset.portfolio_id and decision.owner_id = asset.owner_id
+              and decision.aggregate_version = state.aggregate_version and decision.decision = 'accepted'
+            join media.processed_objects output on output.media_id = asset.media_id
+              and output.portfolio_id = asset.portfolio_id and output.owner_id = asset.owner_id
+              and output.mime_type = 'application/pdf'
+              and exists (select 1 from jsonb_array_elements(decision.sealed_outputs) sealed
+                where sealed->>'objectId' = output.object_id::text and sealed->>'sha256' = output.sha256
+                  and sealed->>'objectVersion' = output.object_version and sealed->>'mimeType' = 'application/pdf')
+           where asset.media_id = ${query.mediaAssetId}::uuid and asset.portfolio_id = ${input.scope.portfolioId}::uuid
+             and asset.owner_id = ${query.ownerId}::uuid and asset.kind = 'document'
+             and asset.declared_media_type = 'application/pdf'
+           order by output.object_id limit 2`.execute(executor);
+        if (rows.rows.length === 0) return ok(undefined);
+        if (rows.rows.length !== 1) return err({ kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" });
+        const row = rows.rows[0]!;
+        const mediaAssetId = parseStableId("MediaAsset", row.media_id);
+        const ownerId = parseStableId("Owner", row.owner_id);
+        const decisionId = parseStableId("MediaDecision", row.decision_id);
+        const objectId = parseStableId("MediaObject", row.object_id);
+        const assetVersion = Number(row.asset_version);
+        if (!mediaAssetId.ok || !ownerId.ok || !decisionId.ok || !objectId.ok ||
+            mediaAssetId.value !== query.mediaAssetId || ownerId.value !== query.ownerId ||
+            !Number.isSafeInteger(assetVersion) || assetVersion < 1 || !/^[0-9a-f]{64}$/u.test(row.sha256) ||
+            row.object_version.length < 1 || row.object_version.length > 512) throw new PostgresInfrastructureError();
+        const snapshot: AcceptedPdfSnapshot = { mediaAssetId: mediaAssetId.value, ownerId: ownerId.value, assetVersion,
+          decisionId: decisionId.value, objectId: objectId.value, sha256: row.sha256, objectVersion: row.object_version };
+        return ok(snapshot);
+      } catch {
         return err({ kind: "temporarily_unavailable", code: "MEDIA_ACCEPTANCE_FACTS_UNAVAILABLE" });
       }
     },

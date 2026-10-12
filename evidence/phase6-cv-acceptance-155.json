@@ -1,0 +1,583 @@
+{
+  "schemaVersion": 1,
+  "ticket": 155,
+  "parent": 145,
+  "runId": "45702b24-fd3a-44eb-8ec5-6b8176314f6a",
+  "sourceRevision": "dff94c42085aad89bcdba5ef1a340c69a893eb61",
+  "sourceTreeSha256": "9f36fa4abe725a56004debbd5cccc5a3eecc78735fc04e51f8c6811086c37d0c",
+  "startedAt": "2026-10-12T13:20:10.248Z",
+  "completedAt": "2026-10-12T13:31:09.040Z",
+  "scope": "explicit-CV-approval-with-current-Media-revalidation-and-atomic-safe-replay",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1",
+    "sharp": "sharp-0.35.4;libvips-8.18.6"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 20
+    },
+    "scanner": {
+      "available": true,
+      "version": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+      "executions": 39
+    },
+    "processors": {
+      "pdf": "17.12.1",
+      "image": "sharp-0.35.4;libvips-8.18.6",
+      "video": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+      "executions": {
+        "pdf": 9,
+        "image": 5,
+        "video": 5
+      }
+    }
+  },
+  "migrationUpgrade": {
+    "migration": "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+    "preexistingConfiguredOwners": 1,
+    "migrations": [
+      "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "20261012040000_accept_registered_cv_versions.sql"
+    ],
+    "migrationLedgerContainsTarget": true,
+    "backfilledRoots": 1,
+    "aggregateVersion": 1,
+    "verdict": "pass"
+  },
+  "policyIds": {
+    "migrations": [
+      "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "20261012040000_accept_registered_cv_versions.sql"
+    ],
+    "RLS": [
+      "cv_acceptance_history_owner_scope",
+      "cv_acceptance_commands_owner_scope"
+    ],
+    "limits": {
+      "sharedMediaLockTimeoutMs": 3000,
+      "statementTimeoutMs": 5000,
+      "transactionTimeoutMs": 8000
+    }
+  },
+  "principalScope": {
+    "database": "shipwithali_application constrained by portfolio_id and owner_id RLS",
+    "media": "real accepted English PDF with current facts and immutable object/hash/version snapshot",
+    "environment": "disposable loopback PostgreSQL, Auth and private Storage"
+  },
+  "formats": [
+    {
+      "id": "pdf",
+      "kind": "document",
+      "mimeType": "application/pdf",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "17.12.1"
+    },
+    {
+      "id": "png",
+      "kind": "image",
+      "mimeType": "image/png",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "jpeg",
+      "kind": "image",
+      "mimeType": "image/jpeg",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "webp",
+      "kind": "image",
+      "mimeType": "image/webp",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "mp4",
+      "kind": "video",
+      "mimeType": "video/mp4",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    },
+    {
+      "id": "webm",
+      "kind": "video",
+      "mimeType": "video/webm",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    }
+  ],
+  "checks": {
+    "acceptance": {
+      "suite": "tests/database/media-upload-intent.integration.test.ts",
+      "test": "Phase 6 #148 private upload intent with real PostgreSQL and Storage processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+      "scenarios": [
+        {
+          "name": "T10-01 only the configured Owner can accept a same-Portfolio registered English PDF; missing and foreign versions disclose no private facts",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-01"
+          ]
+        },
+        {
+          "name": "T10-02 current accepted, safe, suitable and accessible Media facts retain the exact PDF object/hash/version under the shared Media lock",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-02"
+          ]
+        },
+        {
+          "name": "T10-04 approval, history, root increment, exact receipt and minimal event commit together while Current CV remains empty",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-04"
+          ]
+        },
+        {
+          "name": "T10-06 a new key cannot approve an already accepted CV version",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-06"
+          ]
+        },
+        {
+          "name": "T10-03 incomplete Media acceptance facts fail without changing CV approval state",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-03"
+          ]
+        },
+        {
+          "name": "T10-03 duplicate Media acceptance facts fail without changing CV approval state",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-03"
+          ]
+        },
+        {
+          "name": "T10-03 version-inconsistent Media acceptance facts fail without changing CV approval state",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-03"
+          ]
+        },
+        {
+          "name": "T10-04 injected history failure rolls back CV state, root version, approval and success receipt",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-04"
+          ]
+        },
+        {
+          "name": "T10-04 injected receipt failure rolls back CV state, root version, approval and success receipt",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-04"
+          ]
+        },
+        {
+          "name": "T10-04 injected outbox failure rolls back CV state, approval history, root version and success receipt",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-04"
+          ]
+        },
+        {
+          "name": "T10-06 a fresh stale shared-root If-Match fails without creating an approval",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-06"
+          ]
+        },
+        {
+          "name": "T10-03 a rejected Media asset changed after registration cannot be accepted from stale snapshot facts",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-03"
+          ]
+        },
+        {
+          "name": "T10-06 exact replay returns the original receipt before later root/Media checks; changed intent conflicts",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-06"
+          ]
+        },
+        {
+          "name": "T10-07 accepted CV snapshot and approval remain private history and never change the empty Current CV pointer",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-07"
+          ]
+        },
+        {
+          "name": "T10-08 strict response and Owner views expose no PDF content or Media snapshot; approval tables use scoped forced RLS and append-only access",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-08"
+          ]
+        },
+        {
+          "name": "T10-05 accepting another registered version leaves an existing Current CV pointer and its event history unchanged",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-05"
+          ]
+        }
+      ],
+      "counts": {
+        "executed": 16,
+        "failed": 0,
+        "skipped": 0,
+        "criteriaCovered": 8
+      },
+      "verdict": "pass"
+    },
+    "predecessorCvPortfolio": {
+      "suite": "tests/database/media-upload-intent.integration.test.ts",
+      "test": "Phase 6 #148 private upload intent with real PostgreSQL and Storage processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+      "recordedAssertions": [
+        {
+          "name": "T09-01 concurrent authenticated reads initialize one empty version-1 scoped root",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-09 same-scope foreign keys, English and snapshot constraints, forced RLS, default-deny roles and bounded indexes exist",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-02 concurrent authenticated Owner POSTs replay one shared receipt after both miss the initial lookup",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-03 and T09-05 accepted same-Owner PDF facts are snapshot-bound to a UUIDv7 English registered version",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-06 registration increments the root and records one event without accepting or activating the CV",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-07 exact replay preserves the original receipt; changed intent conflicts and a fresh stale root version fails",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-04 unprocessed raw PDF, accepted non-PDF image, missing, foreign Owner, and non-English intents reject without writes",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-08 Owner projections return deterministic latest-100 version and activation views without deleting retained rows",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-06 root, version, receipt and event roll back together when outbox insertion fails",
+          "executed": true,
+          "status": "passed"
+        }
+      ],
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "scenarios": [
+        {
+          "id": "T09-01",
+          "name": "concurrent empty-root initialization and authenticated empty Owner view",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-02",
+          "name": "If-Match and idempotency on registration",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-03",
+          "name": "same-Owner accepted accessible PDF snapshot",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-04",
+          "name": "strict English PDF and scope eligibility",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-05",
+          "name": "UUIDv7 retained registration identity and numbering",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-06",
+          "name": "atomic root, version, receipt and event with rollback",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-07",
+          "name": "exact replay, changed intent and stale version",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-08",
+          "name": "derived current flags and bounded retained histories",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-09",
+          "name": "scope constraints, forced RLS, indexes and preexisting-owner migration backfill",
+          "executed": true,
+          "status": "passed"
+        }
+      ],
+      "counts": {
+        "executed": 9,
+        "failed": 0,
+        "skipped": 0,
+        "insertedVersions": 102,
+        "retainedAfterProjection": 100
+      },
+      "verdict": "pass"
+    },
+    "mediaAcceptance": {
+      "suite": "tests/database/media-upload-intent.integration.test.ts",
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "failedTests": [],
+      "verdict": "pass"
+    },
+    "application": {
+      "suites": [
+        "tests/modules/media-acceptance.test.ts",
+        "tests/modules/media-cv-contracts.test.ts",
+        "tests/modules/cv-portfolio.test.ts"
+      ],
+      "total": 23,
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0,
+      "verdict": "pass"
+    },
+    "acceptanceOperations": 6
+  },
+  "counts": {
+    "executed": 16,
+    "failed": 0,
+    "skipped": 0,
+    "criteriaCovered": 8
+  },
+  "scenarios": [
+    {
+      "name": "T10-01 only the configured Owner can accept a same-Portfolio registered English PDF; missing and foreign versions disclose no private facts",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-01"
+      ]
+    },
+    {
+      "name": "T10-02 current accepted, safe, suitable and accessible Media facts retain the exact PDF object/hash/version under the shared Media lock",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-02"
+      ]
+    },
+    {
+      "name": "T10-04 approval, history, root increment, exact receipt and minimal event commit together while Current CV remains empty",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-04"
+      ]
+    },
+    {
+      "name": "T10-06 a new key cannot approve an already accepted CV version",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-06"
+      ]
+    },
+    {
+      "name": "T10-03 incomplete Media acceptance facts fail without changing CV approval state",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-03"
+      ]
+    },
+    {
+      "name": "T10-03 duplicate Media acceptance facts fail without changing CV approval state",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-03"
+      ]
+    },
+    {
+      "name": "T10-03 version-inconsistent Media acceptance facts fail without changing CV approval state",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-03"
+      ]
+    },
+    {
+      "name": "T10-04 injected history failure rolls back CV state, root version, approval and success receipt",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-04"
+      ]
+    },
+    {
+      "name": "T10-04 injected receipt failure rolls back CV state, root version, approval and success receipt",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-04"
+      ]
+    },
+    {
+      "name": "T10-04 injected outbox failure rolls back CV state, approval history, root version and success receipt",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-04"
+      ]
+    },
+    {
+      "name": "T10-06 a fresh stale shared-root If-Match fails without creating an approval",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-06"
+      ]
+    },
+    {
+      "name": "T10-03 a rejected Media asset changed after registration cannot be accepted from stale snapshot facts",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-03"
+      ]
+    },
+    {
+      "name": "T10-06 exact replay returns the original receipt before later root/Media checks; changed intent conflicts",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-06"
+      ]
+    },
+    {
+      "name": "T10-07 accepted CV snapshot and approval remain private history and never change the empty Current CV pointer",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-07"
+      ]
+    },
+    {
+      "name": "T10-08 strict response and Owner views expose no PDF content or Media snapshot; approval tables use scoped forced RLS and append-only access",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-08"
+      ]
+    },
+    {
+      "name": "T10-05 accepting another registered version leaves an existing Current CV pointer and its event history unchanged",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-05"
+      ]
+    }
+  ],
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:cv-acceptance"
+  ],
+  "limitations": [
+    "Acceptance records approval only; Current CV activation and public delivery remain separate operations."
+  ]
+}

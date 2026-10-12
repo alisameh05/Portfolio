@@ -24,4 +24,4 @@ export type {
   CvPortfolioApplicationService,
 } from "./owner-contracts.js";
 export { createOwnerCvApplicationService } from "./owner-service.js";
-export type { CvPortfolioRepositoryPort, RegisterCvPortfolioVersionInput } from "./repository.js";
+export type { AcceptCvPortfolioVersionInput, CvPortfolioRepositoryPort, RegisterCvPortfolioVersionInput } from "./repository.js";

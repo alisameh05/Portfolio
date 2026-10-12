@@ -18,6 +18,7 @@ function repository(): MediaAcceptanceRepositoryPort {
       mediaAssetId, ownerId, assetVersion: 3, accepted: true, safe: true, suitable: true, accessible: true,
       policyVersion: "image-webp-variants-v1",
     })))),
+    getAcceptedPdfSnapshot: vi.fn(async () => ok(undefined)),
   };
 }
 
