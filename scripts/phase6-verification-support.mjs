@@ -23,15 +23,16 @@ export const PHASE6_FORMATS = Object.freeze([
   { id: "webm", kind: "video", mimeType: "video/webm", processor: "videoProcessor" },
 ]);
 
-export function isolatedPhase6Config(source, projectId) {
+export function isolatedPhase6Config(source, projectId, ports = { api: 57321, db: 57322, shadow: 57320, studio: 57323 }) {
   const config = source
     .replace(/^project_id = .*$/m, `project_id = "${projectId}"`)
     .replace(/(\[api\]\s*)enabled = false/, "$1enabled = true")
     .replace(/(\[auth\]\s*)enabled = false/, "$1enabled = true")
     .replace(/(\[storage\]\s*)enabled = false/, "$1enabled = true")
-    .replace(/^port = 54321$/m, "port = 57321")
-    .replace(/^port = 54322$/m, "port = 57322")
-    .replace(/^shadow_port = 54320$/m, "shadow_port = 57320");
+    .replace(/(\[api\][\s\S]*?^port = )54321$/m, (_match, prefix) => `${prefix}${ports.api}`)
+    .replace(/(\[db\][\s\S]*?^port = )54322$/m, (_match, prefix) => `${prefix}${ports.db}`)
+    .replace(/^shadow_port = 54320$/m, `shadow_port = ${ports.shadow}`)
+    .replace(/(\[studio\][\s\S]*?^port = )54323$/m, (_match, prefix) => `${prefix}${ports.studio}`);
   return `${config.trimEnd()}\n\n[storage.buckets.phase6-private-fixtures]\npublic = false\nfile_size_limit = "50MiB"\n\n[storage.buckets.media-candidates]\npublic = false\nfile_size_limit = "50MiB"\nallowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]\n\n[storage.buckets.media-processed]\npublic = false\nfile_size_limit = "50MiB"\nallowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]\n`;
 }
 
@@ -59,13 +60,16 @@ export function evaluatePhase6IntegrationTests(report, exitStatus) {
   const failedTests = assertions.filter((item) => item.status === "failed").map((item) => {
     const failure = String(item.failureMessages?.[0] ?? "");
     const codes = safeCodes.filter((code) => failure.includes(code));
-    const criteria = [...new Set(failure.match(/\bT09-0[1-9]\b/gu) ?? [])];
+    const criteria = [...new Set(failure.match(/\b(?:T09-0[1-9]|T10-0[1-8])\b/gu) ?? [])];
     return {
     name: item.fullName ?? "unknown-test",
     // Auth assertions can embed entire credential-bearing responses. Retain
     // only an error category and the known test's source location, never payloads.
     reason: String(item.failureMessages?.[0] ?? "").match(/AssertionError|TypeError|Test timed out|Error/u)?.[0] ?? "assertion-failed",
     location: failure.match(/tests[\\/]database[\\/]media-upload-intent\.integration\.test\.ts:\d+:\d+/u)?.[0] ?? "unknown-location",
+    ...(failure.match(/T09-01 (?:first|second) authenticated read returned HTTP \d+ \([A-Za-z0-9_-]+; repo=(?:ok|CV_PORTFOLIO_READ_FAILED|CV_PORTFOLIO_NOT_CONFIGURED|other-safe-error)(?:,(?:ok|CV_PORTFOLIO_READ_FAILED|CV_PORTFOLIO_NOT_CONFIGURED|other-safe-error))*\)/u)?.[0]
+      ? { detail: failure.match(/T09-01 (?:first|second) authenticated read returned HTTP \d+ \([A-Za-z0-9_-]+; repo=(?:ok|CV_PORTFOLIO_READ_FAILED|CV_PORTFOLIO_NOT_CONFIGURED|other-safe-error)(?:,(?:ok|CV_PORTFOLIO_READ_FAILED|CV_PORTFOLIO_NOT_CONFIGURED|other-safe-error))*\)/u)[0] }
+      : {}),
     ...(codes.length ? { codes } : {}), ...(criteria.length ? { criteria } : {}),
   }; });
   return { ...counts, ...(failedTests.length ? { failedTests } : {}), verdict: exitStatus === 0 && counts.total === 5 && counts.passed === 5 &&

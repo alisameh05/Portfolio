@@ -72,8 +72,27 @@ export function createOwnerCvApplicationService(input: {
       });
     },
 
-    async acceptOwnerCvVersion(_command: AcceptOwnerCvVersionApplicationCommand) {
-      return unavailable();
+    async acceptOwnerCvVersion(command: AcceptOwnerCvVersionApplicationCommand) {
+      if (!isAuthorizedOwner(command.actor, input.ownerId)) {
+        return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
+      }
+      if (!Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1 ||
+          !validIdempotencyKey(command.idempotencyKey) || typeof command.versionId !== "string" ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(command.versionId)) {
+        return err({ kind: "validation", code: "CV_ACCEPTANCE_INVALID" });
+      }
+      const requestHash = await hashCanonicalRequest({
+        ownerId: input.ownerId,
+        versionId: command.versionId,
+        expectedVersion: command.expectedVersion,
+      });
+      return input.repository.acceptOwnerCvVersion({
+        ownerId: input.ownerId,
+        idempotencyKey: command.idempotencyKey,
+        requestHash,
+        expectedVersion: command.expectedVersion,
+        versionId: command.versionId as StableId<"CvVersion">,
+      });
     },
 
     async activateOwnerCvVersion(_command: ActivateOwnerCvVersionApplicationCommand) {

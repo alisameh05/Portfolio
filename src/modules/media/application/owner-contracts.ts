@@ -140,6 +140,27 @@ export interface MediaAcceptanceFact {
   readonly consistencyVersion: string;
 }
 
+/** Immutable accepted PDF identity returned only for a current eligible Media asset. */
+export interface GetAcceptedPdfSnapshotQuery {
+  readonly ownerId: StableId<"Owner">;
+  readonly mediaAssetId: StableId<"MediaAsset">;
+}
+
+export interface AcceptedPdfSnapshot {
+  readonly mediaAssetId: StableId<"MediaAsset">;
+  readonly ownerId: StableId<"Owner">;
+  readonly assetVersion: number;
+  readonly decisionId: StableId<"MediaDecision">;
+  readonly objectId: StableId<"MediaObject">;
+  readonly sha256: string;
+  readonly objectVersion: string;
+}
+
+export type AcceptedPdfSnapshotResult =
+  | { readonly status: "not-eligible" }
+  | { readonly status: "not-pdf" }
+  | { readonly status: "accepted"; readonly snapshot: AcceptedPdfSnapshot };
+
 export interface GetMediaUsageQuery {
   readonly ownerId: StableId<string>;
   readonly mediaAssetId: StableId<string>;
@@ -176,6 +197,11 @@ export interface MediaReadApplicationService {
     query: GetMediaAcceptanceFactsQuery,
     transaction: TransactionContext,
   ): Promise<Result<ReadonlyArray<MediaAcceptanceFact>, Rejection>>;
+  /** Reads the exact immutable PDF snapshot behind the current accepted decision. */
+  getAcceptedPdfSnapshot(
+    query: GetAcceptedPdfSnapshotQuery,
+    transaction: TransactionContext,
+  ): Promise<Result<AcceptedPdfSnapshotResult, Rejection>>;
   getUsage(query: GetMediaUsageQuery): Promise<Result<MediaUsage, Rejection>>;
   resolveDelivery(
     query: ResolveMediaDeliveryQuery,

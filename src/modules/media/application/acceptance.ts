@@ -4,6 +4,9 @@ import type { TransactionContext } from "../../../runtime/ports.js";
 import type {
   AcceptOwnerMediaAssetApplicationCommand,
   GetMediaAcceptanceFactsQuery,
+  GetAcceptedPdfSnapshotQuery,
+  AcceptedPdfSnapshot,
+  AcceptedPdfSnapshotResult,
   MediaAcceptanceFact,
   OwnerMediaCommandReceipt,
 } from "./owner-contracts.js";
@@ -32,6 +35,10 @@ export interface MediaAcceptanceRepositoryPort {
     query: GetMediaAcceptanceFactsQuery,
     transaction: TransactionContext,
   ): Promise<Result<ReadonlyArray<MediaAcceptanceRepositoryFact>, Rejection>>;
+  getAcceptedPdfSnapshot(
+    query: GetAcceptedPdfSnapshotQuery,
+    transaction: TransactionContext,
+  ): Promise<Result<AcceptedPdfSnapshot | undefined, Rejection>>;
 }
 
 export interface MediaAcceptanceApplicationService {
@@ -42,6 +49,10 @@ export interface MediaAcceptanceApplicationService {
     query: GetMediaAcceptanceFactsQuery,
     transaction: TransactionContext,
   ): Promise<Result<ReadonlyArray<MediaAcceptanceFact>, Rejection>>;
+  getAcceptedPdfSnapshot(
+    query: GetAcceptedPdfSnapshotQuery,
+    transaction: TransactionContext,
+  ): Promise<Result<AcceptedPdfSnapshotResult, Rejection>>;
 }
 
 type Accessibility = AcceptOwnerMediaAssetApplicationCommand["accessibility"];
@@ -75,6 +86,41 @@ export function createMediaAcceptanceApplicationService(input: {
   readonly scope: { readonly ownerId: StableId<"Owner"> };
   readonly repository: MediaAcceptanceRepositoryPort;
 }): MediaAcceptanceApplicationService {
+  const getAcceptanceFacts: MediaAcceptanceApplicationService["getAcceptanceFacts"] = async (query, transaction) => {
+    if (query.ownerId !== input.scope.ownerId) return err({ kind: "forbidden", code: "OWNER_SCOPE_MISMATCH" });
+    if (transaction?.kind !== "transaction") return err({ kind: "validation", code: "MEDIA_TRANSACTION_REQUIRED" });
+    const ids = [...new Set(query.mediaAssetIds)];
+    if (ids.some((id) => typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(id))) {
+      return err({ kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" });
+    }
+    if (ids.length === 0) return ok([]);
+    const sortedIds = ids.sort();
+    const result = await input.repository.getAcceptanceFacts({ ownerId: query.ownerId, mediaAssetIds: sortedIds, intendedUse: query.intendedUse }, transaction);
+    if (!result.ok) return result;
+    const expected = new Set(sortedIds);
+    const byId = new Map<string, MediaAcceptanceRepositoryFact>();
+    for (const fact of result.value) {
+      if (!expected.has(fact.mediaAssetId) || byId.has(fact.mediaAssetId) || fact.ownerId !== query.ownerId ||
+          !Number.isSafeInteger(fact.assetVersion) || fact.assetVersion < 1 ||
+          (fact.policyVersion !== null && (fact.policyVersion.length < 1 || fact.policyVersion.length > 160))) {
+        return err({ kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" });
+      }
+      byId.set(fact.mediaAssetId, fact);
+    }
+    if (byId.size !== sortedIds.length) return err({ kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" });
+    const consistencyVersion = `media-acceptance-v1:${await hashCanonicalRequest({
+      policy: "media-acceptance-facts-v1", ownerId: query.ownerId, intendedUse: query.intendedUse,
+      facts: sortedIds.map((id) => {
+        const fact = byId.get(id)!;
+        return { id, version: fact.assetVersion, accepted: fact.accepted, safe: fact.safe,
+          suitable: fact.suitable, accessible: fact.accessible, policyVersion: fact.policyVersion };
+      }),
+    })}`;
+    return ok(sortedIds.map((id) => {
+      const { policyVersion: _policyVersion, ...fact } = byId.get(id)!;
+      return { ...fact, consistencyVersion };
+    }));
+  };
   return {
     async acceptOwnerMediaAsset(command) {
       if (!validOwnerActor(command.actor, input.scope.ownerId)) {
@@ -93,42 +139,23 @@ export function createMediaAcceptanceApplicationService(input: {
       return input.repository.accept({ ...command, accessibility: accessibility.value, requestHash });
     },
 
-    async getAcceptanceFacts(query, transaction) {
-      if (query.ownerId !== input.scope.ownerId) return err({ kind: "forbidden", code: "OWNER_SCOPE_MISMATCH" });
-      if (transaction?.kind !== "transaction") return err({ kind: "validation", code: "MEDIA_TRANSACTION_REQUIRED" });
-      const ids = [...new Set(query.mediaAssetIds)];
-      if (ids.some((id) => typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(id))) {
+    getAcceptanceFacts,
+    async getAcceptedPdfSnapshot(query, transaction) {
+      const facts = await getAcceptanceFacts({ ownerId: query.ownerId, mediaAssetIds: [query.mediaAssetId], intendedUse: "supporting-artifact" }, transaction);
+      if (!facts.ok) return facts;
+      const fact = facts.value[0];
+      if (facts.value.length !== 1 || fact === undefined || fact.mediaAssetId !== query.mediaAssetId ||
+          fact.ownerId !== query.ownerId || !fact.accepted || !fact.safe || !fact.suitable || !fact.accessible) {
+        return ok({ status: "not-eligible" });
+      }
+      const snapshot = await input.repository.getAcceptedPdfSnapshot(query, transaction);
+      if (!snapshot.ok) return snapshot;
+      if (snapshot.value === undefined) return ok({ status: "not-pdf" });
+      if (snapshot.value.mediaAssetId !== fact.mediaAssetId || snapshot.value.ownerId !== fact.ownerId ||
+          snapshot.value.assetVersion !== fact.assetVersion) {
         return err({ kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" });
       }
-      if (ids.length === 0) return ok([]);
-      const sortedIds = ids.sort();
-      const result = await input.repository.getAcceptanceFacts({ ownerId: query.ownerId, mediaAssetIds: sortedIds, intendedUse: query.intendedUse }, transaction);
-      if (!result.ok) return result;
-      const expected = new Set(sortedIds);
-      const byId = new Map<string, MediaAcceptanceRepositoryFact>();
-      for (const fact of result.value) {
-        if (!expected.has(fact.mediaAssetId) || byId.has(fact.mediaAssetId) || fact.ownerId !== query.ownerId ||
-            !Number.isSafeInteger(fact.assetVersion) || fact.assetVersion < 1 ||
-            (fact.policyVersion !== null && (fact.policyVersion.length < 1 || fact.policyVersion.length > 160))) {
-          return err({ kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" });
-        }
-        byId.set(fact.mediaAssetId, fact);
-      }
-      if (byId.size !== sortedIds.length) return err({ kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" });
-      const consistencyVersion = `media-acceptance-v1:${await hashCanonicalRequest({
-        policy: "media-acceptance-facts-v1",
-        ownerId: query.ownerId,
-        intendedUse: query.intendedUse,
-        facts: sortedIds.map((id) => {
-          const fact = byId.get(id)!;
-          return { id, version: fact.assetVersion, accepted: fact.accepted, safe: fact.safe,
-            suitable: fact.suitable, accessible: fact.accessible, policyVersion: fact.policyVersion };
-        }),
-      })}`;
-      return ok(sortedIds.map((id) => {
-        const { policyVersion: _policyVersion, ...fact } = byId.get(id)!;
-        return { ...fact, consistencyVersion };
-      }));
+      return ok({ status: "accepted", snapshot: snapshot.value });
     },
   };
 }

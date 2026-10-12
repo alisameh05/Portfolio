@@ -1,5 +1,6 @@
 import type { IdempotencyKey, Rejection, Result, StableId } from "@shared/domain";
 import type {
+  OwnerCvCommandReceipt,
   OwnerCvPortfolioView,
   RegisterOwnerCvVersionReceipt,
 } from "./owner-contracts.js";
@@ -15,6 +16,14 @@ export interface RegisterCvPortfolioVersionInput {
   readonly versionId: StableId<"CvVersion">;
 }
 
+export interface AcceptCvPortfolioVersionInput {
+  readonly ownerId: StableId<"Owner">;
+  readonly idempotencyKey: IdempotencyKey;
+  readonly requestHash: string;
+  readonly expectedVersion: number;
+  readonly versionId: StableId<"CvVersion">;
+}
+
 /** Persistence boundary for the Owner CV Portfolio registration workflow. */
 export interface CvPortfolioRepositoryPort {
   /** Creates the configured empty root once, then returns bounded safe views. */
@@ -25,4 +34,8 @@ export interface CvPortfolioRepositoryPort {
   registerOwnerCvVersion(
     input: RegisterCvPortfolioVersionInput,
   ): Promise<Result<RegisterOwnerCvVersionReceipt, Rejection>>;
+  /** Revalidates the immutable Media snapshot and atomically records CV approval. */
+  acceptOwnerCvVersion(
+    input: AcceptCvPortfolioVersionInput,
+  ): Promise<Result<OwnerCvCommandReceipt, Rejection>>;
 }
