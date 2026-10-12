@@ -417,6 +417,46 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const actor = { kind: "owner" as const, ownerId, sessionId: "phase6-media-rejection-owner" };
     const media = await getOwnerMediaApplicationService();
     const reason = "Owner confirmed this candidate should not remain available.";
+    async function contendAtMediaLock<T extends readonly (() => Promise<unknown>)[]>(mediaId: StableId<"MediaAsset">, commands: T, stageFirst = false): Promise<{
+      [K in keyof T]: T[K] extends () => Promise<infer Result> ? Result : never
+    }> {
+      await admin.query("begin");
+      const pending: Promise<unknown>[] = [];
+      let released = false;
+      try {
+        await admin.query("select pg_advisory_xact_lock(hashtextextended($1::text, 0))", [mediaId]);
+        const start = (index: number) => pending.push(commands[index]!());
+        const waitFor = async (expected: number) => {
+          let waiting = 0;
+          for (let attempt = 0; attempt < 100; attempt += 1) {
+            const result = await admin.query(`select count(distinct activity.pid)::int as count
+              from pg_locks lock join pg_stat_activity activity on activity.pid = lock.pid
+              where activity.usename = $1 and lock.locktype = 'advisory' and not lock.granted`, [roleName]);
+            waiting = Number(result.rows[0]?.count ?? 0);
+            if (waiting === expected) break;
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          }
+          expect(waiting, "all independent transactions must reach the Media advisory lock before release")
+            .toBe(expected);
+        };
+        if (stageFirst) {
+          start(0);
+          await waitFor(1);
+          for (let index = 1; index < commands.length; index += 1) start(index);
+        } else {
+          for (let index = 0; index < commands.length; index += 1) start(index);
+        }
+        await waitFor(commands.length);
+        await admin.query("commit");
+        released = true;
+        return await Promise.all(pending) as {
+          [K in keyof T]: T[K] extends () => Promise<infer Result> ? Result : never
+        };
+      } finally {
+        if (!released) await admin.query("rollback");
+        if (pending.length > 0) await Promise.allSettled(pending);
+      }
+    }
 
     // A candidate with no current Content or CV use can be rejected. The
     // owner private aggregate retains a safe decision while the outbox keeps
@@ -430,9 +470,14 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const rejected = await media.rejectOwnerMediaAsset(unusedCommand);
     expect(rejected, JSON.stringify(rejected)).toMatchObject({ ok: true, value: { aggregateVersion: 4, outcome: "media-rejected" } });
     expect(await media.rejectOwnerMediaAsset(unusedCommand)).toEqual(rejected);
+    // A later aggregate version must not change the meaning of this exact
+    // command receipt. Rejected media is terminal, so advance the fixture
+    // version directly to exercise receipt-first replay against newer state.
+    await admin.query("update media.processing_states set aggregate_version = aggregate_version + 1 where media_id = $1::uuid", [unusedId]);
+    expect(await media.rejectOwnerMediaAsset(unusedCommand)).toEqual(rejected);
     expect(await media.rejectOwnerMediaAsset({ ...unusedCommand, reason: "Changed private rationale." }))
       .toMatchObject({ ok: false, error: { code: "IDEMPOTENCY_CONFLICT" } });
-    const forbiddenReaccept = await createAcceptanceService().acceptOwnerMediaAsset({ actor, mediaId: unusedId, expectedVersion: 4,
+    const forbiddenReaccept = await createAcceptanceService().acceptOwnerMediaAsset({ actor, mediaId: unusedId, expectedVersion: 5,
       idempotencyKey: "phase6-rejection-reaccept" as never, accessibility: { kind: "document", summary: "Readable PDF." } });
     expect(forbiddenReaccept, JSON.stringify(forbiddenReaccept)).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
     const unusedFacts = await admin.query(
@@ -444,8 +489,21 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(unusedFacts.rows[0]).toMatchObject({ rejections: 1, receipts: 1, events: 1, private_reason: reason });
     expect(unusedFacts.rows[0]?.event_payload).not.toContain(reason);
     expect(unusedFacts.rows[0]?.event_payload).toContain("OWNER_REJECTED");
+    const retainedOutput = await admin.query(`select object.object_id::text as object_id, object.sha256
+      from media.processing_attempts attempt
+      join media.processed_objects object on object.object_id = attempt.output_object_id
+      where attempt.media_id = $1::uuid and attempt.result = 'passed'`, [unusedId]);
+    expect(retainedOutput.rowCount).toBe(1);
+    const retainedObject = retainedOutput.rows[0];
+    const retainedPath = `/storage/v1/object/media-processed/processed/${portfolioId}/${unusedId}/${String(retainedObject?.object_id)}/${String(retainedObject?.sha256)}.pdf`;
+    const retainedPrivateBytes = await storageRequest(retainedPath, { headers: headers(SERVICE_ROLE_KEY!) });
+    expect(retainedPrivateBytes.ok).toBe(true);
+    const retainedBytes = Buffer.from(await retainedPrivateBytes.arrayBuffer());
+    expect(createHash("sha256").update(retainedBytes).digest("hex")).toBe(retainedObject?.sha256);
+    const rejectedObjectAnonymousRead = await storageRequest(retainedPath, { headers: headers(ANON_KEY!) });
+    expect(rejectedObjectAnonymousRead.status).toBeGreaterThanOrEqual(400);
     const terminalProcessing = await rejectionProcessingByMediaId.get(unusedId)?.record({ actor, mediaId: unusedId,
-      expectedVersion: 4, idempotencyKey: "phase6-rejection-reprocess" as never, result: "passed",
+      expectedVersion: 5, idempotencyKey: "phase6-rejection-reprocess" as never, result: "passed",
       detectedMediaType: "application/pdf", detectedByteLength: Number((await admin.query(
         "select declared_byte_length from media.assets where media_id = $1::uuid", [unusedId])).rows[0]?.declared_byte_length),
       sha256: String((await admin.query("select declared_sha256 from media.assets where media_id = $1::uuid", [unusedId])).rows[0]?.declared_sha256) });
@@ -457,10 +515,16 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       byteLength: pendingBytes.byteLength, sha256: createHash("sha256").update(pendingBytes).digest("hex") });
     expect(pending.ok).toBe(true);
     if (!pending.ok) throw new Error("PHASE6_REJECTION_PENDING_UPLOAD_FAILED");
+    const processingClaimKeyHash = createHash("sha256").update("phase6-rejection-pending-processing-claim").digest("hex");
+    await admin.query(`insert into media.processing_claims
+      (portfolio_id, owner_id, media_id, idempotency_key_hash, request_hash, claim_id, lease_expires_at)
+      values ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::uuid, now() + interval '1 minute')`,
+    [portfolioId, ownerId, pending.value.mediaId, processingClaimKeyHash, createHash("sha256").update("processing-claim-request").digest("hex"), createStableId("MediaAsset")]);
     const pendingRejection = await media.rejectOwnerMediaAsset({ actor, mediaId: pending.value.mediaId, expectedVersion: 1,
       idempotencyKey: "phase6-rejection-pending" as never, reason });
     expect(pendingRejection, JSON.stringify(pendingRejection))
       .toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+    expect((await admin.query("select 1 from media.processing_claims where media_id = $1::uuid", [pending.value.mediaId])).rowCount).toBe(0);
 
     // Current CV use blocks rejection, then switching to another active CV
     // version removes the old media use and makes rejection safe.
@@ -540,12 +604,13 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     }
 
     const acceptanceRaceId = await createAcceptedRejectionCandidate("acceptance-race", false);
-    const acceptanceRaceCommand = createAcceptanceService().acceptOwnerMediaAsset({ actor, mediaId: acceptanceRaceId,
-      expectedVersion: 2, idempotencyKey: "phase6-rejection-accept-race" as never,
-      accessibility: { kind: "document", summary: "A readable one page PDF document." } });
-    const rejectionRaceCommand = media.rejectOwnerMediaAsset({ actor, mediaId: acceptanceRaceId, expectedVersion: 2,
-      idempotencyKey: "phase6-rejection-command-race" as never, reason });
-    const [acceptanceRaceResult, rejectionRaceResult] = await Promise.all([acceptanceRaceCommand, rejectionRaceCommand]);
+    const [acceptanceRaceResult, rejectionRaceResult] = await contendAtMediaLock(acceptanceRaceId, [
+      () => createAcceptanceService().acceptOwnerMediaAsset({ actor, mediaId: acceptanceRaceId,
+        expectedVersion: 2, idempotencyKey: "phase6-rejection-accept-race" as never,
+        accessibility: { kind: "document", summary: "A readable one page PDF document." } }),
+      () => media.rejectOwnerMediaAsset({ actor, mediaId: acceptanceRaceId, expectedVersion: 2,
+        idempotencyKey: "phase6-rejection-command-race" as never, reason }),
+    ] as const);
     expect(Number(acceptanceRaceResult.ok) + Number(rejectionRaceResult.ok)).toBe(1);
 
     // Start a rejection from the publish-ready barrier while the real Content
@@ -572,12 +637,13 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       idempotencyKey: "phase6-rejection-restore-race-hide" as never, correlationId: "phase6-rejection-restore-race-hide" });
     expect(restoreRaceHidden.ok).toBe(true);
     if (!restoreRaceHidden.ok) throw new Error("PHASE6_REJECTION_RESTORE_RACE_HIDE_FAILED");
-    const restoreRaceCommand = content.restoreContent({ actor, contentId: restoreRacePublication.contentId,
-      expectedVersion: restoreRaceHidden.value.aggregateVersion, idempotencyKey: "phase6-rejection-restore-race-restore" as never,
-      correlationId: "phase6-rejection-restore-race-restore" });
-    const rejectDuringRestore = media.rejectOwnerMediaAsset({ actor, mediaId: restoreRaceMediaId, expectedVersion: 3,
-      idempotencyKey: "phase6-rejection-restore-race-reject" as never, reason });
-    const [restoreRaceResult, rejectDuringRestoreResult] = await Promise.all([restoreRaceCommand, rejectDuringRestore]);
+    const [restoreRaceResult, rejectDuringRestoreResult] = await contendAtMediaLock(restoreRaceMediaId, [
+      () => content.restoreContent({ actor, contentId: restoreRacePublication.contentId,
+        expectedVersion: restoreRaceHidden.value.aggregateVersion, idempotencyKey: "phase6-rejection-restore-race-restore" as never,
+        correlationId: "phase6-rejection-restore-race-restore" }),
+      () => media.rejectOwnerMediaAsset({ actor, mediaId: restoreRaceMediaId, expectedVersion: 3,
+        idempotencyKey: "phase6-rejection-restore-race-reject" as never, reason }),
+    ] as const, true);
     expect(Number(restoreRaceResult.ok) + Number(rejectDuringRestoreResult.ok)).toBe(1);
 
     const cvRaceMediaId = await createAcceptedRejectionCandidate("cv-activation-race");
@@ -589,18 +655,43 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       expectedVersion: cvRegister.value.aggregateVersion, idempotencyKey: "phase6-rejection-cv-race-accept" as never });
     expect(cvAccept.ok).toBe(true);
     if (!cvAccept.ok) throw new Error("PHASE6_REJECTION_CV_RACE_ACCEPT_FAILED");
-    const activationRace = cv.activateOwnerCvVersion({ actor, versionId: cvRegister.value.versionId,
-      expectedVersion: cvAccept.value.aggregateVersion, idempotencyKey: "phase6-rejection-cv-race-activate" as never });
-    const cvRejectionRace = media.rejectOwnerMediaAsset({ actor, mediaId: cvRaceMediaId, expectedVersion: 3,
-      idempotencyKey: "phase6-rejection-cv-race-reject" as never, reason });
-    const [activationRaceResult, cvRejectionRaceResult] = await Promise.all([activationRace, cvRejectionRace]);
+    const [activationRaceResult, cvRejectionRaceResult] = await contendAtMediaLock(cvRaceMediaId, [
+      () => cv.activateOwnerCvVersion({ actor, versionId: cvRegister.value.versionId,
+        expectedVersion: cvAccept.value.aggregateVersion, idempotencyKey: "phase6-rejection-cv-race-activate" as never }),
+      () => media.rejectOwnerMediaAsset({ actor, mediaId: cvRaceMediaId, expectedVersion: 3,
+        idempotencyKey: "phase6-rejection-cv-race-reject" as never, reason }),
+    ] as const, true);
     expect(Number(activationRaceResult.ok) + Number(cvRejectionRaceResult.ok)).toBe(1);
+
+    const cvAcceptRaceId = await createAcceptedRejectionCandidate("cv-accept-race");
+    const cvAcceptRacePortfolio = await cv.getOwnerCvPortfolio({ actor });
+    expect(cvAcceptRacePortfolio.ok).toBe(true);
+    if (!cvAcceptRacePortfolio.ok) throw new Error("PHASE6_REJECTION_CV_ACCEPT_RACE_ROOT_UNAVAILABLE");
+    const cvAcceptRaceRegistration = await cv.registerOwnerCvVersion({ actor, mediaId: cvAcceptRaceId, locale: "en",
+      label: "CV acceptance race", expectedVersion: cvAcceptRacePortfolio.value.aggregateVersion,
+      idempotencyKey: "phase6-rejection-cv-accept-race-register" as never });
+    expect(cvAcceptRaceRegistration.ok).toBe(true);
+    if (!cvAcceptRaceRegistration.ok) throw new Error("PHASE6_REJECTION_CV_ACCEPT_RACE_REGISTER_FAILED");
+    const [cvAcceptRaceResult, cvRejectDuringAccept] = await contendAtMediaLock(cvAcceptRaceId, [
+      () => cv.acceptOwnerCvVersion({ actor, versionId: cvAcceptRaceRegistration.value.versionId,
+        expectedVersion: cvAcceptRaceRegistration.value.aggregateVersion,
+        idempotencyKey: "phase6-rejection-cv-accept-race-accept" as never }),
+      () => media.rejectOwnerMediaAsset({ actor, mediaId: cvAcceptRaceId, expectedVersion: 3,
+        idempotencyKey: "phase6-rejection-cv-accept-race-reject" as never, reason }),
+    ] as const);
+    expect(cvRejectDuringAccept).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+    if (cvAcceptRaceResult.ok) {
+      const activationAfterRejectedMedia = await cv.activateOwnerCvVersion({ actor, versionId: cvAcceptRaceRegistration.value.versionId,
+        expectedVersion: cvAcceptRaceResult.value.aggregateVersion,
+        idempotencyKey: "phase6-rejection-cv-accept-race-activate-after-reject" as never });
+      expect(activationAfterRejectedMedia).toMatchObject({ ok: false });
+    }
 
     mediaProcessingCounts.mediaRejectionScenarios = [
       "upload-pending and accepted rejection, stale version, exact replay, terminal guards, atomic receipt, rollback and redacted event",
       "current CV use blocks rejection and active replacement releases old media",
       "visible Content use blocks rejection, hidden use permits it, restore revalidates",
-      "Media acceptance, Content publication, CV activation and rejection serialize across independent transactions",
+      "Media acceptance, Content publication/restore, CV acceptance/activation and rejection serialize across independent transactions",
       "private media bytes remain in private Storage after rejection",
     ].map((name) => ({ name, executed: true, status: "passed" as const }));
     if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
