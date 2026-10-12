@@ -2050,28 +2050,78 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
 
       const foreignActivationPortfolioId = createStableId("Portfolio");
       const foreignActivationOwnerId = createStableId("Owner");
-      const foreignActivationVersionId = createStableId("CvVersion");
-      const foreignActivationSnapshot = await admin.query(`select media_id, media_asset_version, media_decision_id, media_object_id,
-          media_sha256, media_object_version from cv_portfolio.versions where version_id = $1::uuid`, [cvRegistration.value.versionId]);
-      if (!foreignActivationSnapshot.rows[0]) throw new Error("PHASE6_CV_FOREIGN_ACTIVATION_FIXTURE_FAILED");
-      await admin.query("begin");
-      try {
-        await admin.query("set local session_replication_role = replica");
-        await admin.query("insert into cv_portfolio.portfolios (portfolio_id, owner_id, aggregate_version) values ($1::uuid, $2::uuid, 1)",
-          [foreignActivationPortfolioId, foreignActivationOwnerId]);
-        await admin.query(`insert into cv_portfolio.versions
-            (version_id, portfolio_id, owner_id, media_id, media_asset_version, media_decision_id, media_object_id,
-             media_sha256, media_object_version, version_number, locale, label, state)
-          values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6::uuid, $7::uuid, $8, $9, 1, 'en', 'Foreign accepted CV', 'accepted')`,
-        [foreignActivationVersionId, foreignActivationPortfolioId, foreignActivationOwnerId,
-          foreignActivationSnapshot.rows[0].media_id, foreignActivationSnapshot.rows[0].media_asset_version,
-          foreignActivationSnapshot.rows[0].media_decision_id, foreignActivationSnapshot.rows[0].media_object_id,
-          foreignActivationSnapshot.rows[0].media_sha256, foreignActivationSnapshot.rows[0].media_object_version]);
-        await admin.query("commit");
-      } catch (error) {
-        await admin.query("rollback");
-        throw error;
-      }
+      const foreignSettings = createPortfolioSettingsService({ repository: createPostgresPortfolioSettingsRepository(),
+        transactions: appDatabase.transactions, scope: { ownerId: foreignActivationOwnerId, portfolioId: foreignActivationPortfolioId } });
+      const foreignProvision = await foreignSettings.provision({
+        profile: { displayName: "Foreign CV Test Owner", headline: "Private CV scope fixture", bio: "Disposable local integration fixture." },
+        contactChannels: [{ channel: "email", label: "Email", destination: "mailto:foreign-cv@example.invalid", availableLocales: ["en"] }],
+        globalCta: { label: "Contact", destination: "https://example.invalid/foreign-contact", unavailableFallback: "Unavailable" },
+      });
+      expect(foreignProvision.ok).toBe(true);
+      const foreignUploadService = createMediaUploadIntentApplicationService({
+        scope: { ownerId: foreignActivationOwnerId, portfolioId: foreignActivationPortfolioId },
+        repository: createPostgresMediaUploadIntentRepository(appDatabase.database, appDatabase.transactions),
+        target: targetAdapter,
+        vault: createUploadCapabilityVault(REPLAY_KEY),
+        ids: createSystemIdGenerator(),
+        clock: { now: () => new Date(appNow).toISOString() },
+      });
+      const foreignPdfHash = createHash("sha256").update(pdfBytes).digest("hex");
+      const foreignUpload = await foreignUploadService.create({ actor: { kind: "owner", ownerId: foreignActivationOwnerId, sessionId: "foreign-cv-fixture" },
+        idempotencyKey: "phase6-foreign-cv-media-upload" as never, kind: "document", originalFileName: "foreign-cv.pdf",
+        declaredMediaType: "application/pdf", byteLength: pdfBytes.byteLength, sha256: foreignPdfHash });
+      if (!foreignUpload.ok) throw new Error("PHASE6_CV_FOREIGN_MEDIA_UPLOAD_FAILED");
+      const foreignBytesUploaded = await fetch(foreignUpload.value.uploadTarget, {
+        method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" }, body: Buffer.from(pdfBytes),
+      });
+      expect([200, 201]).toContain(foreignBytesUploaded.status);
+      const foreignMediaProcessing = createMediaProcessingApplicationService({
+        scope: { ownerId: foreignActivationOwnerId },
+        repository: createPostgresMediaProcessingRepository({ database: appDatabase.database, transactions: appDatabase.transactions,
+          scope: { portfolioId: foreignActivationPortfolioId, ownerId: foreignActivationOwnerId } }),
+        storage: normalProcessingStorage,
+        scanner: realScanner,
+        processor: realProcessor,
+        imageProcessor: realImageProcessor,
+        digest: { sha256(input) { return createHash("sha256").update(input).digest("hex"); } },
+        ids: createSystemIdGenerator(), clock: { now: () => new Date(appNow).toISOString() },
+      });
+      const foreignMediaProcessed = await foreignMediaProcessing.record({
+        actor: { kind: "owner", ownerId: foreignActivationOwnerId, sessionId: "foreign-cv-fixture" },
+        idempotencyKey: "phase6-foreign-cv-media-process" as never, mediaId: foreignUpload.value.mediaId,
+        expectedVersion: 1, result: "passed", detectedMediaType: "application/pdf", detectedByteLength: pdfBytes.byteLength, sha256: foreignPdfHash,
+      });
+      if (!foreignMediaProcessed.ok) throw new Error("PHASE6_CV_FOREIGN_MEDIA_PROCESSING_FAILED");
+      const foreignMediaAcceptance = createMediaAcceptanceApplicationService({
+        scope: { ownerId: foreignActivationOwnerId, portfolioId: foreignActivationPortfolioId },
+        repository: createPostgresMediaAcceptanceRepository({ database: appDatabase.database, transactions: appDatabase.transactions,
+          scope: { portfolioId: foreignActivationPortfolioId, ownerId: foreignActivationOwnerId } }),
+        preflight: normalProcessingStorage.preflightAcceptedPdfObject,
+      });
+      const foreignMediaAccepted = await foreignMediaAcceptance.acceptOwnerMediaAsset({
+        actor: { kind: "owner", ownerId: foreignActivationOwnerId, sessionId: "foreign-cv-fixture" },
+        idempotencyKey: "phase6-foreign-cv-media-accept" as never, mediaId: foreignUpload.value.mediaId,
+        expectedVersion: foreignMediaProcessed.value.aggregateVersion, accessibility: { kind: "document", summary: "Accepted foreign PDF fixture." },
+      });
+      if (!foreignMediaAccepted.ok) throw new Error("PHASE6_CV_FOREIGN_MEDIA_ACCEPTANCE_FAILED");
+      const foreignCvService = createOwnerCvApplicationService({ ownerId: foreignActivationOwnerId,
+        repository: createPostgresCvPortfolioRepository({ database: appDatabase.database, transactions: appDatabase.transactions,
+          scope: { portfolioId: foreignActivationPortfolioId, ownerId: foreignActivationOwnerId }, media: foreignMediaAcceptance }) });
+      const foreignCvRoot = await foreignCvService.getOwnerCvPortfolio({ actor: { kind: "owner", ownerId: foreignActivationOwnerId, sessionId: "foreign-cv-fixture" } });
+      if (!foreignCvRoot.ok) throw new Error("PHASE6_CV_FOREIGN_ROOT_FAILED");
+      const foreignCvRegistration = await foreignCvService.registerOwnerCvVersion({
+        actor: { kind: "owner", ownerId: foreignActivationOwnerId, sessionId: "foreign-cv-fixture" },
+        idempotencyKey: "phase6-foreign-cv-register" as never, expectedVersion: foreignCvRoot.value.aggregateVersion,
+        mediaId: foreignUpload.value.mediaId, locale: "en", label: "Foreign accepted CV",
+      });
+      if (!foreignCvRegistration.ok) throw new Error("PHASE6_CV_FOREIGN_REGISTRATION_FAILED");
+      const foreignCvAccepted = await foreignCvService.acceptOwnerCvVersion({
+        actor: { kind: "owner", ownerId: foreignActivationOwnerId, sessionId: "foreign-cv-fixture" },
+        idempotencyKey: "phase6-foreign-cv-approve" as never, expectedVersion: foreignCvRegistration.value.aggregateVersion,
+        versionId: foreignCvRegistration.value.versionId,
+      });
+      if (!foreignCvAccepted.ok) throw new Error("PHASE6_CV_FOREIGN_APPROVAL_FAILED");
+      const foreignActivationVersionId = foreignCvRegistration.value.versionId;
       const beforeForeignActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
       if (!beforeForeignActivation.ok) throw new Error("PHASE6_CV_FOREIGN_ACTIVATION_STATE_FAILED");
       const foreignActivationCountsBefore = await admin.query(`select
@@ -2090,7 +2140,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
           (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid and is_current) as current_flags`, [portfolioId, ownerId]);
       await admin.query("delete from cv_portfolio.versions where version_id = $1::uuid", [foreignActivationVersionId]);
       await admin.query("delete from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [foreignActivationPortfolioId, foreignActivationOwnerId]);
-      cvActivationScenario("T11-09 an out-of-scope CV version ID is not found and cannot mutate this Owner's pointer, flags, history, receipts or outbox",
+      cvActivationScenario("T11-09 a valid accepted foreign Owner CV is not found and cannot mutate this Owner's pointer, flags, history, receipts or outbox",
         !foreignActivation.ok && foreignActivation.error.kind === "not_found" && afterForeignActivation.ok &&
         afterForeignActivation.value.aggregateVersion === beforeForeignActivation.value.aggregateVersion &&
         afterForeignActivation.value.currentVersionId === beforeForeignActivation.value.currentVersionId &&
