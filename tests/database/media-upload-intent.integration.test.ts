@@ -490,6 +490,23 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
   });
 
   it("commits a scoped candidate and replays the same encrypted target without re-signing", async () => {
+    const cvService = await getOwnerCvApplicationService();
+    for (let round = 0; round < 10; round += 1) {
+      await admin.query("delete from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
+      const readCodes: string[] = [];
+      const observedService = { ...cvService, async getOwnerCvPortfolio(query: Parameters<typeof cvService.getOwnerCvPortfolio>[0]) {
+        const result = await cvService.getOwnerCvPortfolio(query);
+        readCodes.push(result.ok ? "ok" : result.error.code);
+        return result;
+      } };
+      const responses = await Promise.all([0, 1].map(() => handleGetOwnerCvPortfolio(new Request("https://example.com/api/owner/v1/cv", {
+        headers: withOwnerTestAuth({}),
+      }), { service: observedService, security: ownerSecurity() })));
+      const statuses = responses.map((response) => response.status);
+      expect(statuses, `T09-01 concurrent root initialization: ${JSON.stringify({ round, statuses, readCodes })}`).toEqual([200, 200]);
+      const roots = await admin.query("select count(*)::int as count from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
+      expect(roots.rows[0]?.count).toBe(1);
+    }
     const key = `phase6-upload-intent-${randomBytes(16).toString("hex")}`;
     const service = createService();
     const first = await issue(key, undefined, service);
@@ -1440,7 +1457,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       .toMatchObject({ ok: true, value: { facts: [{ mediaAssetId: safe.mediaId, inUse: true }] } });
     const owner = { kind: "owner" as const, ownerId, sessionId: "phase6-content-media-owner" };
     const hidden = await content.hideContent({ actor: owner, contentId: project.contentId,
-      expectedVersion: project.published.value.aggregateVersion, idempotencyKey: "phase6-accepted-project-hide" as never,
+      expectedVersion: arabicAggregateVersion, idempotencyKey: "phase6-accepted-project-hide" as never,
       correlationId: "phase6-accepted-project-hide" });
     expect(hidden.ok).toBe(true);
     expect(await visibleUsage(safe.mediaId as StableId<"MediaAsset">))
@@ -1482,7 +1499,9 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       expectedVersion: hidden.ok ? hidden.value.aggregateVersion : 0, idempotencyKey: "phase6-accepted-project-restore" as never,
       correlationId: "phase6-accepted-project-restore" });
     await restoreWriteStarted;
-    expect(publicationLockOrder.slice(restoreOrderStart)).toEqual(["media-shared-locks", "content-lifecycle-write"]);
+    expect(publicationLockOrder.slice(restoreOrderStart)).toEqual([
+      "media-shared-locks", "media-shared-locks", "content-lifecycle-write",
+    ]);
     const restoreLockProbe = await appDatabase.transactions.run(async (transaction) => {
       const rows = await sql<{ acquired: boolean }>`
         select pg_try_advisory_xact_lock(hashtextextended(${safe.mediaId}::text, 0)) as acquired
