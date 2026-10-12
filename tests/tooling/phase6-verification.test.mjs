@@ -43,6 +43,17 @@ test("the complete real integration gate rejects skipped, missing, failed, and p
   assert.equal(evaluatePhase6IntegrationTests({ ...report, numPendingTests: 1 }, 0).verdict, "fail");
 });
 
+test("integration diagnostics retain source locations without arbitrary Auth or database payloads", () => {
+  const message = 'AssertionError: {"password":"fixture-secret","apikey":"fixture-secret","refresh_token":"fixture-secret","access_token":"fixture-secret","serviceRoleKey":"fixture-secret","replayKey":"fixture-secret"} Bearer fixture-secret https://example.test/upload?token=fixture-secret postgresql://user:fixture-secret@localhost/test eyJfixture.fixture.signature\n at tests/database/media-upload-intent.integration.test.ts:605:9';
+  const result = evaluatePhase6IntegrationTests({ testResults: [{ assertionResults: [{
+    fullName: "known integration assertion", status: "failed", failureMessages: [message],
+  }] }] }, 1);
+  assert.equal(result.verdict, "fail");
+  assert.deepEqual(result.failedTests, [{ name: "known integration assertion", reason: "AssertionError",
+    location: "tests/database/media-upload-intent.integration.test.ts:605:9" }]);
+  assert.doesNotMatch(JSON.stringify(result), /fixture-secret|eyJfixture|postgresql:|https:/u);
+});
+
 function passingReport() {
   const predecessorContexts = loadPhase6PredecessorContexts();
   predecessorContexts.phase5.sourceTreeSha256 = "tree";

@@ -54,10 +54,10 @@ export function evaluatePhase6IntegrationTests(report, exitStatus) {
   };
   const failedTests = assertions.filter((item) => item.status === "failed").map((item) => ({
     name: item.fullName ?? "unknown-test",
-    reason: String(item.failureMessages?.[0] ?? "assertion-failed").split(/\r?\n/u).slice(0, 12).join(" | ")
-      .replace(/(?:postgres(?:ql)?|https?):\/\/\S+/giu, "[url]")
-      .replace(/(?:Bearer\s+|token=|apikey[=: ]+|password[=: ]+)\S+/giu, "[credential]")
-      .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gu, "[token]").slice(0, 1400),
+    // Auth assertions can embed entire credential-bearing responses. Retain
+    // only an error category and the known test's source location, never payloads.
+    reason: String(item.failureMessages?.[0] ?? "").match(/AssertionError|TypeError|Test timed out|Error/u)?.[0] ?? "assertion-failed",
+    location: String(item.failureMessages?.[0] ?? "").match(/tests[\\/]database[\\/]media-upload-intent\.integration\.test\.ts:\d+:\d+/u)?.[0] ?? "unknown-location",
   }));
   return { ...counts, ...(failedTests.length ? { failedTests } : {}), verdict: exitStatus === 0 && counts.total === 5 && counts.passed === 5 &&
     report?.numTotalTests === 5 && report?.numPassedTests === 5 && report?.numFailedTests === 0 &&
