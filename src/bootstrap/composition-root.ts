@@ -286,7 +286,14 @@ export async function initializeDatabaseRuntime(
             ...failClosed,
             createOwnerMediaUploadIntent: uploadIntent.create,
           };
+          let mediaStorage: ReturnType<typeof createSupabaseMediaProcessingStorage> | undefined;
           if (env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]) {
+            mediaStorage = createSupabaseMediaProcessingStorage({
+              storageUrl: env["SUPABASE_URL"],
+              serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
+              ...(env["MEDIA_CANDIDATE_BUCKET"] === undefined ? {} : { candidateBucket: env["MEDIA_CANDIDATE_BUCKET"] }),
+              ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+            });
             const processing = createMediaProcessingApplicationService({
               scope: { ownerId: configuredScope.ownerId.value },
               repository: createPostgresMediaProcessingRepository({
@@ -294,12 +301,7 @@ export async function initializeDatabaseRuntime(
                 transactions: operations.transactions,
                 scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
               }),
-              storage: createSupabaseMediaProcessingStorage({
-                storageUrl: env["SUPABASE_URL"],
-                serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
-                ...(env["MEDIA_CANDIDATE_BUCKET"] === undefined ? {} : { candidateBucket: env["MEDIA_CANDIDATE_BUCKET"] }),
-                ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
-              }),
+              storage: mediaStorage,
               scanner: createClamAvScanner({
                 ...(env["CLAMSCAN_PATH"] === undefined ? {} : { executable: env["CLAMSCAN_PATH"] }),
                 maxBytes: 50 * 1024 * 1024,
@@ -330,12 +332,13 @@ export async function initializeDatabaseRuntime(
           ]);
           const scope = { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value };
           const mediaAcceptance = createMediaAcceptanceApplicationService({
-            scope: { ownerId: scope.ownerId },
+            scope: { ownerId: scope.ownerId, portfolioId: scope.portfolioId },
             repository: createPostgresMediaAcceptanceRepository({
               database: database.database,
               transactions: operations.transactions,
               scope,
             }),
+            ...(mediaStorage === undefined ? {} : { preflight: mediaStorage.preflightAcceptedPdfObject }),
           });
           ownerCv = createOwnerCvApplicationService({
             ownerId: scope.ownerId,

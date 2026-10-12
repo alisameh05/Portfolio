@@ -200,11 +200,13 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
   }
 
   function createAcceptanceService() {
+    const storage = createSupabaseMediaProcessingStorage({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY! });
     return createMediaAcceptanceApplicationService({
-      scope: { ownerId },
+      scope: { ownerId, portfolioId },
       repository: createPostgresMediaAcceptanceRepository({
         database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
       }),
+      preflight: storage.preflightAcceptedPdfObject,
     });
   }
 
@@ -885,6 +887,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       const staleCandidate = await uploadImage(staleBytes, "image/png", "stale-commit");
       const staleOutputs: { readonly objectId: StableId<"MediaObject">; readonly sha256: string }[] = [];
       const staleStorage = {
+        preflightAcceptedPdfObject: normalProcessingStorage.preflightAcceptedPdfObject,
         readCandidate: (input: Parameters<typeof normalProcessingStorage.readCandidate>[0]) => normalProcessingStorage.readCandidate(input),
         async sealProcessedObject(input: Parameters<typeof normalProcessingStorage.sealProcessedObject>[0]) {
           const result = await normalProcessingStorage.sealProcessedObject(input);
@@ -1924,23 +1927,126 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         rejectedActivationCounts.rows[0]?.histories === beforeRejectedActivation.value.activationHistory.length &&
         rejectedActivationCounts.rows[0]?.receipts === 0 && rejectedActivationCounts.rows[0]?.events === historyAndEventCountAfterNoop.rows[0]?.events + 1);
 
-      const beforeUnavailableMedia = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
-      if (!beforeUnavailableMedia.ok) throw new Error("PHASE6_CV_ACTIVATION_MEDIA_BASELINE_FAILED");
-      const unavailableMediaRepository = createPostgresCvPortfolioRepository({
-        database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId },
-        media: { async getAcceptedPdfSnapshot() {
-          return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } };
-        } },
+      const unsafeAttempt = await admin.query(`select attempt.attempt_id::text as attempt_id, attempt.finding_codes
+        from media.processing_states state join media.processing_attempts attempt on attempt.attempt_id = state.latest_attempt_id
+        where state.media_id = $1::uuid and state.portfolio_id = $2::uuid and state.owner_id = $3::uuid`, [safe.mediaId, portfolioId, ownerId]);
+      const originalFindings = unsafeAttempt.rows[0]?.finding_codes;
+      if (!unsafeAttempt.rows[0]?.attempt_id) throw new Error("PHASE6_CV_ACTIVATION_UNSAFE_FIXTURE_FAILED");
+      await admin.query("update media.processing_attempts set finding_codes = '[\"T11_TEST_UNSAFE\"]'::jsonb where attempt_id = $1::uuid", [unsafeAttempt.rows[0].attempt_id]);
+      const beforeUnsafeActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      const unsafeActivation = beforeUnsafeActivation.ok ? await activateCvThroughHttp({ versionId: cvRegistration.value.versionId,
+        idempotencyKey: "phase6-cv-activate-media-unsafe", ifMatch: `"${beforeUnsafeActivation.value.aggregateVersion}"` }) : undefined;
+      const afterUnsafeActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      const unsafeActivationBody = unsafeActivation ? await unsafeActivation.json() as Record<string, unknown> : undefined;
+      await admin.query("update media.processing_attempts set finding_codes = $2::jsonb where attempt_id = $1::uuid",
+        [unsafeAttempt.rows[0].attempt_id, JSON.stringify(originalFindings)]);
+      cvActivationScenario("T11-09 unsafe processing evidence blocks activation without changing Current CV",
+        unsafeActivation?.status === 409 && unsafeActivationBody?.["code"] === "CV_MEDIA_NOT_ELIGIBLE" &&
+        beforeUnsafeActivation.ok && afterUnsafeActivation.ok &&
+        afterUnsafeActivation.value.currentVersionId === beforeUnsafeActivation.value.currentVersionId &&
+        afterUnsafeActivation.value.aggregateVersion === beforeUnsafeActivation.value.aggregateVersion);
+
+      const acceptedDecision = await admin.query(`select decision.decision_id::text as decision_id, decision.accessibility
+        from media.processing_states state join media.decision_history decision
+          on decision.media_id = state.media_id and decision.portfolio_id = state.portfolio_id
+          and decision.owner_id = state.owner_id and decision.aggregate_version = state.aggregate_version
+        where state.media_id = $1::uuid and state.portfolio_id = $2::uuid and state.owner_id = $3::uuid`, [safe.mediaId, portfolioId, ownerId]);
+      if (!acceptedDecision.rows[0]?.decision_id) throw new Error("PHASE6_CV_ACTIVATION_ACCESSIBILITY_FIXTURE_FAILED");
+      await admin.query("update media.decision_history set accessibility = '{\"kind\":\"video\",\"summary\":\"invalid fixture\"}'::jsonb where decision_id = $1::uuid", [acceptedDecision.rows[0].decision_id]);
+      const beforeInaccessibleActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      const inaccessibleActivation = beforeInaccessibleActivation.ok ? await activateCvThroughHttp({ versionId: cvRegistration.value.versionId,
+        idempotencyKey: "phase6-cv-activate-media-inaccessible-facts", ifMatch: `"${beforeInaccessibleActivation.value.aggregateVersion}"` }) : undefined;
+      const afterInaccessibleActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      const inaccessibleActivationBody = inaccessibleActivation ? await inaccessibleActivation.json() as Record<string, unknown> : undefined;
+      await admin.query("update media.decision_history set accessibility = $2::jsonb where decision_id = $1::uuid",
+        [acceptedDecision.rows[0].decision_id, JSON.stringify(acceptedDecision.rows[0].accessibility)]);
+      cvActivationScenario("T11-09 inaccessible acceptance facts block activation without changing Current CV",
+        inaccessibleActivation?.status === 409 && inaccessibleActivationBody?.["code"] === "CV_MEDIA_NOT_ELIGIBLE" &&
+        beforeInaccessibleActivation.ok && afterInaccessibleActivation.ok &&
+        afterInaccessibleActivation.value.currentVersionId === beforeInaccessibleActivation.value.currentVersionId &&
+        afterInaccessibleActivation.value.aggregateVersion === beforeInaccessibleActivation.value.aggregateVersion);
+
+      const assertPreflightFailurePreservesActivation = async (input: {
+        readonly scenario: string;
+        readonly key: string;
+        readonly result: "missing" | "outage" | "inaccessible" | "binding";
+      }) => {
+        const mediaAcceptance = createAcceptanceService();
+        const media = {
+          ...mediaAcceptance,
+          async getAcceptedPdfSnapshot(query: Parameters<typeof mediaAcceptance.getAcceptedPdfSnapshot>[0], transaction: Parameters<typeof mediaAcceptance.getAcceptedPdfSnapshot>[1]) {
+            const accepted = await mediaAcceptance.getAcceptedPdfSnapshot(query, transaction);
+            if (!accepted.ok || accepted.value.status !== "accepted") return accepted;
+            if (input.result === "inaccessible") return { ok: true as const, value: { status: "not-eligible" as const } };
+            if (input.result === "binding") return { ok: true as const, value: { status: "accepted" as const,
+              snapshot: { ...accepted.value.snapshot, objectId: createStableId("MediaObject") } } };
+            return accepted;
+          },
+          async preflightAcceptedPdfObject() {
+            return input.result === "missing"
+              ? { ok: false as const, error: { kind: "conflict" as const, code: "CV_MEDIA_NOT_ELIGIBLE" } }
+              : input.result === "outage"
+                ? { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } }
+                : { ok: true as const, value: undefined };
+          },
+        };
+        const repository = createPostgresCvPortfolioRepository({
+          database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId }, media,
+        });
+        const service = createOwnerCvApplicationService({ ownerId, repository });
+        const before = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+        if (!before.ok) throw new Error("PHASE6_CV_ACTIVATION_PREFLIGHT_BASELINE_FAILED");
+        const beforeCounts = await admin.query(`select
+            (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
+            (select count(*)::int from cv_portfolio.activation_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
+            (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events,
+            (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid and is_current) as current_flags`, [portfolioId, ownerId]);
+        const activation = await service.activateOwnerCvVersion({ actor: cvOwner, idempotencyKey: input.key as never,
+          expectedVersion: before.value.aggregateVersion, versionId: competingActivationVersion });
+        const after = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+        const afterCounts = await admin.query(`select
+            (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
+            (select count(*)::int from cv_portfolio.activation_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
+            (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events,
+            (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid and is_current) as current_flags`, [portfolioId, ownerId]);
+        const expected = input.result === "outage" ? "MEDIA_STORAGE_UNAVAILABLE" : "CV_MEDIA_NOT_ELIGIBLE";
+        cvActivationScenario(input.scenario,
+          !activation.ok && activation.error.code === expected && after.ok &&
+          after.value.currentVersionId === before.value.currentVersionId && after.value.aggregateVersion === before.value.aggregateVersion &&
+          JSON.stringify(beforeCounts.rows[0]) === JSON.stringify(afterCounts.rows[0]));
+      };
+      await assertPreflightFailurePreservesActivation({
+        scenario: "T11-09 a missing accepted PDF object blocks activation without changing pointer, flags, history, receipts or outbox",
+        key: "phase6-cv-activate-media-object-missing", result: "missing",
       });
-      const unavailableMediaService = createOwnerCvApplicationService({ ownerId, repository: unavailableMediaRepository });
-      const unavailableMediaActivation = await unavailableMediaService.activateOwnerCvVersion({ actor: cvOwner,
-        idempotencyKey: "phase6-cv-activate-media-outage" as never, expectedVersion: beforeUnavailableMedia.value.aggregateVersion,
-        versionId: cvRegistration.value.versionId });
-      const afterUnavailableMedia = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
-      cvActivationScenario("T11-09 an unavailable accepted-Media preflight preserves the current portfolio state",
-        !unavailableMediaActivation.ok && unavailableMediaActivation.error.kind === "temporarily_unavailable" && afterUnavailableMedia.ok &&
-        afterUnavailableMedia.value.aggregateVersion === beforeUnavailableMedia.value.aggregateVersion &&
-        afterUnavailableMedia.value.currentVersionId === beforeUnavailableMedia.value.currentVersionId);
+      await assertPreflightFailurePreservesActivation({
+        scenario: "T11-09 a Storage outage during the real accepted-Media activation path preserves Current CV state",
+        key: "phase6-cv-activate-media-outage", result: "outage",
+      });
+      await assertPreflightFailurePreservesActivation({
+        scenario: "T11-09 inaccessible accepted Media blocks activation without changing the portfolio",
+        key: "phase6-cv-activate-media-inaccessible", result: "inaccessible",
+      });
+      await assertPreflightFailurePreservesActivation({
+        scenario: "T11-09 an immutable object binding mismatch blocks activation without changing the portfolio",
+        key: "phase6-cv-activate-media-binding", result: "binding",
+      });
+
+      const beforeRegisteredTarget = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      if (!beforeRegisteredTarget.ok) throw new Error("PHASE6_CV_ACTIVATION_INVALID_STATE_BASELINE_FAILED");
+      const registeredOnlyTarget = await registerCv({ idempotencyKey: "phase6-cv-register-unaccepted-target" as never,
+        expectedVersion: beforeRegisteredTarget.value.aggregateVersion, label: "CV registered but not accepted" });
+      if (!registeredOnlyTarget.ok) throw new Error("PHASE6_CV_ACTIVATION_INVALID_STATE_FIXTURE_FAILED");
+      const afterRegisteredTarget = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      if (!afterRegisteredTarget.ok) throw new Error("PHASE6_CV_ACTIVATION_INVALID_STATE_AFTER_REGISTER_FAILED");
+      const registeredTargetActivation = await activateCvThroughHttp({ versionId: registeredOnlyTarget.value.versionId,
+        idempotencyKey: "phase6-cv-activate-unaccepted-target", ifMatch: `"${afterRegisteredTarget.value.aggregateVersion}"` });
+      const registeredTargetBody = await registeredTargetActivation.json() as Record<string, unknown>;
+      const afterInvalidStateActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      cvActivationScenario("T11-09 registered but unaccepted CV versions cannot become Current and do not mutate the portfolio",
+        registeredTargetActivation.status === 409 && registeredTargetBody["code"] === "CV_VERSION_NOT_ACTIVATABLE" &&
+        afterInvalidStateActivation.ok && afterInvalidStateActivation.value.aggregateVersion === afterRegisteredTarget.value.aggregateVersion &&
+        afterInvalidStateActivation.value.currentVersionId === afterRegisteredTarget.value.currentVersionId);
 
       const currentUsage = await appDatabase.transactions.run((transaction) => cvService.getCurrentCvMediaUsage({
         ownerId, mediaAssetId: safe.mediaId as StableId<"MediaAsset">, transaction,

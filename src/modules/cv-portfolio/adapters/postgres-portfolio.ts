@@ -5,7 +5,7 @@ import { err, ok, parseStableId, type Rejection, type Result, type StableId } fr
 import type { TransactionContext, TransactionRunner } from "../../../runtime/ports.js";
 import { PostgresInfrastructureError, resolvePostgresTransaction } from "../../../shared/adapters/postgres/runtime.js";
 import type { DB } from "../../../shared/adapters/postgres/database.generated.js";
-import type { MediaReadApplicationService } from "../../media/index.js";
+import type { AcceptedPdfSnapshot, MediaReadApplicationService } from "../../media/index.js";
 import type { OwnerCvActivationView, OwnerCvCommandReceipt, OwnerCvPortfolioView, OwnerCvVersionView, RegisterOwnerCvVersionReceipt } from "../application/owner-contracts.js";
 import type { AcceptCvPortfolioVersionInput, ActivateCvPortfolioVersionInput, CvPortfolioRepositoryPort, GetCurrentCvMediaUsageInput, RegisterCvPortfolioVersionInput } from "../application/repository.js";
 
@@ -90,11 +90,23 @@ function isoInstant(value: Date | string): string {
   return result;
 }
 
+function activationMediaSnapshotMatches(
+  media: AcceptedPdfSnapshot,
+  registered: CvSnapshotRow,
+  mediaAssetId: StableId<"MediaAsset">,
+  ownerId: StableId<"Owner">,
+): boolean {
+  return media.mediaAssetId === mediaAssetId && media.ownerId === ownerId &&
+    media.assetVersion === Number(registered.media_asset_version) &&
+    media.decisionId === registered.media_decision_id && media.objectId === registered.media_object_id &&
+    media.sha256 === registered.media_sha256 && media.objectVersion === registered.media_object_version;
+}
+
 export function createPostgresCvPortfolioRepository(input: {
   readonly database: Kysely<DB>;
   readonly transactions: TransactionRunner;
   readonly scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> };
-  readonly media: Pick<MediaReadApplicationService, "getAcceptedPdfSnapshot">;
+  readonly media: Pick<MediaReadApplicationService, "getAcceptedPdfSnapshot" | "preflightAcceptedPdfObject">;
 }): CvPortfolioRepositoryPort {
   const setScope = async (context: TransactionContext): Promise<void> => {
     const executor = resolvePostgresTransaction(context);
@@ -379,6 +391,47 @@ export function createPostgresCvPortfolioRepository(input: {
       };
 
       try {
+        // Check Storage outside the activation transaction. The immutable
+        // Media snapshot is read under the normal application role here and
+        // revalidated again inside the write transaction below.
+        type ActivationPreflight =
+          | { readonly kind: "replay"; readonly receipt: OwnerCvCommandReceipt }
+          | { readonly kind: "error"; readonly error: Rejection }
+          | { readonly kind: "preflight"; readonly snapshot: AcceptedPdfSnapshot };
+        const preflight = await input.transactions.run<Result<ActivationPreflight, Rejection>>(async (context) => {
+          const executor = resolvePostgresTransaction(context);
+          await setScope(context);
+          const replay = await readReplay(context);
+          if (replay !== undefined) return replay.ok
+            ? ok({ kind: "replay" as const, receipt: replay.value })
+            : ok({ kind: "error" as const, error: replay.error });
+          const registered = await sql<CvSnapshotRow>`select version.media_id::text as media_id,
+              version.media_asset_version, version.state,
+              version.media_decision_id::text as media_decision_id, version.media_object_id::text as media_object_id,
+              version.media_sha256, version.media_object_version
+            from cv_portfolio.versions version
+            where version.version_id = ${command.versionId}::uuid
+              and version.portfolio_id = ${input.scope.portfolioId}::uuid
+              and version.owner_id = ${input.scope.ownerId}::uuid`.execute(executor);
+          const candidate = registered.rows[0];
+          if (candidate === undefined) return err({ kind: "not_found", code: "CV_VERSION_NOT_FOUND" });
+          if (candidate.state !== "accepted") return err({ kind: "conflict", code: "CV_VERSION_NOT_ACTIVATABLE" });
+          const mediaAssetId = stableId("MediaAsset", candidate.media_id);
+          const accepted = await input.media.getAcceptedPdfSnapshot({ ownerId: input.scope.ownerId, mediaAssetId }, context);
+          if (!accepted.ok) return accepted;
+          if (accepted.value.status !== "accepted") return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
+          const snapshot = accepted.value.snapshot;
+          if (!activationMediaSnapshotMatches(snapshot, candidate, mediaAssetId, input.scope.ownerId)) {
+            return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
+          }
+          return ok({ kind: "preflight" as const, snapshot });
+        });
+        if (!preflight.ok) return preflight;
+        if (preflight.value.kind === "error") return err(preflight.value.error);
+        if (preflight.value.kind === "replay") return ok(preflight.value.receipt);
+        const storage = await input.media.preflightAcceptedPdfObject({ portfolioId: input.scope.portfolioId, snapshot: preflight.value.snapshot });
+        if (!storage.ok) return storage;
+
         return await input.transactions.run(async (context) => {
           const executor = resolvePostgresTransaction(context);
           await setScope(context);
@@ -411,10 +464,7 @@ export function createPostgresCvPortfolioRepository(input: {
           if (!mediaResult.ok) return mediaResult;
           if (mediaResult.value.status !== "accepted") return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
           const currentMedia = mediaResult.value.snapshot;
-          if (currentMedia.mediaAssetId !== mediaAssetId || currentMedia.ownerId !== input.scope.ownerId ||
-              currentMedia.assetVersion !== Number(snapshot.media_asset_version) ||
-              currentMedia.decisionId !== snapshot.media_decision_id || currentMedia.objectId !== snapshot.media_object_id ||
-              currentMedia.sha256 !== snapshot.media_sha256 || currentMedia.objectVersion !== snapshot.media_object_version) {
+          if (!activationMediaSnapshotMatches(currentMedia, snapshot, mediaAssetId, input.scope.ownerId)) {
             return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
           }
 

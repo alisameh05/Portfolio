@@ -53,6 +53,10 @@ export interface MediaAcceptanceApplicationService {
     query: GetAcceptedPdfSnapshotQuery,
     transaction: TransactionContext,
   ): Promise<Result<AcceptedPdfSnapshotResult, Rejection>>;
+  preflightAcceptedPdfObject(input: {
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly snapshot: AcceptedPdfSnapshot;
+  }): Promise<Result<void, Rejection>>;
 }
 
 type Accessibility = AcceptOwnerMediaAssetApplicationCommand["accessibility"];
@@ -83,8 +87,9 @@ function validOwnerActor(actor: ActorContext, ownerId: StableId<"Owner">): boole
 }
 
 export function createMediaAcceptanceApplicationService(input: {
-  readonly scope: { readonly ownerId: StableId<"Owner"> };
+  readonly scope: { readonly ownerId: StableId<"Owner">; readonly portfolioId?: StableId<"Portfolio"> };
   readonly repository: MediaAcceptanceRepositoryPort;
+  readonly preflight?: (input: { readonly portfolioId: StableId<"Portfolio">; readonly snapshot: AcceptedPdfSnapshot }) => Promise<Result<void, Rejection>>;
 }): MediaAcceptanceApplicationService {
   const getAcceptanceFacts: MediaAcceptanceApplicationService["getAcceptanceFacts"] = async (query, transaction) => {
     if (query.ownerId !== input.scope.ownerId) return err({ kind: "forbidden", code: "OWNER_SCOPE_MISMATCH" });
@@ -156,6 +161,14 @@ export function createMediaAcceptanceApplicationService(input: {
         return err({ kind: "validation", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" });
       }
       return ok({ status: "accepted", snapshot: snapshot.value });
+    },
+    async preflightAcceptedPdfObject(query) {
+      if (query.snapshot.ownerId !== input.scope.ownerId ||
+          (input.scope.portfolioId !== undefined && query.portfolioId !== input.scope.portfolioId)) {
+        return err({ kind: "forbidden", code: "OWNER_SCOPE_MISMATCH" });
+      }
+      if (!input.preflight) return err({ kind: "temporarily_unavailable", code: "MEDIA_STORAGE_UNAVAILABLE" });
+      return input.preflight(query);
     },
   };
 }
