@@ -1195,7 +1195,8 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       JSON.stringify(replay) === JSON.stringify(cvRegistration) &&
       (!changedReplay.ok && changedReplay.error.code === "IDEMPOTENCY_CONFLICT") &&
       (!staleRegistration.ok && staleRegistration.error.kind === "precondition_failed") &&
-      staleHttpRegistration.status === 412 && staleHttpProblem?.type === "about:blank" &&
+      staleHttpRegistration.status === 412 && staleHttpProblem?.type === "urn:shipwithali:problem:precondition-failed" &&
+      staleHttpProblem?.code === "failed_precondition" &&
       JSON.stringify(afterStaleHttp.rows[0]) === JSON.stringify(beforeStaleHttp.rows[0]));
 
     const mutationCountsBeforeRejectedIntents = await admin.query(`select

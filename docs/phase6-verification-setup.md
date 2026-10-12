@@ -15,6 +15,8 @@ engine are needed; host npm dependencies do not need installation first.
 On Windows, start Docker Desktop in Linux containers mode. Allow at least
 6 GiB of Docker memory and enough disk for the Supabase and processor images.
 The first run downloads images and dependencies and can take several minutes.
+Run one local acceptance gate at a time, including direct host npm gates, to
+avoid competing scanner containers exhausting Docker Desktop memory.
 
 Use `npm run docker:checks` for setup/tooling tests, typecheck, architecture,
 lint, and the Media processing/CV unit tests, including the Docker file-limit
@@ -29,6 +31,8 @@ then source is copied into a disposable Linux workspace; host `node_modules`
 and `.env` files are excluded. Nested containers see their actual temporary
 paths and loopback endpoints, avoiding host/container path and port mismatches.
 The pinned Node/npm versions and lockfile are installed inside the runner.
+The official pinned DinD bootstrap enables nested control groups so processor
+CPU, memory, PID and file-size limits work on cgroup v2 hosts.
 Production credentials are unnecessary: the existing gates create disposable
 local PostgreSQL/Auth/Storage services and consume their keys in memory.
 
@@ -36,8 +40,10 @@ The runner exports only freshly generated sanitized reports to
 `evidence/phase6-media-integration.json` and
 `evidence/phase6-cv-portfolio-154.json`, including failure reports. An early
 failure cannot export an old committed pass. Docker image and npm download
-caches persist in the Compose project's named volumes. The launcher removes
-the finished runner; no global Docker cleanup is performed. To remove its
+caches persist in the Compose project's named volumes. Startup and shutdown
+remove disposable services from the private daemon, including interrupted-run
+leftovers. The launcher removes the finished runner; no global host Docker
+cleanup is performed. To remove its
 caches after all validation runs have ended:
 
 ```text

@@ -7,6 +7,15 @@ case "${1:-phase6}" in
 esac
 
 daemon_pid=''
+reset_private_services() {
+  local containers
+  # These commands address only this container's private Unix-socket daemon.
+  # Keep downloaded images; discard disposable services left by interrupted runs.
+  containers=$(docker ps --all --quiet) || return 1
+  if [ -n "$containers" ]; then docker rm --force $containers >/dev/null || return 1; fi
+  docker volume prune --all --force >/dev/null || return 1
+  docker network prune --force >/dev/null
+}
 cleanup() {
   local result=$?
   trap - EXIT INT TERM
@@ -18,6 +27,7 @@ cleanup() {
     done
   fi
   if [ -n "$daemon_pid" ]; then
+    reset_private_services || result=1
     kill -TERM "$daemon_pid" 2>/dev/null || true
     wait "$daemon_pid" || true
   fi
@@ -46,11 +56,12 @@ ln -s /git/common/refs /workspace/.git/refs
 for metadata in packed-refs shallow; do
   if [ -f "/git/common/$metadata" ]; then cp "/git/common/$metadata" /workspace/.git/; fi
 done
-unset GIT_COMMON_DIR
-export GIT_DIR=/workspace/.git
+unset GIT_COMMON_DIR GIT_DIR GIT_WORK_TREE
 git rev-parse --verify HEAD >/dev/null
 
-dockerd --host=unix:///var/run/docker.sock --storage-driver=overlay2 \
+# Use the pinned official DinD bootstrap to enable nested cgroup controllers.
+# Starting dockerd directly can start services but reject resource-limited tools.
+dind dockerd --host=unix:///var/run/docker.sock --storage-driver=overlay2 \
   --data-root=/var/lib/docker > /tmp/portfolio-dockerd.log 2>&1 &
 daemon_pid=$!
 for attempt in $(seq 1 60); do
@@ -62,6 +73,7 @@ for attempt in $(seq 1 60); do
   sleep 1
 done
 docker info >/dev/null
+reset_private_services
 npm run setup:validation
 npm run validation:ready
 

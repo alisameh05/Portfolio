@@ -6,7 +6,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git iptables iproute2 xz-utils \
     && rm -rf /var/lib/apt/lists/* \
     && npm install --global npm@11.19.0 --no-audit --no-fund
-COPY --from=engine /usr/local/bin/docker /usr/local/bin/dockerd /usr/local/bin/containerd /usr/local/bin/containerd-shim-runc-v2 /usr/local/bin/ctr /usr/local/bin/runc /usr/local/bin/docker-proxy /usr/local/bin/docker-init /usr/local/bin/
+COPY --from=engine /usr/local/bin/docker /usr/local/bin/dockerd /usr/local/bin/containerd /usr/local/bin/containerd-shim-runc-v2 /usr/local/bin/ctr /usr/local/bin/runc /usr/local/bin/docker-proxy /usr/local/bin/docker-init /usr/local/bin/dind /usr/local/bin/
 COPY entrypoint.sh /usr/local/bin/portfolio-validation
 RUN chmod 755 /usr/local/bin/portfolio-validation
 WORKDIR /workspace

@@ -273,7 +273,9 @@ export function createClamAvScanner(options: { readonly executable?: string; rea
       const remainingMs = () => Math.max(0, deadline - Date.now());
       try {
         if (executable !== "clamscan") return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
-        const versionTimeoutMs = Math.min(3_000, remainingMs());
+        // Include Docker Desktop/container startup and cleanup in this stage.
+        // This still consumes the scanner's shared deadline.
+        const versionTimeoutMs = Math.min(5_000, remainingMs());
         if (!versionTimeoutMs) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         const scannerVersion = await version(versionTimeoutMs);
         if (!isPinnedClamAvVersion(scannerVersion)) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");

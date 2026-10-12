@@ -54,6 +54,17 @@ test("integration diagnostics retain source locations without arbitrary Auth or 
   assert.doesNotMatch(JSON.stringify(result), /fixture-secret|eyJfixture|postgresql:|https:/u);
 });
 
+test("integration diagnostics retain only known Media codes and CV criterion IDs", () => {
+  const result = evaluatePhase6IntegrationTests({ testResults: [{ assertionResults: [{
+    fullName: "safe assertion", status: "failed", failureMessages: [
+      "AssertionError: T09-04 MEDIA_SCANNER_UNAVAILABLE token=fixture-secret MEDIA_PRIVATE_SECRET at tests/database/media-upload-intent.integration.test.ts:100:2",
+    ],
+  }] }] }, 1);
+  assert.deepEqual(result.failedTests[0].codes, ["MEDIA_SCANNER_UNAVAILABLE"]);
+  assert.deepEqual(result.failedTests[0].criteria, ["T09-04"]);
+  assert.doesNotMatch(JSON.stringify(result), /fixture-secret|MEDIA_PRIVATE_SECRET|token=/u);
+});
+
 function passingReport() {
   const predecessorContexts = loadPhase6PredecessorContexts();
   predecessorContexts.phase5.sourceTreeSha256 = "tree";
