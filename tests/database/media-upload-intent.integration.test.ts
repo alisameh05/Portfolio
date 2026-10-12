@@ -7,6 +7,7 @@ import { deflateSync } from "node:zlib";
 import { Client } from "pg";
 import { sql } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { dockerBindMountUserArgs } from "../../src/runtime/adapters/media-processing-tools.js";
 import { handleCreateOwnerMediaUploadIntent } from "../../src/runtime/http/owner-media.js";
 import { handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-media.js";
 import { withOwnerTestAuth } from "../runtime/owner-test-auth.js";
@@ -140,11 +141,11 @@ function dockerPdfProcessor(bytes: Uint8Array) {
   try {
     writeFileSync(join(directory, "input.pdf"), bytes, { flag: "wx", mode: 0o600 });
     const mount = `${directory}:/work`;
-    const checked = dockerResult(["run", "--rm", "--entrypoint", "python3", "-v", mount, PDF_PROCESSOR_IMAGE!, "-c", PDF_PREFLIGHT_FOR_TEST, "/work/input.pdf", "/work/checked.pdf"]);
+    const checked = dockerResult(["run", "--rm", ...dockerBindMountUserArgs(), "--entrypoint", "python3", "-v", mount, PDF_PROCESSOR_IMAGE!, "-c", PDF_PREFLIGHT_FOR_TEST, "/work/input.pdf", "/work/checked.pdf"]);
     if (checked.status !== 0) return { ok: false as const, error: { kind: "validation" as const, code: "MEDIA_PDF_POLICY_REJECTED" } };
-    const processed = dockerResult(["run", "--rm", "--entrypoint", "ocrmypdf", "-v", mount, PDF_PROCESSOR_IMAGE!, "--skip-text", "--output-type", "pdfa-2", "--optimize", "0", "--jobs", "1", "--quiet", "/work/checked.pdf", "/work/processed.pdf"]);
+    const processed = dockerResult(["run", "--rm", ...dockerBindMountUserArgs(), "--entrypoint", "ocrmypdf", "-v", mount, PDF_PROCESSOR_IMAGE!, "--skip-text", "--output-type", "pdfa-2", "--optimize", "0", "--jobs", "1", "--quiet", "/work/checked.pdf", "/work/processed.pdf"]);
     if (processed.status !== 0) return { ok: false as const, error: { kind: "validation" as const, code: "MEDIA_PDF_NOT_READABLE" } };
-    const outputCheck = dockerResult(["run", "--rm", "--entrypoint", "python3", "-v", mount, PDF_PROCESSOR_IMAGE!, "-c", PDF_PREFLIGHT_FOR_TEST, "/work/processed.pdf", "/work/verified-output.pdf"]);
+    const outputCheck = dockerResult(["run", "--rm", ...dockerBindMountUserArgs(), "--entrypoint", "python3", "-v", mount, PDF_PROCESSOR_IMAGE!, "-c", PDF_PREFLIGHT_FOR_TEST, "/work/processed.pdf", "/work/verified-output.pdf"]);
     if (outputCheck.status !== 0) return { ok: false as const, error: { kind: "validation" as const, code: "MEDIA_PDF_OUTPUT_INVALID" } };
     const outputBytes = new Uint8Array(readFileSync(join(directory, "verified-output.pdf")));
     return { ok: true as const, value: { bytes: outputBytes, version: PDF_PROCESSOR_VERSION!, policyVersion: "pdf-active-content-deny-1" } };
@@ -159,7 +160,7 @@ function createPdfVariant(base: Uint8Array, mode: "encrypted" | "active"): Uint8
     const script = mode === "encrypted"
       ? "import pikepdf,sys; pikepdf.open(sys.argv[1]).save(sys.argv[2], encryption=pikepdf.Encryption(owner='owner-secret', user='user-secret', R=6))"
       : "import pikepdf,sys; p=pikepdf.open(sys.argv[1]); p.Root['/OpenAction']=pikepdf.Dictionary(S=pikepdf.Name('/JavaScript'), JS=pikepdf.String('app.alert(1)')); p.save(sys.argv[2])";
-    const generated = dockerResult(["run", "--rm", "--entrypoint", "python3", "-v", `${directory}:/work`, PDF_PROCESSOR_IMAGE!, "-c", script, "/work/base.pdf", "/work/variant.pdf"]);
+    const generated = dockerResult(["run", "--rm", ...dockerBindMountUserArgs(), "--entrypoint", "python3", "-v", `${directory}:/work`, PDF_PROCESSOR_IMAGE!, "-c", script, "/work/base.pdf", "/work/variant.pdf"]);
     if (generated.status !== 0) throw new Error("PHASE6_PDF_FIXTURE_GENERATION_FAILED");
     return new Uint8Array(readFileSync(join(directory, "variant.pdf")));
   } finally { rmSync(directory, { recursive: true, force: true }); }
@@ -923,12 +924,12 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const { createClamAvScanner } = await import("../../src/runtime/adapters/media-processing-tools.js");
     // This standalone tool probe requests 24s. The factory's 14s production
     // default is a tighter cap intended for the complete 60s PDF attempt.
-    const productionScan = await createClamAvScanner({ timeoutMs: 24_000 }).scan(pdfBytes, { timeoutMs: 24_000 });
+    const productionScan = await createClamAvScanner({ timeoutMs: 24_000 }).scan(pdfBytes);
     expect(productionScan, JSON.stringify(productionScan)).toMatchObject({ ok: true, value: { verdict: "clean" } });
+    const { createOcrMyPdfProcessor, runWithBoundedOutput } = await import("../../src/runtime/adapters/media-processing-tools.js");
+    const productionResult = await createOcrMyPdfProcessor().process(pdfBytes);
+    expect(productionResult.ok, JSON.stringify(productionResult)).toBe(true);
     if (process.platform === "win32") {
-      const { createOcrMyPdfProcessor, runWithBoundedOutput } = await import("../../src/runtime/adapters/media-processing-tools.js");
-      const productionResult = await createOcrMyPdfProcessor().process(pdfBytes);
-      expect(productionResult.ok, `Windows production processor must use the bounded pinned container runtime: ${JSON.stringify(productionResult)}`).toBe(true);
       const timeoutDirectory = mkdtempSync(join(tmpdir(), "phase6-pdf-timeout-"));
       try {
         await expect(runWithBoundedOutput("python3", ["-c", "import time; time.sleep(10)"], join(timeoutDirectory, "never-written.pdf"),

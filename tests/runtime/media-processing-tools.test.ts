@@ -2,9 +2,25 @@ import { open, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { assertBoundedFile, createClamAvScanner, isMp4Container, isPinnedClamAvVersion, monitorBoundedChildOutput, readBoundedFile, runWithBoundedOutput, stopActionWithinDeadline } from "../../src/runtime/adapters/media-processing-tools.js";
+import { assertBoundedFile, createClamAvScanner, createOcrMyPdfProcessor, dockerBindMountUserArgs, isMp4Container, isPinnedClamAvVersion, monitorBoundedChildOutput, readBoundedFile, resolveScannerTimeoutMs, runWithBoundedOutput, stopActionWithinDeadline } from "../../src/runtime/adapters/media-processing-tools.js";
 
 describe("bounded PDF output reads", () => {
+  it("allows a standalone scanner probe to raise the production timeout cap", () => {
+    expect(resolveScannerTimeoutMs()).toBe(14_000);
+    expect(resolveScannerTimeoutMs(24_000)).toBe(24_000);
+    expect(resolveScannerTimeoutMs(24_000, 8_000)).toBe(8_000);
+    expect(resolveScannerTimeoutMs(undefined, 24_000)).toBe(14_000);
+  });
+
+  it("matches the owner of private bind-mounted files on Linux", () => {
+    expect(dockerBindMountUserArgs({ uid: 1001, gid: 1001 })).toEqual(["--user", "1001:1001"]);
+    expect(dockerBindMountUserArgs({ uid: undefined, gid: undefined })).toEqual([]);
+  });
+
+  it("rejects an exhausted PDF deadline before starting containers", async () => {
+    expect(await createOcrMyPdfProcessor().process(Buffer.from("%PDF-test"), { timeoutMs: 0 }))
+      .toMatchObject({ ok: false, error: { code: "MEDIA_PROCESSING_TIMEOUT" } });
+  });
   it("accepts supported MP4 major or compatible brands from a bounded ftyp box", () => {
     const ftyp = (major: string, compatible: readonly string[]) => {
       const size = 16 + compatible.length * 4;
@@ -116,7 +132,7 @@ describe("bounded PDF output reads", () => {
     try {
       if (process.platform === "win32") {
         const limited = runWithBoundedOutput("python3", ["-c", "import sys; open(sys.argv[1], 'wb').write(b'x' * (2 * 1024 * 1024))", path], path,
-          { maxBytes: 8, timeoutMs: 3_000, python: "python3" });
+          { maxBytes: 8, timeoutMs: 8_000, python: "python3" });
         if (process.env["PHASE6_PDF_PROCESSOR_IMAGE"] === "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c") {
           await expect(limited).rejects.toBeDefined();
           expect((await stat(path)).size).toBeLessThanOrEqual(8);
@@ -125,7 +141,7 @@ describe("bounded PDF output reads", () => {
         }
       } else {
         await expect(runWithBoundedOutput("python3", ["-c", writer, path], path,
-          { maxBytes: 8, timeoutMs: 3_000, python: "python3" })).rejects.toBeDefined();
+          { maxBytes: 8, timeoutMs: 8_000, python: "python3" })).rejects.toBeDefined();
         expect((await stat(path)).size).toBeLessThanOrEqual(8);
       }
     } finally {

@@ -1,5 +1,60 @@
 # Phase 6 verification setup
 
+## Docker runner on Windows, macOS and Linux
+
+From the repository directory, run:
+
+```text
+npm run docker:phase6
+```
+
+This builds `docker/validation/Dockerfile` through `compose.validation.yaml`
+and runs both real Media integration and CV registration/migration gates.
+Only a host Node executable, Git, Docker Compose and a running Linux Docker
+engine are needed; host npm dependencies do not need installation first.
+On Windows, start Docker Desktop in Linux containers mode. Allow at least
+6 GiB of Docker memory and enough disk for the Supabase and processor images.
+The first run downloads images and dependencies and can take several minutes.
+
+Use `npm run docker:checks` for setup/tooling tests, typecheck, architecture,
+lint, and the Media processing/CV unit tests, including the Docker file-limit
+test. Both modes fail on unsuccessful checks. The launcher rejects a missing
+engine, Windows containers, missing Compose, and concurrent validation runs.
+It discovers Git metadata for both ordinary clones and linked worktrees.
+
+The validation container runs a **privileged private Docker daemon** and should
+be used only with a trusted checkout. It does not mount the host Docker socket
+or expose a TCP daemon port. Source and Git metadata are mounted read-only,
+then source is copied into a disposable Linux workspace; host `node_modules`
+and `.env` files are excluded. Nested containers see their actual temporary
+paths and loopback endpoints, avoiding host/container path and port mismatches.
+The pinned Node/npm versions and lockfile are installed inside the runner.
+Production credentials are unnecessary: the existing gates create disposable
+local PostgreSQL/Auth/Storage services and consume their keys in memory.
+
+The runner exports only freshly generated sanitized reports to
+`evidence/phase6-media-integration.json` and
+`evidence/phase6-cv-portfolio-154.json`, including failure reports. An early
+failure cannot export an old committed pass. Docker image and npm download
+caches persist in the Compose project's named volumes. The launcher removes
+the finished runner; no global Docker cleanup is performed. To remove its
+caches after all validation runs have ended:
+
+```text
+docker compose -p portfolio-validation -f compose.validation.yaml down --volumes
+```
+
+In an ordinary clone, `docker compose -p portfolio-validation -f
+compose.validation.yaml run --build --rm --name portfolio-validation-runner
+validation phase6` also works. Prefer the npm launcher for linked worktrees.
+These files still require a host engine; a restricted Node-only Codex Cloud
+environment cannot run them merely by installing the Docker CLI. Use a
+Docker-capable local host or the PR's Linux CI job for real acceptance.
+
+The existing CI job runs the gates on its Linux host and additionally builds
+this runner to catch broken tool images or Dockerfile dependencies. Production
+processor containers retain their network, memory, CPU, PID and file limits.
+
 Issue #146 establishes a disposable real-service setup probe for the Phase 6 Media/CV tickets. It uses Node `24.21.0` and npm `11.19.0`, plus the repository-locked Supabase CLI. Complete network-enabled dependency setup before running validation:
 
 ```text

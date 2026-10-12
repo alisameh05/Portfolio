@@ -115,6 +115,12 @@ jobs:
           npm install --global "npm@$npm_version" --no-audit --no-fund
       - name: Install locked development dependencies
         run: npm run setup:validation
+      - name: Build the portable Linux Docker validation runner
+        # Delete committed reports before any Docker step can fail.
+        # The always-upload step must never publish a previous run's pass.
+        run: |
+          node --input-type=module -e 'import { rmSync } from "node:fs"; for (const path of ["evidence/phase6-media-integration.json", "evidence/phase6-cv-portfolio-154.json"]) rmSync(path, { force: true });'
+          docker compose -p portfolio-validation -f compose.validation.yaml build validation
       - name: Require all five real Media integration tests with zero skips
         # Remove committed evidence so an early failure cannot upload an old pass.
         run: |

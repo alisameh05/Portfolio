@@ -10,6 +10,8 @@
     "npm": "11.19.0"
   },
   "scripts": {
+    "docker:phase6": "node scripts/docker-validation.mjs phase6",
+    "docker:checks": "node scripts/docker-validation.mjs checks",
     "setup:validation": "node scripts/setup-validation.mjs",
     "validation:ready": "node scripts/validation-environment.mjs",
     "test:setup": "node --test --test-isolation=none tests/tooling/*.test.mjs",

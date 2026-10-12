@@ -31,7 +31,7 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
   readonly elapsedDuringScanMs?: number; readonly fileName?: string; readonly scannerUnavailable?: boolean; readonly sealedObjectId?: StableId<"MediaObject">;
   readonly mediaCandidate?: MediaProcessingCandidate; readonly videoProcessorUnavailable?: boolean; readonly videoSealUnavailable?: boolean; readonly candidateUnavailable?: boolean;
   readonly videoVariantCount?: number; readonly malformedVideoOutput?: boolean; readonly elapsedDuringVideoSealMs?: number;
-  readonly elapsedDuringVideoProcessMs?: number; readonly elapsedDuringVideoOutputScanMs?: number } = {}) {
+  readonly elapsedDuringVideoProcessMs?: number; readonly elapsedDuringVideoOutputScanMs?: number; readonly elapsedDuringPdfProcessMs?: number } = {}) {
   const target = options.mediaCandidate ?? candidate;
   const commits: Parameters<MediaProcessingRepositoryPort["commitAttempt"]>[0][] = [];
   const orphanCalls: Parameters<MediaProcessingRepositoryPort["recordOrphan"]>[0][] = [];
@@ -47,7 +47,10 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
     nowMs += scanCount === 1 ? options.elapsedDuringScanMs ?? 0 : options.elapsedDuringVideoOutputScanMs ?? 0;
     return { ok: true as const, value: { verdict: "clean" as const, version: "ClamAV pinned" } };
   });
-  const process = vi.fn(async () => ({ ok: true as const, value: { bytes: output, version: "OCRmyPDF pinned", policyVersion: "pdf-policy-1" } }));
+  const process = vi.fn(async () => {
+    nowMs += options.elapsedDuringPdfProcessMs ?? 0;
+    return { ok: true as const, value: { bytes: output, version: "OCRmyPDF pinned", policyVersion: "pdf-policy-1" } };
+  });
   const discard = vi.fn(async () => undefined);
   const repository: MediaProcessingRepositoryPort = {
     async getCandidate() { return { ok: true, value: { ...target, state: options.state ?? target.state, originalFileName: options.fileName ?? target.originalFileName } }; },
@@ -95,12 +98,19 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
 }
 
 describe("trusted media processing", () => {
+  it("passes the remaining deadline to PDF work and rejects an over-budget result", async () => {
+    const h = harness({ elapsedDuringScanMs: 59_000, elapsedDuringPdfProcessMs: 1_001 });
+    expect(await h.service.record(command)).toMatchObject({ ok: false, error: { code: "MEDIA_PROCESSING_TIMEOUT" } });
+    expect(h.process).toHaveBeenCalledWith(pdf, { timeoutMs: 1_000 });
+    expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", findings: ["MEDIA_PROCESSING_TIMEOUT"] });
+    expect(h.commits[0]?.attempt.outputObjectId).toBeUndefined();
+  });
   it("binds real input facts, scans and processes both byte streams, then records immutable output evidence", async () => {
     const h = harness();
     const result = await h.service.record(command);
     expect(result).toMatchObject({ ok: true, value: { aggregateId: mediaId, aggregateVersion: 2, outcome: "media-processing-recorded" } });
     expect(h.scan).toHaveBeenCalledTimes(2);
-    expect(h.process).toHaveBeenCalledWith(pdf);
+    expect(h.process).toHaveBeenCalledWith(pdf, { timeoutMs: 60_000 });
     expect(h.commits[0]?.attempt).toMatchObject({ result: "passed", inputObjectId, outputObjectId, sha256: sha(pdf), outputSha256: sha(output), scannerVersion: "ClamAV pinned", processorVersion: "OCRmyPDF pinned", policyVersion: "pdf-policy-1" });
   });
 

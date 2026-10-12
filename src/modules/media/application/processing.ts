@@ -79,7 +79,7 @@ export interface TrustedByteScannerPort {
 }
 
 export interface PdfProcessorPort {
-  process(bytes: Uint8Array): Promise<Result<{ readonly bytes: Uint8Array; readonly version: string; readonly policyVersion: string }, Rejection>>;
+  process(bytes: Uint8Array, options?: { readonly timeoutMs?: number }): Promise<Result<{ readonly bytes: Uint8Array; readonly version: string; readonly policyVersion: string }, Rejection>>;
 }
 export interface VideoProcessorPort {
   process(bytes: Uint8Array, options?: { readonly timeoutMs?: number }): Promise<Result<{
@@ -571,7 +571,7 @@ export function createMediaProcessingApplicationService(deps: {
         return ok({ aggregateId: candidate.mediaId, aggregateVersion: committed.value.version, outcome: committed.value.outcome });
       }
       let processed: Awaited<ReturnType<PdfProcessorPort["process"]>>;
-      try { processed = await deps.processor.process(bytes); } catch { return failedAttempt("MEDIA_PROCESSOR_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version }); }
+      try { processed = await deps.processor.process(bytes, { timeoutMs: remainingBudgetMs() }); } catch { return failedAttempt("MEDIA_PROCESSOR_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version }); }
       if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.ok ? scanned.value.version : "unavailable" });
       if (!processed.ok) return failedAttempt(processed.error.kind === "validation" ? processed.error.code : "MEDIA_PROCESSOR_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
       if (processed.value.bytes.byteLength < 1 || processed.value.bytes.byteLength > MEDIA_PROCESSING_POLICY.maxBytesByKind.document ||
