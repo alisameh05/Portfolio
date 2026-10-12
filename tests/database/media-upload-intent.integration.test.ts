@@ -2077,7 +2077,8 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       const foreignActivationCountsBefore = await admin.query(`select
           (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
           (select count(*)::int from cv_portfolio.activation_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
-          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events`, [portfolioId, ownerId]);
+          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events,
+          (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid and is_current) as current_flags`, [portfolioId, ownerId]);
       const foreignActivation = await cvService.activateOwnerCvVersion({ actor: cvOwner,
         idempotencyKey: "phase6-cv-activate-foreign-target" as never,
         expectedVersion: beforeForeignActivation.value.aggregateVersion, versionId: foreignActivationVersionId });
@@ -2085,10 +2086,11 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       const foreignActivationCountsAfter = await admin.query(`select
           (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
           (select count(*)::int from cv_portfolio.activation_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
-          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events`, [portfolioId, ownerId]);
+          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events,
+          (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid and is_current) as current_flags`, [portfolioId, ownerId]);
       await admin.query("delete from cv_portfolio.versions where version_id = $1::uuid", [foreignActivationVersionId]);
       await admin.query("delete from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [foreignActivationPortfolioId, foreignActivationOwnerId]);
-      cvActivationScenario("T11-09 a valid accepted CV row owned by another Owner and Portfolio cannot be activated or mutate this Owner's state",
+      cvActivationScenario("T11-09 an out-of-scope CV version ID is not found and cannot mutate this Owner's pointer, flags, history, receipts or outbox",
         !foreignActivation.ok && foreignActivation.error.kind === "not_found" && afterForeignActivation.ok &&
         afterForeignActivation.value.aggregateVersion === beforeForeignActivation.value.aggregateVersion &&
         afterForeignActivation.value.currentVersionId === beforeForeignActivation.value.currentVersionId &&
