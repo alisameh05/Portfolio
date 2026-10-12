@@ -1457,7 +1457,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       .toMatchObject({ ok: true, value: { facts: [{ mediaAssetId: safe.mediaId, inUse: true }] } });
     const owner = { kind: "owner" as const, ownerId, sessionId: "phase6-content-media-owner" };
     const hidden = await content.hideContent({ actor: owner, contentId: project.contentId,
-      expectedVersion: project.published.value.aggregateVersion, idempotencyKey: "phase6-accepted-project-hide" as never,
+      expectedVersion: arabicAggregateVersion, idempotencyKey: "phase6-accepted-project-hide" as never,
       correlationId: "phase6-accepted-project-hide" });
     expect(hidden.ok).toBe(true);
     expect(await visibleUsage(safe.mediaId as StableId<"MediaAsset">))
@@ -1499,7 +1499,9 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       expectedVersion: hidden.ok ? hidden.value.aggregateVersion : 0, idempotencyKey: "phase6-accepted-project-restore" as never,
       correlationId: "phase6-accepted-project-restore" });
     await restoreWriteStarted;
-    expect(publicationLockOrder.slice(restoreOrderStart)).toEqual(["media-shared-locks", "content-lifecycle-write"]);
+    expect(publicationLockOrder.slice(restoreOrderStart)).toEqual([
+      "media-shared-locks", "media-shared-locks", "content-lifecycle-write",
+    ]);
     const restoreLockProbe = await appDatabase.transactions.run(async (transaction) => {
       const rows = await sql<{ acquired: boolean }>`
         select pg_try_advisory_xact_lock(hashtextextended(${safe.mediaId}::text, 0)) as acquired
