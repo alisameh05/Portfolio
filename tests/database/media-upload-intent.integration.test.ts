@@ -2048,6 +2048,52 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         afterInvalidStateActivation.ok && afterInvalidStateActivation.value.aggregateVersion === afterRegisteredTarget.value.aggregateVersion &&
         afterInvalidStateActivation.value.currentVersionId === afterRegisteredTarget.value.currentVersionId);
 
+      const foreignActivationPortfolioId = createStableId("Portfolio");
+      const foreignActivationOwnerId = createStableId("Owner");
+      const foreignActivationVersionId = createStableId("CvVersion");
+      const foreignActivationSnapshot = await admin.query(`select media_id, media_asset_version, media_decision_id, media_object_id,
+          media_sha256, media_object_version from cv_portfolio.versions where version_id = $1::uuid`, [cvRegistration.value.versionId]);
+      if (!foreignActivationSnapshot.rows[0]) throw new Error("PHASE6_CV_FOREIGN_ACTIVATION_FIXTURE_FAILED");
+      await admin.query("begin");
+      try {
+        await admin.query("set local session_replication_role = replica");
+        await admin.query("insert into cv_portfolio.portfolios (portfolio_id, owner_id, aggregate_version) values ($1::uuid, $2::uuid, 1)",
+          [foreignActivationPortfolioId, foreignActivationOwnerId]);
+        await admin.query(`insert into cv_portfolio.versions
+            (version_id, portfolio_id, owner_id, media_id, media_asset_version, media_decision_id, media_object_id,
+             media_sha256, media_object_version, version_number, locale, label, state)
+          values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6::uuid, $7::uuid, $8, $9, 1, 'en', 'Foreign accepted CV', 'accepted')`,
+        [foreignActivationVersionId, foreignActivationPortfolioId, foreignActivationOwnerId,
+          foreignActivationSnapshot.rows[0].media_id, foreignActivationSnapshot.rows[0].media_asset_version,
+          foreignActivationSnapshot.rows[0].media_decision_id, foreignActivationSnapshot.rows[0].media_object_id,
+          foreignActivationSnapshot.rows[0].media_sha256, foreignActivationSnapshot.rows[0].media_object_version]);
+        await admin.query("commit");
+      } catch (error) {
+        await admin.query("rollback");
+        throw error;
+      }
+      const beforeForeignActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      if (!beforeForeignActivation.ok) throw new Error("PHASE6_CV_FOREIGN_ACTIVATION_STATE_FAILED");
+      const foreignActivationCountsBefore = await admin.query(`select
+          (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
+          (select count(*)::int from cv_portfolio.activation_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
+          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events`, [portfolioId, ownerId]);
+      const foreignActivation = await cvService.activateOwnerCvVersion({ actor: cvOwner,
+        idempotencyKey: "phase6-cv-activate-foreign-target" as never,
+        expectedVersion: beforeForeignActivation.value.aggregateVersion, versionId: foreignActivationVersionId });
+      const afterForeignActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      const foreignActivationCountsAfter = await admin.query(`select
+          (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
+          (select count(*)::int from cv_portfolio.activation_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
+          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events`, [portfolioId, ownerId]);
+      await admin.query("delete from cv_portfolio.versions where version_id = $1::uuid", [foreignActivationVersionId]);
+      await admin.query("delete from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [foreignActivationPortfolioId, foreignActivationOwnerId]);
+      cvActivationScenario("T11-09 a valid accepted CV row owned by another Owner and Portfolio cannot be activated or mutate this Owner's state",
+        !foreignActivation.ok && foreignActivation.error.kind === "not_found" && afterForeignActivation.ok &&
+        afterForeignActivation.value.aggregateVersion === beforeForeignActivation.value.aggregateVersion &&
+        afterForeignActivation.value.currentVersionId === beforeForeignActivation.value.currentVersionId &&
+        JSON.stringify(foreignActivationCountsBefore.rows[0]) === JSON.stringify(foreignActivationCountsAfter.rows[0]));
+
       const currentUsage = await appDatabase.transactions.run((transaction) => cvService.getCurrentCvMediaUsage({
         ownerId, mediaAssetId: safe.mediaId as StableId<"MediaAsset">, transaction,
       }));
