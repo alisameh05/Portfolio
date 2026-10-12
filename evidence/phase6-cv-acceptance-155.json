@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 155,
   "parent": 145,
-  "runId": "553fab61-9007-41fa-9971-95cc5034109f",
-  "sourceRevision": "dfa1146d5c82a36e173043d3c1b34935fc7409a2",
-  "sourceTreeSha256": "89f5ab4dd783a3303b48b91051165b3f511d124a9c25c44ca8270a9bea0ff0cf",
-  "startedAt": "2026-10-12T13:02:36.600Z",
-  "completedAt": "2026-10-12T13:13:31.463Z",
+  "runId": "45702b24-fd3a-44eb-8ec5-6b8176314f6a",
+  "sourceRevision": "dff94c42085aad89bcdba5ef1a340c69a893eb61",
+  "sourceTreeSha256": "9f36fa4abe725a56004debbd5cccc5a3eecc78735fc04e51f8c6811086c37d0c",
+  "startedAt": "2026-10-12T13:20:10.248Z",
+  "completedAt": "2026-10-12T13:31:09.040Z",
   "scope": "explicit-CV-approval-with-current-Media-revalidation-and-atomic-safe-replay",
   "runtime": {
     "node": "v24.21.0",
@@ -209,6 +209,22 @@
           ]
         },
         {
+          "name": "T10-04 injected history failure rolls back CV state, root version, approval and success receipt",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-04"
+          ]
+        },
+        {
+          "name": "T10-04 injected receipt failure rolls back CV state, root version, approval and success receipt",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T10-04"
+          ]
+        },
+        {
           "name": "T10-04 injected outbox failure rolls back CV state, approval history, root version and success receipt",
           "executed": true,
           "status": "passed",
@@ -266,7 +282,7 @@
         }
       ],
       "counts": {
-        "executed": 14,
+        "executed": 16,
         "failed": 0,
         "skipped": 0,
         "criteriaCovered": 8
@@ -416,7 +432,7 @@
     "acceptanceOperations": 6
   },
   "counts": {
-    "executed": 14,
+    "executed": 16,
     "failed": 0,
     "skipped": 0,
     "criteriaCovered": 8
@@ -476,6 +492,22 @@
       "status": "passed",
       "criteria": [
         "T10-03"
+      ]
+    },
+    {
+      "name": "T10-04 injected history failure rolls back CV state, root version, approval and success receipt",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-04"
+      ]
+    },
+    {
+      "name": "T10-04 injected receipt failure rolls back CV state, root version, approval and success receipt",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-04"
       ]
     },
     {
