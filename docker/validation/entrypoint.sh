@@ -42,6 +42,8 @@ mode="${1:-phase6}"
 tar -C /source --exclude='./.git' --exclude='./node_modules' --exclude='./.worktrees' \
   --exclude='./.next' --exclude='./artifacts' --exclude='./coverage' --exclude='./dist' \
   --exclude='./.env' --exclude='./.env.*' -cf - . | tar -C /workspace -xf -
+# Preserve the repository's example so the source fingerprint matches a clone.
+if [ -f /source/.env.example ]; then cp /source/.env.example /workspace/.env.example; fi
 # Only fresh reports from this invocation can be exported, including on failure.
 if [ "$mode" = phase6 ]; then
   rm -f /workspace/evidence/phase6-media-integration.json /workspace/evidence/phase6-cv-portfolio-154.json

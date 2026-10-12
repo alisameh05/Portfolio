@@ -28,7 +28,8 @@ The validation container runs a **privileged private Docker daemon** and should
 be used only with a trusted checkout. It does not mount the host Docker socket
 or expose a TCP daemon port. Source and Git metadata are mounted read-only,
 then source is copied into a disposable Linux workspace; host `node_modules`
-and `.env` files are excluded. Nested containers see their actual temporary
+and `.env` files are excluded; the repository's `.env.example` is preserved.
+Nested containers see their actual temporary
 paths and loopback endpoints, avoiding host/container path and port mismatches.
 The pinned Node/npm versions and lockfile are installed inside the runner.
 The official pinned DinD bootstrap enables nested control groups so processor
