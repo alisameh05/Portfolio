@@ -436,8 +436,12 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
             if (waiting === expected) break;
             await new Promise((resolve) => setTimeout(resolve, 20));
           }
-          expect(waiting, "all independent transactions must reach the Media advisory lock before release")
-            .toBe(expected);
+          if (waiting !== expected) {
+            const sessions = await admin.query(`select pid, state, wait_event_type, wait_event, left(query, 180) as query
+              from pg_stat_activity where usename = $1`, [roleName]);
+            expect(waiting, `expected ${expected} ungranted Media advisory locks; sessions=${JSON.stringify(sessions.rows)}`)
+              .toBe(expected);
+          }
         };
         if (stageFirst) {
           start(0);
