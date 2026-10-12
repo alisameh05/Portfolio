@@ -92,7 +92,9 @@ export function createPostgresCvPortfolioRepository(input: {
         from portfolio_config.settings settings
        where settings.portfolio_id = ${input.scope.portfolioId}::uuid
          and settings.owner_id = ${input.scope.ownerId}::uuid
-      on conflict (portfolio_id) do nothing`.execute(executor);
+      -- Both the primary key and the Owner-scope unique key can arbitrate
+      -- simultaneous initialization. The scoped read below still fails closed.
+      on conflict do nothing`.execute(executor);
     const selected = await sql<RootRow>`select portfolio_id::text as portfolio_id, owner_id::text as owner_id,
         aggregate_version, current_version_id::text as current_version_id
       from cv_portfolio.portfolios

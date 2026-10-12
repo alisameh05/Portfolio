@@ -13,8 +13,8 @@ const MAX_BYTES = 20 * 1024 * 1024;
 // Docker startup, the pinned definition load and cleanup share this cap.
 const SCAN_TIMEOUT_MS = 24_000;
 const PROCESS_TIMEOUT_MS = 8_000;
-// Allow 2s of preflight work plus the mandatory 3s container cleanup reserve.
-const PDF_PREFLIGHT_TIMEOUT_MS = 5_000;
+// Docker Desktop startup is part of the 5s execution window; cleanup reserves 3s.
+const PDF_PREFLIGHT_TIMEOUT_MS = 8_000;
 const PDF_TOTAL_TIMEOUT_MS = 24_000;
 const POLICY_VERSION = "pdf-active-content-deny-1";
 const BOUNDED_PDF_IMAGE = "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c";
@@ -359,8 +359,8 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
       };
       try {
         if (python !== "python3" || ocrmypdf !== "ocrmypdf") return safeFailure("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
-        const version = await toolVersion(ocrmypdf, ["--version"], remaining(4_000));
-        const pikepdfVersion = await toolVersion(python, ["-c", "import pikepdf; print(pikepdf.__version__)"], remaining(4_000));
+        const version = await toolVersion(ocrmypdf, ["--version"], remaining(5_000));
+        const pikepdfVersion = await toolVersion(python, ["-c", "import pikepdf; print(pikepdf.__version__)"], remaining(5_000));
         const processed = await withTempPdf(bytes, async (directory, input) => {
           const checked = join(directory, "checked.pdf");
           const output = join(directory, "processed.pdf");

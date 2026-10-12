@@ -55,7 +55,7 @@ export function evaluatePhase6IntegrationTests(report, exitStatus) {
   const safeCodes = ["MEDIA_SCANNER_UNAVAILABLE", "MEDIA_PROCESSING_TIMEOUT", "MEDIA_PROCESSOR_UNAVAILABLE",
     "MEDIA_PDF_PROCESSOR_UNAVAILABLE", "MEDIA_PDF_OUTPUT_INVALID", "MEDIA_VIDEO_PROCESSOR_UNAVAILABLE",
     "MEDIA_VIDEO_PROCESSOR_TIMEOUT", "MEDIA_CONTAINER_CLEANUP_FAILED", "MEDIA_STORAGE_UNAVAILABLE",
-    "MEDIA_VIDEO_INPUT_INVALID", "MEDIA_VIDEO_OUTPUT_INVALID", "CV_MEDIA_NOT_ELIGIBLE"];
+    "MEDIA_VIDEO_INPUT_INVALID", "MEDIA_VIDEO_OUTPUT_INVALID", "CV_MEDIA_NOT_ELIGIBLE", "CV_PORTFOLIO_READ_FAILED", "CV_PORTFOLIO_NOT_CONFIGURED"];
   const failedTests = assertions.filter((item) => item.status === "failed").map((item) => {
     const failure = String(item.failureMessages?.[0] ?? "");
     const codes = safeCodes.filter((code) => failure.includes(code));

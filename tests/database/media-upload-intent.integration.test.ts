@@ -490,6 +490,23 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
   });
 
   it("commits a scoped candidate and replays the same encrypted target without re-signing", async () => {
+    const cvService = await getOwnerCvApplicationService();
+    for (let round = 0; round < 10; round += 1) {
+      await admin.query("delete from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
+      const readCodes: string[] = [];
+      const observedService = { ...cvService, async getOwnerCvPortfolio(query: Parameters<typeof cvService.getOwnerCvPortfolio>[0]) {
+        const result = await cvService.getOwnerCvPortfolio(query);
+        readCodes.push(result.ok ? "ok" : result.error.code);
+        return result;
+      } };
+      const responses = await Promise.all([0, 1].map(() => handleGetOwnerCvPortfolio(new Request("https://example.com/api/owner/v1/cv", {
+        headers: withOwnerTestAuth({}),
+      }), { service: observedService, security: ownerSecurity() })));
+      const statuses = responses.map((response) => response.status);
+      expect(statuses, `T09-01 concurrent root initialization: ${JSON.stringify({ round, statuses, readCodes })}`).toEqual([200, 200]);
+      const roots = await admin.query("select count(*)::int as count from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
+      expect(roots.rows[0]?.count).toBe(1);
+    }
     const key = `phase6-upload-intent-${randomBytes(16).toString("hex")}`;
     const service = createService();
     const first = await issue(key, undefined, service);
