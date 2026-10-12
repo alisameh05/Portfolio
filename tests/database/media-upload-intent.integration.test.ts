@@ -2129,19 +2129,24 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
           (select count(*)::int from cv_portfolio.activation_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
           (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events,
           (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid and is_current) as current_flags`, [portfolioId, ownerId]);
-      const foreignActivation = await cvService.activateOwnerCvVersion({ actor: cvOwner,
-        idempotencyKey: "phase6-cv-activate-foreign-target" as never,
-        expectedVersion: beforeForeignActivation.value.aggregateVersion, versionId: foreignActivationVersionId });
+      const foreignActivation = await activateCvThroughHttp({ versionId: foreignActivationVersionId,
+        idempotencyKey: "phase6-cv-activate-foreign-target", ifMatch: `"${beforeForeignActivation.value.aggregateVersion}"` });
+      const foreignActivationBody = await foreignActivation.json() as Record<string, unknown>;
       const afterForeignActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
       const foreignActivationCountsAfter = await admin.query(`select
           (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as histories,
           (select count(*)::int from cv_portfolio.activation_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
           (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1') as events,
           (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid and is_current) as current_flags`, [portfolioId, ownerId]);
+      await admin.query("delete from cv_portfolio.acceptance_history where version_id = $1::uuid", [foreignActivationVersionId]);
+      await admin.query("delete from cv_portfolio.activation_history where version_id = $1::uuid", [foreignActivationVersionId]);
+      await admin.query("delete from cv_portfolio.acceptance_commands where version_id = $1::uuid", [foreignActivationVersionId]);
+      await admin.query("delete from cv_portfolio.registration_commands where version_id = $1::uuid", [foreignActivationVersionId]);
+      await admin.query("delete from cv_portfolio.activation_commands where version_id = $1::uuid", [foreignActivationVersionId]);
       await admin.query("delete from cv_portfolio.versions where version_id = $1::uuid", [foreignActivationVersionId]);
       await admin.query("delete from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [foreignActivationPortfolioId, foreignActivationOwnerId]);
       cvActivationScenario("T11-09 a valid accepted foreign Owner CV is not found and cannot mutate this Owner's pointer, flags, history, receipts or outbox",
-        !foreignActivation.ok && foreignActivation.error.kind === "not_found" && afterForeignActivation.ok &&
+        foreignActivation.status === 404 && foreignActivationBody["code"] === "CV_VERSION_NOT_FOUND" && afterForeignActivation.ok &&
         afterForeignActivation.value.aggregateVersion === beforeForeignActivation.value.aggregateVersion &&
         afterForeignActivation.value.currentVersionId === beforeForeignActivation.value.currentVersionId &&
         JSON.stringify(foreignActivationCountsBefore.rows[0]) === JSON.stringify(foreignActivationCountsAfter.rows[0]));
