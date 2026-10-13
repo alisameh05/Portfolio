@@ -832,7 +832,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       () => createAcceptanceService().acceptOwnerMediaAsset({ actor, mediaId: rejectionFirstRaceId,
         expectedVersion: 2, idempotencyKey: "phase6-rejection-first-race-accept" as never,
         accessibility: { kind: "document", summary: "A readable one page PDF document." } }),
-    ] as const, false, "rejection before Media acceptance");
+    ] as const, true, "rejection before Media acceptance");
     expect(rejectionFirstResult).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
     expect(acceptanceAfterRejectionResult).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
     expect(await rejectionState(rejectionFirstRaceId)).toMatchObject({ aggregate_version: 3, rejections: 1, receipts: 1 });
