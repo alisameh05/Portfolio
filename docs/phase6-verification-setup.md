@@ -102,6 +102,8 @@ for all six formats, and successful cleanup. It writes sanitized evidence to
 `evidence/phase6-media-integration.json`. No external env file is needed.
 Rejection uses a separate Owner/Portfolio fixture so retained CV versions and
 rejected Media cannot contaminate baseline initialization or acceptance checks.
+Auxiliary delivery/rejection acceptances are counted separately from the six
+format acceptances and never enter the accepted-format Media collection.
 
 Run `npm run phase6:focus:cv-portfolio` for the CV registration scenarios and
 the preexisting-Owner migration upgrade proof. Both commands run sequentially

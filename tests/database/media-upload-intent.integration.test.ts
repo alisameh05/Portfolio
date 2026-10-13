@@ -70,7 +70,7 @@ const REQUIRE_ACCEPTANCE = process.env["PHASE6_MEDIA_ACCEPTANCE_ONLY"] === "1";
 const REQUIRE_MEDIA_REJECTION = process.env["PHASE6_MEDIA_REJECTION_ONLY"] === "1";
 const REQUIRE_FULL_MEDIA = process.env["PHASE6_REQUIRE_FULL_MEDIA"] === "1";
 const REQUIRE_CV_ACTIVATION = process.env["PHASE6_CV_ACTIVATION_ONLY"] === "1";
-const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0, imageProcessorExecutions: 0, acceptanceExecutions: 0,
+const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0, imageProcessorExecutions: 0, acceptanceExecutions: 0, fixtureAcceptanceExecutions: 0,
   cvScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   cvAcceptanceScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   cvActivationScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
@@ -363,7 +363,8 @@ describeReal(group === "baseline"
     return published.value.aggregateVersion;
   }
 
-  async function acceptAndVerify(mediaId: StableId<"MediaAsset">, accessibility: OwnerMediaAccessibility, keySuffix: string) {
+  async function acceptAndVerify(mediaId: StableId<"MediaAsset">, accessibility: OwnerMediaAccessibility, keySuffix: string,
+    purpose: "format-proof" | "fixture" = "format-proof") {
     const acceptance = createAcceptanceService();
     const command = {
       actor: { kind: "owner" as const, ownerId, sessionId: "phase6-media-acceptance-owner" },
@@ -391,7 +392,10 @@ describeReal(group === "baseline"
     expect(beforeAcceptance).toMatchObject({ ok: true, value: [{ accepted: false }] });
     const accepted = await pendingAcceptance;
     expect(accepted, JSON.stringify(accepted)).toMatchObject({ ok: true, value: { aggregateId: mediaId, aggregateVersion: 3, outcome: "media-accepted" } });
-    if (accepted.ok) mediaProcessingCounts.acceptanceExecutions += 1;
+    if (accepted.ok) {
+      if (purpose === "format-proof") mediaProcessingCounts.acceptanceExecutions += 1;
+      else mediaProcessingCounts.fixtureAcceptanceExecutions += 1;
+    }
     const replay = await acceptance.acceptOwnerMediaAsset(command);
     expect(replay).toEqual(accepted);
     const differentKey = await acceptance.acceptOwnerMediaAsset({ ...command, expectedVersion: 3, idempotencyKey: `phase6-accept-new-${randomBytes(8).toString("hex")}` as never });
@@ -412,8 +416,10 @@ describeReal(group === "baseline"
     const event = await admin.query(`select event_type, aggregate_version, payload from operations.outbox_events
       where aggregate_id = $1::uuid and event_type = 'media.asset_accepted.v1'`, [mediaId]);
     expect(event.rows).toEqual([{ event_type: "media.asset_accepted.v1", aggregate_version: 3, payload: { mediaId } }]);
-    acceptedMediaIds.push(mediaId);
-    if (accessibility.kind === "decorative-image") decorativeMediaIds.add(mediaId);
+    if (purpose === "format-proof") {
+      acceptedMediaIds.push(mediaId);
+      if (accessibility.kind === "decorative-image") decorativeMediaIds.add(mediaId);
+    }
     const duplicateBatch = await appDatabase.transactions.run((transaction) => acceptance.getAcceptanceFacts({
       ownerId, mediaAssetIds: [mediaId, mediaId], intendedUse: "supporting-artifact",
     }, transaction));
@@ -456,7 +462,7 @@ describeReal(group === "baseline"
       sha256: createHash("sha256").update(payload).digest("hex") });
     expect(processed, JSON.stringify(processed)).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
     if (accept) await acceptAndVerify(media.value.mediaId as StableId<"MediaAsset">,
-      { kind: "document", summary: "A readable one page PDF document." }, suffix);
+      { kind: "document", summary: "A readable one page PDF document." }, suffix, "fixture");
     return media.value.mediaId as StableId<"MediaAsset">;
   }
 
@@ -3351,7 +3357,13 @@ describeReal(group === "baseline"
        where asset.portfolio_id = $1::uuid and asset.owner_id = $2::uuid and asset.kind = 'image'
          and not exists (select 1 from media.decision_history decision where decision.media_id = asset.media_id)
        order by asset.created_at desc limit 1`, [portfolioId, ownerId]);
+    const formatAcceptanceCount = mediaProcessingCounts.acceptanceExecutions;
+    const fixtureAcceptanceCount = mediaProcessingCounts.fixtureAcceptanceExecutions;
+    const formatMediaIds = [...acceptedMediaIds];
     const rejectedMediaId = await createAcceptedRejectionCandidate("delivery-rejected");
+    expect(mediaProcessingCounts.acceptanceExecutions).toBe(formatAcceptanceCount);
+    expect(mediaProcessingCounts.fixtureAcceptanceExecutions).toBe(fixtureAcceptanceCount + 1);
+    expect(acceptedMediaIds).toEqual(formatMediaIds);
     const ownerMedia = await getOwnerMediaApplicationService();
     const rejected = await ownerMedia.rejectOwnerMediaAsset({
       actor: { kind: "owner", ownerId, sessionId: "phase6-profile-media-owner" },
