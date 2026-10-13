@@ -6,6 +6,7 @@ export function createProductionContentAuthoringService(): ContentAuthoringServi
   const unavailable = err({ kind: "temporarily_unavailable" as const, code: "RUNTIME_NOT_IMPLEMENTED" });
   return {
     async getVisibleMediaUsage() { return unavailable; },
+    async getPublicProjectMediaUse() { return { ok: true, value: false }; },
     async createContent() { return unavailable; },
     async getOwnerContentAggregate() { return unavailable; },
     async saveRevision() { return unavailable; },

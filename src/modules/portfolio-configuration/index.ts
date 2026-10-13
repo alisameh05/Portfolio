@@ -25,6 +25,7 @@ export type {
   ConfigurationCorrelation,
   GetPortfolioSettingsQuery,
   GetPublicConfigurationQuery,
+  GetPublicProfileMediaUseQuery,
   PublicCapabilityAvailability,
   PublicPortfolioCapabilityFacts,
   PublicPortfolioCapabilityReader,

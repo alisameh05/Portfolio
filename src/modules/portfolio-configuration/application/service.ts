@@ -35,6 +35,11 @@ export interface GetPublicConfigurationQuery {
   readonly locale: SupportedLocale;
 }
 
+export interface GetPublicProfileMediaUseQuery {
+  readonly mediaAssetId: StableId<"MediaAsset">;
+  readonly locale: SupportedLocale;
+}
+
 export type PublicCapabilityAvailability = "available" | "unavailable" | "unknown";
 
 /** Facts made available to the public settings query through module exports. */
@@ -84,6 +89,11 @@ export interface PortfolioConfigurationService {
   getPublicConfiguration(
     query: GetPublicConfigurationQuery,
   ): Promise<Result<PublicPortfolioConfigurationView, Rejection>>;
+
+  isPublicProfileMediaUse(
+    query: GetPublicProfileMediaUseQuery,
+    transaction: import("../../../runtime/ports.js").TransactionContext,
+  ): Promise<Result<boolean, Rejection>>;
 
   updateProfile(
     command: UpdatePortfolioProfileCommand,

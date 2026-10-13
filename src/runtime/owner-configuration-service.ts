@@ -34,6 +34,7 @@ export function createOwnerConfigurationApplicationService(
           displayName: command.displayName,
           headline: command.headline,
           bio: command.bio,
+          ...(command.mediaAssetId === undefined ? {} : { mediaAssetId: command.mediaAssetId }),
         },
       });
     },

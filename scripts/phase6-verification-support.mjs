@@ -45,6 +45,25 @@ export function scrubPhase6Environment(source = process.env) {
   return env;
 }
 
+export const PHASE6_MEDIA_INTEGRATION_TEST_NAMES = Object.freeze([
+  "commits a scoped candidate and replays the same encrypted target without re-signing",
+  "allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes",
+  "rolls back a failed candidate commit and idempotently removes its expired private orphan",
+  "processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+  "issues bounded delivery only for current published-locale and profile Media uses",
+  "processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg",
+  "rejects accepted Media safely and serializes with current usage changes",
+]);
+
+export function phase6CvDeferredMigrations(migrationNames) {
+  const firstCvMigration = "20261012030000_initialize_cv_portfolio_register_english_versions.sql";
+  if (!migrationNames.includes(firstCvMigration)) throw new Error("PHASE6_CV_UPGRADE_TARGET_MISSING");
+  // A pre-CV database cannot already contain later migration history. Defer
+  // the entire suffix so future CV-dependent changes also upgrade in order.
+  return migrationNames.filter((name) => /^\d{14}_.+\.sql$/u.test(name) &&
+    name.slice(0, 14) >= firstCvMigration.slice(0, 14)).sort();
+}
+
 export function evaluatePhase6IntegrationTests(report, exitStatus) {
   const assertions = (report?.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
   const counts = {
@@ -72,8 +91,11 @@ export function evaluatePhase6IntegrationTests(report, exitStatus) {
       : {}),
     ...(codes.length ? { codes } : {}), ...(criteria.length ? { criteria } : {}),
   }; });
-  return { ...counts, ...(failedTests.length ? { failedTests } : {}), verdict: exitStatus === 0 && counts.total === 5 && counts.passed === 5 &&
-    report?.numTotalTests === 5 && report?.numPassedTests === 5 && report?.numFailedTests === 0 &&
+  const expected = PHASE6_MEDIA_INTEGRATION_TEST_NAMES.length;
+  const names = new Set(assertions.map((item) => item.title));
+  return { ...counts, ...(failedTests.length ? { failedTests } : {}), verdict: exitStatus === 0 && counts.total === expected && counts.passed === expected &&
+    names.size === expected && PHASE6_MEDIA_INTEGRATION_TEST_NAMES.every((name) => names.has(name)) &&
+    report?.numTotalTests === expected && report?.numPassedTests === expected && report?.numFailedTests === 0 &&
     report?.numPendingTests === 0 && report?.success === true ? "pass" : "fail" };
 }
 

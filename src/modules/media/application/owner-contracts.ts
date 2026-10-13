@@ -175,20 +175,77 @@ export type MediaDeliveryPurpose = "project" | "profile" | "current-cv";
 export type MediaDeliveryLocale = "en" | "ar";
 
 export interface ResolveMediaDeliveryQuery {
-  readonly mediaAssetId: StableId<string>;
+  readonly mediaAssetId: StableId<"MediaAsset">;
   readonly purpose: MediaDeliveryPurpose;
   readonly locale: MediaDeliveryLocale;
+}
+
+export interface MediaDeliveryVariant {
+  readonly objectId: StableId<"MediaObject">;
+  readonly name: string;
+  readonly url: string;
+  readonly expiresAt: string;
+  readonly mimeType: string;
+  readonly byteLength: number;
+  readonly width?: number;
+  readonly height?: number;
+  readonly codec?: string;
 }
 
 export interface MediaDeliveryLocation {
   readonly mediaAssetId: StableId<"MediaAsset">;
   readonly purpose: MediaDeliveryPurpose;
   readonly locale: MediaDeliveryLocale;
-  /** Opaque provider-neutral delivery location; never persisted as an identity. */
-  readonly url: string;
-  readonly expiresAt: string;
-  readonly mimeType: string;
+  /** Opaque short-lived bearer capabilities; never persisted as an identity. */
+  readonly variants: ReadonlyArray<MediaDeliveryVariant>;
   readonly accessibility: MediaAccessibilityMetadata;
+}
+
+export interface MediaDeliveryCandidate {
+  readonly mediaAssetId: StableId<"MediaAsset">;
+  readonly ownerId: StableId<"Owner">;
+  readonly assetVersion: number;
+  readonly accessibility: MediaAccessibilityMetadata;
+  readonly variants: ReadonlyArray<MediaDeliveryCandidateVariant>;
+}
+
+export interface MediaDeliveryCandidateVariant {
+  readonly objectId: StableId<"MediaObject">;
+  readonly name: string;
+  readonly mimeType: string;
+  readonly byteLength: number;
+  readonly sha256: string;
+  readonly objectVersion: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly codec?: string;
+}
+
+export interface MediaDeliveryRepositoryPort {
+  getEligibleDeliveryCandidate(
+    query: ResolveMediaDeliveryQuery & { readonly ownerId: StableId<"Owner"> },
+    transaction: TransactionContext,
+  ): Promise<Result<MediaDeliveryCandidate, Rejection>>;
+}
+
+export interface MediaDeliveryUsePort {
+  isCurrentlyUsed(
+    query: ResolveMediaDeliveryQuery,
+    transaction: TransactionContext,
+  ): Promise<Result<boolean, Rejection>>;
+}
+
+export interface MediaDeliveryStoragePort {
+  createSignedDeliveryTarget(input: {
+    readonly mediaAssetId: StableId<"MediaAsset">;
+    readonly purpose: MediaDeliveryPurpose;
+    readonly locale: MediaDeliveryLocale;
+    readonly variant: MediaDeliveryCandidateVariant;
+  }): Promise<Result<{ readonly url: string; readonly expiresAt: string }, Rejection>>;
+}
+
+export interface MediaDeliveryApplicationService {
+  resolveDelivery(query: ResolveMediaDeliveryQuery): Promise<Result<MediaDeliveryLocation, Rejection>>;
 }
 
 export interface MediaReadApplicationService {
