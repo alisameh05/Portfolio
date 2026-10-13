@@ -417,7 +417,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const actor = { kind: "owner" as const, ownerId, sessionId: "phase6-media-rejection-owner" };
     const media = await getOwnerMediaApplicationService();
     const reason = "Owner confirmed this candidate should not remain available.";
-    async function contendAtMediaLock<T extends readonly (() => Promise<unknown>)[]>(mediaId: StableId<"MediaAsset">, commands: T, stageFirst = false): Promise<{
+    async function contendAtMediaLock<T extends readonly (() => Promise<unknown>)[]>(mediaId: StableId<"MediaAsset">, commands: T, stageFirst = false, scenario = "unspecified"): Promise<{
       [K in keyof T]: T[K] extends () => Promise<infer Result> ? Result : never
     }> {
       await admin.query("begin");
@@ -442,7 +442,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
           if (waiting !== expected) {
             const sessions = await admin.query(`select pid, state, wait_event_type, wait_event, left(query, 180) as query
               from pg_stat_activity where usename = $1`, [roleName]);
-            expect(waiting, `expected ${expected} ungranted Media advisory locks; outcomes=${JSON.stringify(outcomes)}; sessions=${JSON.stringify(sessions.rows)}`)
+            expect(waiting, `${scenario}: expected ${expected} ungranted Media advisory locks; outcomes=${JSON.stringify(outcomes)}; sessions=${JSON.stringify(sessions.rows)}`)
               .toBe(expected);
           }
         };
@@ -672,7 +672,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         accessibility: { kind: "document", summary: "A readable one page PDF document." } }),
       () => media.rejectOwnerMediaAsset({ actor, mediaId: acceptanceRaceId, expectedVersion: 2,
         idempotencyKey: "phase6-rejection-command-race" as never, reason }),
-    ] as const, true);
+    ] as const, true, "Media acceptance versus rejection");
     if (rejectionRaceResult.ok) {
       expect(acceptanceRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
       expect(await rejectionState(acceptanceRaceId)).toMatchObject({ aggregate_version: 3, rejections: 1, receipts: 1 });
@@ -689,7 +689,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       () => createAcceptanceService().acceptOwnerMediaAsset({ actor, mediaId: rejectionFirstRaceId,
         expectedVersion: 2, idempotencyKey: "phase6-rejection-first-race-accept" as never,
         accessibility: { kind: "document", summary: "A readable one page PDF document." } }),
-    ] as const, true);
+    ] as const, true, "rejection before Media acceptance");
     expect(rejectionFirstResult).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
     expect(acceptanceAfterRejectionResult).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
     expect(await rejectionState(rejectionFirstRaceId)).toMatchObject({ aggregate_version: 3, rejections: 1, receipts: 1 });
@@ -711,7 +711,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       () => media.rejectOwnerMediaAsset({ actor, mediaId: raceMediaId, expectedVersion: 3,
         idempotencyKey: "phase6-rejection-race-reject" as never, reason }),
       async () => { allowPublish(); return await pendingPublication; },
-    ] as const, true);
+    ] as const, true, "Content publication versus rejection");
     const racePublished = racePublication.published;
     expect(racePublished.ok || raceRejected.ok).toBe(true);
     if (racePublished.ok) {
@@ -739,7 +739,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         correlationId: "phase6-rejection-restore-race-restore" }),
       () => media.rejectOwnerMediaAsset({ actor, mediaId: restoreRaceMediaId, expectedVersion: 3,
         idempotencyKey: "phase6-rejection-restore-race-reject" as never, reason }),
-    ] as const, true);
+    ] as const, true, "Content restore versus rejection");
     expect(Number(restoreRaceResult.ok) + Number(rejectDuringRestoreResult.ok)).toBe(1);
     if (restoreRaceResult.ok) {
       expect(rejectDuringRestoreResult).toMatchObject({ ok: false, error: { code: "MEDIA_IN_USE" } });
@@ -788,7 +788,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         expectedVersion: cvAccept.value.aggregateVersion, idempotencyKey: "phase6-rejection-cv-race-activate" as never }),
       () => media.rejectOwnerMediaAsset({ actor, mediaId: cvRaceMediaId, expectedVersion: 3,
         idempotencyKey: "phase6-rejection-cv-race-reject" as never, reason }),
-    ] as const);
+    ] as const, false, "CV activation versus rejection");
     expect(Number(activationRaceResult.ok) + Number(cvRejectionRaceResult.ok)).toBe(1);
     const activationRacePortfolio = await cv.getOwnerCvPortfolio({ actor });
     expect(activationRacePortfolio.ok).toBe(true);
@@ -819,7 +819,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         idempotencyKey: "phase6-rejection-cv-accept-race-accept" as never }),
       () => media.rejectOwnerMediaAsset({ actor, mediaId: cvAcceptRaceId, expectedVersion: 3,
         idempotencyKey: "phase6-rejection-cv-accept-race-reject" as never, reason }),
-    ] as const, true);
+    ] as const, true, "CV acceptance versus rejection");
     expect(cvRejectDuringAccept).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
     const cvAcceptRacePortfolioAfter = await cv.getOwnerCvPortfolio({ actor });
     expect(cvAcceptRacePortfolioAfter).toMatchObject({ ok: true });
