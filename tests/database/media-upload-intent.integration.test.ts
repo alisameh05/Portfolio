@@ -463,20 +463,20 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       let released = false;
       try {
         await admin.query("select pg_advisory_xact_lock(hashtextextended($1::text, 0))", [mediaId]);
-        const waitFor = async (expected: number, attempts = 160, atLeast = false) => {
+        const waitFor = async (expected: number, timeoutMs = 1_600, atLeast = false) => {
           const matches = (waiting: number) => atLeast ? waiting >= expected : waiting === expected;
+          const deadline = performance.now() + timeoutMs;
           let waiting = 0;
-          // Once a contender is waiting, leave margin inside the production
-          // three-second lock timeout. Scheduling and local query latency can
-          // take several hundred milliseconds on the Supabase stack.
-          for (let attempt = 0; attempt < attempts; attempt += 1) {
+          do {
             const result = await admin.query(`select count(distinct activity.pid)::int as count
               from pg_locks lock join pg_stat_activity activity on activity.pid = lock.pid
               where activity.usename = $1 and lock.locktype = 'advisory' and not lock.granted`, [roleName]);
             waiting = Number(result.rows[0]?.count ?? 0);
             if (matches(waiting)) break;
-            await new Promise((resolve) => setTimeout(resolve, 10));
-          }
+            const remainingMs = deadline - performance.now();
+            if (remainingMs <= 0) break;
+            await new Promise((resolve) => setTimeout(resolve, Math.min(10, remainingMs)));
+          } while (performance.now() < deadline);
           if (!matches(waiting)) {
             const sessions = await admin.query(`select pid, state, wait_event_type, wait_event, left(query, 180) as query
               from pg_stat_activity where usename = $1`, [roleName]);
@@ -489,7 +489,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
           // CV activation performs its private Storage preflight before the
           // final transaction requests this lock, so allow that first stage to
           // finish without consuming the transaction's lock timeout.
-          await waitFor(1, 800);
+          await waitFor(1, 8_000);
           for (let index = 1; index < commands.length; index += 1) {
             pending.push(commands[index]!().then((outcome) => { outcomes[index] = outcome; return outcome; }));
           }
@@ -501,7 +501,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         // Both commands have started before the barrier is released. Confirm
         // both independent application sessions are queued on the Media lock.
         // Keep this bounded wait inside the production three-second lock timeout.
-        await waitFor(commands.length, 240, true);
+        await waitFor(commands.length, 2_400, true);
         await admin.query("commit");
         released = true;
         return await Promise.all(pending) as {
