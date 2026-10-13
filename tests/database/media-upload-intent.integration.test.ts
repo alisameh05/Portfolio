@@ -702,10 +702,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       await publishPermission;
     }, false);
     await publicationReady;
-    const [racePublication, raceRejected] = await contendAtMediaLock(raceMediaId, [
-      async () => { allowPublish(); return await pendingPublication; },
+    const [raceRejected, racePublication] = await contendAtMediaLock(raceMediaId, [
       () => media.rejectOwnerMediaAsset({ actor, mediaId: raceMediaId, expectedVersion: 3,
         idempotencyKey: "phase6-rejection-race-reject" as never, reason }),
+      async () => { allowPublish(); return await pendingPublication; },
     ] as const, true);
     const racePublished = racePublication.published;
     expect(racePublished.ok || raceRejected.ok).toBe(true);
