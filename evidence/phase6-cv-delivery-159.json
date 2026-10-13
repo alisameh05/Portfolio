@@ -3,11 +3,11 @@
   "ticket": 159,
   "parent": 145,
   "predecessor": 156,
-  "runId": "af4c660e-077c-496d-bac8-626682da91d8",
-  "sourceRevision": "d7aadff5bca31f6b16493850646497aad2744221",
-  "sourceTreeSha256": "0e97a9cf72a000c385ca6458a51b3030ebe977c9a89efb9dfabb61ea3fabcd09",
-  "startedAt": "2026-10-13T17:22:55.610Z",
-  "completedAt": "2026-10-13T17:32:27.360Z",
+  "runId": "85c8c834-5d5b-4789-aea6-85c1facd72c9",
+  "sourceRevision": "c76d447684f87f8796edd062cd58dfa924255e1b",
+  "sourceTreeSha256": "e5f69923ad63dfc2ebc1b5362b4ac00f9ac30ac38d6a0474943a8663857698a0",
+  "startedAt": "2026-10-13T17:35:38.817Z",
+  "completedAt": "2026-10-13T17:44:51.656Z",
   "scope": "public-current-cv-private-storage-delivery",
   "runtime": {
     "node": "v24.21.0",
@@ -97,8 +97,8 @@
         "tests/modules/current-cv-delivery.test.ts",
         "tests/runtime/supabase-current-cv-delivery.test.ts"
       ],
-      "total": 35,
-      "passed": 35,
+      "total": 36,
+      "passed": 36,
       "failed": 0,
       "skipped": 0,
       "verdict": "pass"
@@ -166,7 +166,7 @@
     "integrationExecuted": 3,
     "integrationFailures": 0,
     "integrationSkips": 0,
-    "unitExecuted": 35,
+    "unitExecuted": 36,
     "unitFailures": 0,
     "unitSkips": 0
   },

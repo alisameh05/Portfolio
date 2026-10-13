@@ -365,6 +365,7 @@ export async function initializeDatabaseRuntime(
             ? (await import("../runtime/adapters/supabase-current-cv-delivery.js")).createSupabaseCurrentCvDelivery({
                 storageUrl: env["SUPABASE_URL"],
                 serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
+                mode: env["NODE_ENV"] === "test" ? "test" : "deployed",
                 ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
               })
             : {

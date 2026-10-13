@@ -4,10 +4,12 @@ import type { CurrentCvObjectDeliveryPort } from "../../modules/cv-portfolio/ind
 
 const MAX_CURRENT_CV_BYTES = 25 * 1024 * 1024;
 const TARGET_LIFETIME_SECONDS = 300;
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 export interface SupabaseCurrentCvDeliveryOptions {
   readonly storageUrl: string;
   readonly serviceRoleKey: string;
+  readonly mode: "deployed" | "test";
   readonly processedBucket?: string;
   readonly fetcher?: typeof fetch;
 }
@@ -75,7 +77,10 @@ async function readVerifiedPdf(response: Response, expectedHash: string): Promis
 /** Reads and signs only the content-addressed, private processed PDF snapshot. */
 export function createSupabaseCurrentCvDelivery(options: SupabaseCurrentCvDeliveryOptions): CurrentCvObjectDeliveryPort {
   const base = new URL(options.storageUrl);
-  if (base.protocol !== "https:" && !(base.protocol === "http:" && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(base.hostname))) {
+  if (base.username !== "" || base.password !== "" || base.search !== "" || base.hash !== "" || base.pathname !== "/") {
+    throw new TypeError("Current CV Storage URL must identify an origin without credentials or a path.");
+  }
+  if (base.protocol !== "https:" && !(options.mode === "test" && base.protocol === "http:" && LOOPBACK_HOSTS.has(base.hostname))) {
     throw new TypeError("Current CV Storage must use HTTPS outside loopback.");
   }
   if (options.serviceRoleKey.trim() === "") throw new TypeError("Media Storage service role key is required.");
@@ -90,7 +95,7 @@ export function createSupabaseCurrentCvDelivery(options: SupabaseCurrentCvDelive
       const timer = setTimeout(() => controller.abort(), 10_000);
       try {
         const response = await fetcher(new URL(`/storage/v1/object/${encodeURIComponent(bucket)}/${path}`, base), {
-          headers, signal: controller.signal,
+          headers, signal: controller.signal, redirect: "manual",
         });
         if (!response.ok) return unavailable();
         const bytes = await readVerifiedPdf(response, snapshot.sha256);
@@ -113,14 +118,19 @@ export function createSupabaseCurrentCvDelivery(options: SupabaseCurrentCvDelive
           method: "POST", headers: { ...headers, "content-type": "application/json" },
           body: JSON.stringify({ expiresIn: TARGET_LIFETIME_SECONDS,
             ...(disposition === "attachment" ? { download: "cv.pdf" } : {}) }),
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(10_000), redirect: "manual",
         });
         if (!response.ok) return unavailable();
         const payload: unknown = await response.json();
-        if (typeof payload !== "object" || payload === null || !("signedURL" in payload) || typeof payload.signedURL !== "string") return unavailable();
-        const url = new URL(payload.signedURL, base);
-        if (url.origin !== base.origin || url.username !== "" || url.password !== "" ||
+        if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return unavailable();
+        const record = payload as Record<string, unknown>;
+        const signedURL = record["signedURL"] ?? record["signedUrl"];
+        if (typeof signedURL !== "string" || signedURL.length < 1 || signedURL.length > 4096) return unavailable();
+        const url = new URL(signedURL, base);
+        if (url.pathname.startsWith("/object/sign/")) url.pathname = `/storage/v1${url.pathname}`;
+        if (url.origin !== base.origin || url.username !== "" || url.password !== "" || url.hash !== "" ||
             url.pathname !== `/storage/v1/object/sign/${encodeURIComponent(bucket)}/${path}` ||
+            !url.searchParams.has("token") || url.searchParams.get("token")?.length === 0 ||
             (disposition === "attachment" && url.searchParams.get("download") !== "cv.pdf") ||
             (disposition === "inline" && url.searchParams.has("download"))) return unavailable();
         return ok({ url: url.toString(), expiresAt });
