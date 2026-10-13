@@ -2,9 +2,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, isolatedPhase6Config,
-  loadPhase6PredecessorContexts, makePhase6Report, phase6CvScenarioProof, scrubPhase6Environment,
+  loadPhase6PredecessorContexts, makePhase6Report, phase6CvScenarioProof, phase6CvDeferredMigrations, scrubPhase6Environment,
 } from "../../scripts/phase6-verification-support.mjs";
 import { createBarrier, createDeterministicClock, createUuidV7Sequence } from "../phase6/fixtures/deterministic.mjs";
+
+test("CV upgrade defers every migration from CV initialization onward, including later domain migrations", () => {
+  const before = "20261012020000_enforce_visible_media_usage_and_lock_order.sql";
+  const cv = "20261012030000_initialize_cv_portfolio_register_english_versions.sql";
+  const acceptance = "20261012040000_accept_registered_cv_versions.sql";
+  const activation = "20261012050000_activate_current_cv_atomically.sql";
+  const rejection = "20261012060000_reject_media_with_usage_guard.sql";
+  const profile = "20261013100000_configure_public_profile_media.sql";
+  const future = "20261101000000_future_cv_dependent_change.sql";
+  assert.deepEqual(phase6CvDeferredMigrations([profile, before, activation, future, cv, rejection, acceptance]),
+    [cv, acceptance, activation, rejection, profile, future]);
+  assert.throws(() => phase6CvDeferredMigrations([profile, before]), /PHASE6_CV_UPGRADE_TARGET_MISSING/u);
+});
 
 test("CV evidence requires recorded execution of every T09 criterion", () => {
   const counts = { cvScenarios: Array.from({ length: 9 }, (_, index) => ({

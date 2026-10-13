@@ -55,6 +55,15 @@ export const PHASE6_MEDIA_INTEGRATION_TEST_NAMES = Object.freeze([
   "rejects accepted Media safely and serializes with current usage changes",
 ]);
 
+export function phase6CvDeferredMigrations(migrationNames) {
+  const firstCvMigration = "20261012030000_initialize_cv_portfolio_register_english_versions.sql";
+  if (!migrationNames.includes(firstCvMigration)) throw new Error("PHASE6_CV_UPGRADE_TARGET_MISSING");
+  // A pre-CV database cannot already contain later migration history. Defer
+  // the entire suffix so future CV-dependent changes also upgrade in order.
+  return migrationNames.filter((name) => /^\d{14}_.+\.sql$/u.test(name) &&
+    name.slice(0, 14) >= firstCvMigration.slice(0, 14)).sort();
+}
+
 export function evaluatePhase6IntegrationTests(report, exitStatus) {
   const assertions = (report?.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
   const counts = {

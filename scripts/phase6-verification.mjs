@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { randomUUID, randomBytes, randomInt, createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import {
   PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, getPhase6SourceIdentity, isolatedPhase6Config,
-  makePhase6Report, phase6CvScenarioProof, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
+  makePhase6Report, phase6CvScenarioProof, phase6CvDeferredMigrations, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
 } from "./phase6-verification-support.mjs";
 
 const ROOT = phase6Root();
@@ -189,15 +189,12 @@ async function main() {
     const { cpSync } = await import("node:fs");
     cpSync(migrations, join(isolatedSupabase, "migrations"), { recursive: true });
     const cvMigrationName = "20261012030000_initialize_cv_portfolio_register_english_versions.sql";
-    const isolatedCvMigration = join(isolatedSupabase, "migrations", cvMigrationName);
     const cvAcceptanceMigrationName = "20261012040000_accept_registered_cv_versions.sql";
-    const isolatedCvAcceptanceMigration = join(isolatedSupabase, "migrations", cvAcceptanceMigrationName);
     const cvActivationMigrationName = "20261012050000_activate_current_cv_atomically.sql";
-    const isolatedCvActivationMigration = join(isolatedSupabase, "migrations", cvActivationMigrationName);
-    if (CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY) {
-      rmSync(isolatedCvMigration, { force: true });
-      rmSync(isolatedCvAcceptanceMigration, { force: true });
-      rmSync(isolatedCvActivationMigration, { force: true });
+    const deferredCvMigrations = CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY
+      ? phase6CvDeferredMigrations(readdirSync(migrations)) : [];
+    for (const name of deferredCvMigrations) {
+      rmSync(join(isolatedSupabase, "migrations", name), { force: true });
     }
     run("docker", ["network", "create", "-o", "com.docker.network.bridge.host_binding_ipv4=127.0.0.1", network], { env, timeout: 20_000 });
     networkCreated = true;
@@ -226,9 +223,9 @@ async function main() {
         values ($1::uuid, $2::uuid, 'Upgrade fixture', 'Legacy configured Owner', 'Pre-CV migration settings row',
           'Contact', 'https://example.test/contact', 'Contact unavailable')`, [upgradeFixture.portfolioId, upgradeFixture.ownerId]);
       await upgradeClient.end();
-      copyFileSync(join(migrations, cvMigrationName), isolatedCvMigration);
-      copyFileSync(join(migrations, cvAcceptanceMigrationName), isolatedCvAcceptanceMigration);
-      copyFileSync(join(migrations, cvActivationMigrationName), isolatedCvActivationMigration);
+      for (const name of deferredCvMigrations) {
+        copyFileSync(join(migrations, name), join(isolatedSupabase, "migrations", name));
+      }
       const migrationUpOutput = invoke(["migration", "up", "--local"], 120_000);
       console.log(`Applying the deferred CV migration: ${migrationUpOutput.trim().slice(0, 400)}`);
       const verificationClient = new Client({ connectionString: status.DB_URL, connectionTimeoutMillis: 5000 });
@@ -238,13 +235,19 @@ async function main() {
       const targetMigrationLedger = await verificationClient.query("select 1 from supabase_migrations.schema_migrations where version = $1", [cvMigrationName.slice(0, 14)]);
       const acceptanceMigrationLedger = await verificationClient.query("select 1 from supabase_migrations.schema_migrations where version = $1", [cvAcceptanceMigrationName.slice(0, 14)]);
       const activationMigrationLedger = await verificationClient.query("select 1 from supabase_migrations.schema_migrations where version = $1", [cvActivationMigrationName.slice(0, 14)]);
+      const deferredMigrationLedger = await verificationClient.query(
+        "select version from supabase_migrations.schema_migrations where version = any($1::text[])",
+        [deferredCvMigrations.map((name) => name.slice(0, 14))]);
       await verificationClient.end();
       cvMigrationUpgrade = { migration: cvMigrationName, preexistingConfiguredOwners: 1,
         migrations: [cvMigrationName, cvAcceptanceMigrationName, cvActivationMigrationName],
+        deferredMigrations: deferredCvMigrations,
+        migrationLedgerContainsDeferred: deferredMigrationLedger.rowCount === deferredCvMigrations.length,
         migrationLedgerContainsTarget: targetMigrationLedger.rowCount === 1 && acceptanceMigrationLedger.rowCount === 1 && activationMigrationLedger.rowCount === 1,
         backfilledRoots: backfill.rowCount ?? 0, aggregateVersion: Number(backfill.rows[0]?.aggregate_version),
         verdict: backfill.rowCount === 1 && Number(backfill.rows[0]?.aggregate_version) === 1 &&
-          targetMigrationLedger.rowCount === 1 && acceptanceMigrationLedger.rowCount === 1 && activationMigrationLedger.rowCount === 1 ? "pass" : "fail" };
+          targetMigrationLedger.rowCount === 1 && acceptanceMigrationLedger.rowCount === 1 && activationMigrationLedger.rowCount === 1 &&
+          deferredMigrationLedger.rowCount === deferredCvMigrations.length ? "pass" : "fail" };
       if (cvMigrationUpgrade.verdict !== "pass") throw new Error("PHASE6_CV_MIGRATION_UPGRADE_BACKFILL_FAILED");
     }
     toolVersions = { ...toolVersions, supabaseCli: supabasePkg.version, postgres: database.rows[0].version };

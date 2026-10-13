@@ -108,6 +108,10 @@ format acceptances and never enter the accepted-format Media collection.
 Run `npm run phase6:focus:cv-portfolio` for the CV registration scenarios and
 the preexisting-Owner migration upgrade proof. Both commands run sequentially
 in the `Phase 6 Media and CV real-PostgreSQL-Storage` CI job on each PR.
+The upgrade starts with only migrations preceding CV initialization, provisions
+a legacy Owner, then applies every deferred CV and later migration in timestamp
+order. Evidence requires both the version-1 backfill and the complete deferred
+migration ledger; later domain migrations cannot enter the pre-CV baseline.
 
 Direct `npm test` / Vitest runs still skip optional service suites when their
 fixture environment is absent. Use the provisioning commands above for real
