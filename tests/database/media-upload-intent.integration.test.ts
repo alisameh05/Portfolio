@@ -667,8 +667,9 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         accessibility: { kind: "document", summary: "A readable one page PDF document." } }),
       () => media.rejectOwnerMediaAsset({ actor, mediaId: acceptanceRaceId, expectedVersion: 2,
         idempotencyKey: "phase6-rejection-command-race" as never, reason }),
-    ] as const);
-    expect(Number(acceptanceRaceResult.ok) + Number(rejectionRaceResult.ok)).toBe(1);
+    ] as const, true);
+    expect(rejectionRaceResult).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+    if (!acceptanceRaceResult.ok) expect(acceptanceRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
 
     // Start a rejection from the publish-ready barrier while the real Content
     // publication uses a separate transaction. Shared/exclusive Media locks
@@ -793,11 +794,17 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         idempotencyKey: "phase6-rejection-cv-accept-race-reject" as never, reason }),
     ] as const, true);
     expect(cvRejectDuringAccept).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+    const cvAcceptRacePortfolioAfter = await cv.getOwnerCvPortfolio({ actor });
+    expect(cvAcceptRacePortfolioAfter).toMatchObject({ ok: true });
+    if (!cvAcceptRacePortfolioAfter.ok) throw new Error("PHASE6_REJECTION_CV_ACCEPT_RACE_ROOT_UNAVAILABLE");
+    expect(cvAcceptRacePortfolioAfter.value.currentVersionId).toBe(cvAcceptRacePortfolio.value.currentVersionId);
     if (cvAcceptRaceResult.ok) {
       const activationAfterRejectedMedia = await cv.activateOwnerCvVersion({ actor, versionId: cvAcceptRaceRegistration.value.versionId,
         expectedVersion: cvAcceptRaceResult.value.aggregateVersion,
         idempotencyKey: "phase6-rejection-cv-accept-race-activate-after-reject" as never });
-      expect(activationAfterRejectedMedia).toMatchObject({ ok: false });
+      expect(activationAfterRejectedMedia).toMatchObject({ ok: false, error: { code: "CV_MEDIA_NOT_ELIGIBLE" } });
+    } else {
+      expect(cvAcceptRaceResult).toMatchObject({ ok: false, error: { code: "CV_MEDIA_NOT_ELIGIBLE" } });
     }
 
     mediaProcessingCounts.mediaRejectionScenarios = [
