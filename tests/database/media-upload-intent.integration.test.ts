@@ -677,6 +677,18 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       expect(await rejectionState(acceptanceRaceId)).toMatchObject({ aggregate_version: 3, rejections: 0, receipts: 1 });
     }
 
+    const rejectionFirstRaceId = await createAcceptedRejectionCandidate("rejection-first-race", false);
+    const [rejectionFirstResult, acceptanceAfterRejectionResult] = await contendAtMediaLock(rejectionFirstRaceId, [
+      () => media.rejectOwnerMediaAsset({ actor, mediaId: rejectionFirstRaceId, expectedVersion: 2,
+        idempotencyKey: "phase6-rejection-first-race-reject" as never, reason }),
+      () => createAcceptanceService().acceptOwnerMediaAsset({ actor, mediaId: rejectionFirstRaceId,
+        expectedVersion: 2, idempotencyKey: "phase6-rejection-first-race-accept" as never,
+        accessibility: { kind: "document", summary: "A readable one page PDF document." } }),
+    ] as const, true);
+    expect(rejectionFirstResult).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+    expect(acceptanceAfterRejectionResult).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
+    expect(await rejectionState(rejectionFirstRaceId)).toMatchObject({ aggregate_version: 3, rejections: 1, receipts: 1 });
+
     // Start a rejection from the publish-ready barrier while the real Content
     // publication uses a separate transaction. Shared/exclusive Media locks
     // must serialize the decision with its authoritative current references.
