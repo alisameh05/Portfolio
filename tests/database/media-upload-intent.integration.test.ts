@@ -428,10 +428,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         await admin.query("select pg_advisory_xact_lock(hashtextextended($1::text, 0))", [mediaId]);
         const waitFor = async (expected: number) => {
           let waiting = 0;
-          // Keep the barrier well inside the production three-second lock
-          // timeout, accounting for local Supabase query latency as well as
-          // the short polling delay.
-          for (let attempt = 0; attempt < 40; attempt += 1) {
+          // Observe both independent contenders while leaving margin inside
+          // the production three-second lock timeout. Local Supabase can take
+          // several hundred milliseconds to schedule the second transaction.
+          for (let attempt = 0; attempt < 120; attempt += 1) {
             const result = await admin.query(`select count(distinct activity.pid)::int as count
               from pg_locks lock join pg_stat_activity activity on activity.pid = lock.pid
               where activity.usename = $1 and lock.locktype = 'advisory' and not lock.granted`, [roleName]);
