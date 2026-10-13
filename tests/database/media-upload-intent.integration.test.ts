@@ -467,21 +467,25 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
           const matches = (waiting: number) => atLeast ? waiting >= expected : waiting === expected;
           const deadline = performance.now() + timeoutMs;
           let waiting = 0;
+          let matchedBeforeDeadline = false;
           do {
             const result = await admin.query(`select count(distinct activity.pid)::int as count
               from pg_locks lock join pg_stat_activity activity on activity.pid = lock.pid
               where activity.usename = $1 and lock.locktype = 'advisory' and not lock.granted`, [roleName]);
             waiting = Number(result.rows[0]?.count ?? 0);
-            if (matches(waiting)) break;
+            if (matches(waiting)) {
+              matchedBeforeDeadline = performance.now() < deadline;
+              break;
+            }
             const remainingMs = deadline - performance.now();
             if (remainingMs <= 0) break;
             await new Promise((resolve) => setTimeout(resolve, Math.min(10, remainingMs)));
           } while (performance.now() < deadline);
-          if (!matches(waiting)) {
+          if (!matchedBeforeDeadline) {
             const sessions = await admin.query(`select pid, state, wait_event_type, wait_event, left(query, 180) as query
               from pg_stat_activity where usename = $1`, [roleName]);
-            expect(waiting, `${scenario}: expected ${expected} ungranted Media advisory locks; outcomes=${JSON.stringify(outcomes)}; sessions=${JSON.stringify(sessions.rows)}`)
-              .toBe(expected);
+            expect(matchedBeforeDeadline, `${scenario}: expected ${expected} ungranted Media advisory locks before deadline; observed=${waiting}; outcomes=${JSON.stringify(outcomes)}; sessions=${JSON.stringify(sessions.rows)}`)
+              .toBe(true);
           }
         };
         if (stageFirst) {
