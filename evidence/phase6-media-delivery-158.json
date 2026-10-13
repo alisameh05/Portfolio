@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 158,
   "parent": 145,
-  "runId": "2f02c521-c9f8-4034-99cd-d2b15665d533",
-  "sourceRevision": "fdfa432ac337d5cd7477a4b59a3e21d4a140228d",
-  "sourceTreeSha256": "391fd35715d0c2cce51a9f1e4a992eb309dca8383df0f743dc99c1aef39699de",
-  "startedAt": "2026-10-13T12:46:17.676Z",
-  "completedAt": "2026-10-13T12:51:04.546Z",
+  "runId": "3d2a429f-d5b5-44f2-a65c-2f1aa9e12a02",
+  "sourceRevision": "e726426f834109fdb2fcecf7cdd390dbcee33908",
+  "sourceTreeSha256": "feae0636c840734ab573bcd59e2f05b714e921b0eaf715423d12791b98596246",
+  "startedAt": "2026-10-13T13:07:24.553Z",
+  "completedAt": "2026-10-13T13:12:12.899Z",
   "scope": "visibility-authorized-provider-neutral-project-and-profile-media-delivery",
   "runtime": {
     "node": "v24.21.0",
@@ -81,8 +81,8 @@
         "tests/modules/media-delivery.test.ts",
         "tests/runtime/supabase-media-delivery-storage.test.ts"
       ],
-      "total": 14,
-      "passed": 14,
+      "total": 16,
+      "passed": 16,
       "failed": 0,
       "skipped": 0,
       "verdict": "pass"
