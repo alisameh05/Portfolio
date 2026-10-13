@@ -780,6 +780,13 @@ async function main() {
       Number.isSafeInteger(checks.toolEvidence?.cleanScannerVerdicts) && checks.toolEvidence.cleanScannerVerdicts > 0 ? "pass" : "fail";
     const evidence = { schemaVersion: 1, runId: randomUUID(), ...source, startedAt, completedAt: new Date().toISOString(),
       scope: "media-rejection-real-postgres-storage-and-cross-aggregate-races", toolVersions, services, formats, checks,
+      policyIds: {
+        migrations: ["20261010200000_record_trusted_pdf_processing.sql", "20261012060000_reject_media_with_usage_guard.sql"],
+        pdfProcessing: "pdf-active-content-deny-1",
+        databaseRls: ["media_processed_objects_owner_scope", "media_rejection_history_owner_scope"],
+        storage: { candidateBucket: "media-candidates-private", processedBucket: "media-processed-private",
+          processedObjects: "create-only", anonymousProcessedRead: "denied", uploadCapabilityMaxLifetimeSeconds: 7200 },
+      },
       units: acceptanceUnitChecks,
       processingCounts, cleanup, failures,
       verdict: checks.verdict === "pass" && acceptanceUnitChecks?.verdict === "pass" && formats.every((format) => format.executed && format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
