@@ -715,6 +715,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       expect((await admin.query("select 1 from media.rejection_history where media_id = $1::uuid", [raceMediaId])).rowCount).toBe(0);
     } else {
       expect(raceRejected).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+      expect(racePublished).toMatchObject({ ok: false, error: { code: "MEDIA_ACCEPTANCE_FACTS_INVALID" } });
       expect(await content.getPublicProject({ slug: "phase6-rejection-race-project", locale: "en" })).toMatchObject({ ok: false });
       expect((await admin.query("select 1 from media.rejection_history where media_id = $1::uuid", [raceMediaId])).rowCount).toBe(1);
     }
