@@ -64,6 +64,12 @@ function publicPurpose(purpose: MediaDeliveryPurpose): purpose is "project" | "p
   return purpose === "project" || purpose === "profile";
 }
 
+function sameCandidate(left: MediaDeliveryCandidate, right: MediaDeliveryCandidate): boolean {
+  return left.mediaAssetId === right.mediaAssetId && left.ownerId === right.ownerId &&
+    left.assetVersion === right.assetVersion && JSON.stringify(left.accessibility) === JSON.stringify(right.accessibility) &&
+    JSON.stringify(left.variants) === JSON.stringify(right.variants);
+}
+
 /** Resolve a public use, sealed Media snapshot, and short-lived Storage capability. */
 export function createMediaDeliveryApplicationService(input: {
   readonly ownerId: StableId<"Owner">;
@@ -112,12 +118,17 @@ export function createMediaDeliveryApplicationService(input: {
           ...(candidateVariant.codec === undefined ? {} : { codec: candidateVariant.codec }),
         });
       }
-      // Signing crosses the database boundary. Recheck the use after signing so a
-      // hide/archive/profile change during the Storage call cannot return a new cap.
-      const finalUse = await input.transactions.run((transaction) =>
-        input.use.isCurrentlyUsed(query, transaction));
-      if (!finalUse.ok) return finalUse;
-      if (!finalUse.value) return err({ kind: "not_found" as const, code: "MEDIA_DELIVERY_NOT_VISIBLE" });
+      // Signing crosses the database boundary. Recheck both public use and the
+      // accepted sealed snapshot so withdrawal or a changed decision during the
+      // Storage call cannot return a capability for stale Media.
+      const finalState = await input.transactions.run(async (transaction) => {
+        const finalUse = await input.use.isCurrentlyUsed(query, transaction);
+        if (!finalUse.ok) return finalUse;
+        if (!finalUse.value) return err({ kind: "not_found" as const, code: "MEDIA_DELIVERY_NOT_VISIBLE" });
+        return input.repository.getEligibleDeliveryCandidate({ ...query, ownerId: input.ownerId }, transaction);
+      });
+      if (!finalState.ok) return finalState;
+      if (!sameCandidate(candidate, finalState.value)) return err({ kind: "not_found", code: "MEDIA_DELIVERY_NOT_VISIBLE" });
       return {
         ok: true,
         value: {

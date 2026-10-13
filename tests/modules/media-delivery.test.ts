@@ -115,4 +115,55 @@ describe("Media delivery application service", () => {
     expect(useReads).toBe(2);
     expect(signingCalls).toBe(1);
   });
+
+  it("discards signed targets if the accepted Media snapshot changes during signing", async () => {
+    let candidateReads = 0;
+    const changedCandidate = { ...candidate, assetVersion: candidate.assetVersion + 1 };
+    const service = createMediaDeliveryApplicationService({
+      ownerId,
+      transactions: transactions(),
+      use: { async isCurrentlyUsed() { return { ok: true, value: true }; } },
+      repository: { async getEligibleDeliveryCandidate() {
+        candidateReads += 1;
+        return { ok: true, value: candidateReads === 1 ? candidate : changedCandidate };
+      } },
+      storage: { async createSignedDeliveryTarget() {
+        return { ok: true, value: {
+          url: "http://127.0.0.1:54321/storage/v1/object/sign/media-processed/x?token=opaque",
+          expiresAt: "2026-10-13T12:05:00.000Z",
+        } };
+      } },
+      now: () => Date.parse("2026-10-13T12:00:00.000Z"),
+    });
+
+    const result = await service.resolveDelivery(query);
+
+    expect(result).toMatchObject({ ok: false, error: { kind: "not_found", code: "MEDIA_DELIVERY_NOT_VISIBLE" } });
+    expect(candidateReads).toBe(2);
+  });
+
+  it("does not return a capability when the visible use resolves to foreign or unaccepted Media", async () => {
+    let signingCalls = 0;
+    const service = createMediaDeliveryApplicationService({
+      ownerId,
+      transactions: transactions(),
+      use: { async isCurrentlyUsed() { return { ok: true, value: true }; } },
+      repository: { async getEligibleDeliveryCandidate() {
+        return { ok: false, error: { kind: "not_found", code: "MEDIA_DELIVERY_NOT_VISIBLE" } };
+      } },
+      storage: { async createSignedDeliveryTarget() {
+        signingCalls += 1;
+        return { ok: true, value: {
+          url: "http://127.0.0.1:54321/storage/v1/object/sign/media-processed/x?token=opaque",
+          expiresAt: "2026-10-13T12:05:00.000Z",
+        } };
+      } },
+      now: () => Date.parse("2026-10-13T12:00:00.000Z"),
+    });
+
+    const result = await service.resolveDelivery(query);
+
+    expect(result).toMatchObject({ ok: false, error: { kind: "not_found", code: "MEDIA_DELIVERY_NOT_VISIBLE" } });
+    expect(signingCalls).toBe(0);
+  });
 });

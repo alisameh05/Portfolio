@@ -2714,15 +2714,61 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const unselectedProfileMedia = await delivery.resolveDelivery({ mediaAssetId: createStableId("MediaAsset"), purpose: "profile", locale: "en" });
     expect(unselectedProfileMedia).toMatchObject({ ok: false, error: { kind: "not_found" } });
 
+    const updateProfileMedia = async (selectedMediaAssetId: StableId<"MediaAsset">, key: string) => {
+      const settings = await profileSettings.getSettings({ actor: { kind: "owner", ownerId, sessionId: "phase6-profile-media-owner" }, portfolioId });
+      if (!settings.ok) throw new Error("PHASE6_PROFILE_MEDIA_SETTINGS_UNAVAILABLE");
+      return profile.updateProfile({
+        actor: { kind: "owner", ownerId, sessionId: "phase6-profile-media-owner" }, portfolioId,
+        expectedVersion: settings.value.version, idempotencyKey: key as never, correlationId: key,
+        profile: { ...settings.value.profile, mediaAssetId: selectedMediaAssetId },
+      });
+    };
+    const privateCandidates = await admin.query<{ media_id: string }>(`
+      select asset.media_id::text
+        from media.assets asset
+       where asset.portfolio_id = $1::uuid and asset.owner_id = $2::uuid and asset.kind = 'image'
+         and not exists (select 1 from media.decision_history decision where decision.media_id = asset.media_id)
+       order by asset.created_at desc limit 1`, [portfolioId, ownerId]);
+    const rejectedCandidates = await admin.query<{ media_id: string }>(`
+      select asset.media_id::text
+        from media.assets asset
+        join media.decision_history decision on decision.media_id = asset.media_id
+       where asset.portfolio_id = $1::uuid and asset.owner_id = $2::uuid and asset.kind = 'image'
+         and decision.decision = 'rejected'
+       order by decision.aggregate_version desc limit 1`, [portfolioId, ownerId]);
+    expect(privateCandidates.rows.length, "focused acceptance setup must include an unaccepted private image").toBeGreaterThan(0);
+    expect(rejectedCandidates.rows.length, "focused acceptance setup must include a rejected image").toBeGreaterThan(0);
+    for (const [index, row] of [...privateCandidates.rows, ...rejectedCandidates.rows].entries()) {
+      const disallowedMediaId = row.media_id as StableId<"MediaAsset">;
+      expect((await updateProfileMedia(disallowedMediaId, `phase6-profile-media-disallowed-${index}`)).ok).toBe(true);
+      expect(await delivery.resolveDelivery({ mediaAssetId: disallowedMediaId, purpose: "profile", locale: "en" }))
+        .toMatchObject({ ok: false, error: { kind: "not_found" } });
+    }
+    expect((await updateProfileMedia(mediaAssetId, "phase6-profile-media-restore-accepted")).ok).toBe(true);
+
     const variant = english.value.variants[0]!;
-    const storagePath = `/processed/${portfolioId}/${mediaAssetId}/${variant.objectId}/${"0".repeat(64)}.webp`;
+    const sealedObject = await admin.query<{ sha256: string }>(
+      "select sha256 from media.processed_objects where object_id = $1::uuid and media_id = $2::uuid and portfolio_id = $3::uuid and owner_id = $4::uuid",
+      [variant.objectId, mediaAssetId, portfolioId, ownerId]);
+    const objectHash = sealedObject.rows[0]?.sha256;
+    expect(objectHash).toMatch(/^[0-9a-f]{64}$/);
+    if (!objectHash) throw new Error("PHASE6_MEDIA_DELIVERY_SEALED_OBJECT_MISSING");
+    const storagePath = `/processed/${portfolioId}/${mediaAssetId}/${variant.objectId}/${objectHash}.webp`;
+    const candidateObject = await admin.query<{ upload_intent_id: string; media_object_id: string }>(
+      `select upload_intent_id::text, media_object_id::text from media.upload_intents
+        where media_id = $1::uuid and portfolio_id = $2::uuid and owner_id = $3::uuid
+        order by created_at desc limit 1`, [mediaAssetId, portfolioId, ownerId]);
+    const candidateIntent = candidateObject.rows[0];
+    expect(candidateIntent).toBeDefined();
+    if (!candidateIntent) throw new Error("PHASE6_MEDIA_DELIVERY_CANDIDATE_OBJECT_MISSING");
+    const candidatePath = `/candidate/${portfolioId}/${mediaAssetId}/${candidateIntent.upload_intent_id}/${candidateIntent.media_object_id}`;
     const anonymousChecks = await Promise.all([
       storageRequest(`/storage/v1/object/media-processed${storagePath}`, { headers: headers(ANON_KEY!) }),
       storageRequest(`/storage/v1/object/list/media-processed`, { method: "POST", headers: { ...headers(ANON_KEY!), "content-type": "application/json" }, body: JSON.stringify({ prefix: `processed/${portfolioId}/${mediaAssetId}/` }) }),
       storageRequest(`/storage/v1/object/sign/media-processed${storagePath}`, { method: "POST", headers: { ...headers(ANON_KEY!), "content-type": "application/json" }, body: JSON.stringify({ expiresIn: 300 }) }),
       storageRequest(`/storage/v1/object/media-processed${storagePath}`, { method: "PUT", headers: { ...headers(ANON_KEY!), "content-type": "image/webp", "x-upsert": "true" }, body: Buffer.from("replacement") }),
       storageRequest(`/storage/v1/object/media-processed${storagePath}`, { method: "DELETE", headers: headers(ANON_KEY!) }),
-      storageRequest(`/storage/v1/object/media-candidates${storagePath}`, { headers: headers(ANON_KEY!) }),
+      storageRequest(`/storage/v1/object/media-candidates${candidatePath}`, { headers: headers(ANON_KEY!) }),
     ]);
     const listingBody: unknown = anonymousChecks[1]!.ok ? await anonymousChecks[1]!.clone().json() : undefined;
     expect(anonymousChecks[0]!.status >= 400 && anonymousChecks[0]!.status < 500 &&
@@ -2735,6 +2781,14 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(hidden.ok).toBe(true);
     expect(await delivery.resolveDelivery({ mediaAssetId, purpose: "project", locale: "ar" }))
       .toMatchObject({ ok: false, error: { kind: "not_found", code: "MEDIA_DELIVERY_NOT_VISIBLE" } });
+    if (hidden.ok) {
+      const archived = await content.archiveContent({ actor: { kind: "owner", ownerId, sessionId: "phase6-content-media-owner" },
+        contentId: project.contentId, expectedVersion: hidden.value.aggregateVersion,
+        idempotencyKey: "phase6-media-delivery-archive" as never, correlationId: "phase6-media-delivery-archive" });
+      expect(archived.ok).toBe(true);
+      expect(await delivery.resolveDelivery({ mediaAssetId, purpose: "project", locale: "en" }))
+        .toMatchObject({ ok: false, error: { kind: "not_found", code: "MEDIA_DELIVERY_NOT_VISIBLE" } });
+    }
     const storedRevision = await admin.query<{ payload_text: string }>(
       "select payload::text as payload_text from content.revisions where content_id = $1::uuid order by stream_sequence desc limit 1", [project.contentId]);
     expect(storedRevision.rows[0]?.payload_text).not.toContain("token=");
