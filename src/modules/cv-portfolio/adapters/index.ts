@@ -53,3 +53,4 @@ export class StubCvCurrentDelivery implements CvCurrentDeliveryPort {
   }
 }
 export { createPostgresCvPortfolioRepository } from "./postgres-portfolio.js";
+export { createPostgresCurrentCvSnapshotRepository } from "./postgres-portfolio.js";

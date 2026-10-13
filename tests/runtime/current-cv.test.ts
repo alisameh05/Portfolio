@@ -29,6 +29,8 @@ import {
   createCurrentCvTestFake,
 } from "../../src/runtime/fakes/current-cv.js";
 import { handleGetCurrentCv } from "../../src/runtime/http/current-cv.js";
+import { createBoundedCurrentCvRateLimit } from "../../src/runtime/http/current-cv-rate-limit.js";
+import type { CurrentCvRateLimitCheck } from "../../src/runtime/http/current-cv-rate-limit.js";
 
 const SIGNED_URL = "https://storage.example/signed/current-cv?token=fake";
 
@@ -40,11 +42,19 @@ function getCvRequest(query = "locale=en&disposition=inline", options?: { inboun
   return new Request(`https://example.com/api/v1/cv/current?${query}`, { headers });
 }
 
+const allowCurrentCvRequests: CurrentCvRateLimitCheck = { async check() { return { allowed: true }; } };
+type TestCurrentCvDeps = Omit<Parameters<typeof handleGetCurrentCv>[1], "rateLimit"> & { rateLimit?: CurrentCvRateLimitCheck };
+function handleCurrentCv(request: Request, deps: TestCurrentCvDeps): Promise<Response> {
+  return handleGetCurrentCv(request, { ...deps, rateLimit: deps.rateLimit ?? allowCurrentCvRequests });
+}
+
 describe("GET Current CV adapter (#28)", () => {
   it("dispatches once and returns the declared 307 redirect without storage", async () => {
     const fake = createCurrentCvTestFake({ type: "redirect" });
     const logger = createTestLogger();
-    const response = await handleGetCurrentCv(getCvRequest(), { service: fake, logger });
+    const response = await handleCurrentCv(getCvRequest(), {
+      service: fake, logger, allowedRedirectOrigins: ["https://storage.example"],
+    });
     expect(response.status).toBe(307);
     expect(fake.calls).toHaveLength(1);
     expect(fake.calls[0]).toMatchObject({ locale: "en", disposition: "inline" });
@@ -57,9 +67,9 @@ describe("GET Current CV adapter (#28)", () => {
 
   it("binds the requested attachment disposition to the application query", async () => {
     const fake = createCurrentCvTestFake({ type: "redirect" });
-    const response = await handleGetCurrentCv(
+    const response = await handleCurrentCv(
       getCvRequest("locale=en&disposition=attachment"),
-      { service: fake },
+      { service: fake, allowedRedirectOrigins: ["https://storage.example"] },
     );
     expect(response.status).toBe(307);
     expect(fake.calls[0]).toMatchObject({ locale: "en", disposition: "attachment" });
@@ -70,7 +80,7 @@ describe("GET Current CV adapter (#28)", () => {
       type: "stream",
       chunks: [new Uint8Array([37, 80]), new Uint8Array([68, 70])],
     });
-    const response = await handleGetCurrentCv(
+    const response = await handleCurrentCv(
       getCvRequest("locale=en&disposition=attachment"),
       { service: fake },
     );
@@ -79,6 +89,35 @@ describe("GET Current CV adapter (#28)", () => {
     expect(response.headers.get("content-disposition")).toBe('attachment; filename="cv.pdf"');
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual([37, 80, 68, 70]);
+  });
+
+  it("limits repeated client requests before application dispatch and sends Retry-After", async () => {
+    const fake = createCurrentCvTestFake({ type: "stream", chunks: [new Uint8Array([37, 80, 68, 70, 45])] });
+    const limiter = createBoundedCurrentCvRateLimit({
+      clientKey: (request) => request.headers.get("x-test-client") ?? "",
+      maxRequests: 1,
+      windowSeconds: 60,
+      now: () => 1_000,
+    });
+    const request = () => new Request("https://example.com/api/v1/cv/current?locale=en", {
+      headers: { "x-test-client": "client-a" },
+    });
+    const first = await handleCurrentCv(request(), { service: fake, rateLimit: limiter });
+    const second = await handleCurrentCv(request(), { service: fake, rateLimit: limiter });
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(429);
+    expect(second.headers.get("retry-after")).toBe("60");
+    expect(fake.calls).toHaveLength(1);
+  });
+
+  it("fails closed when the hosting rate limiter is unavailable", async () => {
+    const fake = createCurrentCvTestFake({ type: "stream", chunks: [] });
+    const response = await handleCurrentCv(getCvRequest(), {
+      service: fake, rateLimit: { async check() { throw new Error("limiter offline"); } },
+    });
+    expect(response.status).toBe(503);
+    expect(fake.calls).toHaveLength(0);
+    expect(JSON.stringify(await response.json())).not.toContain("limiter offline");
   });
 
   it.each([
@@ -90,7 +129,7 @@ describe("GET Current CV adapter (#28)", () => {
   ])("rejects %s as 400 before dispatch", async (_label, query) => {
     const fake = createCurrentCvTestFake({ type: "redirect" });
     const logger = createTestLogger();
-    const response = await handleGetCurrentCv(getCvRequest(query), { service: fake, logger });
+    const response = await handleCurrentCv(getCvRequest(query), { service: fake, logger });
     expect(response.status).toBe(400);
     expect(fake.calls).toHaveLength(0);
     const body = (await response.json()) as Record<string, unknown>;
@@ -117,7 +156,7 @@ describe("GET Current CV adapter (#28)", () => {
     async (_label, rejection, status, problemCode) => {
       const fake = createCurrentCvTestFake({ type: "rejection", rejection });
       const logger = createTestLogger();
-      const response = await handleGetCurrentCv(getCvRequest(), { service: fake, logger });
+      const response = await handleCurrentCv(getCvRequest(), { service: fake, logger });
       expect(response.status).toBe(status);
       expect(fake.calls).toHaveLength(1);
       const body = (await response.json()) as Record<string, unknown>;
@@ -132,10 +171,22 @@ describe("GET Current CV adapter (#28)", () => {
   it("fails safely when fake output is contract-invalid", async () => {
     const fake = createCurrentCvTestFake({ type: "invalid-redirect" });
     const logger = createTestLogger();
-    const response = await handleGetCurrentCv(getCvRequest(), { service: fake, logger });
+    const response = await handleCurrentCv(getCvRequest(), { service: fake, logger });
     expect(response.status).toBe(500);
     const body = (await response.json()) as Record<string, unknown>;
     expect(body["code"]).toBe("internal_error");
+  });
+
+  it.each([
+    ["unlisted origin", "https://evil.example/cv.pdf"],
+    ["insecure URL", "http://storage.example/cv.pdf"],
+  ])("rejects a redirect with %s", async (_label, downloadUrl) => {
+    const fake = createCurrentCvTestFake({ type: "redirect", downloadUrl });
+    const response = await handleCurrentCv(getCvRequest(), {
+      service: fake, allowedRedirectOrigins: ["https://storage.example"],
+    });
+    expect(response.status).toBe(500);
+    expect((await response.json()).code).toBe("internal_error");
   });
 
   it("production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED", async () => {
@@ -151,7 +202,7 @@ describe("GET Current CV adapter (#28)", () => {
       expect(direct.error.code).toBe("RUNTIME_NOT_IMPLEMENTED");
     }
     const logger = createTestLogger();
-    const response = await handleGetCurrentCv(getCvRequest(), { service, logger });
+    const response = await handleCurrentCv(getCvRequest(), { service, logger });
     expect(response.status).toBe(503);
     const body = (await response.json()) as Record<string, unknown>;
     expect(body["code"]).toBe("temporarily_unavailable");
@@ -164,7 +215,7 @@ describe("GET Current CV adapter (#28)", () => {
       rejection: { kind: "not_found", code: "CV_NOT_FOUND" },
     });
     const logger = createTestLogger();
-    const first = await handleGetCurrentCv(getCvRequest("locale=en", { inboundTrace: "inbound-attacker-value" }), {
+    const first = await handleCurrentCv(getCvRequest("locale=en", { inboundTrace: "inbound-attacker-value" }), {
       service: fake,
       logger,
     });
@@ -174,7 +225,7 @@ describe("GET Current CV adapter (#28)", () => {
     expect(logged["traceId"]).toBe(firstBody["traceId"]);
 
     const secondLogger = createTestLogger();
-    const second = await handleGetCurrentCv(getCvRequest(), { service: fake, logger: secondLogger });
+    const second = await handleCurrentCv(getCvRequest(), { service: fake, logger: secondLogger });
     const secondBody = (await second.json()) as Record<string, unknown>;
     expect(secondBody["traceId"]).not.toBe(firstBody["traceId"]);
   });
@@ -187,7 +238,7 @@ describe("GET Current CV adapter (#28)", () => {
         throw new Error("boom postgres://user:pass@host/db token=tok_123 /app/secret.ts");
       },
     };
-    const response = await handleGetCurrentCv(getCvRequest(), { service: throwing, logger });
+    const response = await handleCurrentCv(getCvRequest(), { service: throwing, logger });
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());
     for (const leak of ["postgres://", "tok_123", "/app/secret.ts", "boom"]) {

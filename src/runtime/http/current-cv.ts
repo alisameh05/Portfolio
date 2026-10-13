@@ -25,6 +25,7 @@ import type {
   CurrentCvDownloadQuery,
 } from "../../modules/cv-portfolio/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
+import type { CurrentCvRateLimitCheck } from "./current-cv-rate-limit.js";
 import {
   internalErrorProblem,
   rejectionToProblem,
@@ -33,6 +34,10 @@ import {
 
 export interface CurrentCvAdapterDeps {
   service: Pick<CvPortfolioApplicationService, "downloadCurrentCv">;
+  /** Exact Storage origins permitted for the short-lived redirect response. */
+  allowedRedirectOrigins?: ReadonlyArray<string>;
+  /** Required hosting-boundary abuse control; missing or unavailable controls fail closed. */
+  rateLimit: CurrentCvRateLimitCheck;
   logger?: Logger;
 }
 
@@ -46,10 +51,11 @@ function requestInstance(request: Request): string {
   }
 }
 
-function isHttpUrl(value: string): boolean {
+function isAllowedRedirect(value: string, allowedOrigins: ReadonlyArray<string>): boolean {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    return parsed.protocol === "https:" && parsed.username === "" && parsed.password === "" &&
+      allowedOrigins.includes(parsed.origin);
   } catch {
     return false;
   }
@@ -125,6 +131,19 @@ export async function handleGetCurrentCv(
       disposition,
     };
 
+    let rateVerdict: Awaited<ReturnType<CurrentCvRateLimitCheck["check"]>>;
+    try {
+      rateVerdict = await deps.rateLimit.check(request);
+    } catch {
+      return rejectionToProblem({ kind: "temporarily_unavailable", code: "CURRENT_CV_RATE_LIMIT_UNAVAILABLE" }, traceId, instance);
+    }
+    if (!rateVerdict.allowed) {
+      const retryAfterSeconds = Number.isSafeInteger(rateVerdict.retryAfterSeconds) &&
+        (rateVerdict.retryAfterSeconds ?? -1) >= 0 ? rateVerdict.retryAfterSeconds as number : 60;
+      const rejection = { kind: "rate_limited" as const, code: "CURRENT_CV_RATE_LIMITED", retryAfterSeconds };
+      return rejectionToProblem(rejection, traceId, instance);
+    }
+
     let result: Awaited<ReturnType<typeof deps.service.downloadCurrentCv>>;
     try {
       result = await deps.service.downloadCurrentCv(query);
@@ -170,9 +189,10 @@ export async function handleGetCurrentCv(
     if (
       typeof location !== "string" ||
       location.length === 0 ||
-      !isHttpUrl(location) ||
+      !isAllowedRedirect(location, deps.allowedRedirectOrigins ?? []) ||
       !Number.isFinite(expiry) ||
-      expiry <= Date.now()
+      expiry <= Date.now() ||
+      expiry > Date.now() + 5 * 60_000
     ) {
       return internalErrorProblem(
         new Error("Invalid application result"),

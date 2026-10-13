@@ -34,7 +34,7 @@ import { createSystemClock, createSystemIdGenerator } from "../runtime/ports.js"
 import { parseStableId, type StableId } from "../shared/domain/index.js";
 import type { OwnerMediaApplicationService } from "../modules/media/index.js";
 import type { MediaDeliveryApplicationService } from "../modules/media/index.js";
-import type { OwnerCvApplicationService } from "../modules/cv-portfolio/index.js";
+import type { CurrentCvDeliveryService, OwnerCvApplicationService } from "../modules/cv-portfolio/index.js";
 
 export type { RuntimeConfig } from "./configuration.js";
 
@@ -47,6 +47,7 @@ let currentPublicDiscovery: PublicDiscoveryService | undefined;
 let currentOwnerMedia: OwnerMediaApplicationService | undefined;
 let currentMediaDelivery: MediaDeliveryApplicationService | undefined;
 let currentOwnerCv: OwnerCvApplicationService | undefined;
+let currentCurrentCv: CurrentCvDeliveryService | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -78,6 +79,7 @@ export interface DatabaseRuntimeDependencies {
   readonly ownerMedia?: OwnerMediaApplicationService;
   readonly mediaDelivery?: MediaDeliveryApplicationService;
   readonly ownerCv?: OwnerCvApplicationService;
+  readonly currentCv?: CurrentCvDeliveryService;
   readonly resource: LifecycleResource;
   readonly readiness: ReadinessCheck;
 }
@@ -152,6 +154,7 @@ export async function initializeDatabaseRuntime(
         let ownerMedia: OwnerMediaApplicationService | undefined;
         let mediaDelivery: MediaDeliveryApplicationService | undefined;
         let ownerCv: OwnerCvApplicationService | undefined;
+        let currentCv: CurrentCvDeliveryService | undefined;
         if (runtimeKind === "application") {
           if (configuredScope === undefined || !configuredScope.portfolioId.ok || !configuredScope.ownerId.ok) {
             throw new RuntimeConfigError("PORTFOLIO_ID", "must be configured for Owner configuration commands");
@@ -354,6 +357,30 @@ export async function initializeDatabaseRuntime(
             }),
             ids: createSystemIdGenerator(),
           });
+          const [{ createCurrentCvDeliveryService }, { createPostgresCurrentCvSnapshotRepository }] = await Promise.all([
+            import("../modules/cv-portfolio/application/current-delivery.js"),
+            import("../modules/cv-portfolio/adapters/postgres-portfolio.js"),
+          ]);
+          const currentCvStorage = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
+            ? (await import("../runtime/adapters/supabase-current-cv-delivery.js")).createSupabaseCurrentCvDelivery({
+                storageUrl: env["SUPABASE_URL"],
+                serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
+                mode: env["NODE_ENV"] === "test" ? "test" : "deployed",
+                ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+              })
+            : {
+                async stream() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "CURRENT_CV_STORAGE_UNAVAILABLE" } }; },
+                async createDownloadTarget() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "CURRENT_CV_STORAGE_UNAVAILABLE" } }; },
+              };
+          currentCv = createCurrentCvDeliveryService({
+            repository: createPostgresCurrentCvSnapshotRepository({
+              database: database.database,
+              transactions: operations.transactions,
+              scope,
+              media: mediaAcceptance,
+            }),
+            storage: currentCvStorage,
+          });
           if (contentAuthoring === undefined) throw new Error("CONTENT_AUTHORING_UNAVAILABLE");
           const [{ createPortfolioSettingsReader }, { createPostgresMediaDeliveryRepository },
             { createMediaDeliveryApplicationService }, { createSupabaseMediaDeliveryStorage }] = await Promise.all([
@@ -443,6 +470,7 @@ export async function initializeDatabaseRuntime(
           ...(ownerMedia === undefined ? {} : { ownerMedia }),
           ...(mediaDelivery === undefined ? {} : { mediaDelivery }),
           ...(ownerCv === undefined ? {} : { ownerCv }),
+          ...(currentCv === undefined ? {} : { currentCv }),
           resource: database.resource,
           readiness: database.readiness,
         };
@@ -469,6 +497,7 @@ export async function initializeDatabaseRuntime(
     currentOwnerMedia = dependencies.ownerMedia;
     currentMediaDelivery = dependencies.mediaDelivery;
     currentOwnerCv = dependencies.ownerCv;
+    currentCurrentCv = dependencies.currentCv;
     lifecycle.markReady();
     return Object.freeze({ ...config, runtimeKind });
   } catch (error) {
@@ -531,6 +560,13 @@ export async function getOwnerCvApplicationService(): Promise<OwnerCvApplication
   return createProductionOwnerCvService();
 }
 
+/** Public delivery resolves the current pointer through PostgreSQL and the private processed Storage adapter. */
+export async function getCurrentCvApplicationService(): Promise<CurrentCvDeliveryService> {
+  if (currentCurrentCv !== undefined) return currentCurrentCv;
+  const { createProductionCurrentCvService } = await import("../runtime/fakes/current-cv.js");
+  return createProductionCurrentCvService();
+}
+
 /** Project route, status, and Featured operations share the Content transaction boundary. */
 export async function getOwnerProjectApplicationService(): Promise<OwnerProjectApplicationService> {
   const contentAuthoring = await getContentAuthoringApplicationService();
@@ -583,5 +619,6 @@ export function resetRuntimeForTests(): void {
   currentOwnerMedia = undefined;
   currentMediaDelivery = undefined;
   currentOwnerCv = undefined;
+  currentCurrentCv = undefined;
   resetLifecycleForTests();
 }
