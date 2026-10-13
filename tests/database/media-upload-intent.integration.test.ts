@@ -426,17 +426,17 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       let released = false;
       try {
         await admin.query("select pg_advisory_xact_lock(hashtextextended($1::text, 0))", [mediaId]);
-        const waitFor = async (expected: number) => {
+        const waitFor = async (expected: number, atLeast = false) => {
           let waiting = 0;
           for (let attempt = 0; attempt < 100; attempt += 1) {
             const result = await admin.query(`select count(distinct activity.pid)::int as count
               from pg_locks lock join pg_stat_activity activity on activity.pid = lock.pid
               where activity.usename = $1 and lock.locktype = 'advisory' and not lock.granted`, [roleName]);
             waiting = Number(result.rows[0]?.count ?? 0);
-            if (waiting === expected) break;
+            if (atLeast ? waiting >= expected : waiting === expected) break;
             await new Promise((resolve) => setTimeout(resolve, 20));
           }
-          if (waiting !== expected) {
+          if (atLeast ? waiting < expected : waiting !== expected) {
             const sessions = await admin.query(`select pid, state, wait_event_type, wait_event, left(query, 180) as query
               from pg_stat_activity where usename = $1`, [roleName]);
             expect(waiting, `expected ${expected} ungranted Media advisory locks; outcomes=${JSON.stringify(outcomes)}; sessions=${JSON.stringify(sessions.rows)}`)
@@ -454,7 +454,11 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
             pending.push(commands[index]!().then((outcome) => { outcomes[index] = outcome; return outcome; }));
           }
         }
-        await waitFor(commands.length);
+        // One confirmed waiter is sufficient for the staged CV operations:
+        // a single PostgreSQL pool connection can queue the other transaction
+        // before it reaches the Media lock. Releasing after both commands have
+        // started keeps the race bounded by the production lock timeout.
+        await waitFor(stageFirst ? 1 : commands.length, stageFirst);
         await admin.query("commit");
         released = true;
         return await Promise.all(pending) as {
@@ -539,6 +543,14 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     const currentCvId = await createAcceptedRejectionCandidate("current-cv");
     const replacementCvId = await createAcceptedRejectionCandidate("replacement-cv");
     const cv = await getOwnerCvApplicationService();
+    const rejectionState = async (mediaId: StableId<"MediaAsset">) => {
+      const state = await admin.query(`select state.aggregate_version,
+          (select count(*)::int from media.rejection_history where media_id = $1::uuid) as rejections,
+          (select count(*)::int from media.acceptance_commands where media_id = $1::uuid) as receipts,
+          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid) as events
+        from media.processing_states state where state.media_id = $1::uuid`, [mediaId]);
+      return state.rows[0];
+    };
     const cvRoot = await cv.getOwnerCvPortfolio({ actor });
     expect(cvRoot.ok).toBe(true);
     if (!cvRoot.ok) throw new Error("PHASE6_REJECTION_CV_ROOT_UNAVAILABLE");
@@ -558,9 +570,11 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       return { versionId: registered.value.versionId, aggregateVersion: activated.value.aggregateVersion };
     };
     const firstCv = await registerCv(currentCvId, cvRoot.value.aggregateVersion, "first");
+    const currentCvBeforeBlockedReject = await rejectionState(currentCvId);
     expect(await media.rejectOwnerMediaAsset({ actor, mediaId: currentCvId, expectedVersion: 3,
       idempotencyKey: "phase6-rejection-current-cv-block" as never, reason }))
       .toMatchObject({ ok: false, error: { code: "MEDIA_IN_USE" } });
+    expect(await rejectionState(currentCvId)).toEqual(currentCvBeforeBlockedReject);
     const secondCv = await registerCv(replacementCvId, firstCv.aggregateVersion, "replacement");
     const replacementPortfolio = await cv.getOwnerCvPortfolio({ actor });
     expect(replacementPortfolio).toMatchObject({ ok: true, value: { currentVersionId: secondCv.versionId } });
@@ -568,14 +582,39 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       idempotencyKey: "phase6-rejection-current-cv-replace" as never, reason }))
       .toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
 
+    // A registered CV that has not yet been approved cannot be approved once
+    // its Media asset has been rejected. The failed command must leave the CV
+    // root, approval history, receipt, and outbox unchanged.
+    const futureCvMediaId = await createAcceptedRejectionCandidate("future-cv-approval");
+    const beforeFutureCvPortfolio = await cv.getOwnerCvPortfolio({ actor });
+    if (!beforeFutureCvPortfolio.ok) throw new Error("PHASE6_REJECTION_FUTURE_CV_ROOT_UNAVAILABLE");
+    const futureCv = await cv.registerOwnerCvVersion({ actor, mediaId: futureCvMediaId, locale: "en", label: "Future CV approval",
+      expectedVersion: beforeFutureCvPortfolio.value.aggregateVersion, idempotencyKey: "phase6-rejection-future-cv-register" as never });
+    expect(futureCv.ok).toBe(true);
+    if (!futureCv.ok) throw new Error("PHASE6_REJECTION_FUTURE_CV_REGISTER_FAILED");
+    expect(await media.rejectOwnerMediaAsset({ actor, mediaId: futureCvMediaId, expectedVersion: 3,
+      idempotencyKey: "phase6-rejection-future-cv-reject" as never, reason })).toMatchObject({ ok: true });
+    const futureCvBeforeApproval = await cv.getOwnerCvPortfolio({ actor });
+    const futureCvHistoryBefore = await admin.query("select count(*)::int as count from cv_portfolio.acceptance_history where version_id = $1::uuid", [futureCv.value.versionId]);
+    const futureCvReceiptBefore = await admin.query("select count(*)::int as count from cv_portfolio.acceptance_commands where version_id = $1::uuid", [futureCv.value.versionId]);
+    const futureCvOutboxBefore = await admin.query("select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type in ('cv.version_accepted.v1', 'cv.current_changed.v1')", [portfolioId]);
+    expect(await cv.acceptOwnerCvVersion({ actor, versionId: futureCv.value.versionId, expectedVersion: futureCv.value.aggregateVersion,
+      idempotencyKey: "phase6-rejection-future-cv-approve" as never })).toMatchObject({ ok: false, error: { code: "CV_MEDIA_NOT_ELIGIBLE" } });
+    expect(await cv.getOwnerCvPortfolio({ actor })).toEqual(futureCvBeforeApproval);
+    expect(await admin.query("select count(*)::int as count from cv_portfolio.acceptance_history where version_id = $1::uuid", [futureCv.value.versionId])).toEqual(futureCvHistoryBefore);
+    expect(await admin.query("select count(*)::int as count from cv_portfolio.acceptance_commands where version_id = $1::uuid", [futureCv.value.versionId])).toEqual(futureCvReceiptBefore);
+    expect(await admin.query("select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type in ('cv.version_accepted.v1', 'cv.current_changed.v1')", [portfolioId])).toEqual(futureCvOutboxBefore);
+
     // A visible published Content reference blocks; hiding removes visible
     // use, while restore revalidates and refuses the now rejected media.
     const contentMediaId = await createAcceptedRejectionCandidate("visible-content");
     const content = createContentService(contentMediaAcceptancePort());
     const publication = await publishContentWithMedia(content, "project", contentMediaId, "phase6-rejection-content");
+    const visibleContentBeforeBlockedReject = await rejectionState(contentMediaId);
     expect(await media.rejectOwnerMediaAsset({ actor, mediaId: contentMediaId, expectedVersion: 3,
       idempotencyKey: "phase6-rejection-visible-block" as never, reason }))
       .toMatchObject({ ok: false, error: { code: "MEDIA_IN_USE" } });
+    expect(await rejectionState(contentMediaId)).toEqual(visibleContentBeforeBlockedReject);
     if (!publication.published.ok) throw new Error("PHASE6_REJECTION_CONTENT_PUBLICATION_FAILED");
     const hidden = await content.hideContent({ actor, contentId: publication.contentId,
       expectedVersion: publication.published.value.aggregateVersion, idempotencyKey: "phase6-rejection-hide-content" as never,
@@ -587,6 +626,16 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       .toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
     expect(await content.restoreContent({ actor, contentId: publication.contentId, expectedVersion: hidden.value.aggregateVersion,
       idempotencyKey: "phase6-rejection-restore-denied" as never, correlationId: "phase6-rejection-restore-denied" })).toMatchObject({ ok: false });
+
+    const futureContentMediaId = await createAcceptedRejectionCandidate("future-content-publication");
+    expect(await media.rejectOwnerMediaAsset({ actor, mediaId: futureContentMediaId, expectedVersion: 3,
+      idempotencyKey: "phase6-rejection-future-content-reject" as never, reason })).toMatchObject({ ok: true });
+    const futureContentBefore = await rejectionState(futureContentMediaId);
+    const futurePublication = await publishContentWithMedia(content, "project", futureContentMediaId,
+      "phase6-rejection-future-content", undefined, false);
+    expect(futurePublication.published).toMatchObject({ ok: false });
+    expect(await content.getPublicProject({ slug: "phase6-rejection-future-content-project", locale: "en" })).toMatchObject({ ok: false });
+    expect(await rejectionState(futureContentMediaId)).toEqual(futureContentBefore);
 
     const rollbackMediaId = await createAcceptedRejectionCandidate("rollback", false);
     const rollbackTrigger = `phase6_rejection_fail_${randomBytes(4).toString("hex")}`;
@@ -667,6 +716,17 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         idempotencyKey: "phase6-rejection-restore-race-reject" as never, reason }),
     ] as const, true);
     expect(Number(restoreRaceResult.ok) + Number(rejectDuringRestoreResult.ok)).toBe(1);
+    if (restoreRaceResult.ok) {
+      expect(rejectDuringRestoreResult).toMatchObject({ ok: false, error: { code: "MEDIA_IN_USE" } });
+      expect(await admin.query("select lifecycle from content.items where content_id = $1::uuid", [restoreRacePublication.contentId]))
+        .toMatchObject({ rows: [{ lifecycle: "published" }] });
+      expect((await admin.query("select count(*)::int as count from media.rejection_history where media_id = $1::uuid", [restoreRaceMediaId])).rows[0]?.count).toBe(0);
+    } else {
+      expect(restoreRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_ACCEPTANCE_FACTS_INVALID" } });
+      expect(await admin.query("select lifecycle from content.items where content_id = $1::uuid", [restoreRacePublication.contentId]))
+        .toMatchObject({ rows: [{ lifecycle: "hidden" }] });
+      expect((await admin.query("select count(*)::int as count from media.rejection_history where media_id = $1::uuid", [restoreRaceMediaId])).rows[0]?.count).toBe(1);
+    }
 
     const cvRaceService = createOwnerCvApplicationService({
       ownerId,
@@ -702,6 +762,19 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         idempotencyKey: "phase6-rejection-cv-race-reject" as never, reason }),
     ] as const, true);
     expect(Number(activationRaceResult.ok) + Number(cvRejectionRaceResult.ok)).toBe(1);
+    const activationRacePortfolio = await cv.getOwnerCvPortfolio({ actor });
+    expect(activationRacePortfolio.ok).toBe(true);
+    if (!activationRacePortfolio.ok) throw new Error("PHASE6_REJECTION_CV_RACE_ROOT_UNAVAILABLE");
+    if (activationRaceResult.ok) {
+      expect(cvRejectionRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_IN_USE" } });
+      expect(activationRacePortfolio.value.currentVersionId).toBe(cvRegister.value.versionId);
+      expect((await admin.query("select count(*)::int as count from media.rejection_history where media_id = $1::uuid", [cvRaceMediaId])).rows[0]?.count).toBe(0);
+    } else {
+      expect(activationRaceResult).toMatchObject({ ok: false, error: { code: "CV_MEDIA_NOT_ELIGIBLE" } });
+      expect(cvRejectionRaceResult).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+      expect(activationRacePortfolio.value.currentVersionId).toBe(secondCv.versionId);
+      expect((await admin.query("select count(*)::int as count from media.rejection_history where media_id = $1::uuid", [cvRaceMediaId])).rows[0]?.count).toBe(1);
+    }
 
     const cvAcceptRaceId = await createAcceptedRejectionCandidate("cv-accept-race");
     const cvAcceptRacePortfolio = await cv.getOwnerCvPortfolio({ actor });
