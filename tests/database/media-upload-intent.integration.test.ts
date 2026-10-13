@@ -814,12 +814,12 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(cvAcceptRaceRegistration.ok).toBe(true);
     if (!cvAcceptRaceRegistration.ok) throw new Error("PHASE6_REJECTION_CV_ACCEPT_RACE_REGISTER_FAILED");
     const [cvAcceptRaceResult, cvRejectDuringAccept] = await contendAtMediaLock(cvAcceptRaceId, [
-      () => cv.acceptOwnerCvVersion({ actor, versionId: cvAcceptRaceRegistration.value.versionId,
+      () => cvRaceService.acceptOwnerCvVersion({ actor, versionId: cvAcceptRaceRegistration.value.versionId,
         expectedVersion: cvAcceptRaceRegistration.value.aggregateVersion,
         idempotencyKey: "phase6-rejection-cv-accept-race-accept" as never }),
       () => media.rejectOwnerMediaAsset({ actor, mediaId: cvAcceptRaceId, expectedVersion: 3,
         idempotencyKey: "phase6-rejection-cv-accept-race-reject" as never, reason }),
-    ] as const, false, "CV acceptance versus rejection");
+    ] as const, true, "CV acceptance versus rejection");
     expect(cvRejectDuringAccept).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
     const cvAcceptRacePortfolioAfter = await cv.getOwnerCvPortfolio({ actor });
     expect(cvAcceptRacePortfolioAfter).toMatchObject({ ok: true });
