@@ -29,6 +29,7 @@ const IMAGE_PROCESSING_ONLY = process.argv.includes("--image-processing-only");
 const VIDEO_PROCESSING_ONLY = process.argv.includes("--video-processing-only");
 const MEDIA_ACCEPTANCE_ONLY = process.argv.includes("--media-acceptance-only");
 const MEDIA_REJECTION_ONLY = process.argv.includes("--media-rejection-only");
+const MEDIA_REJECTION_BUCKETS = Object.freeze({ candidate: "media-candidates", processed: "media-processed" });
 const CV_PORTFOLIO_ONLY = process.argv.includes("--cv-portfolio-only");
 const CV_ACCEPTANCE_ONLY = process.argv.includes("--cv-acceptance-only");
 const CV_ACTIVATION_ONLY = process.argv.includes("--cv-activation-only");
@@ -169,6 +170,9 @@ async function main() {
   }).stdout;
   try {
     let config = isolatedPhase6Config(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId, phase6Ports);
+    if (MEDIA_REJECTION_ONLY && !Object.values(MEDIA_REJECTION_BUCKETS).every((bucket) => config.includes(`[storage.buckets.${bucket}]`))) {
+      throw new Error("PHASE6_MEDIA_REJECTION_STORAGE_BUCKETS_INVALID");
+    }
     if (UPLOAD_INTENT_ONLY || MEDIA_PROCESSING_ONLY || IMAGE_PROCESSING_ONLY || VIDEO_PROCESSING_ONLY || RUN_MEDIA_ACCEPTANCE) {
       // The disposable Auth instance needs a real non-Owner JWT for the Storage denial matrix.
       // This change is confined to its temporary config; repository and developer Auth settings stay untouched.
@@ -784,7 +788,7 @@ async function main() {
         migrations: ["20261010200000_record_trusted_pdf_processing.sql", "20261012060000_reject_media_with_usage_guard.sql"],
         pdfProcessing: "pdf-active-content-deny-1",
         databaseRls: ["media_processed_objects_owner_scope", "media_rejection_history_owner_scope"],
-        storage: { candidateBucket: "media-candidates-private", processedBucket: "media-processed-private",
+        storage: { candidateBucket: MEDIA_REJECTION_BUCKETS.candidate, processedBucket: MEDIA_REJECTION_BUCKETS.processed,
           processedObjects: "create-only", anonymousProcessedRead: "denied", uploadCapabilityMaxLifetimeSeconds: 7200 },
       },
       units: acceptanceUnitChecks,
