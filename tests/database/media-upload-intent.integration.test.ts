@@ -426,12 +426,12 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       let released = false;
       try {
         await admin.query("select pg_advisory_xact_lock(hashtextextended($1::text, 0))", [mediaId]);
-        const waitFor = async (expected: number) => {
+        const waitFor = async (expected: number, attempts = 120) => {
           let waiting = 0;
-          // Observe both independent contenders while leaving margin inside
-          // the production three-second lock timeout. Local Supabase can take
-          // several hundred milliseconds to schedule the second transaction.
-          for (let attempt = 0; attempt < 120; attempt += 1) {
+          // Once a contender is waiting, leave margin inside the production
+          // three-second lock timeout. Scheduling and local query latency can
+          // take several hundred milliseconds on the Supabase stack.
+          for (let attempt = 0; attempt < attempts; attempt += 1) {
             const result = await admin.query(`select count(distinct activity.pid)::int as count
               from pg_locks lock join pg_stat_activity activity on activity.pid = lock.pid
               where activity.usename = $1 and lock.locktype = 'advisory' and not lock.granted`, [roleName]);
@@ -448,7 +448,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         };
         if (stageFirst) {
           pending.push(commands[0]!().then((outcome) => { outcomes[0] = outcome; return outcome; }));
-          await waitFor(1);
+          // CV activation performs its private Storage preflight before the
+          // final transaction requests this lock, so allow that first stage to
+          // finish without consuming the transaction's lock timeout.
+          await waitFor(1, 800);
           for (let index = 1; index < commands.length; index += 1) {
             pending.push(commands[index]!().then((outcome) => { outcomes[index] = outcome; return outcome; }));
           }
