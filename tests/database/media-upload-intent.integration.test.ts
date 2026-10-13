@@ -2729,6 +2729,23 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
        where asset.portfolio_id = $1::uuid and asset.owner_id = $2::uuid and asset.kind = 'image'
          and not exists (select 1 from media.decision_history decision where decision.media_id = asset.media_id)
        order by asset.created_at desc limit 1`, [portfolioId, ownerId]);
+    const rejectedFixture = await admin.query(`
+      insert into media.decision_history (decision_id, portfolio_id, owner_id, media_id, aggregate_version, decision,
+        processing_attempt_id, input_object_id, input_sha256, detected_mime_type, detected_byte_length,
+        scanner_version, processor_version, processing_policy_version, sealed_outputs, accessibility,
+        ownership_attested_by, ownership_attested_at, public_suitability_attested_by, public_suitability_attested_at,
+        decided_by, decided_at, reason_code)
+      select $4::uuid, latest.portfolio_id, latest.owner_id, latest.media_id, latest.aggregate_version + 1, 'rejected',
+        latest.processing_attempt_id, latest.input_object_id, latest.input_sha256, latest.detected_mime_type,
+        latest.detected_byte_length, latest.scanner_version, latest.processor_version, latest.processing_policy_version,
+        latest.sealed_outputs, latest.accessibility, latest.ownership_attested_by, transaction_timestamp(),
+        latest.public_suitability_attested_by, transaction_timestamp(), latest.decided_by, transaction_timestamp(),
+        'DELIVERY_REJECTION_FIXTURE'
+        from media.decision_history latest
+       where latest.media_id = $1::uuid and latest.portfolio_id = $2::uuid and latest.owner_id = $3::uuid
+         and latest.decision = 'accepted'
+       order by latest.aggregate_version desc limit 1`, [mediaAssetId, portfolioId, ownerId, createStableId("MediaDecision")]);
+    expect(rejectedFixture.rowCount).toBe(1);
     const rejectedCandidates = await admin.query<{ media_id: string }>(`
       select asset.media_id::text
         from media.assets asset
