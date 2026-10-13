@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "runId": "50dd33ca-4e1b-449d-9e88-d62f43051cfd",
-  "sourceRevision": "5e48ae2cf5166bb0c6858544ae53facb0500b9a5",
-  "sourceTreeSha256": "dd63f0958bd34133ac1254f871bc457f9544a1fe9a7460ffc9ad8d36a737bb4b",
-  "startedAt": "2026-10-13T10:41:09.321Z",
-  "completedAt": "2026-10-13T10:49:36.550Z",
+  "runId": "2efccb28-3687-4537-be3a-16340dca0323",
+  "sourceRevision": "81481ed3e1ed0f1eab3f77a7a9359c360a4eea2a",
+  "sourceTreeSha256": "c7e78c594ab12ea28207aa0f0977b9521f6237bb7920db303988cf0682f27ff4",
+  "startedAt": "2026-10-13T11:34:18.035Z",
+  "completedAt": "2026-10-13T11:42:46.444Z",
   "scope": "media-rejection-real-postgres-storage-and-cross-aggregate-races",
   "toolVersions": {
     "supabaseCli": "2.117.0",
@@ -184,8 +184,8 @@
       "media_rejection_history_owner_scope"
     ],
     "storage": {
-      "candidateBucket": "media-candidates-private",
-      "processedBucket": "media-processed-private",
+      "candidateBucket": "media-candidates",
+      "processedBucket": "media-processed",
       "processedObjects": "create-only",
       "anonymousProcessedRead": "denied",
       "uploadCapabilityMaxLifetimeSeconds": 7200
