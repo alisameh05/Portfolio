@@ -14,6 +14,7 @@ export { createUploadCapabilityVault } from "./upload-capability-vault.js";
 export { createPostgresMediaUploadIntentRepository } from "./postgres-upload-intents.js";
 export { createPostgresMediaProcessingRepository } from "./postgres-processing.js";
 export { createPostgresMediaAcceptanceRepository } from "./postgres-acceptance.js";
+export { createPostgresMediaRejectionRepository } from "./postgres-rejection.js";
 
 /**
  * Stub repository adapter for Phase 1 skeleton.

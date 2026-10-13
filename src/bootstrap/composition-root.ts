@@ -350,6 +350,42 @@ export async function initializeDatabaseRuntime(
             }),
             ids: createSystemIdGenerator(),
           });
+          const [{ createPostgresMediaRejectionRepository }, { createMediaRejectionApplicationService }] = await Promise.all([
+            import("../modules/media/adapters/postgres-rejection.js"),
+            import("../modules/media/application/rejection.js"),
+          ]);
+          const mediaRejection = createMediaRejectionApplicationService({
+            scope: { ownerId: scope.ownerId },
+            repository: createPostgresMediaRejectionRepository({
+              transactions: operations.transactions,
+              scope,
+            }),
+            usage: {
+              async getUsage(query, transaction) {
+                if (contentAuthoring === undefined || ownerCv === undefined) {
+                  return { ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_USAGE_CHECK_UNAVAILABLE" } };
+                }
+                const contentUsage = await contentAuthoring.getVisibleMediaUsage({
+                  ownerId: query.ownerId,
+                  mediaAssetIds: [query.mediaAssetId],
+                }, transaction);
+                if (!contentUsage.ok) return contentUsage;
+                const visible = contentUsage.value.facts.find((fact) => fact.mediaAssetId === query.mediaAssetId);
+                if (visible === undefined) {
+                  return { ok: false, error: { kind: "temporarily_unavailable", code: "CONTENT_MEDIA_USAGE_INCOMPLETE" } };
+                }
+                const currentCv = await ownerCv.getCurrentCvMediaUsage({ ...query, transaction });
+                if (!currentCv.ok) return currentCv;
+                return { ok: true, value: {
+                  hasVisibleContentReference: visible.inUse,
+                  isCurrentCv: currentCv.value,
+                } };
+              },
+            },
+          });
+          if (ownerMedia !== undefined) {
+            ownerMedia = { ...ownerMedia, rejectOwnerMediaAsset: mediaRejection.rejectOwnerMediaAsset };
+          }
         }
         return {
           operations,

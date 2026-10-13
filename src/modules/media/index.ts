@@ -32,8 +32,9 @@ export {
   createMediaUploadIntentApplicationService,
   createMediaProcessingApplicationService,
   createMediaAcceptanceApplicationService,
+  createMediaRejectionApplicationService,
 } from "./application/index.js";
-export type { MediaProcessingApplicationService, MediaProcessingRepositoryPort, MediaProcessingStoragePort, TrustedByteScannerPort, PdfProcessorPort, VideoProcessorPort, MediaProcessingOutputVariant, MediaImageProcessorPort, MediaImageVariant, MediaDigestPort, RecordMediaProcessingCommand, MediaAcceptanceApplicationService, MediaAcceptanceRepositoryFact, MediaAcceptanceRepositoryPort } from "./application/index.js";
+export type { MediaProcessingApplicationService, MediaProcessingRepositoryPort, MediaProcessingStoragePort, TrustedByteScannerPort, PdfProcessorPort, VideoProcessorPort, MediaProcessingOutputVariant, MediaImageProcessorPort, MediaImageVariant, MediaDigestPort, RecordMediaProcessingCommand, MediaAcceptanceApplicationService, MediaAcceptanceRepositoryFact, MediaAcceptanceRepositoryPort, MediaRejectionApplicationService, MediaRejectionRepositoryInput, MediaRejectionRepositoryPort, MediaRejectionUsagePort, MediaRejectionUsageQuery } from "./application/index.js";
 export type {
   CreateMediaUploadIntentCommand,
   PreparedUploadTarget,
@@ -77,7 +78,7 @@ export type {
   MediaObjectStoragePort,
   TrustedMediaScannerPort,
 } from "./ports/index.js";
-export { createPostgresMediaProcessingRepository, createPostgresMediaAcceptanceRepository } from "./adapters/index.js";
+export { createPostgresMediaProcessingRepository, createPostgresMediaAcceptanceRepository, createPostgresMediaRejectionRepository } from "./adapters/index.js";
 export type {
   SealedUploadCapability,
   UploadIntentReceiptRecord,

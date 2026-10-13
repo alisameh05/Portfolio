@@ -1,0 +1,309 @@
+{
+  "schemaVersion": 1,
+  "runId": "2efccb28-3687-4537-be3a-16340dca0323",
+  "sourceRevision": "81481ed3e1ed0f1eab3f77a7a9359c360a4eea2a",
+  "sourceTreeSha256": "c7e78c594ab12ea28207aa0f0977b9521f6237bb7920db303988cf0682f27ff4",
+  "startedAt": "2026-10-13T11:34:18.035Z",
+  "completedAt": "2026-10-13T11:42:46.444Z",
+  "scope": "media-rejection-real-postgres-storage-and-cross-aggregate-races",
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1",
+    "sharp": "sharp-0.35.4;libvips-8.18.6"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "executionCount": 3,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 5
+    }
+  },
+  "formats": [
+    {
+      "id": "pdf",
+      "kind": "document",
+      "mimeType": "application/pdf",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "ea2be33f0a32f8803cc1fc4c18f10c946c25373947c086f53396c32d63c7ecfe",
+      "scannerVerdict": "clean",
+      "processorVersion": "17.12.1"
+    }
+  ],
+  "checks": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "test": "rejects accepted Media safely and serializes with current usage changes",
+    "recordedAssertions": [
+      {
+        "id": "T12-01",
+        "name": "Pending and accepted unused Media rejects; rejected state and history persist and future processing/acceptance fails.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-02",
+        "name": "Visible Content locale and Current CV use return MEDIA_IN_USE with no rejection mutation.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-03",
+        "name": "Hiding and archiving Content and activating a replacement Current CV remove the affected use.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-04",
+        "name": "Draft, Hidden, and Archived references allow rejection; publish, restore, and CV approval revalidate rejected Media.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-05",
+        "name": "Decision, version, receipt, and event commit atomically; injected failure rolls back and exact replay survives later version changes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-06",
+        "name": "Independent publication, restore, CV acceptance, and activation races with rejection serialize to valid outcomes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-07",
+        "name": "Accept/reject concurrency, changed-hash reuse, stale versions, and terminal transitions fail safely.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-08",
+        "name": "Current authoritative usage reads protect writes; retained objects stay private and capability expiry is documented.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-09",
+        "name": "Private rejection reason is absent from public event data and errors expose safe codes only.",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "T12-01",
+        "name": "Pending and accepted unused Media rejects; rejected state and history persist and future processing/acceptance fails.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-02",
+        "name": "Visible Content locale and Current CV use return MEDIA_IN_USE with no rejection mutation.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-03",
+        "name": "Hiding and archiving Content and activating a replacement Current CV remove the affected use.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-04",
+        "name": "Draft, Hidden, and Archived references allow rejection; publish, restore, and CV approval revalidate rejected Media.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-05",
+        "name": "Decision, version, receipt, and event commit atomically; injected failure rolls back and exact replay survives later version changes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-06",
+        "name": "Independent publication, restore, CV acceptance, and activation races with rejection serialize to valid outcomes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-07",
+        "name": "Accept/reject concurrency, changed-hash reuse, stale versions, and terminal transitions fail safely.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-08",
+        "name": "Current authoritative usage reads protect writes; retained objects stay private and capability expiry is documented.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-09",
+        "name": "Private rejection reason is absent from public event data and errors expose safe codes only.",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "toolEvidence": {
+      "scannerExecutions": 30,
+      "processorExecutions": 15,
+      "cleanScannerVerdicts": 30,
+      "unsafeScannerVerdicts": 0
+    },
+    "total": 9,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "verdict": "pass"
+  },
+  "policyIds": {
+    "migrations": [
+      "20261010200000_record_trusted_pdf_processing.sql",
+      "20261012060000_reject_media_with_usage_guard.sql"
+    ],
+    "pdfProcessing": "pdf-active-content-deny-1",
+    "databaseRls": [
+      "media_processed_objects_owner_scope",
+      "media_rejection_history_owner_scope"
+    ],
+    "storage": {
+      "candidateBucket": "media-candidates",
+      "processedBucket": "media-processed",
+      "processedObjects": "create-only",
+      "anonymousProcessedRead": "denied",
+      "uploadCapabilityMaxLifetimeSeconds": 7200
+    }
+  },
+  "units": {
+    "suites": [
+      "tests/modules/media-acceptance.test.ts",
+      "tests/modules/media-cv-contracts.test.ts",
+      "tests/modules/media-rejection.test.ts"
+    ],
+    "total": 15,
+    "passed": 15,
+    "failed": 0,
+    "skipped": 0,
+    "verdict": "pass"
+  },
+  "processingCounts": {
+    "scannerExecutions": 0,
+    "processorExecutions": 0,
+    "videoProcessorExecutions": 0,
+    "imageProcessorExecutions": 0,
+    "acceptanceExecutions": 12,
+    "cvScenarios": [],
+    "cvAcceptanceScenarios": [],
+    "cvActivationScenarios": [],
+    "mediaRejectionScenarios": [
+      {
+        "id": "T12-01",
+        "name": "Pending and accepted unused Media rejects; rejected state and history persist and future processing/acceptance fails.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-02",
+        "name": "Visible Content locale and Current CV use return MEDIA_IN_USE with no rejection mutation.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-03",
+        "name": "Hiding and archiving Content and activating a replacement Current CV remove the affected use.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-04",
+        "name": "Draft, Hidden, and Archived references allow rejection; publish, restore, and CV approval revalidate rejected Media.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-05",
+        "name": "Decision, version, receipt, and event commit atomically; injected failure rolls back and exact replay survives later version changes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-06",
+        "name": "Independent publication, restore, CV acceptance, and activation races with rejection serialize to valid outcomes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-07",
+        "name": "Accept/reject concurrency, changed-hash reuse, stale versions, and terminal transitions fail safely.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-08",
+        "name": "Current authoritative usage reads protect writes; retained objects stay private and capability expiry is documented.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-09",
+        "name": "Private rejection reason is absent from public event data and errors expose safe codes only.",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "rejectionToolCounts": {
+      "scannerExecutions": 30,
+      "processorExecutions": 15,
+      "cleanScannerVerdicts": 30,
+      "unsafeScannerVerdicts": 0
+    }
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:media-rejection"
+  ],
+  "integration": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "verdict": "pass"
+  },
+  "testDiagnostics": {
+    "exitStatus": 0,
+    "tests": [
+      {
+        "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage rejects accepted Media safely and serializes with current usage changes",
+        "status": "passed",
+        "failure": ""
+      }
+    ]
+  },
+  "limitations": []
+}

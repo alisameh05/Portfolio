@@ -106,7 +106,7 @@ export function createPostgresCvPortfolioRepository(input: {
   readonly database: Kysely<DB>;
   readonly transactions: TransactionRunner;
   readonly scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> };
-  readonly media: Pick<MediaReadApplicationService, "getAcceptedPdfSnapshot" | "preflightAcceptedPdfObject">;
+  readonly media: Pick<MediaReadApplicationService, "getAcceptanceFacts" | "getAcceptedPdfSnapshot" | "preflightAcceptedPdfObject">;
 }): CvPortfolioRepositoryPort {
   const setScope = async (context: TransactionContext): Promise<void> => {
     const executor = resolvePostgresTransaction(context);
@@ -318,6 +318,17 @@ export function createPostgresCvPortfolioRepository(input: {
               currentMedia.sha256 !== snapshot.media_sha256 || currentMedia.objectVersion !== snapshot.media_object_version) {
             return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
           }
+          const currentFacts = await input.media.getAcceptanceFacts({
+            ownerId: input.scope.ownerId,
+            mediaAssetIds: [mediaAssetId],
+            intendedUse: "supporting-artifact",
+          }, context);
+          if (!currentFacts.ok) return currentFacts;
+          const currentFact = currentFacts.value.find((fact) => fact.mediaAssetId === mediaAssetId);
+          if (currentFact === undefined || currentFact.assetVersion !== Number(snapshot.media_asset_version) ||
+              !currentFact.accepted || !currentFact.safe || !currentFact.suitable || !currentFact.accessible) {
+            return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
+          }
 
           // getAcceptanceFacts applies its own bounded savepoint limits; restore
           // the complete acceptance transaction budget before the CV commit.
@@ -465,6 +476,19 @@ export function createPostgresCvPortfolioRepository(input: {
           if (mediaResult.value.status !== "accepted") return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
           const currentMedia = mediaResult.value.snapshot;
           if (!activationMediaSnapshotMatches(currentMedia, snapshot, mediaAssetId, input.scope.ownerId)) {
+            return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
+          }
+
+          // Serialize activation with Media rejection and recheck the
+          // authoritative decision while holding the shared Media lock.
+          const currentFacts = await input.media.getAcceptanceFacts({
+            ownerId: input.scope.ownerId,
+            mediaAssetIds: [mediaAssetId],
+            intendedUse: "supporting-artifact",
+          }, context);
+          if (!currentFacts.ok) return currentFacts;
+          const currentFact = currentFacts.value.find((fact) => fact.mediaAssetId === mediaAssetId);
+          if (currentFact === undefined || !currentFact.accepted || !currentFact.safe || !currentFact.suitable) {
             return err({ kind: "conflict", code: "CV_MEDIA_NOT_ELIGIBLE" });
           }
 
