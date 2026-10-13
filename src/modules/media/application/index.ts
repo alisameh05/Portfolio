@@ -27,10 +27,6 @@ export type {
   MediaAcceptanceFact,
   GetMediaUsageQuery,
   MediaUsage,
-  MediaDeliveryPurpose,
-  MediaDeliveryLocale,
-  ResolveMediaDeliveryQuery,
-  MediaDeliveryLocation,
   MediaReadApplicationService,
 } from "./owner-contracts.js";
 export {
@@ -38,6 +34,20 @@ export {
 } from "./upload-intent.js";
 export { createMediaProcessingApplicationService } from "./processing.js";
 export { createMediaAcceptanceApplicationService } from "./acceptance.js";
+export { createMediaDeliveryApplicationService } from "./delivery.js";
+export type {
+  MediaDeliveryApplicationService,
+  MediaDeliveryCandidate,
+  MediaDeliveryCandidateVariant,
+  MediaDeliveryVariant,
+  MediaDeliveryLocation,
+  MediaDeliveryPurpose,
+  MediaDeliveryLocale,
+  MediaDeliveryRepositoryPort,
+  MediaDeliveryStoragePort,
+  MediaDeliveryUsePort,
+  ResolveMediaDeliveryQuery,
+} from "./owner-contracts.js";
 export type { MediaAcceptanceApplicationService, MediaAcceptanceRepositoryFact, MediaAcceptanceRepositoryPort } from "./acceptance.js";
 export type { MediaProcessingApplicationService, MediaProcessingRepositoryPort, MediaProcessingStoragePort, TrustedByteScannerPort, PdfProcessorPort, VideoProcessorPort, MediaProcessingOutputVariant, MediaImageProcessorPort, MediaImageVariant, MediaDigestPort, RecordMediaProcessingCommand } from "./processing.js";
 export type {

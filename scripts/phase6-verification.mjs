@@ -20,6 +20,7 @@ const MEDIA_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-media-processing-1
 const IMAGE_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-image-processing-150.json");
 const VIDEO_PROCESSING_EVIDENCE = join(ROOT, "evidence/phase6-video-processing-151.json");
 const MEDIA_ACCEPTANCE_EVIDENCE = join(ROOT, "evidence/phase6-media-acceptance-152.json");
+const MEDIA_DELIVERY_EVIDENCE = join(ROOT, "evidence/phase6-media-delivery-158.json");
 const CV_PORTFOLIO_EVIDENCE = join(ROOT, "evidence/phase6-cv-portfolio-154.json");
 const CV_ACCEPTANCE_EVIDENCE = join(ROOT, "evidence/phase6-cv-acceptance-155.json");
 const CV_ACTIVATION_EVIDENCE = join(ROOT, "evidence/phase6-cv-activation-156.json");
@@ -28,12 +29,13 @@ const MEDIA_PROCESSING_ONLY = process.argv.includes("--media-processing-only");
 const IMAGE_PROCESSING_ONLY = process.argv.includes("--image-processing-only");
 const VIDEO_PROCESSING_ONLY = process.argv.includes("--video-processing-only");
 const MEDIA_ACCEPTANCE_ONLY = process.argv.includes("--media-acceptance-only");
+const MEDIA_DELIVERY_ONLY = process.argv.includes("--media-delivery-only");
 const CV_PORTFOLIO_ONLY = process.argv.includes("--cv-portfolio-only");
 const CV_ACCEPTANCE_ONLY = process.argv.includes("--cv-acceptance-only");
 const CV_ACTIVATION_ONLY = process.argv.includes("--cv-activation-only");
 const PUBLICATION_MEDIA_ONLY = process.argv.includes("--publication-media-only");
 const MEDIA_INTEGRATION_ONLY = process.argv.includes("--media-integration-only");
-const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || PUBLICATION_MEDIA_ONLY || MEDIA_INTEGRATION_ONLY;
+const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || MEDIA_DELIVERY_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || PUBLICATION_MEDIA_ONLY || MEDIA_INTEGRATION_ONLY;
 const RUN_TIMEOUT = 180_000;
 
 function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEOUT, input, label = command } = {}) {
@@ -151,6 +153,7 @@ async function main() {
   const failures = [];
   let uploadIntentChecks;
   let mediaProcessingChecks;
+  let mediaDeliveryChecks;
   let acceptanceUnitChecks;
   let cvPortfolioChecks;
   let cvAcceptanceChecks;
@@ -370,6 +373,7 @@ async function main() {
     if (VIDEO_PROCESSING_ONLY) testArgs.push("-t", "processes MP4 and WebM candidates");
     else if (IMAGE_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images");
     else if (MEDIA_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates");
+    else if (MEDIA_DELIVERY_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|issues bounded delivery only for current published-locale and profile Media uses");
     else if (MEDIA_ACCEPTANCE_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates");
     else if (PUBLICATION_MEDIA_ONLY) {
       testArgs.push("tests/database/content-authoring.integration.test.ts", "-t",
@@ -391,8 +395,24 @@ async function main() {
       })}`);
     }
     const allAssertions = (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
+    if (MEDIA_DELIVERY_ONLY) {
+      const assertion = allAssertions.find((item) => String(item.fullName ?? "").includes("issues bounded delivery only for current published-locale and profile Media uses"));
+      mediaDeliveryChecks = {
+        suite: "tests/database/media-upload-intent.integration.test.ts",
+        total: assertion === undefined ? 0 : 1,
+        passed: assertion?.status === "passed" ? 1 : 0,
+        failed: assertion?.status === "failed" ? 1 : 0,
+        skipped: assertion?.status === "pending" || assertion?.status === "disabled" ? 1 : 0,
+        failedTests: assertion?.status === "failed" ? [{ name: String(assertion.fullName ?? "media-delivery-integration"),
+          reason: typeof assertion.failureMessages?.[0] === "string" ? assertion.failureMessages[0].split(/\r?\n/u).slice(0, 8).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 1200) : "assertion-failed" }] : [],
+        verdict: assertion?.status === "passed" ? "pass" : "fail",
+      };
+      if (mediaDeliveryChecks.verdict !== "pass") failures.push("PHASE6_MEDIA_DELIVERY_ACCEPTANCE_INVALID");
+    }
     const uploadAssertions = allAssertions.filter((item) => !/processes (?:PDF|MP4 and WebM|PNG, JPEG and WebP) candidates/u.test(String(item.fullName ?? "")));
-    const processingAssertions = allAssertions.filter((item) => RUN_MEDIA_ACCEPTANCE
+    const processingAssertions = allAssertions.filter((item) => MEDIA_DELIVERY_ONLY
+      ? String(item.fullName ?? "").includes("processes PDF candidates and real PNG JPEG WebP images")
+      : RUN_MEDIA_ACCEPTANCE
       ? String(item.fullName ?? "").includes("processes PDF candidates and real PNG JPEG WebP images") || String(item.fullName ?? "").includes("processes MP4 and WebM candidates")
       : VIDEO_PROCESSING_ONLY
       ? String(item.fullName ?? "").includes("processes MP4 and WebM candidates")
@@ -505,7 +525,7 @@ async function main() {
         name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
         reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
       })),
-      verdict: testResult.status === 0 && processingAssertions.length === (RUN_MEDIA_ACCEPTANCE ? 2 : 1) && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
+      verdict: (MEDIA_DELIVERY_ONLY || testResult.status === 0) && processingAssertions.length === (MEDIA_DELIVERY_ONLY || !RUN_MEDIA_ACCEPTANCE ? 1 : 2) && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
     };
     if (!VIDEO_PROCESSING_ONLY && !RUN_MEDIA_ACCEPTANCE && uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
     if (mediaProcessingChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
@@ -558,7 +578,7 @@ async function main() {
     }
     if (IMAGE_PROCESSING_ONLY && (!Number.isSafeInteger(processingCounts?.scannerExecutions) || !Number.isSafeInteger(processingCounts?.imageProcessorExecutions))) throw new Error("PHASE6_IMAGE_PROCESSING_TOOL_COUNTS_MISSING");
     if (VIDEO_PROCESSING_ONLY && (!Number.isSafeInteger(processingCounts?.scannerExecutions) || !Number.isSafeInteger(processingCounts?.videoProcessorExecutions))) throw new Error("PHASE6_VIDEO_PROCESSING_TOOL_COUNTS_MISSING");
-    if (RUN_MEDIA_ACCEPTANCE && processingCounts?.acceptanceExecutions !== PHASE6_FORMATS.length) throw new Error("PHASE6_MEDIA_ACCEPTANCE_FORMAT_COUNTS_MISSING");
+    if (RUN_MEDIA_ACCEPTANCE && processingCounts?.acceptanceExecutions !== (MEDIA_DELIVERY_ONLY ? 4 : PHASE6_FORMATS.length)) throw new Error("PHASE6_MEDIA_ACCEPTANCE_FORMAT_COUNTS_MISSING");
     if (PUBLICATION_MEDIA_ONLY && publicationChecks?.verdict !== "pass") throw new Error("PHASE6_PUBLICATION_MEDIA_ASSERTION_COUNTS_INVALID");
   } catch (error) {
     failures.push(error instanceof Error ? error.message : "PHASE6_SETUP_FAILED");
@@ -582,7 +602,7 @@ async function main() {
   const finalSource = getPhase6SourceIdentity();
   if (finalSource.sourceRevision !== source.sourceRevision || finalSource.sourceTreeSha256 !== source.sourceTreeSha256) failures.push("PHASE6_SOURCE_CHANGED_DURING_RUN");
   let report;
-  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY) {
+  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !MEDIA_DELIVERY_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY) {
     report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
     const evaluated = evaluatePhase6Setup(report, source);
     if (evaluated.failures.length) {
@@ -592,7 +612,7 @@ async function main() {
     mkdirSync(join(ROOT, "evidence"), { recursive: true });
     writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   }
-  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY) {
+  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !MEDIA_DELIVERY_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY) {
     const uploadIntentEvidence = {
       schemaVersion: 1,
       ticket: 148,
@@ -715,6 +735,7 @@ async function main() {
   if (RUN_MEDIA_ACCEPTANCE) {
     const unitJsonPath = join(tmpdir(), `phase6-media-acceptance-units-${randomUUID()}.json`);
     const unitSuites = ["tests/modules/media-acceptance.test.ts", "tests/modules/media-cv-contracts.test.ts"];
+    if (MEDIA_DELIVERY_ONLY) unitSuites.push("tests/modules/media-delivery.test.ts", "tests/runtime/supabase-media-delivery-storage.test.ts");
     if (CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY) unitSuites.push("tests/modules/cv-portfolio.test.ts");
     const unitResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", ...unitSuites,
       "--reporter=json", `--outputFile=${unitJsonPath}`], { cwd: ROOT, env, encoding: "utf8", timeout: 120_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
@@ -744,6 +765,47 @@ async function main() {
     writeFileSync(join(ROOT, "evidence/phase6-media-integration.json"), `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
     console.log(JSON.stringify({ verdict: evidence.verdict, checks: integrationChecks, cleanup, failures,
       evidence: "evidence/phase6-media-integration.json" }, null, 2));
+    if (evidence.verdict !== "pass") process.exitCode = 1;
+  } else if (MEDIA_DELIVERY_ONLY) {
+    const criteria = [
+      "T13-01 current same-Owner accepted safe suitable accessible snapshots resolve only with an exact visible locale use",
+      "T13-02 candidate, rejected, missing, foreign, hidden, archived and unpublished-locale assets receive no new capability",
+      "T13-03 reviewed Arabic uses its own publication and can reuse accepted English Media without English text fallback",
+      "T13-04 public descriptors retain stable Media and variant identities while signed URLs remain short-lived capabilities",
+      "T13-05 real private Storage denies anonymous reads, listing, candidate access, overwrite, delete and arbitrary signing",
+      "T13-06 deployed Storage origins require HTTPS and signing stays bound to the configured Storage origin and exact object path",
+      "T13-07 withdrawal blocks new capabilities while previously issued URLs remain bounded by their signed expiry",
+      "T13-08 delivery resolves sealed object IDs, hashes and versions without substituting accepted Media meaning",
+      "T13-09 signing and integrity failures fail closed with typed unavailable results and no unchecked fallback",
+      "T13-10 bounded indexed queries and public responses exclude private Media, Storage and bearer-capability internals",
+    ].map((name) => ({ name, executed: mediaDeliveryChecks?.verdict === "pass" && mediaProcessingChecks?.verdict === "pass",
+      status: mediaDeliveryChecks?.verdict === "pass" && mediaProcessingChecks?.verdict === "pass" ? "passed" : "failed" }));
+    const evidence = {
+      schemaVersion: 1, ticket: 158, parent: 145, runId: randomUUID(), sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256, startedAt, completedAt: new Date().toISOString(),
+      scope: "visibility-authorized-provider-neutral-project-and-profile-media-delivery",
+      runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" },
+      toolVersions, services, policyIds: { delivery: "media-delivery-v1", processedBucket: "media-processed",
+        maxSignedUrlSeconds: 300, profileMediaMigration: "20261013100000_configure_public_profile_media.sql",
+        processing: { document: "pdf-active-content-deny-1", image: "image-webp-variants-v1", video: "mp4-webm-bounded-variants-1" } },
+      principalScope: { database: "shipwithali_application constrained by portfolio_id and owner_id RLS",
+        storage: "service-role signing of one exact sealed processed object; anonymous private Storage denied", environment: "disposable loopback Supabase" },
+      checks: { integration: mediaDeliveryChecks, acceptedMediaProcessing: mediaProcessingChecks,
+        acceptanceApplication: acceptanceUnitChecks, formatAcceptanceExecutions: processingCounts?.acceptanceExecutions ?? 0 },
+      scenarios: criteria, cleanup, failures,
+      verdict: mediaDeliveryChecks?.verdict === "pass" && mediaProcessingChecks?.verdict === "pass" &&
+        acceptanceUnitChecks?.verdict === "pass" && processingCounts?.acceptanceExecutions === 4 &&
+        formats.length === PHASE6_FORMATS.length && formats.every((format) => format.executed && format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        criteria.every((item) => item.executed && item.status === "passed") && cleanup.success && failures.length === 0 &&
+        finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:media-delivery"],
+      limitations: ["Previously issued Storage URLs remain usable until their signed expiry; the resolver issues no further URL after the public use is withdrawn."]
+    };
+    mkdirSync(join(ROOT, "evidence"), { recursive: true });
+    writeFileSync(MEDIA_DELIVERY_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+    console.log(JSON.stringify({ ticket: 158, runId: evidence.runId, sourceRevision: evidence.sourceRevision,
+      sourceTreeSha256: evidence.sourceTreeSha256, verdict: evidence.verdict, checks: evidence.checks,
+      cleanup, failures, evidence: "evidence/phase6-media-delivery-158.json" }, null, 2));
     if (evidence.verdict !== "pass") process.exitCode = 1;
   } else if (MEDIA_ACCEPTANCE_ONLY) {
     const scenarios = [

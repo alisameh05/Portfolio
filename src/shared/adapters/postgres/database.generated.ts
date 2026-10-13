@@ -382,6 +382,7 @@ export interface PortfolioConfigSettings {
    * Private stable Owner scope used only by trusted application authorization and RLS.
    */
   owner_id: string;
+  profile_media_asset_id: string | null;
   portfolio_id: string;
   updated_at: Generated<Timestamp>;
   version: Generated<number>;

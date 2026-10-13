@@ -43,6 +43,7 @@ function createService() {
   const calls: { create: unknown[]; get: unknown[]; save: unknown[]; preview: unknown[]; review: unknown[]; history: unknown[]; publish: unknown[]; hide: unknown[]; archive: unknown[]; restore: unknown[] } = { create: [], get: [], save: [], preview: [], review: [], history: [], publish: [], hide: [], archive: [], restore: [] };
   const service: ContentAuthoringService = {
     async getVisibleMediaUsage() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "UNAVAILABLE" } }; },
+    async getPublicProjectMediaUse() { return { ok: true as const, value: false }; },
     async createContent(command) {
       calls.create.push(command);
       return { ok: true, value: { contentId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 1, revisionId: unsafeStableId<"Revision">(REVISION_ID), outcome: "content-created" } };

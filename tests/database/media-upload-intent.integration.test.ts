@@ -13,11 +13,12 @@ import { handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-m
 import { withOwnerTestAuth } from "../runtime/owner-test-auth.js";
 import { createOwnerSecurityTestStub } from "../../src/runtime/http/owner-security.js";
 import { handleAcceptOwnerCvVersion, handleActivateOwnerCvVersion, handleGetOwnerCvPortfolio, handleRegisterOwnerCvVersion } from "../../src/runtime/http/owner-cv.js";
-import { getOwnerCvApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
+import { getMediaDeliveryApplicationService, getOwnerCvApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
 import { createOwnerCvApplicationService } from "../../src/modules/cv-portfolio/application/owner-service.js";
 import { createPostgresCvPortfolioRepository } from "../../src/modules/cv-portfolio/adapters/postgres-portfolio.js";
 import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
 import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
+import { createPortfolioProfileCommandService } from "../../src/modules/portfolio-configuration/application/profile-command.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createContentAuthoringService } from "../../src/modules/content-publishing/application/authoring.js";
 import type { MediaAcceptancePort } from "../../src/modules/content-publishing/application/service.js";
@@ -2653,6 +2654,93 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     mediaProcessingCounts.imageProcessorExecutions += imageProcessorExecutions;
     if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
   }, REQUIRE_FULL_MEDIA ? 600_000 : 300_000);
+  it("issues bounded delivery only for current published-locale and profile Media uses", async () => {
+    const eligible = await admin.query<{ media_id: string }>(`
+      select asset.media_id::text
+        from media.assets asset
+        join media.decision_history decision on decision.media_id = asset.media_id
+       where asset.portfolio_id = $1::uuid and asset.owner_id = $2::uuid and asset.kind = 'image'
+         and decision.decision = 'accepted' and decision.accessibility->>'kind' = 'described-image'
+       order by decision.aggregate_version desc, asset.media_id
+       limit 1`, [portfolioId, ownerId]);
+    const mediaAssetId = eligible.rows[0]?.media_id as StableId<"MediaAsset"> | undefined;
+    expect(mediaAssetId).toBeDefined();
+    if (!mediaAssetId) throw new Error("PHASE6_MEDIA_DELIVERY_ACCEPTED_IMAGE_MISSING");
+
+    const content = createContentService(contentMediaAcceptancePort());
+    const project = await publishContentWithMedia(content, "project", mediaAssetId, "phase6-accepted-project");
+    const delivery = await getMediaDeliveryApplicationService();
+    expect(await delivery.resolveDelivery({ mediaAssetId, purpose: "project", locale: "en" }))
+      .toMatchObject({ ok: true, value: { purpose: "project", locale: "en", variants: expect.any(Array) } });
+    expect(await delivery.resolveDelivery({ mediaAssetId, purpose: "project", locale: "ar" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "MEDIA_DELIVERY_NOT_VISIBLE" } });
+
+    const aggregateVersion = await publishArabicProjectRevision(content, project.contentId, 3, mediaAssetId);
+    const english = await delivery.resolveDelivery({ mediaAssetId, purpose: "project", locale: "en" });
+    const arabic = await delivery.resolveDelivery({ mediaAssetId, purpose: "project", locale: "ar" });
+    expect(english.ok && arabic.ok).toBe(true);
+    if (!english.ok || !arabic.ok) throw new Error("PHASE6_MEDIA_DELIVERY_PROJECT_RESOLUTION_FAILED");
+    expect(english.value.variants.length).toBeGreaterThan(0);
+    expect(arabic.value.variants.map(({ objectId, name }) => ({ objectId, name })))
+      .toEqual(english.value.variants.map(({ objectId, name }) => ({ objectId, name })));
+    for (const variant of [...english.value.variants, ...arabic.value.variants]) {
+      expect(Date.parse(variant.expiresAt) - Date.now()).toBeLessThanOrEqual(5 * 60 * 1000 + 2_000);
+      const response = await fetch(variant.url);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("image/webp");
+      expect((await response.arrayBuffer()).byteLength).toBe(variant.byteLength);
+    }
+
+    const profileSettings = createPortfolioSettingsService({
+      repository: createPostgresPortfolioSettingsRepository(), transactions: appDatabase.transactions, scope: { ownerId, portfolioId },
+    });
+    const profile = createPortfolioProfileCommandService({
+      repository: createPostgresPortfolioSettingsRepository(),
+      operations: createPostgresOperationsPersistence(appDatabase.database),
+      scope: { ownerId, portfolioId },
+    });
+    const currentSettings = await profileSettings.getSettings({ actor: { kind: "owner", ownerId, sessionId: "phase6-profile-media-owner" }, portfolioId });
+    expect(currentSettings.ok).toBe(true);
+    if (!currentSettings.ok) throw new Error("PHASE6_PROFILE_MEDIA_SETTINGS_UNAVAILABLE");
+    const profileUpdate = await profile.updateProfile({
+      actor: { kind: "owner", ownerId, sessionId: "phase6-profile-media-owner" }, portfolioId,
+      expectedVersion: currentSettings.value.version, idempotencyKey: "phase6-profile-media-select" as never,
+      correlationId: "phase6-profile-media-select",
+      profile: { ...currentSettings.value.profile, mediaAssetId },
+    });
+    expect(profileUpdate.ok).toBe(true);
+    const profileDelivery = await delivery.resolveDelivery({ mediaAssetId, purpose: "profile", locale: "ar" });
+    expect(profileDelivery).toMatchObject({ ok: true, value: { purpose: "profile", locale: "ar" } });
+    const unselectedProfileMedia = await delivery.resolveDelivery({ mediaAssetId: createStableId("MediaAsset"), purpose: "profile", locale: "en" });
+    expect(unselectedProfileMedia).toMatchObject({ ok: false, error: { kind: "not_found" } });
+
+    const variant = english.value.variants[0]!;
+    const storagePath = `/processed/${portfolioId}/${mediaAssetId}/${variant.objectId}/${"0".repeat(64)}.webp`;
+    const anonymousChecks = await Promise.all([
+      storageRequest(`/storage/v1/object/media-processed${storagePath}`, { headers: headers(ANON_KEY!) }),
+      storageRequest(`/storage/v1/object/list/media-processed`, { method: "POST", headers: { ...headers(ANON_KEY!), "content-type": "application/json" }, body: JSON.stringify({ prefix: `processed/${portfolioId}/${mediaAssetId}/` }) }),
+      storageRequest(`/storage/v1/object/sign/media-processed${storagePath}`, { method: "POST", headers: { ...headers(ANON_KEY!), "content-type": "application/json" }, body: JSON.stringify({ expiresIn: 300 }) }),
+      storageRequest(`/storage/v1/object/media-processed${storagePath}`, { method: "PUT", headers: { ...headers(ANON_KEY!), "content-type": "image/webp", "x-upsert": "true" }, body: Buffer.from("replacement") }),
+      storageRequest(`/storage/v1/object/media-processed${storagePath}`, { method: "DELETE", headers: headers(ANON_KEY!) }),
+      storageRequest(`/storage/v1/object/media-candidates${storagePath}`, { headers: headers(ANON_KEY!) }),
+    ]);
+    const listingBody: unknown = anonymousChecks[1]!.ok ? await anonymousChecks[1]!.clone().json() : undefined;
+    expect(anonymousChecks[0]!.status >= 400 && anonymousChecks[0]!.status < 500 &&
+      (anonymousChecks[1]!.status >= 400 || (anonymousChecks[1]!.status === 200 && Array.isArray(listingBody) && listingBody.length === 0)) &&
+      anonymousChecks.slice(2).every((response) => response.status >= 400 && response.status < 500),
+      `anonymous Storage status codes: ${anonymousChecks.map(({ status }) => status).join(",")}; listed rows: ${Array.isArray(listingBody) ? listingBody.length : "not-an-array"}`).toBe(true);
+    const hidden = await content.hideContent({ actor: { kind: "owner", ownerId, sessionId: "phase6-content-media-owner" },
+      contentId: project.contentId, expectedVersion: aggregateVersion, idempotencyKey: "phase6-media-delivery-hide" as never,
+      correlationId: "phase6-media-delivery-hide" });
+    expect(hidden.ok).toBe(true);
+    expect(await delivery.resolveDelivery({ mediaAssetId, purpose: "project", locale: "ar" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "MEDIA_DELIVERY_NOT_VISIBLE" } });
+    const storedRevision = await admin.query<{ payload_text: string }>(
+      "select payload::text as payload_text from content.revisions where content_id = $1::uuid order by stream_sequence desc limit 1", [project.contentId]);
+    expect(storedRevision.rows[0]?.payload_text).not.toContain("token=");
+    expect(storedRevision.rows[0]?.payload_text).not.toContain("storage/v1/object/sign");
+  }, 120_000);
+
   it("processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg", async () => {
     appNow = Date.now();
     const acceptedCountBeforeVideos = acceptedMediaIds.length;
