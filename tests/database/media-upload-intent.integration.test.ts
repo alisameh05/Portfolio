@@ -3281,7 +3281,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       if (!activatedA.ok) throw new Error("PHASE6_CURRENT_CV_A_ACTIVATION_FAILED");
       const currentCv = await getCurrentCvApplicationService();
       const readCurrent = async () => handleGetCurrentCv(new Request("https://example.com/api/v1/cv/current?locale=en"), {
-        service: currentCv,
+        service: currentCv, rateLimit: { async check() { return { allowed: true }; } },
       });
       const currentBeforeDelivery = await admin.query(`select current_version_id::text as current_version_id
         from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid`, [portfolioId, ownerId]);

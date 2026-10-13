@@ -25,6 +25,7 @@ import type {
   CurrentCvDownloadQuery,
 } from "../../modules/cv-portfolio/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
+import type { CurrentCvRateLimitCheck } from "./current-cv-rate-limit.js";
 import {
   internalErrorProblem,
   rejectionToProblem,
@@ -35,6 +36,8 @@ export interface CurrentCvAdapterDeps {
   service: Pick<CvPortfolioApplicationService, "downloadCurrentCv">;
   /** Exact Storage origins permitted for the short-lived redirect response. */
   allowedRedirectOrigins?: ReadonlyArray<string>;
+  /** Required hosting-boundary abuse control; missing or unavailable controls fail closed. */
+  rateLimit: CurrentCvRateLimitCheck;
   logger?: Logger;
 }
 
@@ -127,6 +130,19 @@ export async function handleGetCurrentCv(
       locale,
       disposition,
     };
+
+    let rateVerdict: Awaited<ReturnType<CurrentCvRateLimitCheck["check"]>>;
+    try {
+      rateVerdict = await deps.rateLimit.check(request);
+    } catch {
+      return rejectionToProblem({ kind: "temporarily_unavailable", code: "CURRENT_CV_RATE_LIMIT_UNAVAILABLE" }, traceId, instance);
+    }
+    if (!rateVerdict.allowed) {
+      const retryAfterSeconds = Number.isSafeInteger(rateVerdict.retryAfterSeconds) &&
+        (rateVerdict.retryAfterSeconds ?? -1) >= 0 ? rateVerdict.retryAfterSeconds as number : 60;
+      const rejection = { kind: "rate_limited" as const, code: "CURRENT_CV_RATE_LIMITED", retryAfterSeconds };
+      return rejectionToProblem(rejection, traceId, instance);
+    }
 
     let result: Awaited<ReturnType<typeof deps.service.downloadCurrentCv>>;
     try {

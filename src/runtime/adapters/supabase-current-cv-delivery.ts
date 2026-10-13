@@ -32,7 +32,7 @@ function objectPath(snapshot: Parameters<CurrentCvObjectDeliveryPort["stream"]>[
     .map((segment) => encodeURIComponent(segment)).join("/");
 }
 
-async function readBoundedPdf(response: Response, expectedHash: string): Promise<Uint8Array | undefined> {
+async function readVerifiedPdf(response: Response, expectedHash: string): Promise<Uint8Array | undefined> {
   if (response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/pdf") return undefined;
   const contentLengthHeader = response.headers.get("content-length");
   if (contentLengthHeader !== null) {
@@ -44,29 +44,32 @@ async function readBoundedPdf(response: Response, expectedHash: string): Promise
   }
   if (response.body === null) return undefined;
   const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
+  const expectedLength = contentLengthHeader === null ? undefined : Number(contentLengthHeader);
+  const bufferCapacity = expectedLength ?? MAX_CURRENT_CV_BYTES;
+  // Retain one bounded buffer while hashing; no chunk list plus concatenation copy.
+  const bytes = new Uint8Array(bufferCapacity);
+  const digest = createHash("sha256");
   let total = 0;
   try {
     for (;;) {
       const next = await reader.read();
       if (next.done) break;
       total += next.value.byteLength;
-      if (total > MAX_CURRENT_CV_BYTES) {
+      if (total > bufferCapacity || total > MAX_CURRENT_CV_BYTES) {
         await reader.cancel().catch(() => undefined);
         return undefined;
       }
-      chunks.push(next.value);
+      bytes.set(next.value, total - next.value.byteLength);
+      digest.update(next.value);
     }
   } finally {
     reader.releaseLock();
   }
-  if (total === 0) return undefined;
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  if (!bytes.subarray(0, 5).every((byte, index) => byte === [37, 80, 68, 70, 45][index]) ||
-      createHash("sha256").update(bytes).digest("hex") !== expectedHash) return undefined;
-  return bytes;
+  if (total === 0 || (expectedLength !== undefined && total !== expectedLength)) return undefined;
+  const verified = bytes.subarray(0, total);
+  if (!verified.subarray(0, 5).every((byte, index) => byte === [37, 80, 68, 70, 45][index]) ||
+      digest.digest("hex") !== expectedHash) return undefined;
+  return verified;
 }
 
 /** Reads and signs only the content-addressed, private processed PDF snapshot. */
@@ -90,7 +93,7 @@ export function createSupabaseCurrentCvDelivery(options: SupabaseCurrentCvDelive
           headers, signal: controller.signal,
         });
         if (!response.ok) return unavailable();
-        const bytes = await readBoundedPdf(response, snapshot.sha256);
+        const bytes = await readVerifiedPdf(response, snapshot.sha256);
         if (bytes === undefined) return unavailable();
         const chunkSize = 64 * 1024;
         return ok((async function* () {
