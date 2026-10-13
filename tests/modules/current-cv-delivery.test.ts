@@ -66,4 +66,35 @@ describe("Current CV application delivery", () => {
     expect(await storageFailure.downloadCurrentCv(visitor)).toMatchObject({ ok: false,
       error: { kind: "temporarily_unavailable" } });
   });
+
+  it("reports current CV capability from the committed snapshot and private delivery availability", async () => {
+    let currentSnapshot = snapshotA;
+    const getCurrentCvSnapshot = vi.fn(async () => ({ ok: true as const, value: currentSnapshot }));
+    const isAvailable = vi.fn(async () => true);
+    const service = createCurrentCvDeliveryService({ repository: { getCurrentCvSnapshot },
+      storage: { isAvailable, async stream() { throw new Error("unused"); }, async createDownloadTarget() { throw new Error("unused"); } } });
+
+    expect(await service.getAvailability()).toBe("available");
+    expect(getCurrentCvSnapshot).toHaveBeenCalledOnce();
+    expect(isAvailable).toHaveBeenCalledWith({ snapshot: snapshotA });
+
+    isAvailable.mockResolvedValue(false);
+    expect(await service.getAvailability()).toBe("unknown");
+    expect(currentSnapshot).toBe(snapshotA);
+    expect(getCurrentCvSnapshot).toHaveBeenCalledTimes(2);
+  });
+
+  it("distinguishes an empty Current CV from an unavailable authoritative read", async () => {
+    const noCurrent = createCurrentCvDeliveryService({ repository: { async getCurrentCvSnapshot() {
+      return { ok: false as const, error: { kind: "not_found" as const, code: "CURRENT_CV_NOT_FOUND" } };
+    } }, storage: { async isAvailable() { throw new Error("must not probe storage"); },
+      async stream() { throw new Error("unused"); }, async createDownloadTarget() { throw new Error("unused"); } } });
+    expect(await noCurrent.getAvailability()).toBe("unavailable");
+
+    const failedRead = createCurrentCvDeliveryService({ repository: { async getCurrentCvSnapshot() {
+      return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "CURRENT_CV_UNAVAILABLE" } };
+    } }, storage: { async isAvailable() { throw new Error("must not probe storage"); },
+      async stream() { throw new Error("unused"); }, async createDownloadTarget() { throw new Error("unused"); } } });
+    expect(await failedRead.getAvailability()).toBe("unknown");
+  });
 });

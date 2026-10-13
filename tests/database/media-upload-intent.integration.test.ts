@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
@@ -16,6 +16,7 @@ import { createOwnerSecurityTestStub } from "../../src/runtime/http/owner-securi
 import { handleAcceptOwnerCvVersion, handleActivateOwnerCvVersion, handleGetOwnerCvPortfolio, handleRegisterOwnerCvVersion } from "../../src/runtime/http/owner-cv.js";
 import { getMediaDeliveryApplicationService, getOwnerCvApplicationService, getOwnerMediaApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
 import { getCurrentCvApplicationService } from "../../src/bootstrap/composition-root.js";
+import { getPublicConfigurationApplicationService } from "../../src/bootstrap/composition-root.js";
 import { createOwnerCvApplicationService } from "../../src/modules/cv-portfolio/application/owner-service.js";
 import { createPostgresCvPortfolioRepository } from "../../src/modules/cv-portfolio/adapters/postgres-portfolio.js";
 import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
@@ -73,13 +74,39 @@ const REQUIRE_MEDIA_REJECTION = process.env["PHASE6_MEDIA_REJECTION_ONLY"] === "
 const REQUIRE_FULL_MEDIA = process.env["PHASE6_REQUIRE_FULL_MEDIA"] === "1";
 const REQUIRE_CV_ACTIVATION = process.env["PHASE6_CV_ACTIVATION_ONLY"] === "1";
 const REQUIRE_CV_DELIVERY = process.env["PHASE6_CV_DELIVERY_ONLY"] === "1";
+const REQUIRE_PUBLIC_CAPABILITIES = process.env["PHASE6_PUBLIC_CAPABILITIES_ONLY"] === "1";
 const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0, imageProcessorExecutions: 0, acceptanceExecutions: 0, fixtureAcceptanceExecutions: 0,
   cvScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   cvAcceptanceScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   cvActivationScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   currentCvDeliveryScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
+  currentCvCapabilityScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   mediaRejectionScenarios: [] as Array<{ readonly id: string; readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   rejectionToolCounts: { scannerExecutions: 0, processorExecutions: 0, cleanScannerVerdicts: 0, unsafeScannerVerdicts: 0 } };
+
+function saveProcessingCounts(update: Record<string, unknown> = mediaProcessingCounts): void {
+  if (!PROCESSING_COUNTS_FILE) return;
+  let previous: Record<string, unknown> = {};
+  try {
+    if (existsSync(PROCESSING_COUNTS_FILE)) previous = JSON.parse(readFileSync(PROCESSING_COUNTS_FILE, "utf8")) as Record<string, unknown>;
+  } catch { /* The current run rewrites an unreadable partial report. */ }
+  const merged: Record<string, unknown> = { ...previous, ...update };
+  for (const field of ["cvScenarios", "cvAcceptanceScenarios", "cvActivationScenarios", "currentCvDeliveryScenarios", "currentCvCapabilityScenarios", "mediaRejectionScenarios"]) {
+    const prior = Array.isArray(previous[field]) ? previous[field] as Array<Record<string, unknown>> : [];
+    const next = Array.isArray(update[field]) ? update[field] as Array<Record<string, unknown>> : [];
+    if (prior.length > 0 || next.length > 0) {
+      const byName = new Map<string, Record<string, unknown>>();
+      for (const item of [...prior, ...next]) byName.set(String(item["name"] ?? item["id"]), item);
+      merged[field] = [...byName.values()];
+    }
+  }
+  for (const field of ["scannerExecutions", "processorExecutions", "videoProcessorExecutions", "imageProcessorExecutions", "acceptanceExecutions", "fixtureAcceptanceExecutions"]) {
+    const oldValue = Number(previous[field] ?? 0);
+    const newValue = Number(update[field] ?? 0);
+    if (Number.isFinite(oldValue) && Number.isFinite(newValue)) merged[field] = Math.max(oldValue, newValue);
+  }
+  writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(merged));
+}
 
 if (REQUIRE_REAL && (!DATABASE_URL || !STORAGE_URL || !SERVICE_ROLE_KEY || !ANON_KEY || !REPLAY_KEY || !SCANNER_IMAGE || !SCANNER_VERSION ||
     (!REQUIRE_IMAGES && (!PDF_FIXTURE || !PDF_PROCESSOR_IMAGE || !PDF_PROCESSOR_VERSION)))) {
@@ -192,6 +219,12 @@ describeReal(group === "baseline"
   // acceptance assertions never depend on destructive test order.
   function scenario(scenarioGroup: typeof group, name: string, run: () => Promise<void>, timeout?: number): void {
     if (scenarioGroup === group) it(name, run, timeout);
+  }
+  function capabilityScenario(name: string, passed: boolean): void {
+    if (!REQUIRE_CV_DELIVERY && !REQUIRE_PUBLIC_CAPABILITIES) return;
+    mediaProcessingCounts.currentCvCapabilityScenarios.push({ name, executed: true, status: passed ? "passed" : "failed" });
+    saveProcessingCounts();
+    expect(passed, name).toBe(true);
   }
   let admin: Client;
   let appClient: Client;
@@ -364,9 +397,20 @@ describeReal(group === "baseline"
     if (!published.ok) throw new Error("PHASE6_ARABIC_MEDIA_PUBLICATION_FAILED");
     const arabic = await content.getPublicProject({ slug: `${prefix}-project`, locale: "ar" });
     expect(arabic).toMatchObject({ ok: true, value: { revisionId: draft.value.revisionId, locale: "ar",
-      title: "مشروع موثق", summary: "ملخص عربي للمشروع", body: "هذا وصف عربي مستقل للمشروع." } });
-    expect(await content.getPublicProject({ slug: `${prefix}-project`, locale: "en" }))
-      .toMatchObject({ ok: true, value: { title: `${prefix} Project`, locale: "en" } });
+      title: "مشروع موثق", summary: "ملخص عربي للمشروع", body: "هذا وصف عربي مستقل للمشروع.",
+      caseStudy: { problem: "مشكلة عربية واضحة.", ownerRole: "قاد التنفيذ.", contributions: ["بنى الخدمة."],
+        outcomes: ["تحسن سير العمل."], lessons: "قِس أثر العمل." } } });
+    const english = await content.getPublicProject({ slug: `${prefix}-project`, locale: "en" });
+    expect(english).toMatchObject({ ok: true, value: { title: `${prefix} Project`, locale: "en" } });
+    capabilityScenario("T15-03 reviewed Arabic content resolves shared accepted English Media while preserving Arabic-only case-study text",
+      arabic.ok && arabic.value.title === "مشروع موثق" && arabic.value.summary === "ملخص عربي للمشروع" &&
+      arabic.value.body === "هذا وصف عربي مستقل للمشروع." &&
+      arabic.value.claims.some((claim) => claim.artifacts.some((artifact) => artifact.mediaAssetId === mediaAssetId)) &&
+      arabic.value.caseStudy.problem === "مشكلة عربية واضحة." && arabic.value.caseStudy.ownerRole === "قاد التنفيذ." &&
+      arabic.value.caseStudy.contributions.join(" ") === "بنى الخدمة." && arabic.value.caseStudy.outcomes.join(" ") === "تحسن سير العمل." &&
+      arabic.value.caseStudy.lessons === "قِس أثر العمل." && english.ok &&
+      !JSON.stringify(arabic.value.caseStudy).includes("A real workflow problem.") &&
+      !JSON.stringify(arabic.value.caseStudy).includes("Built the workflow."));
     return published.value.aggregateVersion;
   }
 
@@ -1016,7 +1060,7 @@ describeReal(group === "baseline"
       { id: "T12-08", name: "Current authoritative usage reads protect writes; retained objects stay private and capability expiry is documented." },
       { id: "T12-09", name: "Private rejection reason is absent from public event data and errors expose safe codes only." },
     ].map((scenario) => ({ ...scenario, executed: true, status: "passed" as const }));
-    if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
+    saveProcessingCounts();
   }, 600_000);
 
   function ownerService(uploadIntents: ReturnType<typeof createService>) {
@@ -1573,11 +1617,11 @@ describeReal(group === "baseline"
         mediaProcessingCounts.scannerExecutions += scannerExecutions;
         mediaProcessingCounts.processorExecutions += processorExecutions;
         mediaProcessingCounts.imageProcessorExecutions += imageProcessorExecutions;
-        if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
+        saveProcessingCounts();
         return;
       }
-      if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify({ scannerExecutions, processorExecutions, imageProcessorExecutions }));
-      if (!REQUIRE_VIDEO) return;
+      saveProcessingCounts({ scannerExecutions, processorExecutions, imageProcessorExecutions });
+      if (!REQUIRE_VIDEO && !REQUIRE_CV_DELIVERY) return;
     }
 
     const scansBeforePdfProcessing = scannerExecutions;
@@ -3284,7 +3328,7 @@ describeReal(group === "baseline"
       await admin.query(`drop trigger ${triggerName} on operations.outbox_events`);
       await admin.query(`drop function operations.${functionName}()`);
     }
-    if (REQUIRE_CV_DELIVERY) {
+    if (REQUIRE_CV_DELIVERY || REQUIRE_PUBLIC_CAPABILITIES) {
       const deliveryScenarios: Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }> = [];
       const deliveryScenario = (name: string, passed: boolean) => {
         deliveryScenarios.push({ name, executed: true, status: passed ? "passed" : "failed" });
@@ -3292,15 +3336,35 @@ describeReal(group === "baseline"
       };
       const beforeDeliveryActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
       if (!beforeDeliveryActivation.ok) throw new Error("PHASE6_CURRENT_CV_A_ROOT_UNAVAILABLE");
+      const publicConfiguration = await getPublicConfigurationApplicationService();
+      const emptyEnglishCapabilities = await publicConfiguration.getPublicConfiguration({ locale: "en" });
+      const emptyArabicCapabilities = await publicConfiguration.getPublicConfiguration({ locale: "ar" });
+      capabilityScenario("T15-01 T15-02 empty Current CV is unavailable in both locales", emptyEnglishCapabilities.ok &&
+        emptyArabicCapabilities.ok && !emptyEnglishCapabilities.value.capabilities.currentCvAvailable &&
+        !emptyArabicCapabilities.value.capabilities.currentCvAvailable);
       const activatedA = await cvService.activateOwnerCvVersion({ actor: cvOwner,
         idempotencyKey: "phase6-current-cv-delivery-activate-a" as never,
         expectedVersion: beforeDeliveryActivation.value.aggregateVersion, versionId: cvRegistration.value.versionId });
       expect(activatedA.ok, JSON.stringify(activatedA)).toBe(true);
       if (!activatedA.ok) throw new Error("PHASE6_CURRENT_CV_A_ACTIVATION_FAILED");
+      const englishCapabilitiesAfterActivation = await publicConfiguration.getPublicConfiguration({ locale: "en" });
+      const arabicCapabilitiesAfterActivation = await publicConfiguration.getPublicConfiguration({ locale: "ar" });
+      capabilityScenario("T15-01 T15-02 activation exposes only the committed English Current CV capability",
+        englishCapabilitiesAfterActivation.ok && englishCapabilitiesAfterActivation.value.capabilities.currentCvAvailable &&
+        !englishCapabilitiesAfterActivation.value.capabilities.externalLinksAvailable &&
+        arabicCapabilitiesAfterActivation.ok && !arabicCapabilitiesAfterActivation.value.capabilities.currentCvAvailable &&
+        !arabicCapabilitiesAfterActivation.value.capabilities.externalLinksAvailable);
+      capabilityScenario("T15-08 public configuration contains stable settings and capability facts without Storage mappings or bearer URLs",
+        englishCapabilitiesAfterActivation.ok &&
+        !JSON.stringify(englishCapabilitiesAfterActivation.value).match(/signedURL|signedUrl|media-processed|private-key|cv\.pdf/u));
       const currentCv = await getCurrentCvApplicationService();
       const readCurrent = async () => handleGetCurrentCv(new Request("https://example.com/api/v1/cv/current?locale=en"), {
         service: currentCv, rateLimit: { async check() { return { allowed: true }; } },
       });
+      const arabicCvResponse = await handleGetCurrentCv(new Request("https://example.com/api/v1/cv/current?locale=ar"), {
+        service: currentCv, rateLimit: { async check() { return { allowed: true }; } },
+      });
+      capabilityScenario("T15-02 public Current CV transport continues to reject Arabic locale", arabicCvResponse.status === 400);
       const currentBeforeDelivery = await admin.query(`select current_version_id::text as current_version_id
         from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid`, [portfolioId, ownerId]);
       const firstMediaSnapshot = await admin.query(`select version.media_sha256
@@ -3330,6 +3394,8 @@ describeReal(group === "baseline"
         { kind: "document", summary: "A distinct second Current CV PDF." }, "current-cv-delivery-b");
       const beforeRegistration = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
       if (!beforeRegistration.ok) throw new Error("PHASE6_CURRENT_CV_B_ROOT_UNAVAILABLE");
+      const committedCvA = beforeRegistration.value.currentVersionId;
+      if (committedCvA !== cvRegistration.value.versionId) throw new Error("PHASE6_CURRENT_CV_A_POINTER_CHANGED_BEFORE_B_REGISTRATION");
       const registrationB = await cvService.registerOwnerCvVersion({ actor: cvOwner,
         idempotencyKey: "phase6-current-cv-delivery-register-b" as never,
         expectedVersion: beforeRegistration.value.aggregateVersion,
@@ -3339,6 +3405,12 @@ describeReal(group === "baseline"
         idempotencyKey: "phase6-current-cv-delivery-accept-b" as never,
         expectedVersion: registrationB.value.aggregateVersion, versionId: registrationB.value.versionId });
       if (!acceptedB.ok) throw new Error("PHASE6_CURRENT_CV_B_ACCEPTANCE_FAILED");
+      const afterAcceptanceB = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      const beforeActivationBCapability = await publicConfiguration.getPublicConfiguration({ locale: "en" });
+      capabilityScenario("T15-04 registration and separate acceptance do not replace the existing committed Current CV",
+        afterAcceptanceB.ok && afterAcceptanceB.value.currentVersionId === committedCvA &&
+        beforeActivationBCapability.ok && beforeActivationBCapability.value.capabilities.currentCvAvailable &&
+        !JSON.stringify(beforeActivationBCapability.value).match(/signedURL|signedUrl|media-processed|private-key|cv\.pdf/u));
       const activatedB = await cvService.activateOwnerCvVersion({ actor: cvOwner,
         idempotencyKey: "phase6-current-cv-delivery-activate-b" as never,
         expectedVersion: acceptedB.value.aggregateVersion, versionId: registrationB.value.versionId });
@@ -3359,7 +3431,7 @@ describeReal(group === "baseline"
     mediaProcessingCounts.scannerExecutions += scannerExecutions;
     mediaProcessingCounts.processorExecutions += processorExecutions;
     mediaProcessingCounts.imageProcessorExecutions += imageProcessorExecutions;
-    if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
+    saveProcessingCounts();
   }, REQUIRE_FULL_MEDIA ? 600_000 : 300_000);
   scenario("baseline", "issues bounded delivery only for current published-locale and profile Media uses", async () => {
     const eligible = await admin.query<{ media_id: string }>(`
@@ -3466,6 +3538,8 @@ describeReal(group === "baseline"
       expect(await delivery.resolveDelivery({ mediaAssetId: disallowedMediaId, purpose: "profile", locale: "en" }))
         .toMatchObject({ ok: false, error: { kind: "not_found" } });
     }
+    capabilityScenario("T15-07 configured profile visibility cannot make private or rejected Media candidates deliverable",
+      privateCandidates.rows.length > 0 && rejectedCandidates.rows.length > 0);
     expect((await updateProfileMedia(mediaAssetId, "phase6-profile-media-restore-accepted")).ok).toBe(true);
 
     const variant = english.value.variants[0]!;
@@ -3701,7 +3775,7 @@ describeReal(group === "baseline"
     expect(videoProcessorExecutions).toBe(5);
     mediaProcessingCounts.scannerExecutions += scannerExecutions;
     mediaProcessingCounts.videoProcessorExecutions += videoProcessorExecutions;
-    if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
+    saveProcessingCounts();
   }, 300_000);
 });
 }

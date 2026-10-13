@@ -178,6 +178,44 @@ describe("Portfolio settings application service", () => {
     expect(JSON.stringify(result)).not.toContain(initialValues.globalCta.destination);
   });
 
+  it("keeps core configuration readable when an optional delivery capability is unknown", async () => {
+    const { repository, transactions } = fixture();
+    vi.mocked(repository.getSettings).mockResolvedValue(ok({ portfolioId, ...initialValues, version: 10 }));
+    const reader = createPortfolioSettingsReader({
+      repository,
+      transactions,
+      scope: { portfolioId, ownerId },
+      capabilityReader: { async getFacts() {
+        return { currentCv: "unknown", externalLinks: "unknown", globalProjectCta: "unknown" };
+      } },
+    });
+
+    const result = await reader.getPublicConfiguration({ locale: "en" });
+
+    expect(result).toMatchObject({ ok: true, value: {
+      profile: initialValues.profile,
+      contactChannels: initialValues.contactChannels,
+      capabilities: { currentCvAvailable: false, externalLinksAvailable: false },
+      globalCta: { availability: "unavailable", unavailableFallback: initialValues.globalCta.unavailableFallback },
+    } });
+    expect(JSON.stringify(result)).not.toMatch(/signedURL|signedUrl|media-processed|private-key/u);
+  });
+
+  it("fails public configuration when its required settings repository is unavailable", async () => {
+    const { repository, transactions } = fixture();
+    vi.mocked(repository.getSettings).mockResolvedValue(err({ kind: "temporarily_unavailable", code: "DATABASE_UNAVAILABLE" }));
+    const reader = createPortfolioSettingsReader({
+      repository,
+      transactions,
+      scope: { portfolioId, ownerId },
+      capabilityReader: { async getFacts() { return { currentCv: "available" }; } },
+    });
+
+    expect(await reader.getPublicConfiguration({ locale: "en" })).toEqual(err({
+      kind: "temporarily_unavailable", code: "DATABASE_UNAVAILABLE",
+    }));
+  });
+
   it("treats capabilities as unavailable when no exported facts are implemented", async () => {
     const { repository, transactions } = fixture();
     vi.mocked(repository.getSettings).mockResolvedValue(ok({ portfolioId, ...initialValues, version: 1 }));

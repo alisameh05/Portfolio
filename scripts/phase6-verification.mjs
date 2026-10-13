@@ -25,6 +25,7 @@ const CV_PORTFOLIO_EVIDENCE = join(ROOT, "evidence/phase6-cv-portfolio-154.json"
 const CV_ACCEPTANCE_EVIDENCE = join(ROOT, "evidence/phase6-cv-acceptance-155.json");
 const CV_ACTIVATION_EVIDENCE = join(ROOT, "evidence/phase6-cv-activation-156.json");
 const CV_DELIVERY_EVIDENCE = join(ROOT, "evidence/phase6-cv-delivery-159.json");
+const PUBLIC_CAPABILITY_EVIDENCE = join(ROOT, "evidence/phase6-public-capabilities-160.json");
 const UPLOAD_INTENT_ONLY = process.argv.includes("--upload-intents-only");
 const MEDIA_PROCESSING_ONLY = process.argv.includes("--media-processing-only");
 const IMAGE_PROCESSING_ONLY = process.argv.includes("--image-processing-only");
@@ -306,7 +307,8 @@ async function main() {
       }
     }
     if (!IMAGE_PROCESSING_ONLY) writeFileSync(join(fixturesDir, "fixture.pdf"), pdfFixture());
-    const activeFormats = MEDIA_PROCESSING_ONLY || MEDIA_REJECTION_ONLY || CV_DELIVERY_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
+    const activeFormats = MEDIA_PROCESSING_ONLY || MEDIA_REJECTION_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
+      : CV_DELIVERY_ONLY ? PHASE6_FORMATS.filter(({ id, kind }) => id === "pdf" || kind === "image")
       : IMAGE_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ kind }) => kind === "image")
         : VIDEO_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ kind }) => kind === "video") : PHASE6_FORMATS;
     if (IMAGE_PROCESSING_ONLY) {
@@ -361,13 +363,14 @@ async function main() {
       PHASE6_IMAGE_FIXTURE_PNG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.png"),
       PHASE6_IMAGE_FIXTURE_JPEG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.jpeg"),
       PHASE6_IMAGE_FIXTURE_WEBP: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.webp"),
-      PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !CV_DELIVERY_ONLY) ? "1" : "0",
+      PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY) ? "1" : "0",
       PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !CV_DELIVERY_ONLY) ? "1" : "0",
       PHASE6_MEDIA_ACCEPTANCE_ONLY: RUN_MEDIA_ACCEPTANCE ? "1" : "0",
       PHASE6_MEDIA_REJECTION_ONLY: MEDIA_REJECTION_ONLY ? "1" : "0",
       PHASE6_REQUIRE_FULL_MEDIA: CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || MEDIA_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_CV_ACTIVATION_ONLY: CV_ACTIVATION_ONLY ? "1" : "0",
       PHASE6_CV_DELIVERY_ONLY: CV_DELIVERY_ONLY ? "1" : "0",
+      PHASE6_PUBLIC_CAPABILITIES_ONLY: CV_DELIVERY_ONLY ? "1" : "0",
       PHASE6_VIDEO_PROCESSING_MP4_FIXTURE: join(fixturesDir, "fixture.mp4"),
       PHASE6_VIDEO_PROCESSING_WEBM_FIXTURE: join(fixturesDir, "fixture.webm"),
       PHASE6_VIDEO_PROCESSING_UNSUPPORTED_FIXTURE: join(fixturesDir, "fixture-unsupported.mp4"),
@@ -383,12 +386,17 @@ async function main() {
       testEnv.PHASE5_REQUIRE_CONTENT_AUTHORING = "1";
     }
     const testArgs = ["run", "tests/database/media-upload-intent.integration.test.ts", "--reporter=json", `--outputFile=${testJsonPath}`];
+    // CV delivery and public capability assertions share a source-bound
+    // scenario-counts file. Keep the focused suite on one worker so scenario
+    // rows and completion counts cannot race across Vitest workers.
+    if (CV_DELIVERY_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism");
     if (VIDEO_PROCESSING_ONLY) testArgs.push("-t", "processes MP4 and WebM candidates");
     else if (IMAGE_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images");
     else if (MEDIA_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates");
     else if (MEDIA_DELIVERY_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|issues bounded delivery only for current published-locale and profile Media uses");
     else if (MEDIA_REJECTION_ONLY) testArgs.push("-t", "rejects accepted Media safely and serializes with current usage changes");
-    else if (MEDIA_ACCEPTANCE_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates");
+    else if (CV_DELIVERY_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|issues bounded delivery only for current published-locale and profile Media uses");
+    else if (MEDIA_ACCEPTANCE_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates");
     else if (PUBLICATION_MEDIA_ONLY) {
       testArgs.push("tests/database/content-authoring.integration.test.ts", "-t",
         "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates|reports only Media referenced by currently published Project and Achievement locales|preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable|rejects invalid evidence, review, and Media facts without creating public state|publishes English and Arabic independently, preserves first publication time, history, and the last valid projection|publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline|hides, archives, and restores all three content kinds through atomic owner lifecycle commands|revalidates each exact locale publication before restore and changes none when one Media fact fails");
@@ -399,6 +407,10 @@ async function main() {
     const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: testTimeout, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
     const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
+    if (CV_DELIVERY_ONLY) console.log(JSON.stringify({ cvDeliveryIntegrationTests: (testReport.testResults ?? []).map((suite) => ({
+      name: suite.name, status: suite.status,
+      assertions: (suite.assertionResults ?? []).map((assertion) => ({ name: assertion.fullName, status: assertion.status })),
+    })) }, null, 2));
     processingCounts = existsSync(processingCountsPath) ? JSON.parse(readFileSync(processingCountsPath, "utf8")) : undefined;
     if (MEDIA_INTEGRATION_ONLY) {
       integrationChecks = evaluatePhase6IntegrationTests(testReport, testResult.status);
@@ -427,7 +439,7 @@ async function main() {
       if (mediaDeliveryChecks.verdict !== "pass") failures.push("PHASE6_MEDIA_DELIVERY_ACCEPTANCE_INVALID");
     }
     const uploadAssertions = allAssertions.filter((item) => !/processes (?:PDF|MP4 and WebM|PNG, JPEG and WebP) candidates/u.test(String(item.fullName ?? "")));
-    const processingAssertions = allAssertions.filter((item) => MEDIA_DELIVERY_ONLY
+    const processingAssertions = allAssertions.filter((item) => MEDIA_DELIVERY_ONLY || CV_DELIVERY_ONLY
       ? String(item.fullName ?? "").includes("processes PDF candidates and real PNG JPEG WebP images")
       : MEDIA_REJECTION_ONLY
       ? String(item.fullName ?? "").includes("rejects accepted Media safely and serializes with current usage changes")
@@ -549,7 +561,7 @@ async function main() {
         name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
         reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
       })),
-      verdict: (MEDIA_DELIVERY_ONLY || testResult.status === 0) && processingAssertions.length === (MEDIA_DELIVERY_ONLY || MEDIA_REJECTION_ONLY || !RUN_MEDIA_ACCEPTANCE ? 1 : 2) && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
+      verdict: (MEDIA_DELIVERY_ONLY || testResult.status === 0) && processingAssertions.length === (MEDIA_DELIVERY_ONLY || MEDIA_REJECTION_ONLY || CV_DELIVERY_ONLY || !RUN_MEDIA_ACCEPTANCE ? 1 : 2) && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
     };
     if (!VIDEO_PROCESSING_ONLY && !RUN_MEDIA_ACCEPTANCE && uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
     if (mediaProcessingChecks.verdict !== "pass" && !MEDIA_REJECTION_ONLY) throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
@@ -766,7 +778,7 @@ async function main() {
     if (MEDIA_REJECTION_ONLY) unitSuites.push("tests/modules/media-rejection.test.ts");
     if (CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY) unitSuites.push("tests/modules/cv-portfolio.test.ts");
     if (CV_DELIVERY_ONLY) unitSuites.push("tests/runtime/current-cv.test.ts", "tests/modules/current-cv-delivery.test.ts",
-      "tests/runtime/supabase-current-cv-delivery.test.ts");
+      "tests/runtime/supabase-current-cv-delivery.test.ts", "tests/phase4/portfolio-settings-service.test.ts");
     const unitResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", ...unitSuites,
       "--reporter=json", `--outputFile=${unitJsonPath}`], { cwd: ROOT, env, encoding: "utf8", timeout: 120_000, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     try {
@@ -1071,6 +1083,51 @@ async function main() {
       sourceTreeSha256: source.sourceTreeSha256, verdict: evidence.verdict, criteria, counts: evidence.counts,
       cleanup, failures, evidence: "evidence/phase6-cv-delivery-159.json" }, null, 2));
     if (evidence.verdict !== "pass") process.exitCode = 1;
+    const capabilityScenarios = processingCounts?.currentCvCapabilityScenarios ?? [];
+    const hasCapabilityScenario = (criterion) => capabilityScenarios.some((item) => item.name?.includes(criterion) && item.executed && item.status === "passed");
+    const boundaryChecks = {
+      routes: run(process.execPath, [join(ROOT, "scripts/check-route-inventory.mjs")], { label: "phase6-capability-route-inventory" }),
+      architecture: run(process.execPath, [join(ROOT, "scripts/check-runtime-architecture.mjs")], { label: "phase6-capability-runtime-architecture" }),
+    };
+    const capabilityCriteria = [
+      { id: "T15-01", name: "Empty portfolio has no Current CV capability; successful activation exposes the committed eligible English Current CV", passed: hasCapabilityScenario("T15-01") && integrationPassed },
+      { id: "T15-02", name: "Arabic Current CV and English-only link capability remain withheld; public CV locale=ar remains rejected", passed: hasCapabilityScenario("T15-02") && unitPassed },
+      { id: "T15-03", name: "Reviewed Arabic content uses accepted English Media without English case-study text fallback", passed: hasCapabilityScenario("T15-03") },
+      { id: "T15-04", name: "Registration and separate acceptance do not replace or publish a Current CV", passed: hasCapabilityScenario("T15-04") },
+      { id: "T15-05", name: "Storage delivery failure fails the capability closed while preserving the durable Current CV snapshot", passed: unitPassed && formats.some((format) => format.id === "pdf" && format.storageRoundTrip && format.status === "passed") },
+      { id: "T15-06", name: "Optional capability failures leave core configuration readable while required database failure remains an error", passed: unitPassed && integrationPassed },
+      { id: "T15-07", name: "Profile Media delivery requires the configured visibility use and rejects private or rejected candidates", passed: hasCapabilityScenario("T15-07") },
+      { id: "T15-08", name: "Public configuration separates stable identity and transient capability without signed URLs, provider mappings, or private filenames", passed: hasCapabilityScenario("T15-08") },
+      { id: "T15-09", name: "Only completed Phase 6 behavior is composed; later-phase placeholders remain fail closed and public operation count is unchanged", passed: unitPassed && integrationPassed },
+    ].map(({ id, ...criterion }) => {
+      const requiresScenario = ["T15-01", "T15-02", "T15-03", "T15-04", "T15-07", "T15-08"].includes(id);
+      const executed = unitPassed && (!requiresScenario || capabilityScenarios.some((item) => item.name?.includes(id) && item.executed));
+      return { id, ...criterion, executed, status: executed && criterion.passed ? "passed" : "failed" };
+    });
+    const capabilityEvidence = {
+      schemaVersion: 1, ticket: 160, parent: 145, predecessors: [158, 159], runId: evidence.runId,
+      sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256,
+      startedAt, completedAt: new Date().toISOString(), scope: "locale-aware-media-and-current-cv-capabilities",
+      runtime: evidence.runtime, toolVersions, services: evidence.services,
+      checks: { scenarios: capabilityScenarios, currentCvAndConfigurationUnits: acceptanceUnitChecks, boundaryChecks,
+        privateMediaDelivery: mediaDeliveryChecks, activationForDelivery: evidence.checks.activationForDelivery },
+      criteria: capabilityCriteria,
+      counts: { integrationExecuted: capabilityScenarios.filter((item) => item.executed).length,
+        integrationFailures: capabilityScenarios.filter((item) => item.executed && item.status !== "passed").length,
+        integrationSkips: capabilityCriteria.filter((item) => !item.executed).length,
+        unitExecuted: acceptanceUnitChecks?.total ?? 0, unitFailures: acceptanceUnitChecks?.failed ?? 0,
+        unitSkips: acceptanceUnitChecks?.skipped ?? 0 },
+      cleanup, verdict: capabilityCriteria.every((item) => item.executed && item.status === "passed") && integrationPassed &&
+        unitPassed && cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:cv-delivery"],
+      limitations: ["Storage failure behavior is verified through the adapter and application ports with a failing isolated Storage response; successful activation and byte delivery use the real private Storage service."],
+    };
+    mkdirSync(join(ROOT, "evidence"), { recursive: true });
+    writeFileSync(PUBLIC_CAPABILITY_EVIDENCE, `${JSON.stringify(capabilityEvidence, null, 2)}\n`, "utf8");
+    console.log(JSON.stringify({ ticket: 160, runId: capabilityEvidence.runId, sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256, verdict: capabilityEvidence.verdict, criteria: capabilityCriteria,
+      counts: capabilityEvidence.counts, cleanup, failures, evidence: "evidence/phase6-public-capabilities-160.json" }, null, 2));
+    if (capabilityEvidence.verdict !== "pass") process.exitCode = 1;
   } else if (CV_ACTIVATION_ONLY) {
     const scenarios = cvActivationChecks?.scenarios ?? [];
     const criteria = [
