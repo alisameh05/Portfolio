@@ -758,24 +758,26 @@ async function main() {
       evidence: "evidence/phase6-media-integration.json" }, null, 2));
     if (evidence.verdict !== "pass") process.exitCode = 1;
   } else if (MEDIA_REJECTION_ONLY) {
+    const rejectionCriterionIds = Array.from({ length: 9 }, (_, index) => `T12-${String(index + 1).padStart(2, "0")}`);
     const checks = {
       suite: "tests/database/media-upload-intent.integration.test.ts",
       test: "rejects accepted Media safely and serializes with current usage changes",
       recordedAssertions: processingCounts?.mediaRejectionScenarios,
-      scenarios: ["unused and upload-pending candidates reject with stable replay, terminal guards, atomic receipt and redacted event",
-        "current CV use blocks rejection and active replacement releases old media",
-        "visible Content use blocks rejection, hidden use permits it, restore revalidates",
-        "Media acceptance, Content publish/restore, CV activation and rejection serialize across independent transactions",
-        "private media bytes remain in private Storage after rejection"].map((name, index) => ({
-        id: `T12-0${index + 1}`, name, executed: processingCounts?.mediaRejectionScenarios?.[index]?.executed === true,
-        status: processingCounts?.mediaRejectionScenarios?.[index]?.status === "passed" ? "passed" : "failed",
-      })),
+      scenarios: rejectionCriterionIds.map((id) => {
+        const recorded = processingCounts?.mediaRejectionScenarios?.find((item) => item.id === id);
+        return { id, name: recorded?.name ?? `Missing criterion evidence for ${id}`,
+          executed: recorded?.executed === true, status: recorded?.status === "passed" ? "passed" : "failed" };
+      }),
+      toolEvidence: processingCounts?.rejectionToolCounts,
     };
     checks.total = checks.scenarios.length;
     checks.passed = checks.scenarios.filter((item) => item.status === "passed").length;
     checks.failed = checks.scenarios.filter((item) => item.status === "failed").length;
     checks.skipped = checks.scenarios.filter((item) => !item.executed).length;
-    checks.verdict = checks.total === 5 && checks.passed === 5 && checks.failed === 0 && checks.skipped === 0 ? "pass" : "fail";
+    checks.verdict = checks.total === 9 && checks.passed === 9 && checks.failed === 0 && checks.skipped === 0 &&
+      Number.isSafeInteger(checks.toolEvidence?.scannerExecutions) && checks.toolEvidence.scannerExecutions > 0 &&
+      Number.isSafeInteger(checks.toolEvidence?.processorExecutions) && checks.toolEvidence.processorExecutions > 0 &&
+      Number.isSafeInteger(checks.toolEvidence?.cleanScannerVerdicts) && checks.toolEvidence.cleanScannerVerdicts > 0 ? "pass" : "fail";
     const evidence = { schemaVersion: 1, runId: randomUUID(), ...source, startedAt, completedAt: new Date().toISOString(),
       scope: "media-rejection-real-postgres-storage-and-cross-aggregate-races", toolVersions, services, formats, checks,
       units: acceptanceUnitChecks,
