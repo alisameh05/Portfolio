@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "runId": "6b5f92e6-9868-4b85-a552-1a49e0866a0b",
-  "sourceRevision": "2ee3d2bfde1612ca2047ea05668f5321fd97336c",
-  "sourceTreeSha256": "4cfda3a91abe93458b0568649f9b18074e35fd76c09a2abbba0a7174c8ad87c8",
-  "startedAt": "2026-10-12T18:51:08.842Z",
-  "completedAt": "2026-10-12T18:56:34.457Z",
+  "runId": "7944b8d6-19f0-4bf2-a6df-14a7bcca5e9b",
+  "sourceRevision": "202efc98ce5a32e2fbd213f72f2d6e05ed227bdf",
+  "sourceTreeSha256": "89303d324150778bc6b822c0615141559c355c660a5c6421bb8d311e618f7a33",
+  "startedAt": "2026-10-13T09:39:40.852Z",
+  "completedAt": "2026-10-13T09:47:11.989Z",
   "scope": "media-rejection-real-postgres-storage-and-cross-aggregate-races",
   "toolVersions": {
     "supabaseCli": "2.117.0",
@@ -66,7 +66,7 @@
         "status": "passed"
       },
       {
-        "name": "Media acceptance, Content publication, CV activation and rejection serialize across independent transactions",
+        "name": "Media acceptance, Content publication/restore, CV acceptance/activation and rejection serialize across independent transactions",
         "executed": true,
         "status": "passed"
       },
@@ -131,7 +131,7 @@
     "processorExecutions": 0,
     "videoProcessorExecutions": 0,
     "imageProcessorExecutions": 0,
-    "acceptanceExecutions": 7,
+    "acceptanceExecutions": 10,
     "cvScenarios": [],
     "cvAcceptanceScenarios": [],
     "cvActivationScenarios": [],
@@ -152,7 +152,7 @@
         "status": "passed"
       },
       {
-        "name": "Media acceptance, Content publication, CV activation and rejection serialize across independent transactions",
+        "name": "Media acceptance, Content publication/restore, CV acceptance/activation and rejection serialize across independent transactions",
         "executed": true,
         "status": "passed"
       },
