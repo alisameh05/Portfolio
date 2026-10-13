@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "runId": "7944b8d6-19f0-4bf2-a6df-14a7bcca5e9b",
-  "sourceRevision": "202efc98ce5a32e2fbd213f72f2d6e05ed227bdf",
-  "sourceTreeSha256": "89303d324150778bc6b822c0615141559c355c660a5c6421bb8d311e618f7a33",
-  "startedAt": "2026-10-13T09:39:40.852Z",
-  "completedAt": "2026-10-13T09:47:11.989Z",
+  "runId": "50dd33ca-4e1b-449d-9e88-d62f43051cfd",
+  "sourceRevision": "5e48ae2cf5166bb0c6858544ae53facb0500b9a5",
+  "sourceTreeSha256": "dd63f0958bd34133ac1254f871bc457f9544a1fe9a7460ffc9ad8d36a737bb4b",
+  "startedAt": "2026-10-13T10:41:09.321Z",
+  "completedAt": "2026-10-13T10:49:36.550Z",
   "scope": "media-rejection-real-postgres-storage-and-cross-aggregate-races",
   "toolVersions": {
     "supabaseCli": "2.117.0",
@@ -51,27 +51,56 @@
     "test": "rejects accepted Media safely and serializes with current usage changes",
     "recordedAssertions": [
       {
-        "name": "upload-pending and accepted rejection, stale version, exact replay, terminal guards, atomic receipt, rollback and redacted event",
+        "id": "T12-01",
+        "name": "Pending and accepted unused Media rejects; rejected state and history persist and future processing/acceptance fails.",
         "executed": true,
         "status": "passed"
       },
       {
-        "name": "current CV use blocks rejection and active replacement releases old media",
+        "id": "T12-02",
+        "name": "Visible Content locale and Current CV use return MEDIA_IN_USE with no rejection mutation.",
         "executed": true,
         "status": "passed"
       },
       {
-        "name": "visible Content use blocks rejection, hidden use permits it, restore revalidates",
+        "id": "T12-03",
+        "name": "Hiding and archiving Content and activating a replacement Current CV remove the affected use.",
         "executed": true,
         "status": "passed"
       },
       {
-        "name": "Media acceptance, Content publication/restore, CV acceptance/activation and rejection serialize across independent transactions",
+        "id": "T12-04",
+        "name": "Draft, Hidden, and Archived references allow rejection; publish, restore, and CV approval revalidate rejected Media.",
         "executed": true,
         "status": "passed"
       },
       {
-        "name": "private media bytes remain in private Storage after rejection",
+        "id": "T12-05",
+        "name": "Decision, version, receipt, and event commit atomically; injected failure rolls back and exact replay survives later version changes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-06",
+        "name": "Independent publication, restore, CV acceptance, and activation races with rejection serialize to valid outcomes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-07",
+        "name": "Accept/reject concurrency, changed-hash reuse, stale versions, and terminal transitions fail safely.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-08",
+        "name": "Current authoritative usage reads protect writes; retained objects stay private and capability expiry is documented.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-09",
+        "name": "Private rejection reason is absent from public event data and errors expose safe codes only.",
         "executed": true,
         "status": "passed"
       }
@@ -79,40 +108,88 @@
     "scenarios": [
       {
         "id": "T12-01",
-        "name": "unused and upload-pending candidates reject with stable replay, terminal guards, atomic receipt and redacted event",
+        "name": "Pending and accepted unused Media rejects; rejected state and history persist and future processing/acceptance fails.",
         "executed": true,
         "status": "passed"
       },
       {
         "id": "T12-02",
-        "name": "current CV use blocks rejection and active replacement releases old media",
+        "name": "Visible Content locale and Current CV use return MEDIA_IN_USE with no rejection mutation.",
         "executed": true,
         "status": "passed"
       },
       {
         "id": "T12-03",
-        "name": "visible Content use blocks rejection, hidden use permits it, restore revalidates",
+        "name": "Hiding and archiving Content and activating a replacement Current CV remove the affected use.",
         "executed": true,
         "status": "passed"
       },
       {
         "id": "T12-04",
-        "name": "Media acceptance, Content publish/restore, CV activation and rejection serialize across independent transactions",
+        "name": "Draft, Hidden, and Archived references allow rejection; publish, restore, and CV approval revalidate rejected Media.",
         "executed": true,
         "status": "passed"
       },
       {
         "id": "T12-05",
-        "name": "private media bytes remain in private Storage after rejection",
+        "name": "Decision, version, receipt, and event commit atomically; injected failure rolls back and exact replay survives later version changes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-06",
+        "name": "Independent publication, restore, CV acceptance, and activation races with rejection serialize to valid outcomes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-07",
+        "name": "Accept/reject concurrency, changed-hash reuse, stale versions, and terminal transitions fail safely.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-08",
+        "name": "Current authoritative usage reads protect writes; retained objects stay private and capability expiry is documented.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-09",
+        "name": "Private rejection reason is absent from public event data and errors expose safe codes only.",
         "executed": true,
         "status": "passed"
       }
     ],
-    "total": 5,
-    "passed": 5,
+    "toolEvidence": {
+      "scannerExecutions": 30,
+      "processorExecutions": 15,
+      "cleanScannerVerdicts": 30,
+      "unsafeScannerVerdicts": 0
+    },
+    "total": 9,
+    "passed": 9,
     "failed": 0,
     "skipped": 0,
     "verdict": "pass"
+  },
+  "policyIds": {
+    "migrations": [
+      "20261010200000_record_trusted_pdf_processing.sql",
+      "20261012060000_reject_media_with_usage_guard.sql"
+    ],
+    "pdfProcessing": "pdf-active-content-deny-1",
+    "databaseRls": [
+      "media_processed_objects_owner_scope",
+      "media_rejection_history_owner_scope"
+    ],
+    "storage": {
+      "candidateBucket": "media-candidates-private",
+      "processedBucket": "media-processed-private",
+      "processedObjects": "create-only",
+      "anonymousProcessedRead": "denied",
+      "uploadCapabilityMaxLifetimeSeconds": 7200
+    }
   },
   "units": {
     "suites": [
@@ -131,37 +208,72 @@
     "processorExecutions": 0,
     "videoProcessorExecutions": 0,
     "imageProcessorExecutions": 0,
-    "acceptanceExecutions": 10,
+    "acceptanceExecutions": 12,
     "cvScenarios": [],
     "cvAcceptanceScenarios": [],
     "cvActivationScenarios": [],
     "mediaRejectionScenarios": [
       {
-        "name": "upload-pending and accepted rejection, stale version, exact replay, terminal guards, atomic receipt, rollback and redacted event",
+        "id": "T12-01",
+        "name": "Pending and accepted unused Media rejects; rejected state and history persist and future processing/acceptance fails.",
         "executed": true,
         "status": "passed"
       },
       {
-        "name": "current CV use blocks rejection and active replacement releases old media",
+        "id": "T12-02",
+        "name": "Visible Content locale and Current CV use return MEDIA_IN_USE with no rejection mutation.",
         "executed": true,
         "status": "passed"
       },
       {
-        "name": "visible Content use blocks rejection, hidden use permits it, restore revalidates",
+        "id": "T12-03",
+        "name": "Hiding and archiving Content and activating a replacement Current CV remove the affected use.",
         "executed": true,
         "status": "passed"
       },
       {
-        "name": "Media acceptance, Content publication/restore, CV acceptance/activation and rejection serialize across independent transactions",
+        "id": "T12-04",
+        "name": "Draft, Hidden, and Archived references allow rejection; publish, restore, and CV approval revalidate rejected Media.",
         "executed": true,
         "status": "passed"
       },
       {
-        "name": "private media bytes remain in private Storage after rejection",
+        "id": "T12-05",
+        "name": "Decision, version, receipt, and event commit atomically; injected failure rolls back and exact replay survives later version changes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-06",
+        "name": "Independent publication, restore, CV acceptance, and activation races with rejection serialize to valid outcomes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-07",
+        "name": "Accept/reject concurrency, changed-hash reuse, stale versions, and terminal transitions fail safely.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-08",
+        "name": "Current authoritative usage reads protect writes; retained objects stay private and capability expiry is documented.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-09",
+        "name": "Private rejection reason is absent from public event data and errors expose safe codes only.",
         "executed": true,
         "status": "passed"
       }
-    ]
+    ],
+    "rejectionToolCounts": {
+      "scannerExecutions": 30,
+      "processorExecutions": 15,
+      "cleanScannerVerdicts": 30,
+      "unsafeScannerVerdicts": 0
+    }
   },
   "cleanup": {
     "attempted": true,
