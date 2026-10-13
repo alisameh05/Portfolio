@@ -13,7 +13,7 @@ import { handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-m
 import { withOwnerTestAuth } from "../runtime/owner-test-auth.js";
 import { createOwnerSecurityTestStub } from "../../src/runtime/http/owner-security.js";
 import { handleAcceptOwnerCvVersion, handleActivateOwnerCvVersion, handleGetOwnerCvPortfolio, handleRegisterOwnerCvVersion } from "../../src/runtime/http/owner-cv.js";
-import { getMediaDeliveryApplicationService, getOwnerCvApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
+import { getMediaDeliveryApplicationService, getOwnerCvApplicationService, getOwnerMediaApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
 import { createOwnerCvApplicationService } from "../../src/modules/cv-portfolio/application/owner-service.js";
 import { createPostgresCvPortfolioRepository } from "../../src/modules/cv-portfolio/adapters/postgres-portfolio.js";
 import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
@@ -32,6 +32,8 @@ import { createUploadCapabilityVault } from "../../src/modules/media/adapters/up
 import { createMediaUploadIntentApplicationService } from "../../src/modules/media/application/upload-intent.js";
 import { createMediaProcessingApplicationService, type PdfProcessorPort, type VideoProcessorPort, type MediaImageProcessorPort, type TrustedByteScannerPort, type MediaProcessingRepositoryPort } from "../../src/modules/media/application/processing.js";
 import { createMediaAcceptanceApplicationService } from "../../src/modules/media/application/acceptance.js";
+import { createMediaRejectionApplicationService } from "../../src/modules/media/application/rejection.js";
+import { createPostgresMediaRejectionRepository } from "../../src/modules/media/adapters/postgres-rejection.js";
 import type { OwnerMediaAccessibility } from "../../src/modules/media/application/owner-contracts.js";
 import { createSupabaseMediaUploadTargetAdapter } from "../../src/runtime/adapters/supabase-media-upload-target.js";
 import { createSupabaseMediaProcessingStorage } from "../../src/runtime/adapters/supabase-media-processing-storage.js";
@@ -65,12 +67,15 @@ const REQUIRE_VIDEO = process.env["PHASE6_REQUIRE_VIDEO"] === "1";
 const PROCESSING_COUNTS_FILE = process.env["PHASE6_MEDIA_PROCESSING_COUNTS_FILE"];
 const REQUIRE_REAL = process.env["PHASE6_REQUIRE_UPLOAD_INTENT"] === "1";
 const REQUIRE_ACCEPTANCE = process.env["PHASE6_MEDIA_ACCEPTANCE_ONLY"] === "1";
+const REQUIRE_MEDIA_REJECTION = process.env["PHASE6_MEDIA_REJECTION_ONLY"] === "1";
 const REQUIRE_FULL_MEDIA = process.env["PHASE6_REQUIRE_FULL_MEDIA"] === "1";
 const REQUIRE_CV_ACTIVATION = process.env["PHASE6_CV_ACTIVATION_ONLY"] === "1";
 const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0, imageProcessorExecutions: 0, acceptanceExecutions: 0,
   cvScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   cvAcceptanceScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
-  cvActivationScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }> };
+  cvActivationScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
+  mediaRejectionScenarios: [] as Array<{ readonly id: string; readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
+  rejectionToolCounts: { scannerExecutions: 0, processorExecutions: 0, cleanScannerVerdicts: 0, unsafeScannerVerdicts: 0 } };
 
 if (REQUIRE_REAL && (!DATABASE_URL || !STORAGE_URL || !SERVICE_ROLE_KEY || !ANON_KEY || !REPLAY_KEY || !SCANNER_IMAGE || !SCANNER_VERSION ||
     (!REQUIRE_IMAGES && (!PDF_FIXTURE || !PDF_PROCESSOR_IMAGE || !PDF_PROCESSOR_VERSION)))) {
@@ -188,6 +193,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
   let appNow = Date.now();
   const acceptedMediaIds: StableId<"MediaAsset">[] = [];
   const decorativeMediaIds = new Set<StableId<"MediaAsset">>();
+  const rejectionProcessingByMediaId = new Map<string, ReturnType<typeof createMediaProcessingApplicationService>>();
 
   function createService(target = targetAdapter) {
     return createMediaUploadIntentApplicationService({
@@ -247,7 +253,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     contentType: "project" | "achievement",
     mediaAssetId: StableId<"MediaAsset">,
     prefix: string,
-    onReviewReady?: (input: { readonly contentId: StableId<string>; readonly expectedVersion: number }) => void,
+    onReviewReady?: (input: { readonly contentId: StableId<string>; readonly expectedVersion: number }) => void | Promise<void>,
     expectPublished = true,
   ) {
     const artifactId = createStableId("SupportingArtifact");
@@ -277,12 +283,34 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       decision: "accepted", findings: ["Reviewed against accepted Media evidence."] });
     expect(reviewed.ok, JSON.stringify(reviewed)).toBe(true);
     if (!reviewed.ok) throw new Error("PHASE6_CONTENT_MEDIA_REVIEW_FAILED");
-    onReviewReady?.({ contentId: created.value.contentId, expectedVersion: reviewed.value.aggregateVersion });
+    await onReviewReady?.({ contentId: created.value.contentId, expectedVersion: reviewed.value.aggregateVersion });
     const published = await content.publishLanguageVersion({ actor: owner, contentId: created.value.contentId,
       expectedVersion: reviewed.value.aggregateVersion, idempotencyKey: `${prefix}-publish` as never, correlationId: `${prefix}-publish`,
       locale: "en", revisionId: created.value.revisionId });
     if (expectPublished) expect(published.ok, JSON.stringify(published)).toBe(true);
     return { contentId: created.value.contentId, revisionId: created.value.revisionId, published };
+  }
+
+  async function createDraftContentWithMedia(
+    content: ReturnType<typeof createContentService>, mediaAssetId: StableId<"MediaAsset">, prefix: string,
+  ) {
+    const artifactId = createStableId("SupportingArtifact");
+    const created = await content.createContent({
+      actor: { kind: "owner", ownerId, sessionId: "phase6-content-media-owner" },
+      idempotencyKey: `${prefix}-create` as never, correlationId: `${prefix}-create`,
+      payload: { contentType: "project", locale: "en", title: `${prefix} Project`,
+        summary: "A reviewed project summary.", body: "The project remains in Draft.", candidateSlug: `${prefix}-project`,
+        caseStudy: { problem: "A real workflow problem.", ownerRole: "Built the workflow.",
+          contributions: ["Shipped the implementation."], outcomes: ["The task completed reliably."], lessons: "Keep evidence current." },
+        evidence: { claims: [{ claimId: createStableId("EvidenceClaim"), text: "The Media is referenced by this Draft.", artifactIds: [artifactId] }],
+          artifacts: [{ id: artifactId, title: "Draft PDF evidence", destinationUrl: "https://example.com/draft", mediaAssetId }] },
+        externalLinks: [{ id: createStableId("ExternalLink"), label: "Project details", destination: "https://example.com/details", isAvailableInArabic: true }] },
+    });
+    expect(created.ok, JSON.stringify(created)).toBe(true);
+    if (!created.ok) throw new Error("PHASE6_REJECTION_DRAFT_CONTENT_CREATE_FAILED");
+    const row = await admin.query("select lifecycle from content.items where content_id = $1::uuid", [created.value.contentId]);
+    expect(row.rows).toEqual([{ lifecycle: "draft" }]);
+    return { contentId: created.value.contentId, revisionId: created.value.revisionId, aggregateVersion: created.value.aggregateVersion };
   }
 
   async function publishArabicProjectRevision(
@@ -383,6 +411,591 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(duplicateBatch).toMatchObject({ ok: true, value: [{ mediaAssetId: mediaId, accepted: true }] });
     return { acceptance, command, accepted };
   }
+
+  async function createAcceptedRejectionCandidate(suffix: string, accept = true): Promise<StableId<"MediaAsset">> {
+    const payload = new Uint8Array(readFileSync(PDF_FIXTURE!));
+    const media = await createService().create({ actor: { kind: "owner", ownerId, sessionId: "phase6-rejection-owner" },
+      idempotencyKey: `phase6-rejection-upload-${suffix}` as never, kind: "document", originalFileName: `rejection-${suffix}.pdf`,
+      declaredMediaType: "application/pdf", byteLength: payload.byteLength, sha256: createHash("sha256").update(payload).digest("hex") });
+    expect(media.ok, JSON.stringify(media)).toBe(true);
+    if (!media.ok) throw new Error("PHASE6_REJECTION_UPLOAD_FAILED");
+    const uploaded = await fetch(media.value.uploadTarget, { method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" }, body: Buffer.from(payload) });
+    expect([200, 201]).toContain(uploaded.status);
+    const realStorage = createSupabaseMediaProcessingStorage({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY! });
+    const processor = { async process(input: Uint8Array) {
+      const result = dockerPdfProcessor(input);
+      if (REQUIRE_MEDIA_REJECTION) mediaProcessingCounts.rejectionToolCounts.processorExecutions += 1;
+      return result;
+    } };
+    const scanner = { async scan(input: Uint8Array, options?: { readonly timeoutMs?: number }) {
+      const result = dockerScanner(input, options?.timeoutMs);
+      if (REQUIRE_MEDIA_REJECTION) {
+        mediaProcessingCounts.rejectionToolCounts.scannerExecutions += 1;
+        if (result.ok && result.value.verdict === "clean") mediaProcessingCounts.rejectionToolCounts.cleanScannerVerdicts += 1;
+        if (result.ok && result.value.verdict === "unsafe") mediaProcessingCounts.rejectionToolCounts.unsafeScannerVerdicts += 1;
+      }
+      return result;
+    } };
+    const processing = createMediaProcessingApplicationService({ scope: { ownerId },
+      repository: createPostgresMediaProcessingRepository({ database: appDatabase.database, transactions: appDatabase.transactions, scope: { portfolioId, ownerId } }),
+      storage: realStorage, scanner, processor, digest: { sha256(input) { return createHash("sha256").update(input).digest("hex"); } },
+      ids: createSystemIdGenerator(), clock: { now: () => new Date().toISOString() } });
+    rejectionProcessingByMediaId.set(media.value.mediaId, processing);
+    const processed = await processing.record({ actor: { kind: "owner", ownerId, sessionId: "phase6-rejection-owner" },
+      idempotencyKey: `phase6-rejection-process-${suffix}` as never, mediaId: media.value.mediaId, expectedVersion: 1,
+      result: "passed", detectedMediaType: "application/pdf", detectedByteLength: payload.byteLength,
+      sha256: createHash("sha256").update(payload).digest("hex") });
+    expect(processed, JSON.stringify(processed)).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+    if (accept) await acceptAndVerify(media.value.mediaId as StableId<"MediaAsset">,
+      { kind: "document", summary: "A readable one page PDF document." }, suffix);
+    return media.value.mediaId as StableId<"MediaAsset">;
+  }
+
+  it("rejects accepted Media safely and serializes with current usage changes", async () => {
+    const actor = { kind: "owner" as const, ownerId, sessionId: "phase6-media-rejection-owner" };
+    const media = await getOwnerMediaApplicationService();
+    const reason = "Owner confirmed this candidate should not remain available.";
+    async function contendAtMediaLock<T extends readonly (() => Promise<unknown>)[]>(mediaId: StableId<"MediaAsset">, commands: T, stageFirst = false, scenario = "unspecified"): Promise<{
+      [K in keyof T]: T[K] extends () => Promise<infer Result> ? Result : never
+    }> {
+      await admin.query("begin");
+      const pending: Promise<unknown>[] = [];
+      const outcomes: unknown[] = [];
+      let released = false;
+      try {
+        await admin.query("select pg_advisory_xact_lock(hashtextextended($1::text, 0))", [mediaId]);
+        const waitFor = async (expected: number, timeoutMs = 1_600, atLeast = false) => {
+          const matches = (waiting: number) => atLeast ? waiting >= expected : waiting === expected;
+          const deadline = performance.now() + timeoutMs;
+          let waiting = 0;
+          let matchedBeforeDeadline = false;
+          do {
+            const result = await admin.query(`select count(distinct activity.pid)::int as count
+              from pg_locks lock join pg_stat_activity activity on activity.pid = lock.pid
+              where activity.usename = $1 and lock.locktype = 'advisory' and not lock.granted`, [roleName]);
+            waiting = Number(result.rows[0]?.count ?? 0);
+            if (matches(waiting)) {
+              matchedBeforeDeadline = performance.now() < deadline;
+              break;
+            }
+            const remainingMs = deadline - performance.now();
+            if (remainingMs <= 0) break;
+            await new Promise((resolve) => setTimeout(resolve, Math.min(10, remainingMs)));
+          } while (performance.now() < deadline);
+          if (!matchedBeforeDeadline) {
+            const sessions = await admin.query(`select pid, state, wait_event_type, wait_event, left(query, 180) as query
+              from pg_stat_activity where usename = $1`, [roleName]);
+            expect(matchedBeforeDeadline, `${scenario}: expected ${expected} ungranted Media advisory locks before deadline; observed=${waiting}; outcomes=${JSON.stringify(outcomes)}; sessions=${JSON.stringify(sessions.rows)}`)
+              .toBe(true);
+          }
+        };
+        if (stageFirst) {
+          pending.push(commands[0]!().then((outcome) => { outcomes[0] = outcome; return outcome; }));
+          // CV activation performs its private Storage preflight before the
+          // final transaction requests this lock, so allow that first stage to
+          // finish without consuming the transaction's lock timeout.
+          await waitFor(1, 8_000);
+          for (let index = 1; index < commands.length; index += 1) {
+            pending.push(commands[index]!().then((outcome) => { outcomes[index] = outcome; return outcome; }));
+          }
+        } else {
+          for (let index = 0; index < commands.length; index += 1) {
+            pending.push(commands[index]!().then((outcome) => { outcomes[index] = outcome; return outcome; }));
+          }
+        }
+        // Both commands have started before the barrier is released. Confirm
+        // both independent application sessions are queued on the Media lock.
+        // Keep this bounded wait inside the production three-second lock timeout.
+        await waitFor(commands.length, 2_400, true);
+        await admin.query("commit");
+        released = true;
+        return await Promise.all(pending) as {
+          [K in keyof T]: T[K] extends () => Promise<infer Result> ? Result : never
+        };
+      } finally {
+        if (!released) await admin.query("rollback");
+        if (pending.length > 0) await Promise.allSettled(pending);
+      }
+    }
+
+    // A candidate with no current Content or CV use can be rejected. The
+    // owner private aggregate retains a safe decision while the outbox keeps
+    // only a fixed public reason code.
+    const unusedId = await createAcceptedRejectionCandidate("unused");
+    expect(await media.rejectOwnerMediaAsset({ actor, mediaId: unusedId, expectedVersion: 2,
+      idempotencyKey: "phase6-rejection-stale-version" as never, reason }))
+      .toMatchObject({ ok: false, error: { kind: "precondition_failed", code: "MEDIA_VERSION_MISMATCH" } });
+    const unusedCommand = { actor, mediaId: unusedId, expectedVersion: 3,
+      idempotencyKey: "phase6-rejection-exact-replay" as never, reason };
+    const rejected = await media.rejectOwnerMediaAsset(unusedCommand);
+    expect(rejected, JSON.stringify(rejected)).toMatchObject({ ok: true, value: { aggregateVersion: 4, outcome: "media-rejected" } });
+    expect(await media.rejectOwnerMediaAsset(unusedCommand)).toEqual(rejected);
+    // A later aggregate version must not change the meaning of this exact
+    // command receipt. Rejected media is terminal, so advance the fixture
+    // version directly to exercise receipt-first replay against newer state.
+    await admin.query("update media.processing_states set aggregate_version = aggregate_version + 1 where media_id = $1::uuid", [unusedId]);
+    expect(await media.rejectOwnerMediaAsset(unusedCommand)).toEqual(rejected);
+    expect(await media.rejectOwnerMediaAsset({ ...unusedCommand, reason: "Changed private rationale." }))
+      .toMatchObject({ ok: false, error: { code: "IDEMPOTENCY_CONFLICT" } });
+    const forbiddenReaccept = await createAcceptanceService().acceptOwnerMediaAsset({ actor, mediaId: unusedId, expectedVersion: 5,
+      idempotencyKey: "phase6-rejection-reaccept" as never, accessibility: { kind: "document", summary: "Readable PDF." } });
+    expect(forbiddenReaccept, JSON.stringify(forbiddenReaccept)).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
+    const unusedFacts = await admin.query(
+      `select (select count(*)::int from media.rejection_history where media_id = $1::uuid) as rejections,
+              (select count(*)::int from media.acceptance_commands where media_id = $1::uuid and outcome = 'media-rejected') as receipts,
+              (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'media.asset_rejected.v1') as events,
+              (select private_reason from media.rejection_history where media_id = $1::uuid) as private_reason,
+              (select payload::text from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'media.asset_rejected.v1') as event_payload`, [unusedId]);
+    expect(unusedFacts.rows[0]).toMatchObject({ rejections: 1, receipts: 1, events: 1, private_reason: reason });
+    expect(unusedFacts.rows[0]?.event_payload).not.toContain(reason);
+    expect(unusedFacts.rows[0]?.event_payload).toContain("OWNER_REJECTED");
+    const retainedOutput = await admin.query(`select object.object_id::text as object_id, object.sha256
+      from media.processing_attempts attempt
+      join media.processed_objects object on object.object_id = attempt.output_object_id
+      where attempt.media_id = $1::uuid and attempt.result = 'passed'`, [unusedId]);
+    expect(retainedOutput.rowCount).toBe(1);
+    const retainedObject = retainedOutput.rows[0];
+    const retainedPath = `/storage/v1/object/media-processed/processed/${portfolioId}/${unusedId}/${String(retainedObject?.object_id)}/${String(retainedObject?.sha256)}.pdf`;
+    const retainedPrivateBytes = await storageRequest(retainedPath, { headers: headers(SERVICE_ROLE_KEY!) });
+    expect(retainedPrivateBytes.ok).toBe(true);
+    const retainedBytes = Buffer.from(await retainedPrivateBytes.arrayBuffer());
+    expect(createHash("sha256").update(retainedBytes).digest("hex")).toBe(retainedObject?.sha256);
+    const rejectedObjectAnonymousRead = await storageRequest(retainedPath, { headers: headers(ANON_KEY!) });
+    expect(rejectedObjectAnonymousRead.status).toBeGreaterThanOrEqual(400);
+    const terminalProcessing = await rejectionProcessingByMediaId.get(unusedId)?.record({ actor, mediaId: unusedId,
+      expectedVersion: 5, idempotencyKey: "phase6-rejection-reprocess" as never, result: "passed",
+      detectedMediaType: "application/pdf", detectedByteLength: Number((await admin.query(
+        "select declared_byte_length from media.assets where media_id = $1::uuid", [unusedId])).rows[0]?.declared_byte_length),
+      sha256: String((await admin.query("select declared_sha256 from media.assets where media_id = $1::uuid", [unusedId])).rows[0]?.declared_sha256) });
+    expect(terminalProcessing, JSON.stringify(terminalProcessing)).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
+
+    const pendingBytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
+    const pending = await createService().create({ actor, idempotencyKey: "phase6-rejection-pending-upload" as never,
+      kind: "document", originalFileName: "pending-rejection.pdf", declaredMediaType: "application/pdf",
+      byteLength: pendingBytes.byteLength, sha256: createHash("sha256").update(pendingBytes).digest("hex") });
+    expect(pending.ok).toBe(true);
+    if (!pending.ok) throw new Error("PHASE6_REJECTION_PENDING_UPLOAD_FAILED");
+    const processingClaimKeyHash = createHash("sha256").update("phase6-rejection-pending-processing-claim").digest("hex");
+    await admin.query(`insert into media.processing_claims
+      (portfolio_id, owner_id, media_id, idempotency_key_hash, request_hash, claim_id, lease_expires_at)
+      values ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::uuid, now() + interval '1 minute')`,
+    [portfolioId, ownerId, pending.value.mediaId, processingClaimKeyHash, createHash("sha256").update("processing-claim-request").digest("hex"), createStableId("MediaAsset")]);
+    const pendingRejection = await media.rejectOwnerMediaAsset({ actor, mediaId: pending.value.mediaId, expectedVersion: 1,
+      idempotencyKey: "phase6-rejection-pending" as never, reason });
+    expect(pendingRejection, JSON.stringify(pendingRejection))
+      .toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+    expect((await admin.query("select 1 from media.processing_claims where media_id = $1::uuid", [pending.value.mediaId])).rowCount).toBe(0);
+
+    // T12-01 / T12-06: processing has already claimed and sealed this real
+    // database candidate when rejection enters its Media-first transaction.
+    // The gated usage read holds the Media advisory lock until processing
+    // reaches commitAttempt, exercising both sides of the lock order.
+    const raceBytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
+    const raceHash = createHash("sha256").update(raceBytes).digest("hex");
+    const processingRaceUpload = await createService().create({ actor,
+      idempotencyKey: "phase6-rejection-processing-race-upload" as never, kind: "document",
+      originalFileName: "processing-rejection-race.pdf", declaredMediaType: "application/pdf",
+      byteLength: raceBytes.byteLength, sha256: raceHash });
+    expect(processingRaceUpload.ok).toBe(true);
+    if (!processingRaceUpload.ok) throw new Error("PHASE6_REJECTION_PROCESSING_RACE_UPLOAD_FAILED");
+    const raceBaseRepository = createPostgresMediaProcessingRepository({ database: appDatabase.database,
+      transactions: appDatabase.transactions, scope: { portfolioId, ownerId } });
+    let commitReady!: () => void;
+    let allowCommit!: () => void;
+    let usageReadStarted!: () => void;
+    let allowUsageRead!: () => void;
+    const atCommit = new Promise<void>((resolve) => { commitReady = resolve; });
+    const commitPermission = new Promise<void>((resolve) => { allowCommit = resolve; });
+    const usageEntered = new Promise<void>((resolve) => { usageReadStarted = resolve; });
+    const usagePermission = new Promise<void>((resolve) => { allowUsageRead = resolve; });
+    let discardedRaceOutput = 0;
+    const processingRaceRepository: MediaProcessingRepositoryPort = { ...raceBaseRepository,
+      async commitAttempt(command) { commitReady(); await commitPermission; return raceBaseRepository.commitAttempt(command); } };
+    const processingRaceService = createMediaProcessingApplicationService({ scope: { ownerId }, repository: processingRaceRepository,
+      storage: {
+        async readCandidate() { return { ok: true as const, value: raceBytes }; },
+        async sealProcessedObject(input) { return { ok: true as const, value: { objectId: input.outputObjectId, sha256: input.sha256 } }; },
+        async discardSealedObject() { discardedRaceOutput += 1; },
+      },
+      scanner: { async scan() { return { ok: true as const, value: { verdict: "clean" as const, version: "phase6-race-scanner" } }; } },
+      processor: { async process(input) { return { ok: true as const, value: { bytes: input, version: "phase6-race-processor", policyVersion: "pdf-active-content-deny-1" } }; } },
+      digest: { sha256(input) { return createHash("sha256").update(input).digest("hex"); } },
+      ids: createSystemIdGenerator(), clock: { now: () => new Date().toISOString() } });
+    const processingRace = processingRaceService.record({ actor, mediaId: processingRaceUpload.value.mediaId, expectedVersion: 1,
+      idempotencyKey: "phase6-rejection-processing-race-process" as never, result: "passed",
+      detectedMediaType: "application/pdf", detectedByteLength: raceBytes.byteLength, sha256: raceHash });
+    await atCommit;
+    const rejectionRaceService = createMediaRejectionApplicationService({ scope: { ownerId },
+      repository: createPostgresMediaRejectionRepository({ transactions: appDatabase.transactions, scope: { portfolioId, ownerId } }),
+      usage: { async getUsage() { usageReadStarted(); await usagePermission; return { ok: true as const,
+        value: { hasVisibleContentReference: false, isCurrentCv: false } }; } } });
+    const rejectionRace = rejectionRaceService.rejectOwnerMediaAsset({ actor, mediaId: processingRaceUpload.value.mediaId,
+      expectedVersion: 1, idempotencyKey: "phase6-rejection-processing-race-reject" as never, reason });
+    await usageEntered;
+    allowCommit();
+    let processingWaitingOnMediaLock = false;
+    for (let attempt = 0; attempt < 160; attempt += 1) {
+      const waiting = await admin.query(`select count(*)::int as count from pg_locks lock
+        join pg_stat_activity activity on activity.pid = lock.pid
+        where activity.usename = $1 and lock.locktype = 'advisory' and not lock.granted`, [roleName]);
+      if (Number(waiting.rows[0]?.count) > 0) { processingWaitingOnMediaLock = true; break; }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(processingWaitingOnMediaLock).toBe(true);
+    allowUsageRead();
+    const [processingRaceResult, processingRejectionRaceResult] = await Promise.all([processingRace, rejectionRace]);
+    expect(processingRejectionRaceResult, JSON.stringify(processingRejectionRaceResult)).toMatchObject({ ok: true, value: { aggregateVersion: 2, outcome: "media-rejected" } });
+    expect(processingRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_PROCESSING_CLAIM_EXPIRED" } });
+    expect(discardedRaceOutput).toBe(1);
+    const processingRaceState = await admin.query(`select state.aggregate_version,
+        (select count(*)::int from media.processing_claims where media_id = $1::uuid) as claims,
+        (select count(*)::int from media.processing_attempts where media_id = $1::uuid) as attempts,
+        (select count(*)::int from media.processed_objects where media_id = $1::uuid) as outputs,
+        (select count(*)::int from media.rejection_history where media_id = $1::uuid) as rejections
+      from media.processing_states state where state.media_id = $1::uuid`, [processingRaceUpload.value.mediaId]);
+    expect(processingRaceState.rows[0]).toEqual({ aggregate_version: 2, claims: 0, attempts: 0, outputs: 0, rejections: 1 });
+
+    // Current CV use blocks rejection, then switching to another active CV
+    // version removes the old media use and makes rejection safe.
+    // T12-02 / T12-03: the Current CV protects rejection until replacement is active.
+    const currentCvId = await createAcceptedRejectionCandidate("current-cv");
+    const replacementCvId = await createAcceptedRejectionCandidate("replacement-cv");
+    const cv = await getOwnerCvApplicationService();
+    const rejectionState = async (mediaId: StableId<"MediaAsset">) => {
+      const state = await admin.query(`select state.aggregate_version,
+          (select count(*)::int from media.rejection_history where media_id = $1::uuid) as rejections,
+          (select count(*)::int from media.acceptance_commands where media_id = $1::uuid) as receipts,
+          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid) as events
+        from media.processing_states state where state.media_id = $1::uuid`, [mediaId]);
+      return state.rows[0];
+    };
+    const cvRoot = await cv.getOwnerCvPortfolio({ actor });
+    expect(cvRoot.ok).toBe(true);
+    if (!cvRoot.ok) throw new Error("PHASE6_REJECTION_CV_ROOT_UNAVAILABLE");
+    const registerCv = async (mediaId: StableId<"MediaAsset">, expectedVersion: number, suffix: string) => {
+      const registered = await cv.registerOwnerCvVersion({ actor, mediaId, locale: "en", label: `CV ${suffix}`,
+        expectedVersion, idempotencyKey: `phase6-rejection-cv-register-${suffix}` as never });
+      expect(registered, JSON.stringify(registered)).toMatchObject({ ok: true });
+      if (!registered.ok) throw new Error("PHASE6_REJECTION_CV_REGISTER_FAILED");
+      const accepted = await cv.acceptOwnerCvVersion({ actor, versionId: registered.value.versionId,
+        expectedVersion: registered.value.aggregateVersion, idempotencyKey: `phase6-rejection-cv-accept-${suffix}` as never });
+      expect(accepted, JSON.stringify(accepted)).toMatchObject({ ok: true });
+      if (!accepted.ok) throw new Error("PHASE6_REJECTION_CV_ACCEPT_FAILED");
+      const activated = await cv.activateOwnerCvVersion({ actor, versionId: registered.value.versionId,
+        expectedVersion: accepted.value.aggregateVersion, idempotencyKey: `phase6-rejection-cv-activate-${suffix}` as never });
+      expect(activated, JSON.stringify(activated)).toMatchObject({ ok: true });
+      if (!activated.ok) throw new Error("PHASE6_REJECTION_CV_ACTIVATE_FAILED");
+      return { versionId: registered.value.versionId, aggregateVersion: activated.value.aggregateVersion };
+    };
+    const firstCv = await registerCv(currentCvId, cvRoot.value.aggregateVersion, "first");
+    const currentCvBeforeBlockedReject = await rejectionState(currentCvId);
+    expect(await media.rejectOwnerMediaAsset({ actor, mediaId: currentCvId, expectedVersion: 3,
+      idempotencyKey: "phase6-rejection-current-cv-block" as never, reason }))
+      .toMatchObject({ ok: false, error: { code: "MEDIA_IN_USE" } });
+    expect(await rejectionState(currentCvId)).toEqual(currentCvBeforeBlockedReject);
+    const secondCv = await registerCv(replacementCvId, firstCv.aggregateVersion, "replacement");
+    const replacementPortfolio = await cv.getOwnerCvPortfolio({ actor });
+    expect(replacementPortfolio).toMatchObject({ ok: true, value: { currentVersionId: secondCv.versionId } });
+    expect(await media.rejectOwnerMediaAsset({ actor, mediaId: currentCvId, expectedVersion: 3,
+      idempotencyKey: "phase6-rejection-current-cv-replace" as never, reason }))
+      .toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+
+    // A registered CV that has not yet been approved cannot be approved once
+    // its Media asset has been rejected. The failed command must leave the CV
+    // root, approval history, receipt, and outbox unchanged.
+    const futureCvMediaId = await createAcceptedRejectionCandidate("future-cv-approval");
+    const beforeFutureCvPortfolio = await cv.getOwnerCvPortfolio({ actor });
+    if (!beforeFutureCvPortfolio.ok) throw new Error("PHASE6_REJECTION_FUTURE_CV_ROOT_UNAVAILABLE");
+    const futureCv = await cv.registerOwnerCvVersion({ actor, mediaId: futureCvMediaId, locale: "en", label: "Future CV approval",
+      expectedVersion: beforeFutureCvPortfolio.value.aggregateVersion, idempotencyKey: "phase6-rejection-future-cv-register" as never });
+    expect(futureCv.ok).toBe(true);
+    if (!futureCv.ok) throw new Error("PHASE6_REJECTION_FUTURE_CV_REGISTER_FAILED");
+    expect(await media.rejectOwnerMediaAsset({ actor, mediaId: futureCvMediaId, expectedVersion: 3,
+      idempotencyKey: "phase6-rejection-future-cv-reject" as never, reason })).toMatchObject({ ok: true });
+    const futureCvBeforeApproval = await cv.getOwnerCvPortfolio({ actor });
+    const futureCvHistoryBefore = await admin.query("select count(*)::int as count from cv_portfolio.acceptance_history where version_id = $1::uuid", [futureCv.value.versionId]);
+    const futureCvReceiptBefore = await admin.query("select count(*)::int as count from cv_portfolio.acceptance_commands where version_id = $1::uuid", [futureCv.value.versionId]);
+    const futureCvOutboxBefore = await admin.query("select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type in ('cv.version_accepted.v1', 'cv.current_changed.v1')", [portfolioId]);
+    expect(await cv.acceptOwnerCvVersion({ actor, versionId: futureCv.value.versionId, expectedVersion: futureCv.value.aggregateVersion,
+      idempotencyKey: "phase6-rejection-future-cv-approve" as never })).toMatchObject({ ok: false, error: { code: "CV_MEDIA_NOT_ELIGIBLE" } });
+    expect(await cv.getOwnerCvPortfolio({ actor })).toEqual(futureCvBeforeApproval);
+    expect(await admin.query("select count(*)::int as count from cv_portfolio.acceptance_history where version_id = $1::uuid", [futureCv.value.versionId])).toEqual(futureCvHistoryBefore);
+    expect(await admin.query("select count(*)::int as count from cv_portfolio.acceptance_commands where version_id = $1::uuid", [futureCv.value.versionId])).toEqual(futureCvReceiptBefore);
+    expect(await admin.query("select count(*)::int as count from operations.outbox_events where aggregate_id = $1::uuid and event_type in ('cv.version_accepted.v1', 'cv.current_changed.v1')", [portfolioId])).toEqual(futureCvOutboxBefore);
+
+    // T12-02 / T12-03 / T12-04: visible use blocks, while Hidden, Draft and
+    // Archived references do not; restore and later approval still revalidate.
+    const contentMediaId = await createAcceptedRejectionCandidate("visible-content");
+    const content = createContentService(contentMediaAcceptancePort());
+    const publication = await publishContentWithMedia(content, "project", contentMediaId, "phase6-rejection-content");
+    const visibleContentBeforeBlockedReject = await rejectionState(contentMediaId);
+    expect(await media.rejectOwnerMediaAsset({ actor, mediaId: contentMediaId, expectedVersion: 3,
+      idempotencyKey: "phase6-rejection-visible-block" as never, reason }))
+      .toMatchObject({ ok: false, error: { code: "MEDIA_IN_USE" } });
+    expect(await rejectionState(contentMediaId)).toEqual(visibleContentBeforeBlockedReject);
+    if (!publication.published.ok) throw new Error("PHASE6_REJECTION_CONTENT_PUBLICATION_FAILED");
+    const hidden = await content.hideContent({ actor, contentId: publication.contentId,
+      expectedVersion: publication.published.value.aggregateVersion, idempotencyKey: "phase6-rejection-hide-content" as never,
+      correlationId: "phase6-rejection-hide-content" });
+    expect(hidden.ok).toBe(true);
+    if (!hidden.ok) throw new Error("PHASE6_REJECTION_CONTENT_HIDE_FAILED");
+    expect(await media.rejectOwnerMediaAsset({ actor, mediaId: contentMediaId, expectedVersion: 3,
+      idempotencyKey: "phase6-rejection-hidden-allowed" as never, reason }))
+      .toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+    expect(await content.restoreContent({ actor, contentId: publication.contentId, expectedVersion: hidden.value.aggregateVersion,
+      idempotencyKey: "phase6-rejection-restore-denied" as never, correlationId: "phase6-rejection-restore-denied" })).toMatchObject({ ok: false });
+
+    const draftMediaId = await createAcceptedRejectionCandidate("draft-reference");
+    const draftReference = await createDraftContentWithMedia(content, draftMediaId, "phase6-rejection-draft-reference");
+    expect(await media.rejectOwnerMediaAsset({ actor, mediaId: draftMediaId, expectedVersion: 3,
+      idempotencyKey: "phase6-rejection-draft-reference-reject" as never, reason }))
+      .toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+    expect(await admin.query("select lifecycle from content.items where content_id = $1::uuid", [draftReference.contentId]))
+      .toMatchObject({ rows: [{ lifecycle: "draft" }] });
+    const draftPreview = await content.previewRevision({ actor, contentId: draftReference.contentId, revisionId: draftReference.revisionId });
+    expect(draftPreview.ok).toBe(true);
+    if (!draftPreview.ok) throw new Error("PHASE6_REJECTION_DRAFT_PREVIEW_FAILED");
+    const draftReviewed = await content.reviewRevision({ actor, contentId: draftReference.contentId, revisionId: draftReference.revisionId,
+      expectedVersion: draftReference.aggregateVersion, idempotencyKey: "phase6-rejection-draft-review" as never,
+      correlationId: "phase6-rejection-draft-review", locale: "en", snapshotHash: draftPreview.value.snapshotHash,
+      evidenceVersion: draftPreview.value.evidenceVersion, decision: "accepted", findings: [] });
+    expect(draftReviewed.ok).toBe(true);
+    if (!draftReviewed.ok) throw new Error("PHASE6_REJECTION_DRAFT_REVIEW_FAILED");
+    expect(await content.publishLanguageVersion({ actor, contentId: draftReference.contentId,
+      expectedVersion: draftReviewed.value.aggregateVersion, idempotencyKey: "phase6-rejection-draft-publish-denied" as never,
+      correlationId: "phase6-rejection-draft-publish-denied", locale: "en", revisionId: draftReference.revisionId }))
+      .toMatchObject({ ok: false });
+
+    const archivedMediaId = await createAcceptedRejectionCandidate("archived-reference");
+    const archivedPublication = await publishContentWithMedia(content, "project", archivedMediaId, "phase6-rejection-archived-reference");
+    if (!archivedPublication.published.ok) throw new Error("PHASE6_REJECTION_ARCHIVED_PUBLICATION_FAILED");
+    const archived = await content.archiveContent({ actor, contentId: archivedPublication.contentId,
+      expectedVersion: archivedPublication.published.value.aggregateVersion, idempotencyKey: "phase6-rejection-archive-reference" as never,
+      correlationId: "phase6-rejection-archive-reference" });
+    expect(archived.ok).toBe(true);
+    if (!archived.ok) throw new Error("PHASE6_REJECTION_ARCHIVE_FAILED");
+    expect(await media.rejectOwnerMediaAsset({ actor, mediaId: archivedMediaId, expectedVersion: 3,
+      idempotencyKey: "phase6-rejection-archived-reference-reject" as never, reason }))
+      .toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+    expect(await content.restoreContent({ actor, contentId: archivedPublication.contentId, expectedVersion: archived.value.aggregateVersion,
+      idempotencyKey: "phase6-rejection-archived-restore-denied" as never, correlationId: "phase6-rejection-archived-restore-denied" }))
+      .toMatchObject({ ok: false });
+
+    const futureContentMediaId = await createAcceptedRejectionCandidate("future-content-publication");
+    expect(await media.rejectOwnerMediaAsset({ actor, mediaId: futureContentMediaId, expectedVersion: 3,
+      idempotencyKey: "phase6-rejection-future-content-reject" as never, reason })).toMatchObject({ ok: true });
+    const futureContentBefore = await rejectionState(futureContentMediaId);
+    const futurePublication = await publishContentWithMedia(content, "project", futureContentMediaId,
+      "phase6-rejection-future-content", undefined, false);
+    expect(futurePublication.published).toMatchObject({ ok: false });
+    expect(await content.getPublicProject({ slug: "phase6-rejection-future-content-project", locale: "en" })).toMatchObject({ ok: false });
+    expect(await rejectionState(futureContentMediaId)).toEqual(futureContentBefore);
+
+    const rollbackMediaId = await createAcceptedRejectionCandidate("rollback", false);
+    const rollbackTrigger = `phase6_rejection_fail_${randomBytes(4).toString("hex")}`;
+    const rollbackFunction = `${rollbackTrigger}_fn`;
+    if (!/^[a-z0-9_]+$/u.test(rollbackTrigger)) throw new Error("PHASE6_REJECTION_TRIGGER_NAME_INVALID");
+    await admin.query(`create function operations.${rollbackFunction}() returns trigger language plpgsql as $$ begin
+      if new.event_type = 'media.asset_rejected.v1' then raise exception 'phase6 injected rejection outbox failure'; end if;
+      return new; end $$`);
+    await admin.query(`create trigger ${rollbackTrigger} before insert on operations.outbox_events for each row execute function operations.${rollbackFunction}()`);
+    try {
+      expect(await media.rejectOwnerMediaAsset({ actor, mediaId: rollbackMediaId, expectedVersion: 2,
+        idempotencyKey: "phase6-rejection-rollback" as never, reason }))
+        .toMatchObject({ ok: false, error: { kind: "temporarily_unavailable" } });
+      const rollback = await admin.query(`select state.aggregate_version,
+          (select count(*)::int from media.rejection_history where media_id = $1::uuid) as rejections,
+          (select count(*)::int from media.acceptance_commands where media_id = $1::uuid and outcome = 'media-rejected') as receipts,
+          (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'media.asset_rejected.v1') as events
+        from media.processing_states state where state.media_id = $1::uuid`, [rollbackMediaId]);
+      expect(rollback.rows[0]).toEqual({ aggregate_version: 2, rejections: 0, receipts: 0, events: 0 });
+    } finally {
+      await admin.query(`drop trigger ${rollbackTrigger} on operations.outbox_events`);
+      await admin.query(`drop function operations.${rollbackFunction}()`);
+    }
+
+    const acceptanceRaceId = await createAcceptedRejectionCandidate("acceptance-race", false);
+    const [acceptanceRaceResult, rejectionRaceResult] = await contendAtMediaLock(acceptanceRaceId, [
+      () => createAcceptanceService().acceptOwnerMediaAsset({ actor, mediaId: acceptanceRaceId,
+        expectedVersion: 2, idempotencyKey: "phase6-rejection-accept-race" as never,
+        accessibility: { kind: "document", summary: "A readable one page PDF document." } }),
+      () => media.rejectOwnerMediaAsset({ actor, mediaId: acceptanceRaceId, expectedVersion: 2,
+        idempotencyKey: "phase6-rejection-command-race" as never, reason }),
+    ] as const, false, "Media acceptance versus rejection");
+    if (rejectionRaceResult.ok) {
+      expect(acceptanceRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
+      expect(await rejectionState(acceptanceRaceId)).toMatchObject({ aggregate_version: 3, rejections: 1, receipts: 1 });
+    } else {
+      expect(acceptanceRaceResult).toMatchObject({ ok: true, value: { outcome: "media-accepted" } });
+      expect(rejectionRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
+      expect(await rejectionState(acceptanceRaceId)).toMatchObject({ aggregate_version: 3, rejections: 0, receipts: 1 });
+    }
+
+    const rejectionFirstRaceId = await createAcceptedRejectionCandidate("rejection-first-race", false);
+    const [rejectionFirstResult, acceptanceAfterRejectionResult] = await contendAtMediaLock(rejectionFirstRaceId, [
+      () => media.rejectOwnerMediaAsset({ actor, mediaId: rejectionFirstRaceId, expectedVersion: 2,
+        idempotencyKey: "phase6-rejection-first-race-reject" as never, reason }),
+      () => createAcceptanceService().acceptOwnerMediaAsset({ actor, mediaId: rejectionFirstRaceId,
+        expectedVersion: 2, idempotencyKey: "phase6-rejection-first-race-accept" as never,
+        accessibility: { kind: "document", summary: "A readable one page PDF document." } }),
+    ] as const, true, "rejection before Media acceptance");
+    expect(rejectionFirstResult).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+    expect(acceptanceAfterRejectionResult).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
+    expect(await rejectionState(rejectionFirstRaceId)).toMatchObject({ aggregate_version: 3, rejections: 1, receipts: 1 });
+
+    // Start a rejection from the publish-ready barrier while the real Content
+    // publication uses a separate transaction. Shared/exclusive Media locks
+    // must serialize the decision with its authoritative current references.
+    const raceMediaId = await createAcceptedRejectionCandidate("publish-race");
+    let readyToPublish!: () => void;
+    let allowPublish!: () => void;
+    const publicationReady = new Promise<void>((resolve) => { readyToPublish = resolve; });
+    const publishPermission = new Promise<void>((resolve) => { allowPublish = resolve; });
+    const pendingPublication = publishContentWithMedia(content, "project", raceMediaId, "phase6-rejection-race", async () => {
+      readyToPublish();
+      await publishPermission;
+    }, false);
+    await publicationReady;
+    const [raceRejected, racePublication] = await contendAtMediaLock(raceMediaId, [
+      () => media.rejectOwnerMediaAsset({ actor, mediaId: raceMediaId, expectedVersion: 3,
+        idempotencyKey: "phase6-rejection-race-reject" as never, reason }),
+      async () => { allowPublish(); return await pendingPublication; },
+    ] as const, true, "Content publication versus rejection");
+    const racePublished = racePublication.published;
+    expect(racePublished.ok || raceRejected.ok).toBe(true);
+    if (racePublished.ok) {
+      expect(raceRejected).toMatchObject({ ok: false, error: { code: "MEDIA_IN_USE" } });
+      expect(await content.getPublicProject({ slug: "phase6-rejection-race-project", locale: "en" })).toMatchObject({ ok: true });
+      expect((await admin.query("select 1 from media.rejection_history where media_id = $1::uuid", [raceMediaId])).rowCount).toBe(0);
+    } else {
+      expect(raceRejected).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+      expect(racePublished).toMatchObject({ ok: false, error: { code: "MEDIA_ACCEPTANCE_FACTS_INVALID" } });
+      expect(await content.getPublicProject({ slug: "phase6-rejection-race-project", locale: "en" })).toMatchObject({ ok: false });
+      expect((await admin.query("select 1 from media.rejection_history where media_id = $1::uuid", [raceMediaId])).rowCount).toBe(1);
+    }
+
+    const restoreRaceMediaId = await createAcceptedRejectionCandidate("restore-race");
+    const restoreRacePublication = await publishContentWithMedia(content, "project", restoreRaceMediaId, "phase6-rejection-restore-race");
+    if (!restoreRacePublication.published.ok) throw new Error("PHASE6_REJECTION_RESTORE_RACE_PUBLICATION_FAILED");
+    const restoreRaceHidden = await content.hideContent({ actor, contentId: restoreRacePublication.contentId,
+      expectedVersion: restoreRacePublication.published.value.aggregateVersion,
+      idempotencyKey: "phase6-rejection-restore-race-hide" as never, correlationId: "phase6-rejection-restore-race-hide" });
+    expect(restoreRaceHidden.ok).toBe(true);
+    if (!restoreRaceHidden.ok) throw new Error("PHASE6_REJECTION_RESTORE_RACE_HIDE_FAILED");
+    const [restoreRaceResult, rejectDuringRestoreResult] = await contendAtMediaLock(restoreRaceMediaId, [
+      () => content.restoreContent({ actor, contentId: restoreRacePublication.contentId,
+        expectedVersion: restoreRaceHidden.value.aggregateVersion, idempotencyKey: "phase6-rejection-restore-race-restore" as never,
+        correlationId: "phase6-rejection-restore-race-restore" }),
+      () => media.rejectOwnerMediaAsset({ actor, mediaId: restoreRaceMediaId, expectedVersion: 3,
+        idempotencyKey: "phase6-rejection-restore-race-reject" as never, reason }),
+    ] as const, false, "Content restore versus rejection");
+    expect(Number(restoreRaceResult.ok) + Number(rejectDuringRestoreResult.ok)).toBe(1);
+    if (restoreRaceResult.ok) {
+      expect(rejectDuringRestoreResult).toMatchObject({ ok: false, error: { code: "MEDIA_IN_USE" } });
+      expect(await admin.query("select lifecycle from content.items where content_id = $1::uuid", [restoreRacePublication.contentId]))
+        .toMatchObject({ rows: [{ lifecycle: "published" }] });
+      expect((await admin.query("select count(*)::int as count from media.rejection_history where media_id = $1::uuid", [restoreRaceMediaId])).rows[0]?.count).toBe(0);
+    } else {
+      expect(restoreRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_ACCEPTANCE_FACTS_INVALID" } });
+      expect(await admin.query("select lifecycle from content.items where content_id = $1::uuid", [restoreRacePublication.contentId]))
+        .toMatchObject({ rows: [{ lifecycle: "hidden" }] });
+      expect((await admin.query("select count(*)::int as count from media.rejection_history where media_id = $1::uuid", [restoreRaceMediaId])).rows[0]?.count).toBe(1);
+    }
+
+    const cvRaceService = createOwnerCvApplicationService({
+      ownerId,
+      repository: createPostgresCvPortfolioRepository({
+        database: appDatabase.database,
+        transactions: appDatabase.transactions,
+        scope: { portfolioId, ownerId },
+        media: createMediaAcceptanceApplicationService({
+          scope: { portfolioId, ownerId },
+          repository: createPostgresMediaAcceptanceRepository({
+            database: appDatabase.database,
+            transactions: appDatabase.transactions,
+            scope: { portfolioId, ownerId },
+          }),
+          preflight: async () => ({ ok: true as const, value: undefined }),
+        }),
+      }),
+      ids: createSystemIdGenerator(),
+    });
+    const cvRaceMediaId = await createAcceptedRejectionCandidate("cv-activation-race");
+    const cvRacePortfolio = await cv.getOwnerCvPortfolio({ actor });
+    expect(cvRacePortfolio.ok).toBe(true);
+    if (!cvRacePortfolio.ok) throw new Error("PHASE6_REJECTION_CV_RACE_ROOT_UNAVAILABLE");
+    const cvRegister = await cv.registerOwnerCvVersion({ actor, mediaId: cvRaceMediaId, locale: "en", label: "CV activation race",
+      expectedVersion: cvRacePortfolio.value.aggregateVersion, idempotencyKey: "phase6-rejection-cv-race-register" as never });
+    expect(cvRegister.ok).toBe(true);
+    if (!cvRegister.ok) throw new Error("PHASE6_REJECTION_CV_RACE_REGISTER_FAILED");
+    const cvAccept = await cv.acceptOwnerCvVersion({ actor, versionId: cvRegister.value.versionId,
+      expectedVersion: cvRegister.value.aggregateVersion, idempotencyKey: "phase6-rejection-cv-race-accept" as never });
+    expect(cvAccept.ok).toBe(true);
+    if (!cvAccept.ok) throw new Error("PHASE6_REJECTION_CV_RACE_ACCEPT_FAILED");
+    const [activationRaceResult, cvRejectionRaceResult] = await contendAtMediaLock(cvRaceMediaId, [
+      () => cvRaceService.activateOwnerCvVersion({ actor, versionId: cvRegister.value.versionId,
+        expectedVersion: cvAccept.value.aggregateVersion, idempotencyKey: "phase6-rejection-cv-race-activate" as never }),
+      () => media.rejectOwnerMediaAsset({ actor, mediaId: cvRaceMediaId, expectedVersion: 3,
+        idempotencyKey: "phase6-rejection-cv-race-reject" as never, reason }),
+    ] as const, false, "CV activation versus rejection");
+    expect(Number(activationRaceResult.ok) + Number(cvRejectionRaceResult.ok)).toBe(1);
+    const activationRacePortfolio = await cv.getOwnerCvPortfolio({ actor });
+    expect(activationRacePortfolio.ok).toBe(true);
+    if (!activationRacePortfolio.ok) throw new Error("PHASE6_REJECTION_CV_RACE_ROOT_UNAVAILABLE");
+    if (activationRaceResult.ok) {
+      expect(cvRejectionRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_IN_USE" } });
+      expect(activationRacePortfolio.value.currentVersionId).toBe(cvRegister.value.versionId);
+      expect((await admin.query("select count(*)::int as count from media.rejection_history where media_id = $1::uuid", [cvRaceMediaId])).rows[0]?.count).toBe(0);
+    } else {
+      expect(activationRaceResult).toMatchObject({ ok: false, error: { code: "CV_MEDIA_NOT_ELIGIBLE" } });
+      expect(cvRejectionRaceResult).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+      expect(activationRacePortfolio.value.currentVersionId).toBe(secondCv.versionId);
+      expect((await admin.query("select count(*)::int as count from media.rejection_history where media_id = $1::uuid", [cvRaceMediaId])).rows[0]?.count).toBe(1);
+    }
+
+    const cvAcceptRaceId = await createAcceptedRejectionCandidate("cv-accept-race");
+    const cvAcceptRacePortfolio = await cv.getOwnerCvPortfolio({ actor });
+    expect(cvAcceptRacePortfolio.ok).toBe(true);
+    if (!cvAcceptRacePortfolio.ok) throw new Error("PHASE6_REJECTION_CV_ACCEPT_RACE_ROOT_UNAVAILABLE");
+    const cvAcceptRaceRegistration = await cv.registerOwnerCvVersion({ actor, mediaId: cvAcceptRaceId, locale: "en",
+      label: "CV acceptance race", expectedVersion: cvAcceptRacePortfolio.value.aggregateVersion,
+      idempotencyKey: "phase6-rejection-cv-accept-race-register" as never });
+    expect(cvAcceptRaceRegistration.ok).toBe(true);
+    if (!cvAcceptRaceRegistration.ok) throw new Error("PHASE6_REJECTION_CV_ACCEPT_RACE_REGISTER_FAILED");
+    const [cvAcceptRaceResult, cvRejectDuringAccept] = await contendAtMediaLock(cvAcceptRaceId, [
+      () => cvRaceService.acceptOwnerCvVersion({ actor, versionId: cvAcceptRaceRegistration.value.versionId,
+        expectedVersion: cvAcceptRaceRegistration.value.aggregateVersion,
+        idempotencyKey: "phase6-rejection-cv-accept-race-accept" as never }),
+      () => media.rejectOwnerMediaAsset({ actor, mediaId: cvAcceptRaceId, expectedVersion: 3,
+        idempotencyKey: "phase6-rejection-cv-accept-race-reject" as never, reason }),
+    ] as const, true, "CV acceptance versus rejection");
+    expect(cvRejectDuringAccept).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
+    const cvAcceptRacePortfolioAfter = await cv.getOwnerCvPortfolio({ actor });
+    expect(cvAcceptRacePortfolioAfter).toMatchObject({ ok: true });
+    if (!cvAcceptRacePortfolioAfter.ok) throw new Error("PHASE6_REJECTION_CV_ACCEPT_RACE_ROOT_UNAVAILABLE");
+    expect(cvAcceptRacePortfolioAfter.value.currentVersionId).toBe(cvAcceptRacePortfolio.value.currentVersionId);
+    if (cvAcceptRaceResult.ok) {
+      const activationAfterRejectedMedia = await cv.activateOwnerCvVersion({ actor, versionId: cvAcceptRaceRegistration.value.versionId,
+        expectedVersion: cvAcceptRaceResult.value.aggregateVersion,
+        idempotencyKey: "phase6-rejection-cv-accept-race-activate-after-reject" as never });
+      expect(activationAfterRejectedMedia).toMatchObject({ ok: false, error: { code: "CV_MEDIA_NOT_ELIGIBLE" } });
+    } else {
+      expect(cvAcceptRaceResult).toMatchObject({ ok: false, error: { code: "CV_MEDIA_NOT_ELIGIBLE" } });
+    }
+
+    mediaProcessingCounts.mediaRejectionScenarios = [
+      { id: "T12-01", name: "Pending and accepted unused Media rejects; rejected state and history persist and future processing/acceptance fails." },
+      { id: "T12-02", name: "Visible Content locale and Current CV use return MEDIA_IN_USE with no rejection mutation." },
+      { id: "T12-03", name: "Hiding and archiving Content and activating a replacement Current CV remove the affected use." },
+      { id: "T12-04", name: "Draft, Hidden, and Archived references allow rejection; publish, restore, and CV approval revalidate rejected Media." },
+      { id: "T12-05", name: "Decision, version, receipt, and event commit atomically; injected failure rolls back and exact replay survives later version changes." },
+      { id: "T12-06", name: "Independent publication, restore, CV acceptance, and activation races with rejection serialize to valid outcomes." },
+      { id: "T12-07", name: "Accept/reject concurrency, changed-hash reuse, stale versions, and terminal transitions fail safely." },
+      { id: "T12-08", name: "Current authoritative usage reads protect writes; retained objects stay private and capability expiry is documented." },
+      { id: "T12-09", name: "Private rejection reason is absent from public event data and errors expose safe codes only." },
+    ].map((scenario) => ({ ...scenario, executed: true, status: "passed" as const }));
+    if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
+  }, 600_000);
 
   function ownerService(uploadIntents: ReturnType<typeof createService>) {
     return {
@@ -2729,32 +3342,23 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
        where asset.portfolio_id = $1::uuid and asset.owner_id = $2::uuid and asset.kind = 'image'
          and not exists (select 1 from media.decision_history decision where decision.media_id = asset.media_id)
        order by asset.created_at desc limit 1`, [portfolioId, ownerId]);
-    const rejectedFixture = await admin.query(`
-      insert into media.decision_history (decision_id, portfolio_id, owner_id, media_id, aggregate_version, decision,
-        processing_attempt_id, input_object_id, input_sha256, detected_mime_type, detected_byte_length,
-        scanner_version, processor_version, processing_policy_version, sealed_outputs, accessibility,
-        ownership_attested_by, ownership_attested_at, public_suitability_attested_by, public_suitability_attested_at,
-        decided_by, decided_at, reason_code)
-      select $4::uuid, latest.portfolio_id, latest.owner_id, latest.media_id, latest.aggregate_version + 1, 'rejected',
-        latest.processing_attempt_id, latest.input_object_id, latest.input_sha256, latest.detected_mime_type,
-        latest.detected_byte_length, latest.scanner_version, latest.processor_version, latest.processing_policy_version,
-        latest.sealed_outputs, latest.accessibility, latest.ownership_attested_by, transaction_timestamp(),
-        latest.public_suitability_attested_by, transaction_timestamp(), latest.decided_by, transaction_timestamp(),
-        'DELIVERY_REJECTION_FIXTURE'
-        from media.decision_history latest
-       where latest.media_id = $1::uuid and latest.portfolio_id = $2::uuid and latest.owner_id = $3::uuid
-         and latest.decision = 'accepted'
-       order by latest.aggregate_version desc limit 1`, [mediaAssetId, portfolioId, ownerId, createStableId("MediaDecision")]);
-    expect(rejectedFixture.rowCount).toBe(1);
+    const rejectedMediaId = await createAcceptedRejectionCandidate("delivery-rejected");
+    const ownerMedia = await getOwnerMediaApplicationService();
+    const rejected = await ownerMedia.rejectOwnerMediaAsset({
+      actor: { kind: "owner", ownerId, sessionId: "phase6-profile-media-owner" },
+      idempotencyKey: "phase6-profile-media-reject-delivery" as never,
+      expectedVersion: 3,
+      mediaId: rejectedMediaId,
+      reason: "Rejection fixture for delivery visibility.",
+    });
+    expect(rejected, JSON.stringify(rejected)).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
     const rejectedCandidates = await admin.query<{ media_id: string }>(`
-      select asset.media_id::text
-        from media.assets asset
-        join media.decision_history decision on decision.media_id = asset.media_id
-       where asset.portfolio_id = $1::uuid and asset.owner_id = $2::uuid and asset.kind = 'image'
-         and decision.decision = 'rejected'
-       order by decision.aggregate_version desc limit 1`, [portfolioId, ownerId]);
+      select rejection.media_id::text
+        from media.rejection_history rejection
+       where rejection.portfolio_id = $1::uuid and rejection.owner_id = $2::uuid and rejection.media_id = $3::uuid
+       order by rejection.aggregate_version desc limit 1`, [portfolioId, ownerId, rejectedMediaId]);
     expect(privateCandidates.rows.length, "focused acceptance setup must include an unaccepted private image").toBeGreaterThan(0);
-    expect(rejectedCandidates.rows.length, "focused acceptance setup must include a rejected image").toBeGreaterThan(0);
+    expect(rejectedCandidates.rows.length, "delivery setup must include a rejected asset").toBeGreaterThan(0);
     for (const [index, row] of [...privateCandidates.rows, ...rejectedCandidates.rows].entries()) {
       const disallowedMediaId = row.media_id as StableId<"MediaAsset">;
       expect((await updateProfileMedia(disallowedMediaId, `phase6-profile-media-disallowed-${index}`)).ok).toBe(true);

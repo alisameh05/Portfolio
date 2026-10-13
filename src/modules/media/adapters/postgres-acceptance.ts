@@ -88,7 +88,7 @@ export function createPostgresMediaAcceptanceRepository(input: {
               and media_id = ${command.mediaId} and idempotency_key_hash = ${idempotencyKeyHash}`.execute(executor);
           if (existing.rows[0]) {
             if (existing.rows[0].request_hash !== command.requestHash) return err({ kind: "conflict", code: "IDEMPOTENCY_CONFLICT" });
-            if (existing.rows[0].outcome !== "media-accepted") throw new PostgresInfrastructureError();
+            if (existing.rows[0].outcome !== "media-accepted") return err({ kind: "conflict", code: "MEDIA_INVALID_TRANSITION" });
             return ok({ aggregateId: command.mediaId, aggregateVersion: Number(existing.rows[0].aggregate_version), outcome: "media-accepted" as const });
           }
 
@@ -122,7 +122,10 @@ export function createPostgresMediaAcceptanceRepository(input: {
           const previousDecision = await sql`select decision_id from media.decision_history
             where media_id = ${command.mediaId} and portfolio_id = ${executorScope.portfolioId} and owner_id = ${executorScope.ownerId}
             limit 1`.execute(executor);
-          if (previousDecision.rows.length) return err({ kind: "conflict", code: "MEDIA_INVALID_TRANSITION" });
+          const previousRejection = await sql`select rejection_id from media.rejection_history
+            where media_id = ${command.mediaId} and portfolio_id = ${executorScope.portfolioId} and owner_id = ${executorScope.ownerId}
+            limit 1`.execute(executor);
+          if (previousDecision.rows.length || previousRejection.rows.length) return err({ kind: "conflict", code: "MEDIA_INVALID_TRANSITION" });
           if (row.result !== "passed" || row.input_sha256 !== row.declared_sha256 ||
               row.detected_mime_type !== row.declared_media_type || Number(row.detected_byte_length) !== Number(row.declared_byte_length) ||
               row.scanner_version === "unavailable" || row.processor_version === "unavailable" ||

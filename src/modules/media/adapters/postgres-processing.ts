@@ -96,7 +96,9 @@ export function createPostgresMediaProcessingRepository(input: {
             select coalesce(s.aggregate_version, 1) as current_version, latest.result as latest_result,
                    (i.expires_at <= transaction_timestamp()) as expired,
                    exists (select 1 from media.decision_history decision where decision.media_id = a.media_id
-                     and decision.portfolio_id = a.portfolio_id and decision.owner_id = a.owner_id) as terminal_decision
+                     and decision.portfolio_id = a.portfolio_id and decision.owner_id = a.owner_id)
+                     or exists (select 1 from media.rejection_history rejection where rejection.media_id = a.media_id
+                     and rejection.portfolio_id = a.portfolio_id and rejection.owner_id = a.owner_id) as terminal_decision
               from media.assets a join media.upload_intents i on i.media_id = a.media_id
               left join media.processing_states s on s.media_id = a.media_id
               left join media.processing_attempts latest on latest.attempt_id = s.latest_attempt_id
@@ -146,18 +148,23 @@ export function createPostgresMediaProcessingRepository(input: {
             if (existing.rows[0].request_hash !== query.requestHash) return err({ kind: "conflict", code: "IDEMPOTENCY_CONFLICT" });
             return ok({ version: Number(existing.rows[0].aggregate_version), outcome: "media-processing-recorded" as const });
           }
+          // Match rejection's Media-first lock order. If this transaction locks
+          // the claim first, rejection can hold the Media lock while waiting to
+          // delete that claim, creating a row/advisory-lock cycle.
+          await sql`select pg_advisory_xact_lock(hashtextextended(${query.candidate.mediaId}::text, 0))`.execute(executor);
           const claim = await sql`select claim_id from media.processing_claims where portfolio_id = ${input.scope.portfolioId}
             and owner_id = ${input.scope.ownerId} and media_id = ${query.candidate.mediaId} and idempotency_key_hash = ${key}
             and claim_id = ${query.claimId} and lease_expires_at > transaction_timestamp() for update`.execute(executor);
           if (!claim.rows.length) return err({ kind: "temporarily_unavailable", code: "MEDIA_PROCESSING_CLAIM_EXPIRED" });
-          await sql`select pg_advisory_xact_lock(hashtextextended(${query.candidate.mediaId}::text, 0))`.execute(executor);
           const locked = await sql<LockedRow>`
             select a.media_id, a.portfolio_id, a.owner_id, a.kind, a.original_file_name, a.declared_media_type, a.declared_byte_length,
                    a.declared_sha256, i.upload_intent_id, i.media_object_id, i.expires_at,
                    coalesce(s.aggregate_version, 1) as current_version,
                    latest.result as current_result,
                    exists (select 1 from media.decision_history decision where decision.media_id = a.media_id
-                     and decision.portfolio_id = a.portfolio_id and decision.owner_id = a.owner_id) as terminal_decision
+                     and decision.portfolio_id = a.portfolio_id and decision.owner_id = a.owner_id)
+                     or exists (select 1 from media.rejection_history rejection where rejection.media_id = a.media_id
+                     and rejection.portfolio_id = a.portfolio_id and rejection.owner_id = a.owner_id) as terminal_decision
               from media.assets a join media.upload_intents i on i.media_id = a.media_id
               left join media.processing_states s on s.media_id = a.media_id
               left join media.processing_attempts latest on latest.attempt_id = s.latest_attempt_id

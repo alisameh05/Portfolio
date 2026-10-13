@@ -63,6 +63,7 @@ export type MediaAssetRejectedEvent = DomainEvent<
   "media.asset_rejected.v1",
   {
     readonly mediaAssetId: StableId<"MediaAsset">;
-    readonly reason: string;
+    /** Stable machine reason code only; private Owner rationale stays in Media history. */
+    readonly reason: "OWNER_REJECTED";
   }
 >;

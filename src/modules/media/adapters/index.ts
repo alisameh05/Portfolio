@@ -15,6 +15,7 @@ export { createPostgresMediaUploadIntentRepository } from "./postgres-upload-int
 export { createPostgresMediaProcessingRepository } from "./postgres-processing.js";
 export { createPostgresMediaAcceptanceRepository } from "./postgres-acceptance.js";
 export { createPostgresMediaDeliveryRepository } from "./postgres-delivery.js";
+export { createPostgresMediaRejectionRepository } from "./postgres-rejection.js";
 
 /**
  * Stub repository adapter for Phase 1 skeleton.

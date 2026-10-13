@@ -48,7 +48,10 @@ export type {
   MediaDeliveryUsePort,
   ResolveMediaDeliveryQuery,
 } from "./owner-contracts.js";
+export { createMediaRejectionApplicationService } from "./rejection.js";
 export type { MediaAcceptanceApplicationService, MediaAcceptanceRepositoryFact, MediaAcceptanceRepositoryPort } from "./acceptance.js";
+export type { MediaRejectionApplicationService, MediaRejectionRepositoryInput, MediaRejectionRepositoryPort,
+  MediaRejectionUsagePort, MediaRejectionUsageQuery } from "./rejection.js";
 export type { MediaProcessingApplicationService, MediaProcessingRepositoryPort, MediaProcessingStoragePort, TrustedByteScannerPort, PdfProcessorPort, VideoProcessorPort, MediaProcessingOutputVariant, MediaImageProcessorPort, MediaImageVariant, MediaDigestPort, RecordMediaProcessingCommand } from "./processing.js";
 export type {
   CreateMediaUploadIntentCommand,
