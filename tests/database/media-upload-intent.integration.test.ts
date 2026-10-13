@@ -463,7 +463,8 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       let released = false;
       try {
         await admin.query("select pg_advisory_xact_lock(hashtextextended($1::text, 0))", [mediaId]);
-        const waitFor = async (expected: number, attempts = 160) => {
+        const waitFor = async (expected: number, attempts = 160, atLeast = false) => {
+          const matches = (waiting: number) => atLeast ? waiting >= expected : waiting === expected;
           let waiting = 0;
           // Once a contender is waiting, leave margin inside the production
           // three-second lock timeout. Scheduling and local query latency can
@@ -473,10 +474,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
               from pg_locks lock join pg_stat_activity activity on activity.pid = lock.pid
               where activity.usename = $1 and lock.locktype = 'advisory' and not lock.granted`, [roleName]);
             waiting = Number(result.rows[0]?.count ?? 0);
-            if (waiting === expected) break;
+            if (matches(waiting)) break;
             await new Promise((resolve) => setTimeout(resolve, 10));
           }
-          if (waiting !== expected) {
+          if (!matches(waiting)) {
             const sessions = await admin.query(`select pid, state, wait_event_type, wait_event, left(query, 180) as query
               from pg_stat_activity where usename = $1`, [roleName]);
             expect(waiting, `${scenario}: expected ${expected} ungranted Media advisory locks; outcomes=${JSON.stringify(outcomes)}; sessions=${JSON.stringify(sessions.rows)}`)
@@ -501,7 +502,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         // at least one is queued on the Media lock so the outcomes exercise
         // the same serialized transaction boundary without requiring every
         // contender to reach PostgreSQL within a scheduler-sensitive window.
-        await waitFor(1);
+        await waitFor(1, 160, true);
         await admin.query("commit");
         released = true;
         return await Promise.all(pending) as {
