@@ -9,11 +9,12 @@ import { sql } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dockerBindMountUserArgs } from "../../src/runtime/adapters/media-processing-tools.js";
 import { handleCreateOwnerMediaUploadIntent } from "../../src/runtime/http/owner-media.js";
+import { handleGetCurrentCv } from "../../src/runtime/http/current-cv.js";
 import { handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-media.js";
 import { withOwnerTestAuth } from "../runtime/owner-test-auth.js";
 import { createOwnerSecurityTestStub } from "../../src/runtime/http/owner-security.js";
 import { handleAcceptOwnerCvVersion, handleActivateOwnerCvVersion, handleGetOwnerCvPortfolio, handleRegisterOwnerCvVersion } from "../../src/runtime/http/owner-cv.js";
-import { getOwnerCvApplicationService, getOwnerMediaApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
+import { getCurrentCvApplicationService, getOwnerCvApplicationService, getOwnerMediaApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
 import { createOwnerCvApplicationService } from "../../src/modules/cv-portfolio/application/owner-service.js";
 import { createPostgresCvPortfolioRepository } from "../../src/modules/cv-portfolio/adapters/postgres-portfolio.js";
 import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
@@ -69,10 +70,12 @@ const REQUIRE_ACCEPTANCE = process.env["PHASE6_MEDIA_ACCEPTANCE_ONLY"] === "1";
 const REQUIRE_MEDIA_REJECTION = process.env["PHASE6_MEDIA_REJECTION_ONLY"] === "1";
 const REQUIRE_FULL_MEDIA = process.env["PHASE6_REQUIRE_FULL_MEDIA"] === "1";
 const REQUIRE_CV_ACTIVATION = process.env["PHASE6_CV_ACTIVATION_ONLY"] === "1";
+const REQUIRE_CV_DELIVERY = process.env["PHASE6_CV_DELIVERY_ONLY"] === "1";
 const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0, imageProcessorExecutions: 0, acceptanceExecutions: 0,
   cvScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   cvAcceptanceScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   cvActivationScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
+  currentCvDeliveryScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   mediaRejectionScenarios: [] as Array<{ readonly id: string; readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   rejectionToolCounts: { scannerExecutions: 0, processorExecutions: 0, cleanScannerVerdicts: 0, unsafeScannerVerdicts: 0 } };
 
@@ -163,13 +166,15 @@ function dockerPdfProcessor(bytes: Uint8Array) {
   finally { rmSync(directory, { recursive: true, force: true }); }
 }
 
-function createPdfVariant(base: Uint8Array, mode: "encrypted" | "active"): Uint8Array {
+function createPdfVariant(base: Uint8Array, mode: "encrypted" | "active" | "title"): Uint8Array {
   const directory = mkdtempSync(join(tmpdir(), "phase6-media-pdf-variant-"));
   try {
     writeFileSync(join(directory, "base.pdf"), base);
     const script = mode === "encrypted"
       ? "import pikepdf,sys; pikepdf.open(sys.argv[1]).save(sys.argv[2], encryption=pikepdf.Encryption(owner='owner-secret', user='user-secret', R=6))"
-      : "import pikepdf,sys; p=pikepdf.open(sys.argv[1]); p.Root['/OpenAction']=pikepdf.Dictionary(S=pikepdf.Name('/JavaScript'), JS=pikepdf.String('app.alert(1)')); p.save(sys.argv[2])";
+      : mode === "active"
+      ? "import pikepdf,sys; p=pikepdf.open(sys.argv[1]); p.Root['/OpenAction']=pikepdf.Dictionary(S=pikepdf.Name('/JavaScript'), JS=pikepdf.String('app.alert(1)')); p.save(sys.argv[2])"
+      : "import pikepdf,sys; p=pikepdf.open(sys.argv[1]); p.docinfo['/Title']='Distinct Current CV delivery fixture'; p.save(sys.argv[2])";
     const generated = dockerResult(["run", "--rm", ...dockerBindMountUserArgs(), "--entrypoint", "python3", "-v", `${directory}:/work`, PDF_PROCESSOR_IMAGE!, "-c", script, "/work/base.pdf", "/work/variant.pdf"]);
     if (generated.status !== 0) throw new Error("PHASE6_PDF_FIXTURE_GENERATION_FAILED");
     return new Uint8Array(readFileSync(join(directory, "variant.pdf")));
@@ -3260,6 +3265,78 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     } finally {
       await admin.query(`drop trigger ${triggerName} on operations.outbox_events`);
       await admin.query(`drop function operations.${functionName}()`);
+    }
+    if (REQUIRE_CV_DELIVERY) {
+      const deliveryScenarios: Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }> = [];
+      const deliveryScenario = (name: string, passed: boolean) => {
+        deliveryScenarios.push({ name, executed: true, status: passed ? "passed" : "failed" });
+        expect(passed, name).toBe(true);
+      };
+      const beforeDeliveryActivation = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      if (!beforeDeliveryActivation.ok) throw new Error("PHASE6_CURRENT_CV_A_ROOT_UNAVAILABLE");
+      const activatedA = await cvService.activateOwnerCvVersion({ actor: cvOwner,
+        idempotencyKey: "phase6-current-cv-delivery-activate-a" as never,
+        expectedVersion: beforeDeliveryActivation.value.aggregateVersion, versionId: cvRegistration.value.versionId });
+      expect(activatedA.ok, JSON.stringify(activatedA)).toBe(true);
+      if (!activatedA.ok) throw new Error("PHASE6_CURRENT_CV_A_ACTIVATION_FAILED");
+      const currentCv = await getCurrentCvApplicationService();
+      const readCurrent = async () => handleGetCurrentCv(new Request("https://example.com/api/v1/cv/current?locale=en"), {
+        service: currentCv,
+      });
+      const currentBeforeDelivery = await admin.query(`select current_version_id::text as current_version_id
+        from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid`, [portfolioId, ownerId]);
+      const firstMediaSnapshot = await admin.query(`select version.media_sha256
+        from cv_portfolio.versions version where version.version_id = $1::uuid`, [cvRegistration.value.versionId]);
+      const firstResponse = await readCurrent();
+      const firstBytes = new Uint8Array(await firstResponse.arrayBuffer());
+      const firstDeliveredHash = createHash("sha256").update(firstBytes).digest("hex");
+      deliveryScenario("T14-02 T14-03 T14-05 the real current pointer streams exact private accepted PDF bytes with matching immutable hash, no-store and sanitized inline filename",
+        firstResponse.status === 200 && firstResponse.headers.get("content-type") === "application/pdf" &&
+        firstResponse.headers.get("cache-control") === "no-store" &&
+        firstResponse.headers.get("content-disposition") === 'inline; filename="cv.pdf"' &&
+        firstResponse.headers.get("set-cookie") === null && currentBeforeDelivery.rows[0]?.current_version_id === cvRegistration.value.versionId &&
+        firstDeliveredHash === firstMediaSnapshot.rows[0]?.media_sha256 &&
+        firstBytes.byteLength > 0 && firstBytes.byteLength <= 25 * 1024 * 1024);
+
+      const distinctPdf = createPdfVariant(pdfBytes, "title");
+      const deliveryCandidate = await uploadPdf(distinctPdf, "current-cv-delivery-b");
+      const deliveryProcessing = await makeMediaProcessing().record({ actor: { kind: "owner", ownerId, sessionId: "phase6-cv-delivery-owner" },
+        idempotencyKey: "phase6-cv-delivery-process-b" as never, mediaId: deliveryCandidate.mediaId,
+        expectedVersion: 1, result: "passed", detectedMediaType: "application/pdf", detectedByteLength: distinctPdf.byteLength,
+        sha256: createHash("sha256").update(distinctPdf).digest("hex") });
+      expect(deliveryProcessing.ok, JSON.stringify(deliveryProcessing)).toBe(true);
+      const processedB = processedFiles.at(-1);
+      if (!deliveryProcessing.ok || processedB === undefined) throw new Error("PHASE6_CURRENT_CV_B_PROCESSING_FAILED");
+      const processedBHash = createHash("sha256").update(processedB).digest("hex");
+      await acceptAndVerify(deliveryCandidate.mediaId as StableId<"MediaAsset">,
+        { kind: "document", summary: "A distinct second Current CV PDF." }, "current-cv-delivery-b");
+      const beforeRegistration = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      if (!beforeRegistration.ok) throw new Error("PHASE6_CURRENT_CV_B_ROOT_UNAVAILABLE");
+      const registrationB = await cvService.registerOwnerCvVersion({ actor: cvOwner,
+        idempotencyKey: "phase6-current-cv-delivery-register-b" as never,
+        expectedVersion: beforeRegistration.value.aggregateVersion,
+        mediaId: deliveryCandidate.mediaId as StableId<"MediaAsset">, locale: "en", label: "Current CV B" });
+      if (!registrationB.ok) throw new Error("PHASE6_CURRENT_CV_B_REGISTRATION_FAILED");
+      const acceptedB = await cvService.acceptOwnerCvVersion({ actor: cvOwner,
+        idempotencyKey: "phase6-current-cv-delivery-accept-b" as never,
+        expectedVersion: registrationB.value.aggregateVersion, versionId: registrationB.value.versionId });
+      if (!acceptedB.ok) throw new Error("PHASE6_CURRENT_CV_B_ACCEPTANCE_FAILED");
+      const activatedB = await cvService.activateOwnerCvVersion({ actor: cvOwner,
+        idempotencyKey: "phase6-current-cv-delivery-activate-b" as never,
+        expectedVersion: acceptedB.value.aggregateVersion, versionId: registrationB.value.versionId });
+      if (!activatedB.ok) throw new Error("PHASE6_CURRENT_CV_B_ACTIVATION_FAILED");
+      const secondResponse = await readCurrent();
+      const secondBytes = new Uint8Array(await secondResponse.arrayBuffer());
+      const secondDeliveredHash = createHash("sha256").update(secondBytes).digest("hex");
+      const currentAfterReplacement = await cvService.getOwnerCvPortfolio({ actor: cvOwner });
+      deliveryScenario("T14-07 each new request after A-to-B replacement streams B from its new committed pointer while the old snapshot remains distinct",
+        currentAfterReplacement.ok && currentAfterReplacement.value.currentVersionId === registrationB.value.versionId &&
+        secondResponse.status === 200 && secondDeliveredHash === processedBHash && secondDeliveredHash !== firstDeliveredHash &&
+        secondResponse.headers.get("cache-control") === "no-store");
+      deliveryScenario("T14-08 visitor delivery needs no account, identity or consent cookie and does not set one",
+        firstResponse.status === 200 && secondResponse.status === 200 &&
+        firstResponse.headers.get("set-cookie") === null && secondResponse.headers.get("set-cookie") === null);
+      mediaProcessingCounts.currentCvDeliveryScenarios = deliveryScenarios;
     }
     mediaProcessingCounts.scannerExecutions += scannerExecutions;
     mediaProcessingCounts.processorExecutions += processorExecutions;

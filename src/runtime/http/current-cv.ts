@@ -33,6 +33,8 @@ import {
 
 export interface CurrentCvAdapterDeps {
   service: Pick<CvPortfolioApplicationService, "downloadCurrentCv">;
+  /** Exact Storage origins permitted for the short-lived redirect response. */
+  allowedRedirectOrigins?: ReadonlyArray<string>;
   logger?: Logger;
 }
 
@@ -46,10 +48,11 @@ function requestInstance(request: Request): string {
   }
 }
 
-function isHttpUrl(value: string): boolean {
+function isAllowedRedirect(value: string, allowedOrigins: ReadonlyArray<string>): boolean {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    return parsed.protocol === "https:" && parsed.username === "" && parsed.password === "" &&
+      allowedOrigins.includes(parsed.origin);
   } catch {
     return false;
   }
@@ -170,9 +173,10 @@ export async function handleGetCurrentCv(
     if (
       typeof location !== "string" ||
       location.length === 0 ||
-      !isHttpUrl(location) ||
+      !isAllowedRedirect(location, deps.allowedRedirectOrigins ?? []) ||
       !Number.isFinite(expiry) ||
-      expiry <= Date.now()
+      expiry <= Date.now() ||
+      expiry > Date.now() + 5 * 60_000
     ) {
       return internalErrorProblem(
         new Error("Invalid application result"),

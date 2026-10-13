@@ -107,6 +107,15 @@ export interface CurrentCvDownloadQuery {
   readonly disposition: CurrentCvDisposition;
 }
 
+/** Provider-neutral access to the one committed Current CV Media snapshot. */
+export interface CurrentCvSnapshot {
+  readonly portfolioId: StableId<"Portfolio">;
+  readonly mediaAssetId: StableId<"MediaAsset">;
+  readonly objectId: StableId<"MediaObject">;
+  readonly sha256: string;
+  readonly objectVersion: string;
+}
+
 export type CurrentCvDelivery =
   | {
       readonly kind: "stream";

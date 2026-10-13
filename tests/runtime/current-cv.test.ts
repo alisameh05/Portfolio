@@ -44,7 +44,9 @@ describe("GET Current CV adapter (#28)", () => {
   it("dispatches once and returns the declared 307 redirect without storage", async () => {
     const fake = createCurrentCvTestFake({ type: "redirect" });
     const logger = createTestLogger();
-    const response = await handleGetCurrentCv(getCvRequest(), { service: fake, logger });
+    const response = await handleGetCurrentCv(getCvRequest(), {
+      service: fake, logger, allowedRedirectOrigins: ["https://storage.example"],
+    });
     expect(response.status).toBe(307);
     expect(fake.calls).toHaveLength(1);
     expect(fake.calls[0]).toMatchObject({ locale: "en", disposition: "inline" });
@@ -59,7 +61,7 @@ describe("GET Current CV adapter (#28)", () => {
     const fake = createCurrentCvTestFake({ type: "redirect" });
     const response = await handleGetCurrentCv(
       getCvRequest("locale=en&disposition=attachment"),
-      { service: fake },
+      { service: fake, allowedRedirectOrigins: ["https://storage.example"] },
     );
     expect(response.status).toBe(307);
     expect(fake.calls[0]).toMatchObject({ locale: "en", disposition: "attachment" });
@@ -136,6 +138,18 @@ describe("GET Current CV adapter (#28)", () => {
     expect(response.status).toBe(500);
     const body = (await response.json()) as Record<string, unknown>;
     expect(body["code"]).toBe("internal_error");
+  });
+
+  it.each([
+    ["unlisted origin", "https://evil.example/cv.pdf"],
+    ["insecure URL", "http://storage.example/cv.pdf"],
+  ])("rejects a redirect with %s", async (_label, downloadUrl) => {
+    const fake = createCurrentCvTestFake({ type: "redirect", downloadUrl });
+    const response = await handleGetCurrentCv(getCvRequest(), {
+      service: fake, allowedRedirectOrigins: ["https://storage.example"],
+    });
+    expect(response.status).toBe(500);
+    expect((await response.json()).code).toBe("internal_error");
   });
 
   it("production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED", async () => {

@@ -20,7 +20,7 @@ export type {
   CvPortfolioService,
   LegacyCvPortfolioService,
 } from "./application/index.js";
-export { createOwnerCvApplicationService } from "./application/index.js";
+export { createOwnerCvApplicationService, createCurrentCvDeliveryService } from "./application/index.js";
 export type {
   AcceptCvPortfolioVersionInput,
   ActivateCvPortfolioVersionInput,
@@ -28,7 +28,8 @@ export type {
   GetCurrentCvMediaUsageInput,
   RegisterCvPortfolioVersionInput,
 } from "./application/index.js";
-export { createPostgresCvPortfolioRepository } from "./adapters/index.js";
+export type { CurrentCvSnapshotRepositoryPort, CurrentCvObjectDeliveryPort, CurrentCvDeliveryService } from "./application/index.js";
+export { createPostgresCvPortfolioRepository, createPostgresCurrentCvSnapshotRepository } from "./adapters/index.js";
 
 export type {
   GetOwnerCvPortfolioQuery,
@@ -45,6 +46,7 @@ export type {
   CvPortfolioRootView,
   CurrentCvDownloadQuery,
   CurrentCvDelivery,
+  CurrentCvSnapshot,
   CvPortfolioApplicationService,
 } from "./application/index.js";
 

@@ -6,7 +6,8 @@ import type { TransactionContext, TransactionRunner } from "../../../runtime/por
 import { PostgresInfrastructureError, resolvePostgresTransaction } from "../../../shared/adapters/postgres/runtime.js";
 import type { DB } from "../../../shared/adapters/postgres/database.generated.js";
 import type { AcceptedPdfSnapshot, MediaReadApplicationService } from "../../media/index.js";
-import type { OwnerCvActivationView, OwnerCvCommandReceipt, OwnerCvPortfolioView, OwnerCvVersionView, RegisterOwnerCvVersionReceipt } from "../application/owner-contracts.js";
+import type { CurrentCvSnapshot, OwnerCvActivationView, OwnerCvCommandReceipt, OwnerCvPortfolioView, OwnerCvVersionView, RegisterOwnerCvVersionReceipt } from "../application/owner-contracts.js";
+import type { CurrentCvSnapshotRepositoryPort } from "../application/current-delivery.js";
 import type { AcceptCvPortfolioVersionInput, ActivateCvPortfolioVersionInput, CvPortfolioRepositoryPort, GetCurrentCvMediaUsageInput, RegisterCvPortfolioVersionInput } from "../application/repository.js";
 
 interface RootRow {
@@ -582,6 +583,80 @@ export function createPostgresCvPortfolioRepository(input: {
         return ok(usage.rows.length > 0);
       } catch {
         return err({ kind: "temporarily_unavailable", code: "CV_CURRENT_USAGE_READ_FAILED" });
+      }
+    },
+  };
+}
+
+/** Reads only the current, accepted English version and revalidates its exact Media snapshot. */
+export function createPostgresCurrentCvSnapshotRepository(input: {
+  readonly database: Kysely<DB>;
+  readonly transactions: TransactionRunner;
+  readonly scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> };
+  readonly media: Pick<MediaReadApplicationService, "getAcceptedPdfSnapshot">;
+}): CurrentCvSnapshotRepositoryPort {
+  return {
+    async getCurrentCvSnapshot(): Promise<Result<CurrentCvSnapshot, Rejection>> {
+      try {
+        return await input.transactions.run(async (context) => {
+          const executor = resolvePostgresTransaction(context);
+          await sql`select set_config('shipwithali.portfolio_id', ${input.scope.portfolioId}, true),
+                           set_config('shipwithali.owner_id', ${input.scope.ownerId}, true)`
+            .execute(executor);
+          const selected = await sql<{
+            readonly version_id: string;
+            readonly media_id: string;
+            readonly locale: string;
+            readonly state: string;
+            readonly is_current: boolean;
+            readonly media_asset_version: number | string;
+            readonly media_decision_id: string;
+            readonly media_object_id: string;
+            readonly media_sha256: string;
+            readonly media_object_version: string;
+          }>`select version.version_id::text as version_id, version.media_id::text as media_id,
+                     version.locale, version.state, version.is_current, version.media_asset_version,
+                     version.media_decision_id::text as media_decision_id,
+                     version.media_object_id::text as media_object_id, version.media_sha256,
+                     version.media_object_version
+                from cv_portfolio.portfolios portfolio
+                join cv_portfolio.versions version
+                  on version.version_id = portfolio.current_version_id
+                 and version.portfolio_id = portfolio.portfolio_id
+                 and version.owner_id = portfolio.owner_id
+                join cv_portfolio.acceptance_history approval
+                  on approval.version_id = version.version_id
+                 and approval.portfolio_id = version.portfolio_id
+                 and approval.owner_id = version.owner_id
+               where portfolio.portfolio_id = ${input.scope.portfolioId}::uuid
+                 and portfolio.owner_id = ${input.scope.ownerId}::uuid
+                 and version.state = 'accepted' and version.locale = 'en' and version.is_current
+               limit 1`.execute(executor);
+          const row = selected.rows[0];
+          if (row === undefined) return err({ kind: "not_found", code: "CURRENT_CV_NOT_FOUND" });
+          const mediaAssetId = parseStableId("MediaAsset", row.media_id);
+          const objectId = parseStableId("MediaObject", row.media_object_id);
+          if (!mediaAssetId.ok || !objectId.ok || row.locale !== "en" || row.state !== "accepted" ||
+              row.is_current !== true || !Number.isSafeInteger(Number(row.media_asset_version)) ||
+              !/^[0-9a-f]{64}$/u.test(row.media_sha256) || row.media_object_version !== row.media_sha256 ||
+              row.media_object_version.length > 512) {
+            return err({ kind: "temporarily_unavailable", code: "CURRENT_CV_UNAVAILABLE" });
+          }
+          const media = await input.media.getAcceptedPdfSnapshot({
+            ownerId: input.scope.ownerId,
+            mediaAssetId: mediaAssetId.value,
+          }, context);
+          if (!media.ok) return media;
+          if (media.value.status !== "accepted" || media.value.snapshot.assetVersion !== Number(row.media_asset_version) ||
+              media.value.snapshot.decisionId !== row.media_decision_id || media.value.snapshot.objectId !== objectId.value ||
+              media.value.snapshot.sha256 !== row.media_sha256 || media.value.snapshot.objectVersion !== row.media_object_version) {
+            return err({ kind: "not_found", code: "CURRENT_CV_NOT_FOUND" });
+          }
+          return ok({ portfolioId: input.scope.portfolioId, mediaAssetId: mediaAssetId.value, objectId: objectId.value,
+            sha256: row.media_sha256, objectVersion: row.media_object_version });
+        });
+      } catch {
+        return err({ kind: "temporarily_unavailable", code: "CURRENT_CV_UNAVAILABLE" });
       }
     },
   };

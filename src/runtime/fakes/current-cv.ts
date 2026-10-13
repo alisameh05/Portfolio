@@ -44,7 +44,7 @@ export function createCurrentCvTestFake(mode: CurrentCvFakeMode): CurrentCvTestF
             value: {
               kind: "redirect" as const,
               downloadUrl: mode.downloadUrl ?? FAKE_SIGNED_URL,
-              expiresAt: "2099-10-10T19:00:00.000Z",
+              expiresAt: new Date(Date.now() + 60_000).toISOString(),
               disposition: query.disposition,
             },
           };
@@ -67,7 +67,7 @@ export function createCurrentCvTestFake(mode: CurrentCvFakeMode): CurrentCvTestF
             value: {
               kind: "redirect" as const,
               downloadUrl: "not-a-url",
-              expiresAt: "2099-10-10T19:00:00.000Z",
+              expiresAt: new Date(Date.now() + 60_000).toISOString(),
               disposition: query.disposition,
             },
           };

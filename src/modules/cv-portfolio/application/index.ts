@@ -22,7 +22,10 @@ export type {
   CvPortfolioRootView,
   CurrentCvDownloadQuery,
   CurrentCvDelivery,
+  CurrentCvSnapshot,
   CvPortfolioApplicationService,
 } from "./owner-contracts.js";
 export { createOwnerCvApplicationService } from "./owner-service.js";
 export type { AcceptCvPortfolioVersionInput, ActivateCvPortfolioVersionInput, CvPortfolioRepositoryPort, GetCurrentCvMediaUsageInput, RegisterCvPortfolioVersionInput } from "./repository.js";
+export { createCurrentCvDeliveryService } from "./current-delivery.js";
+export type { CurrentCvSnapshotRepositoryPort, CurrentCvObjectDeliveryPort, CurrentCvDeliveryService } from "./current-delivery.js";
