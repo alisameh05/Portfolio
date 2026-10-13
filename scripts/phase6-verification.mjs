@@ -796,8 +796,11 @@ async function main() {
       testDiagnostics: mediaRejectionTestDiagnostics,
       limitations: [] };
     mkdirSync(join(ROOT, "evidence"), { recursive: true });
+    if (evidence.verdict !== "pass") {
+      failures.push("PHASE6_MEDIA_REJECTION_EVIDENCE_INVALID");
+      process.exitCode = 1;
+    }
     writeFileSync(join(ROOT, "evidence/phase6-media-rejection.json"), `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
-    if (evidence.verdict !== "pass") failures.push("PHASE6_MEDIA_REJECTION_EVIDENCE_INVALID");
   } else if (MEDIA_ACCEPTANCE_ONLY) {
     const scenarios = [
       "T07-01 exact candidate hash, current processing version, same Owner and current kind policy are required",
