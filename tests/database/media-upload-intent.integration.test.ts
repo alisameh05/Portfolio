@@ -177,7 +177,16 @@ function createPdfVariant(base: Uint8Array, mode: "encrypted" | "active"): Uint8
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }
 
-describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storage", () => {
+function defineIntegrationSuite(group: "baseline" | "rejection"): void {
+describeReal(group === "baseline"
+  ? "Phase 6 #148 private upload intent with real PostgreSQL and Storage"
+  : "Phase 6 #157 isolated Media rejection with real PostgreSQL and Storage", () => {
+  // Rejection creates retained CV versions and withdraws accepted Media. Give
+  // it its own scoped services and collections so baseline initialization and
+  // acceptance assertions never depend on destructive test order.
+  function scenario(scenarioGroup: typeof group, name: string, run: () => Promise<void>, timeout?: number): void {
+    if (scenarioGroup === group) it(name, run, timeout);
+  }
   let admin: Client;
   let appClient: Client;
   let appDatabase: ReturnType<typeof createPostgresRuntimeDatabase>;
@@ -451,7 +460,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     return media.value.mediaId as StableId<"MediaAsset">;
   }
 
-  it("rejects accepted Media safely and serializes with current usage changes", async () => {
+  scenario("rejection", "rejects accepted Media safely and serializes with current usage changes", async () => {
     const actor = { kind: "owner" as const, ownerId, sessionId: "phase6-media-rejection-owner" };
     const media = await getOwnerMediaApplicationService();
     const reason = "Owner confirmed this candidate should not remain available.";
@@ -1110,7 +1119,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     }
   });
 
-  it("commits a scoped candidate and replays the same encrypted target without re-signing", async () => {
+  scenario("baseline", "commits a scoped candidate and replays the same encrypted target without re-signing", async () => {
     const cvService = await getOwnerCvApplicationService();
     for (let round = 0; round < 10; round += 1) {
       await admin.query("delete from cv_portfolio.portfolios where portfolio_id = $1::uuid and owner_id = $2::uuid", [portfolioId, ownerId]);
@@ -1196,7 +1205,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(signingCalls).toBe(signingCallsBeforeInvalidName);
   });
 
-  it("allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes", async () => {
+  scenario("baseline", "allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes", async () => {
     const key = `phase6-upload-storage-${randomBytes(16).toString("hex")}`;
     const response = await issue(key);
     expect(response.status, `storage=${lastStorageFailure ?? "none"}; body=${JSON.stringify(await response.clone().json())}`).toBe(201);
@@ -1270,7 +1279,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(Buffer.from(await retained.arrayBuffer())).toEqual(bytes);
   });
 
-  it("rolls back a failed candidate commit and idempotently removes its expired private orphan", async () => {
+  scenario("baseline", "rolls back a failed candidate commit and idempotently removes its expired private orphan", async () => {
     const priorCount = await admin.query(
       "select count(*)::int as count from media.assets where portfolio_id = $1::uuid and owner_id = $2::uuid",
       [portfolioId, ownerId],
@@ -1324,7 +1333,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     await admin.query(`drop function media.${functionName}()`);
   });
 
-  it("processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors", async () => {
+  scenario("baseline", "processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors", async () => {
     appNow = Date.now();
     const updatePrivileges = await admin.query(`
       select has_column_privilege('shipwithali_application', 'media.processing_states', 'media_id', 'UPDATE') as state_identity,
@@ -3267,7 +3276,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     mediaProcessingCounts.imageProcessorExecutions += imageProcessorExecutions;
     if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
   }, REQUIRE_FULL_MEDIA ? 600_000 : 300_000);
-  it("issues bounded delivery only for current published-locale and profile Media uses", async () => {
+  scenario("baseline", "issues bounded delivery only for current published-locale and profile Media uses", async () => {
     const eligible = await admin.query<{ media_id: string }>(`
       select asset.media_id::text
         from media.assets asset
@@ -3416,7 +3425,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     expect(storedRevision.rows[0]?.payload_text).not.toContain("storage/v1/object/sign");
   }, 120_000);
 
-  it("processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg", async () => {
+  scenario("baseline", "processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg", async () => {
     appNow = Date.now();
     const acceptedCountBeforeVideos = acceptedMediaIds.length;
     const { createClamAvScanner, createFfmpegVideoProcessor } = await import("../../src/runtime/adapters/media-processing-tools.js");
@@ -3603,3 +3612,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
     if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
   }, 300_000);
 });
+}
+
+defineIntegrationSuite("baseline");
+defineIntegrationSuite("rejection");

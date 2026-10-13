@@ -26,10 +26,18 @@ test("CV evidence requires recorded execution of every T09 criterion", () => {
 
 test("the complete real integration gate rejects skipped, missing, failed, and partial test reports", () => {
   const report = {
-    success: true, numTotalTests: 5, numPassedTests: 5, numFailedTests: 0, numPendingTests: 0,
-    testResults: [{ assertionResults: Array.from({ length: 5 }, () => ({ status: "passed" })) }],
+    success: true, numTotalTests: 7, numPassedTests: 7, numFailedTests: 0, numPendingTests: 0,
+    testResults: [{ assertionResults: [
+      "commits a scoped candidate and replays the same encrypted target without re-signing",
+      "allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes",
+      "rolls back a failed candidate commit and idempotently removes its expired private orphan",
+      "processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+      "issues bounded delivery only for current published-locale and profile Media uses",
+      "processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg",
+      "rejects accepted Media safely and serializes with current usage changes",
+    ].map((title) => ({ title, status: "passed" })) }],
   };
-  assert.deepEqual(evaluatePhase6IntegrationTests(report, 0), { total: 5, passed: 5, failed: 0, skipped: 0, verdict: "pass" });
+  assert.deepEqual(evaluatePhase6IntegrationTests(report, 0), { total: 7, passed: 7, failed: 0, skipped: 0, verdict: "pass" });
   assert.equal(evaluatePhase6IntegrationTests(report, 1).verdict, "fail");
   assert.equal(evaluatePhase6IntegrationTests(undefined, 0).verdict, "fail");
   for (const status of ["pending", "disabled", "todo", "failed"]) {
@@ -41,6 +49,14 @@ test("the complete real integration gate rejects skipped, missing, failed, and p
   partial.testResults[0].assertionResults.pop();
   assert.equal(evaluatePhase6IntegrationTests(partial, 0).verdict, "fail");
   assert.equal(evaluatePhase6IntegrationTests({ ...report, numPendingTests: 1 }, 0).verdict, "fail");
+  for (const title of [report.testResults[0].assertionResults[1].title, "unrelated passing test"]) {
+    const substituted = structuredClone(report);
+    substituted.testResults[0].assertionResults[0].title = title;
+    assert.equal(evaluatePhase6IntegrationTests(substituted, 0).verdict, "fail");
+  }
+  const extra = structuredClone(report);
+  extra.testResults[0].assertionResults.push({ title: "unexpected test", status: "passed" });
+  assert.equal(evaluatePhase6IntegrationTests(extra, 0).verdict, "fail");
 });
 
 test("integration diagnostics retain source locations without arbitrary Auth or database payloads", () => {
