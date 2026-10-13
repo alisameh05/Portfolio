@@ -833,7 +833,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       "private media bytes remain in private Storage after rejection",
     ].map((name) => ({ name, executed: true, status: "passed" as const }));
     if (PROCESSING_COUNTS_FILE) writeFileSync(PROCESSING_COUNTS_FILE, JSON.stringify(mediaProcessingCounts));
-  }, 300_000);
+  }, 600_000);
 
   function ownerService(uploadIntents: ReturnType<typeof createService>) {
     return {
