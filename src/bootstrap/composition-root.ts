@@ -31,8 +31,9 @@ import type { OwnerPublicationApplicationService } from "../runtime/http/owner-p
 import type { PublicDiscoveryService } from "../modules/taxonomy-discovery/application/index.js";
 import type { LifecycleResource, ReadinessCheck } from "../runtime/ports.js";
 import { createSystemClock, createSystemIdGenerator } from "../runtime/ports.js";
-import { parseStableId } from "../shared/domain/index.js";
+import { parseStableId, type StableId } from "../shared/domain/index.js";
 import type { OwnerMediaApplicationService } from "../modules/media/index.js";
+import type { MediaDeliveryApplicationService } from "../modules/media/index.js";
 import type { CurrentCvDeliveryService, OwnerCvApplicationService } from "../modules/cv-portfolio/index.js";
 
 export type { RuntimeConfig } from "./configuration.js";
@@ -44,6 +45,7 @@ let currentContentAuthoring: ContentAuthoringService | undefined;
 let currentOwnerTaxonomy: OwnerTaxonomyApplicationService | undefined;
 let currentPublicDiscovery: PublicDiscoveryService | undefined;
 let currentOwnerMedia: OwnerMediaApplicationService | undefined;
+let currentMediaDelivery: MediaDeliveryApplicationService | undefined;
 let currentOwnerCv: OwnerCvApplicationService | undefined;
 let currentCurrentCv: CurrentCvDeliveryService | undefined;
 
@@ -75,6 +77,7 @@ export interface DatabaseRuntimeDependencies {
   readonly ownerTaxonomy?: OwnerTaxonomyApplicationService;
   readonly publicDiscovery?: PublicDiscoveryService;
   readonly ownerMedia?: OwnerMediaApplicationService;
+  readonly mediaDelivery?: MediaDeliveryApplicationService;
   readonly ownerCv?: OwnerCvApplicationService;
   readonly currentCv?: CurrentCvDeliveryService;
   readonly resource: LifecycleResource;
@@ -149,6 +152,7 @@ export async function initializeDatabaseRuntime(
         let ownerTaxonomy: OwnerTaxonomyApplicationService | undefined;
         let publicDiscovery: PublicDiscoveryService | undefined;
         let ownerMedia: OwnerMediaApplicationService | undefined;
+        let mediaDelivery: MediaDeliveryApplicationService | undefined;
         let ownerCv: OwnerCvApplicationService | undefined;
         let currentCv: CurrentCvDeliveryService | undefined;
         if (runtimeKind === "application") {
@@ -376,6 +380,49 @@ export async function initializeDatabaseRuntime(
             }),
             storage: currentCvStorage,
           });
+          if (contentAuthoring === undefined) throw new Error("CONTENT_AUTHORING_UNAVAILABLE");
+          const [{ createPortfolioSettingsReader }, { createPostgresMediaDeliveryRepository },
+            { createMediaDeliveryApplicationService }, { createSupabaseMediaDeliveryStorage }] = await Promise.all([
+            import("../modules/portfolio-configuration/application/settings-service.js"),
+            import("../modules/media/adapters/postgres-delivery.js"),
+            import("../modules/media/application/delivery.js"),
+            import("../runtime/adapters/supabase-media-delivery-storage.js"),
+          ]);
+          const profileSettings = createPortfolioSettingsReader({
+            repository,
+            transactions: operations.transactions,
+            scope,
+          });
+          const deliveryStorage = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
+            ? createSupabaseMediaDeliveryStorage({
+              storageUrl: env["SUPABASE_URL"],
+              serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
+              portfolioId: scope.portfolioId,
+              mode: env["NODE_ENV"] === "test" ? "test" : "deployed",
+              ...(env["MEDIA_CANDIDATE_BUCKET"] === undefined ? {} : { candidateBucket: env["MEDIA_CANDIDATE_BUCKET"] }),
+              ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+            })
+            : {
+              async createSignedDeliveryTarget() {
+                return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_DELIVERY_UNAVAILABLE" } };
+              },
+            };
+          mediaDelivery = createMediaDeliveryApplicationService({
+            ownerId: scope.ownerId,
+            transactions: operations.transactions,
+            use: {
+              async isCurrentlyUsed(query, transaction) {
+                if (query.purpose === "project") return contentAuthoring!.getPublicProjectMediaUse({ mediaAssetId: query.mediaAssetId as StableId<"MediaAsset">, locale: query.locale }, transaction);
+                if (query.purpose === "profile") return profileSettings.isPublicProfileMediaUse({ mediaAssetId: query.mediaAssetId as StableId<"MediaAsset">, locale: query.locale }, transaction);
+                return { ok: true, value: false };
+              },
+            },
+            repository: createPostgresMediaDeliveryRepository({
+              database: database.database,
+              scope,
+            }),
+            storage: deliveryStorage,
+          });
           const [{ createPostgresMediaRejectionRepository }, { createMediaRejectionApplicationService }] = await Promise.all([
             import("../modules/media/adapters/postgres-rejection.js"),
             import("../modules/media/application/rejection.js"),
@@ -420,6 +467,7 @@ export async function initializeDatabaseRuntime(
           ...(ownerTaxonomy === undefined ? {} : { ownerTaxonomy }),
           ...(publicDiscovery === undefined ? {} : { publicDiscovery }),
           ...(ownerMedia === undefined ? {} : { ownerMedia }),
+          ...(mediaDelivery === undefined ? {} : { mediaDelivery }),
           ...(ownerCv === undefined ? {} : { ownerCv }),
           ...(currentCv === undefined ? {} : { currentCv }),
           resource: database.resource,
@@ -446,6 +494,7 @@ export async function initializeDatabaseRuntime(
     currentOwnerTaxonomy = dependencies.ownerTaxonomy;
     currentPublicDiscovery = dependencies.publicDiscovery;
     currentOwnerMedia = dependencies.ownerMedia;
+    currentMediaDelivery = dependencies.mediaDelivery;
     currentOwnerCv = dependencies.ownerCv;
     currentCurrentCv = dependencies.currentCv;
     lifecycle.markReady();
@@ -495,6 +544,12 @@ export async function getOwnerMediaApplicationService(): Promise<OwnerMediaAppli
   if (currentOwnerMedia !== undefined) return currentOwnerMedia;
   const { createProductionOwnerMediaService } = await import("../runtime/fakes/owner-media.js");
   return createProductionOwnerMediaService();
+}
+
+/** Locale-aware public Media delivery uses only currently visible Content or approved profile settings. */
+export async function getMediaDeliveryApplicationService(): Promise<MediaDeliveryApplicationService> {
+  if (currentMediaDelivery !== undefined) return currentMediaDelivery;
+  throw new Error("Media delivery requires the configured PostgreSQL and private Storage assembly.");
 }
 
 /** CV registration and Owner reads share the configured PostgreSQL and Media acceptance transaction boundary. */
@@ -561,6 +616,7 @@ export function resetRuntimeForTests(): void {
   currentOwnerTaxonomy = undefined;
   currentPublicDiscovery = undefined;
   currentOwnerMedia = undefined;
+  currentMediaDelivery = undefined;
   currentOwnerCv = undefined;
   currentCurrentCv = undefined;
   resetLifecycleForTests();

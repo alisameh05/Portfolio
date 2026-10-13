@@ -29,6 +29,7 @@ function createHarness() {
   let id = 10;
   const repository: ContentAuthoringRepository = {
     async getVisibleMediaUsage() { return { ok: true as const, value: { facts: [] } }; },
+    async getPublicProjectMediaUse() { return { ok: true as const, value: false }; },
     async projectExists(projectId) {
       return projectId.endsWith("91");
     },

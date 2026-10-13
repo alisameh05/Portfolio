@@ -93,17 +93,25 @@ For issue #148, `npm run phase6:focus:upload-intents` runs the same isolated set
 
 ## Complete Media and CV integration validation
 
-Run `npm run phase6:focus:media-integration` to execute all five tests in
+Run `npm run phase6:focus:media-integration` to execute all seven tests in
 `tests/database/media-upload-intent.integration.test.ts`. The command provisions
 the disposable PostgreSQL/Auth/private Storage stack, generates the six format
 fixtures, and injects credentials and processor settings into the test process.
-It requires exactly five passed tests, zero failures, zero skips, real acceptance
+It requires each of the seven named tests to pass, zero failures, zero skips, real acceptance
 for all six formats, and successful cleanup. It writes sanitized evidence to
 `evidence/phase6-media-integration.json`. No external env file is needed.
+Rejection uses a separate Owner/Portfolio fixture so retained CV versions and
+rejected Media cannot contaminate baseline initialization or acceptance checks.
+Auxiliary delivery/rejection acceptances are counted separately from the six
+format acceptances and never enter the accepted-format Media collection.
 
 Run `npm run phase6:focus:cv-portfolio` for the CV registration scenarios and
 the preexisting-Owner migration upgrade proof. Both commands run sequentially
 in the `Phase 6 Media and CV real-PostgreSQL-Storage` CI job on each PR.
+The upgrade starts with only migrations preceding CV initialization, provisions
+a legacy Owner, then applies every deferred CV and later migration in timestamp
+order. Evidence requires both the version-1 backfill and the complete deferred
+migration ledger; later domain migrations cannot enter the pre-CV baseline.
 
 Direct `npm test` / Vitest runs still skip optional service suites when their
 fixture environment is absent. Use the provisioning commands above for real

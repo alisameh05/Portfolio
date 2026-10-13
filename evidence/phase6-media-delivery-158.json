@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "ticket": 158,
+  "parent": 145,
+  "runId": "0dc56543-ba31-41e9-8536-f7fbc58f1361",
+  "sourceRevision": "bcc625c5270790383de5b56d03337ad3e02eb80d",
+  "sourceTreeSha256": "c9862ee7d505a8b0c6a2dc65ab7e5b1c7216ea8735da91f9e7f1ffdd0e60ff5b",
+  "startedAt": "2026-10-13T13:19:43.109Z",
+  "completedAt": "2026-10-13T13:25:05.601Z",
+  "scope": "visibility-authorized-provider-neutral-project-and-profile-media-delivery",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1",
+    "sharp": "sharp-0.35.4;libvips-8.18.6"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "executionCount": 3,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 20
+    }
+  },
+  "policyIds": {
+    "delivery": "media-delivery-v1",
+    "processedBucket": "media-processed",
+    "maxSignedUrlSeconds": 300,
+    "profileMediaMigration": "20261013100000_configure_public_profile_media.sql",
+    "processing": {
+      "document": "pdf-active-content-deny-1",
+      "image": "image-webp-variants-v1",
+      "video": "mp4-webm-bounded-variants-1"
+    }
+  },
+  "principalScope": {
+    "database": "shipwithali_application constrained by portfolio_id and owner_id RLS",
+    "storage": "service-role signing of one exact sealed processed object; anonymous private Storage denied",
+    "environment": "disposable loopback Supabase"
+  },
+  "checks": {
+    "integration": {
+      "suite": "tests/database/media-upload-intent.integration.test.ts",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "failedTests": [],
+      "verdict": "pass"
+    },
+    "acceptedMediaProcessing": {
+      "suite": "tests/database/media-upload-intent.integration.test.ts",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "failedTests": [],
+      "verdict": "pass"
+    },
+    "acceptanceApplication": {
+      "suites": [
+        "tests/modules/media-acceptance.test.ts",
+        "tests/modules/media-cv-contracts.test.ts",
+        "tests/modules/media-delivery.test.ts",
+        "tests/runtime/supabase-media-delivery-storage.test.ts"
+      ],
+      "total": 16,
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0,
+      "verdict": "pass"
+    },
+    "formatAcceptanceExecutions": 4
+  },
+  "scenarios": [
+    {
+      "name": "T13-01 current same-Owner accepted safe suitable accessible snapshots resolve only with an exact visible locale use",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T13-02 candidate, rejected, missing, foreign, hidden, archived and unpublished-locale assets receive no new capability",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T13-03 reviewed Arabic uses its own publication and can reuse accepted English Media without English text fallback",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T13-04 public descriptors retain stable Media and variant identities while signed URLs remain short-lived capabilities",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T13-05 real private Storage denies anonymous reads, listing, candidate access, overwrite, delete and arbitrary signing",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T13-06 deployed Storage origins require HTTPS and signing stays bound to the configured Storage origin and exact object path",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T13-07 withdrawal blocks new capabilities while previously issued URLs remain bounded by their signed expiry",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T13-08 delivery resolves sealed object IDs, hashes and versions without substituting accepted Media meaning",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T13-09 signing and integrity failures fail closed with typed unavailable results and no unchecked fallback",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T13-10 bounded indexed queries and public responses exclude private Media, Storage and bearer-capability internals",
+      "executed": true,
+      "status": "passed"
+    }
+  ],
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:media-delivery"
+  ],
+  "limitations": [
+    "Previously issued Storage URLs remain usable until their signed expiry; the resolver issues no further URL after the public use is withdrawn."
+  ]
+}

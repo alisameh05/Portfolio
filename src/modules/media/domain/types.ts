@@ -9,6 +9,7 @@ export interface MediaAccessibilityMetadata {
   readonly nonVisualDescription?: string;
   readonly isDecorative: boolean;
   readonly caption?: string;
+  readonly summary?: string;
   readonly transcriptUrl?: string;
 }
 

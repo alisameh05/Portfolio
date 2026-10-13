@@ -2,16 +2,17 @@
 
 import { z } from 'zod';
 
-export const zProfileUpdate = z.strictObject({
-    displayName: z.string().min(1).max(100),
-    headline: z.string().min(1).max(160),
-    bio: z.string().min(1).max(4000)
-});
-
 /**
  * Immutable UUIDv7 identity, independent of routes, labels, and providers.
  */
 export const zStableId = z.string().uuid().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+
+export const zProfileUpdate = z.strictObject({
+    displayName: z.string().min(1).max(100),
+    headline: z.string().min(1).max(160),
+    bio: z.string().min(1).max(4000),
+    mediaAssetId: zStableId.optional()
+});
 
 export const zCommandReceipt = z.strictObject({
     aggregateId: zStableId,

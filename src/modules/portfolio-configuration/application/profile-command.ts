@@ -1,4 +1,4 @@
-import type { Rejection, Result } from "@shared/domain";
+import { parseStableId, type Rejection, type Result } from "@shared/domain";
 import type { Clock, StableIdGenerator } from "../../../runtime/ports.js";
 import type { OperationsPersistencePorts } from "../../portability-operations/index.js";
 import type { PortfolioScope } from "../ports/index.js";
@@ -28,6 +28,7 @@ function isValidProfile(value: unknown): value is PortfolioProfile {
       profile.headline.length <= 160 &&
       typeof profile.bio === "string" && profile.bio.trim().length > 0 &&
       profile.bio.length <= 4000 &&
+      (profile.mediaAssetId === undefined || parseStableId("MediaAsset", profile.mediaAssetId).ok) &&
       !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(
         profile.displayName + profile.headline + profile.bio,
       );
@@ -53,6 +54,7 @@ export function createPortfolioProfileCommandService(input: {
             displayName: command.profile.displayName,
             headline: command.profile.headline,
             bio: command.profile.bio,
+            mediaAssetId: command.profile.mediaAssetId ?? null,
           },
         },
         isValid: isValidProfile,
@@ -66,7 +68,7 @@ export function createPortfolioProfileCommandService(input: {
           type: "portfolio_configuration.profile_updated.v1",
           version: 1,
           value: {
-            changedFields: changedConfigurationFields(before.profile, profile, ["displayName", "headline", "bio"]),
+            changedFields: changedConfigurationFields(before.profile, profile, ["displayName", "headline", "bio", "mediaAssetId"]),
             ownerScope,
           },
         }),

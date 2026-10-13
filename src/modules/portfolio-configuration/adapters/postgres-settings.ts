@@ -19,6 +19,7 @@ interface SettingsRow {
   readonly display_name: string;
   readonly headline: string;
   readonly bio: string;
+  readonly profile_media_asset_id: string | null;
   readonly global_cta_label: string;
   readonly global_cta_destination: string;
   readonly global_cta_unavailable_fallback: string;
@@ -54,7 +55,12 @@ function safeRow(row: SettingsRow, channels: readonly ChannelRow[]): PortfolioSe
   });
   return {
     portfolioId: row.portfolio_id as PortfolioSettings["portfolioId"],
-    profile: { displayName: row.display_name, headline: row.headline, bio: row.bio },
+    profile: {
+      displayName: row.display_name,
+      headline: row.headline,
+      bio: row.bio,
+      ...(row.profile_media_asset_id === null ? {} : { mediaAssetId: row.profile_media_asset_id as NonNullable<PortfolioProfile["mediaAssetId"]> }),
+    },
     contactChannels,
     globalCta: {
       label: row.global_cta_label,
@@ -88,7 +94,7 @@ export function createPostgresPortfolioSettingsRepository(
       try {
         await setTrustedScope(context, scope);
         const selected = await sql<SettingsRow>`
-          select portfolio_id::text as portfolio_id, display_name, headline, bio,
+          select portfolio_id::text as portfolio_id, display_name, headline, bio, profile_media_asset_id::text as profile_media_asset_id,
                  global_cta_label, global_cta_destination,
                  global_cta_unavailable_fallback, version
             from portfolio_config.settings
@@ -125,12 +131,12 @@ export function createPostgresPortfolioSettingsRepository(
         await setTrustedScope(context, scope);
         const inserted = await sql<{ portfolio_id: string }>`
           insert into portfolio_config.settings (
-            portfolio_id, owner_id, display_name, headline, bio,
+            portfolio_id, owner_id, display_name, headline, bio, profile_media_asset_id,
             global_cta_label, global_cta_destination,
             global_cta_unavailable_fallback, version
           ) values (
             ${scope.portfolioId}::uuid, ${scope.ownerId}::uuid,
-            ${settings.profile.displayName}, ${settings.profile.headline}, ${settings.profile.bio},
+            ${settings.profile.displayName}, ${settings.profile.headline}, ${settings.profile.bio}, ${settings.profile.mediaAssetId ?? null}::uuid,
             ${settings.globalCta.label}, ${settings.globalCta.destination},
             ${settings.globalCta.unavailableFallback}, 1
           ) on conflict do nothing
@@ -173,6 +179,7 @@ export function createPostgresPortfolioSettingsRepository(
              set display_name = ${profile.displayName},
                  headline = ${profile.headline},
                  bio = ${profile.bio},
+                 profile_media_asset_id = ${profile.mediaAssetId ?? null}::uuid,
                  version = version + 1,
                  updated_at = transaction_timestamp()
            where portfolio_id = ${scope.portfolioId}::uuid

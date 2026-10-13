@@ -20,16 +20,17 @@ export type OwnerExportRecord = ({
     scope: 'portfolio-configuration';
 } & PortfolioConfigurationExportRecord);
 
-export type ProfileUpdate = {
-    displayName: string;
-    headline: string;
-    bio: string;
-};
-
 /**
  * Immutable UUIDv7 identity, independent of routes, labels, and providers.
  */
 export type StableId = string;
+
+export type ProfileUpdate = {
+    displayName: string;
+    headline: string;
+    bio: string;
+    mediaAssetId?: StableId;
+};
 
 export type CommandReceipt = {
     aggregateId: StableId;

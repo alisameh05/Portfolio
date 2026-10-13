@@ -155,6 +155,12 @@ export interface VisibleMediaUsageBatch {
   readonly facts: readonly VisibleMediaUsageFact[];
 }
 
+/** Exact-locale use check against the currently published public Project projection. */
+export interface GetPublicProjectMediaUseQuery {
+  readonly mediaAssetId: StableId<"MediaAsset">;
+  readonly locale: SupportedLocale;
+}
+
 export interface ProjectTaxonomyAssignmentCommand extends ExistingContentCommandContext {
   readonly projectId: StableId<"Project">;
   readonly valueId: StableId<"TaxonomyValue">;

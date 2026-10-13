@@ -15,6 +15,7 @@ export type {
   VisibleMediaUsageQuery,
   VisibleMediaUsageFact,
   VisibleMediaUsageBatch,
+  GetPublicProjectMediaUseQuery,
   ProjectTaxonomyAssignmentCommand,
   ProjectTaxonomyMergeCommand,
   ContentTaxonomyAssignmentsPort,

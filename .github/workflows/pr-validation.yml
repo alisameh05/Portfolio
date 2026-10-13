@@ -121,7 +121,7 @@ jobs:
         run: |
           node --input-type=module -e 'import { rmSync } from "node:fs"; for (const path of ["evidence/phase6-media-integration.json", "evidence/phase6-cv-portfolio-154.json"]) rmSync(path, { force: true });'
           docker compose -p portfolio-validation -f compose.validation.yaml build validation
-      - name: Require all five real Media integration tests with zero skips
+      - name: Require all seven real Media integration tests with zero skips
         # Remove committed evidence so an early failure cannot upload an old pass.
         run: |
           node --input-type=module -e 'import { rmSync } from "node:fs"; for (const path of ["evidence/phase6-media-integration.json", "evidence/phase6-cv-portfolio-154.json"]) rmSync(path, { force: true });'

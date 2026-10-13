@@ -388,6 +388,36 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
       }
     },
 
+    async getPublicProjectMediaUse(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await setTrustedScope(context, input.scope);
+        await sql`select set_config('statement_timeout', '3s', true)`.execute(executor);
+        const result = await sql<{ readonly used: boolean }>`
+          select exists (
+            select 1
+              from content.public_project_locales projection
+              join content.language_publications publication
+                on publication.content_id = projection.content_id and publication.portfolio_id = projection.portfolio_id
+               and publication.locale = projection.locale and publication.revision_id = projection.revision_id
+              join content.items item
+                on item.content_id = publication.content_id and item.portfolio_id = publication.portfolio_id
+               and item.content_type = publication.content_type and item.lifecycle = 'published'
+             where projection.portfolio_id = ${input.scope.portfolioId}::uuid
+               and projection.locale = ${input.locale}
+               and projection.claims @> jsonb_build_array(jsonb_build_object(
+                 'artifacts', jsonb_build_array(jsonb_build_object('mediaAssetId', ${input.mediaAssetId}::text))
+               ))
+             limit 1
+          ) as used
+        `.execute(executor);
+        if (result.rows.length !== 1 || typeof result.rows[0]?.used !== "boolean") throw new PostgresInfrastructureError();
+        return { ok: true, value: result.rows[0].used };
+      } catch {
+        return { ok: false, error: { kind: "temporarily_unavailable", code: "CONTENT_MEDIA_USE_UNAVAILABLE" } };
+      }
+    },
+
     async getVisibleMediaUsage(input, context) {
       const executor = resolvePostgresTransaction(context);
       let savepointActive = false;

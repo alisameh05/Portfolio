@@ -32,6 +32,8 @@ export interface PortfolioProfile {
   readonly displayName: string;
   readonly headline: string;
   readonly bio: string;
+  /** Stable Media identity for the explicitly configured public profile image. */
+  readonly mediaAssetId?: StableId<"MediaAsset">;
 }
 
 /**
