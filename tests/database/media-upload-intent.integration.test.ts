@@ -426,7 +426,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       let released = false;
       try {
         await admin.query("select pg_advisory_xact_lock(hashtextextended($1::text, 0))", [mediaId]);
-        const waitFor = async (expected: number, attempts = 120) => {
+        const waitFor = async (expected: number, attempts = 160) => {
           let waiting = 0;
           // Once a contender is waiting, leave margin inside the production
           // three-second lock timeout. Scheduling and local query latency can
@@ -788,7 +788,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
         expectedVersion: cvAccept.value.aggregateVersion, idempotencyKey: "phase6-rejection-cv-race-activate" as never }),
       () => media.rejectOwnerMediaAsset({ actor, mediaId: cvRaceMediaId, expectedVersion: 3,
         idempotencyKey: "phase6-rejection-cv-race-reject" as never, reason }),
-    ] as const, true);
+    ] as const);
     expect(Number(activationRaceResult.ok) + Number(cvRejectionRaceResult.ok)).toBe(1);
     const activationRacePortfolio = await cv.getOwnerCvPortfolio({ actor });
     expect(activationRacePortfolio.ok).toBe(true);
