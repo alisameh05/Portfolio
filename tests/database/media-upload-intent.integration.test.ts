@@ -426,7 +426,7 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       let released = false;
       try {
         await admin.query("select pg_advisory_xact_lock(hashtextextended($1::text, 0))", [mediaId]);
-        const waitFor = async (expected: number, atLeast = false) => {
+        const waitFor = async (expected: number) => {
           let waiting = 0;
           // Keep the barrier well inside the production three-second lock
           // timeout, accounting for local Supabase query latency as well as
@@ -436,10 +436,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
               from pg_locks lock join pg_stat_activity activity on activity.pid = lock.pid
               where activity.usename = $1 and lock.locktype = 'advisory' and not lock.granted`, [roleName]);
             waiting = Number(result.rows[0]?.count ?? 0);
-            if (atLeast ? waiting >= expected : waiting === expected) break;
+            if (waiting === expected) break;
             await new Promise((resolve) => setTimeout(resolve, 10));
           }
-          if (atLeast ? waiting < expected : waiting !== expected) {
+          if (waiting !== expected) {
             const sessions = await admin.query(`select pid, state, wait_event_type, wait_event, left(query, 180) as query
               from pg_stat_activity where usename = $1`, [roleName]);
             expect(waiting, `expected ${expected} ungranted Media advisory locks; outcomes=${JSON.stringify(outcomes)}; sessions=${JSON.stringify(sessions.rows)}`)
@@ -457,11 +457,10 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
             pending.push(commands[index]!().then((outcome) => { outcomes[index] = outcome; return outcome; }));
           }
         }
-        // One confirmed waiter is sufficient for the staged CV operations:
-        // a single PostgreSQL pool connection can queue the other transaction
-        // before it reaches the Media lock. Releasing after both commands have
-        // started keeps the race bounded by the production lock timeout.
-        await waitFor(stageFirst ? 1 : commands.length, stageFirst);
+        // Confirm every independent contender requested the same Media lock
+        // before releasing the barrier; the short poll stays within the
+        // production lock timeout.
+        await waitFor(commands.length);
         await admin.query("commit");
         released = true;
         return await Promise.all(pending) as {
@@ -770,8 +769,11 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       ids: createSystemIdGenerator(),
     });
     const cvRaceMediaId = await createAcceptedRejectionCandidate("cv-activation-race");
+    const cvRacePortfolio = await cv.getOwnerCvPortfolio({ actor });
+    expect(cvRacePortfolio.ok).toBe(true);
+    if (!cvRacePortfolio.ok) throw new Error("PHASE6_REJECTION_CV_RACE_ROOT_UNAVAILABLE");
     const cvRegister = await cv.registerOwnerCvVersion({ actor, mediaId: cvRaceMediaId, locale: "en", label: "CV activation race",
-      expectedVersion: secondCv.aggregateVersion, idempotencyKey: "phase6-rejection-cv-race-register" as never });
+      expectedVersion: cvRacePortfolio.value.aggregateVersion, idempotencyKey: "phase6-rejection-cv-race-register" as never });
     expect(cvRegister.ok).toBe(true);
     if (!cvRegister.ok) throw new Error("PHASE6_REJECTION_CV_RACE_REGISTER_FAILED");
     const cvAccept = await cv.acceptOwnerCvVersion({ actor, versionId: cvRegister.value.versionId,
