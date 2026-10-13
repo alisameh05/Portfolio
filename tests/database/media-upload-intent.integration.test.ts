@@ -668,8 +668,14 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
       () => media.rejectOwnerMediaAsset({ actor, mediaId: acceptanceRaceId, expectedVersion: 2,
         idempotencyKey: "phase6-rejection-command-race" as never, reason }),
     ] as const, true);
-    expect(rejectionRaceResult).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
-    if (!acceptanceRaceResult.ok) expect(acceptanceRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_INVALID_TRANSITION" } });
+    if (rejectionRaceResult.ok) {
+      expect(acceptanceRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
+      expect(await rejectionState(acceptanceRaceId)).toMatchObject({ aggregate_version: 3, rejections: 1, receipts: 1 });
+    } else {
+      expect(acceptanceRaceResult).toMatchObject({ ok: true, value: { outcome: "media-accepted" } });
+      expect(rejectionRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
+      expect(await rejectionState(acceptanceRaceId)).toMatchObject({ aggregate_version: 3, rejections: 0, receipts: 1 });
+    }
 
     // Start a rejection from the publish-ready barrier while the real Content
     // publication uses a separate transaction. Shared/exclusive Media locks
