@@ -327,11 +327,12 @@ describeReal(group === "baseline"
     contentId: StableId<string>,
     expectedVersion: number,
     mediaAssetId: StableId<"MediaAsset">,
+    prefix = "phase6-accepted-project",
   ) {
     const owner = { kind: "owner" as const, ownerId, sessionId: "phase6-content-media-owner" };
     const artifactId = createStableId("SupportingArtifact");
     const draft = await content.saveRevision({ actor: owner, contentId, expectedVersion,
-      idempotencyKey: "phase6-content-media-arabic-save" as never, correlationId: "phase6-content-media-arabic-save",
+      idempotencyKey: `${prefix}-arabic-save` as never, correlationId: `${prefix}-arabic-save`,
       locale: "ar", title: "مشروع موثق", summary: "ملخص عربي للمشروع", body: "هذا وصف عربي مستقل للمشروع.",
       draftData: { contentType: "project", caseStudy: { problem: "مشكلة عربية واضحة.", ownerRole: "قاد التنفيذ.",
         contributions: ["بنى الخدمة."], outcomes: ["تحسن سير العمل."], lessons: "قِس أثر العمل." },
@@ -345,21 +346,21 @@ describeReal(group === "baseline"
     expect(preview.ok, JSON.stringify(preview)).toBe(true);
     if (!preview.ok) throw new Error("PHASE6_ARABIC_MEDIA_PREVIEW_FAILED");
     const reviewed = await content.reviewRevision({ actor: owner, contentId, revisionId: draft.value.revisionId,
-      expectedVersion: draft.value.aggregateVersion, idempotencyKey: "phase6-content-media-arabic-review" as never,
-      correlationId: "phase6-content-media-arabic-review", locale: "ar", snapshotHash: preview.value.snapshotHash,
+      expectedVersion: draft.value.aggregateVersion, idempotencyKey: `${prefix}-arabic-review` as never,
+      correlationId: `${prefix}-arabic-review`, locale: "ar", snapshotHash: preview.value.snapshotHash,
       evidenceVersion: preview.value.evidenceVersion, decision: "accepted", findings: [] });
     expect(reviewed.ok, JSON.stringify(reviewed)).toBe(true);
     if (!reviewed.ok) throw new Error("PHASE6_ARABIC_MEDIA_REVIEW_FAILED");
     const published = await content.publishLanguageVersion({ actor: owner, contentId, expectedVersion: reviewed.value.aggregateVersion,
-      idempotencyKey: "phase6-content-media-arabic-publish" as never, correlationId: "phase6-content-media-arabic-publish",
+      idempotencyKey: `${prefix}-arabic-publish` as never, correlationId: `${prefix}-arabic-publish`,
       locale: "ar", revisionId: draft.value.revisionId });
     expect(published.ok, JSON.stringify(published)).toBe(true);
     if (!published.ok) throw new Error("PHASE6_ARABIC_MEDIA_PUBLICATION_FAILED");
-    const arabic = await content.getPublicProject({ slug: "phase6-accepted-project-project", locale: "ar" });
+    const arabic = await content.getPublicProject({ slug: `${prefix}-project`, locale: "ar" });
     expect(arabic).toMatchObject({ ok: true, value: { revisionId: draft.value.revisionId, locale: "ar",
       title: "مشروع موثق", summary: "ملخص عربي للمشروع", body: "هذا وصف عربي مستقل للمشروع." } });
-    expect(await content.getPublicProject({ slug: "phase6-accepted-project-project", locale: "en" }))
-      .toMatchObject({ ok: true, value: { title: "phase6-accepted-project Project", locale: "en" } });
+    expect(await content.getPublicProject({ slug: `${prefix}-project`, locale: "en" }))
+      .toMatchObject({ ok: true, value: { title: `${prefix} Project`, locale: "en" } });
     return published.value.aggregateVersion;
   }
 
@@ -3296,14 +3297,15 @@ describeReal(group === "baseline"
     if (!mediaAssetId) throw new Error("PHASE6_MEDIA_DELIVERY_ACCEPTED_IMAGE_MISSING");
 
     const content = createContentService(contentMediaAcceptancePort());
-    const project = await publishContentWithMedia(content, "project", mediaAssetId, "phase6-accepted-project");
+    const prefix = "phase6-media-delivery-project";
+    const project = await publishContentWithMedia(content, "project", mediaAssetId, prefix);
     const delivery = await getMediaDeliveryApplicationService();
     expect(await delivery.resolveDelivery({ mediaAssetId, purpose: "project", locale: "en" }))
       .toMatchObject({ ok: true, value: { purpose: "project", locale: "en", variants: expect.any(Array) } });
     expect(await delivery.resolveDelivery({ mediaAssetId, purpose: "project", locale: "ar" }))
       .toMatchObject({ ok: false, error: { kind: "not_found", code: "MEDIA_DELIVERY_NOT_VISIBLE" } });
 
-    const aggregateVersion = await publishArabicProjectRevision(content, project.contentId, 3, mediaAssetId);
+    const aggregateVersion = await publishArabicProjectRevision(content, project.contentId, 3, mediaAssetId, prefix);
     const english = await delivery.resolveDelivery({ mediaAssetId, purpose: "project", locale: "en" });
     const arabic = await delivery.resolveDelivery({ mediaAssetId, purpose: "project", locale: "ar" });
     expect(english.ok && arabic.ok).toBe(true);
