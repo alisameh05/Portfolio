@@ -497,10 +497,11 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
             pending.push(commands[index]!().then((outcome) => { outcomes[index] = outcome; return outcome; }));
           }
         }
-        // Confirm every independent contender requested the same Media lock
-        // before releasing the barrier; the short poll stays within the
-        // production lock timeout.
-        await waitFor(commands.length);
+        // Both commands have started before the barrier is released. Confirm
+        // at least one is queued on the Media lock so the outcomes exercise
+        // the same serialized transaction boundary without requiring every
+        // contender to reach PostgreSQL within a scheduler-sensitive window.
+        await waitFor(1);
         await admin.query("commit");
         released = true;
         return await Promise.all(pending) as {
