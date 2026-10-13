@@ -499,10 +499,9 @@ describeReal("Phase 6 #148 private upload intent with real PostgreSQL and Storag
           }
         }
         // Both commands have started before the barrier is released. Confirm
-        // at least one is queued on the Media lock so the outcomes exercise
-        // the same serialized transaction boundary without requiring every
-        // contender to reach PostgreSQL within a scheduler-sensitive window.
-        await waitFor(1, 160, true);
+        // both independent application sessions are queued on the Media lock.
+        // Keep this bounded wait inside the production three-second lock timeout.
+        await waitFor(commands.length, 240, true);
         await admin.query("commit");
         released = true;
         return await Promise.all(pending) as {
