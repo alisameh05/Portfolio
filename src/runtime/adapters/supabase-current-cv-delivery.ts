@@ -88,6 +88,22 @@ export function createSupabaseCurrentCvDelivery(options: SupabaseCurrentCvDelive
   const fetcher = options.fetcher ?? fetch;
   const headers = { apikey: options.serviceRoleKey, authorization: `Bearer ${options.serviceRoleKey}` };
   return {
+    async isAvailable({ snapshot }) {
+      let path: string;
+      try { path = objectPath(snapshot); } catch { return false; }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5_000);
+      try {
+        const response = await fetcher(new URL(`/storage/v1/object/${encodeURIComponent(bucket)}/${path}`, base), {
+          method: "HEAD", headers, signal: controller.signal, redirect: "manual",
+        });
+        return response.ok;
+      } catch {
+        return false;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
     async stream({ snapshot }) {
       let path: string;
       try { path = objectPath(snapshot); } catch { return unavailable(); }

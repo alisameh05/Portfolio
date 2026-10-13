@@ -13,6 +13,26 @@ const snapshot: CurrentCvSnapshot = {
 };
 
 describe("Supabase Current CV private delivery", () => {
+  it("checks object availability without creating a signed delivery capability", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => new Response(null, { status: 200 }));
+    const storage = createSupabaseCurrentCvDelivery({ storageUrl: "http://127.0.0.1:56321", serviceRoleKey: "private-key", mode: "test", fetcher });
+
+    expect(await storage.isAvailable?.({ snapshot })).toBe(true);
+    expect(fetcher).toHaveBeenCalledOnce();
+    const [requestUrl, request] = fetcher.mock.calls[0] as [URL, RequestInit];
+    expect(request?.method).toBe("HEAD");
+    expect(requestUrl.pathname).toContain(`${snapshot.objectId}/${sha256}.pdf`);
+    expect(request?.headers).toMatchObject({ apikey: "private-key", authorization: "Bearer private-key" });
+    expect(request?.body).toBeUndefined();
+  });
+
+  it("reports private Storage failure without exposing provider details", async () => {
+    const storage = createSupabaseCurrentCvDelivery({ storageUrl: "http://127.0.0.1:56321", serviceRoleKey: "private-key", mode: "test",
+      fetcher: async () => new Response("provider details", { status: 503 }) });
+
+    expect(await storage.isAvailable?.({ snapshot })).toBe(false);
+  });
+
   it("reads the exact private processed PDF, validates its hash, and uses bounded chunks", async () => {
     const fetcher = vi.fn<typeof fetch>(async () => new Response(pdf, { status: 200,
       headers: { "content-type": "application/pdf", "content-length": String(pdf.byteLength) } }));

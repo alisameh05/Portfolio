@@ -11,6 +11,8 @@ export interface CurrentCvSnapshotRepositoryPort {
 }
 
 export interface CurrentCvObjectDeliveryPort {
+  /** Checks the configured private delivery dependency without returning a capability. */
+  isAvailable?(input: { readonly snapshot: CurrentCvSnapshot }): Promise<boolean>;
   stream(input: {
     readonly snapshot: CurrentCvSnapshot;
     readonly disposition: CurrentCvDisposition;
@@ -28,6 +30,19 @@ export function createCurrentCvDeliveryService(input: {
   readonly mode?: "stream" | "redirect";
 }) {
   return {
+    async getAvailability(): Promise<"available" | "unavailable" | "unknown"> {
+      try {
+        const current = await input.repository.getCurrentCvSnapshot();
+        if (!current.ok) {
+          if (current.error.kind === "not_found") return "unavailable";
+          return "unknown";
+        }
+        if (input.storage.isAvailable === undefined) return "unknown";
+        return await input.storage.isAvailable({ snapshot: current.value }) ? "available" : "unknown";
+      } catch {
+        return "unknown";
+      }
+    },
     async downloadCurrentCv(query: CurrentCvDownloadQuery): Promise<Result<CurrentCvDelivery, Rejection>> {
       if (query.actor.kind !== "visitor" || query.locale !== "en" ||
           (query.disposition !== "inline" && query.disposition !== "attachment")) {

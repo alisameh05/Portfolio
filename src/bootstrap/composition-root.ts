@@ -35,6 +35,7 @@ import { parseStableId, type StableId } from "../shared/domain/index.js";
 import type { OwnerMediaApplicationService } from "../modules/media/index.js";
 import type { MediaDeliveryApplicationService } from "../modules/media/index.js";
 import type { CurrentCvDeliveryService, OwnerCvApplicationService } from "../modules/cv-portfolio/index.js";
+import type { PortfolioSettingsApplicationService } from "../modules/portfolio-configuration/index.js";
 
 export type { RuntimeConfig } from "./configuration.js";
 
@@ -48,6 +49,7 @@ let currentOwnerMedia: OwnerMediaApplicationService | undefined;
 let currentMediaDelivery: MediaDeliveryApplicationService | undefined;
 let currentOwnerCv: OwnerCvApplicationService | undefined;
 let currentCurrentCv: CurrentCvDeliveryService | undefined;
+let currentPublicConfiguration: PortfolioSettingsApplicationService | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -80,6 +82,7 @@ export interface DatabaseRuntimeDependencies {
   readonly mediaDelivery?: MediaDeliveryApplicationService;
   readonly ownerCv?: OwnerCvApplicationService;
   readonly currentCv?: CurrentCvDeliveryService;
+  readonly publicConfiguration?: PortfolioSettingsApplicationService;
   readonly resource: LifecycleResource;
   readonly readiness: ReadinessCheck;
 }
@@ -155,6 +158,7 @@ export async function initializeDatabaseRuntime(
         let mediaDelivery: MediaDeliveryApplicationService | undefined;
         let ownerCv: OwnerCvApplicationService | undefined;
         let currentCv: CurrentCvDeliveryService | undefined;
+        let publicConfiguration: PortfolioSettingsApplicationService | undefined;
         if (runtimeKind === "application") {
           if (configuredScope === undefined || !configuredScope.portfolioId.ok || !configuredScope.ownerId.ok) {
             throw new RuntimeConfigError("PORTFOLIO_ID", "must be configured for Owner configuration commands");
@@ -393,7 +397,17 @@ export async function initializeDatabaseRuntime(
             repository,
             transactions: operations.transactions,
             scope,
+            capabilityReader: {
+              async getFacts() {
+                return {
+                  currentCv: await currentCv!.getAvailability(),
+                  externalLinks: "unknown",
+                  globalProjectCta: "available",
+                };
+              },
+            },
           });
+          publicConfiguration = profileSettings;
           const deliveryStorage = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
             ? createSupabaseMediaDeliveryStorage({
               storageUrl: env["SUPABASE_URL"],
@@ -471,6 +485,7 @@ export async function initializeDatabaseRuntime(
           ...(mediaDelivery === undefined ? {} : { mediaDelivery }),
           ...(ownerCv === undefined ? {} : { ownerCv }),
           ...(currentCv === undefined ? {} : { currentCv }),
+          ...(publicConfiguration === undefined ? {} : { publicConfiguration }),
           resource: database.resource,
           readiness: database.readiness,
         };
@@ -498,6 +513,7 @@ export async function initializeDatabaseRuntime(
     currentMediaDelivery = dependencies.mediaDelivery;
     currentOwnerCv = dependencies.ownerCv;
     currentCurrentCv = dependencies.currentCv;
+    currentPublicConfiguration = dependencies.publicConfiguration;
     lifecycle.markReady();
     return Object.freeze({ ...config, runtimeKind });
   } catch (error) {
@@ -567,6 +583,12 @@ export async function getCurrentCvApplicationService(): Promise<CurrentCvDeliver
   return createProductionCurrentCvService();
 }
 
+/** Locale-aware public configuration combines durable settings with safe composed capability facts. */
+export async function getPublicConfigurationApplicationService(): Promise<PortfolioSettingsApplicationService> {
+  if (currentPublicConfiguration !== undefined) return currentPublicConfiguration;
+  throw new Error("Public configuration requires the configured PostgreSQL application assembly.");
+}
+
 /** Project route, status, and Featured operations share the Content transaction boundary. */
 export async function getOwnerProjectApplicationService(): Promise<OwnerProjectApplicationService> {
   const contentAuthoring = await getContentAuthoringApplicationService();
@@ -620,5 +642,6 @@ export function resetRuntimeForTests(): void {
   currentMediaDelivery = undefined;
   currentOwnerCv = undefined;
   currentCurrentCv = undefined;
+  currentPublicConfiguration = undefined;
   resetLifecycleForTests();
 }

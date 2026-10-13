@@ -13,6 +13,7 @@
 import type { Rejection } from "../../shared/domain/index.js";
 import type {
   CvPortfolioApplicationService,
+  CurrentCvDeliveryService,
   CurrentCvDownloadQuery,
 } from "../../modules/cv-portfolio/index.js";
 
@@ -83,11 +84,11 @@ export function createCurrentCvTestFake(mode: CurrentCvFakeMode): CurrentCvTestF
  * response (`temporarily_unavailable` / `RUNTIME_NOT_IMPLEMENTED`) and
  * never returns fabricated business success.
  */
-export function createProductionCurrentCvService(): Pick<
-  CvPortfolioApplicationService,
-  "downloadCurrentCv"
-> {
+export function createProductionCurrentCvService(): CurrentCvDeliveryService {
   return {
+    async getAvailability() {
+      return "unknown";
+    },
     async downloadCurrentCv(_query: CurrentCvDownloadQuery) {
       return {
         ok: false as const,
