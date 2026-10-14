@@ -514,6 +514,10 @@ async function main() {
           .filter(([name]) => /(?:TOKEN|KEY|SECRET|PASSWORD)/iu.test(name))
           .map(([, value]) => value)
           .filter((value) => typeof value === "string");
+        const safeDiagnosticValue = (value) => sanitizeEvidenceOutput(
+          typeof value === "string" ? value : JSON.stringify(value),
+          { workspace: ROOT, temporary: tmpdir(), secrets: diagnosticSecrets },
+        ).slice(0, 1600);
         console.error("Media integration reporter summary:", JSON.stringify({
           exitStatus: testResult.status,
           spawnError: testResult.error?.code ?? testResult.error?.name ?? null,
@@ -533,11 +537,15 @@ async function main() {
             name: typeof suite.name === "string" ? suite.name.split(/[\\/]/u).at(-1) : "<missing-name>",
             status: suite.status ?? "<missing-status>",
             assertionCount: Array.isArray(suite.assertionResults) ? suite.assertionResults.length : 0,
-            failure: suite.status === "passed" ? undefined : sanitizeEvidenceOutput(
-              String(suite.failureMessage ?? suite.message ?? "<no-suite-failure-message>"),
-              { workspace: ROOT, temporary: tmpdir(), secrets: diagnosticSecrets },
-            ).slice(0, 1600),
+            errorFields: Object.fromEntries(Object.entries(suite)
+              .filter(([key]) => /(?:error|failure|message|hook)/iu.test(key))
+              .map(([key, value]) => [key, safeDiagnosticValue(value)])),
           })),
+          reporterErrorFields: Object.fromEntries(Object.entries(testReport)
+            .filter(([key]) => /(?:error|failure|message|hook)/iu.test(key))
+            .map(([key, value]) => [key, safeDiagnosticValue(value)])),
+          sanitizedStdout: sanitizeEvidenceOutput(String(testResult.stdout ?? ""),
+            { workspace: ROOT, temporary: tmpdir(), secrets: diagnosticSecrets }).slice(-4000),
           sanitizedStderr: sanitizeEvidenceOutput(String(testResult.stderr ?? ""),
             { workspace: ROOT, temporary: tmpdir(), secrets: diagnosticSecrets }).slice(-4000),
         }));
