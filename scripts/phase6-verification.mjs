@@ -26,6 +26,7 @@ const CV_ACCEPTANCE_EVIDENCE = join(ROOT, "evidence/phase6-cv-acceptance-155.jso
 const CV_ACTIVATION_EVIDENCE = join(ROOT, "evidence/phase6-cv-activation-156.json");
 const CV_DELIVERY_EVIDENCE = join(ROOT, "evidence/phase6-cv-delivery-159.json");
 const PUBLIC_CAPABILITY_EVIDENCE = join(ROOT, "evidence/phase6-public-capabilities-160.json");
+const OWNER_COMPOSITION_EVIDENCE = join(ROOT, "evidence/phase6-owner-composition-161.json");
 const UPLOAD_INTENT_ONLY = process.argv.includes("--upload-intents-only");
 const MEDIA_PROCESSING_ONLY = process.argv.includes("--media-processing-only");
 const IMAGE_PROCESSING_ONLY = process.argv.includes("--image-processing-only");
@@ -40,7 +41,8 @@ const CV_ACTIVATION_ONLY = process.argv.includes("--cv-activation-only");
 const CV_DELIVERY_ONLY = process.argv.includes("--cv-delivery-only");
 const PUBLICATION_MEDIA_ONLY = process.argv.includes("--publication-media-only");
 const MEDIA_INTEGRATION_ONLY = process.argv.includes("--media-integration-only");
-const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || MEDIA_DELIVERY_ONLY || MEDIA_REJECTION_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || PUBLICATION_MEDIA_ONLY || MEDIA_INTEGRATION_ONLY;
+const OWNER_COMPOSITION_ONLY = process.argv.includes("--owner-composition-only");
+const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || MEDIA_DELIVERY_ONLY || MEDIA_REJECTION_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || PUBLICATION_MEDIA_ONLY || MEDIA_INTEGRATION_ONLY || OWNER_COMPOSITION_ONLY;
 const RUN_TIMEOUT = 180_000;
 
 function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEOUT, input, label = command } = {}) {
@@ -169,6 +171,7 @@ async function main() {
   let processingCounts;
   let integrationChecks;
   let mediaRejectionTestDiagnostics;
+  let ownerCompositionChecks;
   let toolVersions = {};
   let status;
   const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], {
@@ -307,7 +310,7 @@ async function main() {
       }
     }
     if (!IMAGE_PROCESSING_ONLY) writeFileSync(join(fixturesDir, "fixture.pdf"), pdfFixture());
-    const activeFormats = MEDIA_PROCESSING_ONLY || MEDIA_REJECTION_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
+    const activeFormats = MEDIA_PROCESSING_ONLY || MEDIA_REJECTION_ONLY || OWNER_COMPOSITION_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
       : CV_DELIVERY_ONLY ? PHASE6_FORMATS.filter(({ id, kind }) => id === "pdf" || kind === "image")
       : IMAGE_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ kind }) => kind === "image")
         : VIDEO_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ kind }) => kind === "video") : PHASE6_FORMATS;
@@ -359,12 +362,13 @@ async function main() {
       PHASE6_UPLOAD_INTENT_ANON_KEY: status.ANON_KEY,
       PHASE6_UPLOAD_INTENT_REPLAY_KEY: randomBytes(32).toString("base64"),
       PHASE6_REQUIRE_UPLOAD_INTENT: "1",
+      PHASE6_OWNER_COMPOSITION_ONLY: OWNER_COMPOSITION_ONLY ? "1" : "0",
       PHASE6_PDF_PROCESSING_FIXTURE: join(fixturesDir, "fixture.pdf"),
       PHASE6_IMAGE_FIXTURE_PNG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.png"),
       PHASE6_IMAGE_FIXTURE_JPEG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.jpeg"),
       PHASE6_IMAGE_FIXTURE_WEBP: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.webp"),
-      PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY) ? "1" : "0",
-      PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !CV_DELIVERY_ONLY) ? "1" : "0",
+      PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !OWNER_COMPOSITION_ONLY) ? "1" : "0",
+      PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !CV_DELIVERY_ONLY && !OWNER_COMPOSITION_ONLY) ? "1" : "0",
       PHASE6_MEDIA_ACCEPTANCE_ONLY: RUN_MEDIA_ACCEPTANCE ? "1" : "0",
       PHASE6_MEDIA_REJECTION_ONLY: MEDIA_REJECTION_ONLY ? "1" : "0",
       PHASE6_REQUIRE_FULL_MEDIA: CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || MEDIA_INTEGRATION_ONLY ? "1" : "0",
@@ -390,7 +394,8 @@ async function main() {
     // scenario-counts file. Keep the focused suite on one worker so scenario
     // rows and completion counts cannot race across Vitest workers.
     if (CV_DELIVERY_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism");
-    if (VIDEO_PROCESSING_ONLY) testArgs.push("-t", "processes MP4 and WebM candidates");
+    if (OWNER_COMPOSITION_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism", "-t", "composes all nine Owner Media and CV operations through real services");
+    else if (VIDEO_PROCESSING_ONLY) testArgs.push("-t", "processes MP4 and WebM candidates");
     else if (IMAGE_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images");
     else if (MEDIA_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates");
     else if (MEDIA_DELIVERY_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|issues bounded delivery only for current published-locale and profile Media uses");
@@ -412,6 +417,17 @@ async function main() {
       assertions: (suite.assertionResults ?? []).map((assertion) => ({ name: assertion.fullName, status: assertion.status })),
     })) }, null, 2));
     processingCounts = existsSync(processingCountsPath) ? JSON.parse(readFileSync(processingCountsPath, "utf8")) : undefined;
+    if (OWNER_COMPOSITION_ONLY) {
+      const assertions = (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
+      const assertion = assertions.find((item) => String(item.fullName ?? "").includes("composes all nine Owner Media and CV operations through real services"));
+      const recorded = processingCounts?.ownerCompositionScenarios ?? [];
+      const executed = assertion !== undefined && assertion.status === "passed" && recorded.length === 1 && recorded[0]?.executed === true && recorded[0]?.status === "passed";
+      ownerCompositionChecks = { suite: "tests/database/media-upload-intent.integration.test.ts", test: assertion?.fullName,
+        counts: { executed: executed ? 1 : 0, failed: assertion?.status === "failed" ? 1 : 0,
+          skipped: assertion?.status === "pending" || assertion?.status === "disabled" || assertion === undefined ? 1 : 0 },
+        scenarios: recorded, verdict: executed && testResult.status === 0 ? "pass" : "fail" };
+      if (ownerCompositionChecks.verdict !== "pass") throw new Error("PHASE6_OWNER_COMPOSITION_ACCEPTANCE_INVALID");
+    }
     if (MEDIA_INTEGRATION_ONLY) {
       integrationChecks = evaluatePhase6IntegrationTests(testReport, testResult.status);
       if (integrationChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_INTEGRATION_REQUIRES_SEVEN_PASSED_ZERO_SKIPPED");
@@ -614,7 +630,9 @@ async function main() {
     }
     if (IMAGE_PROCESSING_ONLY && (!Number.isSafeInteger(processingCounts?.scannerExecutions) || !Number.isSafeInteger(processingCounts?.imageProcessorExecutions))) throw new Error("PHASE6_IMAGE_PROCESSING_TOOL_COUNTS_MISSING");
     if (VIDEO_PROCESSING_ONLY && (!Number.isSafeInteger(processingCounts?.scannerExecutions) || !Number.isSafeInteger(processingCounts?.videoProcessorExecutions))) throw new Error("PHASE6_VIDEO_PROCESSING_TOOL_COUNTS_MISSING");
-    const acceptanceExecutionsValid = CV_DELIVERY_ONLY
+    const acceptanceExecutionsValid = OWNER_COMPOSITION_ONLY
+      ? processingCounts?.acceptanceExecutions === 1
+      : CV_DELIVERY_ONLY
       ? Number.isSafeInteger(processingCounts?.acceptanceExecutions) && processingCounts.acceptanceExecutions > 0
       : processingCounts?.acceptanceExecutions === (MEDIA_DELIVERY_ONLY ? 4 : PHASE6_FORMATS.length);
     if (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !acceptanceExecutionsValid) throw new Error("PHASE6_MEDIA_ACCEPTANCE_FORMAT_COUNTS_MISSING");
@@ -1246,6 +1264,27 @@ async function main() {
     const uploadEvidence = uploadIntentChecks === undefined ? undefined : JSON.parse(readFileSync(UPLOAD_INTENT_EVIDENCE, "utf8"));
     console.log(JSON.stringify({ ticket: 148, runId: uploadEvidence?.runId, sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256, verdict: uploadEvidence?.verdict ?? "fail", formatCounts: uploadEvidence?.formatCounts, uploadIntentChecks, cleanup, failures, evidence: uploadEvidence === undefined ? undefined : "evidence/phase6-upload-intent-148.json" }, null, 2));
     if (uploadEvidence?.verdict !== "pass") process.exitCode = 1;
+  } else if (OWNER_COMPOSITION_ONLY) {
+    const evidence = { schemaVersion: 1, ticket: 161, parent: 145, runId: randomUUID(), sourceRevision: source.sourceRevision,
+      sourceTreeSha256: source.sourceTreeSha256, startedAt, completedAt: new Date().toISOString(),
+      scope: "real-owner-media-cv-production-composition", runtime: { node: process.version,
+        npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, toolVersions,
+      services: { postgres: services.postgres, auth: services.auth, storage: services.storage,
+        scanner: { version: toolVersions.scanner, executions: processingCounts?.scannerExecutions },
+        processor: { version: toolVersions.pdfProcessor, executions: processingCounts?.processorExecutions } },
+      formats: formats.map(({ id, executed, status, storageRoundTrip, scannerVerdict, processorVersion }) =>
+        ({ id, executed, status, storageRoundTrip, scannerVerdict, processorVersion })),
+      acceptanceOperations: processingCounts?.acceptanceExecutions ?? 0, checks: ownerCompositionChecks, cleanup, failures,
+      verdict: ownerCompositionChecks?.verdict === "pass" && processingCounts?.acceptanceExecutions === 1 &&
+        formats.length === 1 && formats[0]?.status === "passed" && formats[0]?.storageRoundTrip && cleanup.success &&
+        failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:owner-composition"],
+      limitations: ["Owner HTTP security matrix and contract/architecture checks are exercised by the full unit and repository verification suites."] };
+    writeFileSync(OWNER_COMPOSITION_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+    console.log(JSON.stringify({ ticket: 161, runId: evidence.runId, sourceRevision: evidence.sourceRevision,
+      sourceTreeSha256: evidence.sourceTreeSha256, verdict: evidence.verdict, checks: ownerCompositionChecks,
+      services: evidence.services, cleanup, failures, evidence: "evidence/phase6-owner-composition-161.json" }, null, 2));
+    if (evidence.verdict !== "pass") process.exitCode = 1;
   } else {
     console.log(JSON.stringify({ ticket: report.ticket, runId: report.runId, sourceRevision: report.sourceRevision, sourceTreeSha256: report.sourceTreeSha256, verdict: report.verdict, counts: report.counts, services: report.services, cleanup: report.cleanup, failures: report.failures, uploadIntentChecks, evidence: "evidence/phase-6-verification-setup.json", uploadIntentEvidence: uploadIntentChecks === undefined ? undefined : "evidence/phase6-upload-intent-148.json" }, null, 2));
     if (report.verdict !== "pass") process.exitCode = 1;

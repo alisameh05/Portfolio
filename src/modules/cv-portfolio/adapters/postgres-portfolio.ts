@@ -147,20 +147,22 @@ export function createPostgresCvPortfolioRepository(input: {
               locale, label, state, version_number, is_current
             from cv_portfolio.versions
             where portfolio_id = ${input.scope.portfolioId}::uuid and owner_id = ${input.scope.ownerId}::uuid
-            order by version_number desc, version_id desc limit 100`.execute(executor);
+             order by version_number desc, version_id desc limit 101`.execute(executor);
           const activations = await sql<ActivationRow>`select version_id::text as version_id, activated_at
             from cv_portfolio.activation_history
             where portfolio_id = ${input.scope.portfolioId}::uuid and owner_id = ${input.scope.ownerId}::uuid
-            order by activated_at desc, activation_id desc limit 100`.execute(executor);
+            order by activated_at desc, activation_id desc limit 101`.execute(executor);
           const currentVersionId = root.current_version_id;
           const view: OwnerCvPortfolioView = {
             aggregateVersion: Number(root.aggregate_version),
             currentVersionId: currentVersionId === null ? null : stableId("CvVersion", currentVersionId),
-            versions: versions.rows.map((row) => mapVersion(row, currentVersionId)),
-            activationHistory: activations.rows.map((row): OwnerCvActivationView => ({
+            versions: versions.rows.slice(0, 100).map((row) => mapVersion(row, currentVersionId)),
+            versionsTruncated: versions.rows.length > 100,
+            activationHistory: activations.rows.slice(0, 100).map((row): OwnerCvActivationView => ({
               versionId: stableId("CvVersion", row.version_id),
               activatedAt: isoInstant(row.activated_at),
             })),
+            activationHistoryTruncated: activations.rows.length > 100,
           };
           return ok(view);
         });

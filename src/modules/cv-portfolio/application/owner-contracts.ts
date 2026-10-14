@@ -59,8 +59,14 @@ export interface OwnerCvActivationView {
 export interface OwnerCvPortfolioView {
   readonly aggregateVersion: number;
   readonly currentVersionId: StableId<string> | null;
+  /** Newest-first, at most 100 retained CV versions; true means older rows exist. */
   readonly versions: ReadonlyArray<OwnerCvVersionView>;
+  /** Additive metadata preserves compatibility with clients that ignore it. */
+  readonly versionsTruncated?: boolean;
+  /** Newest-first, at most 100 retained activations; true means older rows exist. */
   readonly activationHistory: ReadonlyArray<OwnerCvActivationView>;
+  /** Additive metadata preserves compatibility with clients that ignore it. */
+  readonly activationHistoryTruncated?: boolean;
 }
 
 export interface RegisterOwnerCvVersionReceipt {

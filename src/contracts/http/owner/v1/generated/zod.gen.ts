@@ -579,7 +579,9 @@ export const zMediaAggregateView = z.strictObject({
         'rejected'
     ]),
     processingHistory: z.array(zMediaProcessingView),
-    decisionHistory: z.array(zMediaDecisionView)
+    processingHistoryTruncated: z.boolean().optional(),
+    decisionHistory: z.array(zMediaDecisionView),
+    decisionHistoryTruncated: z.boolean().optional()
 });
 
 export const zCreateMediaUploadIntentRequest = z.strictObject({
@@ -659,7 +661,9 @@ export const zCvPortfolioView = z.strictObject({
     aggregateVersion: z.number().int().gte(1),
     currentVersionId: zStableId.nullable(),
     versions: z.array(zCvVersionView),
-    activationHistory: z.array(zCvActivationView)
+    versionsTruncated: z.boolean().optional(),
+    activationHistory: z.array(zCvActivationView),
+    activationHistoryTruncated: z.boolean().optional()
 });
 
 export const zRegisterCvVersionRequest = z.strictObject({

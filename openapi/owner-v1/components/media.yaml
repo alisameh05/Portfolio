@@ -146,8 +146,11 @@ schemas:
         enum: [upload-pending, processing, processed, accepted, rejected]
       processingHistory:
         type: array
-        description: Retained processing attempts and findings in recorded order.
+        description: Newest-first view of up to 100 retained processing attempts. Older rows remain retained; processingHistoryTruncated reports when the view is incomplete.
         items: { $ref: '#/schemas/MediaProcessingView' }
+      processingHistoryTruncated: { type: boolean, description: True when older retained processing attempts are omitted. }
       decisionHistory:
         type: array
+        description: Newest-first view of up to 100 retained decisions. Older rows remain retained; decisionHistoryTruncated reports when the view is incomplete.
         items: { $ref: '#/schemas/MediaDecisionView' }
+      decisionHistoryTruncated: { type: boolean, description: True when older retained decisions are omitted. }

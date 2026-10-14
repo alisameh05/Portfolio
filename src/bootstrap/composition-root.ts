@@ -250,24 +250,26 @@ export async function initializeDatabaseRuntime(
             { createUploadCapabilityVault },
             { createMediaUploadIntentApplicationService },
             { createMediaProcessingApplicationService },
+            { createOwnerMediaApplicationService },
             { createSupabaseMediaUploadTargetAdapter },
             { createSupabaseMediaProcessingStorage },
             { createClamAvScanner, createOcrMyPdfProcessor, createFfmpegVideoProcessor },
             { createSharpMediaImageProcessor },
             { createNodeMediaDigest },
-            { createProductionOwnerMediaService },
+            { createPostgresOwnerMediaAggregateRepository },
           ] = await Promise.all([
             import("../modules/media/adapters/postgres-upload-intents.js"),
             import("../modules/media/adapters/postgres-processing.js"),
             import("../modules/media/adapters/upload-capability-vault.js"),
             import("../modules/media/application/upload-intent.js"),
             import("../modules/media/application/processing.js"),
+            import("../modules/media/application/owner-service.js"),
             import("../runtime/adapters/supabase-media-upload-target.js"),
             import("../runtime/adapters/supabase-media-processing-storage.js"),
             import("../runtime/adapters/media-processing-tools.js"),
             import("../runtime/adapters/media-image-processing.js"),
             import("../runtime/adapters/media-digest.js"),
-            import("../runtime/fakes/owner-media.js"),
+            import("../modules/media/adapters/postgres-owner-aggregate.js"),
           ]);
           const uploadIntentTarget = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
             ? createSupabaseMediaUploadTargetAdapter({
@@ -292,20 +294,20 @@ export async function initializeDatabaseRuntime(
             ids: createSystemIdGenerator(),
             clock: createSystemClock(),
           });
-          const failClosed = createProductionOwnerMediaService();
-          ownerMedia = {
-            ...failClosed,
-            createOwnerMediaUploadIntent: uploadIntent.create,
-          };
-          let mediaStorage: ReturnType<typeof createSupabaseMediaProcessingStorage> | undefined;
-          if (env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]) {
-            mediaStorage = createSupabaseMediaProcessingStorage({
+          const mediaStorage = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
+            ? createSupabaseMediaProcessingStorage({
               storageUrl: env["SUPABASE_URL"],
               serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
               ...(env["MEDIA_CANDIDATE_BUCKET"] === undefined ? {} : { candidateBucket: env["MEDIA_CANDIDATE_BUCKET"] }),
               ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
-            });
-            const processing = createMediaProcessingApplicationService({
+            })
+            : {
+              async readCandidate() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } }; },
+              async sealProcessedObject() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } }; },
+              async discardSealedObject() {},
+              async preflightAcceptedPdfObject() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } }; },
+            };
+          const processing = createMediaProcessingApplicationService({
               scope: { ownerId: configuredScope.ownerId.value },
               repository: createPostgresMediaProcessingRepository({
                 database: database.database,
@@ -328,8 +330,6 @@ export async function initializeDatabaseRuntime(
               ids: createSystemIdGenerator(),
               clock: createSystemClock(),
             });
-            ownerMedia = { ...ownerMedia, recordOwnerMediaProcessing: processing.record };
-          }
           const [
             { createPostgresMediaAcceptanceRepository },
             { createMediaAcceptanceApplicationService },
@@ -349,7 +349,7 @@ export async function initializeDatabaseRuntime(
               transactions: operations.transactions,
               scope,
             }),
-            ...(mediaStorage === undefined ? {} : { preflight: mediaStorage.preflightAcceptedPdfObject }),
+            preflight: mediaStorage.preflightAcceptedPdfObject,
           });
           ownerCv = createOwnerCvApplicationService({
             ownerId: scope.ownerId,
@@ -471,9 +471,18 @@ export async function initializeDatabaseRuntime(
               },
             },
           });
-          if (ownerMedia !== undefined) {
-            ownerMedia = { ...ownerMedia, rejectOwnerMediaAsset: mediaRejection.rejectOwnerMediaAsset };
-          }
+          ownerMedia = createOwnerMediaApplicationService({
+            ownerId: scope.ownerId,
+            aggregateRepository: createPostgresOwnerMediaAggregateRepository({
+              database: database.database,
+              transactions: operations.transactions,
+              scope,
+            }),
+            uploadIntent: { createOwnerMediaUploadIntent: uploadIntent.create },
+            processing: { recordOwnerMediaProcessing: processing.record },
+            acceptance: { acceptOwnerMediaAsset: mediaAcceptance.acceptOwnerMediaAsset },
+            rejection: { rejectOwnerMediaAsset: mediaRejection.rejectOwnerMediaAsset },
+          });
         }
         return {
           operations,

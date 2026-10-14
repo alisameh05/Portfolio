@@ -14,7 +14,7 @@ import { handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-m
 import { withOwnerTestAuth } from "../runtime/owner-test-auth.js";
 import { createOwnerSecurityTestStub } from "../../src/runtime/http/owner-security.js";
 import { handleAcceptOwnerCvVersion, handleActivateOwnerCvVersion, handleGetOwnerCvPortfolio, handleRegisterOwnerCvVersion } from "../../src/runtime/http/owner-cv.js";
-import { getMediaDeliveryApplicationService, getOwnerCvApplicationService, getOwnerMediaApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
+import { getContentAuthoringApplicationService, getMediaDeliveryApplicationService, getOwnerCvApplicationService, getOwnerMediaApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
 import { getCurrentCvApplicationService } from "../../src/bootstrap/composition-root.js";
 import { getPublicConfigurationApplicationService } from "../../src/bootstrap/composition-root.js";
 import { createOwnerCvApplicationService } from "../../src/modules/cv-portfolio/application/owner-service.js";
@@ -75,12 +75,14 @@ const REQUIRE_FULL_MEDIA = process.env["PHASE6_REQUIRE_FULL_MEDIA"] === "1";
 const REQUIRE_CV_ACTIVATION = process.env["PHASE6_CV_ACTIVATION_ONLY"] === "1";
 const REQUIRE_CV_DELIVERY = process.env["PHASE6_CV_DELIVERY_ONLY"] === "1";
 const REQUIRE_PUBLIC_CAPABILITIES = process.env["PHASE6_PUBLIC_CAPABILITIES_ONLY"] === "1";
+const REQUIRE_OWNER_COMPOSITION = process.env["PHASE6_OWNER_COMPOSITION_ONLY"] === "1";
 const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0, imageProcessorExecutions: 0, acceptanceExecutions: 0, fixtureAcceptanceExecutions: 0,
   cvScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   cvAcceptanceScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   cvActivationScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   currentCvDeliveryScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   currentCvCapabilityScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
+  ownerCompositionScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   mediaRejectionScenarios: [] as Array<{ readonly id: string; readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   rejectionToolCounts: { scannerExecutions: 0, processorExecutions: 0, cleanScannerVerdicts: 0, unsafeScannerVerdicts: 0 } };
 
@@ -91,7 +93,7 @@ function saveProcessingCounts(update: Record<string, unknown> = mediaProcessingC
     if (existsSync(PROCESSING_COUNTS_FILE)) previous = JSON.parse(readFileSync(PROCESSING_COUNTS_FILE, "utf8")) as Record<string, unknown>;
   } catch { /* The current run rewrites an unreadable partial report. */ }
   const merged: Record<string, unknown> = { ...previous, ...update };
-  for (const field of ["cvScenarios", "cvAcceptanceScenarios", "cvActivationScenarios", "currentCvDeliveryScenarios", "currentCvCapabilityScenarios", "mediaRejectionScenarios"]) {
+  for (const field of ["cvScenarios", "cvAcceptanceScenarios", "cvActivationScenarios", "currentCvDeliveryScenarios", "currentCvCapabilityScenarios", "ownerCompositionScenarios", "mediaRejectionScenarios"]) {
     const prior = Array.isArray(previous[field]) ? previous[field] as Array<Record<string, unknown>> : [];
     const next = Array.isArray(update[field]) ? update[field] as Array<Record<string, unknown>> : [];
     if (prior.length > 0 || next.length > 0) {
@@ -210,16 +212,135 @@ function createPdfVariant(base: Uint8Array, mode: "encrypted" | "active" | "titl
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }
 
-function defineIntegrationSuite(group: "baseline" | "rejection"): void {
+function defineIntegrationSuite(group: "baseline" | "rejection" | "owner-composition"): void {
 describeReal(group === "baseline"
   ? "Phase 6 #148 private upload intent with real PostgreSQL and Storage"
-  : "Phase 6 #157 isolated Media rejection with real PostgreSQL and Storage", () => {
+  : group === "rejection" ? "Phase 6 #157 isolated Media rejection with real PostgreSQL and Storage"
+    : "Phase 6 #161 real production Owner Media and CV composition", () => {
   // Rejection creates retained CV versions and withdraws accepted Media. Give
   // it its own scoped services and collections so baseline initialization and
   // acceptance assertions never depend on destructive test order.
   function scenario(scenarioGroup: typeof group, name: string, run: () => Promise<void>, timeout?: number): void {
-    if (scenarioGroup === group) it(name, run, timeout);
+    if (scenarioGroup === group && (group !== "owner-composition" || REQUIRE_OWNER_COMPOSITION)) it(name, run, timeout);
   }
+  scenario("owner-composition", "composes all nine Owner Media and CV operations through real services", async () => {
+    const actor = { kind: "owner" as const, ownerId, sessionId: "phase6-owner-composition-owner" };
+    const visitor = { kind: "visitor" as const, consent: "unknown" as const };
+    const ownerMedia = await getOwnerMediaApplicationService();
+    const ownerCv = await getOwnerCvApplicationService();
+    const currentCv = await getCurrentCvApplicationService();
+    const content = await getContentAuthoringApplicationService();
+    const bytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
+    const digest = createHash("sha256").update(bytes).digest("hex");
+
+    const deniedRead = await ownerMedia.getOwnerMediaAggregate({ actor: visitor, mediaId: createStableId("MediaAsset") as StableId<"MediaAsset"> });
+    expect(deniedRead).toMatchObject({ ok: false, error: { kind: "forbidden" } });
+    const deniedIntent = await ownerMedia.createOwnerMediaUploadIntent({ actor: { kind: "owner", ownerId: createStableId("Owner"), sessionId: "foreign" },
+      idempotencyKey: "phase6-composition-denied-upload" as never, kind: "document", originalFileName: "private.pdf",
+      declaredMediaType: "application/pdf", byteLength: bytes.byteLength, sha256: digest });
+    expect(deniedIntent).toMatchObject({ ok: false, error: { kind: "forbidden" } });
+
+    const intent = await ownerMedia.createOwnerMediaUploadIntent({ actor, idempotencyKey: "phase6-composition-upload" as never,
+      kind: "document", originalFileName: "composition-private.pdf", declaredMediaType: "application/pdf",
+      byteLength: bytes.byteLength, sha256: digest });
+    expect(intent, JSON.stringify(intent)).toMatchObject({ ok: true, value: { aggregateVersion: 1, outcome: "media-upload-intent-created" } });
+    if (!intent.ok) throw new Error("PHASE6_OWNER_COMPOSITION_UPLOAD_FAILED");
+    const uploaded = await fetch(intent.value.uploadTarget, { method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" }, body: Buffer.from(bytes) });
+    expect([200, 201]).toContain(uploaded.status);
+    const processed = await ownerMedia.recordOwnerMediaProcessing({ actor, idempotencyKey: "phase6-composition-process" as never,
+      expectedVersion: 1, mediaId: intent.value.mediaId, result: "passed", detectedMediaType: "application/pdf",
+      detectedByteLength: bytes.byteLength, sha256: digest });
+    expect(processed, JSON.stringify(processed)).toMatchObject({ ok: true, value: { aggregateVersion: 2, outcome: "media-processing-recorded" } });
+    if (!processed.ok) throw new Error("PHASE6_OWNER_COMPOSITION_PROCESSING_FAILED");
+    const acceptCommand = { actor, idempotencyKey: "phase6-composition-accept" as never,
+      expectedVersion: processed.value.aggregateVersion, mediaId: intent.value.mediaId,
+      accessibility: { kind: "document" as const, summary: "A one page CV PDF." } };
+    const accepted = await ownerMedia.acceptOwnerMediaAsset(acceptCommand);
+    expect(accepted, JSON.stringify(accepted)).toMatchObject({ ok: true, value: { aggregateVersion: 3, outcome: "media-accepted" } });
+    if (!accepted.ok) throw new Error("PHASE6_OWNER_COMPOSITION_ACCEPTANCE_FAILED");
+    expect(await ownerMedia.acceptOwnerMediaAsset(acceptCommand)).toEqual(accepted);
+    expect(await ownerMedia.acceptOwnerMediaAsset({ ...acceptCommand, accessibility: { kind: "document", summary: "Changed intent." } }))
+      .toMatchObject({ ok: false, error: { kind: "conflict" } });
+    expect(await ownerMedia.acceptOwnerMediaAsset({ ...acceptCommand, idempotencyKey: "phase6-composition-accept-stale" as never, expectedVersion: 2 }))
+      .toMatchObject({ ok: false, error: { kind: "precondition_failed" } });
+    mediaProcessingCounts.acceptanceExecutions += 1;
+    const aggregate = await ownerMedia.getOwnerMediaAggregate({ actor, mediaId: intent.value.mediaId });
+    expect(aggregate, JSON.stringify(aggregate)).toMatchObject({ ok: true, value: { state: "accepted", aggregateVersion: 3,
+      processingHistory: [expect.objectContaining({ result: "passed", sha256: digest })],
+      decisionHistory: [expect.objectContaining({ decision: "accepted" })],
+      processingHistoryTruncated: false, decisionHistoryTruncated: false } });
+
+    const root = await ownerCv.getOwnerCvPortfolio({ actor });
+    expect(root, JSON.stringify(root)).toMatchObject({ ok: true, value: { aggregateVersion: 1, versionsTruncated: false, activationHistoryTruncated: false } });
+    if (!root.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CV_ROOT_FAILED");
+    const registered = await ownerCv.registerOwnerCvVersion({ actor, idempotencyKey: "phase6-composition-cv-register" as never,
+      expectedVersion: root.value.aggregateVersion, mediaId: intent.value.mediaId, locale: "en", label: "Composition CV" });
+    expect(registered, JSON.stringify(registered)).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+    if (!registered.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CV_REGISTER_FAILED");
+    const cvAccepted = await ownerCv.acceptOwnerCvVersion({ actor, idempotencyKey: "phase6-composition-cv-accept" as never,
+      expectedVersion: registered.value.aggregateVersion, versionId: registered.value.versionId });
+    expect(cvAccepted, JSON.stringify(cvAccepted)).toMatchObject({ ok: true, value: { aggregateVersion: 3 } });
+    if (!cvAccepted.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CV_ACCEPT_FAILED");
+    const activated = await ownerCv.activateOwnerCvVersion({ actor, idempotencyKey: "phase6-composition-cv-activate" as never,
+      expectedVersion: cvAccepted.value.aggregateVersion, versionId: registered.value.versionId });
+    expect(activated, JSON.stringify(activated)).toMatchObject({ ok: true, value: { aggregateVersion: 4, outcome: "current-cv-activated" } });
+    const portfolio = await ownerCv.getOwnerCvPortfolio({ actor });
+    expect(portfolio).toMatchObject({ ok: true, value: { currentVersionId: registered.value.versionId,
+      versions: [expect.objectContaining({ isCurrent: true, state: "accepted" })], activationHistoryTruncated: false } });
+    const delivered = await currentCv.downloadCurrentCv({ actor: visitor, locale: "en", disposition: "inline" });
+    expect(delivered, JSON.stringify(delivered)).toMatchObject({ ok: true, value: { kind: "stream" } });
+    if (!delivered.ok || delivered.value.kind !== "stream") throw new Error("PHASE6_OWNER_COMPOSITION_CV_DELIVERY_FAILED");
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of delivered.value.bytes) chunks.push(chunk);
+    expect(Buffer.concat(chunks).subarray(0, 5).toString("ascii")).toBe("%PDF-");
+
+    const artifactId = createStableId("SupportingArtifact");
+    const created = await content.createContent({ actor, idempotencyKey: "phase6-composition-content-create" as never,
+      correlationId: "phase6-composition-content-create", payload: {
+        contentType: "project", locale: "en", title: "Composed Media Project", summary: "Real Media evidence.",
+        body: "Published and restored through the production composition.", candidateSlug: "phase6-composition-project",
+        caseStudy: { problem: "Production Owner services must compose.", ownerRole: "Connected the workflows.",
+          contributions: ["Used accepted Media."], outcomes: ["The public state remained valid."], lessons: "Use owned boundaries." },
+        evidence: { claims: [{ claimId: createStableId("EvidenceClaim"), text: "The accepted CV asset supports the project.", artifactIds: [artifactId] }],
+          artifacts: [{ id: artifactId, title: "Accepted CV evidence", destinationUrl: "https://example.com/evidence", mediaAssetId: intent.value.mediaId as StableId<"MediaAsset"> }] },
+        externalLinks: [],
+      } });
+    expect(created.ok, JSON.stringify(created)).toBe(true);
+    if (!created.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CONTENT_CREATE_FAILED");
+    const preview = await content.previewRevision({ actor, contentId: created.value.contentId, revisionId: created.value.revisionId });
+    expect(preview.ok, JSON.stringify(preview)).toBe(true);
+    if (!preview.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CONTENT_PREVIEW_FAILED");
+    const reviewed = await content.reviewRevision({ actor, contentId: created.value.contentId, revisionId: created.value.revisionId,
+      expectedVersion: created.value.aggregateVersion, idempotencyKey: "phase6-composition-content-review" as never,
+      correlationId: "phase6-composition-content-review", locale: "en", snapshotHash: preview.value.snapshotHash,
+      evidenceVersion: preview.value.evidenceVersion, decision: "accepted", findings: [] });
+    expect(reviewed.ok, JSON.stringify(reviewed)).toBe(true);
+    if (!reviewed.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CONTENT_REVIEW_FAILED");
+    const published = await content.publishLanguageVersion({ actor, contentId: created.value.contentId, revisionId: created.value.revisionId,
+      expectedVersion: reviewed.value.aggregateVersion, idempotencyKey: "phase6-composition-content-publish" as never,
+      correlationId: "phase6-composition-content-publish", locale: "en" });
+    expect(published.ok, JSON.stringify(published)).toBe(true);
+    if (!published.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CONTENT_PUBLISH_FAILED");
+    const hidden = await content.hideContent({ actor, contentId: created.value.contentId, expectedVersion: published.value.aggregateVersion,
+      idempotencyKey: "phase6-composition-content-hide" as never, correlationId: "phase6-composition-content-hide" });
+    expect(hidden.ok, JSON.stringify(hidden)).toBe(true);
+    if (!hidden.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CONTENT_HIDE_FAILED");
+    const restored = await content.restoreContent({ actor, contentId: created.value.contentId, expectedVersion: hidden.value.aggregateVersion,
+      idempotencyKey: "phase6-composition-content-restore" as never, correlationId: "phase6-composition-content-restore" });
+    expect(restored.ok, JSON.stringify(restored)).toBe(true);
+    const rejectionIntent = await ownerMedia.createOwnerMediaUploadIntent({ actor, idempotencyKey: "phase6-composition-rejection-upload" as never,
+      kind: "document", originalFileName: "rejected-private.pdf", declaredMediaType: "application/pdf",
+      byteLength: bytes.byteLength, sha256: digest });
+    expect(rejectionIntent, JSON.stringify(rejectionIntent)).toMatchObject({ ok: true, value: { aggregateVersion: 1 } });
+    if (!rejectionIntent.ok) throw new Error("PHASE6_OWNER_COMPOSITION_REJECTION_UPLOAD_FAILED");
+    const rejected = await ownerMedia.rejectOwnerMediaAsset({ actor, idempotencyKey: "phase6-composition-reject" as never,
+      expectedVersion: 1, mediaId: rejectionIntent.value.mediaId, reason: "Duplicate test evidence." });
+    expect(rejected, JSON.stringify(rejected)).toMatchObject({ ok: true, value: { aggregateVersion: 2, outcome: "media-rejected" } });
+    expect(mediaProcessingCounts.ownerCompositionScenarios).toBeDefined();
+    mediaProcessingCounts.ownerCompositionScenarios.push({ name: "T16-01 through T16-03 all nine operations, real byte delivery, and Media-backed Content restore", executed: true, status: restored.ok && rejected.ok ? "passed" : "failed" });
+    saveProcessingCounts();
+    expect(rejected.ok).toBe(true);
+  }, 180_000);
   function capabilityScenario(name: string, passed: boolean): void {
     if (!REQUIRE_CV_DELIVERY && !REQUIRE_PUBLIC_CAPABILITIES) return;
     mediaProcessingCounts.currentCvCapabilityScenarios.push({ name, executed: true, status: passed ? "passed" : "failed" });
@@ -3782,3 +3903,4 @@ describeReal(group === "baseline"
 
 defineIntegrationSuite("baseline");
 defineIntegrationSuite("rejection");
+defineIntegrationSuite("owner-composition");
