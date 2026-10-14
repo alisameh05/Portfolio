@@ -530,6 +530,7 @@ async function main() {
             pendingSuites: testReport.numPendingTestSuites ?? null,
           },
           suites: (testReport.testResults ?? []).map((suite) => ({
+            name: typeof suite.name === "string" ? suite.name.split(/[\\/]/u).at(-1) : "<missing-name>",
             status: suite.status ?? "<missing-status>",
             assertionCount: Array.isArray(suite.assertionResults) ? suite.assertionResults.length : 0,
             failure: suite.status === "passed" ? undefined : sanitizeEvidenceOutput(
@@ -537,6 +538,8 @@ async function main() {
               { workspace: ROOT, temporary: tmpdir(), secrets: diagnosticSecrets },
             ).slice(0, 1600),
           })),
+          sanitizedStderr: sanitizeEvidenceOutput(String(testResult.stderr ?? ""),
+            { workspace: ROOT, temporary: tmpdir(), secrets: diagnosticSecrets }).slice(-4000),
         }));
         throw new Error("PHASE6_MEDIA_INTEGRATION_REQUIRES_SEVEN_PASSED_ZERO_SKIPPED");
       }
