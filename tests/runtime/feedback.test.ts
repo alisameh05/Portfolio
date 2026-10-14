@@ -170,12 +170,13 @@ describe("POST Feedback adapter (#28)", () => {
 
   it("production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED", async () => {
     const service = createProductionFeedbackService();
-    const direct = await service.submitFeedback({
+    const direct = await service.submitFeedback({ scope: { kind: "unconfigured" }, correlationId: "direct-test",
       actor: { kind: "visitor", consent: "unknown" },
       idempotencyKey: IDEMPOTENCY_KEY as never,
       projectId: PROJECT_ID as never,
       authorName: "Ada",
       comment: "Clear explanation.",
+      locale: "en",
     });
     expect(direct.ok).toBe(false);
     if (!direct.ok) {

@@ -30,7 +30,6 @@ export interface RatingTestFake
   readonly calls: ReadonlyArray<SubmitRatingCommand>;
 }
 
-const FAKE_VISITOR_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e90";
 
 export function createRatingTestFake(
   mode: RatingFakeMode,
@@ -49,9 +48,7 @@ export function createRatingTestFake(
             ok: true as const,
             value: {
               projectId: command.projectId,
-              visitorId: FAKE_VISITOR_ID as StableId<"FunctionalVisitor">,
               value: mode.value ?? command.value,
-              updatedAt: clock.now(),
             },
           };
         case "rejection":
@@ -61,9 +58,7 @@ export function createRatingTestFake(
             ok: true as const,
             value: {
               projectId: "not-a-uuid" as unknown as StableId<"Project">,
-              visitorId: FAKE_VISITOR_ID as StableId<"FunctionalVisitor">,
               value: command.value,
-              updatedAt: clock.now(),
             },
           };
       }

@@ -29,3 +29,13 @@ export type {
   ClockPort,
   HashPort,
 } from "./ports/index.js";
+
+export type { AnalyticsEventAction, AnalyticsGoalStep, AnalyticsGoalDefinition, GetOwnerAnalyticsGoalQuery, CreateOwnerAnalyticsGoalVersionApplicationCommand, ActivateOwnerAnalyticsGoalVersionApplicationCommand, AnalyticsGoalVersionView, AnalyticsGoalActivationView, AnalyticsGoalAggregateView, AnalyticsGoalVersionReceipt, AnalyticsGoalActivationReceipt, OwnerAnalyticsApplicationService } from "./application/owner-analytics.js";
+
+export type { MeasurementEventContext, PublicMeasurementEvent, EventReceipt } from "./domain/types.js";
+
+export type { VerifiedMeasurementEvidence } from "./application/service.js";
+
+export type { MeasurementWorkCommand, MeasurementWorkService } from "./application/work.js";
+
+export type { SafeAggregateReport } from "./application/service.js";

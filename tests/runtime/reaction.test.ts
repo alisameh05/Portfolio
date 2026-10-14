@@ -185,7 +185,7 @@ describe("PUT Reaction adapter (#26)", () => {
 
   it("production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED", async () => {
     const service = createProductionReactionService();
-    const direct = await service.submitReaction({
+    const direct = await service.submitReaction({ scope: { kind: "unconfigured" }, correlationId: "direct-test",
       actor: { kind: "visitor", consent: "unknown" },
       idempotencyKey: IDEMPOTENCY_KEY as never,
       projectId: PROJECT_ID as never,

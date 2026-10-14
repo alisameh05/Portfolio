@@ -174,7 +174,7 @@ describe("PUT Rating adapter (#28)", () => {
 
   it("production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED", async () => {
     const service = createProductionRatingService();
-    const direct = await service.submitRating({
+    const direct = await service.submitRating({ scope: { kind: "unconfigured" }, correlationId: "direct-test",
       actor: { kind: "visitor", consent: "unknown" },
       idempotencyKey: IDEMPOTENCY_KEY as never,
       projectId: PROJECT_ID as never,

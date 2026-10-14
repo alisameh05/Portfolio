@@ -18,7 +18,7 @@ import type {
   OwnerModerationCommandReceipt,
   RejectOwnerFeedbackApplicationCommand,
   SuppressOwnerFeedbackApplicationCommand,
-} from "../http/owner-moderation.js";
+} from "../../modules/interaction-moderation/index.js";
 
 export type OwnerModerationFakeMode =
   | { readonly type: "success" }

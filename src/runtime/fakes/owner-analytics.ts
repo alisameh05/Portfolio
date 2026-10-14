@@ -18,7 +18,7 @@ import type {
   CreateOwnerAnalyticsGoalVersionApplicationCommand,
   GetOwnerAnalyticsGoalQuery,
   OwnerAnalyticsApplicationService,
-} from "../http/owner-analytics.js";
+} from "../../modules/measurement/index.js";
 
 export type OwnerAnalyticsFakeMode =
   | { readonly type: "success" }

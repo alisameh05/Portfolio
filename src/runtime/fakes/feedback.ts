@@ -49,10 +49,7 @@ export function createFeedbackTestFake(
             value: {
               id: FAKE_FEEDBACK_ID as StableId<"Feedback">,
               projectId: command.projectId,
-              authorName: command.authorName,
-              comment: command.comment,
-              moderationState: "pending" as const,
-              submittedAt: clock.now(),
+              status: "pending" as const,
             },
           };
         case "rejection":
@@ -63,10 +60,7 @@ export function createFeedbackTestFake(
             value: {
               id: "not-a-uuid" as unknown as StableId<"Feedback">,
               projectId: command.projectId,
-              authorName: command.authorName,
-              comment: command.comment,
-              moderationState: "pending" as const,
-              submittedAt: clock.now(),
+              status: "pending" as const,
             },
           };
       }

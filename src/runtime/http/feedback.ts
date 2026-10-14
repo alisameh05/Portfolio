@@ -1,3 +1,4 @@
+import type { PortfolioRequestScope } from "@shared/application";
 /**
  * feedback.ts — Phase 2 #28 Feedback HTTP adapter.
  *
@@ -9,11 +10,7 @@
  * command; call one injected application interface once; validate and
  * serialize the declared response; complete request logging.
  *
- * Transport body carries `name`, `paragraph`, and `locale`. The locale is
- * validated through the generated strict validator (English or Arabic per
- * the accepted contract) but intentionally not forwarded: the Phase 1
- * domain Feedback record carries no locale field, so forwarding it would
- * leak transport concerns into the provider-neutral application seam.
+ * Submitted locale crosses the application seam for exact-locale eligibility.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, results, and rejections crossing the application seam
@@ -43,6 +40,7 @@ import {
 } from "./problem.js";
 
 export interface FeedbackAdapterDeps {
+  readonly scope?: PortfolioRequestScope;
   service: Pick<InteractionModerationService, "submitFeedback">;
   logger?: Logger;
 }
@@ -99,11 +97,14 @@ export async function handlePostProjectFeedback(
     }
 
     const command: SubmitFeedbackCommand = {
+      scope: deps.scope ?? { kind: "unconfigured" },
+      correlationId: traceId,
       actor: { kind: "visitor", consent: "unknown" },
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       projectId: pathResult.data.projectId as StableId<"Project">,
       authorName: bodyResult.data.name,
       comment: bodyResult.data.paragraph,
+      locale: bodyResult.data.locale,
     };
 
     let result: Awaited<ReturnType<typeof deps.service.submitFeedback>>;

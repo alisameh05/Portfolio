@@ -85,18 +85,7 @@ describe("POST Public event adapter (#28)", () => {
     const response = await handlePostPublicEvent(postEventRequest(), { service: fake, logger });
     expect(response.status).toBe(202);
     expect(fake.calls).toHaveLength(1);
-    const command = fake.calls[0] as {
-      eventType: string;
-      routeIdentity: string;
-      coarseCountry?: string;
-      coarseDevice?: string;
-      actor: { kind: string; consent: string };
-    };
-    expect(command.eventType).toBe("case_study_read");
-    expect(command.routeIdentity).toBe(ROUTE_IDENTITY);
-    expect(command.coarseCountry).toBe("EG");
-    expect(command.coarseDevice).toBe("desktop");
-    expect(command.actor.kind).toBe("visitor");
+    expect(fake.calls[0]).toMatchObject({ event: { action: "project-viewed", projectId: PROJECT_ID, context: validContext() }, idempotencyKey: IDEMPOTENCY_KEY, actor: { kind: "visitor" } });
     const body = (await response.json()) as unknown;
     expect(zPostPublicEventResponse.safeParse(body).success).toBe(true);
     expect(body).toEqual({ eventId: EVENT_ID, acceptedAt: expect.any(String) });
@@ -195,10 +184,10 @@ describe("POST Public event adapter (#28)", () => {
 
   it("production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED", async () => {
     const service = createProductionPublicEventService();
-    const direct = await service.ingestEvent({
+    const direct = await service.ingestEvent({ scope: { kind: "unconfigured" }, correlationId: "direct-test",
       actor: { kind: "visitor", consent: "unknown" },
-      eventType: "page_view",
-      routeIdentity: ROUTE_IDENTITY as never,
+      idempotencyKey: IDEMPOTENCY_KEY as never,
+      event: { action: "page-viewed", context: { ...validContext(), locale: "en", pageRouteIdentity: ROUTE_IDENTITY as never, deviceClass: "desktop", referrerClass: "professional" } },
     });
     expect(direct.ok).toBe(false);
     if (!direct.ok) {

@@ -231,6 +231,7 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
       expect(command.feedbackId).toBe(FEEDBACK_ID);
       expect(command.expectedVersion).toBe(2);
       expect(command.idempotencyKey).toBe(IDEMPOTENCY_KEY);
+    expect(command).toMatchObject({ scope: { kind: "unconfigured" }, correlationId: expect.any(String) });
       expect(command.reason).toBe(decisionBody.reason);
       const body = (await response.json()) as unknown;
       expect(responseValidator.safeParse(body).success).toBe(true);
@@ -411,22 +412,22 @@ describe("Owner Feedback approval, rejection, and suppression (#32)", () => {
     }
     const owner = { kind: "owner", ownerId: FEEDBACK_ID, sessionId: "s" } as const;
     const directCalls = [
-      service.getOwnerFeedbackModeration({ actor: owner as never, feedbackId: FEEDBACK_ID as never }),
-      service.approveOwnerFeedback({
+      service.getOwnerFeedbackModeration({ scope: { kind: "unconfigured" }, correlationId: "direct-test", actor: owner as never, feedbackId: FEEDBACK_ID as never }),
+      service.approveOwnerFeedback({ scope: { kind: "unconfigured" }, correlationId: "direct-test",
         actor: owner as never,
         idempotencyKey: IDEMPOTENCY_KEY as never,
         expectedVersion: 2,
         feedbackId: FEEDBACK_ID as never,
         reason: decisionBody.reason,
       }),
-      service.rejectOwnerFeedback({
+      service.rejectOwnerFeedback({ scope: { kind: "unconfigured" }, correlationId: "direct-test",
         actor: owner as never,
         idempotencyKey: IDEMPOTENCY_KEY as never,
         expectedVersion: 2,
         feedbackId: FEEDBACK_ID as never,
         reason: decisionBody.reason,
       }),
-      service.suppressOwnerFeedback({
+      service.suppressOwnerFeedback({ scope: { kind: "unconfigured" }, correlationId: "direct-test",
         actor: owner as never,
         idempotencyKey: IDEMPOTENCY_KEY as never,
         expectedVersion: 2,
