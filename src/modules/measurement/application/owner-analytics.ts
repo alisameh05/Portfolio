@@ -5,8 +5,8 @@ export type AnalyticsEventAction = import("../domain/index.js").MeasurementEvent
 
 export interface AnalyticsGoalStep {
   readonly action: AnalyticsEventAction;
-  readonly publicRouteIds?: ReadonlyArray<StableId<string>>;
-  readonly projectIds?: ReadonlyArray<StableId<string>>;
+  readonly publicRouteIds?: ReadonlyArray<StableId<"PublicRoute">>;
+  readonly projectIds?: ReadonlyArray<StableId<"Project">>;
 }
 
 export interface AnalyticsGoalDefinition {
@@ -16,14 +16,14 @@ export interface AnalyticsGoalDefinition {
 
 export interface GetOwnerAnalyticsGoalQuery extends ApplicationRequestContext {
   readonly actor: ActorContext;
-  readonly goalId: StableId<string>;
+  readonly goalId: StableId<"AnalyticsGoal">;
 }
 
 export interface CreateOwnerAnalyticsGoalVersionApplicationCommand extends ApplicationRequestContext {
   readonly actor: ActorContext;
   readonly idempotencyKey: IdempotencyKey;
   readonly expectedVersion: number;
-  readonly goalId: StableId<string>;
+  readonly goalId: StableId<"AnalyticsGoal">;
   readonly definition: AnalyticsGoalDefinition;
 }
 
@@ -31,39 +31,39 @@ export interface ActivateOwnerAnalyticsGoalVersionApplicationCommand extends App
   readonly actor: ActorContext;
   readonly idempotencyKey: IdempotencyKey;
   readonly expectedVersion: number;
-  readonly goalId: StableId<string>;
-  readonly versionId: StableId<string>;
+  readonly goalId: StableId<"AnalyticsGoal">;
+  readonly versionId: StableId<"AnalyticsGoalVersion">;
 }
 
 export interface AnalyticsGoalVersionView {
-  readonly versionId: StableId<string>;
+  readonly versionId: StableId<"AnalyticsGoalVersion">;
   readonly versionNumber: number;
   readonly definition: AnalyticsGoalDefinition;
   readonly createdAt: string;
 }
 
 export interface AnalyticsGoalActivationView {
-  readonly versionId: StableId<string>;
+  readonly versionId: StableId<"AnalyticsGoalVersion">;
   readonly activatedAt: string;
 }
 
 export interface AnalyticsGoalAggregateView {
-  readonly goalId: StableId<string>;
+  readonly goalId: StableId<"AnalyticsGoal">;
   readonly aggregateVersion: number;
-  readonly activeVersionId: StableId<string> | null;
+  readonly activeVersionId: StableId<"AnalyticsGoalVersion"> | null;
   readonly versions: ReadonlyArray<AnalyticsGoalVersionView>;
   readonly activationHistory: ReadonlyArray<AnalyticsGoalActivationView>;
 }
 
 export interface AnalyticsGoalVersionReceipt {
-  readonly goalId: StableId<string>;
-  readonly versionId: StableId<string>;
+  readonly goalId: StableId<"AnalyticsGoal">;
+  readonly versionId: StableId<"AnalyticsGoalVersion">;
   readonly aggregateVersion: number;
   readonly outcome: "analytics-goal-version-created";
 }
 
 export interface AnalyticsGoalActivationReceipt {
-  readonly aggregateId: StableId<string>;
+  readonly aggregateId: StableId<"AnalyticsGoal">;
   readonly aggregateVersion: number;
   readonly outcome: "analytics-goal-version-activated";
 }

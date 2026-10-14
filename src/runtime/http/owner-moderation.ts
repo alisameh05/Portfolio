@@ -166,7 +166,7 @@ export async function handleGetOwnerFeedbackModeration(
       scope: deps.scope ?? { kind: "unconfigured" },
       correlationId: traceId,
       actor: guard.actor,
-      feedbackId: pathResult.data.feedbackId as StableId<string>,
+      feedbackId: pathResult.data.feedbackId as StableId<"Feedback">,
     };
     let result: Awaited<ReturnType<typeof deps.service.getOwnerFeedbackModeration>>;
     try {
@@ -335,7 +335,7 @@ export async function handleApproveOwnerFeedback(
       actor,
       idempotencyKey,
       expectedVersion,
-      feedbackId: path["feedbackId"] as StableId<string>,
+      feedbackId: path["feedbackId"] as StableId<"Feedback">,
       reason: body["reason"] as string,
     }) as ApproveOwnerFeedbackApplicationCommand,
     (command) => deps.service.approveOwnerFeedback(command),
@@ -365,7 +365,7 @@ export async function handleRejectOwnerFeedback(
       actor,
       idempotencyKey,
       expectedVersion,
-      feedbackId: path["feedbackId"] as StableId<string>,
+      feedbackId: path["feedbackId"] as StableId<"Feedback">,
       reason: body["reason"] as string,
     }) as RejectOwnerFeedbackApplicationCommand,
     (command) => deps.service.rejectOwnerFeedback(command),
@@ -395,7 +395,7 @@ export async function handleSuppressOwnerFeedback(
       actor,
       idempotencyKey,
       expectedVersion,
-      feedbackId: path["feedbackId"] as StableId<string>,
+      feedbackId: path["feedbackId"] as StableId<"Feedback">,
       reason: body["reason"] as string,
     }) as SuppressOwnerFeedbackApplicationCommand,
     (command) => deps.service.suppressOwnerFeedback(command),

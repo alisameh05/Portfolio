@@ -34,7 +34,7 @@ export interface OwnerModerationTestFake extends OwnerModerationApplicationServi
   };
 }
 
-function moderationView(feedbackId: StableId<string>): OwnerFeedbackModerationView {
+function moderationView(feedbackId: StableId<"Feedback">): OwnerFeedbackModerationView {
   return {
     feedbackId,
     aggregateVersion: 1,
@@ -46,9 +46,9 @@ function moderationView(feedbackId: StableId<string>): OwnerFeedbackModerationVi
   };
 }
 
-function invalidModerationView(feedbackId: StableId<string>): OwnerFeedbackModerationView {
+function invalidModerationView(feedbackId: StableId<"Feedback">): OwnerFeedbackModerationView {
   return {
-    feedbackId: "not-a-uuid" as unknown as StableId<string>,
+    feedbackId: "not-a-uuid" as unknown as StableId<"Feedback">,
     aggregateVersion: -1,
     state: "pending",
     authorName: "",
@@ -70,7 +70,7 @@ function receipt(
   outcome: OwnerModerationCommandReceipt["outcome"],
 ): OwnerModerationCommandReceipt {
   return {
-    aggregateId: aggregateId as StableId<string>,
+    aggregateId: aggregateId as StableId<"Feedback">,
     aggregateVersion,
     outcome,
   };
@@ -78,7 +78,7 @@ function receipt(
 
 function invalidReceipt(outcome: OwnerModerationCommandReceipt["outcome"]): OwnerModerationCommandReceipt {
   return {
-    aggregateId: "not-a-uuid" as unknown as StableId<string>,
+    aggregateId: "not-a-uuid" as unknown as StableId<"Feedback">,
     aggregateVersion: -1,
     outcome,
   };

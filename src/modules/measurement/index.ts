@@ -39,3 +39,5 @@ export type { VerifiedMeasurementEvidence } from "./application/service.js";
 export type { MeasurementWorkCommand, MeasurementWorkService } from "./application/work.js";
 
 export type { SafeAggregateReport } from "./application/service.js";
+
+export type { AggregateReportMetadata, SafeReportDimensions, AggregateReportRow } from "./application/service.js";

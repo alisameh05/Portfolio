@@ -73,19 +73,33 @@ export interface VerifiedMeasurementEvidence {
  readonly purpose: "measurement";
 }
 
-/** Fixed report groupings prevent arbitrary small-cell combinations. No raw subject list. */
-export type SafeAggregateReport = {
- readonly state: "no-data" | "low-sample";
- readonly observedSubjects: "zero" | "fewer-than-five";
+/** Reports expose fixed eligible cohorts, stable historical definitions, and no identity lists. */
+export interface AggregateReportMetadata {
+ readonly utcPeriod: { readonly startDay: string; readonly endDay: string };
  readonly asOf: string;
  readonly incomplete: boolean;
  readonly policyVersion: string;
-} | {
- readonly state: "available";
- readonly rows: readonly { readonly utcDay: string; readonly action: MeasurementEventType; readonly count: number; readonly sum?: number; readonly goalVersionId?: StableId<"AnalyticsGoalVersion"> }[];
- readonly asOf: string;
- readonly incomplete: boolean;
- readonly policyVersion: string;
- readonly engagementMeaning: "approximate-active-attention";
- readonly journeyMeaning: "context-without-causation";
-};
+ readonly grouping: "daily-action" | "daily-goal";
+}
+export interface SafeReportDimensions {
+ readonly locale?: "en" | "ar";
+ readonly countryCode?: string;
+ readonly deviceClass?: "desktop" | "mobile" | "tablet" | "other" | "unknown";
+ readonly referrerClass?: "direct" | "search" | "social" | "professional" | "referral" | "unknown";
+ readonly projectId?: StableId<"Project">;
+ readonly publicRouteId?: StableId<"PublicRoute">;
+}
+export type AggregateReportRow = {
+ readonly utcDay: string;
+ readonly count: number;
+ readonly sum?: number;
+ readonly dimensions: SafeReportDimensions;
+} & (
+ | { readonly metric: "action"; readonly action: MeasurementEventType; readonly goalId?: never; readonly goalVersionId?: never; readonly definitionSnapshot?: never }
+ | { readonly metric: "goal"; readonly goalId: StableId<"AnalyticsGoal">; readonly goalVersionId: StableId<"AnalyticsGoalVersion">; readonly definitionSnapshot: import("./owner-analytics.js").AnalyticsGoalDefinition; readonly action?: never }
+);
+export type SafeAggregateReport = AggregateReportMetadata & (
+ { readonly state: "no-data"; readonly observedSubjects: "zero"; readonly rows?: never } |
+ { readonly state: "low-sample"; readonly observedSubjects: "fewer-than-five"; readonly rows?: never } |
+ { readonly state: "available"; readonly rows: readonly AggregateReportRow[]; readonly engagementMeaning: "approximate-active-attention"; readonly journeyMeaning: "context-without-causation" }
+);

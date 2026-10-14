@@ -24,7 +24,9 @@ export interface MeasurementEventContext {
   readonly countryCode?: string;
 }
 /** Each action retains its own required facts. No functional actions or CV intake. */
-export type PublicMeasurementEvent =
+type UnionKeys<T> = T extends unknown ? keyof T : never;
+type StrictActionUnion<T, All = T> = T extends unknown ? T & { readonly [K in Exclude<UnionKeys<All>, keyof T>]?: never } : never;
+export type PublicMeasurementEvent = StrictActionUnion<
   | { readonly action: "page-viewed"; readonly context: MeasurementEventContext }
   | { readonly action: "project-viewed"; readonly context: MeasurementEventContext; readonly projectId: StableId<"Project"> }
   | { readonly action: "active-engagement-sampled"; readonly context: MeasurementEventContext; readonly projectId?: StableId<"Project">; readonly activeMilliseconds: number }
@@ -33,7 +35,8 @@ export type PublicMeasurementEvent =
   | { readonly action: "contact-channel-opened"; readonly context: MeasurementEventContext; readonly projectId?: StableId<"Project">; readonly channel: "linkedin" | "whatsapp" | "instagram" | "phone" }
   | { readonly action: "external-project-link-opened"; readonly context: MeasurementEventContext; readonly projectId: StableId<"Project">; readonly destination: "github-repository" | "live-demo" }
   | { readonly action: "testimonial-engaged"; readonly context: MeasurementEventContext; readonly testimonialId: StableId<"Testimonial">; readonly projectId?: StableId<"Project"> }
-  | { readonly action: "global-project-cta-opened"; readonly context: MeasurementEventContext; readonly projectId: StableId<"Project"> };
+  | { readonly action: "global-project-cta-opened"; readonly context: MeasurementEventContext; readonly projectId: StableId<"Project"> }
+>;
 export type MeasurementEventType = PublicMeasurementEvent["action"];
 /** Owned raw detail; never an ordinary intake receipt or report. */
 export interface PublicEventData {

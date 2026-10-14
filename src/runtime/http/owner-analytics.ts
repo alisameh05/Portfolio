@@ -161,7 +161,7 @@ export async function handleGetOwnerAnalyticsGoal(
       scope: deps.scope ?? { kind: "unconfigured" },
       correlationId: traceId,
       actor: guard.actor,
-      goalId: pathResult.data.goalId as StableId<string>,
+      goalId: pathResult.data.goalId as StableId<"AnalyticsGoal">,
     };
     let result: Awaited<ReturnType<typeof deps.service.getOwnerAnalyticsGoal>>;
     try {
@@ -258,8 +258,8 @@ export async function handleCreateOwnerAnalyticsGoalVersion(
         name: string;
         steps: Array<{
           action: AnalyticsEventAction;
-          publicRouteIds?: StableId<string>[];
-          projectIds?: StableId<string>[];
+          publicRouteIds?: StableId<"PublicRoute">[];
+          projectIds?: StableId<"Project">[];
         }>;
       };
     };
@@ -269,7 +269,7 @@ export async function handleCreateOwnerAnalyticsGoalVersion(
       actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
-      goalId: pathResult.data.goalId as StableId<string>,
+      goalId: pathResult.data.goalId as StableId<"AnalyticsGoal">,
       definition: {
         name: body.definition.name,
         steps: body.definition.steps.map((step) => ({
@@ -356,14 +356,14 @@ export async function handleActivateOwnerAnalyticsGoalVersion(
     if (expectedVersion === null) {
       return reject(logger, traceId, instance, "Missing or invalid concurrency headers.");
     }
-    const body = bodyResult.data as { versionId: StableId<string> };
+    const body = bodyResult.data as { versionId: StableId<"AnalyticsGoalVersion"> };
     const command: ActivateOwnerAnalyticsGoalVersionApplicationCommand = {
       scope: deps.scope ?? { kind: "unconfigured" },
       correlationId: traceId,
       actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
-      goalId: pathResult.data.goalId as StableId<string>,
+      goalId: pathResult.data.goalId as StableId<"AnalyticsGoal">,
       versionId: body.versionId,
     };
     let result: Awaited<ReturnType<typeof deps.service.activateOwnerAnalyticsGoalVersion>>;

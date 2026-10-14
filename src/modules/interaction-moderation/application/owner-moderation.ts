@@ -3,14 +3,14 @@ import type { ActorContext, IdempotencyKey, Rejection, Result, StableId } from "
 
 export interface GetOwnerFeedbackModerationQuery extends ApplicationRequestContext {
   readonly actor: ActorContext;
-  readonly feedbackId: StableId<string>;
+  readonly feedbackId: StableId<"Feedback">;
 }
 
 export interface ApproveOwnerFeedbackApplicationCommand extends ApplicationRequestContext {
   readonly actor: ActorContext;
   readonly idempotencyKey: IdempotencyKey;
   readonly expectedVersion: number;
-  readonly feedbackId: StableId<string>;
+  readonly feedbackId: StableId<"Feedback">;
   readonly reason: string;
 }
 
@@ -18,7 +18,7 @@ export interface RejectOwnerFeedbackApplicationCommand extends ApplicationReques
   readonly actor: ActorContext;
   readonly idempotencyKey: IdempotencyKey;
   readonly expectedVersion: number;
-  readonly feedbackId: StableId<string>;
+  readonly feedbackId: StableId<"Feedback">;
   readonly reason: string;
 }
 
@@ -26,7 +26,7 @@ export interface SuppressOwnerFeedbackApplicationCommand extends ApplicationRequ
   readonly actor: ActorContext;
   readonly idempotencyKey: IdempotencyKey;
   readonly expectedVersion: number;
-  readonly feedbackId: StableId<string>;
+  readonly feedbackId: StableId<"Feedback">;
   readonly reason: string;
 }
 
@@ -37,7 +37,7 @@ export interface OwnerModerationDecisionView {
 }
 
 export interface OwnerFeedbackModerationView {
-  readonly feedbackId: StableId<string>;
+  readonly feedbackId: StableId<"Feedback">;
   readonly aggregateVersion: number;
   readonly state: "pending" | "approved" | "rejected" | "suppressed";
   readonly authorName: string;
@@ -47,7 +47,7 @@ export interface OwnerFeedbackModerationView {
 }
 
 export interface OwnerModerationCommandReceipt {
-  readonly aggregateId: StableId<string>;
+  readonly aggregateId: StableId<"Feedback">;
   readonly aggregateVersion: number;
   readonly outcome: "feedback-approved" | "feedback-rejected" | "feedback-suppressed";
 }
