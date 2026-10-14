@@ -7,6 +7,14 @@ import type { ColumnType } from "kysely";
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface Ratings {
+  portfolio_id: string;
+  project_id: string;
+  updated_at: Timestamp;
+  value: number;
+  visitor_id: string;
+}
+
 export interface Reactions {
   kind: string;
   portfolio_id: string;
@@ -16,5 +24,6 @@ export interface Reactions {
 }
 
 export interface DB {
+  ratings: Ratings;
   reactions: Reactions;
 }

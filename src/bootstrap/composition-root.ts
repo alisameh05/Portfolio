@@ -45,6 +45,12 @@ export interface ReactionRuntimeServices {
   readonly functionalIdentity: FunctionalInteractionContextPort;
 }
 
+export interface RatingRuntimeServices {
+  readonly scope: ReactionRuntimeServices["scope"];
+  readonly service: Pick<InteractionModerationService, "submitRating">;
+  readonly functionalIdentity: FunctionalInteractionContextPort;
+}
+
 export type { RuntimeConfig } from "./configuration.js";
 
 let current: RuntimeConfig | undefined;
@@ -60,6 +66,7 @@ let currentCurrentCv: CurrentCvDeliveryService | undefined;
 let currentPublicConfiguration: PortfolioSettingsApplicationService | undefined;
 let currentConsent: ConsentApplicationService | undefined;
 let currentReaction: ReactionRuntimeServices | undefined;
+let currentRating: RatingRuntimeServices | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -84,6 +91,7 @@ export interface DatabaseRuntimeState extends RuntimeConfig {
 
 export interface DatabaseRuntimeDependencies {
   readonly reaction?: ReactionRuntimeServices;
+  readonly rating?: RatingRuntimeServices;
   readonly consent?: ConsentApplicationService;
   readonly operations: OperationsPersistencePorts;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
@@ -173,12 +181,14 @@ export async function initializeDatabaseRuntime(
         let publicConfiguration: PortfolioSettingsApplicationService | undefined;
         let consent: ConsentApplicationService | undefined;
         let reaction: ReactionRuntimeServices | undefined;
+        let rating: RatingRuntimeServices | undefined;
         if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok && env["FUNCTIONAL_ID_HASH_KEY"]) {
-          const [{ createReactionApplicationService, createFunctionalInteractionContext }, { createPostgresReactionRepository },
+          const [{ createReactionApplicationService, createRatingApplicationService, createFunctionalInteractionContext }, { createPostgresReactionRepository }, { createPostgresRatingRepository },
             { createPostgresProjectInteractionFacts }, { createIdentityAccessService },
             { AesGcmPseudonymousTokenAdapter, createFunctionalPseudonymousIdentityConfig, StubAuthProvider }] = await Promise.all([
             import("../modules/interaction-moderation/index.js"),
             import("../modules/interaction-moderation/adapters/postgres-reactions.js"),
+            import("../modules/interaction-moderation/adapters/postgres-ratings.js"),
             import("../modules/content-publishing/adapters/postgres-interaction-facts.js"),
             import("../modules/identity-access/application/policy.js"),
             import("../modules/identity-access/adapters/index.js"),
@@ -192,6 +202,10 @@ export async function initializeDatabaseRuntime(
             service: createReactionApplicationService({ portfolioId: scope.portfolioId, content, operations,
               repository: createPostgresReactionRepository(), clock: createSystemClock(), ids: createSystemIdGenerator() }),
             functionalIdentity: createFunctionalInteractionContext({ portfolioId: scope.portfolioId, transactions: operations.transactions, content, identity }) };
+          rating = { scope: reaction.scope,
+            service: createRatingApplicationService({ portfolioId: scope.portfolioId, content, operations,
+              repository: createPostgresRatingRepository(), clock: createSystemClock(), ids: createSystemIdGenerator() }),
+            functionalIdentity: reaction.functionalIdentity };
         }
         // Optional Measurement capability does not become a global readiness dependency.
         if (runtimeKind === "application" && env["MEASUREMENT_CONSENT_NOTICE_VERSIONS"]) {
@@ -540,6 +554,7 @@ export async function initializeDatabaseRuntime(
         return {
           operations,
           ...(reaction === undefined ? {} : { reaction }),
+          ...(rating === undefined ? {} : { rating }),
           ...(consent === undefined ? {} : { consent }),
           ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
           ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
@@ -570,6 +585,7 @@ export async function initializeDatabaseRuntime(
     current = config;
     currentOperations = dependencies.operations;
     currentReaction = dependencies.reaction;
+    currentRating = dependencies.rating;
     currentConsent = dependencies.consent;
     currentOwnerConfiguration = dependencies.ownerConfiguration;
     currentContentAuthoring = dependencies.contentAuthoring;
@@ -708,12 +724,19 @@ export async function getReactionRuntimeServices(): Promise<ReactionRuntimeServi
   return { service: createProductionReactionService() };
 }
 
+export async function getRatingRuntimeServices(): Promise<RatingRuntimeServices | { readonly service: Pick<InteractionModerationService, "submitRating"> }> {
+  if (currentRating) return currentRating;
+  const { createProductionRatingService } = await import("../runtime/fakes/rating.js");
+  return { service: createProductionRatingService() };
+}
+
 /** Test-only seam to isolate focused suites. */
 export function resetRuntimeForTests(): void {
   current = undefined;
   currentOperations = undefined;
   currentConsent = undefined;
   currentReaction = undefined;
+  currentRating = undefined;
   currentOwnerConfiguration = undefined;
   currentContentAuthoring = undefined;
   currentOwnerTaxonomy = undefined;

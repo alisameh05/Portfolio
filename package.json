@@ -154,7 +154,9 @@
     "prephase7:focus:consent": "npm run validation:ready",
     "phase7:focus:consent": "node scripts/phase7-consent.mjs",
     "prephase7:focus:reactions": "npm run validation:ready",
-    "phase7:focus:reactions": "node scripts/phase7-reactions.mjs"
+    "phase7:focus:reactions": "node scripts/phase7-reactions.mjs",
+    "prephase7:focus:ratings": "npm run validation:ready",
+    "phase7:focus:ratings": "node scripts/phase7-ratings.mjs"
   },
   "dependencies": {
     "kysely": "0.29.6",
