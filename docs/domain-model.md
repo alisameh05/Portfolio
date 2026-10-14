@@ -344,6 +344,20 @@ not proof of one vote per person or cross-device deduplication.
 
 ### Consent evidence and revocation (#189)
 
+Feedback submission (#192) uses no persistent Visitor identity. Anonymous replay
+is scoped to Portfolio, Project, operation and caller key with a canonical hash
+of normalized plain name/paragraph and submitted locale. Content locks its root
+before the ledger/Feedback write; the row, minimal pending receipt and text-free
+FeedbackSubmitted fact commit together. Current Published lifecycle and the
+exact submitted published language are rechecked before replay. The name and
+paragraph live only in the private row, which starts at aggregate version 1 and
+server submittedAt. Runtime submission privileges are INSERT-only under FORCE
+RLS, never private read/author lookup. NFC/trim normalization rejects blank,
+oversized and disallowed control text without truncation or translation.
+The HTTP edge bounds actual body bytes and checks a configured shared Portfolio
+abuse budget without issuing functional/Measurement tokens or persisting client
+identifiers. Owner inspection/decisions and public presentation remain #193/#194.
+
 - Trusted in-process `recordConsent` accepts an explicit granted/denied/unknown choice and optimistic revision, never a client subject. Initial revision is zero. Only a granted choice generates an independent MeasurementVisitor and encrypted authenticated evidence. New grants after denial or at/after the prior evidence expiry generate a new subject; renewal can preserve a still-unexpired subject. Ordinary reads, event JSON, cookie presence and Feedback cannot grant consent.
 - Identity and Access uses the separately authenticated `measurement-consent` envelope purpose, with the reviewed Measurement keyring and independent Functional key material. Evidence binds Portfolio, consent ID, notice, state, subject, revision and server issue/expiry times. Supported previous keys preserve the subject for the remaining lifetime. Notice versions are configured explicitly; removed versions and retired keys fail closed.
 - Measurement owns a current row and minimal state/notice/revision/time history. No subject or event payload is copied into history, outbox or replay records. An advisory lock for Portfolio/consent ID precedes the current-row lock; grant, withdrawal and transaction-participating checks share this protocol. Stale optimistic revisions reject; issuance failure rolls back state and history together.

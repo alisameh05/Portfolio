@@ -54,7 +54,7 @@ describe("Phase 7 contracts #188", () => {
  });
  it("T01-04/05 Feedback receipt and logs omit private text and identities, retaining submitted locale in the command", async () => {
   const fake = createFeedbackTestFake({ type: "success" }); const logger = createTestLogger();
-  const response = await handlePostProjectFeedback(new Request("https://example.com", { method: "POST", headers: { "Idempotency-Key": "contracts-188" }, body: JSON.stringify({ name: "PRIVATE_NAME_SENTINEL", paragraph: "PRIVATE_TEXT_SENTINEL", locale: "ar" }) }), { projectId: id }, { service: fake, logger });
+  const response = await handlePostProjectFeedback(new Request("https://example.com", { method: "POST", headers: { "Idempotency-Key": "contracts-188" }, body: JSON.stringify({ name: "PRIVATE_NAME_SENTINEL", paragraph: "PRIVATE_TEXT_SENTINEL", locale: "ar" }) }), { projectId: id }, { rateLimit: { check: async () => ({ allowed: true }) }, service: fake, logger });
   expect(response.status).toBe(201);
   expect(fake.calls[0]).toMatchObject({ locale: "ar" });
   const command = fake.calls[0]; if (!command) throw new Error("missing command");

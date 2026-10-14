@@ -17,7 +17,7 @@ import type {
   TransactionRunner,
 } from "../../../runtime/ports.js";
 import type { IdempotencyKey } from "@shared/domain";
-import { InputValidationError } from "@shared/domain";
+import { InputValidationError, parseStableId } from "@shared/domain";
 
 export type SafeResultEnvelope = Readonly<Record<string, JsonValue>>;
 declare const SAFE_ERROR_CODE: unique symbol;
@@ -109,7 +109,7 @@ export interface OperationsPersistencePorts {
   readonly jobs: LeasedJobStorePort;
 }
 
-const SENSITIVE_KEYS = /(?:password|secret|token|authorization|cookie|feedback|email|ipaddress)/i;
+const SENSITIVE_KEYS = /(?:password|secret|token|authorization|cookie|feedback|email|ipaddress|authorname|paragraph|comment|reason)/i;
 
 /** Bounded non-sensitive machine code suitable for durable operational state. */
 export function parseSafeErrorCode(value: string): SafeErrorCode {
@@ -126,7 +126,8 @@ function assertSafe(value: JsonValue, path = "payload"): void {
   }
   if (value !== null && typeof value === "object") {
     for (const [key, entry] of Object.entries(value)) {
-      if (SENSITIVE_KEYS.test(key)) {
+      const safeFeedbackId = key === "feedbackId" && typeof entry === "string" && parseStableId("Feedback", entry).ok;
+      if (SENSITIVE_KEYS.test(key) && !safeFeedbackId) {
         throw new InputValidationError(`Versioned payload contains a sensitive field at ${path}.`);
       }
       assertSafe(entry, `${path}.${key}`);

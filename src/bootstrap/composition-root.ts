@@ -45,6 +45,12 @@ export interface ReactionRuntimeServices {
   readonly functionalIdentity: FunctionalInteractionContextPort;
 }
 
+export interface FeedbackRuntimeServices {
+  readonly scope: ReactionRuntimeServices["scope"];
+  readonly service: Pick<InteractionModerationService, "submitFeedback">;
+  readonly rateLimit: import("../runtime/http/current-cv-rate-limit.js").CurrentCvRateLimitCheck;
+}
+
 export interface RatingRuntimeServices {
   readonly scope: ReactionRuntimeServices["scope"];
   readonly service: Pick<InteractionModerationService, "submitRating">;
@@ -67,6 +73,7 @@ let currentPublicConfiguration: PortfolioSettingsApplicationService | undefined;
 let currentConsent: ConsentApplicationService | undefined;
 let currentReaction: ReactionRuntimeServices | undefined;
 let currentRating: RatingRuntimeServices | undefined;
+let currentFeedback: FeedbackRuntimeServices | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -92,6 +99,7 @@ export interface DatabaseRuntimeState extends RuntimeConfig {
 export interface DatabaseRuntimeDependencies {
   readonly reaction?: ReactionRuntimeServices;
   readonly rating?: RatingRuntimeServices;
+  readonly feedback?: FeedbackRuntimeServices;
   readonly consent?: ConsentApplicationService;
   readonly operations: OperationsPersistencePorts;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
@@ -182,6 +190,23 @@ export async function initializeDatabaseRuntime(
         let consent: ConsentApplicationService | undefined;
         let reaction: ReactionRuntimeServices | undefined;
         let rating: RatingRuntimeServices | undefined;
+        let feedback: FeedbackRuntimeServices | undefined;
+        if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok) {
+          const [{ createFeedbackApplicationService }, { createPostgresFeedbackSubmissionRepository },
+            { createPostgresProjectInteractionFacts }, { createBoundedCurrentCvRateLimit }] = await Promise.all([
+            import("../modules/interaction-moderation/index.js"),
+            import("../modules/interaction-moderation/adapters/postgres-feedback.js"),
+            import("../modules/content-publishing/adapters/postgres-interaction-facts.js"),
+            import("../runtime/http/current-cv-rate-limit.js"),
+          ]);
+          const scope = { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value };
+          feedback = { scope: { kind: "portfolio", portfolioId: scope.portfolioId },
+            service: createFeedbackApplicationService({ portfolioId: scope.portfolioId, content: createPostgresProjectInteractionFacts(scope),
+              operations, repository: createPostgresFeedbackSubmissionRepository(), clock: createSystemClock(), ids: createSystemIdGenerator() }),
+            // Portfolio-wide process budget needs no IP, fingerprint or persistent identity.
+            rateLimit: createBoundedCurrentCvRateLimit({ clientKey: () => "feedback:" + scope.portfolioId,
+              maxRequests: Number(env["FEEDBACK_RATE_LIMIT_MAX_REQUESTS"] ?? 30), windowSeconds: Number(env["FEEDBACK_RATE_LIMIT_WINDOW_SECONDS"] ?? 60) }) };
+        }
         if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok && env["FUNCTIONAL_ID_HASH_KEY"]) {
           const [{ createReactionApplicationService, createRatingApplicationService, createFunctionalInteractionContext }, { createPostgresReactionRepository }, { createPostgresRatingRepository },
             { createPostgresProjectInteractionFacts }, { createIdentityAccessService },
@@ -555,6 +580,7 @@ export async function initializeDatabaseRuntime(
           operations,
           ...(reaction === undefined ? {} : { reaction }),
           ...(rating === undefined ? {} : { rating }),
+          ...(feedback === undefined ? {} : { feedback }),
           ...(consent === undefined ? {} : { consent }),
           ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
           ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
@@ -586,6 +612,7 @@ export async function initializeDatabaseRuntime(
     currentOperations = dependencies.operations;
     currentReaction = dependencies.reaction;
     currentRating = dependencies.rating;
+    currentFeedback = dependencies.feedback;
     currentConsent = dependencies.consent;
     currentOwnerConfiguration = dependencies.ownerConfiguration;
     currentContentAuthoring = dependencies.contentAuthoring;
@@ -730,6 +757,13 @@ export async function getRatingRuntimeServices(): Promise<RatingRuntimeServices 
   return { service: createProductionRatingService() };
 }
 
+/** Existing Feedback HTTP edge obtains persistence and abuse control here. */
+export async function getFeedbackRuntimeServices(): Promise<FeedbackRuntimeServices | { readonly service: Pick<InteractionModerationService, "submitFeedback">; readonly rateLimit: FeedbackRuntimeServices["rateLimit"] }> {
+  if (currentFeedback) return currentFeedback;
+  const { createProductionFeedbackService } = await import("../runtime/fakes/feedback.js");
+  return { service: createProductionFeedbackService(), rateLimit: { check: async () => { throw new Error("FEEDBACK_NOT_CONFIGURED"); } } };
+}
+
 /** Test-only seam to isolate focused suites. */
 export function resetRuntimeForTests(): void {
   current = undefined;
@@ -737,6 +771,7 @@ export function resetRuntimeForTests(): void {
   currentConsent = undefined;
   currentReaction = undefined;
   currentRating = undefined;
+  currentFeedback = undefined;
   currentOwnerConfiguration = undefined;
   currentContentAuthoring = undefined;
   currentOwnerTaxonomy = undefined;

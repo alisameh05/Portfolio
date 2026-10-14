@@ -1,4 +1,5 @@
 import type { PortfolioRequestScope } from "@shared/application";
+import type { CurrentCvRateLimitCheck } from "./current-cv-rate-limit.js";
 /**
  * feedback.ts — Phase 2 #28 Feedback HTTP adapter.
  *
@@ -40,6 +41,7 @@ import {
 } from "./problem.js";
 
 export interface FeedbackAdapterDeps {
+  readonly rateLimit: CurrentCvRateLimitCheck;
   readonly scope?: PortfolioRequestScope;
   service: Pick<InteractionModerationService, "submitFeedback">;
   logger?: Logger;
@@ -82,9 +84,39 @@ export async function handlePostProjectFeedback(
       return transportProblem("Missing or invalid Idempotency-Key header.", traceId, instance);
     }
 
+    let verdict: Awaited<ReturnType<CurrentCvRateLimitCheck["check"]>>;
+    try { verdict = await deps.rateLimit.check(request); }
+    catch { return rejectionToProblem({ kind: "temporarily_unavailable", code: "FEEDBACK_RATE_LIMIT_UNAVAILABLE" }, traceId, instance); }
+    if (!verdict.allowed) {
+      const retryAfterSeconds = Number.isSafeInteger(verdict.retryAfterSeconds) && (verdict.retryAfterSeconds ?? 0) > 0 ? verdict.retryAfterSeconds! : 60;
+      return rejectionToProblem({ kind: "rate_limited", code: "FEEDBACK_RATE_LIMITED", retryAfterSeconds }, traceId, instance);
+    }
+    // 16 KiB fits even the maximum en/ar payload encoded as JSON escapes.
+    const maximumBytes = 16 * 1024;
+    if (Number(request.headers.get("content-length")) > maximumBytes) {
+      return transportProblem("Request body exceeds the allowed limit.", traceId, instance);
+    }
     let rawBody: unknown;
     try {
-      rawBody = await request.json();
+      const reader = request.body?.getReader();
+      let text = "", size = 0;
+      const decoder = new TextDecoder("utf-8", { fatal: true });
+      if (reader) {
+        try {
+          while (true) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            size += chunk.value.byteLength;
+            if (size > maximumBytes) {
+              await reader.cancel();
+              return transportProblem("Request body exceeds the allowed limit.", traceId, instance);
+            }
+            text += decoder.decode(chunk.value, { stream: true });
+          }
+          text += decoder.decode();
+        } finally { reader.releaseLock(); }
+      }
+      rawBody = JSON.parse(text);
     } catch {
       logger?.warn("request.rejected", { traceId, status: 400 });
       return transportProblem("Malformed JSON body.", traceId, instance);
