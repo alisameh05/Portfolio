@@ -39,7 +39,7 @@ test("CV evidence requires recorded execution of every T09 criterion", () => {
 
 test("the complete real integration gate rejects skipped, missing, failed, and partial test reports", () => {
   const report = {
-    success: true, numTotalTests: 7, numPassedTests: 7, numFailedTests: 0, numPendingTests: 0,
+    success: true, numTotalTests: 7, numPassedTests: 7, numFailedTests: 0, numFailedTestSuites: 0, numPendingTests: 0,
     testResults: [{ assertionResults: [
       "commits a scoped candidate and replays the same encrypted target without re-signing",
       "allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes",
@@ -61,6 +61,19 @@ test("the complete real integration gate rejects skipped, missing, failed, and p
   const partial = structuredClone(report);
   partial.testResults[0].assertionResults.pop();
   assert.equal(evaluatePhase6IntegrationTests(partial, 0).verdict, "fail");
+  const aggregateMismatch = structuredClone(report);
+  aggregateMismatch.success = false;
+  const aggregateDiagnostics = evaluatePhase6IntegrationTests(aggregateMismatch, 0).diagnostics;
+  assert.equal(aggregateDiagnostics.conditions.reportSucceeded, false);
+  assert.equal(aggregateDiagnostics.assertionTitles.length, 7);
+  const failedSuite = structuredClone(report);
+  failedSuite.testResults[0].status = "failed";
+  failedSuite.numFailedTestSuites = 1;
+  failedSuite.testResults[0].message = "Error: fixture-secret\n at tests/database/media-upload-intent.integration.test.ts:605:9";
+  const suiteDiagnostics = evaluatePhase6IntegrationTests(failedSuite, 0).diagnostics;
+  assert.deepEqual(suiteDiagnostics.suiteResults, [{ name: "unknown-suite", status: "failed",
+    reason: "Error", location: "tests/database/media-upload-intent.integration.test.ts:605:9" }]);
+  assert.doesNotMatch(JSON.stringify(suiteDiagnostics), /fixture-secret/u);
   assert.equal(evaluatePhase6IntegrationTests({ ...report, numPendingTests: 1 }, 0).verdict, "fail");
   for (const title of [report.testResults[0].assertionResults[1].title, "unrelated passing test"]) {
     const substituted = structuredClone(report);
