@@ -1334,14 +1334,18 @@ async function main() {
         storage: "private media-processed bucket; one content-addressed accepted PDF snapshot",
         visitor: "anonymous request without identity, consent cookie, or Measurement write" },
       checks: { delivery: scenarioNames, currentCvHttpAndStorageUnits: acceptanceUnitChecks,
+        currentCvStorageMatrix: processingCounts?.currentCvStorageMatrix ?? [],
         mediaAcceptanceOperations: processingCounts?.acceptanceExecutions ?? 0,
         activationForDelivery: scenarios.find((item) => String(item.name).includes("T14-02")) },
       criteria, counts: { integrationExecuted: scenarios.filter((item) => item.executed).length,
         integrationFailures: scenarios.filter((item) => item.executed && item.status !== "passed").length,
         integrationSkips: scenarios.filter((item) => !item.executed).length,
         unitExecuted: acceptanceUnitChecks?.total ?? 0, unitFailures: acceptanceUnitChecks?.failed ?? 0,
-        unitSkips: acceptanceUnitChecks?.skipped ?? 0 },
+        unitSkips: acceptanceUnitChecks?.skipped ?? 0,
+        currentCvStorageMatrixExecuted: processingCounts?.currentCvStorageMatrix?.length ?? 0,
+        currentCvStorageMatrixFailures: processingCounts?.currentCvStorageMatrix?.filter((item) => item.status !== "passed").length ?? 0 },
       cleanup, verdict: criteria.every((item) => item.executed && item.status === "passed") && integrationPassed &&
+        (processingCounts?.currentCvStorageMatrix?.length ?? 0) >= 46 && processingCounts.currentCvStorageMatrix.every((item) => item.executed && item.status === "passed") &&
         unitPassed && formats.some((format) => format.id === "pdf" && format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
         cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:cv-delivery"],

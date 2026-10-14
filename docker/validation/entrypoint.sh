@@ -20,7 +20,7 @@ cleanup() {
   local result=$?
   trap - EXIT INT TERM
   if [ "${mode}" = phase6 ] || [ "${mode}" = media-cv-integration ]; then
-    for report in phase6-media-integration.json phase6-cv-portfolio-154.json phase6-media-cv-integration-163.json; do
+    for report in phase6-media-integration.json phase6-cv-portfolio-154.json phase6-cv-activation-156.json phase6-cv-delivery-159.json phase6-owner-composition-161.json phase6-migration-access-162.json phase6-media-cv-integration-163.json; do
       if [ -f "/workspace/evidence/$report" ]; then
         cp "/workspace/evidence/$report" "/evidence/$report" || result=1
       fi
@@ -48,6 +48,10 @@ if [ -f /source/.env.example ]; then cp /source/.env.example /workspace/.env.exa
 if [ "$mode" = phase6 ] || [ "$mode" = media-cv-integration ]; then
   rm -f /workspace/evidence/phase6-media-integration.json /workspace/evidence/phase6-cv-portfolio-154.json
   rm -f /evidence/phase6-media-integration.json /evidence/phase6-cv-portfolio-154.json
+  rm -f /workspace/evidence/phase6-cv-activation-156.json /workspace/evidence/phase6-owner-composition-161.json /workspace/evidence/phase6-migration-access-162.json
+  rm -f /evidence/phase6-cv-activation-156.json /evidence/phase6-owner-composition-161.json /evidence/phase6-migration-access-162.json
+  rm -f /workspace/evidence/phase6-cv-delivery-159.json /evidence/phase6-cv-delivery-159.json
+  rm -f /workspace/evidence/phase6-media-cv-integration-163.json /evidence/phase6-media-cv-integration-163.json
 fi
 # Build a private Git view without host paths, hooks, config or credentials.
 # This also avoids Windows worktree-specific config changing Linux ref lookup.
@@ -94,4 +98,8 @@ elif [ "${1:-phase6}" = media-cv-integration ]; then
 else
   npm run phase6:focus:media-integration
   npm run phase6:focus:cv-portfolio
+  npm run phase6:focus:cv-activation
+  npm run phase6:focus:cv-delivery
+  npm run phase6:focus:owner-composition
+  npm run phase6:focus:migration-access
 fi

@@ -100,7 +100,7 @@ jobs:
   phase6-media-cv:
     name: Phase 6 Media and CV real-PostgreSQL-Storage
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -119,18 +119,26 @@ jobs:
         # Delete committed reports before any Docker step can fail.
         # The always-upload step must never publish a previous run's pass.
         run: |
-          node --input-type=module -e 'import { rmSync } from "node:fs"; for (const path of ["evidence/phase6-media-integration.json", "evidence/phase6-cv-portfolio-154.json", "evidence/phase6-media-cv-integration-163.json"]) rmSync(path, { force: true });'
+          node --input-type=module -e 'import { rmSync } from "node:fs"; for (const path of ["evidence/phase6-media-integration.json", "evidence/phase6-cv-portfolio-154.json", "evidence/phase6-cv-activation-156.json", "evidence/phase6-cv-delivery-159.json", "evidence/phase6-owner-composition-161.json", "evidence/phase6-migration-access-162.json", "evidence/phase6-media-cv-integration-163.json"]) rmSync(path, { force: true });'
           docker compose -p portfolio-validation -f compose.validation.yaml build validation
       - name: Require all seven real Media integration tests with zero skips
         # Remove committed evidence so an early failure cannot upload an old pass.
         run: |
-          node --input-type=module -e 'import { rmSync } from "node:fs"; for (const path of ["evidence/phase6-media-integration.json", "evidence/phase6-cv-portfolio-154.json"]) rmSync(path, { force: true });'
+          node --input-type=module -e 'import { rmSync } from "node:fs"; for (const path of ["evidence/phase6-media-integration.json", "evidence/phase6-cv-portfolio-154.json", "evidence/phase6-cv-activation-156.json", "evidence/phase6-cv-delivery-159.json", "evidence/phase6-owner-composition-161.json", "evidence/phase6-migration-access-162.json"]) rmSync(path, { force: true });'
           npm run phase6:focus:media-integration
       - name: Require CV registration and migration upgrade acceptance
         run: npm run phase6:focus:cv-portfolio
       - name: Require integrated Media and CV cross-feature acceptance for issue 163
         # This source-bound evidence is created only by this run and uploaded below.
         run: npm run phase6:focus:media-cv-integration
+      - name: Require accepted CV activation invariants
+        run: npm run phase6:focus:cv-activation
+      - name: Require real Current and old CV Storage API policy matrix
+        run: npm run phase6:focus:cv-delivery
+      - name: Require retained Media and CV history evidence
+        run: npm run phase6:focus:owner-composition
+      - name: Require clean-upgrade, restricted-access, and bounded-plan evidence for issue 162
+        run: npm run phase6:focus:migration-access
       - name: Publish sanitized current-source evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -139,6 +147,10 @@ jobs:
           path: |
             evidence/phase6-media-integration.json
             evidence/phase6-cv-portfolio-154.json
+            evidence/phase6-cv-activation-156.json
+            evidence/phase6-cv-delivery-159.json
+            evidence/phase6-owner-composition-161.json
+            evidence/phase6-migration-access-162.json
             evidence/phase6-media-cv-integration-163.json
           if-no-files-found: error
           retention-days: 14

@@ -76,6 +76,8 @@
     "prephase5:context": "npm run validation:ready",
     "phase5:context": "node scripts/check-phase5-context.mjs",
     "phase6:focus:verification": "node scripts/phase6-verification.mjs",
+    "prephase6:focus:migration-access": "npm run validation:ready",
+    "phase6:focus:migration-access": "node scripts/phase6-migration-access.mjs",
     "prephase6:focus:media-image-processing": "npm run validation:ready",
     "phase6:focus:media-image-processing": "node scripts/phase6-verification.mjs --image-processing-only",
     "prephase6:focus:media-processing": "npm run validation:ready",

@@ -40,6 +40,8 @@ import { createPostgresMediaRejectionRepository } from "../../src/modules/media/
 import type { OwnerMediaAccessibility } from "../../src/modules/media/application/owner-contracts.js";
 import { createSupabaseMediaUploadTargetAdapter } from "../../src/runtime/adapters/supabase-media-upload-target.js";
 import { createSupabaseMediaProcessingStorage } from "../../src/runtime/adapters/supabase-media-processing-storage.js";
+import { createSupabaseCurrentCvDelivery } from "../../src/runtime/adapters/supabase-current-cv-delivery.js";
+import { createCurrentCvDeliveryService } from "../../src/modules/cv-portfolio/application/current-delivery.js";
 import { createPostgresRuntimeDatabase, resolvePostgresTransaction } from "../../src/shared/adapters/postgres/runtime.js";
 import { createProductionOwnerMediaService } from "../../src/runtime/fakes/owner-media.js";
 import { createStableId } from "../../src/shared/domain/index.js";
@@ -81,6 +83,7 @@ const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, vi
   cvAcceptanceScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   cvActivationScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   currentCvDeliveryScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
+  currentCvStorageMatrix: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   currentCvCapabilityScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   ownerCompositionScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed";
     readonly scannerVersion?: string; readonly processorVersion?: string;
@@ -98,7 +101,7 @@ function saveProcessingCounts(update: Record<string, unknown> = mediaProcessingC
     if (existsSync(PROCESSING_COUNTS_FILE)) previous = JSON.parse(readFileSync(PROCESSING_COUNTS_FILE, "utf8")) as Record<string, unknown>;
   } catch { /* The current run rewrites an unreadable partial report. */ }
   const merged: Record<string, unknown> = { ...previous, ...update };
-  for (const field of ["cvScenarios", "cvAcceptanceScenarios", "cvActivationScenarios", "currentCvDeliveryScenarios", "currentCvCapabilityScenarios", "ownerCompositionScenarios", "mediaRejectionScenarios"]) {
+  for (const field of ["cvScenarios", "cvAcceptanceScenarios", "cvActivationScenarios", "currentCvDeliveryScenarios", "currentCvStorageMatrix", "currentCvCapabilityScenarios", "ownerCompositionScenarios", "mediaRejectionScenarios"]) {
     const prior = Array.isArray(previous[field]) ? previous[field] as Array<Record<string, unknown>> : [];
     const next = Array.isArray(update[field]) ? update[field] as Array<Record<string, unknown>> : [];
     if (prior.length > 0 || next.length > 0) {
@@ -127,7 +130,7 @@ const bytes = Buffer.from("Phase 6 private Media candidate fixture.", "utf8");
 const sha256 = createHash("sha256").update(bytes).digest("hex");
 const mimeType = "image/png";
 
-function headers(key: string): HeadersInit {
+function headers(key: string): Record<string, string> {
   return { apikey: key, authorization: `Bearer ${key}` };
 }
 
@@ -3692,6 +3695,117 @@ describeReal(group === "baseline"
         currentAfterReplacement.ok && currentAfterReplacement.value.currentVersionId === registrationB.value.versionId &&
         secondResponse.status === 200 && secondDeliveredHash === processedBHash && secondDeliveredHash !== firstDeliveredHash &&
         secondResponse.headers.get("cache-control") === "no-store");
+      const cvStorageMatrix: Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }> = [];
+      const cvStorageCheck = (name: string, passed: boolean) => {
+        cvStorageMatrix.push({ name, executed: true, status: passed ? "passed" : "failed" });
+        expect(passed, name).toBe(true);
+      };
+      const cvStorageObjects = await admin.query<{ version_id: string; media_id: string; media_object_id: string; media_sha256: string }>(
+        `select version_id::text, media_id::text, media_object_id::text, media_sha256 from cv_portfolio.versions
+          where version_id = any($1::uuid[]) order by version_number`, [[cvRegistration.value.versionId, registrationB.value.versionId]]);
+      expect(cvStorageObjects.rows).toHaveLength(2);
+      const cvObjectPaths = cvStorageObjects.rows.map((row) => ({
+        versionId: row.version_id,
+        kind: row.version_id === registrationB.value.versionId ? "current-CV" : "old-CV",
+        path: `/processed/${portfolioId}/${row.media_id}/${row.media_object_id}/${row.media_sha256}.pdf`,
+      }));
+      const mappedBucket = `phase6-map-${randomBytes(5).toString("hex")}`;
+      let mappedBucketCreated = false;
+      try {
+        const createMappedBucket = await storageRequest("/storage/v1/bucket", { method: "POST",
+          headers: { ...headers(SERVICE_ROLE_KEY!), "content-type": "application/json" },
+          body: JSON.stringify({ id: mappedBucket, name: mappedBucket, public: false }) });
+        mappedBucketCreated = [200, 201].includes(createMappedBucket.status);
+        cvStorageCheck("provider mapping fixture creates a separate private bucket", mappedBucketCreated);
+        const currentObject = cvStorageObjects.rows.find((row) => row.version_id === registrationB.value.versionId);
+        const currentObjectPath = cvObjectPaths.find((object) => object.kind === "current-CV")?.path;
+        if (!currentObject || !currentObjectPath) throw new Error("PHASE6_PORTABLE_CURRENT_CV_FIXTURE_MISSING");
+        const sourceObject = await storageRequest(`/storage/v1/object/media-processed${currentObjectPath}`, { headers: headers(SERVICE_ROLE_KEY!) });
+        const sourceBytes = new Uint8Array(await sourceObject.arrayBuffer());
+        const copiedObject = await storageRequest(`/storage/v1/object/${mappedBucket}${currentObjectPath}`, { method: "POST",
+          headers: { ...headers(SERVICE_ROLE_KEY!), "content-type": "application/pdf", "x-upsert": "false" }, body: sourceBytes });
+        const mappedSnapshot = { portfolioId, mediaAssetId: currentObject.media_id as StableId<"MediaAsset">,
+          objectId: currentObject.media_object_id as StableId<"MediaObject">, sha256: currentObject.media_sha256, objectVersion: currentObject.media_sha256 };
+        const mappedStorage = createSupabaseCurrentCvDelivery({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY!,
+          mode: "test", processedBucket: mappedBucket });
+        const mappedDeliveryService = createCurrentCvDeliveryService({
+          repository: { async getCurrentCvSnapshot() { return { ok: true as const, value: mappedSnapshot }; } }, storage: mappedStorage,
+        });
+        const mappedDelivery = await mappedDeliveryService.downloadCurrentCv({ actor: { kind: "visitor", consent: "unknown" }, locale: "en", disposition: "inline" });
+        let mappedDeliveryHash: string | undefined;
+        if (mappedDelivery.ok && mappedDelivery.value.kind === "stream") {
+          const mappedChunks: Buffer[] = [];
+          for await (const chunk of mappedDelivery.value.bytes) mappedChunks.push(Buffer.from(chunk));
+          mappedDeliveryHash = createHash("sha256").update(Buffer.concat(mappedChunks)).digest("hex");
+        }
+        cvStorageCheck("Current CV application resolution and verified streaming succeed after switching to a different private Storage bucket",
+          copiedObject.status === 200 && sourceObject.status === 200 && mappedDelivery.ok && mappedDelivery.value.kind === "stream" && mappedDeliveryHash === currentObject.media_sha256);
+      } finally {
+        if (mappedBucketCreated) {
+          const objectPath = cvObjectPaths.find((object) => object.kind === "current-CV")?.path;
+          const removedObject = await storageRequest(`/storage/v1/object/${mappedBucket}`, { method: "DELETE",
+            headers: { ...headers(SERVICE_ROLE_KEY!), "content-type": "application/json" },
+            body: JSON.stringify({ prefixes: objectPath ? [objectPath.slice(1)] : [] }) });
+          const removedBucket = await storageRequest(`/storage/v1/bucket/${mappedBucket}`, { method: "DELETE", headers: headers(SERVICE_ROLE_KEY!) });
+          cvStorageCheck("provider mapping fixture removes its copied object and private bucket", [200, 204].includes(removedObject.status) && [200, 204].includes(removedBucket.status));
+        }
+      }
+      const foreignOwnerEmail = `cv-storage-foreign-owner-${randomBytes(5).toString("hex")}@example.invalid`;
+      const foreignOwnerPassword = randomBytes(18).toString("base64url");
+      const foreignPortfolioId = createStableId("Portfolio");
+      const foreignOwnerId = createStableId("Owner");
+      const createdForeignOwner = await storageRequest("/auth/v1/admin/users", { method: "POST",
+        headers: { ...headers(SERVICE_ROLE_KEY!), "content-type": "application/json" },
+        body: JSON.stringify({ email: foreignOwnerEmail, password: foreignOwnerPassword, email_confirm: true,
+          app_metadata: { role: "owner", owner_id: foreignOwnerId, portfolio_id: foreignPortfolioId } }) });
+      cvStorageCheck("local Auth creates a foreign-scope Owner principal for the Storage API matrix", [200, 201].includes(createdForeignOwner.status));
+      const authenticatedForeignOwner = await storageRequest("/auth/v1/token?grant_type=password", { method: "POST",
+        headers: { apikey: ANON_KEY!, "content-type": "application/json" },
+        body: JSON.stringify({ email: foreignOwnerEmail, password: foreignOwnerPassword }) });
+      const foreignOwnerAuth = authenticatedForeignOwner.ok ? await authenticatedForeignOwner.json() as Record<string, unknown> : {};
+      cvStorageCheck("local Auth issues a foreign-scope Owner JWT for the Storage API matrix", authenticatedForeignOwner.status === 200 && typeof foreignOwnerAuth["access_token"] === "string");
+      const foreignOwnerHeaders = { apikey: ANON_KEY!, authorization: `Bearer ${String(foreignOwnerAuth["access_token"])}` };
+      const nonOwnerEmail = `cv-storage-non-owner-${randomBytes(5).toString("hex")}@example.invalid`;
+      const nonOwnerPassword = randomBytes(18).toString("base64url");
+      const createdNonOwner = await storageRequest("/auth/v1/admin/users", { method: "POST",
+        headers: { ...headers(SERVICE_ROLE_KEY!), "content-type": "application/json" },
+        body: JSON.stringify({ email: nonOwnerEmail, password: nonOwnerPassword, email_confirm: true }) });
+      cvStorageCheck("local Auth creates a real authenticated non-Owner principal", [200, 201].includes(createdNonOwner.status));
+      const authenticatedNonOwner = await storageRequest("/auth/v1/token?grant_type=password", { method: "POST",
+        headers: { apikey: ANON_KEY!, "content-type": "application/json" },
+        body: JSON.stringify({ email: nonOwnerEmail, password: nonOwnerPassword }) });
+      const nonOwnerAuth = authenticatedNonOwner.ok ? await authenticatedNonOwner.json() as Record<string, unknown> : {};
+      cvStorageCheck("local Auth issues a non-Owner JWT for the Storage API matrix", authenticatedNonOwner.status === 200 && typeof nonOwnerAuth["access_token"] === "string");
+      const nonOwnerHeaders = { apikey: ANON_KEY!, authorization: `Bearer ${String(nonOwnerAuth["access_token"])}` };
+      for (const object of cvObjectPaths) {
+        const operations = [
+          { name: "read", run: (auth: Record<string, string>) => storageRequest(`/storage/v1/object/media-processed${object.path}`, { headers: auth }) },
+          { name: "list", run: (auth: Record<string, string>) => storageRequest("/storage/v1/object/list/media-processed", { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ prefix: object.path.slice(1), limit: 10, offset: 0 }) }) },
+          { name: "sign", run: (auth: Record<string, string>) => storageRequest(`/storage/v1/object/sign/media-processed${object.path}`, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ expiresIn: 300 }) }) },
+          { name: "write", run: (auth: Record<string, string>) => storageRequest(`/storage/v1/object/media-processed${object.path}`, { method: "POST", headers: { ...auth, "content-type": "application/pdf" }, body: Buffer.from("replacement") }) },
+          { name: "overwrite", run: (auth: Record<string, string>) => storageRequest(`/storage/v1/object/media-processed${object.path}`, { method: "PUT", headers: { ...auth, "content-type": "application/pdf", "x-upsert": "true" }, body: Buffer.from("replacement") }) },
+          { name: "delete", run: (auth: Record<string, string>) => storageRequest("/storage/v1/object/media-processed", { method: "DELETE", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ prefixes: [object.path.slice(1)] }) }) },
+        ] as const;
+        for (const [principal, auth] of [["anonymous", headers(ANON_KEY!)], ["authenticated non-Owner", nonOwnerHeaders], ["authenticated foreign-scope Owner", foreignOwnerHeaders]] as const) {
+          for (const operation of operations) {
+            const response = await operation.run(auth);
+            let denied = response.status >= 400 && response.status < 500;
+            if (operation.name === "list" && response.status === 200) denied = (await response.json() as unknown[]).length === 0;
+            // Storage may return 200 after RLS filters every delete row; privileged fixture verification below confirms retention.
+            if (operation.name === "delete" && response.status === 200) denied = true;
+            cvStorageCheck(`${principal} ${operation.name} denied for ${object.kind}`, denied);
+          }
+        }
+      }
+      const postDenialCurrent = await readCurrent();
+      const postDenialBytes = new Uint8Array(await postDenialCurrent.arrayBuffer());
+      cvStorageCheck("current CV remains available through the scoped visitor delivery after denied Storage mutations",
+        postDenialCurrent.status === 200 && createHash("sha256").update(postDenialBytes).digest("hex") === secondDeliveredHash);
+      for (const object of cvObjectPaths) {
+        const retainedBySetupAdapter = await storageRequest(`/storage/v1/object/media-processed${object.path}`, { headers: headers(SERVICE_ROLE_KEY!) });
+        cvStorageCheck(`privileged fixture verification confirms ${object.kind} object survived filtered delete attempts`, retainedBySetupAdapter.status === 200);
+      }
+      mediaProcessingCounts.currentCvStorageMatrix = cvStorageMatrix;
       deliveryScenario("T14-08 visitor delivery needs no account, identity or consent cookie and does not set one",
         firstResponse.status === 200 && secondResponse.status === 200 &&
         firstResponse.headers.get("set-cookie") === null && secondResponse.headers.get("set-cookie") === null);
