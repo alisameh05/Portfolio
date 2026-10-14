@@ -18,6 +18,7 @@ describe.runIf(Boolean(url))("real PostgreSQL private Feedback acceptance", () =
   const portfolioId = createStableId("Portfolio"), ownerId = createStableId("Owner");
   const scope = { kind: "portfolio" as const, portfolioId }, now = "2026-10-15T00:00:00.000Z";
   const db = createPostgresRuntimeDatabase(url ?? "postgres://invalid"), second = createPostgresRuntimeDatabase(url ?? "postgres://invalid");
+  const worker = createPostgresRuntimeDatabase(process.env["PHASE7_FEEDBACK_WORKER_URL"] ?? "postgres://invalid");
   const admin = new Client({ connectionString: process.env["PHASE7_FEEDBACK_ADMIN_URL"] });
   const operations = createPostgresOperationsPersistence(db.database, { now: () => now }), content = createPostgresProjectInteractionFacts({ portfolioId, ownerId });
   const repository = createPostgresFeedbackSubmissionRepository();
@@ -56,7 +57,7 @@ describe.runIf(Boolean(url))("real PostgreSQL private Feedback acceptance", () =
     await admin.connect();
     await admin.query("insert into portfolio_config.settings (portfolio_id,owner_id,display_name,headline,bio,global_cta_label,global_cta_destination,global_cta_unavailable_fallback) values ($1,$2,'Owner','Headline','Bio','Contact','https://example.com','Unavailable')", [portfolioId, ownerId]);
   });
-  afterAll(async () => { resetRuntimeForTests(); await admin.end(); await db.resource.close(); await second.resource.close(); });
+  afterAll(async () => { resetRuntimeForTests(); await admin.end(); await db.resource.close(); await second.resource.close(); await worker.resource.close(); });
 
   it("T05-01/T05-02 en/ar returns minimal 201; stores private version 1/server time with no identities under every consent state", async () => {
     const projectId = await seed();
@@ -212,6 +213,18 @@ describe.runIf(Boolean(url))("real PostgreSQL private Feedback acceptance", () =
     const blocked = await http(projectId, undefined, key(), assembled); expect(blocked.status).toBe(429); expect(blocked.headers.get("retry-after")).toBeTruthy();
     await getLifecycleCoordinator().shutdown(); resetRuntimeForTests(); await initializeDatabaseRuntime({ ...env, FEEDBACK_RATE_LIMIT_MAX_REQUESTS: "30" }, "application");
     const failedDb = await getFeedbackRuntimeServices(); await getLifecycleCoordinator().shutdown(); expect((await http(projectId, undefined, key(), failedDb)).status).toBe(503); resetRuntimeForTests();
+  });
+  it("restricted worker claims a mixed Feedback and preexisting Media rejection batch without privacy regression", async () => {
+    const projectId = await seed(), submitted = await service.submitFeedback(command(projectId)); expect(submitted.ok).toBe(true);
+    if (!submitted.ok) throw new Error("submission");
+    const mediaId = createStableId("MediaAsset"), eventId = createStableId("Event");
+    // Same persisted shape as the established Media rejection producer.
+    await admin.query("insert into operations.outbox_events (event_id,event_type,schema_version,aggregate_id,aggregate_version,payload,correlation_id,occurred_at,available_at) values ($1,'media.asset_rejected.v1',1,$2,1,$3,'media-regression',$4,$4)",
+      [eventId, mediaId, { mediaAssetId: mediaId, reason: "OWNER_REJECTED" }, now]);
+    const claimed = await createPostgresOperationsPersistence(worker.database).outbox.claimDue({ workerId: "feedback-regression", now, leaseDurationSeconds: 30, limit: 100 });
+    expect(claimed).toContainEqual(expect.objectContaining({ eventId, payload: { type: "media.asset_rejected.v1", version: 1, value: { mediaAssetId: mediaId, reason: "OWNER_REJECTED" } } }));
+    expect(claimed).toContainEqual(expect.objectContaining({ payload: { type: "interaction.feedback_submitted.v1", version: 1, value: { feedbackId: submitted.value.id, projectId } } }));
+    expect(JSON.stringify(claimed)).not.toContain("PRIVATE_PARAGRAPH_SENTINEL");
   });
 });
 

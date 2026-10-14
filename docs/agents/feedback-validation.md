@@ -46,7 +46,9 @@ npm run phase7:focus:feedback
 rejects any source change during the run. PostgreSQL binaries are discovered at
 `C:/Program Files/PostgreSQL/18/bin` on Windows or via `pg_config --bindir` on Linux;
 override with `PHASE7_POSTGRES_BIN`. The runner creates a disposable loopback-only
-cluster, applies all migrations, creates a non-superuser/non-bypassing runtime,
+cluster, applies migrations using the pinned Supabase CLI and its real ledger,
+compares clean versus prior-release upgrade Feedback schema/grants/policies/RLS,
+checks preservation of an existing Rating, creates a non-superuser/non-bypassing runtime,
 checks strict aggregate Vitest success with zero required skips and removes its
 own cluster. No developer/production service is contacted. Integrated historical
-upgrade qualification is #208; this slice proves its migration/type/RLS behavior.
+qualification across all modules is #208; this slice proves Feedback migration/type/RLS behavior.

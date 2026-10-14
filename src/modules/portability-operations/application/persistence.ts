@@ -119,18 +119,20 @@ export function parseSafeErrorCode(value: string): SafeErrorCode {
   return value as SafeErrorCode;
 }
 
-function assertSafe(value: JsonValue, path = "payload"): void {
+function assertSafe(value: JsonValue, path = "payload", mediaRejectionV1 = false): void {
   if (Array.isArray(value)) {
-    value.forEach((entry, index) => assertSafe(entry, `${path}[${index}]`));
+    value.forEach((entry, index) => assertSafe(entry, `${path}[${index}]`, mediaRejectionV1));
     return;
   }
   if (value !== null && typeof value === "object") {
     for (const [key, entry] of Object.entries(value)) {
       const safeFeedbackId = key === "feedbackId" && typeof entry === "string" && parseStableId("Feedback", entry).ok;
-      if (SENSITIVE_KEYS.test(key) && !safeFeedbackId) {
+      // Existing Media facts carry this enumerated code, never the Owner's private reason.
+      const safeMachineReason = mediaRejectionV1 && path === "payload" && key === "reason" && entry === "OWNER_REJECTED";
+      if (SENSITIVE_KEYS.test(key) && !safeFeedbackId && !safeMachineReason) {
         throw new InputValidationError(`Versioned payload contains a sensitive field at ${path}.`);
       }
-      assertSafe(entry, `${path}.${key}`);
+      assertSafe(entry, `${path}.${key}`, mediaRejectionV1);
     }
   }
 }
@@ -143,7 +145,7 @@ export function validateVersionedPayload(input: VersionedPayload): VersionedPayl
   if (!Number.isSafeInteger(input.version) || input.version < 1) {
     throw new InputValidationError("Versioned payload version must be a positive integer.");
   }
-  assertSafe(input.value);
+  assertSafe(input.value, "payload", input.type === "media.asset_rejected.v1" && input.version === 1);
   return Object.freeze({
     type: input.type,
     version: input.version,

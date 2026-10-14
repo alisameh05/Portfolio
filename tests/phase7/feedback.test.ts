@@ -14,6 +14,14 @@ describe("Feedback application validation", () => {
       expect(() => validateVersionedPayload({ ...payload, value })).toThrow();
     }
   });
+  it("established Media rejection machine reasons remain claimable; private or nested reasons reject", () => {
+    const payload = { type: "media.asset_rejected.v1", version: 1, value: { mediaAssetId: createStableId("MediaAsset"), reason: "OWNER_REJECTED" } };
+    expect(validateVersionedPayload(payload)).toEqual(payload);
+    for (const invalid of [{ ...payload, value: { reason: "PRIVATE_REASON" } },
+      { ...payload, value: { nested: { reason: "OWNER_REJECTED" } } }, { ...payload, version: 2 }, { ...payload, type: "interaction.feedback_rejected.v1" }]) {
+      expect(() => validateVersionedPayload(invalid)).toThrow();
+    }
+  });
   it("T05-03 rejects private invalid text before beginning any transaction", async () => {
     const portfolioId = createStableId("Portfolio"), projectId = createStableId("Project");
     let transactions = 0;
