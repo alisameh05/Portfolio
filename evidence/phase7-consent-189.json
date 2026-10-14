@@ -1,0 +1,187 @@
+{
+  "runId": "348efda7-91d4-4703-a7c4-d46404a4093b",
+  "sourceRevision": "38105aecd33980fe5307283c657f353c109fa305",
+  "sourceTreeSha256": "1b26159b30dcc2da8c30b328667e4b8a5aa9ed2a0a5d8f2808bdfe74c9939bc5",
+  "version": "postgres (PostgreSQL) 18.3",
+  "migration": "supabase/migrations/20261014194925_measurement_consent.sql",
+  "migrationSha256": "9b122a259e91cee3875aa22133ff1b529c0b07203f01464378d0e3116ba01630",
+  "required": {
+    "success": true,
+    "passed": 16,
+    "failed": 0,
+    "skipped": 0,
+    "failedSuites": 0
+  },
+  "roles": [
+    "consent_runtime",
+    "shipwithali_application",
+    "shipwithali_worker",
+    "anon",
+    "authenticated"
+  ],
+  "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:consent (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
+  "scope": "Native disposable PostgreSQL cluster; repository security baseline and this owned migration. Full Phase 3-6 upgrade qualification belongs to #208.",
+  "cleanup": true,
+  "runtime": {
+    "node": "24.21.0",
+    "npm": "11.19.0",
+    "kyselyCodegen": "0.20.0",
+    "supabaseMigrationCli": "2.117.0"
+  },
+  "broad": {
+    "success": true,
+    "passed": 1168,
+    "failed": 0,
+    "skipped": 164,
+    "failedSuites": 0
+  },
+  "focusedHttp": {
+    "command": "npx --no-install vitest run tests/runtime/public-event.test.ts tests/runtime/phase7-contracts.test.ts",
+    "passed": 38,
+    "failed": 0,
+    "skipped": 0
+  },
+  "review": {
+    "revision": "38105aecd33980fe5307283c657f353c109fa305",
+    "standardsFindings": 0,
+    "specFindings": 0,
+    "resolved": "Expired-subject renewal now rotates at/after expiry, with real PostgreSQL regression proof."
+  },
+  "acceptanceAssertions": [
+    {
+      "title": "authenticates the full consent envelope with independent purpose and bounded lifetime",
+      "status": "passed"
+    },
+    {
+      "title": "supports previous keys for remaining lifetime and rejects retired keys",
+      "status": "passed"
+    },
+    {
+      "title": "rejects exactly at expiry and never issues evidence longer than thirty days",
+      "status": "passed"
+    },
+    {
+      "title": "cannot substitute functional or Measurement identity envelopes for consent, or consent for identity",
+      "status": "passed"
+    },
+    {
+      "title": "rejects shared key material including previous-key reuse and malformed evidence",
+      "status": "passed"
+    },
+    {
+      "title": "persists explicit grants across fresh service/pool instances and withdrawal revokes unexpired evidence",
+      "status": "passed"
+    },
+    {
+      "title": "denied/unknown/unsupported notices issue no identity; missing and forged evidence have no writes",
+      "status": "passed"
+    },
+    {
+      "title": "foreign Portfolio, unsupported notice and removed consent never authorize evidence",
+      "status": "passed"
+    },
+    {
+      "title": "crypto failure rolls back consent and minimal history atomically",
+      "status": "passed"
+    },
+    {
+      "title": "concurrent grant and withdrawal serialize one revision and reject the stale writer",
+      "status": "passed"
+    },
+    {
+      "title": "transaction-participating verification holds withdrawal until intake commits",
+      "status": "passed"
+    },
+    {
+      "title": "restricted roles enforce scope, append-only history and expiry-only worker deletion",
+      "status": "passed"
+    },
+    {
+      "title": "the real HTTP boundary requires current signed evidence and emits safe commands/receipts/logs",
+      "status": "passed"
+    },
+    {
+      "title": "standard runtime assembly exposes the consent boundary and optional absence leaves core readiness available",
+      "status": "passed"
+    },
+    {
+      "title": "renewal preserves unexpired subjects but rotates them exactly at or after expiry",
+      "status": "passed"
+    },
+    {
+      "title": "persisted current consent accepts supported previous-key evidence without changing subject",
+      "status": "passed"
+    }
+  ],
+  "checks": [
+    {
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "log": "evidence/phase7-consent-189-logs/typecheck.log",
+      "sha256": "fe0c4ac5876d1ff8796100f372d8de48ea5e0d9e457be6b48b957ccf76cfa06c"
+    },
+    {
+      "command": "npm run lint",
+      "exitCode": 0,
+      "log": "evidence/phase7-consent-189-logs/lint.log",
+      "sha256": "f5fe4568c03508511cbb1c00ce735a64ed610b6dd7a984e90ba36f61696758df"
+    },
+    {
+      "command": "npm run build",
+      "exitCode": 0,
+      "log": "evidence/phase7-consent-189-logs/build.log",
+      "sha256": "5867781c284420e21317c333c21880038f57859008831fcb76d1a21762b79f35"
+    },
+    {
+      "command": "npm run test:arch",
+      "exitCode": 0,
+      "log": "evidence/phase7-consent-189-logs/architecture.log",
+      "sha256": "104596b4df48680491158810d1308edb3cb298ca7efc9a783500bf21d0b43065"
+    },
+    {
+      "command": "npm run route:inventory",
+      "exitCode": 0,
+      "log": "evidence/phase7-consent-189-logs/routes.log",
+      "sha256": "da0c025587fee43f620f8a1a63090a6ebd38fd8cb5369c2687704e1fe08041e7"
+    },
+    {
+      "command": "npm run runtime:boundary",
+      "exitCode": 0,
+      "log": "evidence/phase7-consent-189-logs/boundaries.log",
+      "sha256": "76b8d83ec350338aebcc0f20b3a84dc61413122b51fd817d32ac2575921d3e26"
+    },
+    {
+      "command": "npm run contract:verify",
+      "exitCode": 0,
+      "log": "evidence/phase7-consent-189-logs/contracts.log",
+      "sha256": "2a30aeb78bcb9a54f0c7c16689696e06e8af07f865d3d4554852aa42b5ffe476"
+    },
+    {
+      "command": "npm run phase5:context",
+      "exitCode": 0,
+      "log": "evidence/phase7-consent-189-logs/phase5-context.log",
+      "sha256": "ecdef792f92387242901337c22439a15b9fecb8c2ffc2b9694bf020196c98b22"
+    }
+  ],
+  "cleanupNote": "Final required cluster stopped and removed. Earlier interrupted bootstrap cluster was confirmed stopped; automatic approval review blocked removing its empty directory C:/Users/alisa/AppData/Local/Temp/portfolio-consent-189-qSAS3t with reason blocked by policy. No services or test data remain active there.",
+  "prerequisites": {
+    "phase4": {
+      "issue": 90,
+      "pr": 105,
+      "merged": true,
+      "hostedChecks": "all passed"
+    },
+    "phase5": {
+      "issue": 125,
+      "pr": 144,
+      "merged": true,
+      "hostedChecks": "all passed"
+    },
+    "contracts": {
+      "issue": 188,
+      "pr": 210,
+      "merged": true,
+      "hostedChecks": "billing blocked; existing local evidence accepted by merge"
+    }
+  }
+}
