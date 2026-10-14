@@ -61,6 +61,11 @@ test("the complete real integration gate rejects skipped, missing, failed, and p
   const partial = structuredClone(report);
   partial.testResults[0].assertionResults.pop();
   assert.equal(evaluatePhase6IntegrationTests(partial, 0).verdict, "fail");
+  const aggregateMismatch = structuredClone(report);
+  aggregateMismatch.success = false;
+  const aggregateDiagnostics = evaluatePhase6IntegrationTests(aggregateMismatch, 0).diagnostics;
+  assert.equal(aggregateDiagnostics.conditions.reportSucceeded, false);
+  assert.equal(aggregateDiagnostics.assertionTitles.length, 7);
   assert.equal(evaluatePhase6IntegrationTests({ ...report, numPendingTests: 1 }, 0).verdict, "fail");
   for (const title of [report.testResults[0].assertionResults[1].title, "unrelated passing test"]) {
     const substituted = structuredClone(report);

@@ -93,10 +93,24 @@ export function evaluatePhase6IntegrationTests(report, exitStatus) {
   }; });
   const expected = PHASE6_MEDIA_INTEGRATION_TEST_NAMES.length;
   const names = new Set(assertions.map((item) => item.title));
-  return { ...counts, ...(failedTests.length ? { failedTests } : {}), verdict: exitStatus === 0 && counts.total === expected && counts.passed === expected &&
-    names.size === expected && PHASE6_MEDIA_INTEGRATION_TEST_NAMES.every((name) => names.has(name)) &&
-    report?.numTotalTests === expected && report?.numPassedTests === expected && report?.numFailedTests === 0 &&
-    report?.numPendingTests === 0 && report?.success === true ? "pass" : "fail" };
+  const conditions = {
+    processSucceeded: exitStatus === 0,
+    expectedAssertionCount: counts.total === expected,
+    allAssertionsPassed: counts.passed === expected,
+    uniqueExpectedNames: names.size === expected && PHASE6_MEDIA_INTEGRATION_TEST_NAMES.every((name) => names.has(name)),
+    reportTotalMatches: report?.numTotalTests === expected,
+    reportPassedMatches: report?.numPassedTests === expected,
+    reportHasNoFailures: report?.numFailedTests === 0,
+    reportHasNoPending: report?.numPendingTests === 0,
+    reportSucceeded: report?.success === true,
+  };
+  const passed = Object.values(conditions).every(Boolean);
+  return { ...counts, ...(failedTests.length ? { failedTests } : {}), ...(!passed ? {
+    diagnostics: { conditions, assertionTitles: assertions.map((item) => item.title ?? "missing-title"),
+      reportCounts: { total: report?.numTotalTests, passed: report?.numPassedTests,
+        failed: report?.numFailedTests, pending: report?.numPendingTests, todo: report?.numTodoTests,
+        failedSuites: report?.numFailedTestSuites, pendingSuites: report?.numPendingTestSuites } },
+  } : {}), verdict: passed ? "pass" : "fail" };
 }
 
 export function phase6CvScenarioProof(processingCounts) {
