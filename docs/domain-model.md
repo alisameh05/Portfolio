@@ -210,6 +210,14 @@ Evidence state is internal editorial information. It must not be rendered as an 
 - Visitors do not require accounts. FunctionalVisitor deduplicates Reaction and Rating; consented MeasurementVisitor measures allowlisted observations. Feedback needs neither persistent identity.
 - Submitting a new Reaction or Rating for an existing Visitor-and-Project pair replaces the current value where feasible; it does not add another current vote.
 - Reactions, Ratings, Feedback submissions, and their aggregates are Project-wide rather than duplicated by language.
+- Rating accepts only integer values 1 through 5 at the application boundary.
+  Rating and Reaction keep independent current rows for the same recognized
+  FunctionalVisitor and Project. Replacing either leaves the other unchanged;
+  a same-value request with a new key creates a safe receipt without a changed
+  event. Exact retries remain operation-scoped and return the original receipt
+  after rechecking current Project eligibility. Content locks precede the owned
+  vote pair and ledger; state, safe receipt and subject-free changed fact commit
+  atomically. Neither operation depends on Measurement consent or locale.
 - New Feedback is private and pending. It cannot appear publicly until an approval is recorded.
 - An approval makes Feedback eligible for display only while its Project and requested locale are publicly visible.
 - Rejection keeps Feedback private. Later suppression removes previously approved Feedback from display while retaining Moderation decision history.

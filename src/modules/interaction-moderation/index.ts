@@ -52,3 +52,5 @@ export { createFunctionalInteractionContext } from "./application/functional-con
 export type { FunctionalInteractionContextPort } from "./application/functional-context.js";
 
 export type { FeedbackWorkCommand, FeedbackWorkService } from "./application/work.js";
+export { createRatingApplicationService } from "./application/ratings.js";
+export type { RatingRepositoryPort } from "./application/ratings.js";
