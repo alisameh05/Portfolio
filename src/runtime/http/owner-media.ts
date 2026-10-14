@@ -212,7 +212,9 @@ export async function handleGetOwnerMediaAggregate(
       byteLength: result.value.byteLength,
       state: result.value.state,
       processingHistory: [...result.value.processingHistory],
+      processingHistoryTruncated: result.value.processingHistoryTruncated,
       decisionHistory: [...result.value.decisionHistory],
+      decisionHistoryTruncated: result.value.decisionHistoryTruncated,
     };
     const parsed = zGetOwnerMediaAggregateResponse.safeParse(payload);
     if (!parsed.success) {

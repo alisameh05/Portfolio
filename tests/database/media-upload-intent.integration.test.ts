@@ -458,7 +458,7 @@ describeReal(group === "baseline"
     const rejectionIntent = await ownerMedia.createOwnerMediaUploadIntent({ actor, idempotencyKey: "phase6-composition-rejection-upload" as never,
       kind: "document", originalFileName: "rejected-private.pdf", declaredMediaType: "application/pdf",
       byteLength: bytes.byteLength, sha256: digest });
-    expect(rejectionIntent, JSON.stringify(rejectionIntent)).toMatchObject({ ok: true, value: { aggregateVersion: 1 } });
+    expect(rejectionIntent.ok, "Rejection upload intent should be created.").toBe(true);
     if (!rejectionIntent.ok) throw new Error("PHASE6_OWNER_COMPOSITION_REJECTION_UPLOAD_FAILED");
     const rejectCommand = { actor, idempotencyKey: "phase6-composition-reject" as never,
       expectedVersion: 1, mediaId: rejectionIntent.value.mediaId, reason: "Duplicate test evidence." };

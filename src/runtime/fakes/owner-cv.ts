@@ -45,6 +45,7 @@ function portfolioView(): OwnerCvPortfolioView {
   return {
     aggregateVersion: 2,
     currentVersionId: OWNER_CV_VERSION_ID as StableId<string>,
+    versionsTruncated: true,
     versions: [
       {
         versionId: OWNER_CV_VERSION_ID as StableId<string>,
@@ -61,6 +62,7 @@ function portfolioView(): OwnerCvPortfolioView {
         activatedAt: ACTIVATED_AT,
       },
     ],
+    activationHistoryTruncated: true,
   };
 }
 
