@@ -101,12 +101,22 @@ export function evaluatePhase6IntegrationTests(report, exitStatus) {
     reportTotalMatches: report?.numTotalTests === expected,
     reportPassedMatches: report?.numPassedTests === expected,
     reportHasNoFailures: report?.numFailedTests === 0,
+    reportHasNoFailedSuites: report?.numFailedTestSuites === 0,
     reportHasNoPending: report?.numPendingTests === 0,
     reportSucceeded: report?.success === true,
   };
   const passed = Object.values(conditions).every(Boolean);
   return { ...counts, ...(failedTests.length ? { failedTests } : {}), ...(!passed ? {
     diagnostics: { conditions, assertionTitles: assertions.map((item) => item.title ?? "missing-title"),
+      suiteResults: (report?.testResults ?? []).map((suite) => {
+        const failure = String(suite.message ?? "");
+        return { name: suite.name ?? "unknown-suite", status: suite.status ?? "missing-status",
+          ...(suite.status === "failed" ? {
+            reason: failure.match(/AssertionError|TypeError|Test timed out|Error/u)?.[0] ?? "suite-failed",
+            location: failure.match(/tests[\\/]database[\\/]media-upload-intent\.integration\.test\.ts:\d+:\d+/u)?.[0] ?? "unknown-location",
+          } : {}) };
+      }),
+      processStatus: exitStatus,
       reportCounts: { total: report?.numTotalTests, passed: report?.numPassedTests,
         failed: report?.numFailedTests, pending: report?.numPendingTests, todo: report?.numTodoTests,
         failedSuites: report?.numFailedTestSuites, pendingSuites: report?.numPendingTestSuites } },
