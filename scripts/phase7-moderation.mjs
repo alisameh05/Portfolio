@@ -8,6 +8,9 @@ import { Client } from "pg";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 
 const root = process.cwd(), runId = randomUUID(), source = workingTreeSourceSha256();
+const suppression = process.argv.includes("--suppression");
+const evidencePath = suppression ? "evidence/phase7-suppression-194.json" : "evidence/phase7-moderation-193.json";
+const expectedTests = suppression ? 93 : 80;
 const discoveredBin = process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" :
   spawnSync("pg_config", ["--bindir"], { encoding: "utf8", timeout: 5_000 }).stdout?.trim();
 const bin = process.env.PHASE7_POSTGRES_BIN ?? discoveredBin ?? "";
@@ -19,10 +22,11 @@ function run(command, args, env = process.env) {
   return r.stdout;
 }
 const temp = mkdtempSync(join(tmpdir(), "portfolio-moderation-193-"));
-const data = join(temp, "data"), reportPath = resolve("artifacts/moderation-vitest.json");
+const data = join(temp, "data"), reportPath = resolve(suppression ? "artifacts/suppression-vitest.json" : "artifacts/moderation-vitest.json");
 mkdirSync("artifacts", { recursive: true });
 rmSync(reportPath, { force: true });
-rmSync("evidence/phase7-moderation-193.json", { force: true });
+if (suppression) rmSync("artifacts/suppression-query-plan.json", { force: true });
+rmSync(evidencePath, { force: true });
 const port = await new Promise((resolvePort, reject) => {
   const server = createServer(); server.once("error", reject);
   server.listen(0, "127.0.0.1", () => { const p = server.address().port; server.close(() => resolvePort(p)); });
@@ -102,11 +106,12 @@ try {
   console.log("Temporary restricted PostgreSQL ready; running private Moderation acceptance.");
   stage = "acceptance";
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "tests/phase7/moderation.test.ts", "tests/phase7/moderation-postgres.test.ts", "tests/runtime/owner-moderation.test.ts", "tests/phase4/owner-request-security.test.ts", "tests/phase4/owner-session-auth.test.ts",
+    ...(suppression ? ["tests/phase7/suppression-postgres.test.ts"] : []),
     "--no-file-parallelism", "--reporter=json", "--outputFile=" + reportPath], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
   const assertions = tests.testResults.flatMap(s => s.assertionResults ?? []);
   if (!tests.success || tests.numFailedTestSuites || tests.numFailedTests || tests.numPendingTests || tests.numTodoTests ||
-      tests.numPassedTests !== 80 || assertions.length !== 80 || tests.testResults.length !== 5 ||
+      tests.numPassedTests !== expectedTests || assertions.length !== expectedTests || tests.testResults.length !== (suppression ? 6 : 5) ||
       tests.testResults.some(s => s.status !== "passed") || assertions.some(a => a.status !== "passed")) throw new Error("MODERATION_ACCEPTANCE_INCOMPLETE");
   if (workingTreeSourceSha256() !== testedSource) throw new Error("MODERATION_SOURCE_CHANGED_DURING_RUN");
   result = { runId, sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(), sourceTreeSha256: testedSource, version,
@@ -116,8 +121,9 @@ try {
     assertions: assertions.map(a => ({ title: a.title.replace(/: \{.*$/, ": invalid shape"), status: a.status })),
     required: { success: tests.success, passed: tests.numPassedTests, failed: tests.numFailedTests, skipped: tests.numPendingTests, failedSuites: tests.numFailedTestSuites },
     roles: ["moderation_runtime", "moderation_worker", "shipwithali_application", "shipwithali_worker", "anon", "authenticated"],
-    reproduction: "npm run setup:validation; npm run validation:ready; npm run phase7:focus:moderation (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
-    scope: "Native disposable PostgreSQL cluster; all repository migrations through #193. Full Phase 3-6 upgrade qualification belongs to #208." };
+    ...(suppression ? { queryPlan: JSON.parse(readFileSync("artifacts/suppression-query-plan.json", "utf8")) } : {}),
+    reproduction: `npm run setup:validation; npm run validation:ready; npm run phase7:focus:${suppression ? "suppression" : "moderation"} (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)`,
+    scope: "Native disposable PostgreSQL cluster; all repository migrations through #193. Suppression reuses existing schema/grants/index. Full Phase 3-6 upgrade qualification belongs to #208." };
 } catch (error) {
   // No provider messages, connection strings, payloads or secret-bearing PostgreSQL logs.
   console.error(error instanceof Error && /^MODERATION_/.test(error.message) ? error.message : "MODERATION_VALIDATION_FAILED");
@@ -138,7 +144,7 @@ try {
   } catch { console.error("MODERATION_CLEANUP_FAILED"); process.exitCode = 1; }
   if (result && cleanup) {
     mkdirSync("evidence", { recursive: true });
-    writeFileSync("evidence/phase7-moderation-193.json", JSON.stringify({ ...result, cleanup }, null, 2) + "\n");
+    writeFileSync(evidencePath, JSON.stringify({ ...result, cleanup }, null, 2) + "\n");
     console.log(JSON.stringify({ required: result.required, cleanup }));
   }
 }

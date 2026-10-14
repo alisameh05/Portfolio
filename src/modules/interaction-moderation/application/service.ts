@@ -47,7 +47,7 @@ export interface GetProjectAggregateQuery extends ApplicationRequestContext {
 }
 
 export interface GetApprovedFeedbackQuery extends GetProjectAggregateQuery {
-  readonly limit: 25 | 50 | 100;
+  readonly limit?: number;
   readonly cursor?: { readonly displayedAt: string; readonly feedbackId: StableId<"Feedback"> };
   readonly projectId: StableId<"Project">;
 }
