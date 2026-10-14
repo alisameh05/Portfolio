@@ -1,0 +1,657 @@
+{
+  "runId": "09e10c2d-8f0d-4fb4-80f2-469b04ffcfb3",
+  "sourceRevision": "0f2692f65f4b5fa18080325bc40ee26254aaa367",
+  "sourceTreeSha256": "b1529a7681617ad3860dc079ea05502287d9a290279763c9ab5cf5b3dd6a524c",
+  "fullSuiteCommand": "npm test -- --testTimeout=20000 --reporter=json --outputFile=artifacts/reactions-full-vitest.json",
+  "fullSuite": {
+    "success": true,
+    "numPassedTests": 1170,
+    "numFailedTests": 0,
+    "numPendingTests": 178,
+    "numTodoTests": 0,
+    "numFailedTestSuites": 0
+  },
+  "rawReportSha256": "eff88f615bb73118281c0caa83073fdf4a38ba595fbc143578ddc9228e9002c2",
+  "checks": [
+    {
+      "command": "npm run typecheck",
+      "status": "passed"
+    },
+    {
+      "command": "npm run lint",
+      "status": "passed"
+    },
+    {
+      "command": "npm run contract:verify",
+      "status": "passed"
+    },
+    {
+      "command": "npm run test:arch",
+      "status": "passed"
+    },
+    {
+      "command": "npm run runtime:architecture",
+      "status": "passed"
+    },
+    {
+      "command": "npm run runtime:boundary",
+      "status": "passed"
+    },
+    {
+      "command": "npm run route:inventory",
+      "status": "passed"
+    },
+    {
+      "command": "npm run phase5:context",
+      "status": "passed"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed"
+    }
+  ],
+  "reviews": {
+    "Standards": {
+      "actionableFindings": 0,
+      "head": "0f2692f"
+    },
+    "Spec": {
+      "actionableFindings": 0,
+      "head": "0f2692f"
+    }
+  },
+  "suites": [
+    {
+      "name": "architecture/architecture.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "skipped": 0
+    },
+    {
+      "name": "architecture/runtime-boundary.test.ts",
+      "status": "passed",
+      "passed": 19,
+      "skipped": 0
+    },
+    {
+      "name": "contracts/compatibility-gate.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "skipped": 0
+    },
+    {
+      "name": "contracts/contract-drift-gate.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "skipped": 0
+    },
+    {
+      "name": "contracts/generated-validation.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0
+    },
+    {
+      "name": "contracts/owner-contract.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0
+    },
+    {
+      "name": "contracts/owner-generated-validation.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "skipped": 0
+    },
+    {
+      "name": "contracts/owner-issue-7-generated-validation.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "skipped": 0
+    },
+    {
+      "name": "contracts/owner-issue-8-generated-validation.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "skipped": 0
+    },
+    {
+      "name": "contracts/public-contract.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0
+    },
+    {
+      "name": "contracts/public.test.ts",
+      "status": "passed",
+      "passed": 1,
+      "skipped": 0
+    },
+    {
+      "name": "database/content-authoring.integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "skipped": 49
+    },
+    {
+      "name": "database/idempotency.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "skipped": 0
+    },
+    {
+      "name": "database/leased-jobs.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "skipped": 0
+    },
+    {
+      "name": "database/media-upload-intent.integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "skipped": 7
+    },
+    {
+      "name": "database/migration-security-baseline.test.ts",
+      "status": "passed",
+      "passed": 16,
+      "skipped": 0
+    },
+    {
+      "name": "database/operations-migration.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "skipped": 0
+    },
+    {
+      "name": "database/optimistic-concurrency.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "skipped": 3
+    },
+    {
+      "name": "database/outbox.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "skipped": 0
+    },
+    {
+      "name": "database/owner-composition.integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "skipped": 1
+    },
+    {
+      "name": "database/persistence-contracts.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "skipped": 0
+    },
+    {
+      "name": "database/phase3-database-tests-command.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0
+    },
+    {
+      "name": "database/phase4-migration-integrity.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "skipped": 0
+    },
+    {
+      "name": "database/phase5-security.integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "skipped": 5
+    },
+    {
+      "name": "database/portfolio-settings.integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "skipped": 24
+    },
+    {
+      "name": "database/postgres-integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "skipped": 8
+    },
+    {
+      "name": "database/postgres-runtime.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "skipped": 0
+    },
+    {
+      "name": "database/postgres-transaction-runner.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0
+    },
+    {
+      "name": "database/role-rls-matrix.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "skipped": 54
+    },
+    {
+      "name": "database/toolchain-workflow.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/functional-identity-orchestration.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/identity-configuration-contracts.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/local-auth-token.integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "skipped": 1
+    },
+    {
+      "name": "phase4/owner-operation-policy.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/owner-request-security.test.ts",
+      "status": "passed",
+      "passed": 20,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/owner-session-auth.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/phase-context.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/phase5-scenario-coverage.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/phase5-verification.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/portfolio-contact-channels-command.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/portfolio-cta-command.test.ts",
+      "status": "passed",
+      "passed": 14,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/portfolio-profile-command.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/portfolio-settings-service.test.ts",
+      "status": "passed",
+      "passed": 24,
+      "skipped": 0
+    },
+    {
+      "name": "phase4/pseudonymous-identity.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "skipped": 0
+    },
+    {
+      "name": "modules/current-cv-delivery.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "skipped": 0
+    },
+    {
+      "name": "modules/cv-portfolio.test.ts",
+      "status": "passed",
+      "passed": 17,
+      "skipped": 0
+    },
+    {
+      "name": "modules/media-acceptance.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "skipped": 0
+    },
+    {
+      "name": "modules/media-cv-contracts.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0
+    },
+    {
+      "name": "modules/media-delivery.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "skipped": 0
+    },
+    {
+      "name": "modules/media-image-processing.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "skipped": 0
+    },
+    {
+      "name": "modules/media-owner-service.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0
+    },
+    {
+      "name": "modules/media-processing.test.ts",
+      "status": "passed",
+      "passed": 18,
+      "skipped": 0
+    },
+    {
+      "name": "modules/media-rejection.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0
+    },
+    {
+      "name": "modules/media-upload-capability-vault.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0
+    },
+    {
+      "name": "modules/media-upload-intent.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "skipped": 0
+    },
+    {
+      "name": "phase2/gate-definition.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "skipped": 0
+    },
+    {
+      "name": "phase7/consent-crypto.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "skipped": 0
+    },
+    {
+      "name": "phase7/consent-postgres.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "skipped": 11
+    },
+    {
+      "name": "phase7/reactions-postgres.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "skipped": 14
+    },
+    {
+      "name": "phase7/reactions.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0
+    },
+    {
+      "name": "routes/route-inventory.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "skipped": 0
+    },
+    {
+      "name": "routes/runtime-boundary.test.ts",
+      "status": "passed",
+      "passed": 16,
+      "skipped": 0
+    },
+    {
+      "name": "shared-domain/actor.test.ts",
+      "status": "passed",
+      "passed": 23,
+      "skipped": 0
+    },
+    {
+      "name": "shared-domain/domain-event.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "skipped": 0
+    },
+    {
+      "name": "shared-domain/idempotency-key.test.ts",
+      "status": "passed",
+      "passed": 24,
+      "skipped": 0
+    },
+    {
+      "name": "shared-domain/rejection.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "skipped": 0
+    },
+    {
+      "name": "shared-domain/stable-id.test.ts",
+      "status": "passed",
+      "passed": 22,
+      "skipped": 0
+    },
+    {
+      "name": "phase1/gate.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/configuration.test.ts",
+      "status": "passed",
+      "passed": 17,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/current-cv.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/feedback.test.ts",
+      "status": "passed",
+      "passed": 20,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/livez.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/media-image-processing.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/media-processing-tools.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "skipped": 1
+    },
+    {
+      "name": "runtime/owner-analytics.test.ts",
+      "status": "passed",
+      "passed": 32,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/owner-configuration.test.ts",
+      "status": "passed",
+      "passed": 31,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/owner-content-authoring.test.ts",
+      "status": "passed",
+      "passed": 28,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/owner-content-http.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/owner-cv.test.ts",
+      "status": "passed",
+      "passed": 55,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/owner-export.test.ts",
+      "status": "passed",
+      "passed": 35,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/owner-media.test.ts",
+      "status": "passed",
+      "passed": 68,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/owner-moderation.test.ts",
+      "status": "passed",
+      "passed": 32,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/owner-project-status.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/owner-project.test.ts",
+      "status": "passed",
+      "passed": 37,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/owner-publication.test.ts",
+      "status": "passed",
+      "passed": 36,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/owner-taxonomy.test.ts",
+      "status": "passed",
+      "passed": 35,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/phase7-contracts.test.ts",
+      "status": "passed",
+      "passed": 19,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/problem.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/public-event.test.ts",
+      "status": "passed",
+      "passed": 19,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/rating.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/reaction.test.ts",
+      "status": "passed",
+      "passed": 19,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/readiness-lifecycle.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/runtime-ports.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/supabase-current-cv-delivery.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/supabase-media-delivery-storage.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/supabase-media-processing-storage.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0
+    },
+    {
+      "name": "runtime/supabase-media-upload-target.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "skipped": 0
+    },
+    {
+      "name": "phase5/taxonomy/public-discovery.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "skipped": 0
+    }
+  ]
+}

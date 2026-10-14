@@ -37,6 +37,13 @@ import type { MediaDeliveryApplicationService } from "../modules/media/index.js"
 import type { CurrentCvDeliveryService, OwnerCvApplicationService } from "../modules/cv-portfolio/index.js";
 import type { PortfolioSettingsApplicationService } from "../modules/portfolio-configuration/index.js";
 import type { ConsentApplicationService } from "../modules/measurement/index.js";
+import type { InteractionModerationService, FunctionalInteractionContextPort } from "../modules/interaction-moderation/index.js";
+
+export interface ReactionRuntimeServices {
+  readonly scope: { readonly kind: "portfolio"; readonly portfolioId: StableId<"Portfolio"> };
+  readonly service: Pick<InteractionModerationService, "submitReaction">;
+  readonly functionalIdentity: FunctionalInteractionContextPort;
+}
 
 export type { RuntimeConfig } from "./configuration.js";
 
@@ -52,6 +59,7 @@ let currentOwnerCv: OwnerCvApplicationService | undefined;
 let currentCurrentCv: CurrentCvDeliveryService | undefined;
 let currentPublicConfiguration: PortfolioSettingsApplicationService | undefined;
 let currentConsent: ConsentApplicationService | undefined;
+let currentReaction: ReactionRuntimeServices | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -75,6 +83,7 @@ export interface DatabaseRuntimeState extends RuntimeConfig {
 }
 
 export interface DatabaseRuntimeDependencies {
+  readonly reaction?: ReactionRuntimeServices;
   readonly consent?: ConsentApplicationService;
   readonly operations: OperationsPersistencePorts;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
@@ -163,6 +172,27 @@ export async function initializeDatabaseRuntime(
         let currentCv: CurrentCvDeliveryService | undefined;
         let publicConfiguration: PortfolioSettingsApplicationService | undefined;
         let consent: ConsentApplicationService | undefined;
+        let reaction: ReactionRuntimeServices | undefined;
+        if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok && env["FUNCTIONAL_ID_HASH_KEY"]) {
+          const [{ createReactionApplicationService, createFunctionalInteractionContext }, { createPostgresReactionRepository },
+            { createPostgresProjectInteractionFacts }, { createIdentityAccessService },
+            { AesGcmPseudonymousTokenAdapter, createFunctionalPseudonymousIdentityConfig, StubAuthProvider }] = await Promise.all([
+            import("../modules/interaction-moderation/index.js"),
+            import("../modules/interaction-moderation/adapters/postgres-reactions.js"),
+            import("../modules/content-publishing/adapters/postgres-interaction-facts.js"),
+            import("../modules/identity-access/application/policy.js"),
+            import("../modules/identity-access/adapters/index.js"),
+          ]);
+          const scope = { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value };
+          const content = createPostgresProjectInteractionFacts(scope);
+          const identity = createIdentityAccessService({ auth: new StubAuthProvider(), crypto: new AesGcmPseudonymousTokenAdapter({
+            config: createFunctionalPseudonymousIdentityConfig(env), nowSeconds: () => Math.floor(Date.now() / 1000),
+          }) });
+          reaction = { scope: { kind: "portfolio", portfolioId: scope.portfolioId },
+            service: createReactionApplicationService({ portfolioId: scope.portfolioId, content, operations,
+              repository: createPostgresReactionRepository(), clock: createSystemClock(), ids: createSystemIdGenerator() }),
+            functionalIdentity: createFunctionalInteractionContext({ portfolioId: scope.portfolioId, transactions: operations.transactions, content, identity }) };
+        }
         // Optional Measurement capability does not become a global readiness dependency.
         if (runtimeKind === "application" && env["MEASUREMENT_CONSENT_NOTICE_VERSIONS"]) {
           try {
@@ -509,6 +539,7 @@ export async function initializeDatabaseRuntime(
         }
         return {
           operations,
+          ...(reaction === undefined ? {} : { reaction }),
           ...(consent === undefined ? {} : { consent }),
           ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
           ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
@@ -538,6 +569,7 @@ export async function initializeDatabaseRuntime(
     lifecycle.registerReadinessCheck(dependencies.readiness);
     current = config;
     currentOperations = dependencies.operations;
+    currentReaction = dependencies.reaction;
     currentConsent = dependencies.consent;
     currentOwnerConfiguration = dependencies.ownerConfiguration;
     currentContentAuthoring = dependencies.contentAuthoring;
@@ -669,11 +701,19 @@ export function getConsentApplicationService(): ConsentApplicationService | unde
   return currentConsent;
 }
 
+/** Completed Reaction operation obtains real persistence and identity from standard assembly. */
+export async function getReactionRuntimeServices(): Promise<ReactionRuntimeServices | { readonly service: Pick<InteractionModerationService, "submitReaction"> }> {
+  if (currentReaction) return currentReaction;
+  const { createProductionReactionService } = await import("../runtime/fakes/reaction.js");
+  return { service: createProductionReactionService() };
+}
+
 /** Test-only seam to isolate focused suites. */
 export function resetRuntimeForTests(): void {
   current = undefined;
   currentOperations = undefined;
   currentConsent = undefined;
+  currentReaction = undefined;
   currentOwnerConfiguration = undefined;
   currentContentAuthoring = undefined;
   currentOwnerTaxonomy = undefined;

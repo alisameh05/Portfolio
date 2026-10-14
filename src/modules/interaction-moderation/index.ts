@@ -46,5 +46,9 @@ export type {
 export type { GetOwnerFeedbackModerationQuery, ApproveOwnerFeedbackApplicationCommand, RejectOwnerFeedbackApplicationCommand, SuppressOwnerFeedbackApplicationCommand, OwnerModerationDecisionView, OwnerFeedbackModerationView, OwnerModerationCommandReceipt, OwnerModerationApplicationService } from "./application/owner-moderation.js";
 
 export type { ReactionReceipt, RatingReceipt, FeedbackReceipt, PublicFeedbackView, PublicFeedbackPage } from "./domain/types.js";
+export { createReactionApplicationService } from "./application/reactions.js";
+export type { ReactionRepositoryPort } from "./application/reactions.js";
+export { createFunctionalInteractionContext } from "./application/functional-context.js";
+export type { FunctionalInteractionContextPort } from "./application/functional-context.js";
 
 export type { FeedbackWorkCommand, FeedbackWorkService } from "./application/work.js";

@@ -152,7 +152,9 @@
     "prephase5:focus:integrated-scenarios": "node scripts/phase5-scenario-coverage.mjs --invalidate-integrated && npm run validation:ready",
     "phase5:focus:integrated-scenarios": "node scripts/phase5-scenario-coverage.mjs",
     "prephase7:focus:consent": "npm run validation:ready",
-    "phase7:focus:consent": "node scripts/phase7-consent.mjs"
+    "phase7:focus:consent": "node scripts/phase7-consent.mjs",
+    "prephase7:focus:reactions": "npm run validation:ready",
+    "phase7:focus:reactions": "node scripts/phase7-reactions.mjs"
   },
   "dependencies": {
     "kysely": "0.29.6",
