@@ -964,7 +964,7 @@ async function main() {
     const capabilityCases = scenarioCases(processingCounts?.currentCvCapabilityScenarios,
       ["T15-01", "T15-02", "T15-03", "T15-04", "T15-08"]);
     const deliveryCases = scenarioCases(processingCounts?.currentCvDeliveryScenarios,
-      ["T14-02", "T14-03", "T14-05", "T14-07", "T14-08", "T14-09"]);
+      ["T14-02", "T14-03", "T14-05", "T14-07", "T14-08"]);
     const rejectionCases = scenarioCases(processingCounts?.mediaRejectionScenarios,
       Array.from({ length: 9 }, (_, index) => `T12-${String(index + 1).padStart(2, "0")}`));
     const ownerCompositionCases = scenarioCases(processingCounts?.ownerCompositionScenarios, ["T16-01"]);
@@ -1010,10 +1010,13 @@ async function main() {
       { id: "T18-08", name: "Public Media/CV delivery enforces bytes, origin, expiry, no-store, errors, rate limits, and no identity dependence",
         cases: [...deliveryCases, ...requiredAssertions([PHASE6_MEDIA_CV_TEST_NAMES[1]]),
           ...namedCases(acceptanceUnitChecks?.tests, ["streams the declared PDF branch with no-store and safe disposition",
-            "returns a short lived exact-origin signed URL with disposition encoded by Storage"])] },
+            "returns a short lived exact-origin signed URL with disposition encoded by Storage",
+            "limits repeated client requests before application dispatch and sends Retry-After"])] },
       { id: "T18-09", name: "Logs, problems, public DTOs, receipts, outbox, and evidence exclude private capabilities and content",
         cases: [...scenarioCases(processingCounts?.currentCvCapabilityScenarios, ["T15-08"]),
-          ...scenarioCases(processingCounts?.currentCvDeliveryScenarios, ["T14-09"]),
+          ...scenarioCases(processingCounts?.cvActivationScenarios, ["T11-03"]),
+          ...namedCases(acceptanceUnitChecks?.tests, ["rejects a redirect with unlisted origin", "rejects a redirect with insecure URL"]),
+          ...namedCases(acceptanceUnitChecks?.tests, ["redacts private diagnostics before evidence export"]),
           ...scenarioCases(processingCounts?.mediaRejectionScenarios, ["T12-09"]), ...ownerUnitCases] },
       { id: "T18-10", name: "Real Owner/session/CSRF/scope checks and restricted-principal policies remain green",
         cases: [...scenarioCases(processingCounts?.cvActivationScenarios, ["T11-02"]), ...ownerCompositionCases, ...ownerSecurityCases] },

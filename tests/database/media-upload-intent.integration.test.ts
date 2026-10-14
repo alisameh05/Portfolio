@@ -2678,6 +2678,12 @@ describeReal(group === "baseline"
       const firstActivationEvent = await admin.query(`select payload from operations.outbox_events
         where aggregate_id = $1::uuid and event_type = 'cv.current_changed.v1'`, [portfolioId]);
       const firstEventPayload = firstActivationEvent.rows[0]?.payload as Record<string, unknown> | undefined;
+      const firstActivationReceipt = await admin.query<{ idempotency_key_hash: string; request_hash: string; version_id: string; aggregate_version: number }>(
+        `select idempotency_key_hash, request_hash, version_id::text as version_id, aggregate_version
+           from cv_portfolio.activation_commands
+          where portfolio_id = $1::uuid and owner_id = $2::uuid and idempotency_key_hash = $3`,
+        [portfolioId, ownerId, createHash("sha256").update(initialActivationKey).digest("hex")]);
+      const firstReceipt = firstActivationReceipt.rows[0];
       cvActivationScenario("T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event",
         firstActivationResponse.status === 200 && firstActivationBody.outcome === "current-cv-activated" &&
         firstActivationView.ok && firstActivationView.value.currentVersionId === cvRegistration.value.versionId &&
@@ -2685,6 +2691,9 @@ describeReal(group === "baseline"
         firstActivationState.rows[0]?.current_version_id === cvRegistration.value.versionId &&
         firstActivationState.rows[0]?.ever_activated === true && firstActivationState.rows[0]?.is_current === true &&
         firstActivationState.rows[0]?.histories === 1 && firstActivationState.rows[0]?.events === 1 &&
+        firstActivationReceipt.rowCount === 1 && firstReceipt !== undefined && /^[a-f0-9]{64}$/u.test(firstReceipt.idempotency_key_hash) &&
+        firstReceipt.idempotency_key_hash !== initialActivationKey && /^[a-f0-9]{64}$/u.test(firstReceipt.request_hash) &&
+        firstReceipt.version_id === cvRegistration.value.versionId && firstReceipt.aggregate_version === firstActivationView.value.aggregateVersion &&
         Object.keys(firstEventPayload ?? {}).sort().join(",") === "activatedAt,newCurrentCvId" &&
         firstEventPayload?.["newCurrentCvId"] === cvRegistration.value.versionId);
 

@@ -31,6 +31,7 @@ import {
 import { handleGetCurrentCv } from "../../src/runtime/http/current-cv.js";
 import { createBoundedCurrentCvRateLimit } from "../../src/runtime/http/current-cv-rate-limit.js";
 import type { CurrentCvRateLimitCheck } from "../../src/runtime/http/current-cv-rate-limit.js";
+import { sanitizeEvidenceOutput } from "../../scripts/phase4-gate-support.mjs";
 
 const SIGNED_URL = "https://storage.example/signed/current-cv?token=fake";
 
@@ -49,6 +50,36 @@ function handleCurrentCv(request: Request, deps: TestCurrentCvDeps): Promise<Res
 }
 
 describe("GET Current CV adapter (#28)", () => {
+  it("redacts private diagnostics before evidence export", () => {
+    const signedUrl = "https://storage.example/download/current-cv?token=signed-url-sentinel";
+    const scannerDump = "scanner-output-sentinel";
+    const originalFilename = "../../private/current-cv.pdf";
+    const cvBytes = "%PDF-private-bytes-sentinel";
+    const providerMapping = "provider-user-sentinel";
+    const workspace = "C:\\runner\\workspace";
+    const temporary = "C:\\runner\\tmp";
+    const diagnostic = [
+      "postgresql://user:db-secret-sentinel@db.example/private",
+      "Bearer auth-token-sentinel",
+      signedUrl,
+      scannerDump,
+      originalFilename,
+      cvBytes,
+      providerMapping,
+      workspace,
+      temporary,
+    ].join(" ");
+    const safe = sanitizeEvidenceOutput(diagnostic, {
+      workspace,
+      temporary,
+      secrets: [signedUrl, scannerDump, originalFilename, cvBytes, providerMapping],
+    });
+    for (const value of ["db-secret-sentinel", "auth-token-sentinel", signedUrl, scannerDump,
+      originalFilename, cvBytes, providerMapping, workspace, temporary]) {
+      expect(safe).not.toContain(value);
+    }
+  });
+
   it("dispatches once and returns the declared 307 redirect without storage", async () => {
     const fake = createCurrentCvTestFake({ type: "redirect" });
     const logger = createTestLogger();
@@ -191,11 +222,15 @@ describe("GET Current CV adapter (#28)", () => {
     ["insecure URL", "http://storage.example/cv.pdf"],
   ])("rejects a redirect with %s", async (_label, downloadUrl) => {
     const fake = createCurrentCvTestFake({ type: "redirect", downloadUrl });
+    const logger = createTestLogger();
     const response = await handleCurrentCv(getCvRequest(), {
-      service: fake, allowedRedirectOrigins: ["https://storage.example"],
+      service: fake, logger, allowedRedirectOrigins: ["https://storage.example"],
     });
     expect(response.status).toBe(500);
-    expect((await response.json()).code).toBe("internal_error");
+    const serialized = JSON.stringify(await response.json());
+    expect(JSON.parse(serialized).code).toBe("internal_error");
+    expect(serialized).not.toContain(downloadUrl);
+    expect(JSON.stringify(logger.records)).not.toContain(downloadUrl);
   });
 
   it("production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED", async () => {
