@@ -226,10 +226,11 @@ export function createPostgresOperationsPersistence(
     async execute(
       input: IdempotentExecutionInput,
       effect: (context: TransactionContext) => Promise<SafeResultEnvelope>,
+      transaction?: TransactionContext,
     ): Promise<IdempotentExecutionResult> {
       validateIdempotencyInput(input);
       const hashedKey = keyHash(input.key);
-      return transactions.run(async (context) => {
+      const execute = async (context: TransactionContext): Promise<IdempotentExecutionResult> => {
         const executor = resolvePostgresTransaction(context);
         const inserted = await sql<{ inserted: boolean }>`
           insert into operations.idempotency_records (
@@ -288,7 +289,8 @@ export function createPostgresOperationsPersistence(
              and status = 'reserved'
         `.execute(executor);
         return { kind: "executed", result };
-      });
+      };
+      return transaction === undefined ? transactions.run(execute) : execute(transaction);
     },
   };
 

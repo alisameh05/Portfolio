@@ -313,6 +313,23 @@ Commands express owner or Visitor intent. Events describe successful domain outc
 Accepted ADRs 0004, 0014, 0015, and 0016 retain precedence. This prefactor reconciles application contracts; persistence, crypto verification, consumers, and job execution arrive in the subsequent consuming tickets. It activates no new workflow.
 
 - Reaction and Rating use FunctionalVisitor, independently of Measurement consent and shared across Project languages. Feedback uses neither persistent identity. Losing the first functional cookie prevents same-actor replay of that first request; anonymous callers are never treated as one shared subject.
+
+Reaction implementation (#190) authorizes a stable Published Project with at
+least one published language before functional token issuance/use, then locks
+Content and rechecks before committing the current choice. Content root,
+Interaction pair, and operation/resource/actor/key ledger are acquired in that
+order. Publication/lifecycle changes serialize through the same Content root;
+Interaction never acquires Media locks. The current row is unique by Portfolio,
+Project and FunctionalVisitor, with no language-specific copies. A same-value
+new-key request returns the current choice without a changed event; an exact
+same-actor retry returns its original safe receipt even if a later choice differs,
+provided the Project remains available. The encrypted `visitor_functional`
+cookie is Secure, HttpOnly, SameSite=Lax, path `/`, and bounded to 30 days.
+Its subject is absent from HTTP bodies, ordinary receipts and outbox facts.
+If the initial response cookie is lost, retry cannot prove the original subject:
+a cookie-less request creates another independent recognized subject, even with
+the same idempotency key. This is one current choice per recognized subject,
+not proof of one vote per person or cross-device deduplication.
 - All nine allowlisted actions retain distinct semantics and action-specific fields. Reaction, Rating, Feedback, and Current CV never become Measurement intake or goal actions. Verified Measurement evidence has its own purpose, subject, Portfolio, consent revision, notice version, and expiry; cookie presence is not verification.
 - Owned vote/Feedback/raw-event records are separate from ordinary safe receipts, approved public Feedback pages, and Owner reports. Events carry stable resource facts, never functional subjects, names, paragraphs, or reasons. Owner private views remain distinct from public views. Only approved submitted-locale Feedback can appear publicly; no translation fallback applies.
 - Application request context carries server correlation and explicit Portfolio scope. The legacy shell can represent unconfigured scope and must fail closed. Effectful implementations require configured scope, current authorization, and current consent where applicable. The event edge verifies signed consent against its persisted current revision; intake rechecks it under the same transaction lock before committing (#196).

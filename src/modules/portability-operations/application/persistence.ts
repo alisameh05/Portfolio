@@ -40,6 +40,7 @@ export interface IdempotencyPort {
   execute(
     input: IdempotentExecutionInput,
     effect: (context: TransactionContext) => Promise<SafeResultEnvelope>,
+    transaction?: TransactionContext,
   ): Promise<IdempotentExecutionResult>;
 }
 

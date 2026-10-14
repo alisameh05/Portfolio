@@ -23,6 +23,7 @@ import {
 import type {
   InteractionModerationService,
   SubmitReactionCommand,
+  FunctionalInteractionContextPort,
 } from "../../modules/interaction-moderation/index.js";
 import type {
   IdempotencyKey,
@@ -37,6 +38,7 @@ import {
 
 export interface ReactionAdapterDeps {
   readonly scope?: PortfolioRequestScope;
+  readonly functionalIdentity?: FunctionalInteractionContextPort;
   service: Pick<InteractionModerationService, "submitReaction">;
   logger?: Logger;
 }
@@ -92,10 +94,18 @@ export async function handlePutProjectReaction(
       return transportProblem("Invalid request body.", traceId, instance);
     }
 
+    const scope = deps.scope ?? { kind: "unconfigured" as const };
+    const cookies = (request.headers.get("cookie") ?? "").split(";").map(c => c.trim()).filter(c => c.startsWith("visitor_functional="));
+    if (cookies.length > 1) return transportProblem("Ambiguous functional cookie.", traceId, instance);
+    const tokenString = cookies[0]?.slice("visitor_functional=".length);
+    const prepared = deps.functionalIdentity ? await deps.functionalIdentity.prepare({ scope, correlationId: traceId,
+      projectId: pathResult.data.projectId as StableId<"Project">, interaction: "reaction", consent: "unknown",
+      ...(tokenString === undefined ? {} : { tokenString }) }) : undefined;
+    if (prepared && !prepared.ok) return rejectionToProblem(prepared.error, traceId, instance);
     const command: SubmitReactionCommand = {
       scope: deps.scope ?? { kind: "unconfigured" },
       correlationId: traceId,
-      actor: { kind: "visitor", consent: "unknown" },
+      actor: prepared?.ok ? prepared.value.actor : { kind: "visitor", consent: "unknown" },
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       projectId: pathResult.data.projectId as StableId<"Project">,
       kind: bodyResult.data.reaction,
@@ -135,7 +145,11 @@ export async function handlePutProjectReaction(
     }
 
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(responseResult.data, { status: 200 });
+    const response = Response.json(responseResult.data, { status: 200 });
+    if (prepared?.ok && prepared.value.issued) {
+      response.headers.set("set-cookie", `visitor_functional=${prepared.value.issued.tokenString}; Path=/; Secure; HttpOnly; SameSite=Lax; Expires=${new Date(prepared.value.issued.expiresAt).toUTCString()}`);
+    }
+    return response;
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
