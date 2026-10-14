@@ -36,6 +36,7 @@ import type { OwnerMediaApplicationService } from "../modules/media/index.js";
 import type { MediaDeliveryApplicationService } from "../modules/media/index.js";
 import type { CurrentCvDeliveryService, OwnerCvApplicationService } from "../modules/cv-portfolio/index.js";
 import type { PortfolioSettingsApplicationService } from "../modules/portfolio-configuration/index.js";
+import type { ConsentApplicationService } from "../modules/measurement/index.js";
 
 export type { RuntimeConfig } from "./configuration.js";
 
@@ -50,6 +51,7 @@ let currentMediaDelivery: MediaDeliveryApplicationService | undefined;
 let currentOwnerCv: OwnerCvApplicationService | undefined;
 let currentCurrentCv: CurrentCvDeliveryService | undefined;
 let currentPublicConfiguration: PortfolioSettingsApplicationService | undefined;
+let currentConsent: ConsentApplicationService | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -73,6 +75,7 @@ export interface DatabaseRuntimeState extends RuntimeConfig {
 }
 
 export interface DatabaseRuntimeDependencies {
+  readonly consent?: ConsentApplicationService;
   readonly operations: OperationsPersistencePorts;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
   readonly contentAuthoring?: ContentAuthoringService;
@@ -159,6 +162,26 @@ export async function initializeDatabaseRuntime(
         let ownerCv: OwnerCvApplicationService | undefined;
         let currentCv: CurrentCvDeliveryService | undefined;
         let publicConfiguration: PortfolioSettingsApplicationService | undefined;
+        let consent: ConsentApplicationService | undefined;
+        // Optional Measurement capability does not become a global readiness dependency.
+        if (runtimeKind === "application" && env["MEASUREMENT_CONSENT_NOTICE_VERSIONS"]) {
+          try {
+            const [{ createConsentApplicationService }, { createPostgresConsentRepository },
+              { AesGcmConsentEvidenceAdapter }, { createPseudonymousIdentityConfig }] = await Promise.all([
+              import("../modules/measurement/index.js"),
+              import("../modules/measurement/adapters/postgres-consent.js"),
+              import("../modules/identity-access/adapters/consent-evidence.js"),
+              import("../modules/identity-access/adapters/pseudonymous-config.js"),
+            ]);
+            const clock = createSystemClock();
+            consent = createConsentApplicationService({ transactions: database.transactions,
+              repository: createPostgresConsentRepository(),
+              crypto: new AesGcmConsentEvidenceAdapter(createPseudonymousIdentityConfig(env), clock.now),
+              clock, ids: createSystemIdGenerator(), ttlSeconds: 2_592_000,
+              supportedNoticeVersions: env["MEASUREMENT_CONSENT_NOTICE_VERSIONS"]!.split(",").map(v => v.trim()),
+            });
+          } catch { consent = undefined; }
+        }
         if (runtimeKind === "application") {
           if (configuredScope === undefined || !configuredScope.portfolioId.ok || !configuredScope.ownerId.ok) {
             throw new RuntimeConfigError("PORTFOLIO_ID", "must be configured for Owner configuration commands");
@@ -486,6 +509,7 @@ export async function initializeDatabaseRuntime(
         }
         return {
           operations,
+          ...(consent === undefined ? {} : { consent }),
           ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
           ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
           ...(ownerTaxonomy === undefined ? {} : { ownerTaxonomy }),
@@ -514,6 +538,7 @@ export async function initializeDatabaseRuntime(
     lifecycle.registerReadinessCheck(dependencies.readiness);
     current = config;
     currentOperations = dependencies.operations;
+    currentConsent = dependencies.consent;
     currentOwnerConfiguration = dependencies.ownerConfiguration;
     currentContentAuthoring = dependencies.contentAuthoring;
     currentOwnerTaxonomy = dependencies.ownerTaxonomy;
@@ -639,10 +664,16 @@ export function isRuntimeInitialized(): boolean {
   return current !== undefined;
 }
 
+/** Trusted future consent presentation and the existing event edge share this boundary. */
+export function getConsentApplicationService(): ConsentApplicationService | undefined {
+  return currentConsent;
+}
+
 /** Test-only seam to isolate focused suites. */
 export function resetRuntimeForTests(): void {
   current = undefined;
   currentOperations = undefined;
+  currentConsent = undefined;
   currentOwnerConfiguration = undefined;
   currentContentAuthoring = undefined;
   currentOwnerTaxonomy = undefined;

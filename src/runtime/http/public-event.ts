@@ -1,4 +1,5 @@
 import type { PortfolioRequestScope } from "@shared/application";
+import { getConsentApplicationService } from "../../bootstrap/composition-root.js";
 /**
  * public-event.ts — Phase 2 #28 consented Public event adapter.
  *
@@ -11,15 +12,12 @@ import type { PortfolioRequestScope } from "@shared/application";
  * declared response; complete request logging.
  *
  * Consent: the accepted contract declares AnalyticsConsent security as a
- * signed `sw_analytics_consent` cookie. The adapter reads only the presence
- * of that cookie from the standard `cookie` header and folds it into the
- * provider-neutral visitor actor (`granted` when present and non-empty,
- * otherwise `unknown`). Cookie values, signatures, and raw identifiers
- * never cross the application seam and never appear in logs.
+ * signed `sw_analytics_consent` cookie. Identity/Measurement verifies its
+ * authenticated envelope and current persisted revision before dispatch.
+ * Cookie values never enter event commands or logs.
  *
  * All nine validated action-specific facts cross the owning application seam.
- * Verified Measurement evidence is supplied by the future consent boundary;
- * the existing fail-closed shell does not gain collection behavior.
+ * The event application must recheck consent inside its intake transaction (#196).
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, results, and rejections crossing the application seam
@@ -37,6 +35,7 @@ import type {
   PublicMeasurementEvent,
   MeasurementService,
   EventReceipt,
+  ConsentApplicationService,
 } from "../../modules/measurement/index.js";
 import type {
   IdempotencyKey,
@@ -50,6 +49,7 @@ import {
 } from "./problem.js";
 
 export interface PublicEventAdapterDeps {
+  readonly consent?: Pick<ConsentApplicationService, "verifyEvidence">;
   readonly scope?: PortfolioRequestScope;
   service: Pick<MeasurementService, "ingestEvent">;
   logger?: Logger;
@@ -65,18 +65,20 @@ function requestInstance(request: Request): string {
   }
 }
 
-function hasAnalyticsConsent(request: Request): boolean {
+function analyticsConsentToken(request: Request): string | undefined {
   const cookie = request.headers.get("cookie");
   if (cookie === null || cookie.length === 0) {
-    return false;
+    return undefined;
   }
+  let token: string | undefined;
   for (const part of cookie.split(";")) {
     const [name, ...rest] = part.split("=");
     if (name?.trim() === "sw_analytics_consent" && rest.join("=").trim().length > 0) {
-      return true;
+      if (token !== undefined) return undefined;
+      token = rest.join("=").trim();
     }
   }
-  return false;
+  return token;
 }
 
 export async function handlePostPublicEvent(
@@ -118,10 +120,17 @@ export async function handlePostPublicEvent(
       return transportProblem("Invalid request body.", traceId, instance);
     }
 
+    const scope = deps.scope ?? { kind: "unconfigured" as const };
+    const consent = deps.consent ?? getConsentApplicationService();
+    const token = analyticsConsentToken(request);
+    if (!consent || !token) return rejectionToProblem({ kind: "forbidden", code: "MEASUREMENT_CONSENT_REQUIRED" }, traceId, instance);
+    const verified = await consent.verifyEvidence({ scope, correlationId: traceId, token, noticeVersion: bodyResult.data.context.consentVersion });
+    if (!verified.ok) return rejectionToProblem(verified.error, traceId, instance);
     const command: IngestPublicEventCommand = {
-      scope: deps.scope ?? { kind: "unconfigured" },
+      scope,
       correlationId: traceId,
-      actor: { kind: "visitor", consent: hasAnalyticsConsent(request) ? "granted" : "unknown" },
+      actor: { kind: "visitor", consent: "granted" },
+      measurement: verified.value,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       event: bodyResult.data as unknown as PublicMeasurementEvent,
     };

@@ -41,3 +41,6 @@ export type { MeasurementWorkCommand, MeasurementWorkService } from "./applicati
 export type { SafeAggregateReport } from "./application/service.js";
 
 export type { AggregateReportMetadata, SafeReportDimensions, AggregateReportRow } from "./application/service.js";
+
+export { createConsentApplicationService } from "./application/consent.js";
+export type { ConsentApplicationService, ConsentServiceDependencies, ConsentChoiceReceipt, RecordConsentChoiceCommand, VerifyConsentQuery, CurrentConsent, ConsentRepositoryPort } from "./application/consent.js";

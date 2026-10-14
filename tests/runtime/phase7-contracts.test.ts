@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { handlePostPublicEvent } from "../../src/runtime/http/public-event.js";
+import { handlePostPublicEvent as rawHandlePostPublicEvent } from "../../src/runtime/http/public-event.js";
 import { handlePostProjectFeedback } from "../../src/runtime/http/feedback.js";
 import { createPublicEventTestFake, createProductionPublicEventService } from "../../src/runtime/fakes/public-event.js";
 import { createFeedbackTestFake } from "../../src/runtime/fakes/feedback.js";
 import { createReactionTestFake } from "../../src/runtime/fakes/reaction.js";
 import { createRatingTestFake } from "../../src/runtime/fakes/rating.js";
 import { createTestLogger } from "../../src/runtime/ports.js";
+const handlePostPublicEvent: typeof rawHandlePostPublicEvent = (request, deps) => rawHandlePostPublicEvent(request, {
+  ...deps, consent: { async verifyEvidence(query) { return { ok: true, value: { purpose: "measurement",
+    subject: id as never, portfolioId: id as never, consentId: id as never, noticeVersion: query.noticeVersion,
+    revision: 1, issuedAt: "2026-10-14T12:00:00.000Z", expiresAt: "2026-11-13T12:00:00.000Z" } }; } },
+});
 const id = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e93";
 const context = { pageRouteIdentity: id, locale: "ar", occurredAt: "2026-10-14T12:00:00Z", consentVersion: "v1", journeyContext: [id], deviceClass: "unknown", referrerClass: "professional", countryCode: "EG" };
 const actions = [
@@ -28,7 +33,7 @@ describe("Phase 7 contracts #188", () => {
   expect(response.status).toBe(202);
   expect(fake.calls).toHaveLength(1);
   expect(fake.calls[0]).toMatchObject({ event, idempotencyKey: "contracts-188", scope: { kind: "portfolio", portfolioId: id }, correlationId: expect.any(String) });
-  expect(fake.calls[0]).not.toHaveProperty("measurement");
+  expect(fake.calls[0]).toHaveProperty("measurement.purpose", "measurement");
   expect(await response.json()).toEqual({ eventId: expect.any(String), acceptedAt: expect.any(String) });
  });
  it.each([

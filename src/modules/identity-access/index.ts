@@ -40,3 +40,5 @@ export type {
   AuthProviderPort,
   CryptoPort,
 } from "./ports/index.js";
+
+export type { ConsentEvidencePayload, ConsentEvidenceCryptoPort } from "./ports/consent.js";
