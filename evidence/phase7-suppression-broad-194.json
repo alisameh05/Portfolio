@@ -1,0 +1,24 @@
+{
+  "initial": {
+    "reportSha256": "11193ee1826d434631244c0e955143fb0f829f750761cde34b9a266c082cc91f",
+    "success": false,
+    "passed": 1176,
+    "failed": 1,
+    "skipped": 234,
+    "failedSuites": 2,
+    "suites": 106
+  },
+  "final": {
+    "reportSha256": "9ca5cbbcca4c4a7f67c277cdb383536b91bd456f2106e1e8363bedaf58851542",
+    "success": true,
+    "passed": 1177,
+    "failed": 0,
+    "skipped": 234,
+    "failedSuites": 0,
+    "suites": 106
+  },
+  "initialFailure": "Existing Phase4 architecture subprocess exceeded five-second test timeout under Windows load; duration5340ms",
+  "finalCommand": "npm test -- --no-file-parallelism --testTimeout=15000 --reporter=json --outputFile=artifacts/suppression-full-rerun-vitest.json",
+  "sourceRevision": "4fdf1bf7e58bbf1526a1aaf35b3e8a9c14c3f934",
+  "sourceTreeSha256": "a84164376f4d997e07c6f9d1a63737ff655bd196b4891ccee4f73ffac04acc9b"
+}

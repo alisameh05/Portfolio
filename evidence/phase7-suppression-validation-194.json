@@ -1,0 +1,75 @@
+{
+  "sourceRevision": "4fdf1bf7e58bbf1526a1aaf35b3e8a9c14c3f934",
+  "gitTree": "5a547aa51b2ae0c78f219580371f4ac58f3623a3",
+  "sourceTreeSha256": "a84164376f4d997e07c6f9d1a63737ff655bd196b4891ccee4f73ffac04acc9b",
+  "requiredRunId": "34e3e0c1-de5e-4d82-9f89-87b386f8d906",
+  "commands": [
+    {
+      "command": "npm run setup:validation",
+      "status": "passed"
+    },
+    {
+      "command": "npm run validation:ready",
+      "status": "passed"
+    },
+    {
+      "command": "npm run typecheck",
+      "status": "passed"
+    },
+    {
+      "command": "npm run lint",
+      "status": "passed"
+    },
+    {
+      "command": "npm run contract:verify",
+      "status": "passed"
+    },
+    {
+      "command": "npm run test:arch",
+      "status": "passed"
+    },
+    {
+      "command": "npm run runtime:architecture",
+      "status": "passed"
+    },
+    {
+      "command": "npm run route:inventory",
+      "status": "passed"
+    },
+    {
+      "command": "npm run phase5:context",
+      "status": "passed"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed"
+    }
+  ],
+  "buildLogSha256": "851f4e993c316ded37e532ed7f0f3460da211cf8303f9187e6a07b87d552d6c8",
+  "reviews": {
+    "standards": {
+      "base": "eb1b6d2b6426dac7f370d4ac7e46ab929a1b13ad",
+      "head": "4fdf1bf7e58bbf1526a1aaf35b3e8a9c14c3f934",
+      "actionableFindings": 0
+    },
+    "spec": {
+      "issue": 194,
+      "parent": 187,
+      "head": "4fdf1bf7e58bbf1526a1aaf35b3e8a9c14c3f934",
+      "actionableFindings": 0
+    }
+  },
+  "prerequisites": {
+    "issue193": "completed; PR215 merged",
+    "issue90": "completed; PR105 merged",
+    "issue125": "completed; PR144 merged"
+  },
+  "tools": {
+    "node": "24.21.0",
+    "npm": "11.19.0"
+  }
+}
