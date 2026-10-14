@@ -1,23 +1,17 @@
 import type { OwnerAnalyticsApplicationService } from "./owner-analytics.js";
 import type { MeasurementWorkService } from "./work.js";
+import type { ConsentApplicationService, VerifiedMeasurementEvidence } from "./consent.js";
+export type { VerifiedMeasurementEvidence } from "./consent.js";
 import type { ApplicationRequestContext } from "@shared/application";
 import type { StableId, Result, Rejection, ActorContext } from "@shared/domain";
 import type {
   ConsentState,
-  ConsentRecord,
   MeasurementEventType,
   PublicMeasurementEvent,
   EventReceipt,
 } from "../domain/index.js";
 
-export interface RecordConsentCommand extends ApplicationRequestContext {
-  readonly actor: ActorContext;
-  readonly visitorId: StableId<"MeasurementVisitor">;
-  readonly consent: ConsentState;
-  readonly noticeVersion: string;
-  readonly expectedRevision: number;
-  readonly idempotencyKey: import("@shared/domain").IdempotencyKey;
-}
+export type RecordConsentCommand = import("./consent.js").RecordConsentChoiceCommand;
 
 export interface IngestPublicEventCommand extends ApplicationRequestContext {
   readonly actor: { readonly kind: "visitor"; readonly consent: ConsentState; readonly functionalId?: never };
@@ -39,10 +33,7 @@ export interface GetAggregateReportQuery extends ApplicationRequestContext {
   readonly endDate: string;
 }
 
-export interface MeasurementService extends OwnerAnalyticsApplicationService, MeasurementWorkService {
-  recordConsent(
-    command: RecordConsentCommand,
-  ): Promise<Result<ConsentRecord, Rejection>>;
+export interface MeasurementService extends OwnerAnalyticsApplicationService, MeasurementWorkService, ConsentApplicationService {
 
   ingestEvent(
     command: IngestPublicEventCommand,
@@ -61,17 +52,6 @@ export interface MeasurementService extends OwnerAnalyticsApplicationService, Me
   ): Promise<Result<SafeAggregateReport, Rejection>>;
 }
 
-/** Evidence is constructed only by the verified Identity/consent boundary (#189). */
-export interface VerifiedMeasurementEvidence {
- readonly subject: StableId<"MeasurementVisitor">;
- readonly portfolioId: StableId<"Portfolio">;
- readonly consentId: StableId<"Consent">;
- readonly noticeVersion: string;
- readonly revision: number;
- readonly issuedAt: string;
- readonly expiresAt: string;
- readonly purpose: "measurement";
-}
 
 /** Reports expose fixed eligible cohorts, stable historical definitions, and no identity lists. */
 export interface AggregateReportMetadata {

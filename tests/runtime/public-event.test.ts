@@ -31,8 +31,15 @@ import {
   createProductionPublicEventService,
   createPublicEventTestFake,
 } from "../../src/runtime/fakes/public-event.js";
-import { handlePostPublicEvent } from "../../src/runtime/http/public-event.js";
+import { handlePostPublicEvent as rawHandlePostPublicEvent } from "../../src/runtime/http/public-event.js";
 
+// Explicit edge fake keeps transport/rejection tests independent of real crypto tests.
+const handlePostPublicEvent: typeof rawHandlePostPublicEvent = (request, deps) => rawHandlePostPublicEvent(request, {
+  ...deps, consent: { async verifyEvidence(query) { return { ok: true, value: {
+    purpose: "measurement", subject: EVENT_ID as never, portfolioId: PROJECT_ID as never, consentId: EVENT_ID as never,
+    noticeVersion: query.noticeVersion, revision: 1, issuedAt: "2026-10-14T12:00:00.000Z", expiresAt: "2026-11-13T12:00:00.000Z",
+  } }; } },
+});
 const IDEMPOTENCY_KEY = "test-key-123";
 const PROJECT_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e8f";
 const ROUTE_IDENTITY = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e93";
@@ -57,7 +64,7 @@ function postEventRequest(options?: {
   inboundTrace?: string;
   cookie?: string;
 }): Request {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = { "content-type": "application/json", cookie: "sw_analytics_consent=test-evidence" };
   if (options?.idempotencyKey !== null) {
     headers["Idempotency-Key"] = options?.idempotencyKey ?? IDEMPOTENCY_KEY;
   }
@@ -91,24 +98,13 @@ describe("POST Public event adapter (#28)", () => {
     expect(body).toEqual({ eventId: EVENT_ID, acceptedAt: expect.any(String) });
   });
 
-  it("folds consent-cookie presence into the visitor actor without leaking values", async () => {
+  it("cookie presence alone cannot grant consent or dispatch an event", async () => {
     const fake = createPublicEventTestFake({ type: "success" });
     const logger = createTestLogger();
-    await handlePostPublicEvent(
-      postEventRequest({ cookie: "sw_analytics_consent=signed-value-123" }),
-      { service: fake, logger },
-    );
-    const consented = fake.calls[0] as { actor: { consent: string } };
-    expect(consented.actor.consent).toBe("granted");
-    const logs = JSON.stringify(logger.records);
-    expect(logs).not.toContain("signed-value-123");
-
-    const anonymous = createPublicEventTestFake({ type: "success" });
-    await handlePostPublicEvent(postEventRequest(), {
-      service: anonymous,
-      logger: createTestLogger(),
-    });
-    expect((anonymous.calls[0] as { actor: { consent: string } }).actor.consent).toBe("unknown");
+    const response = await rawHandlePostPublicEvent(postEventRequest({ cookie: "sw_analytics_consent=signed-value-123" }), { service: fake, logger });
+    expect(response.status).toBe(403);
+    expect(fake.calls).toHaveLength(0);
+    expect(JSON.stringify(logger.records)).not.toContain("signed-value-123");
   });
 
   it.each([

@@ -36,6 +36,15 @@ jobs:
       - run: npm run phase4:focus:context
       - run: npm run test:arch
       - run: npm run contract:verify
+      - name: Require real PostgreSQL consent and crypto acceptance with zero skips
+        run: npm run phase7:focus:consent
+      - name: Publish sanitized consent evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase7-consent
+          path: evidence/phase7-consent-189.json
+          if-no-files-found: error
+          retention-days: 14
 
   local-auth:
     name: Local Auth real-token
