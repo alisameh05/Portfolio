@@ -1,0 +1,55 @@
+{
+  "runId": "fd6dad69-3292-4c11-b8bc-1019bee94d30",
+  "sourceRevision": "e32c5ac7c8613991e2bd955eb114e67bdb35cad8",
+  "sourceTreeSha256": "92f6034b3c1fae44abda8397b8d176d5934bf36da34bccc0d42e67dc55131e36",
+  "requiredRunId": "37b6ecd9-cea6-4b04-87a2-c9d84d7ecbaf",
+  "fullSuite": {
+    "success": true,
+    "passed": 1176,
+    "failed": 0,
+    "skipped": 207,
+    "failedSuites": 0,
+    "reportSha256": "12772770425c74149ad20fa820103342b9d7a5737547760f6868ecba523b0df2",
+    "command": "npm test -- --testTimeout=20000 --reporter=json --outputFile=artifacts/feedback-full-vitest.json",
+    "startedAtSourceRevision": "c4ea0bb6ce2eb3e08c4c036478378dadec304c47",
+    "finalFollowup": "Only documentation encoding and runner cleanup lint fix changed afterward; no product or test changes."
+  },
+  "passedChecks": [
+    "setup:validation",
+    "validation:ready",
+    "typecheck",
+    "lint",
+    "contract:verify",
+    "test:arch",
+    "runtime:architecture",
+    "runtime:boundary",
+    "route:inventory",
+    "phase5:context",
+    "build",
+    "git diff --check"
+  ],
+  "predecessors": {
+    "runId": "1dca184b-46ee-4f13-b758-b2d034d25514",
+    "required": {
+      "success": true,
+      "passed": 33,
+      "failed": 0,
+      "skipped": 0,
+      "failedSuites": 0
+    },
+    "cleanup": true
+  },
+  "reviews": {
+    "base": "b873e505576c851b3b68722dc49e9dc067caf419",
+    "head": "e32c5ac7c8613991e2bd955eb114e67bdb35cad8",
+    "standardsActionableFindings": 0,
+    "specActionableFindings": 0,
+    "resolvedFinding": "Preserve existing Media machine reason via exact event type/version/top-level/value allowance; real restricted-worker mixed-batch regression passes."
+  },
+  "prerequisites": {
+    "issue90": "completed; PR105 merged; 19-check source-bound gate and hosted CI recorded",
+    "issue125": "completed; PR144 merged; 142 checks with zero failures/skips recorded",
+    "issue188": "completed; PR210 merged"
+  },
+  "hostedCI": "Not certified by local acceptance; inspect published PR checks."
+}
