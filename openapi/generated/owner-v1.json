@@ -5651,16 +5651,25 @@
           },
           "processingHistory": {
             "type": "array",
-            "description": "Retained processing attempts and findings in recorded order.",
+            "description": "Newest-first view of up to 100 retained processing attempts. Older rows remain retained; processingHistoryTruncated reports when the view is incomplete.",
             "items": {
               "$ref": "#/components/schemas/MediaProcessingView"
             }
           },
+          "processingHistoryTruncated": {
+            "type": "boolean",
+            "description": "True when older retained processing attempts are omitted."
+          },
           "decisionHistory": {
             "type": "array",
+            "description": "Newest-first view of up to 100 retained decisions. Older rows remain retained; decisionHistoryTruncated reports when the view is incomplete.",
             "items": {
               "$ref": "#/components/schemas/MediaDecisionView"
             }
+          },
+          "decisionHistoryTruncated": {
+            "type": "boolean",
+            "description": "True when older retained decisions are omitted."
           }
         }
       },
@@ -5979,17 +5988,25 @@
           },
           "versions": {
             "type": "array",
-            "description": "Retained registration and acceptance history, including prior Current CV versions.",
+            "description": "Newest-first view of up to 100 retained CV versions. Older rows remain retained; versionsTruncated reports when the view is incomplete.",
             "items": {
               "$ref": "#/components/schemas/CvVersionView"
             }
           },
+          "versionsTruncated": {
+            "type": "boolean",
+            "description": "True when older retained CV versions are omitted."
+          },
           "activationHistory": {
             "type": "array",
-            "description": "Retained Current CV activations in recorded order.",
+            "description": "Newest-first view of up to 100 retained activations. Older rows remain retained; activationHistoryTruncated reports when the view is incomplete.",
             "items": {
               "$ref": "#/components/schemas/CvActivationView"
             }
+          },
+          "activationHistoryTruncated": {
+            "type": "boolean",
+            "description": "True when older retained activations are omitted."
           }
         }
       },

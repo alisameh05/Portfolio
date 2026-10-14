@@ -16,6 +16,7 @@ export { createPostgresMediaProcessingRepository } from "./postgres-processing.j
 export { createPostgresMediaAcceptanceRepository } from "./postgres-acceptance.js";
 export { createPostgresMediaDeliveryRepository } from "./postgres-delivery.js";
 export { createPostgresMediaRejectionRepository } from "./postgres-rejection.js";
+export { createPostgresOwnerMediaAggregateRepository } from "./postgres-owner-aggregate.js";
 
 /**
  * Stub repository adapter for Phase 1 skeleton.

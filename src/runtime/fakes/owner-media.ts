@@ -60,7 +60,9 @@ function aggregateView(mediaId: StableId<string>): OwnerMediaAggregateView {
     byteLength: 204800,
     state: "upload-pending",
     processingHistory: [],
+    processingHistoryTruncated: true,
     decisionHistory: [],
+    decisionHistoryTruncated: true,
   };
 }
 

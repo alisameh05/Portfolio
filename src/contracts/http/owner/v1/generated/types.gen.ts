@@ -544,10 +544,21 @@ export type MediaAggregateView = {
     byteLength: number;
     state: 'upload-pending' | 'processing' | 'processed' | 'accepted' | 'rejected';
     /**
-     * Retained processing attempts and findings in recorded order.
+     * Newest-first view of up to 100 retained processing attempts. Older rows remain retained; processingHistoryTruncated reports when the view is incomplete.
      */
     processingHistory: Array<MediaProcessingView>;
+    /**
+     * True when older retained processing attempts are omitted.
+     */
+    processingHistoryTruncated?: boolean;
+    /**
+     * Newest-first view of up to 100 retained decisions. Older rows remain retained; decisionHistoryTruncated reports when the view is incomplete.
+     */
     decisionHistory: Array<MediaDecisionView>;
+    /**
+     * True when older retained decisions are omitted.
+     */
+    decisionHistoryTruncated?: boolean;
 };
 
 export type CreateMediaUploadIntentRequest = {
@@ -633,13 +644,21 @@ export type CvPortfolioView = {
     aggregateVersion: number;
     currentVersionId: StableId | null;
     /**
-     * Retained registration and acceptance history, including prior Current CV versions.
+     * Newest-first view of up to 100 retained CV versions. Older rows remain retained; versionsTruncated reports when the view is incomplete.
      */
     versions: Array<CvVersionView>;
     /**
-     * Retained Current CV activations in recorded order.
+     * True when older retained CV versions are omitted.
+     */
+    versionsTruncated?: boolean;
+    /**
+     * Newest-first view of up to 100 retained activations. Older rows remain retained; activationHistoryTruncated reports when the view is incomplete.
      */
     activationHistory: Array<CvActivationView>;
+    /**
+     * True when older retained activations are omitted.
+     */
+    activationHistoryTruncated?: boolean;
 };
 
 export type RegisterCvVersionRequest = {

@@ -180,7 +180,9 @@ export async function handleGetOwnerCvPortfolio(
       aggregateVersion: result.value.aggregateVersion,
       currentVersionId: result.value.currentVersionId,
       versions: [...result.value.versions],
+      versionsTruncated: result.value.versionsTruncated,
       activationHistory: [...result.value.activationHistory],
+      activationHistoryTruncated: result.value.activationHistoryTruncated,
     };
     const parsed = zGetOwnerCvPortfolioResponse.safeParse(payload);
     if (!parsed.success) {

@@ -20,6 +20,7 @@ export type {
   OwnerMediaUploadIntentView,
   OwnerMediaCommandReceipt,
   OwnerMediaApplicationService,
+  OwnerMediaAggregateRepositoryPort,
   GetMediaAcceptanceFactsQuery,
   GetAcceptedPdfSnapshotQuery,
   AcceptedPdfSnapshot,
@@ -29,6 +30,7 @@ export type {
   MediaUsage,
   MediaReadApplicationService,
 } from "./owner-contracts.js";
+export { createOwnerMediaApplicationService } from "./owner-service.js";
 export {
   createMediaUploadIntentApplicationService,
 } from "./upload-intent.js";

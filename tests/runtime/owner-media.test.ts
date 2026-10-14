@@ -166,7 +166,9 @@ describe("Owner Media aggregate retrieval (#31)", () => {
       byteLength: 204800,
       state: "upload-pending",
       processingHistory: [],
+      processingHistoryTruncated: true,
       decisionHistory: [],
+      decisionHistoryTruncated: true,
     });
   });
 

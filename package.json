@@ -95,6 +95,8 @@
     "phase6:focus:cv-activation": "node scripts/phase6-verification.mjs --cv-activation-only",
     "prephase6:focus:cv-delivery": "npm run validation:ready",
     "phase6:focus:cv-delivery": "node scripts/phase6-verification.mjs --cv-delivery-only",
+    "prephase6:focus:owner-composition": "npm run validation:ready",
+    "phase6:focus:owner-composition": "node scripts/phase6-verification.mjs --owner-composition-only",
     "prephase6:focus:media-integration": "npm run validation:ready",
     "phase6:focus:media-integration": "node scripts/phase6-verification.mjs --media-integration-only",
     "prephase6:focus:publication-media": "npm run validation:ready",

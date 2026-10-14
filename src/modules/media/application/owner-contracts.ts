@@ -82,8 +82,14 @@ export interface OwnerMediaAggregateView {
   readonly declaredMediaType: string;
   readonly byteLength: number;
   readonly state: "upload-pending" | "processing" | "processed" | "accepted" | "rejected";
+  /** Newest-first, at most 100 retained attempts; true means older rows exist. */
   readonly processingHistory: ReadonlyArray<OwnerMediaProcessingView>;
+  /** Additive metadata preserves compatibility with clients that ignore it. */
+  readonly processingHistoryTruncated?: boolean;
+  /** Newest-first, at most 100 retained decisions; true means older rows exist. */
   readonly decisionHistory: ReadonlyArray<OwnerMediaDecisionView>;
+  /** Additive metadata preserves compatibility with clients that ignore it. */
+  readonly decisionHistoryTruncated?: boolean;
 }
 
 export interface OwnerMediaUploadIntentView {
@@ -120,6 +126,13 @@ export interface OwnerMediaApplicationService {
   rejectOwnerMediaAsset(
     command: RejectOwnerMediaAssetApplicationCommand,
   ): Promise<Result<OwnerMediaCommandReceipt, Rejection>>;
+}
+
+export interface OwnerMediaAggregateRepositoryPort {
+  getOwnerMediaAggregate(input: {
+    readonly ownerId: StableId<"Owner">;
+    readonly mediaId: StableId<"MediaAsset">;
+  }): Promise<Result<OwnerMediaAggregateView, Rejection>>;
 }
 
 /** Complete, consistent acceptance facts read through the caller's transaction. */

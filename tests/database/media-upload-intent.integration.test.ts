@@ -14,7 +14,7 @@ import { handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-m
 import { withOwnerTestAuth } from "../runtime/owner-test-auth.js";
 import { createOwnerSecurityTestStub } from "../../src/runtime/http/owner-security.js";
 import { handleAcceptOwnerCvVersion, handleActivateOwnerCvVersion, handleGetOwnerCvPortfolio, handleRegisterOwnerCvVersion } from "../../src/runtime/http/owner-cv.js";
-import { getMediaDeliveryApplicationService, getOwnerCvApplicationService, getOwnerMediaApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
+import { getContentAuthoringApplicationService, getMediaDeliveryApplicationService, getOwnerCvApplicationService, getOwnerMediaApplicationService, initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
 import { getCurrentCvApplicationService } from "../../src/bootstrap/composition-root.js";
 import { getPublicConfigurationApplicationService } from "../../src/bootstrap/composition-root.js";
 import { createOwnerCvApplicationService } from "../../src/modules/cv-portfolio/application/owner-service.js";
@@ -75,12 +75,19 @@ const REQUIRE_FULL_MEDIA = process.env["PHASE6_REQUIRE_FULL_MEDIA"] === "1";
 const REQUIRE_CV_ACTIVATION = process.env["PHASE6_CV_ACTIVATION_ONLY"] === "1";
 const REQUIRE_CV_DELIVERY = process.env["PHASE6_CV_DELIVERY_ONLY"] === "1";
 const REQUIRE_PUBLIC_CAPABILITIES = process.env["PHASE6_PUBLIC_CAPABILITIES_ONLY"] === "1";
+const REQUIRE_OWNER_COMPOSITION = process.env["PHASE6_OWNER_COMPOSITION_ONLY"] === "1";
 const mediaProcessingCounts = { scannerExecutions: 0, processorExecutions: 0, videoProcessorExecutions: 0, imageProcessorExecutions: 0, acceptanceExecutions: 0, fixtureAcceptanceExecutions: 0,
   cvScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   cvAcceptanceScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   cvActivationScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   currentCvDeliveryScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   currentCvCapabilityScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
+  ownerCompositionScenarios: [] as Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed";
+    readonly scannerVersion?: string; readonly processorVersion?: string;
+    readonly mediaHistory?: { readonly processingReturned: number; readonly processingRetained: number; readonly processingTruncated: boolean;
+      readonly decisionsReturned: number; readonly decisionsRetained: number; readonly decisionsTruncated: boolean };
+    readonly cvHistory?: { readonly versionsReturned: number; readonly versionsRetained: number; readonly versionsTruncated: boolean;
+      readonly activationsReturned: number; readonly activationsRetained: number; readonly activationsTruncated: boolean } }>,
   mediaRejectionScenarios: [] as Array<{ readonly id: string; readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }>,
   rejectionToolCounts: { scannerExecutions: 0, processorExecutions: 0, cleanScannerVerdicts: 0, unsafeScannerVerdicts: 0 } };
 
@@ -91,7 +98,7 @@ function saveProcessingCounts(update: Record<string, unknown> = mediaProcessingC
     if (existsSync(PROCESSING_COUNTS_FILE)) previous = JSON.parse(readFileSync(PROCESSING_COUNTS_FILE, "utf8")) as Record<string, unknown>;
   } catch { /* The current run rewrites an unreadable partial report. */ }
   const merged: Record<string, unknown> = { ...previous, ...update };
-  for (const field of ["cvScenarios", "cvAcceptanceScenarios", "cvActivationScenarios", "currentCvDeliveryScenarios", "currentCvCapabilityScenarios", "mediaRejectionScenarios"]) {
+  for (const field of ["cvScenarios", "cvAcceptanceScenarios", "cvActivationScenarios", "currentCvDeliveryScenarios", "currentCvCapabilityScenarios", "ownerCompositionScenarios", "mediaRejectionScenarios"]) {
     const prior = Array.isArray(previous[field]) ? previous[field] as Array<Record<string, unknown>> : [];
     const next = Array.isArray(update[field]) ? update[field] as Array<Record<string, unknown>> : [];
     if (prior.length > 0 || next.length > 0) {
@@ -210,16 +217,278 @@ function createPdfVariant(base: Uint8Array, mode: "encrypted" | "active" | "titl
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }
 
-function defineIntegrationSuite(group: "baseline" | "rejection"): void {
+function defineIntegrationSuite(group: "baseline" | "rejection" | "owner-composition"): void {
 describeReal(group === "baseline"
   ? "Phase 6 #148 private upload intent with real PostgreSQL and Storage"
-  : "Phase 6 #157 isolated Media rejection with real PostgreSQL and Storage", () => {
+  : group === "rejection" ? "Phase 6 #157 isolated Media rejection with real PostgreSQL and Storage"
+    : "Phase 6 #161 real production Owner Media and CV composition", () => {
   // Rejection creates retained CV versions and withdraws accepted Media. Give
   // it its own scoped services and collections so baseline initialization and
   // acceptance assertions never depend on destructive test order.
   function scenario(scenarioGroup: typeof group, name: string, run: () => Promise<void>, timeout?: number): void {
-    if (scenarioGroup === group) it(name, run, timeout);
+    if (scenarioGroup === group && (group !== "owner-composition" || REQUIRE_OWNER_COMPOSITION)) it(name, run, timeout);
   }
+  scenario("owner-composition", "composes all nine Owner Media and CV operations through real services", async () => {
+    const actor = { kind: "owner" as const, ownerId, sessionId: "phase6-owner-composition-owner" };
+    const visitor = { kind: "visitor" as const, consent: "unknown" as const };
+    const ownerMedia = await getOwnerMediaApplicationService();
+    const ownerCv = await getOwnerCvApplicationService();
+    const currentCv = await getCurrentCvApplicationService();
+    const content = await getContentAuthoringApplicationService();
+    const bytes = new Uint8Array(readFileSync(PDF_FIXTURE!));
+    const digest = createHash("sha256").update(bytes).digest("hex");
+
+    const deniedRead = await ownerMedia.getOwnerMediaAggregate({ actor: visitor, mediaId: createStableId("MediaAsset") as StableId<"MediaAsset"> });
+    expect(deniedRead).toMatchObject({ ok: false, error: { kind: "forbidden" } });
+    const deniedIntent = await ownerMedia.createOwnerMediaUploadIntent({ actor: { kind: "owner", ownerId: createStableId("Owner"), sessionId: "foreign" },
+      idempotencyKey: "phase6-composition-denied-upload" as never, kind: "document", originalFileName: "private.pdf",
+      declaredMediaType: "application/pdf", byteLength: bytes.byteLength, sha256: digest });
+    expect(deniedIntent).toMatchObject({ ok: false, error: { kind: "forbidden" } });
+
+    const uploadCommand = { actor, idempotencyKey: "phase6-composition-upload" as never,
+      kind: "document", originalFileName: "composition-private.pdf", declaredMediaType: "application/pdf",
+      byteLength: bytes.byteLength, sha256: digest } as const;
+    const intent = await ownerMedia.createOwnerMediaUploadIntent(uploadCommand);
+    expect(intent.ok, "Owner upload intent should be created.").toBe(true);
+    if (!intent.ok) throw new Error("PHASE6_OWNER_COMPOSITION_UPLOAD_FAILED");
+    const uploadReplay = await ownerMedia.createOwnerMediaUploadIntent(uploadCommand);
+    expect(uploadReplay.ok && uploadReplay.value.mediaId === intent.value.mediaId &&
+      uploadReplay.value.uploadIntentId === intent.value.uploadIntentId && uploadReplay.value.uploadTarget === intent.value.uploadTarget)
+      .toBe(true);
+    const uploaded = await fetch(intent.value.uploadTarget, { method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" }, body: Buffer.from(bytes) });
+    expect([200, 201]).toContain(uploaded.status);
+    const processingCommand = { actor, idempotencyKey: "phase6-composition-process" as never,
+      expectedVersion: 1, mediaId: intent.value.mediaId, result: "passed", detectedMediaType: "application/pdf",
+      detectedByteLength: bytes.byteLength, sha256: digest } as const;
+    const processed = await ownerMedia.recordOwnerMediaProcessing(processingCommand);
+    expect(processed, JSON.stringify(processed)).toMatchObject({ ok: true, value: { aggregateVersion: 2, outcome: "media-processing-recorded" } });
+    if (!processed.ok) throw new Error("PHASE6_OWNER_COMPOSITION_PROCESSING_FAILED");
+    expect(await ownerMedia.recordOwnerMediaProcessing(processingCommand)).toEqual(processed);
+    expect(await ownerMedia.recordOwnerMediaProcessing({ ...processingCommand, result: "failed" }))
+      .toMatchObject({ ok: false, error: { kind: "conflict" } });
+    expect(await ownerMedia.recordOwnerMediaProcessing({ ...processingCommand, idempotencyKey: "phase6-composition-process-stale" as never }))
+      .toMatchObject({ ok: false, error: { kind: "precondition_failed" } });
+    const acceptCommand = { actor, idempotencyKey: "phase6-composition-accept" as never,
+      expectedVersion: processed.value.aggregateVersion, mediaId: intent.value.mediaId,
+      accessibility: { kind: "document" as const, summary: "A one page CV PDF." } };
+    const accepted = await ownerMedia.acceptOwnerMediaAsset(acceptCommand);
+    expect(accepted, JSON.stringify(accepted)).toMatchObject({ ok: true, value: { aggregateVersion: 3, outcome: "media-accepted" } });
+    if (!accepted.ok) throw new Error("PHASE6_OWNER_COMPOSITION_ACCEPTANCE_FAILED");
+    expect(await ownerMedia.acceptOwnerMediaAsset(acceptCommand)).toEqual(accepted);
+    expect(await ownerMedia.acceptOwnerMediaAsset({ ...acceptCommand, accessibility: { kind: "document", summary: "Changed intent." } }))
+      .toMatchObject({ ok: false, error: { kind: "conflict" } });
+    expect(await ownerMedia.acceptOwnerMediaAsset({ ...acceptCommand, idempotencyKey: "phase6-composition-accept-stale" as never, expectedVersion: 2 }))
+      .toMatchObject({ ok: false, error: { kind: "precondition_failed" } });
+    mediaProcessingCounts.acceptanceExecutions += 1;
+    const trustedProcessing = await admin.query(`select scanner_version, processor_version, policy_version
+      from media.processing_attempts where media_id = $1::uuid and result = 'passed'
+      order by finished_at desc, attempt_id desc limit 1`, [intent.value.mediaId]);
+    expect(trustedProcessing.rowCount).toBe(1);
+    expect(trustedProcessing.rows[0]?.scanner_version).not.toBe("unavailable");
+    expect(trustedProcessing.rows[0]?.processor_version).not.toBe("unavailable");
+    expect(trustedProcessing.rows[0]?.policy_version).not.toBe("unavailable");
+    const aggregate = await ownerMedia.getOwnerMediaAggregate({ actor, mediaId: intent.value.mediaId });
+    expect(aggregate, JSON.stringify(aggregate)).toMatchObject({ ok: true, value: { state: "accepted", aggregateVersion: 3,
+      processingHistory: [expect.objectContaining({ result: "passed", sha256: digest })],
+      decisionHistory: [expect.objectContaining({ decision: "accepted" })],
+      processingHistoryTruncated: false, decisionHistoryTruncated: false } });
+
+    const processingSeedIds = Array.from({ length: 101 }, () => createStableId("MediaProcessingAttempt"));
+    const processingSeed = await admin.query(`with generated as (
+        select id::uuid as attempt_id, ordinal from unnest($4::uuid[]) with ordinality as seeded(id, ordinal)
+      ), source as (
+        select input_object_id, scanner_version, processor_version, policy_version
+          from media.processing_attempts where media_id = $3::uuid and result = 'passed'
+         order by finished_at desc, attempt_id desc limit 1
+      )
+      insert into media.processing_attempts
+        (attempt_id, portfolio_id, owner_id, media_id, input_object_id, input_sha256, detected_mime_type,
+         detected_byte_length, result, output_object_id, output_sha256, scanner_version, processor_version,
+         policy_version, finding_codes, started_at, finished_at)
+      select generated.attempt_id, $1::uuid, $2::uuid, $3::uuid, source.input_object_id, $5, 'application/pdf',
+        $6, 'failed', null, null, source.scanner_version, source.processor_version, source.policy_version,
+        '["PHASE6_HISTORY_FIXTURE"]'::jsonb,
+        transaction_timestamp() + (generated.ordinal * interval '1 second') - interval '500 milliseconds',
+        transaction_timestamp() + (generated.ordinal * interval '1 second')
+        from generated cross join source`, [portfolioId, ownerId, intent.value.mediaId, processingSeedIds, digest, bytes.byteLength]);
+    expect(processingSeed.rowCount).toBe(101);
+    const decisionSeedIds = Array.from({ length: 101 }, () => createStableId("MediaDecision"));
+    const decisionSeed = await admin.query(`with generated as (
+        select id::uuid as decision_id, ordinal from unnest($4::uuid[]) with ordinality as seeded(id, ordinal)
+      ), source as (
+        select * from media.decision_history where media_id = $3::uuid and aggregate_version = 3 and decision = 'accepted'
+      )
+      insert into media.decision_history
+        (decision_id, portfolio_id, owner_id, media_id, aggregate_version, decision, processing_attempt_id,
+         input_object_id, input_sha256, detected_mime_type, detected_byte_length, scanner_version, processor_version,
+         processing_policy_version, sealed_outputs, accessibility, ownership_attested_by, ownership_attested_at,
+         public_suitability_attested_by, public_suitability_attested_at, decided_by, decided_at, reason_code)
+      select generated.decision_id, source.portfolio_id, source.owner_id, source.media_id, 1000 + generated.ordinal,
+        source.decision, source.processing_attempt_id, source.input_object_id, source.input_sha256,
+        source.detected_mime_type, source.detected_byte_length, source.scanner_version, source.processor_version,
+        source.processing_policy_version, source.sealed_outputs, source.accessibility, source.owner_id,
+        transaction_timestamp() + (generated.ordinal * interval '1 second'), source.owner_id,
+        transaction_timestamp() + (generated.ordinal * interval '1 second'), source.owner_id,
+        transaction_timestamp() + (generated.ordinal * interval '1 second'), null
+        from generated cross join source`, [portfolioId, ownerId, intent.value.mediaId, decisionSeedIds]);
+    expect(decisionSeed.rowCount).toBe(101);
+    const truncatedAggregate = await ownerMedia.getOwnerMediaAggregate({ actor, mediaId: intent.value.mediaId });
+    expect(truncatedAggregate.ok).toBe(true);
+    if (!truncatedAggregate.ok) throw new Error("PHASE6_OWNER_COMPOSITION_HISTORY_READ_FAILED");
+    expect(truncatedAggregate.value).toMatchObject({ processingHistoryTruncated: true, decisionHistoryTruncated: true });
+    expect(truncatedAggregate.value.processingHistory).toHaveLength(100);
+    expect(truncatedAggregate.value.decisionHistory).toHaveLength(100);
+    expect(Date.parse(truncatedAggregate.value.processingHistory[0]!.recordedAt))
+      .toBeGreaterThan(Date.parse(truncatedAggregate.value.processingHistory[1]!.recordedAt));
+    expect(Date.parse(truncatedAggregate.value.decisionHistory[0]!.decidedAt))
+      .toBeGreaterThan(Date.parse(truncatedAggregate.value.decisionHistory[1]!.decidedAt));
+    const retainedMediaHistory = await admin.query(`select
+      (select count(*)::int from media.processing_attempts where media_id = $1::uuid) as attempts,
+      (select count(*)::int from media.decision_history where media_id = $1::uuid) as decisions`, [intent.value.mediaId]);
+    expect(retainedMediaHistory.rows[0]).toEqual({ attempts: 102, decisions: 102 });
+
+    const root = await ownerCv.getOwnerCvPortfolio({ actor });
+    expect(root, JSON.stringify(root)).toMatchObject({ ok: true, value: { aggregateVersion: 1, versionsTruncated: false, activationHistoryTruncated: false } });
+    if (!root.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CV_ROOT_FAILED");
+    const registerCommand = { actor, idempotencyKey: "phase6-composition-cv-register" as never,
+      expectedVersion: root.value.aggregateVersion, mediaId: intent.value.mediaId, locale: "en" as const, label: "Composition CV" };
+    const registered = await ownerCv.registerOwnerCvVersion(registerCommand);
+    expect(registered, JSON.stringify(registered)).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+    if (!registered.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CV_REGISTER_FAILED");
+    expect(await ownerCv.registerOwnerCvVersion(registerCommand)).toEqual(registered);
+    expect(await ownerCv.registerOwnerCvVersion({ ...registerCommand, label: "Changed CV label" }))
+      .toMatchObject({ ok: false, error: { kind: "conflict" } });
+    expect(await ownerCv.registerOwnerCvVersion({ ...registerCommand, idempotencyKey: "phase6-composition-cv-register-stale" as never }))
+      .toMatchObject({ ok: false, error: { kind: "precondition_failed" } });
+    const acceptCvCommand = { actor, idempotencyKey: "phase6-composition-cv-accept" as never,
+      expectedVersion: registered.value.aggregateVersion, versionId: registered.value.versionId };
+    const cvAccepted = await ownerCv.acceptOwnerCvVersion(acceptCvCommand);
+    expect(cvAccepted, JSON.stringify(cvAccepted)).toMatchObject({ ok: true, value: { aggregateVersion: 3 } });
+    if (!cvAccepted.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CV_ACCEPT_FAILED");
+    expect(await ownerCv.acceptOwnerCvVersion(acceptCvCommand)).toEqual(cvAccepted);
+    expect(await ownerCv.acceptOwnerCvVersion({ ...acceptCvCommand, expectedVersion: 3 }))
+      .toMatchObject({ ok: false, error: { kind: "conflict" } });
+    expect(await ownerCv.acceptOwnerCvVersion({ ...acceptCvCommand, expectedVersion: 2, idempotencyKey: "phase6-composition-cv-accept-stale" as never }))
+      .toMatchObject({ ok: false, error: { kind: "precondition_failed" } });
+    const activateCvCommand = { actor, idempotencyKey: "phase6-composition-cv-activate" as never,
+      expectedVersion: cvAccepted.value.aggregateVersion, versionId: registered.value.versionId };
+    const activated = await ownerCv.activateOwnerCvVersion(activateCvCommand);
+    expect(activated, JSON.stringify(activated)).toMatchObject({ ok: true, value: { aggregateVersion: 4, outcome: "current-cv-activated" } });
+    expect(await ownerCv.activateOwnerCvVersion(activateCvCommand)).toEqual(activated);
+    expect(await ownerCv.activateOwnerCvVersion({ ...activateCvCommand, expectedVersion: 4 }))
+      .toMatchObject({ ok: false, error: { kind: "conflict" } });
+    expect(await ownerCv.activateOwnerCvVersion({ ...activateCvCommand, expectedVersion: 3, idempotencyKey: "phase6-composition-cv-activate-stale" as never }))
+      .toMatchObject({ ok: false, error: { kind: "precondition_failed" } });
+    const portfolio = await ownerCv.getOwnerCvPortfolio({ actor });
+    expect(portfolio).toMatchObject({ ok: true, value: { currentVersionId: registered.value.versionId,
+      versions: [expect.objectContaining({ isCurrent: true, state: "accepted" })], activationHistoryTruncated: false } });
+
+    const cvVersionSeedIds = Array.from({ length: 101 }, () => createStableId("CvVersion"));
+    const cvVersionSeed = await admin.query(`with generated as (
+        select id::uuid as version_id, ordinal from unnest($3::uuid[]) with ordinality as seeded(id, ordinal)
+      ), source as (select * from cv_portfolio.versions where version_id = $1::uuid)
+      insert into cv_portfolio.versions
+        (version_id, portfolio_id, owner_id, media_id, media_asset_version, media_decision_id, media_object_id,
+         media_sha256, media_object_version, version_number, locale, label, state, registered_at, is_current)
+      select generated.version_id, source.portfolio_id, source.owner_id, source.media_id, source.media_asset_version,
+        source.media_decision_id, source.media_object_id, source.media_sha256, source.media_object_version,
+        source.version_number + generated.ordinal, source.locale, 'CV retained history ' || generated.ordinal,
+        'registered', transaction_timestamp() - (generated.ordinal * interval '1 second'), false
+        from generated cross join source`, [registered.value.versionId, portfolioId, cvVersionSeedIds]);
+    expect(cvVersionSeed.rowCount).toBe(101);
+    const activationSeedIds = Array.from({ length: 101 }, () => createStableId("CvActivation"));
+    const activationSeed = await admin.query(`with generated as (
+        select id::uuid as activation_id, ordinal from unnest($4::uuid[]) with ordinality as seeded(id, ordinal)
+      )
+      insert into cv_portfolio.activation_history (activation_id, portfolio_id, owner_id, version_id, activated_at)
+      select generated.activation_id, $1::uuid, $2::uuid, $3::uuid,
+        transaction_timestamp() - (generated.ordinal * interval '1 second')
+        from generated`, [portfolioId, ownerId, registered.value.versionId, activationSeedIds]);
+    expect(activationSeed.rowCount).toBe(101);
+    const truncatedPortfolio = await ownerCv.getOwnerCvPortfolio({ actor });
+    expect(truncatedPortfolio.ok).toBe(true);
+    if (!truncatedPortfolio.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CV_HISTORY_READ_FAILED");
+    expect(truncatedPortfolio.value).toMatchObject({ versionsTruncated: true, activationHistoryTruncated: true });
+    expect(truncatedPortfolio.value.versions).toHaveLength(100);
+    expect(truncatedPortfolio.value.activationHistory).toHaveLength(100);
+    expect(truncatedPortfolio.value.versions[0]?.label).toBe("CV retained history 101");
+    expect(Date.parse(truncatedPortfolio.value.activationHistory[0]!.activatedAt))
+      .toBeGreaterThan(Date.parse(truncatedPortfolio.value.activationHistory[1]!.activatedAt));
+    const retainedCvHistory = await admin.query(`select
+      (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid) as versions,
+      (select count(*)::int from cv_portfolio.activation_history where portfolio_id = $1::uuid and owner_id = $2::uuid) as activations`, [portfolioId, ownerId]);
+    expect(retainedCvHistory.rows[0]).toEqual({ versions: 102, activations: 102 });
+    const delivered = await currentCv.downloadCurrentCv({ actor: visitor, locale: "en", disposition: "inline" });
+    expect(delivered, JSON.stringify(delivered)).toMatchObject({ ok: true, value: { kind: "stream" } });
+    if (!delivered.ok || delivered.value.kind !== "stream") throw new Error("PHASE6_OWNER_COMPOSITION_CV_DELIVERY_FAILED");
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of delivered.value.bytes) chunks.push(chunk);
+    expect(Buffer.concat(chunks).subarray(0, 5).toString("ascii")).toBe("%PDF-");
+
+    const artifactId = createStableId("SupportingArtifact");
+    const created = await content.createContent({ actor, idempotencyKey: "phase6-composition-content-create" as never,
+      correlationId: "phase6-composition-content-create", payload: {
+        contentType: "project", locale: "en", title: "Composed Media Project", summary: "Real Media evidence.",
+        body: "Published and restored through the production composition.", candidateSlug: "phase6-composition-project",
+        caseStudy: { problem: "Production Owner services must compose.", ownerRole: "Connected the workflows.",
+          contributions: ["Used accepted Media."], outcomes: ["The public state remained valid."], lessons: "Use owned boundaries." },
+        evidence: { claims: [{ claimId: createStableId("EvidenceClaim"), text: "The accepted CV asset supports the project.", artifactIds: [artifactId] }],
+          artifacts: [{ id: artifactId, title: "Accepted CV evidence", destinationUrl: "https://example.com/evidence", mediaAssetId: intent.value.mediaId as StableId<"MediaAsset"> }] },
+        externalLinks: [],
+      } });
+    expect(created.ok, JSON.stringify(created)).toBe(true);
+    if (!created.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CONTENT_CREATE_FAILED");
+    const preview = await content.previewRevision({ actor, contentId: created.value.contentId, revisionId: created.value.revisionId });
+    expect(preview.ok, JSON.stringify(preview)).toBe(true);
+    if (!preview.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CONTENT_PREVIEW_FAILED");
+    const reviewed = await content.reviewRevision({ actor, contentId: created.value.contentId, revisionId: created.value.revisionId,
+      expectedVersion: created.value.aggregateVersion, idempotencyKey: "phase6-composition-content-review" as never,
+      correlationId: "phase6-composition-content-review", locale: "en", snapshotHash: preview.value.snapshotHash,
+      evidenceVersion: preview.value.evidenceVersion, decision: "accepted", findings: [] });
+    expect(reviewed.ok, JSON.stringify(reviewed)).toBe(true);
+    if (!reviewed.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CONTENT_REVIEW_FAILED");
+    const published = await content.publishLanguageVersion({ actor, contentId: created.value.contentId, revisionId: created.value.revisionId,
+      expectedVersion: reviewed.value.aggregateVersion, idempotencyKey: "phase6-composition-content-publish" as never,
+      correlationId: "phase6-composition-content-publish", locale: "en" });
+    expect(published.ok, JSON.stringify(published)).toBe(true);
+    if (!published.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CONTENT_PUBLISH_FAILED");
+    const hidden = await content.hideContent({ actor, contentId: created.value.contentId, expectedVersion: published.value.aggregateVersion,
+      idempotencyKey: "phase6-composition-content-hide" as never, correlationId: "phase6-composition-content-hide" });
+    expect(hidden.ok, JSON.stringify(hidden)).toBe(true);
+    if (!hidden.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CONTENT_HIDE_FAILED");
+    const restored = await content.restoreContent({ actor, contentId: created.value.contentId, expectedVersion: hidden.value.aggregateVersion,
+      idempotencyKey: "phase6-composition-content-restore" as never, correlationId: "phase6-composition-content-restore" });
+    expect(restored.ok, JSON.stringify(restored)).toBe(true);
+    const rejectionIntent = await ownerMedia.createOwnerMediaUploadIntent({ actor, idempotencyKey: "phase6-composition-rejection-upload" as never,
+      kind: "document", originalFileName: "rejected-private.pdf", declaredMediaType: "application/pdf",
+      byteLength: bytes.byteLength, sha256: digest });
+    expect(rejectionIntent.ok, "Rejection upload intent should be created.").toBe(true);
+    if (!rejectionIntent.ok) throw new Error("PHASE6_OWNER_COMPOSITION_REJECTION_UPLOAD_FAILED");
+    const rejectCommand = { actor, idempotencyKey: "phase6-composition-reject" as never,
+      expectedVersion: 1, mediaId: rejectionIntent.value.mediaId, reason: "Duplicate test evidence." };
+    const rejected = await ownerMedia.rejectOwnerMediaAsset(rejectCommand);
+    expect(rejected, JSON.stringify(rejected)).toMatchObject({ ok: true, value: { aggregateVersion: 2, outcome: "media-rejected" } });
+    expect(await ownerMedia.rejectOwnerMediaAsset(rejectCommand)).toEqual(rejected);
+    expect(await ownerMedia.rejectOwnerMediaAsset({ ...rejectCommand, reason: "Changed reason." }))
+      .toMatchObject({ ok: false, error: { kind: "conflict" } });
+    expect(await ownerMedia.rejectOwnerMediaAsset({ ...rejectCommand, idempotencyKey: "phase6-composition-reject-stale" as never }))
+      .toMatchObject({ ok: false, error: { kind: "precondition_failed" } });
+    expect(mediaProcessingCounts.ownerCompositionScenarios).toBeDefined();
+    mediaProcessingCounts.ownerCompositionScenarios.push({ name: "T16-01 through T16-05 all nine operations, real byte delivery, and bounded histories",
+      executed: true, status: restored.ok && rejected.ok ? "passed" : "failed",
+      scannerVersion: String(trustedProcessing.rows[0]?.scanner_version),
+      processorVersion: String(trustedProcessing.rows[0]?.processor_version),
+      mediaHistory: { processingReturned: truncatedAggregate.value.processingHistory.length, processingRetained: 102,
+        processingTruncated: truncatedAggregate.value.processingHistoryTruncated === true,
+        decisionsReturned: truncatedAggregate.value.decisionHistory.length, decisionsRetained: 102,
+        decisionsTruncated: truncatedAggregate.value.decisionHistoryTruncated === true },
+      cvHistory: { versionsReturned: truncatedPortfolio.value.versions.length, versionsRetained: 102,
+        versionsTruncated: truncatedPortfolio.value.versionsTruncated === true,
+        activationsReturned: truncatedPortfolio.value.activationHistory.length, activationsRetained: 102,
+        activationsTruncated: truncatedPortfolio.value.activationHistoryTruncated === true } });
+    saveProcessingCounts();
+    expect(rejected.ok).toBe(true);
+  }, 180_000);
   function capabilityScenario(name: string, passed: boolean): void {
     if (!REQUIRE_CV_DELIVERY && !REQUIRE_PUBLIC_CAPABILITIES) return;
     mediaProcessingCounts.currentCvCapabilityScenarios.push({ name, executed: true, status: passed ? "passed" : "failed" });
@@ -3782,3 +4051,4 @@ describeReal(group === "baseline"
 
 defineIntegrationSuite("baseline");
 defineIntegrationSuite("rejection");
+defineIntegrationSuite("owner-composition");
