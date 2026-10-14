@@ -40,6 +40,15 @@ jobs:
         run: npm run phase7:focus:consent
       - name: Require private Feedback PostgreSQL acceptance with zero skips
         run: npm run phase7:focus:feedback
+      - name: Require Owner moderation PostgreSQL acceptance with zero skips
+        run: npm run phase7:focus:moderation
+      - name: Publish sanitized moderation evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase7-moderation
+          path: evidence/phase7-moderation-193.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Publish sanitized Feedback evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

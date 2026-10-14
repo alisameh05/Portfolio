@@ -11,6 +11,7 @@ export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export interface Feedback {
   aggregate_version: Int8;
+  approved_at: Timestamp | null;
   author_name: string;
   feedback_id: string;
   locale: string;
@@ -19,6 +20,17 @@ export interface Feedback {
   portfolio_id: string;
   project_id: string;
   submitted_at: Timestamp;
+}
+
+export interface ModerationDecisions {
+  decided_at: Timestamp;
+  decision: string;
+  decision_id: string;
+  feedback_id: string;
+  owner_id: string;
+  portfolio_id: string;
+  reason: string;
+  sequence: Int8;
 }
 
 export interface Ratings {
@@ -39,6 +51,7 @@ export interface Reactions {
 
 export interface DB {
   feedback: Feedback;
+  moderation_decisions: ModerationDecisions;
   ratings: Ratings;
   reactions: Reactions;
 }

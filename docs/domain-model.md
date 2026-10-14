@@ -220,6 +220,7 @@ Evidence state is internal editorial information. It must not be rendered as an 
   atomically. Neither operation depends on Measurement consent or locale.
 - New Feedback is private and pending. It cannot appear publicly until an approval is recorded.
 - An approval makes Feedback eligible for display only while its Project and requested locale are publicly visible.
+- Owner inspection and pending approval/rejection require the currently authorized scoped Owner, including before releasing an exact replay. Each decision retains a stable UUIDv7 identity, increasing sequence, private reason, verified Owner reference and server time. State, eligibility, version, safe fact and receipt/ledger commit together; stale versions fail, and terminal new-key repeats conflict. Retained Hidden/Archived Feedback can be moderated without publishing Content.
 - Rejection keeps Feedback private. Later suppression removes previously approved Feedback from display while retaining Moderation decision history.
 - Hiding or archiving a Project stops new public interactions and removes its interaction summaries and approved Feedback from public presentation. Stored history remains subject to Retention policy.
 - Testimonial suppression uses its Public lifecycle and retained publication history; it does not add a permission-verification requirement.

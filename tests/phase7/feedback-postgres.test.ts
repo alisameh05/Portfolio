@@ -187,17 +187,17 @@ describe.runIf(Boolean(url))("real PostgreSQL private Feedback acceptance", () =
     expect(alternate).not.toContain("PRIVATE_NAME_SENTINEL"); expect(alternate).not.toContain("PRIVATE_PARAGRAPH_SENTINEL");
     expect(await rows(projectId)).toMatchObject([{ author_name: "PRIVATE_NAME_SENTINEL", paragraph: "PRIVATE_PARAGRAPH_SENTINEL" }]);
   });
-  it("restricted submission role has insert-only pending Portfolio RLS; anonymous/worker deny; pooled scope resets", async () => {
+  it("restricted submission scope has pending-only INSERT and default-deny reads; anonymous/worker deny; pooled scope resets", async () => {
     expect((await admin.query("select relrowsecurity,relforcerowsecurity from pg_class where oid='interaction.feedback'::regclass")).rows).toEqual([{ relrowsecurity: true, relforcerowsecurity: true }]);
     for (const role of ["anon", "authenticated", "shipwithali_worker", "shipwithali_backup", "feedback_runtime"]) {
-      for (const privilege of ["SELECT", "UPDATE", "DELETE"]) expect((await admin.query("select has_table_privilege($1,'interaction.feedback',$2) as allowed", [role, privilege])).rows[0].allowed).toBe(false);
+      for (const privilege of (role === "feedback_runtime" ? ["DELETE"] : ["SELECT", "UPDATE", "DELETE"])) expect((await admin.query("select has_table_privilege($1,'interaction.feedback',$2) as allowed", [role, privilege])).rows[0].allowed).toBe(false);
       if (role !== "feedback_runtime") expect((await admin.query("select has_table_privilege($1,'interaction.feedback','INSERT') as allowed", [role])).rows[0].allowed).toBe(false);
     }
     const client = new Client({ connectionString: url }); await client.connect(); const projectId = await seed();
     try {
       expect((await client.query("select rolsuper,rolbypassrls from pg_roles where rolname=current_user")).rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
-      await expect(client.query("select * from interaction.feedback")).rejects.toMatchObject({ code: "42501" });
-      const insert = (portfolio = portfolioId, state = "pending", version = 1) => client.query("insert into interaction.feedback values ($1,$2,$3,'en','Ada','Helpful',$4,$5,$6)", [createStableId("Feedback"), portfolio, projectId, state, version, now]);
+      expect((await client.query("select * from interaction.feedback")).rows).toEqual([]);
+      const insert = (portfolio = portfolioId, state = "pending", version = 1) => client.query("insert into interaction.feedback (feedback_id,portfolio_id,project_id,locale,author_name,paragraph,moderation_state,aggregate_version,submitted_at) values ($1,$2,$3,'en','Ada','Helpful',$4,$5,$6)", [createStableId("Feedback"), portfolio, projectId, state, version, now]);
       await expect(insert()).rejects.toMatchObject({ code: "42501" }); await client.query("begin"); await client.query("select set_config('shipwithali.portfolio_id',$1,true)", [portfolioId]); await insert();
       for (const [portfolio, state, version] of [[createStableId("Portfolio"), "pending", 1], [portfolioId, "approved", 1], [portfolioId, "pending", 2]] as const) {
         await client.query("savepoint denied"); await expect(insert(portfolio, state, version)).rejects.toMatchObject({ code: "42501" }); await client.query("rollback to savepoint denied");

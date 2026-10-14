@@ -1,7 +1,7 @@
 {
-  "runId": "37b6ecd9-cea6-4b04-87a2-c9d84d7ecbaf",
-  "sourceRevision": "e32c5ac7c8613991e2bd955eb114e67bdb35cad8",
-  "sourceTreeSha256": "92f6034b3c1fae44abda8397b8d176d5934bf36da34bccc0d42e67dc55131e36",
+  "runId": "96596e69-1cf3-414b-a49e-fe5fbc2a70bf",
+  "sourceRevision": "4191ffb1858067e4176739cd1308c808b24d9088",
+  "sourceTreeSha256": "486e74270ee5fc96ac2050f701c42555c1253f91db902ed223a9876844f656bb",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015003000_persist_private_feedback.sql",
   "migrationQualification": {
@@ -119,12 +119,15 @@
       },
       {
         "version": "20261015003000"
+      },
+      {
+        "version": "20261015010000"
       }
     ],
-    "schemaSha256": "9d06b279c0e9bea94d2d6f292caf16ad919b3c6c2dbacbc7b5a2abcf257a3459",
+    "schemaSha256": "1cf793b9d8f7cce1c1e55104cc312a60d837ad40644fb1e2b8dd48a44f15cb98",
     "cli": "2.117.0"
   },
-  "migrationSha256": "991aeb268280b9e00c089d527598eeb20114f005e35057fb4521d2d9deaaa19c",
+  "migrationSha256": "76383b9305740d85f0557903924412a936a60df70264801583f141738447852b",
   "migrations": [
     {
       "name": "20260922170000_prepare_migration_capability.sql",
@@ -272,7 +275,11 @@
     },
     {
       "name": "20261015003000_persist_private_feedback.sql",
-      "sha256": "991aeb268280b9e00c089d527598eeb20114f005e35057fb4521d2d9deaaa19c"
+      "sha256": "76383b9305740d85f0557903924412a936a60df70264801583f141738447852b"
+    },
+    {
+      "name": "20261015010000_retain_feedback_moderation.sql",
+      "sha256": "5dcb17fa99531d21cdbd0ae60af6fd2b7178a6b161b8f66daa56ed70c5136938"
     }
   ],
   "tools": {
@@ -321,7 +328,7 @@
       "status": "passed"
     },
     {
-      "title": "restricted submission role has insert-only pending Portfolio RLS; anonymous/worker deny; pooled scope resets",
+      "title": "restricted submission scope has pending-only INSERT and default-deny reads; anonymous/worker deny; pooled scope resets",
       "status": "passed"
     },
     {
