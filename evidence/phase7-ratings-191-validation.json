@@ -1,0 +1,36 @@
+{
+  "runId": "78ccbaa4-4f72-4d9e-9641-b1f42867495f",
+  "sourceRevision": "fa6405b814bba3716577f9c2656fda42f8f81a02",
+  "sourceTreeSha256": "0abd2173784574de9837562735dd38e62883841ad33012b2443ebaae69e39b46",
+  "requiredRunId": "0e1b7b62-e2cb-40c4-90a4-eadfdfa8ee0e",
+  "fullSuite": {
+    "success": true,
+    "passed": 1171,
+    "failed": 0,
+    "skipped": 194,
+    "failedSuites": 0,
+    "reportSha256": "4aa68ae0570dc3931147820bc1744539c2c99d6a76085e4fe5dbdb18511370b4",
+    "command": "npm test -- --testTimeout=20000 --reporter=json --outputFile=artifacts/ratings-full-vitest.json"
+  },
+  "passedChecks": [
+    "setup:validation",
+    "validation:ready",
+    "typecheck",
+    "lint",
+    "contract:verify",
+    "test:arch",
+    "runtime:architecture",
+    "runtime:boundary",
+    "route:inventory",
+    "phase5:context",
+    "build",
+    "git diff --check"
+  ],
+  "reviews": {
+    "base": "ea84d875598e0735be385e7b366add2259f387f3",
+    "head": "fa6405b814bba3716577f9c2656fda42f8f81a02",
+    "standardsActionableFindings": 0,
+    "specActionableFindings": 0
+  },
+  "hostedCI": "Not certified by local acceptance; inspect the published PR checks."
+}
