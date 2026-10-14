@@ -111,7 +111,8 @@ export function createConsentApplicationService(deps: ConsentServiceDependencies
           const granted = command.consent === "granted";
           const record: CurrentConsent = {
             consentId, portfolioId, state: command.consent, noticeVersion: command.noticeVersion,
-            subject: granted ? (existing?.state === "granted" ? existing.subject : generate("MeasurementVisitor")) : existing?.subject ?? null,
+            subject: granted ? (existing?.state === "granted" && Date.parse(existing.evidenceExpiresAt) > Date.parse(now)
+              ? existing.subject : generate("MeasurementVisitor")) : existing?.subject ?? null,
             revision: (existing?.revision ?? 0) + 1, recordedAt: now,
             evidenceExpiresAt: granted ? new Date(Date.parse(now) + deps.ttlSeconds * 1000).toISOString() : existing?.evidenceExpiresAt ?? now,
           };

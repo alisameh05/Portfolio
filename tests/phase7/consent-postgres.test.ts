@@ -176,4 +176,32 @@ describe.runIf(Boolean(url))("real PostgreSQL consent boundary", () => {
       expect((await handlePostPublicEvent(request(), { scope, service: createPublicEventTestFake({ type: "success" }) })).status).toBe(403);
     } finally { resetRuntimeForTests(); await runtime.resource.close(); }
   });
+  it("renewal preserves unexpired subjects but rotates them exactly at or after expiry", async () => {
+    const initial = now;
+    try {
+      for (const offset of [-1, 0, 1]) {
+        now = initial;
+        const issued = await grant(); if (!issued.ok) throw new Error("grant");
+        const old = await service.verifyEvidence(query(issued.value.evidence)); if (!old.ok) throw new Error("verify");
+        now = new Date(Date.parse(issued.value.evidenceExpiresAt) + offset).toISOString();
+        const renewed = await service.recordConsent({ scope, correlationId: "renew", consentId: issued.value.consentId,
+          consent: "granted", noticeVersion: "2026-10", expectedRevision: 1 });
+        if (!renewed.ok) throw new Error("renew");
+        const current = await service.verifyEvidence(query(renewed.value.evidence)); if (!current.ok) throw new Error("verify");
+        if (offset < 0) expect(current.value.subject).toBe(old.value.subject);
+        else expect(current.value.subject).not.toBe(old.value.subject);
+        expect((await service.verifyEvidence(query(issued.value.evidence))).ok).toBe(false);
+      }
+    } finally { now = initial; }
+  });
+  it("persisted current consent accepts supported previous-key evidence without changing subject", async () => {
+    const issued = await grant(); if (!issued.ok) throw new Error("grant");
+    const original = await service.verifyEvidence(query(issued.value.evidence)); if (!original.ok) throw new Error("verify");
+    const rotated = { ...config, measurement: { active: { version: 2, secret: Buffer.alloc(32, 33).toString("base64url") }, previous: [config.measurement.active] } };
+    const make = (crypto: AesGcmConsentEvidenceAdapter) => createConsentApplicationService({ transactions: database.transactions,
+      repository, crypto, clock: { now: () => now }, ids: createSystemIdGenerator(), ttlSeconds: 2_592_000, supportedNoticeVersions: ["2026-10"] });
+    expect(await make(new AesGcmConsentEvidenceAdapter(rotated, () => now)).verifyEvidence(query(issued.value.evidence))).toEqual(original);
+    expect((await make(new AesGcmConsentEvidenceAdapter({ ...rotated, measurement: { ...rotated.measurement, previous: [] } }, () => now))
+      .verifyEvidence(query(issued.value.evidence))).ok).toBe(false);
+  });
 });

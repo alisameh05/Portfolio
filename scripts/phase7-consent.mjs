@@ -56,12 +56,13 @@ try {
   const testedSource = workingTreeSourceSha256();
   if (!process.argv.includes("--refresh-types") && testedSource !== source) throw new Error("CONSENT_SOURCE_CHANGED_DURING_RUN");
   console.log("Temporary restricted PostgreSQL ready; running real consent/crypto acceptance.");
+  stage = "acceptance";
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "tests/phase7/consent-crypto.test.ts", "tests/phase7/consent-postgres.test.ts",
     "--reporter=json", "--outputFile=" + reportPath], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
   const assertions = tests.testResults.flatMap(s => s.assertionResults ?? []);
   if (!tests.success || tests.numFailedTestSuites || tests.numFailedTests || tests.numPendingTests || tests.numTodoTests ||
-      tests.numPassedTests !== 14 || assertions.length !== 14 || tests.testResults.length !== 2 ||
+      tests.numPassedTests !== 16 || assertions.length !== 16 || tests.testResults.length !== 2 ||
       tests.testResults.some(s => s.status !== "passed") || assertions.some(a => a.status !== "passed")) throw new Error("CONSENT_ACCEPTANCE_INCOMPLETE");
   if (workingTreeSourceSha256() !== testedSource) throw new Error("CONSENT_SOURCE_CHANGED_DURING_RUN");
   result = { runId, sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(), sourceTreeSha256: testedSource, version,
