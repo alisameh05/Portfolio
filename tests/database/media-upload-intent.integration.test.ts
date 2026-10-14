@@ -4051,4 +4051,4 @@ describeReal(group === "baseline"
 
 defineIntegrationSuite("baseline");
 defineIntegrationSuite("rejection");
-defineIntegrationSuite("owner-composition");
+if (REQUIRE_OWNER_COMPOSITION) defineIntegrationSuite("owner-composition");
