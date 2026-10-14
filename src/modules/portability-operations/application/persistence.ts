@@ -17,7 +17,7 @@ import type {
   TransactionRunner,
 } from "../../../runtime/ports.js";
 import type { IdempotencyKey } from "@shared/domain";
-import { InputValidationError } from "@shared/domain";
+import { InputValidationError, parseStableId } from "@shared/domain";
 
 export type SafeResultEnvelope = Readonly<Record<string, JsonValue>>;
 declare const SAFE_ERROR_CODE: unique symbol;
@@ -109,7 +109,7 @@ export interface OperationsPersistencePorts {
   readonly jobs: LeasedJobStorePort;
 }
 
-const SENSITIVE_KEYS = /(?:password|secret|token|authorization|cookie|feedback|email|ipaddress)/i;
+const SENSITIVE_KEYS = /(?:password|secret|token|authorization|cookie|feedback|email|ipaddress|authorname|paragraph|comment|reason)/i;
 
 /** Bounded non-sensitive machine code suitable for durable operational state. */
 export function parseSafeErrorCode(value: string): SafeErrorCode {
@@ -119,17 +119,20 @@ export function parseSafeErrorCode(value: string): SafeErrorCode {
   return value as SafeErrorCode;
 }
 
-function assertSafe(value: JsonValue, path = "payload"): void {
+function assertSafe(value: JsonValue, path = "payload", mediaRejectionV1 = false): void {
   if (Array.isArray(value)) {
-    value.forEach((entry, index) => assertSafe(entry, `${path}[${index}]`));
+    value.forEach((entry, index) => assertSafe(entry, `${path}[${index}]`, mediaRejectionV1));
     return;
   }
   if (value !== null && typeof value === "object") {
     for (const [key, entry] of Object.entries(value)) {
-      if (SENSITIVE_KEYS.test(key)) {
+      const safeFeedbackId = key === "feedbackId" && typeof entry === "string" && parseStableId("Feedback", entry).ok;
+      // Existing Media facts carry this enumerated code, never the Owner's private reason.
+      const safeMachineReason = mediaRejectionV1 && path === "payload" && key === "reason" && entry === "OWNER_REJECTED";
+      if (SENSITIVE_KEYS.test(key) && !safeFeedbackId && !safeMachineReason) {
         throw new InputValidationError(`Versioned payload contains a sensitive field at ${path}.`);
       }
-      assertSafe(entry, `${path}.${key}`);
+      assertSafe(entry, `${path}.${key}`, mediaRejectionV1);
     }
   }
 }
@@ -142,7 +145,7 @@ export function validateVersionedPayload(input: VersionedPayload): VersionedPayl
   if (!Number.isSafeInteger(input.version) || input.version < 1) {
     throw new InputValidationError("Versioned payload version must be a positive integer.");
   }
-  assertSafe(input.value);
+  assertSafe(input.value, "payload", input.type === "media.asset_rejected.v1" && input.version === 1);
   return Object.freeze({
     type: input.type,
     version: input.version,

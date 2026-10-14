@@ -5,7 +5,21 @@
 
 import type { ColumnType } from "kysely";
 
+export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+
+export interface Feedback {
+  aggregate_version: Int8;
+  author_name: string;
+  feedback_id: string;
+  locale: string;
+  moderation_state: string;
+  paragraph: string;
+  portfolio_id: string;
+  project_id: string;
+  submitted_at: Timestamp;
+}
 
 export interface Ratings {
   portfolio_id: string;
@@ -24,6 +38,7 @@ export interface Reactions {
 }
 
 export interface DB {
+  feedback: Feedback;
   ratings: Ratings;
   reactions: Reactions;
 }

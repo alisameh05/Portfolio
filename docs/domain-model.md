@@ -342,6 +342,22 @@ not proof of one vote per person or cross-device deduplication.
 - Owned vote/Feedback/raw-event records are separate from ordinary safe receipts, approved public Feedback pages, and Owner reports. Events carry stable resource facts, never functional subjects, names, paragraphs, or reasons. Owner private views remain distinct from public views. Only approved submitted-locale Feedback can appear publicly; no translation fallback applies.
 - Application request context carries server correlation and explicit Portfolio scope. The legacy shell can represent unconfigured scope and must fail closed. Effectful implementations require configured scope, current authorization, and current consent where applicable. The event edge verifies signed consent against its persisted current revision; intake rechecks it under the same transaction lock before committing (#196).
 
+### Private Feedback submission (#192)
+
+Feedback submission (#192) uses no persistent Visitor identity. Anonymous replay
+is scoped to Portfolio, Project, operation and caller key with a canonical hash
+of normalized plain name/paragraph and submitted locale. Content locks its root
+before the ledger/Feedback write; the row, minimal pending receipt and text-free
+FeedbackSubmitted fact commit together. Current Published lifecycle and the
+exact submitted published language are rechecked before replay. The name and
+paragraph live only in the private row, which starts at aggregate version 1 and
+server submittedAt. Runtime submission privileges are INSERT-only under FORCE
+RLS, never private read/author lookup. NFC/trim normalization rejects blank,
+oversized and disallowed control text without truncation or translation.
+The HTTP edge bounds actual body bytes and checks a configured shared Portfolio
+abuse budget without issuing functional/Measurement tokens or persisting client
+identifiers. Owner inspection/decisions and public presentation remain #193/#194.
+
 ### Consent evidence and revocation (#189)
 
 - Trusted in-process `recordConsent` accepts an explicit granted/denied/unknown choice and optimistic revision, never a client subject. Initial revision is zero. Only a granted choice generates an independent MeasurementVisitor and encrypted authenticated evidence. New grants after denial or at/after the prior evidence expiry generate a new subject; renewal can preserve a still-unexpired subject. Ordinary reads, event JSON, cookie presence and Feedback cannot grant consent.
