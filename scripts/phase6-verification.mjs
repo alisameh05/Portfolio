@@ -6,9 +6,11 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
+import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
 import {
   PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, getPhase6SourceIdentity, isolatedPhase6Config,
-  makePhase6Report, phase6CvScenarioProof, phase6CvDeferredMigrations, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
+  evaluatePhase6MediaCvIntegration, PHASE6_MEDIA_CV_CRITERION_IDS, makePhase6Report, phase6CvScenarioProof,
+  phase6CvDeferredMigrations, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
 } from "./phase6-verification-support.mjs";
 
 const ROOT = phase6Root();
@@ -27,6 +29,7 @@ const CV_ACTIVATION_EVIDENCE = join(ROOT, "evidence/phase6-cv-activation-156.jso
 const CV_DELIVERY_EVIDENCE = join(ROOT, "evidence/phase6-cv-delivery-159.json");
 const PUBLIC_CAPABILITY_EVIDENCE = join(ROOT, "evidence/phase6-public-capabilities-160.json");
 const OWNER_COMPOSITION_EVIDENCE = join(ROOT, "evidence/phase6-owner-composition-161.json");
+const MEDIA_CV_INTEGRATION_EVIDENCE = join(ROOT, "evidence/phase6-media-cv-integration-163.json");
 const UPLOAD_INTENT_ONLY = process.argv.includes("--upload-intents-only");
 const MEDIA_PROCESSING_ONLY = process.argv.includes("--media-processing-only");
 const IMAGE_PROCESSING_ONLY = process.argv.includes("--image-processing-only");
@@ -42,8 +45,73 @@ const CV_DELIVERY_ONLY = process.argv.includes("--cv-delivery-only");
 const PUBLICATION_MEDIA_ONLY = process.argv.includes("--publication-media-only");
 const MEDIA_INTEGRATION_ONLY = process.argv.includes("--media-integration-only");
 const OWNER_COMPOSITION_ONLY = process.argv.includes("--owner-composition-only");
-const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || MEDIA_DELIVERY_ONLY || MEDIA_REJECTION_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || PUBLICATION_MEDIA_ONLY || MEDIA_INTEGRATION_ONLY || OWNER_COMPOSITION_ONLY;
+const MEDIA_CV_INTEGRATION_ONLY = process.argv.includes("--media-cv-integration-only");
+const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || MEDIA_DELIVERY_ONLY || MEDIA_REJECTION_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || PUBLICATION_MEDIA_ONLY || MEDIA_INTEGRATION_ONLY || OWNER_COMPOSITION_ONLY || MEDIA_CV_INTEGRATION_ONLY;
 const RUN_TIMEOUT = 180_000;
+
+const PHASE6_MEDIA_CV_TEST_NAMES = Object.freeze([
+  "processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+  "issues bounded delivery only for current published-locale and profile Media uses",
+  "processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg",
+  "rejects accepted Media safely and serializes with current usage changes",
+  "composes all nine Owner Media and CV operations through real services",
+  "reports only Media referenced by currently published Project and Achievement locales",
+  "preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable",
+  "rejects invalid evidence, review, and Media facts without creating public state",
+  "publishes English and Arabic independently, preserves first publication time, history, and the last valid projection",
+  "publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline",
+  "hides, archives, and restores all three content kinds through atomic owner lifecycle commands",
+  "revalidates each exact locale publication before restore and changes none when one Media fact fails",
+  "resolves a verified Owner actor for mutations with valid session, origin, and CSRF proof",
+  "rejects mutations without a session cookie as 401 before dispatch",
+  "requires owner-scoped access for every Owner entrypoint operation",
+  "resolves a valid Owner session to a stable provider-neutral actor",
+  "accepts emitted session claims, rejects tampering, removal and revocation",
+  "allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes",
+  "rolls back route reservations, immutable history, projections, receipt, and event when outbox append fails",
+]);
+
+function testNamePattern(names) {
+  return names.join("|");
+}
+
+function scenarioCases(scenarios, requiredIds) {
+  const source = Array.isArray(scenarios) ? scenarios : [];
+  return requiredIds.flatMap((id) => {
+    const matches = source.filter((item) => item?.id === id || (typeof item?.name === "string" && new RegExp(`\\b${id}\\b`, "u").test(item.name)));
+    if (!matches.length) return [{ caseId: id, name: id, executed: false, status: "skipped" }];
+    return matches.map((item, index) => ({ caseId: `${id}-${index + 1}`, name: item.name,
+      executed: item.executed === true, status: item.status === "passed" ? "passed" : item.status === "failed" ? "failed" : "skipped" }));
+  });
+}
+
+function assertionCases(assertions, requiredTitles) {
+  const source = Array.isArray(assertions) ? assertions : [];
+  return requiredTitles.flatMap((title) => {
+    const matches = source.filter((item) => item?.title === title);
+    if (!matches.length) return [{ caseId: `test:${title}`, name: title, executed: false, status: "skipped" }];
+    return matches.map((item, index) => ({ caseId: `test:${title}:${index + 1}`, name: String(item.fullName ?? title),
+      executed: item.status === "passed" || item.status === "failed", status: item.status === "passed" ? "passed" : item.status === "failed" ? "failed" : "skipped" }));
+  });
+}
+
+function formatCases(formats) {
+  return PHASE6_FORMATS.map(({ id }) => {
+    const format = Array.isArray(formats) ? formats.find((item) => item.id === id) : undefined;
+    return { caseId: `format:${id}`, name: `${id} real processor, scanner and private Storage round trip`,
+      executed: format?.executed === true, status: format?.status === "passed" ? "passed" : format?.status === "failed" ? "failed" : "skipped" };
+  });
+}
+
+function namedCases(items, requiredNames) {
+  const source = Array.isArray(items) ? items : [];
+  return requiredNames.flatMap((requiredName) => {
+    const matches = source.filter((item) => typeof item?.name === "string" && item.name.includes(requiredName));
+    if (!matches.length) return [{ caseId: requiredName, name: requiredName, executed: false, status: "skipped" }];
+    return matches.map((item, index) => ({ caseId: `${requiredName}:${index + 1}`, name: item.name,
+      executed: item.executed === true, status: item.status === "passed" ? "passed" : item.status === "failed" ? "failed" : "skipped" }));
+  });
+}
 
 function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEOUT, input, label = command } = {}) {
   const result = spawnSync(command, args, { cwd, env, encoding: "utf8", input, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], timeout, maxBuffer: 16 * 1024 * 1024 });
@@ -179,7 +247,7 @@ async function main() {
   }).stdout;
   try {
     let config = isolatedPhase6Config(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId, phase6Ports);
-    if (MEDIA_REJECTION_ONLY && !Object.values(MEDIA_REJECTION_BUCKETS).every((bucket) => config.includes(`[storage.buckets.${bucket}]`))) {
+    if ((MEDIA_REJECTION_ONLY || MEDIA_CV_INTEGRATION_ONLY) && !Object.values(MEDIA_REJECTION_BUCKETS).every((bucket) => config.includes(`[storage.buckets.${bucket}]`))) {
       throw new Error("PHASE6_MEDIA_REJECTION_STORAGE_BUCKETS_INVALID");
     }
     if (UPLOAD_INTENT_ONLY || MEDIA_PROCESSING_ONLY || IMAGE_PROCESSING_ONLY || VIDEO_PROCESSING_ONLY || RUN_MEDIA_ACCEPTANCE) {
@@ -362,7 +430,7 @@ async function main() {
       PHASE6_UPLOAD_INTENT_ANON_KEY: status.ANON_KEY,
       PHASE6_UPLOAD_INTENT_REPLAY_KEY: randomBytes(32).toString("base64"),
       PHASE6_REQUIRE_UPLOAD_INTENT: "1",
-      PHASE6_OWNER_COMPOSITION_ONLY: OWNER_COMPOSITION_ONLY ? "1" : "0",
+      PHASE6_OWNER_COMPOSITION_ONLY: OWNER_COMPOSITION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_PDF_PROCESSING_FIXTURE: join(fixturesDir, "fixture.pdf"),
       PHASE6_IMAGE_FIXTURE_PNG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.png"),
       PHASE6_IMAGE_FIXTURE_JPEG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.jpeg"),
@@ -370,11 +438,11 @@ async function main() {
       PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !OWNER_COMPOSITION_ONLY) ? "1" : "0",
       PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !CV_DELIVERY_ONLY && !OWNER_COMPOSITION_ONLY) ? "1" : "0",
       PHASE6_MEDIA_ACCEPTANCE_ONLY: RUN_MEDIA_ACCEPTANCE ? "1" : "0",
-      PHASE6_MEDIA_REJECTION_ONLY: MEDIA_REJECTION_ONLY ? "1" : "0",
-      PHASE6_REQUIRE_FULL_MEDIA: CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || MEDIA_INTEGRATION_ONLY ? "1" : "0",
-      PHASE6_CV_ACTIVATION_ONLY: CV_ACTIVATION_ONLY ? "1" : "0",
-      PHASE6_CV_DELIVERY_ONLY: CV_DELIVERY_ONLY ? "1" : "0",
-      PHASE6_PUBLIC_CAPABILITIES_ONLY: CV_DELIVERY_ONLY ? "1" : "0",
+      PHASE6_MEDIA_REJECTION_ONLY: MEDIA_REJECTION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
+      PHASE6_REQUIRE_FULL_MEDIA: CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || MEDIA_INTEGRATION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
+      PHASE6_CV_ACTIVATION_ONLY: CV_ACTIVATION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
+      PHASE6_CV_DELIVERY_ONLY: CV_DELIVERY_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
+      PHASE6_PUBLIC_CAPABILITIES_ONLY: CV_DELIVERY_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_VIDEO_PROCESSING_MP4_FIXTURE: join(fixturesDir, "fixture.mp4"),
       PHASE6_VIDEO_PROCESSING_WEBM_FIXTURE: join(fixturesDir, "fixture.webm"),
       PHASE6_VIDEO_PROCESSING_UNSUPPORTED_FIXTURE: join(fixturesDir, "fixture-unsupported.mp4"),
@@ -385,16 +453,27 @@ async function main() {
       PHASE6_PDF_PROCESSOR_VERSION: toolVersions.pdfProcessor,
       PHASE6_MEDIA_PROCESSING_COUNTS_FILE: processingCountsPath,
     };
-    if (PUBLICATION_MEDIA_ONLY) {
+    if (PUBLICATION_MEDIA_ONLY || MEDIA_CV_INTEGRATION_ONLY) {
       testEnv.PHASE5_CONTENT_AUTHORING_DATABASE_URL = status.DB_URL;
       testEnv.PHASE5_REQUIRE_CONTENT_AUTHORING = "1";
     }
-    const testArgs = ["run", "tests/database/media-upload-intent.integration.test.ts", "--reporter=json", `--outputFile=${testJsonPath}`];
+    if (MEDIA_CV_INTEGRATION_ONLY) {
+      testEnv.PHASE4_REQUIRE_LOCAL_AUTH = "1";
+      testEnv.PHASE4_LOCAL_AUTH_URL = String(status.API_URL);
+      testEnv.PHASE4_LOCAL_AUTH_ANON_KEY = String(status.ANON_KEY);
+      testEnv.PHASE4_LOCAL_AUTH_SERVICE_ROLE_KEY = String(status.SERVICE_ROLE_KEY);
+      testEnv.PHASE4_LOCAL_AUTH_EXPECTED_PORT = String(phase6Ports.api);
+    }
+    const testArgs = ["run", "tests/database/media-upload-intent.integration.test.ts", "--reporter=json", "--reporter=verbose", `--outputFile=${testJsonPath}`];
     // CV delivery and public capability assertions share a source-bound
     // scenario-counts file. Keep the focused suite on one worker so scenario
     // rows and completion counts cannot race across Vitest workers.
-    if (CV_DELIVERY_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism");
-    if (OWNER_COMPOSITION_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism", "-t", "composes all nine Owner Media and CV operations through real services");
+    if (CV_DELIVERY_ONLY || MEDIA_CV_INTEGRATION_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism");
+    if (MEDIA_CV_INTEGRATION_ONLY) {
+      testArgs.push("tests/database/content-authoring.integration.test.ts", "tests/phase4/owner-request-security.test.ts", "tests/phase4/owner-session-auth.test.ts",
+        "tests/phase4/owner-operation-policy.test.ts", "tests/phase4/local-auth-token.integration.test.ts",
+        "-t", testNamePattern(PHASE6_MEDIA_CV_TEST_NAMES));
+    } else if (OWNER_COMPOSITION_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism", "-t", "composes all nine Owner Media and CV operations through real services");
     else if (VIDEO_PROCESSING_ONLY) testArgs.push("-t", "processes MP4 and WebM candidates");
     else if (IMAGE_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images");
     else if (MEDIA_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates");
@@ -408,7 +487,7 @@ async function main() {
     }
     // The complete gate includes both isolated scopes: the baseline's bounded
     // PDF/image and video tests plus the bounded rejection/race test.
-    const testTimeout = MEDIA_INTEGRATION_ONLY ? 1_800_000 : 900_000;
+    const testTimeout = MEDIA_INTEGRATION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? 1_800_000 : 900_000;
     const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: testTimeout, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
     const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
@@ -430,9 +509,50 @@ async function main() {
     }
     if (MEDIA_INTEGRATION_ONLY) {
       integrationChecks = evaluatePhase6IntegrationTests(testReport, testResult.status);
-      if (integrationChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_INTEGRATION_REQUIRES_SEVEN_PASSED_ZERO_SKIPPED");
+      if (integrationChecks.verdict !== "pass") {
+        const diagnosticSecrets = Object.entries(testEnv)
+          .filter(([name]) => /(?:TOKEN|KEY|SECRET|PASSWORD)/iu.test(name))
+          .map(([, value]) => value)
+          .filter((value) => typeof value === "string");
+        const safeDiagnosticValue = (value) => sanitizeEvidenceOutput(
+          typeof value === "string" ? value : JSON.stringify(value),
+          { workspace: ROOT, temporary: tmpdir(), secrets: diagnosticSecrets },
+        ).slice(0, 1600);
+        console.error("Media integration reporter summary:", JSON.stringify({
+          exitStatus: testResult.status,
+          spawnError: testResult.error?.code ?? testResult.error?.name ?? null,
+          assertionTitles: (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? [])
+            .map((item) => typeof item.title === "string" ? item.title : "<missing-title>"),
+          reportedCounts: {
+            total: testReport.numTotalTests ?? null,
+            passed: testReport.numPassedTests ?? null,
+            failed: testReport.numFailedTests ?? null,
+            pending: testReport.numPendingTests ?? null,
+            success: testReport.success ?? null,
+            totalSuites: testReport.numTotalTestSuites ?? null,
+            failedSuites: testReport.numFailedTestSuites ?? null,
+            pendingSuites: testReport.numPendingTestSuites ?? null,
+          },
+          suites: (testReport.testResults ?? []).map((suite) => ({
+            name: typeof suite.name === "string" ? suite.name.split(/[\\/]/u).at(-1) : "<missing-name>",
+            status: suite.status ?? "<missing-status>",
+            assertionCount: Array.isArray(suite.assertionResults) ? suite.assertionResults.length : 0,
+            errorFields: Object.fromEntries(Object.entries(suite)
+              .filter(([key]) => /(?:error|failure|message|hook)/iu.test(key))
+              .map(([key, value]) => [key, safeDiagnosticValue(value)])),
+          })),
+          reporterErrorFields: Object.fromEntries(Object.entries(testReport)
+            .filter(([key]) => /(?:error|failure|message|hook)/iu.test(key))
+            .map(([key, value]) => [key, safeDiagnosticValue(value)])),
+          sanitizedStdout: sanitizeEvidenceOutput(String(testResult.stdout ?? ""),
+            { workspace: ROOT, temporary: tmpdir(), secrets: diagnosticSecrets }).slice(-4000),
+          sanitizedStderr: sanitizeEvidenceOutput(String(testResult.stderr ?? ""),
+            { workspace: ROOT, temporary: tmpdir(), secrets: diagnosticSecrets }).slice(-4000),
+        }));
+        throw new Error("PHASE6_MEDIA_INTEGRATION_REQUIRES_SEVEN_PASSED_ZERO_SKIPPED");
+      }
     }
-    if ((CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || MEDIA_INTEGRATION_ONLY) && !phase6CvScenarioProof(processingCounts)) {
+    if ((CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || MEDIA_INTEGRATION_ONLY || MEDIA_CV_INTEGRATION_ONLY) && !phase6CvScenarioProof(processingCounts)) {
       const integration = evaluatePhase6IntegrationTests(testReport, testResult.status);
       throw new Error(`PHASE6_CV_SCENARIO_EXECUTION_PROOF_MISSING:${JSON.stringify({
         assertions: { total: integration.total, passed: integration.passed, failed: integration.failed, skipped: integration.skipped },
@@ -659,7 +779,7 @@ async function main() {
   const finalSource = getPhase6SourceIdentity();
   if (finalSource.sourceRevision !== source.sourceRevision || finalSource.sourceTreeSha256 !== source.sourceTreeSha256) failures.push("PHASE6_SOURCE_CHANGED_DURING_RUN");
   let report;
-  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !MEDIA_DELIVERY_ONLY && !MEDIA_REJECTION_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !CV_DELIVERY_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY) {
+  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !MEDIA_DELIVERY_ONLY && !MEDIA_REJECTION_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !CV_DELIVERY_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY && !MEDIA_CV_INTEGRATION_ONLY) {
     report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
     const evaluated = evaluatePhase6Setup(report, source);
     if (evaluated.failures.length) {
@@ -669,7 +789,7 @@ async function main() {
     mkdirSync(join(ROOT, "evidence"), { recursive: true });
     writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   }
-  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !MEDIA_DELIVERY_ONLY && !MEDIA_REJECTION_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !CV_DELIVERY_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY) {
+  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !MEDIA_DELIVERY_ONLY && !MEDIA_REJECTION_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !CV_DELIVERY_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY && !MEDIA_CV_INTEGRATION_ONLY) {
     const uploadIntentEvidence = {
       schemaVersion: 1,
       ticket: 148,
@@ -792,6 +912,12 @@ async function main() {
   if (RUN_MEDIA_ACCEPTANCE) {
     const unitJsonPath = join(tmpdir(), `phase6-media-acceptance-units-${randomUUID()}.json`);
     const unitSuites = ["tests/modules/media-acceptance.test.ts", "tests/modules/media-cv-contracts.test.ts"];
+    if (MEDIA_CV_INTEGRATION_ONLY) unitSuites.push("tests/modules/media-delivery.test.ts", "tests/runtime/supabase-media-delivery-storage.test.ts",
+      "tests/modules/media-rejection.test.ts", "tests/modules/cv-portfolio.test.ts", "tests/runtime/current-cv.test.ts",
+      "tests/modules/current-cv-delivery.test.ts", "tests/runtime/supabase-current-cv-delivery.test.ts",
+      "tests/modules/media-processing.test.ts", "tests/modules/media-upload-intent.test.ts", "tests/phase4/portfolio-settings-service.test.ts",
+      "tests/database/postgres-runtime.test.ts",
+      "tests/phase4/owner-session-auth.test.ts", "tests/phase4/owner-request-security.test.ts", "tests/phase4/owner-operation-policy.test.ts");
     if (MEDIA_DELIVERY_ONLY) unitSuites.push("tests/modules/media-delivery.test.ts", "tests/runtime/supabase-media-delivery-storage.test.ts");
     if (MEDIA_REJECTION_ONLY) unitSuites.push("tests/modules/media-rejection.test.ts");
     if (CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY) unitSuites.push("tests/modules/cv-portfolio.test.ts");
@@ -807,6 +933,8 @@ async function main() {
         passed: assertions.filter((item) => item.status === "passed").length,
         failed: assertions.filter((item) => item.status === "failed").length,
         skipped: assertions.filter((item) => item.status === "pending" || item.status === "disabled").length,
+        tests: assertions.map((item) => ({ name: String(item.fullName ?? item.title ?? "unnamed-unit-test"),
+          executed: item.status === "passed" || item.status === "failed", status: item.status === "passed" ? "passed" : item.status === "failed" ? "failed" : "skipped" })),
         verdict: unitResult.status === 0 && assertions.length > 0 && assertions.every((item) => item.status === "passed") ? "pass" : "fail" };
     } finally { if (existsSync(unitJsonPath)) rmSync(unitJsonPath, { force: true }); }
     if (acceptanceUnitChecks?.verdict !== "pass") failures.push("PHASE6_MEDIA_ACCEPTANCE_UNIT_ASSERTIONS_INVALID");
@@ -825,6 +953,133 @@ async function main() {
     writeFileSync(join(ROOT, "evidence/phase6-media-integration.json"), `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
     console.log(JSON.stringify({ verdict: evidence.verdict, checks: integrationChecks, cleanup, failures,
       evidence: "evidence/phase6-media-integration.json" }, null, 2));
+    if (evidence.verdict !== "pass") process.exitCode = 1;
+  } else if (MEDIA_CV_INTEGRATION_ONLY) {
+    const activationCases = scenarioCases(processingCounts?.cvActivationScenarios,
+      ["T11-01", "T11-03", "T11-04", "T11-05", "T11-06", "T11-07", "T11-08"]);
+    const cvRegistrationCases = scenarioCases(processingCounts?.cvScenarios,
+      Array.from({ length: 9 }, (_, index) => `T09-0${index + 1}`));
+    const cvAcceptanceCases = scenarioCases(processingCounts?.cvAcceptanceScenarios,
+      Array.from({ length: 8 }, (_, index) => `T10-0${index + 1}`));
+    const capabilityCases = scenarioCases(processingCounts?.currentCvCapabilityScenarios,
+      ["T15-01", "T15-02", "T15-03", "T15-04", "T15-08"]);
+    const deliveryCases = scenarioCases(processingCounts?.currentCvDeliveryScenarios,
+      ["T14-02", "T14-03", "T14-05", "T14-07", "T14-08"]);
+    const rejectionCases = scenarioCases(processingCounts?.mediaRejectionScenarios,
+      Array.from({ length: 9 }, (_, index) => `T12-${String(index + 1).padStart(2, "0")}`));
+    const ownerCompositionCases = scenarioCases(processingCounts?.ownerCompositionScenarios, ["T16-01"]);
+    const contentTitles = PHASE6_MEDIA_CV_TEST_NAMES.slice(5, 12);
+    const contentCases = assertionCases(allAssertions, contentTitles);
+    const ownerSecurityCases = assertionCases(allAssertions, PHASE6_MEDIA_CV_TEST_NAMES.slice(12, 18));
+    const ownerUnitCases = namedCases(acceptanceUnitChecks?.tests, [
+      "maps unexpected exceptions to generic 500 without leaking secrets",
+      "discards signed targets if the approved public use is withdrawn during signing",
+      "rejects mutations without a session cookie as 401 before dispatch",
+    ]);
+    const dependencyFaultCases = namedCases(acceptanceUnitChecks?.tests, [
+      "keeps video candidates unaccepted when Storage, scanner, processor, or output sealing fails",
+      "fails closed before reservation when the replay encryption key is unavailable",
+      "discards signed targets if the accepted Media snapshot changes during signing",
+      "reports private Storage failure without exposing provider details",
+      "returns a truthful 503 when Current CV delivery is unavailable",
+      "keeps the public settings read available when capability lookup fails",
+      "keeps core configuration readable when an optional delivery capability is unknown",
+      "surfaces database loss and recovery through the safe readiness route",
+      "reports bounded unready without throwing when PostgreSQL is unreachable",
+    ]);
+    const requiredAssertions = (titles) => assertionCases(allAssertions, titles);
+    const criteria = [
+      { id: "T18-01", name: "Current CV A-to-B activation, retained history, competing activation, no-op, reactivation, and atomic rollback",
+        cases: [...activationCases, ...requiredAssertions(["issues bounded delivery only for current published-locale and profile Media uses"])] },
+      { id: "T18-02", name: "Safe accepted Media enables Project and Achievement publication; invalid or stale facts preserve last-valid state",
+        cases: [...contentCases, ...requiredAssertions([PHASE6_MEDIA_CV_TEST_NAMES[0]])] },
+      { id: "T18-03", name: "Arabic publication reuses accepted English Media without text fallback and withholds English-only CV/link capabilities",
+        cases: [...capabilityCases, ...requiredAssertions([PHASE6_MEDIA_CV_TEST_NAMES[8]])] },
+      { id: "T18-04", name: "Storage, scanner, processor, signing, delivery, encryption, and transaction faults preserve committed state",
+        cases: [...scenarioCases(processingCounts?.cvActivationScenarios, ["T11-05", "T11-09"]), ...ownerUnitCases, ...dependencyFaultCases,
+          ...requiredAssertions([PHASE6_MEDIA_CV_TEST_NAMES[0], PHASE6_MEDIA_CV_TEST_NAMES[2], PHASE6_MEDIA_CV_TEST_NAMES[6],
+            PHASE6_MEDIA_CV_TEST_NAMES[11], PHASE6_MEDIA_CV_TEST_NAMES[18]])] },
+      { id: "T18-05", name: "Independent Content publish/restore and CV accept/activate races with Media rejection serialize safely",
+        cases: [...rejectionCases, ...requiredAssertions([PHASE6_MEDIA_CV_TEST_NAMES[3]])] },
+      { id: "T18-06", name: "Exact and changed-hash idempotency, replay, stale commands, rollback, and orphan handling across Media/CV commands",
+        cases: [...cvRegistrationCases, ...cvAcceptanceCases, ...scenarioCases(processingCounts?.cvActivationScenarios, ["T11-06"]),
+          ...ownerCompositionCases, ...requiredAssertions([PHASE6_MEDIA_CV_TEST_NAMES[0], PHASE6_MEDIA_CV_TEST_NAMES[4]])] },
+      { id: "T18-07", name: "Missing, duplicate, foreign, stale, substituted, replacement, and overwrite facts cannot bypass eligibility or immutability",
+        cases: [...formatCases(formats), ...scenarioCases(processingCounts?.mediaRejectionScenarios, ["T12-07", "T12-08"]),
+          ...ownerCompositionCases] },
+      { id: "T18-08", name: "Public Media/CV delivery enforces bytes, origin, expiry, no-store, errors, rate limits, and no identity dependence",
+        cases: [...deliveryCases, ...requiredAssertions([PHASE6_MEDIA_CV_TEST_NAMES[1]]),
+          ...namedCases(acceptanceUnitChecks?.tests, ["streams the declared PDF branch with no-store and safe disposition",
+            "returns a short lived exact-origin signed URL with disposition encoded by Storage",
+            "limits repeated client requests before application dispatch and sends Retry-After"])] },
+      { id: "T18-09", name: "Logs, problems, public DTOs, receipts, outbox, and evidence exclude private capabilities and content",
+        cases: [...scenarioCases(processingCounts?.currentCvCapabilityScenarios, ["T15-08"]),
+          ...scenarioCases(processingCounts?.cvActivationScenarios, ["T11-03"]),
+          ...namedCases(acceptanceUnitChecks?.tests, ["rejects a redirect with unlisted origin", "rejects a redirect with insecure URL"]),
+          ...namedCases(acceptanceUnitChecks?.tests, ["redacts private diagnostics before evidence export"]),
+          ...scenarioCases(processingCounts?.mediaRejectionScenarios, ["T12-09"]), ...ownerUnitCases] },
+      { id: "T18-10", name: "Real Owner/session/CSRF/scope checks and restricted-principal policies remain green",
+        cases: [...scenarioCases(processingCounts?.cvActivationScenarios, ["T11-02"]), ...ownerCompositionCases, ...ownerSecurityCases] },
+      { id: "T18-11", name: "Every integrated scenario is mapped to executed case IDs, counts, sanitized evidence, and honest limitations",
+        cases: [{ caseId: "evidence:eleven-criteria", name: "all eleven T18 criteria and source-bound case IDs are present",
+          executed: criteria.length === PHASE6_MEDIA_CV_CRITERION_IDS.length && criteria.every((item) => item.cases.length > 0),
+          status: criteria.length === PHASE6_MEDIA_CV_CRITERION_IDS.length && criteria.every((item) => item.cases.length > 0) ? "passed" : "failed" },
+        { caseId: "evidence:zero-required-skips", name: "integrated and unit suites report zero failures and skips",
+          executed: testResult.status === 0 && acceptanceUnitChecks?.verdict === "pass",
+          status: testResult.status === 0 && acceptanceUnitChecks?.verdict === "pass" ? "passed" : "failed" }] },
+    ];
+    const caseList = criteria.flatMap(({ cases }) => cases);
+    const counts = { executed: caseList.filter((item) => item.executed && item.status === "passed").length,
+      failed: caseList.filter((item) => item.executed && item.status === "failed").length,
+      skipped: caseList.filter((item) => item.executed !== true || item.status === "skipped").length };
+    const testRun = { exitStatus: testResult.status ?? 1, total: Number(testReport.numTotalTests ?? allAssertions.length),
+      failed: Number(testReport.numFailedTests ?? allAssertions.filter((item) => item.status === "failed").length),
+      skipped: Number(testReport.numPendingTests ?? allAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length),
+      passed: Number(testReport.numPassedTests ?? allAssertions.filter((item) => item.status === "passed").length),
+      unit: acceptanceUnitChecks };
+    const evidence = {
+      schemaVersion: 1, ticket: 163, parent: 145, predecessor: 162, runId: randomUUID(),
+      sourceRevision: source.sourceRevision, sourceTreeSha256: source.sourceTreeSha256,
+      startedAt, completedAt: new Date().toISOString(),
+      scope: "integrated-real-service-media-cv-races-publication-delivery-privacy-and-authorization",
+      runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" },
+      toolVersions,
+      services: { postgres: services.postgres, auth: services.auth, storage: services.storage,
+        scanner: { available: Boolean(toolVersions.scanner) && Number(processingCounts?.scannerExecutions) > 0,
+          version: toolVersions.scanner, executions: processingCounts?.scannerExecutions ?? 0 },
+        processors: {
+          pdf: { available: Number(processingCounts?.processorExecutions) > 0, version: toolVersions.pdfProcessor, executions: processingCounts?.processorExecutions ?? 0 },
+          image: { available: Number(processingCounts?.imageProcessorExecutions) > 0, version: toolVersions.sharp, executions: processingCounts?.imageProcessorExecutions ?? 0 },
+          video: { available: Number(processingCounts?.videoProcessorExecutions) > 0, version: toolVersions.videoProcessor, executions: processingCounts?.videoProcessorExecutions ?? 0 },
+        } },
+      policyIds: { mediaObjectPolicies: ["media_candidates_private", "media_processed_private_immutable"],
+        cvMigrations: ["20261012030000_initialize_cv_portfolio_register_english_versions.sql", "20261012040000_accept_registered_cv_versions.sql", "20261012050000_activate_current_cv_atomically.sql"],
+        transactionLockOrder: ["media-shared-locks", "content-lifecycle-write"], deliveryMaxAgeSeconds: 300 },
+      principalScope: { database: "shipwithali_application with scoped Owner/Portfolio policies and independent PostgreSQL connections",
+        auth: "disposable loopback Supabase Auth including real issued Owner session claims",
+        storage: "private local Storage; anonymous and non-Owner access denied; sealed objects read by exact identity" },
+      formats: formats.map(({ id, kind, mimeType, executed, status, storageRoundTrip, scannerVerdict, processorVersion }) =>
+        ({ id, kind, mimeType, executed, status, storageRoundTrip, scannerVerdict, processorVersion })),
+      criteria, counts, testRun, cleanup,
+      checks: { mediaProcessing: mediaProcessingChecks, cvRegistration: processingCounts?.cvScenarios,
+        cvAcceptance: processingCounts?.cvAcceptanceScenarios, cvActivation: processingCounts?.cvActivationScenarios,
+        cvDelivery: processingCounts?.currentCvDeliveryScenarios, publicCapabilities: processingCounts?.currentCvCapabilityScenarios,
+        mediaRejection: processingCounts?.mediaRejectionScenarios, ownerComposition: processingCounts?.ownerCompositionScenarios,
+        contentAuthoringTests: [...contentTitles, PHASE6_MEDIA_CV_TEST_NAMES[18]], ownerSecurityTests: PHASE6_MEDIA_CV_TEST_NAMES.slice(12, 18) },
+      reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run docker:phase6:media-cv-integration"],
+      limitations: ["The run validates application and local-service behavior; it does not certify deployment outage survival, release qualification, frontend behavior, Measurement interactions, or backup operations."],
+    };
+    const evaluation = evaluatePhase6MediaCvIntegration(evidence, { sourceRevision: finalSource.sourceRevision,
+      sourceTreeSha256: finalSource.sourceTreeSha256 });
+    evidence.verdict = evaluation.verdict === "pass" && failures.length === 0 ? "pass" : "fail";
+    evidence.failures = [...failures, ...evaluation.failures];
+    evidence.counts = { ...counts, criteria: criteria.length, suite: testRun };
+    mkdirSync(join(ROOT, "evidence"), { recursive: true });
+    writeFileSync(MEDIA_CV_INTEGRATION_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+    console.log(JSON.stringify({ ticket: 163, runId: evidence.runId, sourceRevision: evidence.sourceRevision,
+      sourceTreeSha256: evidence.sourceTreeSha256, verdict: evidence.verdict, counts: evidence.counts,
+      criteria: criteria.map(({ id, name, cases }) => ({ id, name, cases: cases.length })), cleanup, failures: evidence.failures,
+      evidence: "evidence/phase6-media-cv-integration-163.json" }, null, 2));
     if (evidence.verdict !== "pass") process.exitCode = 1;
   } else if (MEDIA_DELIVERY_ONLY) {
     const criteria = [

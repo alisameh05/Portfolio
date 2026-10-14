@@ -11,6 +11,7 @@
   },
   "scripts": {
     "docker:phase6": "node scripts/docker-validation.mjs phase6",
+    "docker:phase6:media-cv-integration": "node scripts/docker-validation.mjs media-cv-integration",
     "docker:checks": "node scripts/docker-validation.mjs checks",
     "setup:validation": "node scripts/setup-validation.mjs",
     "validation:ready": "node scripts/validation-environment.mjs",
@@ -101,6 +102,8 @@
     "phase6:focus:owner-composition": "node scripts/phase6-verification.mjs --owner-composition-only",
     "prephase6:focus:media-integration": "npm run validation:ready",
     "phase6:focus:media-integration": "node scripts/phase6-verification.mjs --media-integration-only",
+    "prephase6:focus:media-cv-integration": "npm run validation:ready",
+    "phase6:focus:media-cv-integration": "node scripts/phase6-verification.mjs --media-cv-integration-only",
     "prephase6:focus:publication-media": "npm run validation:ready",
     "phase6:focus:publication-media": "node scripts/phase6-verification.mjs --publication-media-only",
     "prephase6:focus:upload-intents": "npm run validation:ready",

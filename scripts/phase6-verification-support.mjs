@@ -22,6 +22,70 @@ export const PHASE6_FORMATS = Object.freeze([
   { id: "mp4", kind: "video", mimeType: "video/mp4", processor: "videoProcessor" },
   { id: "webm", kind: "video", mimeType: "video/webm", processor: "videoProcessor" },
 ]);
+export const PHASE6_MEDIA_CV_CRITERION_IDS = Object.freeze(Array.from({ length: 11 }, (_, index) => `T18-${String(index + 1).padStart(2, "0")}`));
+
+export function evaluatePhase6MediaCvIntegration(evidence, expected = {}) {
+  const failures = [];
+  if (evidence?.schemaVersion !== 1 || evidence?.ticket !== 163 || typeof evidence?.runId !== "string" || !evidence.runId) failures.push("evidence-identity-invalid");
+  if (typeof evidence?.sourceRevision !== "string" || evidence.sourceRevision !== expected.sourceRevision ||
+      typeof evidence?.sourceTreeSha256 !== "string" || evidence.sourceTreeSha256 !== expected.sourceTreeSha256 ||
+      !/^[a-f0-9]{64}$/u.test(evidence?.sourceTreeSha256 ?? "")) failures.push("evidence-source-stale-or-mismatched");
+  if (evidence?.runtime?.node !== "v24.21.0" || evidence?.runtime?.npm !== "11.19.0") failures.push("runtime-pin-mismatch");
+  const startedAt = Date.parse(evidence?.startedAt ?? "");
+  const completedAt = Date.parse(evidence?.completedAt ?? "");
+  if (!Number.isFinite(startedAt) || !Number.isFinite(completedAt) || completedAt < startedAt || completedAt > (expected.now ?? Date.now()) + 60_000) failures.push("run-time-invalid");
+  const services = evidence?.services;
+  if (services?.postgres?.available !== true || !Number.isSafeInteger(services?.postgres?.executionCount) || services.postgres.executionCount < 1 ||
+      !Number.isSafeInteger(services?.postgres?.independentConnections) || services.postgres.independentConnections < 2 ||
+      services?.auth?.available !== true || !Number.isSafeInteger(services?.auth?.executionCount) || services.auth.executionCount < 1 ||
+      services?.storage?.available !== true || services.storage.privateBucketVerified !== true ||
+      !Number.isSafeInteger(services.storage.executionCount) || services.storage.executionCount < 1) failures.push("required-service-probe-missing");
+  if (!services?.scanner?.available || typeof services.scanner.version !== "string" || !services.scanner.version ||
+      !Number.isSafeInteger(services.scanner.executions) || services.scanner.executions < 1) failures.push("real-scanner-execution-missing");
+  for (const kind of ["pdf", "image", "video"]) {
+    const processor = services?.processors?.[kind];
+    if (processor?.available !== true || typeof processor.version !== "string" || !processor.version ||
+        !Number.isSafeInteger(processor.executions) || processor.executions < 1) failures.push(`real-${kind}-processor-execution-missing`);
+  }
+  const formats = Array.isArray(evidence?.formats) ? evidence.formats : [];
+  const formatIds = new Set(formats.map((format) => format?.id));
+  if (formats.length !== PHASE6_FORMATS.length || formatIds.size !== PHASE6_FORMATS.length ||
+      PHASE6_FORMATS.some(({ id }) => !formats.some((format) => format?.id === id && format.executed === true && format.status === "passed" &&
+        format.storageRoundTrip === true && format.scannerVerdict === "clean" && typeof format.processorVersion === "string" && format.processorVersion))) {
+    failures.push("required-format-execution-incomplete");
+  }
+  const criteria = Array.isArray(evidence?.criteria) ? evidence.criteria : [];
+  const criterionIds = criteria.map((criterion) => criterion?.id);
+  const expectedIds = PHASE6_MEDIA_CV_CRITERION_IDS;
+  if (criteria.length !== expectedIds.length || new Set(criterionIds).size !== expectedIds.length || expectedIds.some((id) => !criterionIds.includes(id))) {
+    failures.push("criterion-matrix-incomplete-or-duplicated");
+  }
+  let executedCases = 0;
+  let failedCases = 0;
+  let skippedCases = 0;
+  for (const criterion of criteria) {
+    const cases = Array.isArray(criterion?.cases) ? criterion.cases : [];
+    const caseIds = cases.map((item) => item?.caseId);
+    if (!cases.length || caseIds.some((id) => typeof id !== "string" || !id) || new Set(caseIds).size !== caseIds.length) {
+      failures.push(`criterion-cases-invalid:${criterion?.id ?? "unknown"}`);
+    }
+    for (const item of cases) {
+      if (item?.executed === true && item?.status === "passed") executedCases += 1;
+      else if (item?.executed === true && item?.status === "failed") failedCases += 1;
+      else skippedCases += 1;
+    }
+  }
+  if (executedCases < expectedIds.length || failedCases || skippedCases) failures.push("criterion-execution-counts-invalid");
+  if (evidence?.counts?.executed !== executedCases || evidence?.counts?.failed !== failedCases || evidence?.counts?.skipped !== skippedCases) {
+    failures.push("reported-case-counts-mismatch");
+  }
+  if (evidence?.cleanup?.attempted !== true || evidence?.cleanup?.success !== true) failures.push("cleanup-not-confirmed");
+  if (evidence?.testRun?.exitStatus !== 0 || evidence?.testRun?.failed !== 0 || evidence?.testRun?.skipped !== 0 || evidence?.testRun?.total < 1) {
+    failures.push("integrated-suite-incomplete");
+  }
+  return { verdict: failures.length ? "fail" : "pass", failures,
+    counts: { criteria: criteria.length, executed: executedCases, failed: failedCases, skipped: skippedCases } };
+}
 
 export function isolatedPhase6Config(source, projectId, ports = { api: 57321, db: 57322, shadow: 57320, studio: 57323 }) {
   const config = source

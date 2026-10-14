@@ -1,10 +1,53 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, isolatedPhase6Config,
+  PHASE6_FORMATS, PHASE6_MEDIA_CV_CRITERION_IDS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests,
+  evaluatePhase6MediaCvIntegration, evaluatePhase6Setup, isolatedPhase6Config,
   loadPhase6PredecessorContexts, makePhase6Report, phase6CvScenarioProof, phase6CvDeferredMigrations, scrubPhase6Environment,
 } from "../../scripts/phase6-verification-support.mjs";
 import { createBarrier, createDeterministicClock, createUuidV7Sequence } from "../phase6/fixtures/deterministic.mjs";
+
+function integratedMediaCvEvidence() {
+  const criteria = PHASE6_MEDIA_CV_CRITERION_IDS.map((id) => ({
+    id, cases: [{ caseId: `${id}-case-1`, name: "executed integration assertion", executed: true, status: "passed" }],
+  }));
+  return {
+    schemaVersion: 1, ticket: 163, runId: "integrated-run", sourceRevision: "abc",
+    sourceTreeSha256: "a".repeat(64), startedAt: "2026-10-14T10:00:00.000Z", completedAt: "2026-10-14T10:05:00.000Z",
+    runtime: { node: "v24.21.0", npm: "11.19.0" },
+    services: { postgres: { available: true, executionCount: 2, independentConnections: 2 },
+      auth: { available: true, executionCount: 1 }, storage: { available: true, privateBucketVerified: true, executionCount: 3 },
+      scanner: { available: true, version: "ClamAV fixture runtime", executions: 6 },
+      processors: { pdf: { available: true, version: "OCRmyPDF", executions: 1 },
+        image: { available: true, version: "Sharp", executions: 3 }, video: { available: true, version: "FFmpeg", executions: 2 } } },
+    formats: PHASE6_FORMATS.map(({ id, processor }) => ({ id, executed: true, status: "passed", storageRoundTrip: true,
+      scannerVerdict: "clean", processorVersion: `tool-${processor}` })),
+    criteria, counts: { executed: 11, failed: 0, skipped: 0 }, cleanup: { attempted: true, success: true },
+    testRun: { exitStatus: 0, total: 12, failed: 0, skipped: 0 },
+  };
+}
+
+test("integrated Media/CV evidence requires all T18 cases and fresh real-service proof", () => {
+  const evidence = integratedMediaCvEvidence();
+  assert.deepEqual(evaluatePhase6MediaCvIntegration(evidence, { sourceRevision: "abc", sourceTreeSha256: "a".repeat(64), now: Date.parse("2026-10-14T10:06:00Z") }),
+    { verdict: "pass", failures: [], counts: { criteria: 11, executed: 11, failed: 0, skipped: 0 } });
+  const missing = structuredClone(evidence);
+  missing.criteria.pop();
+  assert.ok(evaluatePhase6MediaCvIntegration(missing, { sourceRevision: "abc", sourceTreeSha256: "a".repeat(64) }).failures.includes("criterion-matrix-incomplete-or-duplicated"));
+  const skipped = structuredClone(evidence);
+  skipped.criteria[4].cases[0].executed = false;
+  skipped.criteria[4].cases[0].status = "skipped";
+  skipped.counts.skipped = 1;
+  assert.ok(evaluatePhase6MediaCvIntegration(skipped, { sourceRevision: "abc", sourceTreeSha256: "a".repeat(64) }).failures.includes("criterion-execution-counts-invalid"));
+  const stale = structuredClone(evidence);
+  assert.ok(evaluatePhase6MediaCvIntegration(stale, { sourceRevision: "newer", sourceTreeSha256: "b".repeat(64) }).failures.includes("evidence-source-stale-or-mismatched"));
+  const fakeStorage = structuredClone(evidence);
+  fakeStorage.services.storage.privateBucketVerified = false;
+  fakeStorage.formats[0].scannerVerdict = "fake-clean";
+  assert.ok(evaluatePhase6MediaCvIntegration(fakeStorage, { sourceRevision: "abc", sourceTreeSha256: "a".repeat(64) }).failures.includes("required-service-probe-missing"));
+  assert.equal(evaluatePhase6MediaCvIntegration({ ...evidence, cleanup: { attempted: true, success: false } },
+    { sourceRevision: "abc", sourceTreeSha256: "a".repeat(64) }).verdict, "fail");
+});
 
 test("CV upgrade defers every migration from CV initialization onward, including later domain migrations", () => {
   const before = "20261012020000_enforce_visible_media_usage_and_lock_order.sql";
