@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
+import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
 import {
   PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, getPhase6SourceIdentity, isolatedPhase6Config,
   evaluatePhase6MediaCvIntegration, PHASE6_MEDIA_CV_CRITERION_IDS, makePhase6Report, phase6CvScenarioProof,
@@ -509,6 +510,10 @@ async function main() {
     if (MEDIA_INTEGRATION_ONLY) {
       integrationChecks = evaluatePhase6IntegrationTests(testReport, testResult.status);
       if (integrationChecks.verdict !== "pass") {
+        const diagnosticSecrets = Object.entries(testEnv)
+          .filter(([name]) => /(?:TOKEN|KEY|SECRET|PASSWORD)/iu.test(name))
+          .map(([, value]) => value)
+          .filter((value) => typeof value === "string");
         console.error("Media integration reporter summary:", JSON.stringify({
           exitStatus: testResult.status,
           spawnError: testResult.error?.code ?? testResult.error?.name ?? null,
@@ -520,7 +525,18 @@ async function main() {
             failed: testReport.numFailedTests ?? null,
             pending: testReport.numPendingTests ?? null,
             success: testReport.success ?? null,
+            totalSuites: testReport.numTotalTestSuites ?? null,
+            failedSuites: testReport.numFailedTestSuites ?? null,
+            pendingSuites: testReport.numPendingTestSuites ?? null,
           },
+          suites: (testReport.testResults ?? []).map((suite) => ({
+            status: suite.status ?? "<missing-status>",
+            assertionCount: Array.isArray(suite.assertionResults) ? suite.assertionResults.length : 0,
+            failure: suite.status === "passed" ? undefined : sanitizeEvidenceOutput(
+              String(suite.failureMessage ?? suite.message ?? "<no-suite-failure-message>"),
+              { workspace: ROOT, temporary: tmpdir(), secrets: diagnosticSecrets },
+            ).slice(0, 1600),
+          })),
         }));
         throw new Error("PHASE6_MEDIA_INTEGRATION_REQUIRES_SEVEN_PASSED_ZERO_SKIPPED");
       }
