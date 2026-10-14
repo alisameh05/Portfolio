@@ -31,7 +31,9 @@ login is a trusted server capability, never a client-exposed SQL login. The
 configured Content adapter supplies the stable Owner scope needed by existing
 Content policies; it exposes only narrow eligibility facts to Interaction.
 
-Content root lock precedes the Reaction pair lock and replay ledger. Publication
+Content root shared lock precedes the Reaction pair lock and replay ledger. This
+allows independent pairs to proceed while blocking lifecycle/publication writes.
+Publication
 and lifecycle commands use that same root lock. Locales are read in a separate
 statement after acquisition so a waiting READ COMMITTED transaction observes the
 latest committed publication. Reaction state, safe ledger receipt and the

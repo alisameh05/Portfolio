@@ -176,7 +176,7 @@ export async function initializeDatabaseRuntime(
         if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok && env["FUNCTIONAL_ID_HASH_KEY"]) {
           const [{ createReactionApplicationService, createFunctionalInteractionContext }, { createPostgresReactionRepository },
             { createPostgresProjectInteractionFacts }, { createIdentityAccessService },
-            { AesGcmPseudonymousTokenAdapter, createPseudonymousIdentityConfig, StubAuthProvider }] = await Promise.all([
+            { AesGcmPseudonymousTokenAdapter, createFunctionalPseudonymousIdentityConfig, StubAuthProvider }] = await Promise.all([
             import("../modules/interaction-moderation/index.js"),
             import("../modules/interaction-moderation/adapters/postgres-reactions.js"),
             import("../modules/content-publishing/adapters/postgres-interaction-facts.js"),
@@ -186,7 +186,7 @@ export async function initializeDatabaseRuntime(
           const scope = { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value };
           const content = createPostgresProjectInteractionFacts(scope);
           const identity = createIdentityAccessService({ auth: new StubAuthProvider(), crypto: new AesGcmPseudonymousTokenAdapter({
-            config: createPseudonymousIdentityConfig(env), nowSeconds: () => Math.floor(Date.now() / 1000),
+            config: createFunctionalPseudonymousIdentityConfig(env), nowSeconds: () => Math.floor(Date.now() / 1000),
           }) });
           reaction = { scope: { kind: "portfolio", portfolioId: scope.portfolioId },
             service: createReactionApplicationService({ portfolioId: scope.portfolioId, content, operations,

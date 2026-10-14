@@ -24,6 +24,7 @@ export { createOwnerAuthConfig } from "./auth-config.js";
 export type { OwnerAuthConfig, OwnerAuthConfigEnv } from "./auth-config.js";
 export { OwnerAuthConfigError } from "./auth-config.js";
 export { createPseudonymousIdentityConfig } from "./pseudonymous-config.js";
+export { createFunctionalPseudonymousIdentityConfig } from "./pseudonymous-config.js";
 export type {
   PseudonymousIdentityConfig,
   PseudonymousKey,

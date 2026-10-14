@@ -40,6 +40,8 @@ export interface IdempotencyPort {
   execute(
     input: IdempotentExecutionInput,
     effect: (context: TransactionContext) => Promise<SafeResultEnvelope>,
+    /** Participate in caller-owned authorization/serialization. Caller must
+     * propagate failures or request rollback; this port never commits it. */
     transaction?: TransactionContext,
   ): Promise<IdempotentExecutionResult>;
 }

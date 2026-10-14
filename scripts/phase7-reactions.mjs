@@ -61,11 +61,14 @@ try {
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
   const assertions = tests.testResults.flatMap(s => s.assertionResults ?? []);
   if (!tests.success || tests.numFailedTestSuites || tests.numFailedTests || tests.numPendingTests || tests.numTodoTests ||
-      tests.numPassedTests !== 15 || assertions.length !== 15 || tests.testResults.length !== 2 ||
+      tests.numPassedTests !== 16 || assertions.length !== 16 || tests.testResults.length !== 2 ||
       tests.testResults.some(s => s.status !== "passed") || assertions.some(a => a.status !== "passed")) throw new Error("REACTION_ACCEPTANCE_INCOMPLETE");
   if (workingTreeSourceSha256() !== testedSource) throw new Error("REACTION_SOURCE_CHANGED_DURING_RUN");
   result = { runId, sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(), sourceTreeSha256: testedSource, version,
     migration, migrationSha256: createHash("sha256").update(readFileSync(migration)).digest("hex"),
+    migrations: migrations.map(name => ({ name, sha256: createHash("sha256").update(readFileSync("supabase/migrations/" + name)).digest("hex") })),
+    tools: { node: process.versions.node, npm: (process.env.npm_config_user_agent ?? "").match(/npm\/([^\s]+)/)?.[1] ?? "unavailable" },
+    assertions: assertions.map(a => ({ title: a.title, status: a.status })),
     required: { success: tests.success, passed: tests.numPassedTests, failed: tests.numFailedTests, skipped: tests.numPendingTests, failedSuites: tests.numFailedTestSuites },
     roles: ["reaction_runtime", "shipwithali_application", "shipwithali_worker", "anon", "authenticated"],
     reproduction: "npm run setup:validation; npm run validation:ready; npm run phase7:focus:reactions (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
