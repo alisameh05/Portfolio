@@ -464,7 +464,7 @@ async function main() {
       testEnv.PHASE4_LOCAL_AUTH_SERVICE_ROLE_KEY = String(status.SERVICE_ROLE_KEY);
       testEnv.PHASE4_LOCAL_AUTH_EXPECTED_PORT = String(phase6Ports.api);
     }
-    const testArgs = ["run", "tests/database/media-upload-intent.integration.test.ts", "--reporter=json", `--outputFile=${testJsonPath}`];
+    const testArgs = ["run", "tests/database/media-upload-intent.integration.test.ts", "--reporter=json", "--reporter=verbose", `--outputFile=${testJsonPath}`];
     // CV delivery and public capability assertions share a source-bound
     // scenario-counts file. Keep the focused suite on one worker so scenario
     // rows and completion counts cannot race across Vitest workers.
