@@ -12,7 +12,8 @@ describe.skipIf(!required)("real local Supabase access token", () => {
     const service = process.env['PHASE4_LOCAL_AUTH_SERVICE_ROLE_KEY'];
     if (!base || !anon || !service) throw new Error("LOCAL_AUTH_ENV_REQUIRED");
     const url = new URL(base);
-    if (url.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(url.hostname) || url.port !== "56321") {
+    const expectedPort = process.env['PHASE4_LOCAL_AUTH_EXPECTED_PORT'] ?? "56321";
+    if (url.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(url.hostname) || url.port !== expectedPort) {
       throw new Error("LOCAL_AUTH_ENDPOINT_NOT_ISOLATED");
     }
     async function request(path: string, key: string, body?: unknown, method = "POST") {

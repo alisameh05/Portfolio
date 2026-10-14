@@ -120,6 +120,15 @@ describe("GET Current CV adapter (#28)", () => {
     expect(JSON.stringify(await response.json())).not.toContain("limiter offline");
   });
 
+  it("returns a truthful 503 when Current CV delivery is unavailable", async () => {
+    const fake = createCurrentCvTestFake({ type: "rejection", rejection: {
+      kind: "temporarily_unavailable", code: "CURRENT_CV_STORAGE_UNAVAILABLE",
+    } });
+    const response = await handleCurrentCv(getCvRequest(), { service: fake });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "temporarily_unavailable" });
+  });
+
   it.each([
     ["missing locale", "disposition=inline"],
     ["invalid locale", "locale=ar"],

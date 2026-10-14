@@ -2,8 +2,8 @@
 set -euo pipefail
 
 case "${1:-phase6}" in
-  phase6|checks) ;;
-  *) echo 'Choose phase6 (real Media/CV acceptance) or checks (local checks).' >&2; exit 2 ;;
+  phase6|media-cv-integration|checks) ;;
+  *) echo 'Choose phase6, media-cv-integration, or checks.' >&2; exit 2 ;;
 esac
 
 daemon_pid=''
@@ -19,8 +19,8 @@ reset_private_services() {
 cleanup() {
   local result=$?
   trap - EXIT INT TERM
-  if [ "${mode}" = phase6 ]; then
-    for report in phase6-media-integration.json phase6-cv-portfolio-154.json; do
+  if [ "${mode}" = phase6 ] || [ "${mode}" = media-cv-integration ]; then
+    for report in phase6-media-integration.json phase6-cv-portfolio-154.json phase6-media-cv-integration-163.json; do
       if [ -f "/workspace/evidence/$report" ]; then
         cp "/workspace/evidence/$report" "/evidence/$report" || result=1
       fi
@@ -45,7 +45,7 @@ tar -C /source --exclude='./.git' --exclude='./node_modules' --exclude='./.workt
 # Preserve the repository's example so the source fingerprint matches a clone.
 if [ -f /source/.env.example ]; then cp /source/.env.example /workspace/.env.example; fi
 # Only fresh reports from this invocation can be exported, including on failure.
-if [ "$mode" = phase6 ]; then
+if [ "$mode" = phase6 ] || [ "$mode" = media-cv-integration ]; then
   rm -f /workspace/evidence/phase6-media-integration.json /workspace/evidence/phase6-cv-portfolio-154.json
   rm -f /evidence/phase6-media-integration.json /evidence/phase6-cv-portfolio-154.json
 fi
@@ -88,6 +88,9 @@ if [ "${1:-phase6}" = checks ]; then
   npm run test:arch
   npm run lint
   ./node_modules/.bin/vitest run tests/runtime/media-processing-tools.test.ts tests/modules/media-processing.test.ts tests/modules/cv-portfolio.test.ts
+elif [ "${1:-phase6}" = media-cv-integration ]; then
+  rm -f /workspace/evidence/phase6-media-cv-integration-163.json /evidence/phase6-media-cv-integration-163.json
+  npm run phase6:focus:media-cv-integration
 else
   npm run phase6:focus:media-integration
   npm run phase6:focus:cv-portfolio
