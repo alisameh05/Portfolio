@@ -1279,7 +1279,7 @@ async function main() {
         formats.length === 1 && formats[0]?.status === "passed" && formats[0]?.storageRoundTrip && cleanup.success &&
         failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:owner-composition"],
-      limitations: ["Owner HTTP security matrix and contract/architecture checks are exercised by the full unit and repository verification suites."] };
+      limitations: ["Owner HTTP security matrix is covered separately by tests/phase4/owner-request-security.test.ts; contract and architecture checks are separate repository commands and are not included in this real-service run."] };
     writeFileSync(OWNER_COMPOSITION_EVIDENCE, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
     console.log(JSON.stringify({ ticket: 161, runId: evidence.runId, sourceRevision: evidence.sourceRevision,
       sourceTreeSha256: evidence.sourceTreeSha256, verdict: evidence.verdict, checks: ownerCompositionChecks,
