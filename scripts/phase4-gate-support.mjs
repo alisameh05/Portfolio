@@ -20,6 +20,10 @@ export const REQUIRED_PHASE4_CHECK_NAMES = Object.freeze([
   "phase4-database-integrity",
 ]);
 
+/**
+ * @param {string} value
+ * @param {{ workspace?: string, temporary?: string, secrets?: string[] }} options
+ */
 export function sanitizeEvidenceOutput(value, { workspace = "", temporary = "", secrets = [] } = {}) {
   let safe = value;
   for (const [path, replacement] of [[workspace, "<WORKSPACE>"], [temporary, "<TEMP>"]]) {

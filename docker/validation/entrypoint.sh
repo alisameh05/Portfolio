@@ -2,8 +2,8 @@
 set -euo pipefail
 
 case "${1:-phase6}" in
-  phase6|media-cv-integration|checks) ;;
-  *) echo 'Choose phase6, media-cv-integration, or checks.' >&2; exit 2 ;;
+  phase6|gate|media-cv-integration|checks) ;;
+  *) echo 'Choose phase6, gate, media-cv-integration, or checks.' >&2; exit 2 ;;
 esac
 
 daemon_pid=''
@@ -19,12 +19,16 @@ reset_private_services() {
 cleanup() {
   local result=$?
   trap - EXIT INT TERM
-  if [ "${mode}" = phase6 ] || [ "${mode}" = media-cv-integration ]; then
-    for report in phase6-media-integration.json phase6-cv-portfolio-154.json phase6-cv-activation-156.json phase6-cv-delivery-159.json phase6-owner-composition-161.json phase6-migration-access-162.json phase6-media-cv-integration-163.json; do
+  if [ "${mode}" = phase6 ] || [ "${mode}" = gate ] || [ "${mode}" = media-cv-integration ]; then
+    for report in phase-6-verification-setup.json phase6-upload-intent-148.json phase6-media-processing-149.json phase6-image-processing-150.json phase6-video-processing-151.json phase6-media-acceptance-152.json phase6-publication-media-153.json phase6-cv-portfolio-154.json phase6-cv-acceptance-155.json phase6-cv-activation-156.json phase6-media-rejection.json phase6-media-delivery-158.json phase6-cv-delivery-159.json phase6-public-capabilities-160.json phase6-owner-composition-161.json phase6-migration-access-162.json phase6-media-integration.json phase6-media-cv-integration-163.json phase6-gate-report.json; do
       if [ -f "/workspace/evidence/$report" ]; then
         cp "/workspace/evidence/$report" "/evidence/$report" || result=1
       fi
     done
+    if [ -d /workspace/evidence/phase6-gate-checks ]; then
+      rm -rf /evidence/phase6-gate-checks
+      cp -R /workspace/evidence/phase6-gate-checks /evidence/phase6-gate-checks || result=1
+    fi
   fi
   if [ -n "$daemon_pid" ]; then
     reset_private_services || result=1
@@ -45,13 +49,11 @@ tar -C /source --exclude='./.git' --exclude='./node_modules' --exclude='./.workt
 # Preserve the repository's example so the source fingerprint matches a clone.
 if [ -f /source/.env.example ]; then cp /source/.env.example /workspace/.env.example; fi
 # Only fresh reports from this invocation can be exported, including on failure.
-if [ "$mode" = phase6 ] || [ "$mode" = media-cv-integration ]; then
-  rm -f /workspace/evidence/phase6-media-integration.json /workspace/evidence/phase6-cv-portfolio-154.json
-  rm -f /evidence/phase6-media-integration.json /evidence/phase6-cv-portfolio-154.json
-  rm -f /workspace/evidence/phase6-cv-activation-156.json /workspace/evidence/phase6-owner-composition-161.json /workspace/evidence/phase6-migration-access-162.json
-  rm -f /evidence/phase6-cv-activation-156.json /evidence/phase6-owner-composition-161.json /evidence/phase6-migration-access-162.json
-  rm -f /workspace/evidence/phase6-cv-delivery-159.json /evidence/phase6-cv-delivery-159.json
-  rm -f /workspace/evidence/phase6-media-cv-integration-163.json /evidence/phase6-media-cv-integration-163.json
+if [ "$mode" = phase6 ] || [ "$mode" = gate ] || [ "$mode" = media-cv-integration ]; then
+  for report in phase6-media-integration.json phase-6-verification-setup.json phase6-upload-intent-148.json phase6-media-processing-149.json phase6-image-processing-150.json phase6-video-processing-151.json phase6-media-acceptance-152.json phase6-publication-media-153.json phase6-cv-portfolio-154.json phase6-cv-acceptance-155.json phase6-cv-activation-156.json phase6-media-rejection.json phase6-media-delivery-158.json phase6-cv-delivery-159.json phase6-public-capabilities-160.json phase6-owner-composition-161.json phase6-migration-access-162.json phase6-media-cv-integration-163.json phase6-gate-report.json; do
+    rm -f "/workspace/evidence/$report" "/evidence/$report"
+  done
+  rm -rf /workspace/evidence/phase6-gate-checks /evidence/phase6-gate-checks
 fi
 # Build a private Git view without host paths, hooks, config or credentials.
 # This also avoids Windows worktree-specific config changing Linux ref lookup.
@@ -92,6 +94,8 @@ if [ "${1:-phase6}" = checks ]; then
   npm run test:arch
   npm run lint
   ./node_modules/.bin/vitest run tests/runtime/media-processing-tools.test.ts tests/modules/media-processing.test.ts tests/modules/cv-portfolio.test.ts
+elif [ "${1:-phase6}" = gate ]; then
+  npm run phase6:gate
 elif [ "${1:-phase6}" = media-cv-integration ]; then
   rm -f /workspace/evidence/phase6-media-cv-integration-163.json /evidence/phase6-media-cv-integration-163.json
   npm run phase6:focus:media-cv-integration

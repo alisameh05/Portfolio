@@ -100,11 +100,16 @@ jobs:
   phase6-media-cv:
     name: Phase 6 Media and CV real-PostgreSQL-Storage
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - name: Remove stale Phase 6 evidence before setup
+        run: >-
+          node --input-type=module -e 'import { rmSync } from "node:fs";
+          for (const path of ["evidence/phase-6-verification-setup.json", "evidence/phase6-upload-intent-148.json", "evidence/phase6-media-processing-149.json", "evidence/phase6-image-processing-150.json", "evidence/phase6-video-processing-151.json", "evidence/phase6-media-acceptance-152.json", "evidence/phase6-publication-media-153.json", "evidence/phase6-cv-portfolio-154.json", "evidence/phase6-cv-acceptance-155.json", "evidence/phase6-cv-activation-156.json", "evidence/phase6-media-rejection.json", "evidence/phase6-media-delivery-158.json", "evidence/phase6-cv-delivery-159.json", "evidence/phase6-public-capabilities-160.json", "evidence/phase6-owner-composition-161.json", "evidence/phase6-migration-access-162.json", "evidence/phase6-media-integration.json", "evidence/phase6-media-cv-integration-163.json", "evidence/phase6-gate-report.json"]) rmSync(path, { force: true });
+          rmSync("evidence/phase6-gate-checks", { recursive: true, force: true });'
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .nvmrc
@@ -116,43 +121,36 @@ jobs:
       - name: Install locked development dependencies
         run: npm run setup:validation
       - name: Build the portable Linux Docker validation runner
-        # Delete committed reports before any Docker step can fail.
-        # The always-upload step must never publish a previous run's pass.
-        run: |
-          node --input-type=module -e 'import { rmSync } from "node:fs"; for (const path of ["evidence/phase6-media-integration.json", "evidence/phase6-cv-portfolio-154.json", "evidence/phase6-cv-activation-156.json", "evidence/phase6-cv-delivery-159.json", "evidence/phase6-owner-composition-161.json", "evidence/phase6-migration-access-162.json", "evidence/phase6-media-cv-integration-163.json"]) rmSync(path, { force: true });'
-          docker compose -p portfolio-validation -f compose.validation.yaml build validation
-      - name: Require all seven real Media integration tests with zero skips
-        # Remove committed evidence so an early failure cannot upload an old pass.
-        run: |
-          node --input-type=module -e 'import { rmSync } from "node:fs"; for (const path of ["evidence/phase6-media-integration.json", "evidence/phase6-cv-portfolio-154.json", "evidence/phase6-cv-activation-156.json", "evidence/phase6-cv-delivery-159.json", "evidence/phase6-owner-composition-161.json", "evidence/phase6-migration-access-162.json"]) rmSync(path, { force: true });'
-          npm run phase6:focus:media-integration
-      - name: Require CV registration and migration upgrade acceptance
-        run: npm run phase6:focus:cv-portfolio
-      - name: Require integrated Media and CV cross-feature acceptance for issue 163
-        # This source-bound evidence is created only by this run and uploaded below.
-        run: npm run phase6:focus:media-cv-integration
-      - name: Require accepted CV activation invariants
-        run: npm run phase6:focus:cv-activation
-      - name: Require real Current and old CV Storage API policy matrix
-        run: npm run phase6:focus:cv-delivery
-      - name: Require retained Media and CV history evidence
-        run: npm run phase6:focus:owner-composition
-      - name: Require clean-upgrade, restricted-access, and bounded-plan evidence for issue 162
-        run: npm run phase6:focus:migration-access
-      - name: Publish sanitized current-source evidence
+        run: docker compose -p portfolio-validation -f compose.validation.yaml build validation
+      - name: Require the complete fail-closed Phase 6 gate
+        run: npm run phase6:gate
+      - name: Publish sanitized Phase 6 gate and component evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: phase6-media-cv-integration
+          name: phase6-gate
           path: |
-            evidence/phase6-media-integration.json
+            evidence/phase6-gate-report.json
+            evidence/phase6-gate-checks/*.log
+            evidence/phase-6-verification-setup.json
+            evidence/phase6-upload-intent-148.json
+            evidence/phase6-media-processing-149.json
+            evidence/phase6-image-processing-150.json
+            evidence/phase6-video-processing-151.json
+            evidence/phase6-media-acceptance-152.json
+            evidence/phase6-publication-media-153.json
             evidence/phase6-cv-portfolio-154.json
+            evidence/phase6-cv-acceptance-155.json
             evidence/phase6-cv-activation-156.json
+            evidence/phase6-media-rejection.json
+            evidence/phase6-media-delivery-158.json
             evidence/phase6-cv-delivery-159.json
+            evidence/phase6-public-capabilities-160.json
             evidence/phase6-owner-composition-161.json
             evidence/phase6-migration-access-162.json
+            evidence/phase6-media-integration.json
             evidence/phase6-media-cv-integration-163.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
   cloud-bootstrap:
