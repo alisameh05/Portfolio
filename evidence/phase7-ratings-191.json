@@ -1,10 +1,10 @@
 {
-  "runId": "0e1b7b62-e2cb-40c4-90a4-eadfdfa8ee0e",
-  "sourceRevision": "fa6405b814bba3716577f9c2656fda42f8f81a02",
-  "sourceTreeSha256": "0abd2173784574de9837562735dd38e62883841ad33012b2443ebaae69e39b46",
+  "runId": "56775382-45ec-469e-b7ed-dd61533bae33",
+  "sourceRevision": "7a7ae176a9cadd73de7334582bd357dad870411c",
+  "sourceTreeSha256": "486e74270ee5fc96ac2050f701c42555c1253f91db902ed223a9876844f656bb",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261014211320_persist_project_ratings.sql",
-  "migrationSha256": "fff307d5158a7edbc15dd93114b1e5319f944fce74c3a0dd9f33072b78fecbdf",
+  "migrationSha256": "027e9b6f1bc024b6d646e2a0da431f58bec9e9280a0548705cf3d5940055baff",
   "migrations": [
     {
       "name": "20260922170000_prepare_migration_capability.sql",
@@ -148,7 +148,15 @@
     },
     {
       "name": "20261014211320_persist_project_ratings.sql",
-      "sha256": "fff307d5158a7edbc15dd93114b1e5319f944fce74c3a0dd9f33072b78fecbdf"
+      "sha256": "027e9b6f1bc024b6d646e2a0da431f58bec9e9280a0548705cf3d5940055baff"
+    },
+    {
+      "name": "20261015003000_persist_private_feedback.sql",
+      "sha256": "76383b9305740d85f0557903924412a936a60df70264801583f141738447852b"
+    },
+    {
+      "name": "20261015010000_retain_feedback_moderation.sql",
+      "sha256": "5dcb17fa99531d21cdbd0ae60af6fd2b7178a6b161b8f66daa56ed70c5136938"
     }
   ],
   "tools": {
