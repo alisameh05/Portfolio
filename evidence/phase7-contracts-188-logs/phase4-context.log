@@ -1,0 +1,8 @@
+
+> shipwithali-portfolio@0.0.0 phase4:context
+> node scripts/check-phase4-context.mjs
+
+✓ depcruise tests/fixtures/invalid-deps/phase4-provider-leakage — no-provider-in-application
+✓ depcruise tests/fixtures/invalid-deps/phase4-generated-leakage — no-generated-code-leakage
+
+✗ phase4 context: Later-phase activation detected: supabase/migrations: later-phase-business-table
