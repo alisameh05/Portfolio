@@ -508,7 +508,22 @@ async function main() {
     }
     if (MEDIA_INTEGRATION_ONLY) {
       integrationChecks = evaluatePhase6IntegrationTests(testReport, testResult.status);
-      if (integrationChecks.verdict !== "pass") throw new Error("PHASE6_MEDIA_INTEGRATION_REQUIRES_SEVEN_PASSED_ZERO_SKIPPED");
+      if (integrationChecks.verdict !== "pass") {
+        console.error("Media integration reporter summary:", JSON.stringify({
+          exitStatus: testResult.status,
+          spawnError: testResult.error?.code ?? testResult.error?.name ?? null,
+          assertionTitles: (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? [])
+            .map((item) => typeof item.title === "string" ? item.title : "<missing-title>"),
+          reportedCounts: {
+            total: testReport.numTotalTests ?? null,
+            passed: testReport.numPassedTests ?? null,
+            failed: testReport.numFailedTests ?? null,
+            pending: testReport.numPendingTests ?? null,
+            success: testReport.success ?? null,
+          },
+        }));
+        throw new Error("PHASE6_MEDIA_INTEGRATION_REQUIRES_SEVEN_PASSED_ZERO_SKIPPED");
+      }
     }
     if ((CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || MEDIA_INTEGRATION_ONLY || MEDIA_CV_INTEGRATION_ONLY) && !phase6CvScenarioProof(processingCounts)) {
       const integration = evaluatePhase6IntegrationTests(testReport, testResult.status);
