@@ -126,8 +126,9 @@ try {
   if (connected) await client.end();
   try {
     if (started) run(exe("pg_ctl"), ["-D", data, "-m", "immediate", "-w", "stop"]);
-    if (dirname(resolve(temp)) !== resolve(tmpdir()) || !basename(temp).startsWith("portfolio-feedback-192-")) throw new Error("FEEDBACK_CLEANUP_PATH_INVALID");
-    rmSync(temp, { recursive: true, force: true }); cleanup = true;
+    if (dirname(resolve(temp)) !== resolve(tmpdir()) || !basename(temp).startsWith("portfolio-feedback-192-")) {
+      console.error("FEEDBACK_CLEANUP_PATH_INVALID"); process.exitCode = 1;
+    } else { rmSync(temp, { recursive: true, force: true }); cleanup = true; }
   } catch { console.error("FEEDBACK_CLEANUP_FAILED"); process.exitCode = 1; }
   if (result && cleanup) {
     mkdirSync("evidence", { recursive: true });
