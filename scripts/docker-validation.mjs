@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const mode = process.argv[2] ?? "phase6";
-if (!["phase6", "media-cv-integration", "checks"].includes(mode)) {
-  console.error("Usage: node scripts/docker-validation.mjs [phase6|media-cv-integration|checks]");
+if (!["phase6", "gate", "media-cv-integration", "checks"].includes(mode)) {
+  console.error("Usage: node scripts/docker-validation.mjs [phase6|gate|media-cv-integration|checks]");
   process.exit(2);
 }
 function capture(command, args, message) {
