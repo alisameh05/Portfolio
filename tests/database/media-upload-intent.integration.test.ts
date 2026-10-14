@@ -366,6 +366,8 @@ describeReal(group === "baseline"
     expect(cvAccepted, JSON.stringify(cvAccepted)).toMatchObject({ ok: true, value: { aggregateVersion: 3 } });
     if (!cvAccepted.ok) throw new Error("PHASE6_OWNER_COMPOSITION_CV_ACCEPT_FAILED");
     expect(await ownerCv.acceptOwnerCvVersion(acceptCvCommand)).toEqual(cvAccepted);
+    expect(await ownerCv.acceptOwnerCvVersion({ ...acceptCvCommand, expectedVersion: 3 }))
+      .toMatchObject({ ok: false, error: { kind: "conflict" } });
     expect(await ownerCv.acceptOwnerCvVersion({ ...acceptCvCommand, expectedVersion: 2, idempotencyKey: "phase6-composition-cv-accept-stale" as never }))
       .toMatchObject({ ok: false, error: { kind: "precondition_failed" } });
     const activateCvCommand = { actor, idempotencyKey: "phase6-composition-cv-activate" as never,
@@ -373,6 +375,8 @@ describeReal(group === "baseline"
     const activated = await ownerCv.activateOwnerCvVersion(activateCvCommand);
     expect(activated, JSON.stringify(activated)).toMatchObject({ ok: true, value: { aggregateVersion: 4, outcome: "current-cv-activated" } });
     expect(await ownerCv.activateOwnerCvVersion(activateCvCommand)).toEqual(activated);
+    expect(await ownerCv.activateOwnerCvVersion({ ...activateCvCommand, expectedVersion: 4 }))
+      .toMatchObject({ ok: false, error: { kind: "conflict" } });
     expect(await ownerCv.activateOwnerCvVersion({ ...activateCvCommand, expectedVersion: 3, idempotencyKey: "phase6-composition-cv-activate-stale" as never }))
       .toMatchObject({ ok: false, error: { kind: "precondition_failed" } });
     const portfolio = await ownerCv.getOwnerCvPortfolio({ actor });
