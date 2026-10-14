@@ -56,3 +56,5 @@ export { createRatingApplicationService } from "./application/ratings.js";
 export type { RatingRepositoryPort } from "./application/ratings.js";
 export { createFeedbackApplicationService } from "./application/feedback.js";
 export type { FeedbackSubmissionRepositoryPort } from "./application/feedback.js";
+export { createOwnerFeedbackModerationService } from "./application/moderation.js";
+export type { ModerationRepositoryPort, ModerationApplicationDeps, RetainedModerationDecision } from "./application/moderation.js";

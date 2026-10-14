@@ -48,11 +48,11 @@ try {
   // This disposable loopback cluster intentionally has no TLS listener.
   const migrate = dbUrl => run(process.execPath, ["node_modules/supabase/dist/supabase.js", "migration", "up", "--db-url", dbUrl + "?sslmode=disable",
     "--workdir", migrationProject, "--yes"], { ...process.env, SUPABASE_TELEMETRY_DISABLED: "true" });
-  for (const name of migrations.filter(n => n !== basename(migration))) copyFileSync("supabase/migrations/" + name, join(migrationProject, "supabase/migrations", name));
+  for (const name of migrations.filter(n => n < basename(migration))) copyFileSync("supabase/migrations/" + name, join(migrationProject, "supabase/migrations", name));
   stage = "prior-release-migrations"; migrate(adminUrl);
   const predecessor = ["0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea1", "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea2", "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ea3"];
   await client.query("insert into interaction.ratings (portfolio_id,project_id,visitor_id,value,updated_at) values ($1,$2,$3,3,'2026-10-14T00:00:00Z')", predecessor);
-  copyFileSync(migration, join(migrationProject, "supabase/migrations", basename(migration)));
+  for (const name of migrations.filter(n => n >= basename(migration))) copyFileSync("supabase/migrations/" + name, join(migrationProject, "supabase/migrations", name));
   stage = "feedback-upgrade"; migrate(adminUrl);
   const preserved = (await client.query("select value from interaction.ratings where portfolio_id=$1 and project_id=$2 and visitor_id=$3", predecessor)).rows;
   if (JSON.stringify(preserved) !== '[{"value":3}]') throw new Error("FEEDBACK_PREDECESSOR_CHANGED");

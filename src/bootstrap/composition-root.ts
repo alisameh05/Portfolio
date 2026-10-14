@@ -74,6 +74,7 @@ let currentConsent: ConsentApplicationService | undefined;
 let currentReaction: ReactionRuntimeServices | undefined;
 let currentRating: RatingRuntimeServices | undefined;
 let currentFeedback: FeedbackRuntimeServices | undefined;
+let currentModeration: (import("../modules/interaction-moderation/index.js").OwnerModerationApplicationService & Pick<InteractionModerationService, "getApprovedFeedback">) | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -100,6 +101,7 @@ export interface DatabaseRuntimeDependencies {
   readonly reaction?: ReactionRuntimeServices;
   readonly rating?: RatingRuntimeServices;
   readonly feedback?: FeedbackRuntimeServices;
+  readonly moderation?: NonNullable<typeof currentModeration>;
   readonly consent?: ConsentApplicationService;
   readonly operations: OperationsPersistencePorts;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
@@ -191,8 +193,9 @@ export async function initializeDatabaseRuntime(
         let reaction: ReactionRuntimeServices | undefined;
         let rating: RatingRuntimeServices | undefined;
         let feedback: FeedbackRuntimeServices | undefined;
+        let moderation: NonNullable<typeof currentModeration> | undefined;
         if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok) {
-          const [{ createFeedbackApplicationService }, { createPostgresFeedbackSubmissionRepository },
+          const [{ createFeedbackApplicationService, createOwnerFeedbackModerationService }, { createPostgresFeedbackSubmissionRepository },
             { createPostgresProjectInteractionFacts }, { createBoundedCurrentCvRateLimit }] = await Promise.all([
             import("../modules/interaction-moderation/index.js"),
             import("../modules/interaction-moderation/adapters/postgres-feedback.js"),
@@ -200,6 +203,11 @@ export async function initializeDatabaseRuntime(
             import("../runtime/http/current-cv-rate-limit.js"),
           ]);
           const scope = { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value };
+          const { createPostgresModerationRepository } = await import("../modules/interaction-moderation/adapters/postgres-moderation.js");
+          const { decideAuthorization } = await import("../modules/identity-access/index.js");
+          moderation = createOwnerFeedbackModerationService({ scope, operations,
+            authorize: async query => decideAuthorization(query), repository: createPostgresModerationRepository(),
+            content: createPostgresProjectInteractionFacts(scope), clock: createSystemClock(), ids: createSystemIdGenerator() });
           feedback = { scope: { kind: "portfolio", portfolioId: scope.portfolioId },
             service: createFeedbackApplicationService({ portfolioId: scope.portfolioId, content: createPostgresProjectInteractionFacts(scope),
               operations, repository: createPostgresFeedbackSubmissionRepository(), clock: createSystemClock(), ids: createSystemIdGenerator() }),
@@ -581,6 +589,7 @@ export async function initializeDatabaseRuntime(
           ...(reaction === undefined ? {} : { reaction }),
           ...(rating === undefined ? {} : { rating }),
           ...(feedback === undefined ? {} : { feedback }),
+          ...(moderation === undefined ? {} : { moderation }),
           ...(consent === undefined ? {} : { consent }),
           ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
           ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
@@ -613,6 +622,7 @@ export async function initializeDatabaseRuntime(
     currentReaction = dependencies.reaction;
     currentRating = dependencies.rating;
     currentFeedback = dependencies.feedback;
+    currentModeration = dependencies.moderation;
     currentConsent = dependencies.consent;
     currentOwnerConfiguration = dependencies.ownerConfiguration;
     currentContentAuthoring = dependencies.contentAuthoring;
@@ -764,6 +774,19 @@ export async function getFeedbackRuntimeServices(): Promise<FeedbackRuntimeServi
   return { service: createProductionFeedbackService(), rateLimit: { check: async () => { throw new Error("FEEDBACK_NOT_CONFIGURED"); } } };
 }
 
+/** Owner adapters use configured scope plus their existing verified-session security boundary. */
+export async function getOwnerModerationRuntimeServices() {
+  if (currentModeration && currentFeedback) return { scope: currentFeedback.scope, service: currentModeration };
+  const { createProductionOwnerModerationService } = await import("../runtime/fakes/owner-moderation.js");
+  return { service: createProductionOwnerModerationService() };
+}
+
+/** The approved exact-locale query is an in-process application capability. */
+export function getApprovedFeedbackApplicationService() {
+  if (!currentModeration) throw new Error("MODERATION_NOT_CONFIGURED");
+  return currentModeration;
+}
+
 /** Test-only seam to isolate focused suites. */
 export function resetRuntimeForTests(): void {
   current = undefined;
@@ -772,6 +795,7 @@ export function resetRuntimeForTests(): void {
   currentReaction = undefined;
   currentRating = undefined;
   currentFeedback = undefined;
+  currentModeration = undefined;
   currentOwnerConfiguration = undefined;
   currentContentAuthoring = undefined;
   currentOwnerTaxonomy = undefined;

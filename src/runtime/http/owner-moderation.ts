@@ -19,8 +19,8 @@ import type { PortfolioRequestScope } from "@shared/application";
  * Owner session, owner-scoped authorization, and (for mutations) exact
  * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
  * translation is exercised through fakes. Moderation decisions, retention,
- * persistence, and authorization rules remain unimplemented
- * provider-neutral application behavior.
+ * persistence, and scoped authorization are provider-neutral application behavior.
+ * Inspection, approval and rejection use real persistence; suppression is the next ticket.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application
@@ -54,6 +54,7 @@ import type {
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
+  OWNER_PRIVATE_RESPONSE_HEADERS,
   type OwnerRequestSecurity,
 } from "./owner-security.js";
 import {
@@ -196,7 +197,7 @@ export async function handleGetOwnerFeedbackModeration(
       );
     }
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(parsed.data, { status: 200 });
+    return Response.json(parsed.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
@@ -307,7 +308,7 @@ async function handleModerationCommand(
       );
     }
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(parsed.data, { status: 200 });
+    return Response.json(parsed.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }

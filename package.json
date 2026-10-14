@@ -158,6 +158,7 @@
     "prephase7:focus:ratings": "npm run validation:ready",
     "phase7:focus:ratings": "node scripts/phase7-ratings.mjs",
     "prephase7:focus:feedback": "npm run validation:ready",
+    "phase7:focus:moderation": "node scripts/phase7-moderation.mjs",
     "phase7:focus:feedback": "node scripts/phase7-feedback.mjs"
   },
   "dependencies": {
