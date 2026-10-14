@@ -18,7 +18,7 @@ import type {
   CreateOwnerAnalyticsGoalVersionApplicationCommand,
   GetOwnerAnalyticsGoalQuery,
   OwnerAnalyticsApplicationService,
-} from "../http/owner-analytics.js";
+} from "../../modules/measurement/index.js";
 
 export type OwnerAnalyticsFakeMode =
   | { readonly type: "success" }
@@ -36,14 +36,14 @@ export interface OwnerAnalyticsTestFake extends OwnerAnalyticsApplicationService
 export const OWNER_ANALYTICS_GOAL_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ed0";
 export const OWNER_ANALYTICS_VERSION_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ed1";
 
-function aggregateView(goalId: StableId<string>): AnalyticsGoalAggregateView {
+function aggregateView(goalId: StableId<"AnalyticsGoal">): AnalyticsGoalAggregateView {
   return {
     goalId,
     aggregateVersion: 2,
-    activeVersionId: OWNER_ANALYTICS_VERSION_ID as StableId<string>,
+    activeVersionId: OWNER_ANALYTICS_VERSION_ID as StableId<"AnalyticsGoalVersion">,
     versions: [
       {
-        versionId: OWNER_ANALYTICS_VERSION_ID as StableId<string>,
+        versionId: OWNER_ANALYTICS_VERSION_ID as StableId<"AnalyticsGoalVersion">,
         versionNumber: 1,
         definition: {
           name: "Project view to contact",
@@ -54,21 +54,21 @@ function aggregateView(goalId: StableId<string>): AnalyticsGoalAggregateView {
     ],
     activationHistory: [
       {
-        versionId: OWNER_ANALYTICS_VERSION_ID as StableId<string>,
+        versionId: OWNER_ANALYTICS_VERSION_ID as StableId<"AnalyticsGoalVersion">,
         activatedAt: "2026-09-22T00:00:00.000Z",
       },
     ],
   };
 }
 
-function invalidAggregateView(goalId: StableId<string>): AnalyticsGoalAggregateView {
+function invalidAggregateView(goalId: StableId<"AnalyticsGoal">): AnalyticsGoalAggregateView {
   return {
-    goalId: "not-a-uuid" as unknown as StableId<string>,
+    goalId: "not-a-uuid" as unknown as StableId<"AnalyticsGoal">,
     aggregateVersion: -1,
-    activeVersionId: goalId,
+    activeVersionId: goalId as unknown as StableId<"AnalyticsGoalVersion">,
     versions: [
       {
-        versionId: goalId,
+        versionId: goalId as unknown as StableId<"AnalyticsGoalVersion">,
         versionNumber: -1,
         definition: { name: "", steps: [] },
         createdAt: "not-a-datetime",
@@ -80,8 +80,8 @@ function invalidAggregateView(goalId: StableId<string>): AnalyticsGoalAggregateV
 
 function versionReceipt(goalId: string, versionId: string): AnalyticsGoalVersionReceipt {
   return {
-    goalId: goalId as StableId<string>,
-    versionId: versionId as StableId<string>,
+    goalId: goalId as StableId<"AnalyticsGoal">,
+    versionId: versionId as StableId<"AnalyticsGoalVersion">,
     aggregateVersion: 3,
     outcome: "analytics-goal-version-created",
   };
@@ -89,7 +89,7 @@ function versionReceipt(goalId: string, versionId: string): AnalyticsGoalVersion
 
 function activationReceipt(goalId: string): AnalyticsGoalActivationReceipt {
   return {
-    aggregateId: goalId as StableId<string>,
+    aggregateId: goalId as StableId<"AnalyticsGoal">,
     aggregateVersion: 3,
     outcome: "analytics-goal-version-activated",
   };
@@ -97,8 +97,8 @@ function activationReceipt(goalId: string): AnalyticsGoalActivationReceipt {
 
 function invalidVersionReceipt(): AnalyticsGoalVersionReceipt {
   return {
-    goalId: "not-a-uuid" as unknown as StableId<string>,
-    versionId: "not-a-uuid" as unknown as StableId<string>,
+    goalId: "not-a-uuid" as unknown as StableId<"AnalyticsGoal">,
+    versionId: "not-a-uuid" as unknown as StableId<"AnalyticsGoalVersion">,
     aggregateVersion: -1,
     outcome: "analytics-goal-version-created",
   };
@@ -106,7 +106,7 @@ function invalidVersionReceipt(): AnalyticsGoalVersionReceipt {
 
 function invalidActivationReceipt(): AnalyticsGoalActivationReceipt {
   return {
-    aggregateId: "not-a-uuid" as unknown as StableId<string>,
+    aggregateId: "not-a-uuid" as unknown as StableId<"AnalyticsGoal">,
     aggregateVersion: -1,
     outcome: "analytics-goal-version-activated",
   };

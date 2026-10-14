@@ -179,6 +179,12 @@ _Avoid_: Latest upload
 An owner-defined, versioned measurement rule over existing Visitor actions or event sequences, optionally scoped to pages or Projects. It does not alter the Visitor experience.
 _Avoid_: Conversion cause
 
+**FunctionalVisitor**:
+A purpose-limited identity used only to recognize current Reaction and Rating choices. It is independent of Measurement consent; Feedback needs no persistent identity.
+
+**MeasurementVisitor**:
+A purpose-distinct pseudonymous subject used only with verified current affirmative consent for allowlisted Measurement observations. It is never derived from FunctionalVisitor.
+
 **Visitor measurement identity**:
 A privacy-preserving pseudonymous signal used only when needed to distinguish unique and returning Visitor patterns. It is not an account or directly identifying Visitor record.
 _Avoid_: Visitor account, user profile

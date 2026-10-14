@@ -1,3 +1,4 @@
+import type { PortfolioRequestScope } from "@shared/application";
 /**
  * reaction.ts — Phase 2 #26 Reaction HTTP adapter (tracer bullet).
  *
@@ -35,6 +36,7 @@ import {
 } from "./problem.js";
 
 export interface ReactionAdapterDeps {
+  readonly scope?: PortfolioRequestScope;
   service: Pick<InteractionModerationService, "submitReaction">;
   logger?: Logger;
 }
@@ -91,6 +93,8 @@ export async function handlePutProjectReaction(
     }
 
     const command: SubmitReactionCommand = {
+      scope: deps.scope ?? { kind: "unconfigured" },
+      correlationId: traceId,
       actor: { kind: "visitor", consent: "unknown" },
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       projectId: pathResult.data.projectId as StableId<"Project">,

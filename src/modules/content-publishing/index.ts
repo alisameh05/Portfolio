@@ -128,3 +128,5 @@ export {
 } from "./application/index.js";
 
 export type { ContentRepositoryPort } from "./ports/index.js";
+
+export type { ProjectInteractionFacts, ProjectInteractionEligibilityPort, ContentMeasurementPublicFactsPort } from "./application/interaction-facts.js";

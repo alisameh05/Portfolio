@@ -1,3 +1,6 @@
+import type { OwnerModerationApplicationService } from "./owner-moderation.js";
+import type { FeedbackWorkService } from "./work.js";
+import type { ApplicationRequestContext } from "@shared/application";
 import type {
   StableId,
   IdempotencyKey,
@@ -6,68 +9,65 @@ import type {
   ActorContext,
 } from "@shared/domain";
 import type {
-  Reaction,
-  Rating,
-  Feedback,
   ProjectAggregate,
   ReactionKind,
   RatingValue,
-  ModerationState,
+  ReactionReceipt, RatingReceipt, FeedbackReceipt, PublicFeedbackPage,
 } from "../domain/index.js";
 
-export interface SubmitReactionCommand {
+export interface SubmitReactionCommand extends ApplicationRequestContext {
   readonly actor: ActorContext;
   readonly idempotencyKey: IdempotencyKey;
   readonly projectId: StableId<"Project">;
   readonly kind: ReactionKind;
 }
 
-export interface SubmitRatingCommand {
+export interface SubmitRatingCommand extends ApplicationRequestContext {
   readonly actor: ActorContext;
   readonly idempotencyKey: IdempotencyKey;
   readonly projectId: StableId<"Project">;
   readonly value: RatingValue;
 }
 
-export interface SubmitFeedbackCommand {
-  readonly actor: ActorContext;
+export interface SubmitFeedbackCommand extends ApplicationRequestContext {
+  readonly actor: { readonly kind: "visitor"; readonly consent: "granted" | "denied" | "unknown"; readonly functionalId?: never };
   readonly idempotencyKey: IdempotencyKey;
   readonly projectId: StableId<"Project">;
   readonly authorName: string;
   readonly comment: string;
+  readonly locale: "en" | "ar";
 }
 
-export interface ModerateFeedbackCommand {
-  readonly actor: ActorContext;
-  readonly feedbackId: StableId<"Feedback">;
-  readonly decision: "approve" | "reject" | "suppress";
-  readonly reason?: string;
-}
+export type ModerateFeedbackCommand = (import("./owner-moderation.js").ApproveOwnerFeedbackApplicationCommand & { readonly decision: "approve" }) | (import("./owner-moderation.js").RejectOwnerFeedbackApplicationCommand & { readonly decision: "reject" }) | (import("./owner-moderation.js").SuppressOwnerFeedbackApplicationCommand & { readonly decision: "suppress" });
 
-export interface GetProjectAggregateQuery {
+export interface GetProjectAggregateQuery extends ApplicationRequestContext {
+  readonly portfolioId: StableId<"Portfolio">;
+  readonly locale: "en" | "ar";
   readonly projectId: StableId<"Project">;
 }
 
-export interface GetApprovedFeedbackQuery {
+export interface GetApprovedFeedbackQuery extends GetProjectAggregateQuery {
+  readonly limit: 25 | 50 | 100;
+  readonly cursor?: { readonly displayedAt: string; readonly feedbackId: StableId<"Feedback"> };
   readonly projectId: StableId<"Project">;
 }
 
-export interface InteractionModerationService {
+export interface InteractionModerationService extends OwnerModerationApplicationService, FeedbackWorkService {
   submitReaction(
     command: SubmitReactionCommand,
-  ): Promise<Result<Reaction, Rejection>>;
+  ): Promise<Result<ReactionReceipt, Rejection>>;
 
   submitRating(
     command: SubmitRatingCommand,
-  ): Promise<Result<Rating, Rejection>>;
+  ): Promise<Result<RatingReceipt, Rejection>>;
 
   submitFeedback(
     command: SubmitFeedbackCommand,
-  ): Promise<Result<Feedback, Rejection>>;
+  ): Promise<Result<FeedbackReceipt, Rejection>>;
 
   moderateFeedback(
     command: ModerateFeedbackCommand,
-  ): Promise<Result<Feedback, Rejection>>;
+  ): Promise<Result<import("./owner-moderation.js").OwnerModerationCommandReceipt, Rejection>>;
 
   getProjectAggregate(
     query: GetProjectAggregateQuery,
@@ -75,5 +75,5 @@ export interface InteractionModerationService {
 
   getApprovedFeedback(
     query: GetApprovedFeedbackQuery,
-  ): Promise<Result<readonly Feedback[], Rejection>>;
+  ): Promise<Result<PublicFeedbackPage, Rejection>>;
 }

@@ -42,3 +42,9 @@ export type {
   InteractionRepositoryPort,
   FeedbackRepositoryPort,
 } from "./ports/index.js";
+
+export type { GetOwnerFeedbackModerationQuery, ApproveOwnerFeedbackApplicationCommand, RejectOwnerFeedbackApplicationCommand, SuppressOwnerFeedbackApplicationCommand, OwnerModerationDecisionView, OwnerFeedbackModerationView, OwnerModerationCommandReceipt, OwnerModerationApplicationService } from "./application/owner-moderation.js";
+
+export type { ReactionReceipt, RatingReceipt, FeedbackReceipt, PublicFeedbackView, PublicFeedbackPage } from "./domain/types.js";
+
+export type { FeedbackWorkCommand, FeedbackWorkService } from "./application/work.js";

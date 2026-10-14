@@ -228,6 +228,7 @@ describe("Owner Analytics goal version creation and activation (#32)", () => {
     expect(command.goalId).toBe(GOAL_ID);
     expect(command.expectedVersion).toBe(2);
     expect(command.idempotencyKey).toBe(IDEMPOTENCY_KEY);
+    expect(command).toMatchObject({ scope: { kind: "unconfigured" }, correlationId: expect.any(String) });
     expect(command.definition).toEqual(definitionBody.definition);
     const body = (await response.json()) as unknown;
     expect(zCreateOwnerAnalyticsGoalVersionResponse.safeParse(body).success).toBe(true);
@@ -259,6 +260,7 @@ describe("Owner Analytics goal version creation and activation (#32)", () => {
     expect(command.versionId).toBe(VERSION_ID);
     expect(command.expectedVersion).toBe(2);
     expect(command.idempotencyKey).toBe(IDEMPOTENCY_KEY);
+    expect(command).toMatchObject({ scope: { kind: "unconfigured" }, correlationId: expect.any(String) });
     const body = (await response.json()) as unknown;
     expect(zActivateOwnerAnalyticsGoalVersionResponse.safeParse(body).success).toBe(true);
     expect(body).toEqual({
@@ -393,15 +395,15 @@ describe("Owner Analytics goal version creation and activation (#32)", () => {
     }
     const owner = { kind: "owner", ownerId: GOAL_ID, sessionId: "s" } as const;
     const directCalls = [
-      service.getOwnerAnalyticsGoal({ actor: owner as never, goalId: GOAL_ID as never }),
-      service.createOwnerAnalyticsGoalVersion({
+      service.getOwnerAnalyticsGoal({ scope: { kind: "unconfigured" }, correlationId: "direct-test", actor: owner as never, goalId: GOAL_ID as never }),
+      service.createOwnerAnalyticsGoalVersion({ scope: { kind: "unconfigured" }, correlationId: "direct-test",
         actor: owner as never,
         idempotencyKey: IDEMPOTENCY_KEY as never,
         expectedVersion: 2,
         goalId: GOAL_ID as never,
         definition: definitionBody.definition as never,
       }),
-      service.activateOwnerAnalyticsGoalVersion({
+      service.activateOwnerAnalyticsGoalVersion({ scope: { kind: "unconfigured" }, correlationId: "direct-test",
         actor: owner as never,
         idempotencyKey: IDEMPOTENCY_KEY as never,
         expectedVersion: 2,

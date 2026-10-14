@@ -1,3 +1,4 @@
+import type { PortfolioRequestScope } from "@shared/application";
 /**
  * public-event.ts — Phase 2 #28 consented Public event adapter.
  *
@@ -16,23 +17,9 @@
  * otherwise `unknown`). Cookie values, signatures, and raw identifiers
  * never cross the application seam and never appear in logs.
  *
- * Transport-to-application translation (documented Phase 2 shell mapping):
- * the accepted contract carries nine hyphenated transport actions while the
- * Phase 1 domain MeasurementEventType carries five underscore values. The
- * adapter translates explicitly so the seam stays provider-neutral:
- * page-viewed maps to page_view; project-viewed, active-engagement-sampled,
- * and media-engaged map to case_study_read; related-project-opened and
- * external-project-link-opened map to external_link_click; and
- * contact-channel-opened, testimonial-engaged, and global-project-cta-opened
- * map to cta_click. The domain cv_download value has no Phase 2 transport
- * producer and is reserved for later phases.
- *
- * Route identity, coarse country, and coarse device flow from the validated
- * event context (`pageRouteIdentity`, `countryCode`, `deviceClass`); the
- * `other` and `unknown` device classes are dropped rather than forwarded as
- * coarse signals. Fine-grained context (timestamps, locales, journey
- * attribution, media and testimonial identifiers, engagement details)
- * remains transport-validated and never crosses the seam.
+ * All nine validated action-specific facts cross the owning application seam.
+ * Verified Measurement evidence is supplied by the future consent boundary;
+ * the existing fail-closed shell does not gain collection behavior.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, results, and rejections crossing the application seam
@@ -47,9 +34,9 @@ import {
 } from "../../contracts/http/v1/generated/zod.gen.js";
 import type {
   IngestPublicEventCommand,
-  MeasurementEventType,
+  PublicMeasurementEvent,
   MeasurementService,
-  PublicEventData,
+  EventReceipt,
 } from "../../modules/measurement/index.js";
 import type {
   IdempotencyKey,
@@ -63,6 +50,7 @@ import {
 } from "./problem.js";
 
 export interface PublicEventAdapterDeps {
+  readonly scope?: PortfolioRequestScope;
   service: Pick<MeasurementService, "ingestEvent">;
   logger?: Logger;
 }
@@ -89,48 +77,6 @@ function hasAnalyticsConsent(request: Request): boolean {
     }
   }
   return false;
-}
-
-type TransportAction =
-  | "page-viewed"
-  | "project-viewed"
-  | "active-engagement-sampled"
-  | "media-engaged"
-  | "related-project-opened"
-  | "contact-channel-opened"
-  | "external-project-link-opened"
-  | "testimonial-engaged"
-  | "global-project-cta-opened";
-
-function toDomainEventType(action: TransportAction): MeasurementEventType {
-  switch (action) {
-    case "page-viewed":
-      return "page_view";
-    case "project-viewed":
-    case "active-engagement-sampled":
-    case "media-engaged":
-      return "case_study_read";
-    case "related-project-opened":
-    case "external-project-link-opened":
-      return "external_link_click";
-    case "contact-channel-opened":
-    case "testimonial-engaged":
-    case "global-project-cta-opened":
-      return "cta_click";
-  }
-}
-
-type ValidatedEventContext = {
-  readonly pageRouteIdentity: string;
-  readonly countryCode?: string;
-  readonly deviceClass?: string;
-};
-
-function toCoarseDevice(deviceClass: string | undefined): IngestPublicEventCommand["coarseDevice"] {
-  if (deviceClass === "desktop" || deviceClass === "mobile" || deviceClass === "tablet") {
-    return deviceClass;
-  }
-  return undefined;
 }
 
 export async function handlePostPublicEvent(
@@ -172,22 +118,12 @@ export async function handlePostPublicEvent(
       return transportProblem("Invalid request body.", traceId, instance);
     }
 
-    const event = bodyResult.data as {
-      readonly action: TransportAction;
-      readonly context: ValidatedEventContext;
-    };
-    const context = event.context;
-    const coarseDevice = toCoarseDevice(context.deviceClass);
-    // ExactOptionalPropertyTypes: only include coarse signals when defined.
     const command: IngestPublicEventCommand = {
-      actor: {
-        kind: "visitor",
-        consent: hasAnalyticsConsent(request) ? "granted" : "unknown",
-      },
-      eventType: toDomainEventType(event.action),
-      routeIdentity: context.pageRouteIdentity as StableId<"PublicRoute">,
-      ...(context.countryCode === undefined ? {} : { coarseCountry: context.countryCode }),
-      ...(coarseDevice === undefined ? {} : { coarseDevice }),
+      scope: deps.scope ?? { kind: "unconfigured" },
+      correlationId: traceId,
+      actor: { kind: "visitor", consent: hasAnalyticsConsent(request) ? "granted" : "unknown" },
+      idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
+      event: bodyResult.data as unknown as PublicMeasurementEvent,
     };
 
     let result: Awaited<ReturnType<typeof deps.service.ingestEvent>>;
@@ -209,10 +145,10 @@ export async function handlePostPublicEvent(
       return rejection;
     }
 
-    const value = result.value as PublicEventData;
+    const value = result.value as EventReceipt;
     const payload = {
       eventId: value.eventId,
-      acceptedAt: value.timestamp,
+      acceptedAt: value.acceptedAt,
     };
     const responseResult = zPostPublicEventResponse.safeParse(payload);
     if (!responseResult.success) {

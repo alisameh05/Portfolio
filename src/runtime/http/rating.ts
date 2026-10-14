@@ -1,3 +1,4 @@
+import type { PortfolioRequestScope } from "@shared/application";
 /**
  * rating.ts — Phase 2 #28 Rating HTTP adapter.
  *
@@ -37,6 +38,7 @@ import {
 } from "./problem.js";
 
 export interface RatingAdapterDeps {
+  readonly scope?: PortfolioRequestScope;
   service: Pick<InteractionModerationService, "submitRating">;
   logger?: Logger;
 }
@@ -93,6 +95,8 @@ export async function handlePutProjectRating(
     }
 
     const command: SubmitRatingCommand = {
+      scope: deps.scope ?? { kind: "unconfigured" },
+      correlationId: traceId,
       actor: { kind: "visitor", consent: "unknown" },
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       projectId: pathResult.data.projectId as StableId<"Project">,

@@ -38,7 +38,7 @@ export type OwnerActor = {
  * An anonymous or pseudonymous visitor.
  *
  * `functionalId` is present only when needed for a permitted interaction
- * (reaction, rating, feedback) and the identity adapter has issued or
+ * (reaction or rating) and the identity adapter has issued or
  * recognized a purpose-limited functional ID. It is independent of
  * Measurement consent per ADR-0015: declining Measurement does not disable
  * functional identity, and ordinary reads create no functional ID.
@@ -58,7 +58,7 @@ export type VisitorActor = {
  * A scheduled or background system job.
  *
  * `jobId` is the stable identity of the job claim from the operations module.
- * `purpose` is a human-readable description of the job for logging only.
+ * `purpose` is an authorization input: owned work commands must allow only their declared system purpose.
  */
 export type SystemActor = {
   readonly kind: "system";

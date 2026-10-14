@@ -83,7 +83,7 @@ An identity remains stable while names, labels, slugs, revisions, states, or pro
 | Lab entry | Lab entry identity | Public lifecycle, Localized revision streams, evidence, links, media references | Media assets, Taxonomy values | No; model only |
 | Taxonomy | Taxonomy identity | name, purpose, Taxonomy values, evolution history | nothing outside the aggregate | Yes |
 | Media library | Media asset identity | safety assessment, accessibility metadata, acceptance and publication history | owning portfolio identity | Yes |
-| Feedback | Feedback identity | submitted name and paragraph, current presentation eligibility, Moderation decisions | one Project, Visitor measurement identity when permitted | Yes |
+| Feedback | Feedback identity | submitted name and paragraph, current presentation eligibility, Moderation decisions | one Project; no persistent Visitor identity | Yes |
 | CV portfolio | CV portfolio identity | CV versions and the Current CV designation | accepted file assets | Yes |
 | Analytics goal | Analytics goal identity | ordered goal versions and current active version | known public actions, pages, and Project identities | Yes |
 | Measurement | Public event identity while detail is retained | privacy-minimized event facts, Journey context, aggregates | Visitor measurement identity, public content identities | Yes |
@@ -98,7 +98,7 @@ An identity remains stable while names, labels, slugs, revisions, states, or pro
 - A Project relationship joins two distinct Projects. It makes them eligible for related-project presentation only while both have a public Language version for the visitor's locale.
 - A Testimonial belongs either to the general profile or to exactly one Project.
 - An External link belongs to one Project. A Contact channel belongs to portfolio settings; the two concepts are not interchangeable.
-- A Reaction and a Rating each belong to one Project and one permitted Visitor measurement identity. Only one current value of each kind may exist for that pair.
+- A Reaction and a Rating each belong to one Project and one purpose-limited FunctionalVisitor identity. Only one current value of each kind may exist for that pair.
 - Feedback belongs to one Project. Public display additionally depends on both Feedback approval and Project visibility.
 - A CV version belongs to the single CV portfolio. Exactly one accepted English CV version is Current CV once CV access is launched.
 
@@ -207,7 +207,7 @@ Evidence state is internal editorial information. It must not be rendered as an 
 
 ## Visitor interaction and moderation
 
-- Visitors do not require accounts. Visitor measurement identity is used only when needed to deduplicate or measure permitted behavior.
+- Visitors do not require accounts. FunctionalVisitor deduplicates Reaction and Rating; consented MeasurementVisitor measures allowlisted observations. Feedback needs neither persistent identity.
 - Submitting a new Reaction or Rating for an existing Visitor-and-Project pair replaces the current value where feasible; it does not add another current vote.
 - Reactions, Ratings, Feedback submissions, and their aggregates are Project-wide rather than duplicated by language.
 - New Feedback is private and pending. It cannot appear publicly until an approval is recorded.
@@ -223,7 +223,7 @@ Evidence state is internal editorial information. It must not be rendered as an 
 - Geography, device, and language dimensions are coarse; aggregates expose a Low-sample state or suppress detail when observation counts are too small.
 - Engagement estimate is always presented as approximate active attention, never exact reading time.
 - Journey context records sequence without asserting that a page or Project caused a conversion.
-- Each Analytics goal version is immutable after activation. Editing a goal creates a new version so reports can identify the rule used at measurement time.
+- Each Analytics goal definition version is immutable from creation. Activation changes only the active pointer and appends history. Editing a goal creates a new version so reports can identify the rule used at measurement time.
 - Retention policy governs deletion or anonymization of eligible Feedback and Public event data. Aggregate reporting is preferred when detailed events are no longer needed.
 - In the first release, raw Public event data is retained for 14 days and daily aggregates for 13 months; rejected or unresolved Feedback is retained for 90 days and suppressed Feedback history for 12 months, unless a governing deletion requirement shortens those periods.
 - Failure of analytics intake, alerts, contact delivery, a rich-media dependency, or an External link must not block the Core public journey or replace the last valid published state.
@@ -307,3 +307,18 @@ Commands express owner or Visitor intent. Events describe successful domain outc
 | [ADR-0010: Durable public identity and safe media](./adr/0010-durable-public-identity.md) | Stable Public route identity, redirects, private previews, upload distrust, media processing, accessibility metadata, and explicit acceptance. |
 | [ADR-0011: Owner data portability](./adr/0011-owner-portability.md) | Versioned, documented Owner exports preserve required records, relationships, history, and a future migration path. |
 | [ADR-0015: Consent-first measurement and conservative retention](./adr/0015-consent-first-measurement-retention.md) | Non-essential measurement requires consent, functional and analytics identities remain purpose-separated, and first-release retention periods are explicit. |
+
+## Phase 7 contract decisions (#187 / #188)
+
+Accepted ADRs 0004, 0014, 0015, and 0016 retain precedence. This prefactor reconciles application contracts; persistence, crypto verification, consumers, and job execution arrive in the subsequent consuming tickets. It activates no new workflow.
+
+- Reaction and Rating use FunctionalVisitor, independently of Measurement consent and shared across Project languages. Feedback uses neither persistent identity. Losing the first functional cookie prevents same-actor replay of that first request; anonymous callers are never treated as one shared subject.
+- All nine allowlisted actions retain distinct semantics and action-specific fields. Reaction, Rating, Feedback, and Current CV never become Measurement intake or goal actions. Verified Measurement evidence has its own purpose, subject, Portfolio, consent revision, notice version, and expiry; cookie presence is not verification.
+- Owned vote/Feedback/raw-event records are separate from ordinary safe receipts, approved public Feedback pages, and Owner reports. Events carry stable resource facts, never functional subjects, names, paragraphs, or reasons. Owner private views remain distinct from public views. Only approved submitted-locale Feedback can appear publicly; no translation fallback applies.
+- Application request context carries server correlation and explicit Portfolio scope. The legacy shell can represent unconfigured scope and must fail closed. Effectful implementations require configured scope, current authorization, and current consent where applicable. The HTTP edge's temporary consent label is not verified evidence; #189 replaces that placeholder boundary.
+- Content owns the transaction-bound Project eligibility/public-facts ports. First consumers implement their adapters; Interaction never imports a Content repository. Content eligibility is locked before Interaction state in the existing transaction. This adds no inverse Media lock acquisition.
+- Public Feedback pages use descending display time then stable ID, default 25 and maximum 100. Rating averages are absent below five current raters. Owner Measurement reports use fixed groupings and suppress detail below five distinct consented subjects, preserving no-data, Low-sample, as-of, and incomplete states.
+- Goal definitions are immutable at creation; creating a version does not activate it. Activation changes the pointer and appends history. Missing-root version creation accepts initial If-Match 1, starts root version 1, and returns version 2; GET/activation of a missing goal remains not_found. Matching uses separate same-subject events in order within 30 minutes, historical half-open activation boundaries, and deterministic effective-time/accepted-time/event-ID ordering. Journey metadata alone cannot convert.
+- Event occurredAt is accepted from server acceptance minus 24 hours through plus 60 seconds, inclusive, and future effective time is capped at acceptance. Engagement samples are 1000–60000 milliseconds, journey context at most ten unique routes. Engagement remains approximate and Journey context non-causal.
+- Owned work is purpose-authorized, bounded to at most 100 records per transaction, and restartable. Raw detail/scratch/contributions expire at acceptedAt plus 14 UTC days; daily aggregates at UTC day plus 13 calendar months; pending/rejected Feedback at original submission plus 90 UTC days; suppressed name/text/reasons at suppression plus 12 calendar months. Equality means expired; month additions clamp at month end. Withdrawal cleans subject-linked detail while only irreversible aggregates survive; evidence/revocation auxiliaries have a maximum 30-day horizon.
+- Phase 7 proves owned leased-job execution locally/CI. Protected daily production scheduling, general dispatch/alerts, exports, and backup deletion propagation remain Phase 8 handoffs. Existing schemas and migration ownership remain unchanged in #188.

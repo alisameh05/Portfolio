@@ -75,3 +75,5 @@ export {
   type ProjectTaxonomyAssignmentFactsPort,
   type ContentProjectTaxonomyAssignment,
 } from "./authoring.js";
+
+export type { ProjectInteractionFacts, ProjectInteractionEligibilityPort, ContentMeasurementPublicFactsPort } from "./interaction-facts.js";

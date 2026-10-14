@@ -1,3 +1,4 @@
+import type { PortfolioRequestScope } from "@shared/application";
 /**
  * owner-analytics.ts — Phase 2 #32 Owner Analytics goal HTTP adapter.
  *
@@ -58,95 +59,11 @@ import {
 
 // ── Provider-neutral application seam ─────────────────────────────────────────
 
-export type AnalyticsEventAction =
-  | "page-viewed"
-  | "project-viewed"
-  | "active-engagement-sampled"
-  | "media-engaged"
-  | "related-project-opened"
-  | "contact-channel-opened"
-  | "external-project-link-opened"
-  | "testimonial-engaged"
-  | "global-project-cta-opened";
-
-export interface AnalyticsGoalStep {
-  readonly action: AnalyticsEventAction;
-  readonly publicRouteIds?: ReadonlyArray<StableId<string>>;
-  readonly projectIds?: ReadonlyArray<StableId<string>>;
-}
-
-export interface AnalyticsGoalDefinition {
-  readonly name: string;
-  readonly steps: ReadonlyArray<AnalyticsGoalStep>;
-}
-
-export interface GetOwnerAnalyticsGoalQuery {
-  readonly actor: ActorContext;
-  readonly goalId: StableId<string>;
-}
-
-export interface CreateOwnerAnalyticsGoalVersionApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly expectedVersion: number;
-  readonly goalId: StableId<string>;
-  readonly definition: AnalyticsGoalDefinition;
-}
-
-export interface ActivateOwnerAnalyticsGoalVersionApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly expectedVersion: number;
-  readonly goalId: StableId<string>;
-  readonly versionId: StableId<string>;
-}
-
-export interface AnalyticsGoalVersionView {
-  readonly versionId: StableId<string>;
-  readonly versionNumber: number;
-  readonly definition: AnalyticsGoalDefinition;
-  readonly createdAt: string;
-}
-
-export interface AnalyticsGoalActivationView {
-  readonly versionId: StableId<string>;
-  readonly activatedAt: string;
-}
-
-export interface AnalyticsGoalAggregateView {
-  readonly goalId: StableId<string>;
-  readonly aggregateVersion: number;
-  readonly activeVersionId: StableId<string> | null;
-  readonly versions: ReadonlyArray<AnalyticsGoalVersionView>;
-  readonly activationHistory: ReadonlyArray<AnalyticsGoalActivationView>;
-}
-
-export interface AnalyticsGoalVersionReceipt {
-  readonly goalId: StableId<string>;
-  readonly versionId: StableId<string>;
-  readonly aggregateVersion: number;
-  readonly outcome: "analytics-goal-version-created";
-}
-
-export interface AnalyticsGoalActivationReceipt {
-  readonly aggregateId: StableId<string>;
-  readonly aggregateVersion: number;
-  readonly outcome: "analytics-goal-version-activated";
-}
-
-export interface OwnerAnalyticsApplicationService {
-  getOwnerAnalyticsGoal(
-    query: GetOwnerAnalyticsGoalQuery,
-  ): Promise<Result<AnalyticsGoalAggregateView, Rejection>>;
-  createOwnerAnalyticsGoalVersion(
-    command: CreateOwnerAnalyticsGoalVersionApplicationCommand,
-  ): Promise<Result<AnalyticsGoalVersionReceipt, Rejection>>;
-  activateOwnerAnalyticsGoalVersion(
-    command: ActivateOwnerAnalyticsGoalVersionApplicationCommand,
-  ): Promise<Result<AnalyticsGoalActivationReceipt, Rejection>>;
-}
+import type { AnalyticsEventAction, AnalyticsGoalStep, AnalyticsGoalDefinition, GetOwnerAnalyticsGoalQuery, CreateOwnerAnalyticsGoalVersionApplicationCommand, ActivateOwnerAnalyticsGoalVersionApplicationCommand, AnalyticsGoalVersionView, AnalyticsGoalActivationView, AnalyticsGoalAggregateView, AnalyticsGoalVersionReceipt, AnalyticsGoalActivationReceipt, OwnerAnalyticsApplicationService } from "../../modules/measurement/index.js";
+export type { AnalyticsEventAction, AnalyticsGoalStep, AnalyticsGoalDefinition, GetOwnerAnalyticsGoalQuery, CreateOwnerAnalyticsGoalVersionApplicationCommand, ActivateOwnerAnalyticsGoalVersionApplicationCommand, AnalyticsGoalVersionView, AnalyticsGoalActivationView, AnalyticsGoalAggregateView, AnalyticsGoalVersionReceipt, AnalyticsGoalActivationReceipt, OwnerAnalyticsApplicationService } from "../../modules/measurement/index.js";
 
 export interface OwnerAnalyticsAdapterDeps {
+  readonly scope?: PortfolioRequestScope;
   service: OwnerAnalyticsApplicationService;
   security: OwnerRequestSecurity;
   logger?: Logger;
@@ -241,8 +158,10 @@ export async function handleGetOwnerAnalyticsGoal(
       return reject(logger, traceId, instance, "Invalid path parameters.");
     }
     const query: GetOwnerAnalyticsGoalQuery = {
+      scope: deps.scope ?? { kind: "unconfigured" },
+      correlationId: traceId,
       actor: guard.actor,
-      goalId: pathResult.data.goalId as StableId<string>,
+      goalId: pathResult.data.goalId as StableId<"AnalyticsGoal">,
     };
     let result: Awaited<ReturnType<typeof deps.service.getOwnerAnalyticsGoal>>;
     try {
@@ -339,16 +258,18 @@ export async function handleCreateOwnerAnalyticsGoalVersion(
         name: string;
         steps: Array<{
           action: AnalyticsEventAction;
-          publicRouteIds?: StableId<string>[];
-          projectIds?: StableId<string>[];
+          publicRouteIds?: StableId<"PublicRoute">[];
+          projectIds?: StableId<"Project">[];
         }>;
       };
     };
     const command: CreateOwnerAnalyticsGoalVersionApplicationCommand = {
+      scope: deps.scope ?? { kind: "unconfigured" },
+      correlationId: traceId,
       actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
-      goalId: pathResult.data.goalId as StableId<string>,
+      goalId: pathResult.data.goalId as StableId<"AnalyticsGoal">,
       definition: {
         name: body.definition.name,
         steps: body.definition.steps.map((step) => ({
@@ -435,12 +356,14 @@ export async function handleActivateOwnerAnalyticsGoalVersion(
     if (expectedVersion === null) {
       return reject(logger, traceId, instance, "Missing or invalid concurrency headers.");
     }
-    const body = bodyResult.data as { versionId: StableId<string> };
+    const body = bodyResult.data as { versionId: StableId<"AnalyticsGoalVersion"> };
     const command: ActivateOwnerAnalyticsGoalVersionApplicationCommand = {
+      scope: deps.scope ?? { kind: "unconfigured" },
+      correlationId: traceId,
       actor: guard.actor,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       expectedVersion,
-      goalId: pathResult.data.goalId as StableId<string>,
+      goalId: pathResult.data.goalId as StableId<"AnalyticsGoal">,
       versionId: body.versionId,
     };
     let result: Awaited<ReturnType<typeof deps.service.activateOwnerAnalyticsGoalVersion>>;
