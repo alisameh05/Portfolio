@@ -176,4 +176,63 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     const remaining = (await admin!.query("select event_id,accepted_at from measurement.public_events where event_id=$1", [expiredEvent])).rows;
     expect(remaining).toHaveLength(0);
   });
+
+  it("rejects Visitor, Owner, wrong-purpose System, and foreign-Portfolio commands at both module boundaries", async () => {
+    const modules = makeModuleServices(worker!);
+    const jobId = id("Job");
+    const invalidCommands = [
+      { ...workCommand(jobId, "measurement.aggregate", now), actor: { kind: "visitor", consent: "denied" } },
+      { ...workCommand(jobId, "measurement.aggregate", now), actor: { kind: "owner", ownerId: id("Owner"), sessionId: "test-session" } },
+      { ...workCommand(jobId, "measurement.aggregate", now), scope: { kind: "portfolio", portfolioId: id("Portfolio") } },
+    ];
+
+    for (const command of invalidCommands) {
+      const measurementResult = await modules.daily.aggregateDay({ ...command, utcDay: "2026-10-14" } as never);
+      expect(measurementResult.ok).toBe(false);
+      const feedbackResult = await modules.feedbackRetention.expireFeedback(command as never);
+      expect(feedbackResult.ok ? "ok" : feedbackResult.error.kind).toBe("forbidden");
+    }
+    const wrongMeasurementPurpose = await modules.daily.aggregateDay({ ...workCommand(jobId, "measurement.retention", now), utcDay: "2026-10-14" } as never);
+    expect(wrongMeasurementPurpose.ok).toBe(false);
+    const wrongFeedbackPurpose = await modules.feedbackRetention.expireFeedback(workCommand(jobId, "measurement.aggregate", now) as never);
+    expect(wrongFeedbackPurpose.ok ? "ok" : wrongFeedbackPurpose.error.kind).toBe("forbidden");
+  });
+
+  it("rolls back a failed retention batch, persists only safe retry diagnostics, then retries to completion", async () => {
+    const expiredEvent = id("PublicEvent");
+    await addEvent({ eventId: expiredEvent, occurredAt: "2026-10-01T00:00:00.000Z", acceptedAt: "2026-10-01T00:00:00.000Z" });
+    await admin!.query(`create function public.fail_due_work_event_delete() returns trigger language plpgsql as $$
+      begin raise exception 'PRIVATE_SUBJECT_TOKEN_SHOULD_NOT_PERSIST'; end $$`);
+    await admin!.query(`create trigger fail_due_work_event_delete before delete on measurement.public_events
+      for each row execute function public.fail_due_work_event_delete()`);
+
+    const operations = createPostgresOperationsPersistence(worker!.database, { now: () => now });
+    const modules = makeModuleServices(worker!);
+    const service = createPhase7DueWorkService({ portfolioId, clock: { now: () => now }, ids: createSystemIdGenerator(),
+      operations, measurement: { ...modules.daily, ...modules.measurementRetention }, interaction: modules.feedbackRetention });
+    const failedRun = await service.runDueWork({ workerId: "phase7-rollback-test" });
+    if (!failedRun.ok || failedRun.value.failed !== 1 || !failedRun.value.incomplete) {
+      throw new Error(`DUE_WORK_SAFE_FAILURE_RESULT:${JSON.stringify(failedRun)}`);
+    }
+
+    const failedJob = (await admin!.query(`select job_id,job_type,payload,status,attempt_count,last_error_code
+      from operations.jobs where job_type='measurement.detail-retention.v1' and status='available' order by job_id limit 1`)).rows[0];
+    if (failedJob?.status !== "available" || failedJob.attempt_count !== 2 || failedJob.last_error_code !== "PHASE7_WORK_FAILED" ||
+        JSON.stringify(failedJob.payload) !== "{}") {
+      throw new Error(`DUE_WORK_PERSISTED_FAILURE:${JSON.stringify(failedJob)}`);
+    }
+    expect(JSON.stringify(failedJob)).not.toContain("PRIVATE_SUBJECT_TOKEN_SHOULD_NOT_PERSIST");
+    expect((await admin!.query("select 1 from measurement.public_events where event_id=$1", [expiredEvent])).rows).toHaveLength(1);
+    expect((await admin!.query("select stage from measurement.retention_checkpoints where job_id=$1 and work_kind='detail'", [failedJob.job_id])).rows)
+      .toEqual([{ stage: "events" }]);
+
+    await admin!.query("drop trigger fail_due_work_event_delete on measurement.public_events; drop function public.fail_due_work_event_delete()");
+    const retriedRun = await service.runDueWork({ workerId: "phase7-rollback-test" });
+    expect(retriedRun).toMatchObject({ ok: true, value: { failed: 0, incomplete: true } });
+    const retriedJob = (await admin!.query("select status,attempt_count,last_error_code from operations.jobs where job_id=$1", [failedJob.job_id])).rows[0];
+    expect(retriedJob.status).toBe("completed");
+    expect(retriedJob.attempt_count).toBeGreaterThan(failedJob.attempt_count);
+    expect(retriedJob.last_error_code).toBe("PHASE7_WORK_FAILED");
+    expect((await admin!.query("select 1 from measurement.public_events where event_id=$1", [expiredEvent])).rows).toHaveLength(0);
+  });
 });

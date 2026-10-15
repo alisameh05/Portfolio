@@ -77,7 +77,7 @@ try {
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
   const assertions = tests.testResults.flatMap(suite => suite.assertionResults ?? []);
   if (!tests.success || tests.numFailedTestSuites !== 0 || tests.numFailedTests !== 0 || tests.numPendingTests !== 0 || tests.numTodoTests !== 0 ||
-      tests.numPassedTests !== 6 || assertions.length !== 6 || tests.testResults.length !== 2 ||
+      tests.numPassedTests !== 8 || assertions.length !== 8 || tests.testResults.length !== 2 ||
       tests.testResults.some(suite => suite.status !== "passed") || assertions.some(assertion => assertion.status !== "passed")) {
     throw new Error("PHASE7_JOBS_ACCEPTANCE_INCOMPLETE");
   }

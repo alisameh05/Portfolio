@@ -7,3 +7,4 @@ openapi/baseline/master/*.json text eol=lf
 src/contracts/http/**/generated/*.ts text eol=lf
 # Kysely database types are regenerated from the migrated database and drift-checked byte-for-byte.
 src/shared/adapters/postgres/database.generated.ts text eol=lf
+src/modules/*/adapters/database.generated.ts text eol=lf
