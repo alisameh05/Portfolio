@@ -7,6 +7,10 @@ import { createPostgresOperationsPersistence } from "../../src/modules/portabili
 import { createPostgresConsentRepository } from "../../src/modules/measurement/adapters/postgres-consent.js";
 import { createPostgresMeasurementEventRepository } from "../../src/modules/measurement/adapters/postgres-events.js";
 import { createPostgresContentMeasurementPublicFacts } from "../../src/modules/content-publishing/adapters/postgres-interaction-facts.js";
+import { createMediaAcceptanceApplicationService } from "../../src/modules/media/index.js";
+import { createPostgresMediaAcceptanceRepository } from "../../src/modules/media/adapters/postgres-acceptance.js";
+import { createPortfolioSettingsReader } from "../../src/modules/portfolio-configuration/index.js";
+import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createConsentApplicationService, createMeasurementEventService, type PublicMeasurementEvent, type VerifiedMeasurementEvidence } from "../../src/modules/measurement/index.js";
 import type { MeasurementEventRepositoryPort, MeasurementMediaPublicFactsPort } from "../../src/modules/measurement/application/ingest-event.js";
 import type { ConsentApplicationService, ConsentRepositoryPort } from "../../src/modules/measurement/application/consent.js";
@@ -80,6 +84,34 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     await admin.query("insert into content.testimonial_language_publications (content_id,portfolio_id,content_type,locale,revision_id,review_id,publication_sequence,published_at) values ($1,$2,'testimonial','en',$3,$4,1,$5)", [testimonialId, portfolioId, revision, review, now]);
     await admin.query("insert into content.public_testimonial_locales (content_id,portfolio_id,content_type,locale,revision_id,author_name,quote,association_type,project_id,published_at) values ($1,$2,'testimonial','en',$3,'Fixture author','Private fixture quote',$4,$5,$6)", [testimonialId, portfolioId, revision, projectId ? "project" : "profile", projectId ?? null, now]);
     return testimonialId;
+  }
+  async function seedAcceptedProfileMedia() {
+    const mediaAssetId = createStableId("MediaAsset"), uploadIntentId = createStableId("MediaUploadIntent");
+    const sourceObjectId = createStableId("MediaObject"), outputObjectId = createStableId("MediaObject");
+    const attemptId = createStableId("MediaProcessingAttempt"), decisionId = createStableId("MediaDecision");
+    const digest = "c".repeat(64), outputDigest = "d".repeat(64), byteLength = 25, timestamp = now;
+    await admin.query("insert into media.assets (media_id,portfolio_id,owner_id,kind,original_file_name,declared_media_type,declared_byte_length,declared_sha256) values ($1,$2,$3,'document','event-evidence.pdf','application/pdf',$4,$5)", [mediaAssetId, portfolioId, ownerId, byteLength, digest]);
+    await admin.query("insert into media.upload_intents (upload_intent_id,media_id,media_object_id,portfolio_id,owner_id,expires_at) values ($1,$2,$3,$4,$5,$6)", [uploadIntentId, mediaAssetId, sourceObjectId, portfolioId, ownerId, timestamp]);
+    await admin.query("insert into media.processed_objects (object_id,portfolio_id,owner_id,media_id,source_object_id,sha256,byte_length,mime_type,object_version) values ($1,$2,$3,$4,$5,$6,$7,'application/pdf','fixture-v1')", [outputObjectId, portfolioId, ownerId, mediaAssetId, sourceObjectId, outputDigest, byteLength]);
+    await admin.query("insert into media.processing_attempts (attempt_id,portfolio_id,owner_id,media_id,input_object_id,input_sha256,detected_mime_type,detected_byte_length,result,output_object_id,output_sha256,scanner_version,processor_version,policy_version,finding_codes,started_at,finished_at) values ($1,$2,$3,$4,$5,$6,'application/pdf',$7,'passed',$8,$9,'fixture-scanner-v1','fixture-processor-v1','pdf-active-content-deny-1','[]'::jsonb,$10,$10)", [attemptId, portfolioId, ownerId, mediaAssetId, sourceObjectId, digest, byteLength, outputObjectId, outputDigest, timestamp]);
+    await admin.query("insert into media.processing_states (media_id,portfolio_id,owner_id,aggregate_version,latest_attempt_id) values ($1,$2,$3,3,$4)", [mediaAssetId, portfolioId, ownerId, attemptId]);
+    await admin.query("insert into media.decision_history (decision_id,portfolio_id,owner_id,media_id,aggregate_version,decision,processing_attempt_id,input_object_id,input_sha256,detected_mime_type,detected_byte_length,scanner_version,processor_version,processing_policy_version,sealed_outputs,accessibility,ownership_attested_by,ownership_attested_at,public_suitability_attested_by,public_suitability_attested_at,decided_by,decided_at) values ($1,$2,$3,$4,3,'accepted',$5,$6,$7,'application/pdf',$8,'fixture-scanner-v1','fixture-processor-v1','pdf-active-content-deny-1',$9::jsonb,$10::jsonb,$3,$11,$3,$11,$3,$11)", [decisionId, portfolioId, ownerId, mediaAssetId, attemptId, sourceObjectId, digest, byteLength,
+      JSON.stringify([{ objectId: outputObjectId, sha256: outputDigest, byteLength, mimeType: "application/pdf", objectVersion: "fixture-v1", variantName: "document" }]),
+      JSON.stringify({ kind: "document", summary: "Public evidence document." }), timestamp]);
+    await admin.query("update portfolio_config.settings set profile_media_asset_id=$3 where portfolio_id=$1 and owner_id=$2", [portfolioId, ownerId, mediaAssetId]);
+    const mediaAcceptance = createMediaAcceptanceApplicationService({ scope: { portfolioId, ownerId }, repository: createPostgresMediaAcceptanceRepository({
+      database: database.database, transactions: database.transactions, scope: { portfolioId, ownerId },
+    }) });
+    const profileSettings = createPortfolioSettingsReader({ repository: createPostgresPortfolioSettingsRepository(),
+      transactions: database.transactions, scope: { portfolioId, ownerId } });
+    const mediaFacts: MeasurementMediaPublicFactsPort = { async getPublicUseFact(query, transaction) {
+      const acceptance = await mediaAcceptance.getAcceptanceFacts({ ownerId, mediaAssetIds: [query.mediaAssetId], intendedUse: "supporting-artifact" }, transaction);
+      if (!acceptance.ok) return acceptance;
+      const accepted = acceptance.value[0];
+      if (!accepted || !accepted.accepted || !accepted.safe || !accepted.suitable || !accepted.accessible) return { ok: true, value: false };
+      return profileSettings.isPublicProfileMediaUse({ mediaAssetId: query.mediaAssetId, locale: query.locale }, transaction);
+    } };
+    return { mediaAssetId, mediaFacts };
   }
   async function countEvents() { return Number((await admin.query("select count(*)::int as count from measurement.public_events where portfolio_id=$1", [portfolioId])).rows[0].count); }
   async function countJobs() { return Number((await admin.query("select count(*)::int as count from operations.jobs where job_type='measurement.public-event-received.v1'")).rows[0].count); }
@@ -170,24 +202,24 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
   });
 
   it("T10-01/T10-03 persists Media facts only when the optional public-use capability accepts them", async () => {
-    const project = await seedProject(), evidence = await issueEvidence(), mediaAssetId = createStableId("MediaAsset");
-    const acceptedMedia: MeasurementMediaPublicFactsPort = { async getPublicUseFact(input) {
-      return { ok: true, value: input.mediaAssetId === mediaAssetId && input.projectId === project.projectId && input.locale === "en" };
-    } };
-    const event: PublicMeasurementEvent = { action: "media-engaged", projectId: project.projectId, mediaAssetId, engagement: "completed", context: context(project.routeId) };
+    const project = await seedProject(), evidence = await issueEvidence(), { mediaAssetId, mediaFacts } = await seedAcceptedProfileMedia();
+    const event: PublicMeasurementEvent = { action: "media-engaged", mediaAssetId, engagement: "completed", context: context(project.routeId) };
     const before = await countEvents(), beforeJobs = await countJobs(), eventKey = key("media-fact-accepted-0001");
-    const mediaService = makeService({ media: acceptedMedia });
+    const mediaService = makeService({ media: mediaFacts });
     const accepted = await mediaService.ingestEvent(command(event, evidence.verified, eventKey));
     expect(accepted.ok).toBe(true);
     expect(await mediaService.ingestEvent(command(event, evidence.verified, eventKey))).toEqual(accepted);
     expect(await mediaService.ingestEvent(command({ ...event, engagement: "opened" }, evidence.verified, eventKey)))
       .toMatchObject({ ok: false, error: { kind: "conflict" } });
     const row = await admin.query("select action,project_id::text,media_asset_id::text,media_engagement from measurement.public_events where portfolio_id=$1 and media_asset_id=$2", [portfolioId, mediaAssetId]);
-    expect(row.rows).toEqual([{ action: "media-engaged", project_id: project.projectId, media_asset_id: mediaAssetId, media_engagement: "completed" }]);
-    const rejected = await makeService({ media: { async getPublicUseFact() { return { ok: true as const, value: false }; } } })
-      .ingestEvent(command(event, evidence.verified, key("media-fact-rejected-0001")));
+    expect(row.rows).toEqual([{ action: "media-engaged", project_id: null, media_asset_id: mediaAssetId, media_engagement: "completed" }]);
+    const unrelatedProfileAsset = createStableId("MediaAsset");
+    await admin.query("insert into media.assets (media_id,portfolio_id,owner_id,kind,original_file_name,declared_media_type,declared_byte_length,declared_sha256) values ($1,$2,$3,'document','other-candidate.pdf','application/pdf',1,$4)", [unrelatedProfileAsset, portfolioId, ownerId, "e".repeat(64)]);
+    await admin.query("update portfolio_config.settings set profile_media_asset_id=$3 where portfolio_id=$1 and owner_id=$2", [portfolioId, ownerId, unrelatedProfileAsset]);
+    const rejected = await mediaService.ingestEvent(command(event, evidence.verified, key("media-fact-rejected-0001")));
+    await admin.query("update portfolio_config.settings set profile_media_asset_id=$3 where portfolio_id=$1 and owner_id=$2", [portfolioId, ownerId, mediaAssetId]);
     const missing = await service.ingestEvent(command({ ...event, mediaAssetId: createStableId("MediaAsset") }, evidence.verified, key("media-fact-missing-0001")));
-    const failingService = makeService({ media: acceptedMedia, repository: { async insert() { throw new Error("injected Media event insert failure"); } } });
+    const failingService = makeService({ media: mediaFacts, repository: { async insert() { throw new Error("injected Media event insert failure"); } } });
     expect((await failingService.ingestEvent(command(event, evidence.verified, key("media-fact-rollback-0001")))).ok).toBe(false);
     expect(rejected.ok).toBe(false);
     expect(missing.ok).toBe(false);
