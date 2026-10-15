@@ -21,7 +21,7 @@ function setup(options: { readonly retainedIds?: readonly string[] } = {}) {
   const retainedIds = new Set(options.retainedIds ?? [projectId, routeId]);
   const roots = new Map<string, { aggregateVersion: number; activeVersionId: StableId<"AnalyticsGoalVersion"> | null }>();
   const versions = new Map<string, Array<{ versionId: StableId<"AnalyticsGoalVersion">; versionNumber: number; definition: AnalyticsGoalDefinition; createdAt: string }>>();
-  const activations = new Map<string, Array<{ versionId: StableId<"AnalyticsGoalVersion">; activatedAt: string }>>();
+  const activations = new Map<string, Array<{ versionId: StableId<"AnalyticsGoalVersion">; activatedAt: string; activationSequence: number }>>();
   const ledger = new Map<string, { hash: string; result: Record<string, unknown> }>();
   const writes: unknown[] = [];
   let authorized = true;
@@ -39,6 +39,14 @@ function setup(options: { readonly retainedIds?: readonly string[] } = {}) {
       rows.push({ versionId: input.versionId, versionNumber: input.versionNumber, definition: input.definition, createdAt: input.createdAt });
       versions.set(input.goalId, rows);
       roots.set(input.goalId, { ...roots.get(input.goalId)!, aggregateVersion: roots.get(input.goalId)!.aggregateVersion + 1 });
+    },
+    async activateVersion(input: { goalId: StableId<"AnalyticsGoal">; versionId: StableId<"AnalyticsGoalVersion">; activatedAt: string }) {
+      const root = roots.get(input.goalId)!;
+      roots.set(input.goalId, { aggregateVersion: root.aggregateVersion + 1, activeVersionId: input.versionId });
+      const history = activations.get(input.goalId) ?? [];
+      history.push({ versionId: input.versionId, activatedAt: input.activatedAt, activationSequence: history.length + 1 });
+      activations.set(input.goalId, history);
+      return history.length;
     },
     async listVersions(id: string) { return versions.get(id) ?? []; },
     async listActivations(id: string) { return activations.get(id) ?? []; },
@@ -78,8 +86,18 @@ function setup(options: { readonly retainedIds?: readonly string[] } = {}) {
       idempotencyKey: key.value, expectedVersion: override.expectedVersion ?? 1, goalId, definition: override.definition ?? definition,
     };
   };
+  const activationCommand = (override: Partial<{ expectedVersion: number; versionId: StableId<"AnalyticsGoalVersion">; idempotencyKey: string }> = {}) => {
+    const key = parseIdempotencyKey(override.idempotencyKey ?? "goal-activate-001");
+    if (!key.ok) throw new Error("invalid test key");
+    return {
+      scope: { kind: "portfolio" as const, portfolioId }, correlationId: "goal-activation-correlation",
+      actor: { kind: "owner" as const, ownerId, sessionId: "verified-session" },
+      idempotencyKey: key.value, expectedVersion: override.expectedVersion ?? 2, goalId,
+      versionId: override.versionId ?? versionId,
+    };
+  };
   const query = () => ({ scope: { kind: "portfolio" as const, portfolioId }, correlationId: "goal-query", actor: { kind: "owner" as const, ownerId, sessionId: "verified-session" }, goalId });
-  return { service, roots, versions, writes, command, query, setAuthorized(value: boolean) { authorized = value; } };
+  return { service, roots, versions, activations, writes, command, activationCommand, query, setAuthorized(value: boolean) { authorized = value; } };
 }
 
 describe("Owner Analytics goal version application seam", () => {
@@ -173,5 +191,60 @@ describe("Owner Analytics goal version application seam", () => {
       .toMatchObject({ ok: false, error: { kind: "precondition_failed", code: "GOAL_INITIAL_VERSION_REQUIRED" } });
     expect(roots.size).toBe(0);
     expect(writes).toHaveLength(0);
+  });
+
+  it("activates an existing version without changing its immutable definition and exposes ordered history", async () => {
+    const { service, roots, versions, activations, writes, command, activationCommand, query } = setup();
+    await service.createOwnerAnalyticsGoalVersion(command());
+    const snapshot = structuredClone(versions.get(goalId));
+    const activated = await service.activateOwnerAnalyticsGoalVersion(activationCommand());
+    expect(activated).toEqual({ ok: true, value: { aggregateId: goalId, aggregateVersion: 3, outcome: "analytics-goal-version-activated" } });
+    expect(roots.get(goalId)).toEqual({ aggregateVersion: 3, activeVersionId: versionId });
+    expect(versions.get(goalId)).toEqual(snapshot);
+    expect(activations.get(goalId)).toEqual([{ versionId, activatedAt: now, activationSequence: 1 }]);
+    expect(await service.getOwnerAnalyticsGoal(query())).toMatchObject({ ok: true, value: {
+      aggregateVersion: 3, activeVersionId: versionId, activationHistory: [{ versionId, activatedAt: now }],
+    } });
+    expect(writes).toHaveLength(2);
+  });
+
+  it("replays activation receipts, treats fresh-key activation of the current version as a no-op, and checks stale versions", async () => {
+    const { service, roots, activations, writes, command, activationCommand } = setup();
+    await service.createOwnerAnalyticsGoalVersion(command());
+    const first = await service.activateOwnerAnalyticsGoalVersion(activationCommand());
+    expect(await service.activateOwnerAnalyticsGoalVersion(activationCommand())).toEqual(first);
+    expect(await service.activateOwnerAnalyticsGoalVersion(activationCommand({ idempotencyKey: "goal-activate-noop", expectedVersion: 3 }))).toEqual(first);
+    expect(roots.get(goalId)).toEqual({ aggregateVersion: 3, activeVersionId: versionId });
+    expect(activations.get(goalId)).toHaveLength(1);
+    expect(writes).toHaveLength(2);
+    expect(await service.activateOwnerAnalyticsGoalVersion(activationCommand({ idempotencyKey: "goal-activate-stale", expectedVersion: 2 })))
+      .toMatchObject({ ok: false, error: { kind: "precondition_failed", code: "ANALYTICS_GOAL_VERSION_STALE", currentVersion: 3 } });
+    expect(writes).toHaveLength(2);
+  });
+
+  it("rejects missing roots and foreign versions without leaking or changing goal state", async () => {
+    const { service, roots, activations, writes, activationCommand, command } = setup();
+    expect(await service.activateOwnerAnalyticsGoalVersion(activationCommand()))
+      .toMatchObject({ ok: false, error: { kind: "not_found", code: "ANALYTICS_GOAL_NOT_FOUND" } });
+    await service.createOwnerAnalyticsGoalVersion(command());
+    const foreignVersion = createStableId("AnalyticsGoalVersion");
+    expect(await service.activateOwnerAnalyticsGoalVersion(activationCommand({ versionId: foreignVersion })))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "ANALYTICS_GOAL_VERSION_UNAVAILABLE" } });
+    expect(roots.get(goalId)).toEqual({ aggregateVersion: 2, activeVersionId: null });
+    expect(activations.get(goalId) ?? []).toHaveLength(0);
+    expect(writes).toHaveLength(1);
+  });
+
+  it("rechecks Owner authorization before replay and conflicts on changed activation payload", async () => {
+    const { service, command, activationCommand, setAuthorized, writes } = setup();
+    await service.createOwnerAnalyticsGoalVersion(command());
+    const first = await service.activateOwnerAnalyticsGoalVersion(activationCommand());
+    setAuthorized(false);
+    expect(await service.activateOwnerAnalyticsGoalVersion(activationCommand())).toMatchObject({ ok: false, error: { kind: "forbidden" } });
+    setAuthorized(true);
+    expect(await service.activateOwnerAnalyticsGoalVersion(activationCommand({ versionId: createStableId("AnalyticsGoalVersion") })))
+      .toMatchObject({ ok: false, error: { kind: "conflict", code: "IDEMPOTENCY_PAYLOAD_CONFLICT" } });
+    expect(first.ok).toBe(true);
+    expect(writes).toHaveLength(2);
   });
 });

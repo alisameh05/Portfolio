@@ -20,13 +20,17 @@ export interface AnalyticsGoalRootRecord {
 }
 
 export interface AnalyticsGoalVersionRecord extends AnalyticsGoalVersionView {}
-export interface AnalyticsGoalActivationRecord extends AnalyticsGoalActivationView {}
+export interface AnalyticsGoalActivationRecord extends AnalyticsGoalActivationView {
+  /** Monotonic, goal-local ordering for tied timestamps and delayed matching. */
+  readonly activationSequence: number;
+}
 
 export interface OwnerAnalyticsGoalRepositoryPort {
   lockGoal(goalId: StableId<"AnalyticsGoal">, portfolioId: StableId<"Portfolio">, transaction: TransactionContext): Promise<void>;
   getGoal(goalId: StableId<"AnalyticsGoal">, portfolioId: StableId<"Portfolio">, transaction: TransactionContext): Promise<AnalyticsGoalRootRecord | null>;
   insertGoal(goalId: StableId<"AnalyticsGoal">, portfolioId: StableId<"Portfolio">, transaction: TransactionContext): Promise<void>;
   appendVersion(input: { readonly goalId: StableId<"AnalyticsGoal">; readonly portfolioId: StableId<"Portfolio">; readonly versionId: StableId<"AnalyticsGoalVersion">; readonly versionNumber: number; readonly expectedAggregateVersion: number; readonly definition: AnalyticsGoalDefinition; readonly createdAt: string }, transaction: TransactionContext): Promise<void>;
+  activateVersion(input: { readonly goalId: StableId<"AnalyticsGoal">; readonly portfolioId: StableId<"Portfolio">; readonly versionId: StableId<"AnalyticsGoalVersion">; readonly activationId: StableId<"Event">; readonly expectedAggregateVersion: number; readonly activatedAt: string }, transaction: TransactionContext): Promise<number>;
   listVersions(goalId: StableId<"AnalyticsGoal">, portfolioId: StableId<"Portfolio">, transaction: TransactionContext): Promise<readonly AnalyticsGoalVersionRecord[]>;
   listActivations(goalId: StableId<"AnalyticsGoal">, portfolioId: StableId<"Portfolio">, transaction: TransactionContext): Promise<readonly AnalyticsGoalActivationRecord[]>;
 }
