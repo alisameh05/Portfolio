@@ -273,15 +273,17 @@ export async function initializeDatabaseRuntime(
               clock, ids: createSystemIdGenerator(), ttlSeconds: 2_592_000,
               supportedNoticeVersions: env["MEASUREMENT_CONSENT_NOTICE_VERSIONS"]!.split(",").map(v => v.trim()),
             });
-            const [{ createMeasurementEventService }, { createPostgresMeasurementEventRepository }, { createPostgresContentMeasurementPublicFacts }] = await Promise.all([
+            const [{ createMeasurementEventService }, { createPostgresMeasurementEventRepository }, { createPostgresContentMeasurementPublicFacts }, { createPostgresMeasurementConfigurationPublicFacts }] = await Promise.all([
               import("../modules/measurement/index.js"),
               import("../modules/measurement/adapters/postgres-events.js"),
               import("../modules/content-publishing/adapters/postgres-interaction-facts.js"),
+              import("../modules/portfolio-configuration/adapters/postgres-measurement-public-facts.js"),
             ]);
             if (!configuredScope?.portfolioId.ok || !configuredScope.ownerId.ok) throw new Error("MEASUREMENT_SCOPE_UNAVAILABLE");
             eventIngestion = { scope: { kind: "portfolio", portfolioId: configuredScope.portfolioId.value }, service: createMeasurementEventService({ portfolioId: configuredScope.portfolioId.value,
               transactions: database.transactions, operations, consent,
               content: createPostgresContentMeasurementPublicFacts({ portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value }),
+              configuration: createPostgresMeasurementConfigurationPublicFacts({ portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value }),
               media: { async getPublicUseFact(input, transaction) {
                 if (!eventMediaFacts) return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEASUREMENT_MEDIA_FACTS_UNAVAILABLE" } };
                 return eventMediaFacts.getPublicUseFact(input, transaction);

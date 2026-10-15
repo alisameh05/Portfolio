@@ -68,3 +68,4 @@ export class StubPortfolioConfigurationRepository
     return err({ kind: "temporarily_unavailable", code: "PERSISTENCE_NOT_IMPLEMENTED" });
   }
 }
+export { createPostgresMeasurementConfigurationPublicFacts } from "./postgres-measurement-public-facts.js";

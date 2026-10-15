@@ -107,22 +107,32 @@ describe("POST Public event adapter (#28)", () => {
     expect(JSON.stringify(logger.records)).not.toContain("signed-value-123");
   });
 
-  it("rejects actions outside the currently implemented fact capabilities before consent verification", async () => {
+  it("dispatches all nine contract actions through consent verification", async () => {
     const actions = [
+      { action: "page-viewed" },
+      { action: "project-viewed", projectId: PROJECT_ID },
+      { action: "active-engagement-sampled", projectId: PROJECT_ID, activeMilliseconds: 1_000 },
+      { action: "media-engaged", mediaAssetId: EVENT_ID, engagement: "opened" },
+      { action: "related-project-opened", sourceProjectId: PROJECT_ID, targetProjectId: EVENT_ID },
+      { action: "testimonial-engaged", testimonialId: EVENT_ID },
       { action: "contact-channel-opened", channel: "linkedin" },
       { action: "external-project-link-opened", projectId: PROJECT_ID, destination: "github-repository" },
       { action: "global-project-cta-opened", projectId: PROJECT_ID },
     ];
-    for (const event of actions) {
+    for (const [index, event] of actions.entries()) {
       const fake = createPublicEventTestFake({ type: "success" });
       let consentCalls = 0;
-      const response = await rawHandlePostPublicEvent(postEventRequest({ body: { ...event, context: validContext() } }), {
-        consent: { async verifyEvidence() { consentCalls += 1; throw new Error("must not verify excluded action"); } },
+      const response = await rawHandlePostPublicEvent(postEventRequest({ idempotencyKey: `http-action-key-0${index + 1}`, body: { ...event, context: validContext() } }), {
+        consent: { async verifyEvidence(query) { consentCalls += 1; return { ok: true as const, value: {
+          purpose: "measurement" as const, subject: EVENT_ID as never, portfolioId: PROJECT_ID as never, consentId: EVENT_ID as never,
+          noticeVersion: query.noticeVersion, revision: 1, issuedAt: "2026-09-17T12:00:00.000Z", expiresAt: "2026-10-17T12:00:00.000Z",
+        } }; } },
         service: fake,
       });
-      expect(response.status).toBe(400);
-      expect(consentCalls).toBe(0);
-      expect(fake.calls).toHaveLength(0);
+      expect(response.status, event.action).toBe(202);
+      expect(consentCalls).toBe(1);
+      expect(fake.calls).toHaveLength(1);
+      expect(fake.calls[0]?.event).toMatchObject(event);
     }
   });
 

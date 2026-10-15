@@ -1,0 +1,77 @@
+{
+  "runId": "2e02be25-81b3-4da7-b5be-a788c32ca626",
+  "sourceRevision": "3bdf5377036ce13510822db6f62a99a8e206f5a1",
+  "sourceTreeSha256": "a5258c950203990fe5acfe73ffed6f8170833e15f1f21572b8850d0be79c2e8c",
+  "version": "postgres (PostgreSQL) 18.3",
+  "migration": "supabase/migrations/20261015150000_enable_configuration_interaction_event_facts.sql",
+  "migrationSha256": "ce3d4700c6cf9154f8aa5a462bca3032d19ead3faf1b73ef64dca4ff954a03a9",
+  "acceptanceCriteria": {
+    "T11-01": [
+      "T11-01/T11-04/T11-06 records only current configured capability facts and stable public identities",
+      "T11-01/T11-06 accepts and preserves all nine action mappings as distinct facts"
+    ],
+    "T11-02": [
+      "T11-02/T11-03/T11-05 rejects absent or mismatched current configuration without durable effects",
+      "T11-02/T11-03 rejects unconfigured Contact channel before durable effects",
+      "T11-02/T11-03 rejects unavailable Global CTA destination before durable effects"
+    ],
+    "T11-03": [
+      "T11-02/T11-03 rejects English-only Project destination in Arabic before durable effects"
+    ],
+    "T11-04": [
+      "T11-01/T11-04/T11-06 records only current configured capability facts and stable public identities"
+    ],
+    "T11-05": [
+      "T11-05 rejects invalid Contact channel before durable effects",
+      "T11-05 rejects raw destination URL before durable effects",
+      "T11-05 rejects unknown closed-shape property as 400 before dispatch"
+    ],
+    "T11-06": [
+      "T11-01/T11-06 accepts and preserves all nine action mappings as distinct facts",
+      "dispatches all nine contract actions through consent verification"
+    ],
+    "T11-07": [
+      "T11-07 replays and conflicts for each current capability fact exactly once",
+      "T09-07 commits event, safe receipt and private job once; exact races replay and failures roll back"
+    ],
+    "T11-08": [
+      "T11-01/T11-04/T11-06 records only current configured capability facts and stable public identities",
+      "T11-02/T11-03/T11-05 rejects absent or mismatched current configuration without durable effects"
+    ]
+  },
+  "required": {
+    "success": true,
+    "passed": 69,
+    "failed": 0,
+    "skipped": 0,
+    "failedSuites": 0
+  },
+  "suites": [
+    {
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/phase7/consent-crypto.test.ts",
+      "passed": 5
+    },
+    {
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/phase7/events-application.test.ts",
+      "passed": 32
+    },
+    {
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/phase7/events-postgres.test.ts",
+      "passed": 12
+    },
+    {
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/runtime/public-event.test.ts",
+      "passed": 20
+    }
+  ],
+  "roles": [
+    "event_runtime",
+    "shipwithali_application",
+    "shipwithali_worker",
+    "anon",
+    "authenticated"
+  ],
+  "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:events -- --ticket-198; PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries",
+  "scope": "Disposable native PostgreSQL cluster; full repository migration chain, restricted application role, HTTP/application/consent integration. No production database was modified.",
+  "cleanup": true
+}
