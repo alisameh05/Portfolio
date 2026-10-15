@@ -7,7 +7,7 @@ import type { AnalyticsGoalRootRecord, AnalyticsGoalVersionRecord, OwnerAnalytic
 import type {
   AnalyticsEventAction, AnalyticsGoalDefinition, AnalyticsGoalAggregateView, AnalyticsGoalVersionView,
   AnalyticsGoalVersionReceipt, CreateOwnerAnalyticsGoalVersionApplicationCommand, GetOwnerAnalyticsGoalQuery,
-  OwnerAnalyticsApplicationService,
+  ActivateOwnerAnalyticsGoalVersionApplicationCommand, AnalyticsGoalActivationReceipt, OwnerAnalyticsApplicationService,
 } from "./owner-analytics.js";
 
 export interface AnalyticsGoalScopeFactsPort {
@@ -35,6 +35,7 @@ const ACTIONS = new Set<AnalyticsEventAction>([
   "contact-channel-opened", "external-project-link-opened", "testimonial-engaged", "global-project-cta-opened",
 ]);
 const REQUEST_FIELDS = new Set(["scope", "correlationId", "actor", "idempotencyKey", "expectedVersion", "goalId", "definition"]);
+const ACTIVATION_REQUEST_FIELDS = new Set(["scope", "correlationId", "actor", "idempotencyKey", "expectedVersion", "goalId", "versionId"]);
 const DEFINITION_FIELDS = new Set(["name", "steps"]);
 const STEP_FIELDS = new Set(["action", "publicRouteIds", "projectIds"]);
 
@@ -92,8 +93,15 @@ function isReceipt(value: Record<string, unknown>, goalId: StableId<"AnalyticsGo
     Number.isSafeInteger(value["aggregateVersion"]) && (value["aggregateVersion"] as number) >= 2 && value["outcome"] === "analytics-goal-version-created" && Object.keys(value).length === 4;
 }
 
+function isActivationReceipt(value: Record<string, unknown>, goalId: StableId<"AnalyticsGoal">): value is Record<string, unknown> & {
+  aggregateId: StableId<"AnalyticsGoal">; aggregateVersion: number; outcome: "analytics-goal-version-activated";
+} {
+  return value["aggregateId"] === goalId && Number.isSafeInteger(value["aggregateVersion"]) &&
+    (value["aggregateVersion"] as number) >= 2 && value["outcome"] === "analytics-goal-version-activated" && Object.keys(value).length === 3;
+}
+
 export function createOwnerAnalyticsGoalService(deps: OwnerAnalyticsGoalServiceDependencies): OwnerAnalyticsApplicationService {
-  async function authorize(query: GetOwnerAnalyticsGoalQuery | CreateOwnerAnalyticsGoalVersionApplicationCommand): Promise<Result<void, Rejection>> {
+  async function authorize(query: GetOwnerAnalyticsGoalQuery | CreateOwnerAnalyticsGoalVersionApplicationCommand | ActivateOwnerAnalyticsGoalVersionApplicationCommand): Promise<Result<void, Rejection>> {
     if (!validOwner(query.actor, deps.scope) || query.scope.kind !== "portfolio" || query.scope.portfolioId !== deps.scope.portfolioId) return reject("forbidden", "OWNER_SCOPE_REQUIRED");
     const permitted = await deps.authorize({ actor: query.actor, requiredPermission: "write:owner" });
     if (!permitted.ok) return permitted;
@@ -110,7 +118,9 @@ export function createOwnerAnalyticsGoalService(deps: OwnerAnalyticsGoalServiceD
           const root = await deps.repository.getGoal(query.goalId, deps.scope.portfolioId, tx);
           if (!root) return reject("not_found", "ANALYTICS_GOAL_NOT_FOUND");
           const versions = (await deps.repository.listVersions(query.goalId, deps.scope.portfolioId, tx)).map(asVersionView);
-          const activationHistory = await deps.repository.listActivations(query.goalId, deps.scope.portfolioId, tx);
+          const activationRecords = await deps.repository.listActivations(query.goalId, deps.scope.portfolioId, tx);
+          const activationHistory = activationRecords.map(({ versionId, activatedAt }) => ({ versionId, activatedAt }));
+          if (activationRecords.some((activation, index) => activation.activationSequence !== index + 1)) throw new Error("ANALYTICS_GOAL_ACTIVATION_ORDER_INVALID");
           if (!versions.length || versions[0]?.versionNumber !== 1 || versions.some((version, index) => version.versionNumber !== index + 1)) throw new Error("ANALYTICS_GOAL_HISTORY_INVALID");
           const view: AnalyticsGoalAggregateView = { goalId: root.goalId, aggregateVersion: root.aggregateVersion,
             activeVersionId: root.activeVersionId, versions, activationHistory };
@@ -174,8 +184,62 @@ export function createOwnerAnalyticsGoalService(deps: OwnerAnalyticsGoalServiceD
         });
       } catch { return unavailable(); }
     },
-    async activateOwnerAnalyticsGoalVersion() {
-      return reject("temporarily_unavailable", "RUNTIME_NOT_IMPLEMENTED");
+    async activateOwnerAnalyticsGoalVersion(command: ActivateOwnerAnalyticsGoalVersionApplicationCommand): Promise<Result<AnalyticsGoalActivationReceipt, Rejection>> {
+      try {
+        const access = await authorize(command);
+        if (!access.ok) return access;
+        if (Object.keys(command).some(key => !ACTIVATION_REQUEST_FIELDS.has(key)) ||
+            !parseStableId("AnalyticsGoal", command.goalId).ok || !parseStableId("AnalyticsGoalVersion", command.versionId).ok ||
+            !parseIdempotencyKey(command.idempotencyKey).ok || !Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1 ||
+            typeof command.correlationId !== "string" || command.correlationId.length < 1 || command.correlationId.length > 200) {
+          return reject("validation", "ANALYTICS_GOAL_COMMAND_INVALID");
+        }
+        return await deps.operations.transactions.run<Result<AnalyticsGoalActivationReceipt, Rejection>>(async tx => {
+          await deps.repository.lockGoal(command.goalId, deps.scope.portfolioId, tx);
+          const root = await deps.repository.getGoal(command.goalId, deps.scope.portfolioId, tx);
+          if (!root) return requestTransactionRollback(reject("not_found", "ANALYTICS_GOAL_NOT_FOUND"));
+          const executionTime = deps.clock.now();
+          const activationId = parseStableId("Event", deps.ids.generate("Event"));
+          const eventId = parseStableId("Event", deps.ids.generate("Event"));
+          if (!activationId.ok || !eventId.ok || !Number.isFinite(Date.parse(executionTime))) throw new Error("ANALYTICS_GOAL_ID_GENERATION_INVALID");
+          const execution = await deps.operations.idempotency.execute({
+            operationScope: `measurement.analytics-goal-activation:${deps.scope.portfolioId}:${command.goalId}`,
+            actorScope: await hashCanonicalRequest({ purpose: "owner_analytics_goal", ownerId: deps.scope.ownerId }),
+            key: command.idempotencyKey,
+            requestHash: await hashCanonicalRequest({ goalId: command.goalId, versionId: command.versionId, expectedVersion: command.expectedVersion }),
+            expiresAt: new Date(Date.parse(executionTime) + 90 * 86_400_000).toISOString(),
+          }, async context => {
+            const current = await deps.repository.getGoal(command.goalId, deps.scope.portfolioId, context);
+            if (!current) return { rejection: "ANALYTICS_GOAL_NOT_FOUND" };
+            if (command.expectedVersion !== current.aggregateVersion) {
+              return { rejection: "ANALYTICS_GOAL_VERSION_STALE", currentVersion: current.aggregateVersion };
+            }
+            const versions = await deps.repository.listVersions(command.goalId, deps.scope.portfolioId, context);
+            if (!versions.some(version => version.versionId === command.versionId)) return { rejection: "ANALYTICS_GOAL_VERSION_UNAVAILABLE" };
+            if (current.activeVersionId === command.versionId) {
+              return { aggregateId: command.goalId, aggregateVersion: current.aggregateVersion, outcome: "analytics-goal-version-activated" };
+            }
+            const aggregateVersion = current.aggregateVersion + 1;
+            await deps.repository.activateVersion({ goalId: command.goalId, portfolioId: deps.scope.portfolioId,
+              versionId: command.versionId, activationId: activationId.value, expectedAggregateVersion: current.aggregateVersion,
+              activatedAt: executionTime }, context);
+            const version = versions.find(candidate => candidate.versionId === command.versionId);
+            if (!version) throw new Error("ANALYTICS_GOAL_VERSION_DISAPPEARED");
+            await deps.operations.outbox.append(context, { eventId: eventId.value, aggregateId: command.goalId, aggregateVersion,
+              correlationId: command.correlationId, occurredAt: executionTime, availableAt: executionTime,
+              payload: { type: "measurement.goal_version_activated.v1", version: 1,
+                value: { goalId: command.goalId, versionId: command.versionId, versionNumber: version.versionNumber } } });
+            return { aggregateId: command.goalId, aggregateVersion, outcome: "analytics-goal-version-activated" };
+          }, tx);
+          if (execution.kind === "conflict") return requestTransactionRollback(reject("conflict", "IDEMPOTENCY_PAYLOAD_CONFLICT"));
+          if (execution.result["rejection"] === "ANALYTICS_GOAL_NOT_FOUND") return requestTransactionRollback(reject("not_found", "ANALYTICS_GOAL_NOT_FOUND"));
+          if (execution.result["rejection"] === "ANALYTICS_GOAL_VERSION_UNAVAILABLE") return requestTransactionRollback(reject("validation", "ANALYTICS_GOAL_VERSION_UNAVAILABLE"));
+          if (execution.result["rejection"] === "ANALYTICS_GOAL_VERSION_STALE") return requestTransactionRollback(reject("precondition_failed", "ANALYTICS_GOAL_VERSION_STALE", Number(execution.result["currentVersion"])));
+          if (!isActivationReceipt(execution.result, command.goalId)) throw new Error("ANALYTICS_GOAL_ACTIVATION_RECEIPT_INVALID");
+          return { ok: true as const, value: { aggregateId: execution.result.aggregateId,
+            aggregateVersion: execution.result.aggregateVersion, outcome: execution.result.outcome } };
+        });
+      } catch { return unavailable(); }
     },
   };
 }

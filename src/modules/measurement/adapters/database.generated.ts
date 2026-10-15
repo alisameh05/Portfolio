@@ -9,6 +9,8 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
 
+export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
+
 export type Json = JsonValue;
 
 export type JsonArray = JsonValue[];
@@ -26,6 +28,10 @@ export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 export interface AnalyticsGoalActivationHistory {
   activated_at: Timestamp;
   activation_id: string;
+  /**
+   * Monotonic goal-local order, allocated under the goal lock so delayed matching can resolve tied activation timestamps.
+   */
+  activation_sequence: Int8;
   aggregate_version: number;
   goal_id: string;
   portfolio_id: string;

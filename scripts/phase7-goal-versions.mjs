@@ -11,7 +11,7 @@ const runId = randomUUID();
 const startingSource = workingTreeSourceSha256();
 const refreshTypes = process.argv.includes("--refresh-types");
 const reportPath = resolve("artifacts/goal-versions-vitest.json");
-const evidencePath = resolve("evidence/phase7-goal-versions-199.json");
+const evidencePath = resolve("evidence/phase7-goal-activation-200.json");
 const discoveredBin = process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" :
   spawnSync("pg_config", ["--bindir"], { encoding: "utf8", timeout: 5_000 }).stdout?.trim();
 const bin = process.env.PHASE7_POSTGRES_BIN ?? discoveredBin ?? "";
@@ -50,7 +50,7 @@ try {
   stage = "baseline";
   await admin.query("create role anon nologin; create role authenticated nologin; create role shipwithali_migration nologin nosuperuser nobypassrls; grant create on database postgres to shipwithali_migration");
   const migrations = readdirSync("supabase/migrations").filter(name => name.endsWith(".sql")).sort();
-  const migration = "supabase/migrations/20261015160000_persist_immutable_analytics_goal_versions.sql";
+  const migration = "supabase/migrations/20261015170000_activate_analytics_goal_versions.sql";
   if (!migrations.includes(migration.split("/").at(-1))) throw new Error("GOAL_MIGRATION_MISSING");
   const project = join(temp, "migration-project");
   mkdirSync(join(project, "supabase/migrations"), { recursive: true });
@@ -92,9 +92,17 @@ try {
         "T12-03": ["a two-party barrier overlaps independent concurrent initializers and yields exactly one root and version one", "exact retry replays original receipt and changed payload conflicts without another outbox effect"],
         "T12-04": ["name, action, step, scope, duplicate, wrong-type, unavailable, and Portfolio boundaries validated", "one hundred scope and ten step limits accepted; one hundred one and eleven rejected"],
         "T12-05": ["retained Hidden Project and route identities remain valid goal scopes without changing public lifecycle"],
-        "T12-06": ["later immutable snapshots advance ordered history while active pointer and activation facts remain unchanged"],
+        "T12-06": ["later versions append ordered snapshots without changing the active pointer or activation facts"],
         "T12-07": ["stale preconditions and non-Owner actors are rejected safely", "replay checks current Owner authorization again", "the shared verified Owner boundary rejects invalid origin and CSRF before dispatch"],
-        "T12-08": ["root, snapshot, outbox, and ledger failures leave no durable root/version/receipt/fact", "restricted application role cannot update or delete immutable snapshots"]
+        "T12-08": ["root, snapshot, outbox, and ledger failures leave no durable root/version/receipt/fact", "restricted application role cannot update or delete immutable snapshots"],
+        "T13-01": ["existing Owner activation HTTP operation returns contract-valid 200 and inspect exposes the active pointer and ordered history"],
+        "T13-02": ["creation leaves activation unchanged and activation preserves definition snapshot bytes with one active pointer"],
+        "T13-03": ["cross-goal and foreign-Portfolio version IDs reject without private leakage or state changes; absent root is not_found"],
+        "T13-04": ["exact replay and fresh-key same-version activation add no duplicate fact or aggregate increment"],
+        "T13-05": ["changed-payload key reuse conflicts, stale If-Match returns 412, and replay requires current Owner authorization"],
+        "T13-06": ["independent concurrent activations serialize to one pointer/history", "injected pointer-history, outbox, and ledger failures roll back together"],
+        "T13-07": ["fixed-clock tied activation timestamps retain deterministic goal-local sequence for delayed matching"],
+        "T13-08": ["scoped Owner composition, real PostgreSQL/RLS, and generated strict HTTP response validation pass"]
       },
       required: { success: tests.success, passed: tests.numPassedTests, failed: tests.numFailedTests, skipped: tests.numPendingTests, failedSuites: tests.numFailedTestSuites },
       suites: tests.testResults.map(suite => ({ name: suite.name.replace(root, ""), passed: suite.assertionResults?.length ?? 0 })),
@@ -110,7 +118,8 @@ try {
   try {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     for (const suite of report.testResults ?? []) console.error(JSON.stringify({ suite: suite.name.replace(root, ""), status: suite.status,
-      assertions: (suite.assertionResults ?? []).map(assertion => ({ title: assertion.title, status: assertion.status })) }));
+      assertions: (suite.assertionResults ?? []).map(assertion => ({ title: assertion.title, status: assertion.status,
+        ...(assertion.status === "passed" ? {} : { failure: (assertion.failureMessages ?? []).join(" ").slice(0, 1_000) }) })) }));
   } catch {}
   process.exitCode = 1;
 } finally {

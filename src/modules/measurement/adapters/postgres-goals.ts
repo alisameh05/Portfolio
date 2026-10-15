@@ -19,6 +19,7 @@ interface GoalVersionRow {
 interface GoalActivationRow {
   version_id: StableId<"AnalyticsGoalVersion">;
   activated_at: string;
+  activation_sequence: number;
 }
 
 async function setScope(transaction: TransactionContext, portfolioId: StableId<"Portfolio">): Promise<void> {
@@ -61,6 +62,25 @@ export function createPostgresOwnerAnalyticsGoalRepository(): OwnerAnalyticsGoal
           and aggregate_version = ${input.expectedAggregateVersion}`.execute(db);
       if (updated.numAffectedRows !== 1n) throw new Error("ANALYTICS_GOAL_VERSION_ADVANCE_FAILED");
     },
+    async activateVersion(input, transaction) {
+      const db = resolvePostgresTransaction(transaction);
+      await setScope(transaction, input.portfolioId);
+      const order = await sql<{ next_sequence: number }>`select coalesce(max(activation_sequence), 0) + 1 as next_sequence
+        from measurement.analytics_goal_activation_history
+        where portfolio_id = ${input.portfolioId}::uuid and goal_id = ${input.goalId}::uuid`.execute(db);
+      const activationSequence = Number(order.rows[0]?.next_sequence);
+      if (!Number.isSafeInteger(activationSequence) || activationSequence < 1) throw new Error("ANALYTICS_GOAL_ACTIVATION_SEQUENCE_INVALID");
+      const updated = await sql`update measurement.analytics_goals set active_version_id = ${input.versionId}::uuid,
+          aggregate_version = aggregate_version + 1
+        where portfolio_id = ${input.portfolioId}::uuid and goal_id = ${input.goalId}::uuid
+          and aggregate_version = ${input.expectedAggregateVersion} and active_version_id is distinct from ${input.versionId}::uuid`.execute(db);
+      if (updated.numAffectedRows !== 1n) throw new Error("ANALYTICS_GOAL_ACTIVATION_ADVANCE_FAILED");
+      await sql`insert into measurement.analytics_goal_activation_history
+        (portfolio_id, goal_id, activation_id, version_id, aggregate_version, activated_at, activation_sequence)
+        values (${input.portfolioId}::uuid, ${input.goalId}::uuid, ${input.activationId}::uuid,
+          ${input.versionId}::uuid, ${input.expectedAggregateVersion + 1}, ${input.activatedAt}::timestamptz, ${activationSequence})`.execute(db);
+      return activationSequence;
+    },
     async listVersions(goalId, portfolioId, transaction): Promise<readonly AnalyticsGoalVersionRecord[]> {
       const db = resolvePostgresTransaction(transaction);
       await setScope(transaction, portfolioId);
@@ -74,11 +94,11 @@ export function createPostgresOwnerAnalyticsGoalRepository(): OwnerAnalyticsGoal
     async listActivations(goalId, portfolioId, transaction): Promise<readonly AnalyticsGoalActivationRecord[]> {
       const db = resolvePostgresTransaction(transaction);
       await setScope(transaction, portfolioId);
-      const result = await sql<GoalActivationRow>`select version_id,
+      const result = await sql<GoalActivationRow>`select version_id, activation_sequence,
           to_char(activated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as activated_at
         from measurement.analytics_goal_activation_history where portfolio_id = ${portfolioId}::uuid and goal_id = ${goalId}::uuid
-        order by aggregate_version, activation_id`.execute(db);
-      return result.rows.map(row => ({ versionId: row.version_id, activatedAt: row.activated_at.replace(/(\.\d{3})000Z$/, "$1Z") }));
+        order by activation_sequence`.execute(db);
+      return result.rows.map(row => ({ versionId: row.version_id, activatedAt: row.activated_at.replace(/(\.\d{3})000Z$/, "$1Z"), activationSequence: Number(row.activation_sequence) }));
     },
   };
 }
