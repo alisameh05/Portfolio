@@ -13,10 +13,11 @@ export function createPostgresModerationRepository(): ModerationRepositoryPort {
   return {
     async getFeedback(scope, id, lock, tx) {
       const db = resolvePostgresTransaction(tx);
+      if (lock) await sql`select pg_advisory_xact_lock(hashtextextended(${id}::text, 205))`.execute(db);
       await sql`select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
         set_config('shipwithali.owner_id', ${scope.ownerId}, true), set_config('shipwithali.feedback_access', 'owner', true)`.execute(db);
       const rows = await sql<FeedbackRow>`select feedback_id, portfolio_id, project_id, locale, author_name, paragraph, moderation_state, aggregate_version, submitted_at
-        from interaction.feedback where portfolio_id = ${scope.portfolioId}::uuid and feedback_id = ${id}::uuid ${lock ? sql`for update` : sql``}`.execute(db);
+        from interaction.feedback where portfolio_id = ${scope.portfolioId}::uuid and feedback_id = ${id}::uuid\n          and text_erased_at is null ${lock ? sql`for update` : sql``}`.execute(db);
       const r = rows.rows[0];
       if (!r) return null;
       const version = Number(r.aggregate_version);
@@ -27,7 +28,7 @@ export function createPostgresModerationRepository(): ModerationRepositoryPort {
     async history(id, tx) {
       const rows = await sql<{ decision_id: RetainedModerationDecision["id"]; sequence: string; decision: RetainedModerationDecision["decision"]; reason: string; owner_id: RetainedModerationDecision["ownerId"]; decided_at: Date }>`
         select decision_id, sequence, decision, reason, owner_id, decided_at from interaction.moderation_decisions
-        where feedback_id = ${id}::uuid order by sequence`.execute(resolvePostgresTransaction(tx));
+        where feedback_id = ${id}::uuid and owner_id is not null order by sequence`.execute(resolvePostgresTransaction(tx));
       return rows.rows.map(r => ({ id: r.decision_id, sequence: Number(r.sequence), decision: r.decision, reason: r.reason, ownerId: r.owner_id, decidedAt: r.decided_at.toISOString() }));
     },
     async decide(feedback, decision, tx) {

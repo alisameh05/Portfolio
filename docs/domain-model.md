@@ -445,3 +445,25 @@ subject-linked Measurement detail, and backup restore must apply the original
 retention deadlines and withdrawn-consent cleanup before restored data becomes
 available; a restore cannot resurrect expired detail or usable withdrawn
 evidence. This is a handoff, not a Phase 7 backup/export implementation.
+
+
+### Feedback retention (#205)
+
+Pending and rejected Feedback expires at the original server `submitted_at` plus
+90 UTC days. Rejection does not restart the clock. Approved Feedback remains
+retained, including while its Project is Hidden or Archived. Suppressed Feedback
+keeps only stable scope, state, timestamps, and ordered non-identifying decision
+facts after `decided_at` plus 12 UTC calendar months; the month addition clamps
+at the final day of the target month. The cleanup command locks and rechecks
+current state, removes eligible pending/rejected rows with dependent decision
+history, or atomically nulls suppressed names, paragraphs, decision reasons,
+and decision owner references. A bounded per-Portfolio job checkpoint makes
+batches restartable, including when competing moderation temporarily holds a
+row lock.
+
+Erased Feedback is not returned through the required-text Owner inspection
+contract, which continues to report compatible `not_found`. Worker access is
+restricted to the `feedback.retention` purpose and its configured Portfolio.
+Submission receipts and outbox facts remain free of Feedback text; operational
+results expose counts and safe codes only. Backup/export deletion propagation
+remains a Phase 8 handoff.

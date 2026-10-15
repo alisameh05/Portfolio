@@ -20,3 +20,5 @@ export type {
 export type { GetOwnerFeedbackModerationQuery, ApproveOwnerFeedbackApplicationCommand, RejectOwnerFeedbackApplicationCommand, SuppressOwnerFeedbackApplicationCommand, OwnerModerationDecisionView, OwnerFeedbackModerationView, OwnerModerationCommandReceipt, OwnerModerationApplicationService } from "./owner-moderation.js";
 
 export type { FeedbackWorkCommand, FeedbackWorkService } from "./work.js";
+export { createFeedbackRetentionWorkService, pendingFeedbackExpiryAt, suppressedFeedbackExpiryAt } from "./retention.js";
+export type { FeedbackRetentionWorkDependencies } from "./retention.js";

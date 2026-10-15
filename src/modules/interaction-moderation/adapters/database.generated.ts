@@ -24,14 +24,23 @@ export interface CurrentReactionCounts {
 export interface Feedback {
   aggregate_version: Int8;
   approved_at: Timestamp | null;
-  author_name: string;
+  author_name: string | null;
   feedback_id: string;
   locale: string;
   moderation_state: string;
-  paragraph: string;
+  paragraph: string | null;
   portfolio_id: string;
   project_id: string;
   submitted_at: Timestamp;
+  text_erased_at: Timestamp | null;
+}
+
+export interface FeedbackRetentionCheckpoints {
+  job_id: string;
+  portfolio_id: string;
+  requested_at: Timestamp;
+  stage: string;
+  updated_at: Timestamp;
 }
 
 export interface ModerationDecisions {
@@ -39,9 +48,9 @@ export interface ModerationDecisions {
   decision: string;
   decision_id: string;
   feedback_id: string;
-  owner_id: string;
+  owner_id: string | null;
   portfolio_id: string;
-  reason: string;
+  reason: string | null;
   sequence: Int8;
 }
 
@@ -65,6 +74,7 @@ export interface DB {
   current_rating_summary: CurrentRatingSummary;
   current_reaction_counts: CurrentReactionCounts;
   feedback: Feedback;
+  feedback_retention_checkpoints: FeedbackRetentionCheckpoints;
   moderation_decisions: ModerationDecisions;
   ratings: Ratings;
   reactions: Reactions;
