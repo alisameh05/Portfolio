@@ -303,6 +303,8 @@ describe("Owner Analytics goal versions through PostgreSQL and existing Owner op
       activationHistory: [{ versionId: created.value.versionId, activatedAt: now }] });
     expect((await admin!.query("select version_id, version_number, definition::text, created_at from measurement.analytics_goal_versions where portfolio_id=$1 and goal_id=$2", [portfolioId, goalId])).rows)
       .toEqual(before.rows);
+    const activationEvent = await admin!.query("select payload from operations.outbox_events where aggregate_id=$1 and event_type='measurement.goal_version_activated.v1'", [goalId]);
+    expect(activationEvent.rows).toEqual([{ payload: { goalId, version: 1 } }]);
     const second = await service!.createOwnerAnalyticsGoalVersion(command(goalId, "activation-http-create-002", 3, { name: "Later immutable version", steps: definition.steps }));
     expect(second).toMatchObject({ ok: true, value: { aggregateVersion: 4 } });
     expect(await activationState(goalId)).toMatchObject({ aggregateVersion: 4, activeVersionId: created.value.versionId, histories: 1, events: 1 });

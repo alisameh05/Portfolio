@@ -228,7 +228,7 @@ export function createOwnerAnalyticsGoalService(deps: OwnerAnalyticsGoalServiceD
             await deps.operations.outbox.append(context, { eventId: eventId.value, aggregateId: command.goalId, aggregateVersion,
               correlationId: command.correlationId, occurredAt: executionTime, availableAt: executionTime,
               payload: { type: "measurement.goal_version_activated.v1", version: 1,
-                value: { goalId: command.goalId, versionId: command.versionId, versionNumber: version.versionNumber } } });
+                value: { goalId: command.goalId, version: version.versionNumber } } });
             return { aggregateId: command.goalId, aggregateVersion, outcome: "analytics-goal-version-activated" };
           }, tx);
           if (execution.kind === "conflict") return requestTransactionRollback(reject("conflict", "IDEMPOTENCY_PAYLOAD_CONFLICT"));
