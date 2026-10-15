@@ -103,6 +103,7 @@ schemas:
     required: [id, label, destination, isAvailableInArabic]
     properties:
       id: { $ref: ./common.yaml#/schemas/StableId }
+      type: { type: string, enum: [github-repository, live-demo] }
       label: { type: string, minLength: 1, maxLength: 120 }
       destination: { type: string, format: uri, maxLength: 2048 }
       isAvailableInArabic: { type: boolean }

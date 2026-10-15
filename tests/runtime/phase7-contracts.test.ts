@@ -37,10 +37,10 @@ describe("Phase 7 contracts #188", () => {
   { action: "contact-channel-opened", projectId: id, channel: "phone" },
   { action: "external-project-link-opened", projectId: id, destination: "live-demo" },
   { action: "global-project-cta-opened", projectId: id },
- ])("keeps later optional action fail-closed until its fact capability is implemented: %j", async action => {
+ ])("T11-06 dispatches configured capability action shapes: %j", async action => {
   const fake = createPublicEventTestFake({ type: "success" });
-  expect((await handlePostPublicEvent(request({ context, ...action }), { service: fake })).status).toBe(400);
-  expect(fake.calls).toHaveLength(0);
+  expect((await handlePostPublicEvent(request({ context, ...action }), { service: fake })).status).toBe(202);
+  expect(fake.calls).toHaveLength(1);
  });
  it.each([
   { action: "project-viewed" },

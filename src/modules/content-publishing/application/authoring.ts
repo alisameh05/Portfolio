@@ -276,6 +276,7 @@ export interface PublicProjectContentView {
     readonly mediaAssetId?: StableId<"MediaAsset">;
   }[] }[];
   readonly externalLinks: readonly {
+    readonly type?: "github-repository" | "live-demo";
     readonly label: string;
     readonly destination: string;
   }[];
@@ -726,12 +727,14 @@ function externalLinksAreValid(value: unknown): boolean {
   if (!Array.isArray(value) || value.length > 50) return false;
   const linkIds = new Set<string>();
   return value.every((link) => {
-    if (!isRecord(link) || !hasOnlyKeys(link, ["id", "label", "destination", "isAvailableInArabic"])) return false;
+    if (!isRecord(link) || !hasOnlyKeys(link, ["id", "type", "label", "destination", "isAvailableInArabic"])) return false;
     const id = link["id"];
+    const type = link["type"];
     const label = link["label"];
     const destination = link["destination"];
     const isAvailableInArabic = link["isAvailableInArabic"];
-    if (typeof id !== "string" || !parseStableId("ExternalLink", id).ok || linkIds.has(id) || !isCleanText(label, 120) ||
+    if (typeof id !== "string" || !parseStableId("ExternalLink", id).ok || linkIds.has(id) ||
+        (type !== undefined && type !== "github-repository" && type !== "live-demo") || !isCleanText(label, 120) ||
         !safeWebDestination(destination) || typeof isAvailableInArabic !== "boolean") return false;
     linkIds.add(id);
     return true;

@@ -64,7 +64,7 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     expect(verified.ok).toBe(true); if (!verified.ok) throw new Error("CONSENT_VERIFY_FAILED");
     return { ...granted.value, token: granted.value.evidence, verified: verified.value };
   }
-  async function seedProject(options: { lifecycle?: string; locales?: readonly ("en" | "ar")[]; portfolio?: StableId<"Portfolio">; externalLinks?: readonly { readonly label: string; readonly destination: string; readonly availableInArabic?: boolean }[] } = {}) {
+  async function seedProject(options: { lifecycle?: string; locales?: readonly ("en" | "ar")[]; portfolio?: StableId<"Portfolio">; externalLinks?: readonly { readonly type?: "github-repository" | "live-demo"; readonly label: string; readonly destination: string; readonly availableInArabic?: boolean }[] } = {}) {
     const projectId = createStableId("Project"), routeId = createStableId("PublicRoute"), targetPortfolio = options.portfolio ?? portfolioId;
     const lifecycle = options.lifecycle ?? "published", locales = options.locales ?? ["en"];
     await admin.query("insert into content.items (content_id,portfolio_id,content_type,lifecycle) values ($1,$2,'project',$3)", [projectId, targetPortfolio, lifecycle]);
@@ -82,7 +82,7 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
           values ($1,$2,'project',$3,$4,$5,'Private fixture title','Fixture summary','Fixture body','{}'::jsonb,'[]'::jsonb,$6::jsonb,$7,$7)
           on conflict (content_id,locale) do update set revision_id=excluded.revision_id, route_identity=excluded.route_identity,
             external_links=excluded.external_links, published_at=excluded.published_at`,
-          [projectId, targetPortfolio, locale, revision, routeId, JSON.stringify(publicLinks.map(({ label, destination }) => ({ label, destination }))), now]);
+          [projectId, targetPortfolio, locale, revision, routeId, JSON.stringify(publicLinks.map(({ type, label, destination }) => ({ ...(type === undefined ? {} : { type }), label, destination }))), now]);
       }
     }
     return { projectId, routeId };
@@ -175,8 +175,8 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
 
   it("T11-01/T11-04/T11-06 records only current configured capability facts and stable public identities", async () => {
     const { projectId, routeId } = await seedProject({ externalLinks: [
-      { label: "Private GitHub label", destination: "https://github.com/private-owner/private-repo" },
-      { label: "Private demo label", destination: "https://private-demo.example/project", availableInArabic: true },
+      { type: "github-repository", label: "Private GitHub label", destination: "https://github.com/private-owner/private-repo" },
+      { type: "live-demo", label: "Private demo label", destination: "https://private-demo.example/project", availableInArabic: true },
     ] });
     const evidence = await issueEvidence();
     const beforeEvents = await countEvents(), beforeJobs = await countJobs();
@@ -234,7 +234,10 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
 
   it("T11-02/T11-03/T11-05 rejects absent or mismatched current configuration without durable effects", async () => {
     const { projectId, routeId } = await seedProject({ locales: ["en", "ar"], externalLinks: [
-      { label: "English-only repository", destination: "https://github.com/private-owner/private-repo" },
+      { type: "github-repository", label: "English-only repository", destination: "https://github.com/private-owner/private-repo" },
+    ] });
+    const untypedProject = await seedProject({ externalLinks: [
+      { label: "Documentation, not a demo", destination: "https://docs.example.com/guide" },
     ] });
     const evidence = await issueEvidence();
     const beforeEvents = await countEvents(), beforeJobs = await countJobs();
@@ -244,6 +247,7 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
       { action: "external-project-link-opened", context: context(routeId, { locale: "ar" }), projectId, destination: "github-repository" },
       { action: "external-project-link-opened", context: context(routeId), projectId: createStableId("Project"), destination: "github-repository" },
       { action: "global-project-cta-opened", context: context(routeId), projectId: createStableId("Project") },
+      { action: "external-project-link-opened", context: context(untypedProject.routeId), projectId: untypedProject.projectId, destination: "live-demo" },
     ];
     for (const [index, event] of invalidEvents.entries()) {
       const response = await handlePostPublicEvent(request(evidence.token, event, `ticket-198-rejected-${index + 1}`), { scope, service, consent, logger: createTestLogger() });
@@ -265,8 +269,8 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
 
   it("T11-07 replays and conflicts for each current capability fact exactly once", async () => {
     const { projectId, routeId } = await seedProject({ externalLinks: [
-      { label: "Replay repository", destination: "https://github.com/replay-owner/replay-project" },
-      { label: "Replay demo", destination: "https://replay-demo.example/project" },
+      { type: "github-repository", label: "Replay repository", destination: "https://github.com/replay-owner/replay-project" },
+      { type: "live-demo", label: "Replay demo", destination: "https://replay-demo.example/project" },
     ] });
     const evidence = await issueEvidence();
     const beforeEvents = await countEvents(), beforeJobs = await countJobs();

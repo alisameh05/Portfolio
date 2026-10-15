@@ -431,7 +431,7 @@ describe("Content authoring application service", () => {
   });
 
   it.each([
-    ["project", { contentType: "project", candidateSlug: "atlas-search", caseStudy: { problem: "A draft problem." }, evidence: { artifacts: [{ id: unsafeStableId<"SupportingArtifact">(uuid(92)), title: "Demo", mediaAssetId: unsafeStableId<"MediaAsset">(uuid(93)) }] }, externalLinks: [{ id: unsafeStableId<"ExternalLink">(uuid(94)), label: "Project site", destination: "https://example.com/project", isAvailableInArabic: true }] }],
+    ["project", { contentType: "project", candidateSlug: "atlas-search", caseStudy: { problem: "A draft problem." }, evidence: { artifacts: [{ id: unsafeStableId<"SupportingArtifact">(uuid(92)), title: "Demo", mediaAssetId: unsafeStableId<"MediaAsset">(uuid(93)) }] }, externalLinks: [{ id: unsafeStableId<"ExternalLink">(uuid(94)), type: "live-demo", label: "Project site", destination: "https://example.com/project", isAvailableInArabic: true }] }],
     ["achievement", { contentType: "achievement", achievedOn: "2025-04-12", evidence: { claims: [{ claimId: unsafeStableId<"EvidenceClaim">(uuid(90)), text: "A draft claim.", artifactIds: [] }], artifacts: [{ id: unsafeStableId<"SupportingArtifact">(uuid(92)), title: "Proof", mediaAssetId: unsafeStableId<"MediaAsset">(uuid(93)) }] } }],
     ["testimonial", { contentType: "testimonial", authorName: "Reviewer", quote: "A draft quote.", relatedProjectId: unsafeStableId<"Project">(uuid(91)) }],
   ] as const)("creates a private %s Draft with its typed initial Revision", async (kind, details) => {
@@ -452,7 +452,7 @@ describe("Content authoring application service", () => {
       expect(record?.revisions[0]?.payload).toMatchObject({ association: { type: "project", projectId: uuid(91) } });
     }
     if (kind === "project") {
-      expect(record?.revisions[0]?.payload).toMatchObject({ evidence: { artifacts: [{ mediaAssetId: uuid(93) }] }, externalLinks: [{ destination: "https://example.com/project" }] });
+      expect(record?.revisions[0]?.payload).toMatchObject({ evidence: { artifacts: [{ mediaAssetId: uuid(93) }] }, externalLinks: [{ type: "live-demo", destination: "https://example.com/project" }] });
     }
     if (kind === "achievement") {
       expect(record?.revisions[0]?.payload).toMatchObject({ evidence: { artifacts: [{ mediaAssetId: uuid(93) }] } });
@@ -672,6 +672,7 @@ describe("Content authoring application service", () => {
     ["malformed evidence claim", { contentType: "achievement", evidence: { claims: [{ claimId: uuid(90), text: "Claim", artifactIds: "bad" }] } }],
     ["malformed media identity", { contentType: "project", evidence: { artifacts: [{ id: uuid(90), title: "Bad asset", mediaAssetId: "not-a-stable-id" }] } }],
     ["unsafe external link", { contentType: "project", externalLinks: [{ id: uuid(90), label: "Run this", destination: "javascript:alert(1)", isAvailableInArabic: true }] }],
+    ["unsupported external link type", { contentType: "project", externalLinks: [{ id: uuid(90), type: "documentation", label: "Docs", destination: "https://example.com/docs", isAvailableInArabic: true }] }],
     ["unknown Project payload key", { contentType: "project", executable: { run: true } }],
     ["unknown case study key", { contentType: "project", caseStudy: { problem: "Problem.", extra: "unsafe snapshot data" } }],
     ["unknown evidence claim key", { contentType: "achievement", evidence: { claims: [{ claimId: uuid(90), text: "Claim", artifactIds: [], injected: true }] } }],

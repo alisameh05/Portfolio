@@ -149,10 +149,7 @@ export function createPostgresContentMeasurementPublicFacts(scope: { portfolioId
             cross join lateral jsonb_array_elements(projection.external_links) link
            where item.portfolio_id = ${scope.portfolioId}::uuid
              and item.content_id = ${input.projectId}::uuid and item.content_type = 'project' and item.lifecycle = 'published'
-             and (${input.destination} = 'github-repository'
-               and (link->>'destination') ~* '^https://(www\.)?github\.com/[^/?#]+/[^/?#]+/?([?#].*)?$'
-               or ${input.destination} = 'live-demo'
-               and (link->>'destination') !~* '^https://(www\.)?github\.com/')
+             and link->>'type' = ${input.destination}
         ) as configured
       `.execute(db);
       return { ok: true, value: result.rows[0]?.configured === true };

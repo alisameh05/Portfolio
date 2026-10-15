@@ -10,6 +10,7 @@ export type {
   EvidencePackage,
   EvidencePackageDraft,
   ExternalLink,
+  ExternalLinkType,
   PublicRoute,
   LocalizedRevision,
   LanguagePublication,

@@ -145,6 +145,7 @@ export type ContentAggregateView = {
 
 export type ExternalLinkDraft = {
     id: StableId;
+    type?: 'github-repository' | 'live-demo';
     label: string;
     destination: string;
     isAvailableInArabic: boolean;
