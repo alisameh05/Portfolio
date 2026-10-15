@@ -1,11 +1,11 @@
 {
   "ticket": 203,
-  "runId": "ce67c6c1-1046-45f0-a067-cc003a6c2ed0",
-  "sourceRevision": "4b067ed9ee6e08138deab9b57cf88bac99d402b6",
-  "sourceTreeSha256": "634ea730202af627d7345a3ee5dcec15b689966f7ad43082e4a06b697ef3a212",
+  "runId": "967815ff-118f-4983-9bde-31b1f7d830b7",
+  "sourceRevision": "e896c6ae65e135dcf45a67f9382136957cf99a02",
+  "sourceTreeSha256": "12548aa382e2d4c37b3941a4963051962a211e25758db1026c1e902331a409df",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015200000_enable_fixed_aggregate_dimensions.sql",
-  "migrationSha256": "8353964c925b7363a5b4592fef06fac679bc232ebf4ed1214141eb8aca28e368",
+  "migrationSha256": "bf2e22a2e285faedba9b13962303da71b2c18f59cb4131720a8917722c02bd79",
   "migrations": [
     {
       "name": "20260922170000_prepare_migration_capability.sql",
@@ -193,7 +193,7 @@
     },
     {
       "name": "20261015200000_enable_fixed_aggregate_dimensions.sql",
-      "sha256": "8353964c925b7363a5b4592fef06fac679bc232ebf4ed1214141eb8aca28e368"
+      "sha256": "bf2e22a2e285faedba9b13962303da71b2c18f59cb4131720a8917722c02bd79"
     }
   ],
   "tools": {
@@ -211,6 +211,10 @@
     },
     {
       "title": "persists bounded single-dimension groupings and applies report-wide and complementary suppression",
+      "status": "passed"
+    },
+    {
+      "title": "keeps retained legacy summaries readable while old dimension breakdowns remain incomplete",
       "status": "passed"
     },
     {
@@ -284,11 +288,15 @@
     {
       "title": "keeps high event volume from one subject in the low-sample state",
       "status": "passed"
+    },
+    {
+      "title": "marks reports over the bounded row limit incomplete",
+      "status": "passed"
     }
   ],
   "required": {
     "success": true,
-    "passed": 21,
+    "passed": 23,
     "failed": 0,
     "skipped": 0,
     "failedSuites": 0
