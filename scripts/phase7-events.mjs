@@ -49,8 +49,8 @@ try {
   stage = "migrations";
   run(process.execPath, ["node_modules/supabase/dist/supabase.js", "migration", "up", "--db-url", adminUrl + "?sslmode=disable", "--workdir", project, "--yes"],
     { ...process.env, SUPABASE_TELEMETRY_DISABLED: "true" });
-  await client.query("create role event_runtime login nosuperuser nobypassrls; grant shipwithali_application to event_runtime; create role event_worker login nosuperuser nobypassrls; grant shipwithali_worker to event_worker");
-  const env = { ...process.env, PHASE7_EVENT_DATABASE_URL: `postgres://event_runtime@127.0.0.1:${port}/postgres?sslmode=disable`, PHASE7_EVENT_WORKER_DATABASE_URL: `postgres://event_worker@127.0.0.1:${port}/postgres?sslmode=disable`, PHASE7_EVENT_ADMIN_URL: adminUrl + "?sslmode=disable" };
+  await client.query("create role event_runtime login nosuperuser nobypassrls; grant shipwithali_application to event_runtime");
+  const env = { ...process.env, PHASE7_EVENT_DATABASE_URL: `postgres://event_runtime@127.0.0.1:${port}/postgres?sslmode=disable`, PHASE7_EVENT_ADMIN_URL: adminUrl + "?sslmode=disable" };
   stage = "type-generation";
   const codegen = ["node_modules/kysely-codegen/dist/cli/bin.js", "--dialect", "postgres", "--url", "env(PHASE7_EVENT_ADMIN_URL)",
     "--default-schema", "measurement", "--include-pattern", "measurement.*", "--date-parser", "timestamp", "--out-file", "src/modules/measurement/adapters/database.generated.ts", "--log-level", "error"];
@@ -73,7 +73,7 @@ try {
       migrationSha256: createHash("sha256").update(readFileSync(migration)).digest("hex"),
       required: { success: tests.success, passed: tests.numPassedTests, failed: tests.numFailedTests, skipped: tests.numPendingTests, failedSuites: tests.numFailedTestSuites },
       suites: tests.testResults.map(suite => ({ name: suite.name.replace(root, ""), passed: suite.assertionResults?.length ?? 0 })),
-      roles: ["event_runtime", "event_worker", "shipwithali_application", "shipwithali_worker", "anon", "authenticated"],
+      roles: ["event_runtime", "shipwithali_application", "shipwithali_worker", "anon", "authenticated"],
       reproduction: "npm run setup:validation; npm run validation:ready; npm run phase7:focus:events (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
       scope: "Disposable native PostgreSQL cluster; full repository migration chain, restricted application role, HTTP/application/consent integration. No production database was modified." };
   }

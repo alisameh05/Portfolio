@@ -5,10 +5,9 @@ import { createSystemIdGenerator, createTestLogger, type TransactionContext } fr
 import { createPostgresRuntimeDatabase, resolvePostgresTransaction } from "../../src/shared/adapters/postgres/runtime.js";
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import { createPostgresConsentRepository } from "../../src/modules/measurement/adapters/postgres-consent.js";
-import { createPostgresMeasurementEventRepository, createPostgresMeasurementEventRetentionRepository } from "../../src/modules/measurement/adapters/postgres-events.js";
+import { createPostgresMeasurementEventRepository } from "../../src/modules/measurement/adapters/postgres-events.js";
 import { createPostgresContentMeasurementPublicFacts } from "../../src/modules/content-publishing/adapters/postgres-interaction-facts.js";
 import { createConsentApplicationService, createMeasurementEventService, type PublicMeasurementEvent, type VerifiedMeasurementEvidence } from "../../src/modules/measurement/index.js";
-import { createMeasurementEventRetentionService } from "../../src/modules/measurement/application/event-retention.js";
 import type { MeasurementEventRepositoryPort } from "../../src/modules/measurement/application/ingest-event.js";
 import type { ConsentApplicationService, ConsentRepositoryPort } from "../../src/modules/measurement/application/consent.js";
 import { AesGcmConsentEvidenceAdapter } from "../../src/modules/identity-access/adapters/consent-evidence.js";
@@ -16,8 +15,7 @@ import { handlePostPublicEvent } from "../../src/runtime/http/public-event.js";
 import { initializeDatabaseRuntime, getMeasurementEventIngestionService, getConsentApplicationService, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
 
 const url = process.env["PHASE7_EVENT_DATABASE_URL"];
-const workerUrl = process.env["PHASE7_EVENT_WORKER_DATABASE_URL"];
-describe.runIf(Boolean(url && workerUrl))("durable consented public-event ingestion", () => {
+describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
   const portfolioId = createStableId("Portfolio"), ownerId = createStableId("Owner");
   const scope = { kind: "portfolio" as const, portfolioId };
   let now = "2026-10-15T12:00:00.000Z";
@@ -27,7 +25,6 @@ describe.runIf(Boolean(url && workerUrl))("durable consented public-event ingest
   };
   const database = createPostgresRuntimeDatabase(url ?? "postgres://invalid");
   const otherDatabase = createPostgresRuntimeDatabase(url ?? "postgres://invalid");
-  const workerDatabase = createPostgresRuntimeDatabase(workerUrl ?? "postgres://invalid");
   const admin = new Client({ connectionString: process.env["PHASE7_EVENT_ADMIN_URL"] });
   const operations = createPostgresOperationsPersistence(database.database, { now: () => now });
   const otherOperations = createPostgresOperationsPersistence(otherDatabase.database, { now: () => now });
@@ -37,8 +34,6 @@ describe.runIf(Boolean(url && workerUrl))("durable consented public-event ingest
     supportedNoticeVersions: ["2026-10"], ttlSeconds: 2_592_000 });
   const content = createPostgresContentMeasurementPublicFacts({ portfolioId, ownerId });
   const repository = createPostgresMeasurementEventRepository();
-  const retention = createMeasurementEventRetentionService({ portfolioId, transactions: workerDatabase.transactions,
-    repository: createPostgresMeasurementEventRetentionRepository() });
   const makeService = (options: { operations?: typeof operations; repository?: MeasurementEventRepositoryPort; facts?: typeof content; consentService?: ConsentApplicationService } = {}) => createMeasurementEventService({
     portfolioId, transactions: (options.operations ?? operations).transactions, operations: options.operations ?? operations,
     consent: options.consentService ?? consent, content: options.facts ?? content, repository: options.repository ?? repository,
@@ -87,7 +82,7 @@ describe.runIf(Boolean(url && workerUrl))("durable consented public-event ingest
     await admin.connect();
     await admin.query("insert into portfolio_config.settings (portfolio_id,owner_id,display_name,headline,bio,global_cta_label,global_cta_destination,global_cta_unavailable_fallback) values ($1,$2,'Owner','Headline','Bio','Contact','https://example.com','Unavailable')", [portfolioId, ownerId]);
   });
-  afterAll(async () => { await admin.end(); await database.resource.close(); await otherDatabase.resource.close(); await workerDatabase.resource.close(); resetRuntimeForTests(); });
+  afterAll(async () => { await admin.end(); await database.resource.close(); await otherDatabase.resource.close(); resetRuntimeForTests(); });
 
   it("T09-01/T09-03 persists each first-slice action and round-trips the full safe context", async () => {
     const { projectId, routeId } = await seedProject();
@@ -291,43 +286,15 @@ describe.runIf(Boolean(url && workerUrl))("durable consented public-event ingest
     expect(await blockedIntake).toMatchObject({ ok: false, error: { kind: "forbidden" } });
   });
 
-  it("T09-08 bounds worker retention and deletes rows at the inclusive 14-day acceptance cutoff", async () => {
-    const foreignPortfolio = createStableId("Portfolio");
-    async function seed(acceptedAt: string, portfolio = portfolioId) {
-      const id = createStableId("PublicEvent");
-      await admin.query(`insert into measurement.public_events (event_id,portfolio_id,measurement_subject,action,occurred_at,accepted_at,effective_at,page_route_identity,locale,consent_version)
-        values ($1,$2,$3,'page-viewed',$4,$4,$4,$5,'en','2026-10')`, [id, portfolio, createStableId("MeasurementVisitor"), acceptedAt, createStableId("PublicRoute")]);
-      return id;
-    }
-    const expired = [];
-    for (let i = 0; i < 25; i++) expired.push(await seed("2026-10-01T11:59:59.999Z"));
-    const atCutoff = await seed("2026-10-01T12:00:00.000Z");
-    const recent = await seed("2026-10-01T12:00:00.001Z");
-    await seed("2026-10-01T11:00:00.000Z", foreignPortfolio);
-    const adminEligible = await admin.query("select count(*)::int as count from measurement.public_events where portfolio_id=$1 and accepted_at <= $2", [portfolioId, "2026-10-01T12:00:00.000Z"]);
-    expect(adminEligible.rows[0].count).toBe(26);
-    const command = { scope, correlationId: "event-retention", actor: { kind: "system" as const, jobId: createStableId("Job"), purpose: "measurement.retention" as const },
-      batchSize: 25 as const, now: "2026-10-15T12:00:00.000Z" };
-    const firstBatch = await retention.expireDetail(command);
-    expect(firstBatch).toMatchObject({ ok: true, value: { processedCount: 25, nextCursor: null, incomplete: true } });
-    const secondBatch = await retention.expireDetail(command);
-    expect(secondBatch).toMatchObject({ ok: true, value: { processedCount: 1, nextCursor: null, incomplete: false } });
-    expect(await retention.expireDetail(command)).toMatchObject({ ok: true, value: { processedCount: 0, nextCursor: null, incomplete: false } });
-    const remaining = await admin.query("select event_id::text from measurement.public_events where event_id = any($1::uuid[])", [[...expired, atCutoff, recent]]);
-    expect(remaining.rows.map(row => row.event_id)).toEqual([recent]);
-    expect((await admin.query("select event_id from measurement.public_events where portfolio_id=$1 and accepted_at <= $2", [foreignPortfolio, "2026-10-01T12:00:00.000Z"])).rowCount).toBe(1);
-  });
-
   it("T09-09 enforces module RLS and keeps optional event assembly out of core readiness", async () => {
     const { routeId } = await seedProject();
     const evidence = await issueEvidence();
     const grants = await admin.query(`select has_table_privilege('event_runtime','measurement.public_events','INSERT') as insert,
       has_table_privilege('event_runtime','measurement.public_events','SELECT') as read,
       has_table_privilege('shipwithali_worker','measurement.public_events','SELECT') as worker_read,
-      has_table_privilege('shipwithali_worker','measurement.public_events','DELETE') as worker_delete,
       has_schema_privilege('anon','measurement','USAGE') as anon_schema,
       has_table_privilege('anon','measurement.public_events','SELECT') as anon_read`);
-    expect(grants.rows[0]).toEqual({ insert: true, read: false, worker_read: true, worker_delete: true, anon_schema: false, anon_read: false });
+    expect(grants.rows[0]).toEqual({ insert: true, read: false, worker_read: true, anon_schema: false, anon_read: false });
     const roles = await admin.query("select rolbypassrls, rolsuper from pg_roles where rolname in ('event_runtime','shipwithali_application','shipwithali_worker')");
     expect(roles.rows.every(row => !row.rolbypassrls && !row.rolsuper)).toBe(true);
     await admin.query("begin");
