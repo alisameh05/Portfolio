@@ -3,7 +3,7 @@ import { parseStableId, type StableId } from "@shared/domain";
 import type { TransactionContext } from "../../../runtime/ports.js";
 import { resolvePostgresTransaction } from "../../../shared/adapters/postgres/runtime.js";
 import type { AnalyticsGoalDefinition } from "../application/owner-analytics.js";
-import { emptyGoalConversionProgress, type GoalConversionEvent, type GoalConversionTimeline } from "../application/goal-conversions.js";
+import { compareGoalConversionInstants, emptyGoalConversionProgress, type GoalConversionEvent, type GoalConversionTimeline } from "../application/goal-conversions.js";
 import type { GoalConversionCheckpoint, GoalConversionCursor, GoalConversionRepositoryPort } from "../ports/goal-conversions.js";
 
 interface TriggerRow { event_id: string; measurement_subject: string; accepted_at: string }
@@ -22,13 +22,6 @@ interface EventRow {
 function asInstant(value: string | Date): string {
   if (typeof value === "string") return value;
   return value.toISOString();
-}
-
-function instantMicros(value: string): number {
-  const millis = Date.parse(value);
-  if (!Number.isFinite(millis)) throw new Error("GOAL_CONVERSION_TIMESTAMP_INVALID");
-  const fraction = /\.(\d+)(?:Z|[+-]\d\d:\d\d)$/i.exec(value)?.[1] ?? "";
-  return millis * 1_000 + Number(fraction.padEnd(6, "0").slice(3, 6));
 }
 
 async function setScope(tx: TransactionContext, portfolioId: StableId<"Portfolio">) {
@@ -77,13 +70,12 @@ export function createPostgresGoalConversionRepository(): GoalConversionReposito
           triggerEventId: input.eventId, progress: emptyGoalConversionProgress(), cursor: null, consentGranted };
       }
 
-      const triggerAt = instantMicros(state.trigger_accepted_at);
-      const incomingAt = instantMicros(trigger.accepted_at);
+      const triggerOrder = compareGoalConversionInstants(trigger.accepted_at, state.trigger_accepted_at);
       const sameTrigger = state.trigger_event_id === input.eventId;
       if (sameTrigger && state.completed) return { status: "already-complete", portfolioId: input.portfolioId,
         measurementSubject: subject.value, generation: Number(state.generation), triggerEventId: input.eventId,
         progress: state.progress, cursor: toCursor(state), consentGranted };
-      if (!sameTrigger && (incomingAt < triggerAt || (incomingAt === triggerAt && input.eventId <= state.trigger_event_id))) {
+      if (!sameTrigger && (triggerOrder < 0 || (triggerOrder === 0 && input.eventId <= state.trigger_event_id))) {
         return { status: "stale-trigger", portfolioId: input.portfolioId, measurementSubject: subject.value,
           generation: Number(state.generation), triggerEventId: input.eventId, progress: state.progress, cursor: toCursor(state), consentGranted };
       }

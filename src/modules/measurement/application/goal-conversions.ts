@@ -63,9 +63,11 @@ function instantMicros(value: string): number {
   return parsed * 1_000 + Number(fraction.padEnd(6, "0").slice(3, 6));
 }
 
-function compareInstant(left: string, right: string): number {
+export function compareGoalConversionInstants(left: string, right: string): number {
   return instantMicros(left) - instantMicros(right);
 }
+
+const compareInstant = compareGoalConversionInstants;
 
 function activeVersionAt(timeline: GoalConversionTimeline, at: string): GoalConversionActivation | undefined {
   let active: GoalConversionActivation | undefined;
