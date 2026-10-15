@@ -17,7 +17,7 @@ export interface IngestPublicEventCommand extends ApplicationRequestContext {
   readonly actor: { readonly kind: "visitor"; readonly consent: ConsentState; readonly functionalId?: never };
   readonly idempotencyKey: import("@shared/domain").IdempotencyKey;
   readonly event: PublicMeasurementEvent;
-  /** Only verified evidence may populate this; cookie presence cannot. */
+  /** Only edge-verified evidence may populate this; actor consent and cookie presence are ignored. */
   readonly measurement?: VerifiedMeasurementEvidence;
 }
 

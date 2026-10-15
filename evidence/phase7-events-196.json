@@ -1,0 +1,43 @@
+{
+  "runId": "7216fc4d-7aad-49ac-94e6-dfc70301d3c5",
+  "sourceRevision": "c285be59ced78efb71258affc8c87a3478c7a92c",
+  "sourceTreeSha256": "4917bad419df09b924a23b859b0f4e69528aca0992b5e78db6d589ad964a18cf",
+  "version": "postgres (PostgreSQL) 18.3",
+  "migration": "supabase/migrations/20261015120000_persist_consented_public_events.sql",
+  "migrationSha256": "49a176f484fda2e0f067925501c609222308a1a776eecea06f13abbe591e73f6",
+  "required": {
+    "success": true,
+    "passed": 45,
+    "failed": 0,
+    "skipped": 0,
+    "failedSuites": 0
+  },
+  "suites": [
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-measurement-196/tests/phase7/consent-crypto.test.ts",
+      "passed": 5
+    },
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-measurement-196/tests/phase7/events-application.test.ts",
+      "passed": 14
+    },
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-measurement-196/tests/phase7/events-postgres.test.ts",
+      "passed": 7
+    },
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-measurement-196/tests/runtime/public-event.test.ts",
+      "passed": 19
+    }
+  ],
+  "roles": [
+    "event_runtime",
+    "shipwithali_application",
+    "shipwithali_worker",
+    "anon",
+    "authenticated"
+  ],
+  "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:events (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
+  "scope": "Disposable native PostgreSQL cluster; full repository migration chain, restricted application role, HTTP/application/consent integration. No production database was modified.",
+  "cleanup": true
+}

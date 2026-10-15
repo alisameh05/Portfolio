@@ -11,6 +11,9 @@ export type { AnalyticsEventAction, AnalyticsGoalStep, AnalyticsGoalDefinition, 
 
 export type { VerifiedMeasurementEvidence } from "./service.js";
 
+export { createMeasurementEventService } from "./ingest-event.js";
+export type { MeasurementEventApplicationDeps, MeasurementEventRepositoryPort } from "./ingest-event.js";
+
 export type { MeasurementWorkCommand, MeasurementWorkService } from "./work.js";
 
 export type { SafeAggregateReport } from "./service.js";

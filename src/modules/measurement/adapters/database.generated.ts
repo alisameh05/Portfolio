@@ -5,6 +5,10 @@
 
 import type { ColumnType } from "kysely";
 
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export interface ConsentHistory {
@@ -27,7 +31,34 @@ export interface Consents {
   subject: string | null;
 }
 
+export interface PublicEvents {
+  accepted_at: Timestamp;
+  action: string;
+  active_milliseconds: number | null;
+  consent_version: string;
+  country_code: string | null;
+  created_at: Generated<Timestamp>;
+  device_class: string | null;
+  effective_at: Timestamp;
+  event_id: string;
+  /**
+   * At most ten distinct ordered retained PublicRoute identities; no route content is copied.
+   */
+  journey_context: string[] | null;
+  locale: string;
+  /**
+   * Purpose-limited MeasurementVisitor identity; never copied to receipts, idempotency results, jobs, or outbox payloads.
+   */
+  measurement_subject: string;
+  occurred_at: Timestamp;
+  page_route_identity: string;
+  portfolio_id: string;
+  project_id: string | null;
+  referrer_class: string | null;
+}
+
 export interface DB {
   consent_history: ConsentHistory;
   consents: Consents;
+  public_events: PublicEvents;
 }

@@ -54,6 +54,8 @@ export interface ConsentApplicationService {
   verifyEvidence(query: VerifyConsentQuery): Promise<Result<VerifiedMeasurementEvidence, Rejection>>;
   /** Intake must use this inside its own transaction, keeping the lock until event commit. */
   checkCurrentConsent(query: VerifyConsentQuery, transaction: TransactionContext): Promise<Result<VerifiedMeasurementEvidence, Rejection>>;
+  /** Recheck edge-verified evidence against the current locked row inside the event transaction. */
+  checkCurrentEvidence(evidence: VerifiedMeasurementEvidence, transaction: TransactionContext): Promise<Result<VerifiedMeasurementEvidence, Rejection>>;
 }
 export interface ConsentServiceDependencies {
   readonly transactions: TransactionRunner;
@@ -74,21 +76,29 @@ export function createConsentApplicationService(deps: ConsentServiceDependencies
     if (!value.ok) throw new Error("CONSENT_ID_UNAVAILABLE");
     return value.value;
   }
+  async function checkCurrentEvidence(evidence: VerifiedMeasurementEvidence, transaction: TransactionContext): Promise<Result<VerifiedMeasurementEvidence, Rejection>> {
+    if (evidence.purpose !== "measurement" || !supported.has(evidence.noticeVersion) || !Number.isSafeInteger(evidence.revision) || evidence.revision < 1 ||
+        !parseStableId("Portfolio", evidence.portfolioId).ok || !parseStableId("Consent", evidence.consentId).ok ||
+        !parseStableId("MeasurementVisitor", evidence.subject).ok || !Number.isFinite(Date.parse(evidence.issuedAt)) ||
+        !Number.isFinite(Date.parse(evidence.expiresAt))) return forbidden();
+    const current = await deps.repository.lock(evidence.portfolioId, evidence.consentId, transaction);
+    if (!current || current.state !== "granted" || current.revision !== evidence.revision || current.subject !== evidence.subject ||
+        current.noticeVersion !== evidence.noticeVersion || current.recordedAt !== evidence.issuedAt || current.evidenceExpiresAt !== evidence.expiresAt ||
+        Date.parse(evidence.expiresAt) <= Date.parse(deps.clock.now())) return forbidden();
+    return ok(evidence);
+  }
   async function checkCurrentConsent(query: VerifyConsentQuery, transaction: TransactionContext): Promise<Result<VerifiedMeasurementEvidence, Rejection>> {
     if (query.scope.kind !== "portfolio" || !query.token || !supported.has(query.noticeVersion)) return forbidden();
     const decoded = await deps.crypto.verify(query.token);
     if (!decoded.ok) return decoded;
     const p = decoded.value;
     if (p.portfolioId !== query.scope.portfolioId || p.noticeVersion !== query.noticeVersion) return forbidden();
-    const current = await deps.repository.lock(p.portfolioId, p.consentId, transaction);
-    if (!current || current.state !== "granted" || current.revision !== p.revision || current.subject !== p.subject ||
-        current.noticeVersion !== p.noticeVersion || current.recordedAt !== p.issuedAt || current.evidenceExpiresAt !== p.expiresAt ||
-        Date.parse(p.expiresAt) <= Date.parse(deps.clock.now())) return forbidden();
-    return ok({ purpose: "measurement", subject: p.subject, portfolioId: p.portfolioId,
-      consentId: p.consentId, noticeVersion: p.noticeVersion, revision: p.revision, issuedAt: p.issuedAt, expiresAt: p.expiresAt });
+    return checkCurrentEvidence({ purpose: "measurement", subject: p.subject, portfolioId: p.portfolioId,
+      consentId: p.consentId, noticeVersion: p.noticeVersion, revision: p.revision, issuedAt: p.issuedAt, expiresAt: p.expiresAt }, transaction);
   }
   return {
     checkCurrentConsent,
+    checkCurrentEvidence,
     async verifyEvidence(query) {
       try { return await deps.transactions.run(tx => checkCurrentConsent(query, tx)); }
       catch { return err({ kind: "temporarily_unavailable", code: "CONSENT_UNAVAILABLE" }); }
