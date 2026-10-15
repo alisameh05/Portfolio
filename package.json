@@ -164,7 +164,9 @@
     "phase7:focus:suppression": "node scripts/phase7-moderation.mjs --suppression",
     "phase7:focus:feedback": "node scripts/phase7-feedback.mjs",
     "prephase7:focus:summaries": "npm run validation:ready",
-    "phase7:focus:summaries": "node scripts/phase7-moderation.mjs --summaries"
+    "phase7:focus:summaries": "node scripts/phase7-moderation.mjs --summaries",
+    "prephase7:focus:goal-versions": "npm run validation:ready",
+    "phase7:focus:goal-versions": "node scripts/phase7-goal-versions.mjs"
   },
   "dependencies": {
     "kysely": "0.29.6",

@@ -3076,7 +3076,7 @@
       "get": {
         "operationId": "getOwnerAnalyticsGoal",
         "summary": "Inspect an Analytics goal and its version history",
-        "description": "Returns immutable goal definitions and the explicit active-version pointer.",
+        "description": "Returns immutable goal definitions and the explicit active-version pointer. A caller-generated goal ID without a stored root returns not found; clients initialize a goal through the create-version operation with If-Match: 1.",
         "tags": [
           "Measurement"
         ],
@@ -3124,7 +3124,7 @@
       "post": {
         "operationId": "createOwnerAnalyticsGoalVersion",
         "summary": "Create an Analytics goal version",
-        "description": "Adds a new immutable definition without changing the currently active version.",
+        "description": "For a caller-generated goal ID without a stored root, If-Match: 1 atomically initializes the root and immutable first version. Otherwise If-Match must match the current aggregate version and appends the next immutable definition. Version creation does not change the currently active version.",
         "tags": [
           "Measurement"
         ],

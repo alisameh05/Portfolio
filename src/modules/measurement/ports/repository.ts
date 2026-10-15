@@ -6,6 +6,30 @@ import type {
   AnalyticsGoalVersion,
   DailyAggregate,
 } from "../domain/index.js";
+import type {
+  AnalyticsGoalAggregateView,
+  AnalyticsGoalDefinition,
+  AnalyticsGoalVersionView,
+  AnalyticsGoalActivationView,
+} from "../application/owner-analytics.js";
+
+export interface AnalyticsGoalRootRecord {
+  readonly goalId: StableId<"AnalyticsGoal">;
+  readonly aggregateVersion: number;
+  readonly activeVersionId: StableId<"AnalyticsGoalVersion"> | null;
+}
+
+export interface AnalyticsGoalVersionRecord extends AnalyticsGoalVersionView {}
+export interface AnalyticsGoalActivationRecord extends AnalyticsGoalActivationView {}
+
+export interface OwnerAnalyticsGoalRepositoryPort {
+  lockGoal(goalId: StableId<"AnalyticsGoal">, portfolioId: StableId<"Portfolio">, transaction: TransactionContext): Promise<void>;
+  getGoal(goalId: StableId<"AnalyticsGoal">, portfolioId: StableId<"Portfolio">, transaction: TransactionContext): Promise<AnalyticsGoalRootRecord | null>;
+  insertGoal(goalId: StableId<"AnalyticsGoal">, portfolioId: StableId<"Portfolio">, transaction: TransactionContext): Promise<void>;
+  appendVersion(input: { readonly goalId: StableId<"AnalyticsGoal">; readonly portfolioId: StableId<"Portfolio">; readonly versionId: StableId<"AnalyticsGoalVersion">; readonly versionNumber: number; readonly expectedAggregateVersion: number; readonly definition: AnalyticsGoalDefinition; readonly createdAt: string }, transaction: TransactionContext): Promise<void>;
+  listVersions(goalId: StableId<"AnalyticsGoal">, portfolioId: StableId<"Portfolio">, transaction: TransactionContext): Promise<readonly AnalyticsGoalVersionRecord[]>;
+  listActivations(goalId: StableId<"AnalyticsGoal">, portfolioId: StableId<"Portfolio">, transaction: TransactionContext): Promise<readonly AnalyticsGoalActivationRecord[]>;
+}
 
 export interface MeasurementRepositoryPort {
   saveConsentRecord(

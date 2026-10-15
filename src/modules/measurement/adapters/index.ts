@@ -12,6 +12,9 @@ import type {
   DailyAggregate,
 } from "../domain/index.js";
 
+export { createPostgresOwnerAnalyticsGoalRepository } from "./postgres-goals.js";
+export { createPostgresAnalyticsGoalScopeFacts } from "./postgres-goal-scope-facts.js";
+
 /**
  * Stub adapters for Phase 1 skeleton.
  * Business implementation and persistence are deferred to later phases.

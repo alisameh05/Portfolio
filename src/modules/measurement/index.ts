@@ -29,6 +29,11 @@ export type {
   ClockPort,
   HashPort,
 } from "./ports/index.js";
+export { createOwnerAnalyticsGoalService } from "./application/index.js";
+export type { AnalyticsGoalScopeFactsPort, OwnerAnalyticsGoalServiceDependencies } from "./application/index.js";
+export type { AnalyticsGoalRootRecord, AnalyticsGoalVersionRecord, AnalyticsGoalActivationRecord, OwnerAnalyticsGoalRepositoryPort } from "./ports/index.js";
+export { createPostgresOwnerAnalyticsGoalRepository } from "./adapters/postgres-goals.js";
+export { createPostgresAnalyticsGoalScopeFacts } from "./adapters/postgres-goal-scope-facts.js";
 
 export type { AnalyticsEventAction, AnalyticsGoalStep, AnalyticsGoalDefinition, GetOwnerAnalyticsGoalQuery, CreateOwnerAnalyticsGoalVersionApplicationCommand, ActivateOwnerAnalyticsGoalVersionApplicationCommand, AnalyticsGoalVersionView, AnalyticsGoalActivationView, AnalyticsGoalAggregateView, AnalyticsGoalVersionReceipt, AnalyticsGoalActivationReceipt, OwnerAnalyticsApplicationService } from "./application/owner-analytics.js";
 
