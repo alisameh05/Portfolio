@@ -1,7 +1,7 @@
 {
-  "runId": "26588d98-0f0f-4c34-9452-0412135ce92c",
-  "sourceRevision": "30290c36e86086f889f0c647904b79e6d7655c24",
-  "sourceTreeSha256": "847b6f562d4798c2ab77ec80d588c1a3c398dc861c6c6a173dff81bbad3d3471",
+  "runId": "f6c69bc4-d95c-40ec-8751-ff2fbf3da783",
+  "sourceRevision": "15cd2fe67bbb9040cef96c289974d211f5cbd0b2",
+  "sourceTreeSha256": "868b59472739dcde6b67dd85a3d572f85f86a4094b02306db10235f606ceb43f",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015150000_enable_configuration_interaction_event_facts.sql",
   "migrationSha256": "ce3d4700c6cf9154f8aa5a462bca3032d19ead3faf1b73ef64dca4ff954a03a9",
@@ -16,6 +16,7 @@
       "T11-02/T11-03 rejects unavailable Global CTA destination before durable effects"
     ],
     "T11-03": [
+      "T11-01/T11-03/T11-04/T11-06/T11-08 records only current configured capability facts and stable public identities",
       "T11-02/T11-03 rejects English-only Project destination in Arabic before durable effects"
     ],
     "T11-04": [
@@ -38,7 +39,7 @@
       "T09-07 commits event, safe receipt and private job once; exact races replay and failures roll back"
     ],
     "T11-08": [
-      "T11-01/T11-04/T11-06 records only current configured capability facts and stable public identities",
+      "T11-01/T11-03/T11-04/T11-06/T11-08 records only current configured capability facts and stable public identities",
       "T11-02/T11-03/T11-05 rejects absent or mismatched current configuration without durable effects"
     ]
   },
