@@ -1,6 +1,6 @@
 {
-  "runId": "7216fc4d-7aad-49ac-94e6-dfc70301d3c5",
-  "sourceRevision": "c285be59ced78efb71258affc8c87a3478c7a92c",
+  "runId": "3d515848-ed41-453d-b3aa-ed85e0ab086b",
+  "sourceRevision": "9212415f4644d38d95852149d2ebac299f317120",
   "sourceTreeSha256": "4917bad419df09b924a23b859b0f4e69528aca0992b5e78db6d589ad964a18cf",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015120000_persist_consented_public_events.sql",
