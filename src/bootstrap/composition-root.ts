@@ -74,6 +74,7 @@ let currentConsent: ConsentApplicationService | undefined;
 let currentReaction: ReactionRuntimeServices | undefined;
 let currentRating: RatingRuntimeServices | undefined;
 let currentFeedback: FeedbackRuntimeServices | undefined;
+let currentInteractionSummary: Pick<InteractionModerationService, "getProjectAggregate"> | undefined;
 let currentModeration: (import("../modules/interaction-moderation/index.js").OwnerModerationApplicationService & Pick<InteractionModerationService, "getApprovedFeedback">) | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
@@ -102,6 +103,7 @@ export interface DatabaseRuntimeDependencies {
   readonly rating?: RatingRuntimeServices;
   readonly feedback?: FeedbackRuntimeServices;
   readonly moderation?: NonNullable<typeof currentModeration>;
+  readonly interactionSummary?: NonNullable<typeof currentInteractionSummary>;
   readonly consent?: ConsentApplicationService;
   readonly operations: OperationsPersistencePorts;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
@@ -194,6 +196,7 @@ export async function initializeDatabaseRuntime(
         let rating: RatingRuntimeServices | undefined;
         let feedback: FeedbackRuntimeServices | undefined;
         let moderation: NonNullable<typeof currentModeration> | undefined;
+        let interactionSummary: NonNullable<typeof currentInteractionSummary> | undefined;
         if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok) {
           const [{ createFeedbackApplicationService, createOwnerFeedbackModerationService }, { createPostgresFeedbackSubmissionRepository },
             { createPostgresProjectInteractionFacts }, { createBoundedCurrentCvRateLimit }] = await Promise.all([
@@ -203,6 +206,10 @@ export async function initializeDatabaseRuntime(
             import("../runtime/http/current-cv-rate-limit.js"),
           ]);
           const scope = { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value };
+          const { createProjectInteractionSummaryService } = await import("../modules/interaction-moderation/index.js");
+          const { createPostgresInteractionSummaryRepository } = await import("../modules/interaction-moderation/adapters/postgres-summary.js");
+          interactionSummary = createProjectInteractionSummaryService({ portfolioId: scope.portfolioId, transactions: operations.transactions,
+            content: createPostgresProjectInteractionFacts(scope), repository: createPostgresInteractionSummaryRepository() });
           const { createPostgresModerationRepository } = await import("../modules/interaction-moderation/adapters/postgres-moderation.js");
           const { decideAuthorization } = await import("../modules/identity-access/index.js");
           moderation = createOwnerFeedbackModerationService({ scope, operations,
@@ -590,6 +597,7 @@ export async function initializeDatabaseRuntime(
           ...(rating === undefined ? {} : { rating }),
           ...(feedback === undefined ? {} : { feedback }),
           ...(moderation === undefined ? {} : { moderation }),
+          ...(interactionSummary === undefined ? {} : { interactionSummary }),
           ...(consent === undefined ? {} : { consent }),
           ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
           ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
@@ -623,6 +631,7 @@ export async function initializeDatabaseRuntime(
     currentRating = dependencies.rating;
     currentFeedback = dependencies.feedback;
     currentModeration = dependencies.moderation;
+    currentInteractionSummary = dependencies.interactionSummary;
     currentConsent = dependencies.consent;
     currentOwnerConfiguration = dependencies.ownerConfiguration;
     currentContentAuthoring = dependencies.contentAuthoring;
@@ -787,6 +796,12 @@ export function getApprovedFeedbackApplicationService() {
   return currentModeration;
 }
 
+/** Current exact-locale summaries are an in-process capability with no identity issuance. */
+export function getProjectInteractionSummaryApplicationService() {
+  if (!currentInteractionSummary) throw new Error("INTERACTION_SUMMARY_NOT_CONFIGURED");
+  return currentInteractionSummary;
+}
+
 /** Test-only seam to isolate focused suites. */
 export function resetRuntimeForTests(): void {
   current = undefined;
@@ -796,6 +811,7 @@ export function resetRuntimeForTests(): void {
   currentRating = undefined;
   currentFeedback = undefined;
   currentModeration = undefined;
+  currentInteractionSummary = undefined;
   currentOwnerConfiguration = undefined;
   currentContentAuthoring = undefined;
   currentOwnerTaxonomy = undefined;

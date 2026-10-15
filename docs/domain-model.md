@@ -393,3 +393,30 @@ change subsequent results; cursors do not freeze withdrawn content or count priv
 states. DTOs contain only approved name/paragraph, Feedback/Project IDs, original
 locale and display time. The existing partial index, column grants and FORCE RLS
 support this slice without new DDL or a public read/delete/reapproval operation.
+
+### Current interaction summaries (#195)
+
+The in-process Project aggregate query checks configured Portfolio, stable Project,
+Published lifecycle and requested published locale while holding Content's shared
+root lock. It reads current Reaction/Rating rows and exact-locale approved Feedback
+in one statement snapshot, with a database as-of time. Replacements and same-value
+retries do not increase contributor cardinality. Zero raters returns no-data;
+one through four returns low-sample without an average; five or more returns the
+current sum divided by count. Vote totals are shared across languages; Feedback
+counts and pages are exact-locale with no fallback.
+
+Content-before-Interaction is also used by submit, publication, withdrawal and
+Moderation. Hide/archive retain eligible private records but immediately reject
+public summaries/pages. Restore rechecks current locale and approved retained
+state. No aggregate worker writes public visibility or caches Feedback eligibility.
+Replaying an outbox fact cannot resurrect a count or suppressed paragraph.
+
+Two private owner-rights aggregate views expose no subjects, raw votes or small
+sample average. Their NOLOGIN/NOBYPASSRLS owner inherits existing application
+Content access and has project-scoped vote SELECT policies under FORCE RLS.
+The runtime is not a member of that role and receives only SELECT on the aggregate
+views; its existing subject-scoped raw vote policies remain unchanged. Both views
+also check current Published Project/locale facts. Data API, worker and backup
+roles receive no view grants. There is no Measurement subject join or new HTTP
+operation. Rollback disables summary assembly and preserves retained records;
+policy changes use a reviewed forward migration.
