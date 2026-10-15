@@ -1,18 +1,18 @@
 {
   "ticket": 201,
-  "runId": "9d36aa27-616f-4088-afa4-99de2a93d311",
-  "sourceRevision": "bcd5a094e7bf0e4639fbc6e79b622d4042ee3ca0",
-  "sourceTreeSha256": "71a4644b9dfe41e6f8d2fb803d25669fd1116deaa2ae611189aeb7307ba417d1",
+  "runId": "e2b38492-3098-490a-9a2d-b9deb75366b6",
+  "sourceRevision": "8051a546b4467a13abeb41b7224b2e37fcae70b3",
+  "sourceTreeSha256": "ae02a21837341dd881a35f13427b05d22ced72be502806e56049f71de44365d8",
   "node": "v24.21.0",
   "npm": "11.19.0",
   "postgres": "postgres (PostgreSQL) 18.3",
   "migration": {
     "id": "20261015180000_match_analytics_goal_conversions.sql",
-    "sha256": "b7c045775c6d185ea5ac0a9a21f118adef130202966bbf2d6295e85b258cf0d3"
+    "sha256": "682a4c7b6f3fd7e19c10fef259cb0fc50df93eec9c9bfd2c119e436ebea2a03a"
   },
   "required": {
     "success": true,
-    "passed": 13,
+    "passed": 15,
     "failed": 0,
     "skipped": 0,
     "todo": 0,
@@ -21,7 +21,7 @@
   "suites": [
     {
       "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-conversions-201/tests/phase7/goal-conversions-postgres.test.ts",
-      "passed": 5
+      "passed": 7
     },
     {
       "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-conversions-201/tests/phase7/goal-conversions.test.ts",
