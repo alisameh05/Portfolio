@@ -153,12 +153,26 @@ describe("Owner Analytics goal versions through PostgreSQL and existing Owner op
   });
 
   it("T12-04/05 rejects invalid and foreign scopes but accepts retained Hidden Project identity without public exposure", async () => {
-    const id = makeGoalId();
+    const foreignPortfolioId = seededId("Portfolio", 98);
     const foreignProject = seededId("Project", 4);
-    const invalid = await service!.createOwnerAnalyticsGoalVersion(command(id, "foreign-goal-scope-001", 1,
-      { name: "Foreign", steps: [{ action: "project-viewed", projectIds: [foreignProject] }] }));
-    expect(invalid).toMatchObject({ ok: false, error: { kind: "validation", code: "ANALYTICS_GOAL_SCOPE_UNAVAILABLE" } });
-    expect(await counts(id)).toEqual({ roots: 0, versions: 0, outbox: 0, ledger: 0 });
+    const foreignRoute = seededId("PublicRoute", 5);
+    await admin!.query(`insert into portfolio_config.settings
+      (portfolio_id,owner_id,display_name,headline,bio,global_cta_label,global_cta_destination,global_cta_unavailable_fallback)
+      values ($1,$2,'Foreign','Portfolio owner','Owner profile','Contact','https://example.com/contact','Contact the owner')`,
+    [foreignPortfolioId, seededId("Owner", 6)]);
+    await admin!.query("insert into content.items (content_id,portfolio_id,content_type,lifecycle,candidate_slug) values ($1,$2,'project','hidden',null)",
+      [foreignProject, foreignPortfolioId]);
+    await admin!.query("insert into content.public_routes (route_identity,content_id,portfolio_id,content_type,current_slug,first_published_at) values ($1,$2,$3,'project','foreign-goal-project',$4)",
+      [foreignRoute, foreignProject, foreignPortfolioId, now]);
+    for (const [key, scope] of [["foreign-goal-project-001", { projectIds: [foreignProject] }],
+      ["foreign-goal-route-001", { publicRouteIds: [foreignRoute] }]] as const) {
+      const id = makeGoalId();
+      const invalid = await service!.createOwnerAnalyticsGoalVersion(command(id, key, 1,
+        { name: "Foreign", steps: [{ action: "project-viewed", ...scope }] }));
+      expect(invalid).toMatchObject({ ok: false, error: { kind: "validation", code: "ANALYTICS_GOAL_SCOPE_UNAVAILABLE" } });
+      expect(await counts(id)).toEqual({ roots: 0, versions: 0, outbox: 0, ledger: 0 });
+    }
+    const id = makeGoalId();
     const accepted = await service!.createOwnerAnalyticsGoalVersion(command(id, "retained-goal-scope-001"));
     expect(accepted.ok).toBe(true);
     const stored = await admin!.query("select lifecycle, content_type from content.items where portfolio_id=$1 and content_id=$2", [portfolioId, projectId]);
