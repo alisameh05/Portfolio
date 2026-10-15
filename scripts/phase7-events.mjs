@@ -8,8 +8,10 @@ import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 
 const root = process.cwd(), runId = randomUUID(), source = workingTreeSourceSha256();
 const refreshTypes = process.argv.includes("--refresh-types");
+const ticket197 = process.argv.includes("--ticket-197");
 const migration = "supabase/migrations/20261015120000_persist_consented_public_events.sql";
-const evidencePath = resolve("evidence/phase7-events-196.json"), reportPath = resolve("artifacts/events-vitest.json");
+const evidencePath = resolve(ticket197 ? "evidence/phase7-event-facts-197.json" : "evidence/phase7-events-196.json");
+const reportPath = resolve(ticket197 ? "artifacts/event-facts-vitest.json" : "artifacts/events-vitest.json");
 const discoveredBin = process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" :
   spawnSync("pg_config", ["--bindir"], { encoding: "utf8", timeout: 5_000 }).stdout?.trim();
 const bin = process.env.PHASE7_POSTGRES_BIN ?? discoveredBin ?? "";
@@ -71,10 +73,20 @@ try {
     if (workingTreeSourceSha256() !== testedSource) throw new Error("EVENT_SOURCE_CHANGED_DURING_RUN");
     result = { runId, sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(), sourceTreeSha256: testedSource, version, migration,
       migrationSha256: createHash("sha256").update(readFileSync(migration)).digest("hex"),
+      ...(ticket197 ? { acceptanceCriteria: {
+        "T10-01": ["T09-01/T09-03 persists each first-slice action and round-trips the full safe context", "T10-01/T10-04 persists related-project and testimonial actions with exact current public associations", "T10-01/T10-03 persists Media facts only when the optional public-use capability accepts them"],
+        "T10-02": ["T09-04 binds current routes, Project, locale, type and Portfolio while allowing retained journey identities", "T10-01/T10-04 persists related-project and testimonial actions with exact current public associations", "T10-01/T10-03 persists Media facts only when the optional public-use capability accepts them"],
+        "T10-03": ["T10-01/T10-03 persists Media facts only when the optional public-use capability accepts them", "fails only Media engagement safely when its optional public-use capability is missing", "fails only Media engagement safely when its optional public-use capability is unavailable"],
+        "T10-04": ["T10-01/T10-04 persists related-project and testimonial actions with exact current public associations"],
+        "T10-05": ["rejects invalid Media engagement before durable effects", "rejects invalid relationship payload before durable effects", "rejects unknown testimonial property before durable effects", "rejects unknown closed-shape property as 400 before dispatch", "rejects unknown context property as 400 before dispatch"],
+        "T10-06": ["T09-04 binds current routes, Project, locale, type and Portfolio while allowing retained journey identities", "T10-01/T10-04 persists related-project and testimonial actions with exact current public associations"],
+        "T10-07": ["T10-01/T10-03 persists Media facts only when the optional public-use capability accepts them", "T09-07 commits event, safe receipt and private job once; exact races replay and failures roll back"],
+        "T10-08": ["fails only Media engagement safely when its optional public-use capability is missing", "fails only Media engagement safely when its optional public-use capability is unavailable", "T09-09 enforces module RLS and keeps optional event assembly out of core readiness"]
+      } } : {}),
       required: { success: tests.success, passed: tests.numPassedTests, failed: tests.numFailedTests, skipped: tests.numPendingTests, failedSuites: tests.numFailedTestSuites },
       suites: tests.testResults.map(suite => ({ name: suite.name.replace(root, ""), passed: suite.assertionResults?.length ?? 0 })),
       roles: ["event_runtime", "shipwithali_application", "shipwithali_worker", "anon", "authenticated"],
-      reproduction: "npm run setup:validation; npm run validation:ready; npm run phase7:focus:events (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
+      reproduction: `npm run setup:validation; npm run validation:ready; npm run phase7:focus:events${ticket197 ? " -- --ticket-197" : ""}; PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries`,
       scope: "Disposable native PostgreSQL cluster; full repository migration chain, restricted application role, HTTP/application/consent integration. No production database was modified." };
   }
 } catch (error) {

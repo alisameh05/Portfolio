@@ -159,6 +159,8 @@ export interface VisibleMediaUsageBatch {
 export interface GetPublicProjectMediaUseQuery {
   readonly mediaAssetId: StableId<"MediaAsset">;
   readonly locale: SupportedLocale;
+  /** When supplied, only a reference in this Project establishes public use. */
+  readonly projectId?: StableId<"Project">;
 }
 
 export interface ProjectTaxonomyAssignmentCommand extends ExistingContentCommandContext {

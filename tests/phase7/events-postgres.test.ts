@@ -7,8 +7,12 @@ import { createPostgresOperationsPersistence } from "../../src/modules/portabili
 import { createPostgresConsentRepository } from "../../src/modules/measurement/adapters/postgres-consent.js";
 import { createPostgresMeasurementEventRepository } from "../../src/modules/measurement/adapters/postgres-events.js";
 import { createPostgresContentMeasurementPublicFacts } from "../../src/modules/content-publishing/adapters/postgres-interaction-facts.js";
+import { createMediaAcceptanceApplicationService } from "../../src/modules/media/index.js";
+import { createPostgresMediaAcceptanceRepository } from "../../src/modules/media/adapters/postgres-acceptance.js";
+import { createPortfolioSettingsReader } from "../../src/modules/portfolio-configuration/index.js";
+import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createConsentApplicationService, createMeasurementEventService, type PublicMeasurementEvent, type VerifiedMeasurementEvidence } from "../../src/modules/measurement/index.js";
-import type { MeasurementEventRepositoryPort } from "../../src/modules/measurement/application/ingest-event.js";
+import type { MeasurementEventRepositoryPort, MeasurementMediaPublicFactsPort } from "../../src/modules/measurement/application/ingest-event.js";
 import type { ConsentApplicationService, ConsentRepositoryPort } from "../../src/modules/measurement/application/consent.js";
 import { AesGcmConsentEvidenceAdapter } from "../../src/modules/identity-access/adapters/consent-evidence.js";
 import { handlePostPublicEvent } from "../../src/runtime/http/public-event.js";
@@ -34,9 +38,9 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     supportedNoticeVersions: ["2026-10"], ttlSeconds: 2_592_000 });
   const content = createPostgresContentMeasurementPublicFacts({ portfolioId, ownerId });
   const repository = createPostgresMeasurementEventRepository();
-  const makeService = (options: { operations?: typeof operations; repository?: MeasurementEventRepositoryPort; facts?: typeof content; consentService?: ConsentApplicationService } = {}) => createMeasurementEventService({
+  const makeService = (options: { operations?: typeof operations; repository?: MeasurementEventRepositoryPort; facts?: typeof content; media?: MeasurementMediaPublicFactsPort; consentService?: ConsentApplicationService } = {}) => createMeasurementEventService({
     portfolioId, transactions: (options.operations ?? operations).transactions, operations: options.operations ?? operations,
-    consent: options.consentService ?? consent, content: options.facts ?? content, repository: options.repository ?? repository,
+    consent: options.consentService ?? consent, content: options.facts ?? content, ...(options.media ? { media: options.media } : {}), repository: options.repository ?? repository,
     clock: { now: () => now }, ids: createSystemIdGenerator(),
   });
   const service = makeService();
@@ -70,6 +74,46 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
       await admin.query("insert into content.language_publications (content_id,portfolio_id,content_type,locale,revision_id,review_id,route_identity,publication_sequence,published_at) values ($1,$2,'project',$3,$4,$5,$6,1,$7)", [projectId, targetPortfolio, locale, revision, review, routeId, now]);
     }
     return { projectId, routeId };
+  }
+  async function seedTestimonial(projectId?: StableId<"Project">) {
+    const testimonialId = createStableId("Testimonial"), revision = createStableId("Revision"), review = createStableId("ContentReview");
+    const payload = { contentType: "testimonial", locale: "en", authorName: "Fixture author", quote: "Private fixture quote", associationType: projectId ? "project" : "profile", projectId };
+    await admin.query("insert into content.items (content_id,portfolio_id,content_type,lifecycle) values ($1,$2,'testimonial','published')", [testimonialId, portfolioId]);
+    await admin.query("insert into content.revisions (revision_id,content_id,portfolio_id,content_type,locale,stream_sequence,aggregate_version,title,summary,body,payload,saved_at) values ($1,$2,$3,'testimonial','en',1,1,'Fixture testimonial','Fixture summary','Fixture body',$4,$5)", [revision, testimonialId, portfolioId, payload, now]);
+    await admin.query("insert into content.revision_reviews (review_id,content_id,portfolio_id,content_type,revision_id,locale,review_sequence,snapshot_hash,evidence_version,reviewer_id,decision,reviewed_at) values ($1,$2,$3,'testimonial',$4,'en',1,$5,1,$6,'accepted',$7)", [review, testimonialId, portfolioId, revision, "b".repeat(64), ownerId, now]);
+    await admin.query("insert into content.testimonial_language_publications (content_id,portfolio_id,content_type,locale,revision_id,review_id,publication_sequence,published_at) values ($1,$2,'testimonial','en',$3,$4,1,$5)", [testimonialId, portfolioId, revision, review, now]);
+    await admin.query("insert into content.public_testimonial_locales (content_id,portfolio_id,content_type,locale,revision_id,author_name,quote,association_type,project_id,published_at) values ($1,$2,'testimonial','en',$3,'Fixture author','Private fixture quote',$4,$5,$6)", [testimonialId, portfolioId, revision, projectId ? "project" : "profile", projectId ?? null, now]);
+    return testimonialId;
+  }
+  async function seedAcceptedProfileMedia(options: { setAsProfile?: boolean } = {}) {
+    const mediaAssetId = createStableId("MediaAsset"), uploadIntentId = createStableId("MediaUploadIntent");
+    const sourceObjectId = createStableId("MediaObject"), outputObjectId = createStableId("MediaObject");
+    const attemptId = createStableId("MediaProcessingAttempt"), decisionId = createStableId("MediaDecision");
+    const digest = "c".repeat(64), outputDigest = "d".repeat(64), byteLength = 25, timestamp = now;
+    await admin.query("insert into media.assets (media_id,portfolio_id,owner_id,kind,original_file_name,declared_media_type,declared_byte_length,declared_sha256) values ($1,$2,$3,'document','event-evidence.pdf','application/pdf',$4,$5)", [mediaAssetId, portfolioId, ownerId, byteLength, digest]);
+    await admin.query("insert into media.upload_intents (upload_intent_id,media_id,media_object_id,portfolio_id,owner_id,expires_at) values ($1,$2,$3,$4,$5,$6)", [uploadIntentId, mediaAssetId, sourceObjectId, portfolioId, ownerId, timestamp]);
+    await admin.query("insert into media.processed_objects (object_id,portfolio_id,owner_id,media_id,source_object_id,sha256,byte_length,mime_type,object_version) values ($1,$2,$3,$4,$5,$6,$7,'application/pdf','fixture-v1')", [outputObjectId, portfolioId, ownerId, mediaAssetId, sourceObjectId, outputDigest, byteLength]);
+    await admin.query("insert into media.processing_attempts (attempt_id,portfolio_id,owner_id,media_id,input_object_id,input_sha256,detected_mime_type,detected_byte_length,result,output_object_id,output_sha256,scanner_version,processor_version,policy_version,finding_codes,started_at,finished_at) values ($1,$2,$3,$4,$5,$6,'application/pdf',$7,'passed',$8,$9,'fixture-scanner-v1','fixture-processor-v1','pdf-active-content-deny-1','[]'::jsonb,$10,$10)", [attemptId, portfolioId, ownerId, mediaAssetId, sourceObjectId, digest, byteLength, outputObjectId, outputDigest, timestamp]);
+    await admin.query("insert into media.processing_states (media_id,portfolio_id,owner_id,aggregate_version,latest_attempt_id) values ($1,$2,$3,3,$4)", [mediaAssetId, portfolioId, ownerId, attemptId]);
+    await admin.query("insert into media.decision_history (decision_id,portfolio_id,owner_id,media_id,aggregate_version,decision,processing_attempt_id,input_object_id,input_sha256,detected_mime_type,detected_byte_length,scanner_version,processor_version,processing_policy_version,sealed_outputs,accessibility,ownership_attested_by,ownership_attested_at,public_suitability_attested_by,public_suitability_attested_at,decided_by,decided_at) values ($1,$2,$3,$4,3,'accepted',$5,$6,$7,'application/pdf',$8,'fixture-scanner-v1','fixture-processor-v1','pdf-active-content-deny-1',$9::jsonb,$10::jsonb,$3,$11,$3,$11,$3,$11)", [decisionId, portfolioId, ownerId, mediaAssetId, attemptId, sourceObjectId, digest, byteLength,
+      JSON.stringify([{ objectId: outputObjectId, sha256: outputDigest, byteLength, mimeType: "application/pdf", objectVersion: "fixture-v1", variantName: "document" }]),
+      JSON.stringify({ kind: "document", summary: "Public evidence document." }), timestamp]);
+    if (options.setAsProfile !== false) {
+      await admin.query("update portfolio_config.settings set profile_media_asset_id=$3 where portfolio_id=$1 and owner_id=$2", [portfolioId, ownerId, mediaAssetId]);
+    }
+    const mediaAcceptance = createMediaAcceptanceApplicationService({ scope: { portfolioId, ownerId }, repository: createPostgresMediaAcceptanceRepository({
+      database: database.database, transactions: database.transactions, scope: { portfolioId, ownerId },
+    }) });
+    const profileSettings = createPortfolioSettingsReader({ repository: createPostgresPortfolioSettingsRepository(),
+      transactions: database.transactions, scope: { portfolioId, ownerId } });
+    const mediaFacts: MeasurementMediaPublicFactsPort = { async getPublicUseFact(query, transaction) {
+      const acceptance = await mediaAcceptance.getAcceptanceFacts({ ownerId, mediaAssetIds: [query.mediaAssetId], intendedUse: "supporting-artifact" }, transaction);
+      if (!acceptance.ok) return acceptance;
+      const accepted = acceptance.value[0];
+      if (!accepted || !accepted.accepted || !accepted.safe || !accepted.suitable || !accepted.accessible) return { ok: true, value: false };
+      return profileSettings.isPublicProfileMediaUse({ mediaAssetId: query.mediaAssetId, locale: query.locale }, transaction);
+    } };
+    return { mediaAssetId, mediaFacts };
   }
   async function countEvents() { return Number((await admin.query("select count(*)::int as count from measurement.public_events where portfolio_id=$1", [portfolioId])).rows[0].count); }
   async function countJobs() { return Number((await admin.query("select count(*)::int as count from operations.jobs where job_type='measurement.public-event-received.v1'")).rows[0].count); }
@@ -115,11 +159,80 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     expect(JSON.stringify(receipts)).not.toContain(evidence.verified.subject);
   });
 
+  it("T10-01/T10-04 persists related-project and testimonial actions with exact current public associations", async () => {
+    const source = await seedProject(), target = await seedProject();
+    const left = source.projectId < target.projectId ? source.projectId : target.projectId;
+    const right = source.projectId < target.projectId ? target.projectId : source.projectId;
+    await admin.query("insert into content.project_relationships (portfolio_id,left_project_id,right_project_id,created_by) values ($1,$2,$3,$4)", [portfolioId, left, right, ownerId]);
+    await admin.query("insert into content.project_relationship_views (portfolio_id,project_id,related_project_id,left_project_id,right_project_id) values ($1,$2,$3,$4,$5),($1,$3,$2,$4,$5)", [portfolioId, left, right, left, right]);
+    const profileTestimonial = await seedTestimonial();
+    const projectTestimonial = await seedTestimonial(source.projectId);
+    const evidence = await issueEvidence();
+    const before = await countEvents(), beforeJobs = await countJobs();
+    const events: PublicMeasurementEvent[] = [
+      { action: "related-project-opened", sourceProjectId: source.projectId, targetProjectId: target.projectId, context: context(source.routeId) },
+      { action: "testimonial-engaged", testimonialId: profileTestimonial, context: context(source.routeId) },
+      { action: "testimonial-engaged", testimonialId: projectTestimonial, projectId: source.projectId, context: context(source.routeId) },
+    ];
+    const eventKeys = events.map((_, index) => key(`fact-event-key-000${index}`));
+    for (const [index, event] of events.entries()) {
+      expect((await service.ingestEvent(command(event, evidence.verified, eventKeys[index]))).ok).toBe(true);
+    }
+    expect(await countEvents()).toBe(before + 3);
+    expect(await countJobs()).toBe(beforeJobs + 3);
+    const rows = await admin.query(`select action, project_id::text, source_project_id::text, target_project_id::text, testimonial_id::text
+      from measurement.public_events where portfolio_id=$1 order by accepted_at desc limit 3`, [portfolioId]);
+    expect(rows.rows).toEqual(expect.arrayContaining([
+      { action: "related-project-opened", project_id: null, source_project_id: source.projectId, target_project_id: target.projectId, testimonial_id: null },
+      { action: "testimonial-engaged", project_id: null, source_project_id: null, target_project_id: null, testimonial_id: profileTestimonial },
+      { action: "testimonial-engaged", project_id: source.projectId, source_project_id: null, target_project_id: null, testimonial_id: projectTestimonial },
+    ]));
+    const invalid: PublicMeasurementEvent[] = [
+      { action: "related-project-opened", sourceProjectId: source.projectId, targetProjectId: createStableId("Project"), context: context(source.routeId) },
+      { action: "testimonial-engaged", testimonialId: projectTestimonial, projectId: target.projectId, context: context(source.routeId) },
+      { action: "testimonial-engaged", testimonialId: profileTestimonial, projectId: source.projectId, context: context(source.routeId) },
+      { action: "testimonial-engaged", testimonialId: profileTestimonial, context: context(source.routeId, { locale: "ar" }) },
+    ];
+    for (const [index, event] of invalid.entries()) {
+      expect((await service.ingestEvent(command(event, evidence.verified, key(`invalid-fact-key-${index}-0001`)))).ok).toBe(false);
+    }
+    expect(await countEvents()).toBe(before + 3);
+    expect(await countJobs()).toBe(beforeJobs + 3);
+    const safeOutput = JSON.stringify({ rows: rows.rows, receipt: await service.ingestEvent(command(events[1]!, evidence.verified, eventKeys[1])) });
+    expect(safeOutput).not.toContain("Private fixture quote");
+    expect(safeOutput).not.toContain("Fixture author");
+  });
+
+  it("T10-01/T10-03 persists Media facts only when the optional public-use capability accepts them", async () => {
+    const project = await seedProject(), evidence = await issueEvidence(), { mediaAssetId, mediaFacts } = await seedAcceptedProfileMedia();
+    const event: PublicMeasurementEvent = { action: "media-engaged", mediaAssetId, engagement: "completed", context: context(project.routeId) };
+    const before = await countEvents(), beforeJobs = await countJobs(), eventKey = key("media-fact-accepted-0001");
+    const mediaService = makeService({ media: mediaFacts });
+    const accepted = await mediaService.ingestEvent(command(event, evidence.verified, eventKey));
+    expect(accepted.ok).toBe(true);
+    expect(await mediaService.ingestEvent(command(event, evidence.verified, eventKey))).toEqual(accepted);
+    expect(await mediaService.ingestEvent(command({ ...event, engagement: "opened" }, evidence.verified, eventKey)))
+      .toMatchObject({ ok: false, error: { kind: "conflict" } });
+    const row = await admin.query("select action,project_id::text,media_asset_id::text,media_engagement from measurement.public_events where portfolio_id=$1 and media_asset_id=$2", [portfolioId, mediaAssetId]);
+    expect(row.rows).toEqual([{ action: "media-engaged", project_id: null, media_asset_id: mediaAssetId, media_engagement: "completed" }]);
+    const { mediaAssetId: unrelatedProfileAsset } = await seedAcceptedProfileMedia({ setAsProfile: false });
+    await admin.query("update portfolio_config.settings set profile_media_asset_id=$3 where portfolio_id=$1 and owner_id=$2", [portfolioId, ownerId, unrelatedProfileAsset]);
+    const rejected = await mediaService.ingestEvent(command(event, evidence.verified, key("media-fact-rejected-0001")));
+    await admin.query("update portfolio_config.settings set profile_media_asset_id=$3 where portfolio_id=$1 and owner_id=$2", [portfolioId, ownerId, mediaAssetId]);
+    const missing = await service.ingestEvent(command({ ...event, mediaAssetId: createStableId("MediaAsset") }, evidence.verified, key("media-fact-missing-0001")));
+    const failingService = makeService({ media: mediaFacts, repository: { async insert() { throw new Error("injected Media event insert failure"); } } });
+    expect((await failingService.ingestEvent(command(event, evidence.verified, key("media-fact-rollback-0001")))).ok).toBe(false);
+    expect(rejected.ok).toBe(false);
+    expect(missing.ok).toBe(false);
+    expect(await countEvents()).toBe(before + 1);
+    expect(await countJobs()).toBe(beforeJobs + 1);
+  });
+
   it("T09-02 rejects missing, forged, expired, unsupported, withdrawn and mismatched consent without writes", async () => {
     const { routeId } = await seedProject();
     const event = pageEvent(routeId);
     const evidence = await issueEvidence();
-    const start = await countEvents();
+    const start = await countEvents(), jobsStart = await countJobs();
     for (const token of [undefined, "granted", "forged-cookie-value"]) {
       expect((await handlePostPublicEvent(request(token, event), { scope, service, consent })).status).toBe(403);
     }
@@ -136,7 +249,7 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     expect(withdrawn.ok).toBe(true);
     expect((await handlePostPublicEvent(request(evidence.token, event, "withdrawn-consent-key"), { scope, service, consent })).status).toBe(403);
     expect(await countEvents()).toBe(start);
-    expect(await countJobs()).toBe(3);
+    expect(await countJobs()).toBe(jobsStart);
   });
 
   it("T09-04 binds current routes, Project, locale, type and Portfolio while allowing retained journey identities", async () => {

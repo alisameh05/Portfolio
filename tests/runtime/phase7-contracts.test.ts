@@ -19,22 +19,28 @@ const actions = [
  { action: "active-engagement-sampled", projectId: id, activeMilliseconds: 60000 },
  { action: "media-engaged", projectId: id, mediaAssetId: id, engagement: "completed" },
  { action: "related-project-opened", sourceProjectId: id, targetProjectId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e94" },
- { action: "contact-channel-opened", projectId: id, channel: "phone" },
- { action: "external-project-link-opened", projectId: id, destination: "live-demo" },
  { action: "testimonial-engaged", projectId: id, testimonialId: id },
- { action: "global-project-cta-opened", projectId: id },
 ];
 function request(body: unknown) { return new Request("https://example.com/api/v1/events", { method: "POST", headers: { "Idempotency-Key": "contracts-188", cookie: "sw_analytics_consent=PRIVATE_TOKEN_SENTINEL" }, body: JSON.stringify(body) }); }
 describe("Phase 7 contracts #188", () => {
- it.each(actions)("T01-02 preserves $action with complete context, scope, and idempotency", async action => {
+ it.each(actions)("T09/T10 preserves $action with complete context, scope, and idempotency", async action => {
   const fake = createPublicEventTestFake({ type: "success" });
   const event = { ...action, context };
   const response = await handlePostPublicEvent(request(event), { service: fake, scope: { kind: "portfolio", portfolioId: id as never } });
-  expect(response.status).toBe(202);
+  expect(response.status, await response.clone().text()).toBe(202);
   expect(fake.calls).toHaveLength(1);
   expect(fake.calls[0]).toMatchObject({ event, idempotencyKey: "contracts-188", scope: { kind: "portfolio", portfolioId: id }, correlationId: expect.any(String) });
   expect(fake.calls[0]).toHaveProperty("measurement.purpose", "measurement");
   expect(await response.json()).toEqual({ eventId: expect.any(String), acceptedAt: expect.any(String) });
+ });
+ it.each([
+  { action: "contact-channel-opened", projectId: id, channel: "phone" },
+  { action: "external-project-link-opened", projectId: id, destination: "live-demo" },
+  { action: "global-project-cta-opened", projectId: id },
+ ])("keeps later optional action fail-closed until its fact capability is implemented: %j", async action => {
+  const fake = createPublicEventTestFake({ type: "success" });
+  expect((await handlePostPublicEvent(request({ context, ...action }), { service: fake })).status).toBe(400);
+  expect(fake.calls).toHaveLength(0);
  });
  it.each([
   { action: "project-viewed" },

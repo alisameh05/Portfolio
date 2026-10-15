@@ -15,6 +15,8 @@ export interface ContentMeasurementPublicFactsPort {
  getRouteFacts(input: { readonly portfolioId: StableId<"Portfolio">; readonly routeId: StableId<"PublicRoute">; readonly locale: SupportedLocale }, transaction: TransactionContext): Promise<Result<{ readonly routeId: StableId<"PublicRoute">; readonly projectId: StableId<"Project"> | null; readonly contentType: ContentKind; readonly published: boolean }, Rejection>>;
  /** Historical journey/goal references validate identity without returning private content. */
  hasRetainedPublicRoute(input: { readonly portfolioId: StableId<"Portfolio">; readonly routeId: StableId<"PublicRoute"> }, transaction: TransactionContext): Promise<Result<boolean, Rejection>>;
+ /** Current curated relationship and both endpoints must be public in the requested locale. */
  getRelatedProjectFact(input: { readonly portfolioId: StableId<"Portfolio">; readonly sourceProjectId: StableId<"Project">; readonly targetProjectId: StableId<"Project">; readonly locale: SupportedLocale }, transaction: TransactionContext): Promise<Result<boolean, Rejection>>;
+ /** Current public Testimonial and exact profile/Project association in the requested locale. */
  getTestimonialFact(input: { readonly portfolioId: StableId<"Portfolio">; readonly testimonialId: StableId<"Testimonial">; readonly projectId?: StableId<"Project">; readonly locale: SupportedLocale }, transaction: TransactionContext): Promise<Result<boolean, Rejection>>;
 }

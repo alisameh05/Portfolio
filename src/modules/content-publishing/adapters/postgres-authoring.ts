@@ -405,6 +405,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
                and item.content_type = publication.content_type and item.lifecycle = 'published'
              where projection.portfolio_id = ${input.scope.portfolioId}::uuid
                and projection.locale = ${input.locale}
+               and (${input.projectId ?? null}::uuid is null or projection.content_id = ${input.projectId ?? null}::uuid)
                and projection.claims @> jsonb_build_array(jsonb_build_object(
                  'artifacts', jsonb_build_array(jsonb_build_object('mediaAssetId', ${input.mediaAssetId}::text))
                ))

@@ -107,13 +107,10 @@ describe("POST Public event adapter (#28)", () => {
     expect(JSON.stringify(logger.records)).not.toContain("signed-value-123");
   });
 
-  it("rejects all future actions before consent verification or application dispatch", async () => {
+  it("rejects actions outside the currently implemented fact capabilities before consent verification", async () => {
     const actions = [
-      { action: "media-engaged", projectId: PROJECT_ID, mediaAssetId: EVENT_ID, engagement: "played" },
-      { action: "related-project-opened", sourceProjectId: PROJECT_ID, targetProjectId: EVENT_ID },
       { action: "contact-channel-opened", channel: "linkedin" },
       { action: "external-project-link-opened", projectId: PROJECT_ID, destination: "github-repository" },
-      { action: "testimonial-engaged", testimonialId: EVENT_ID },
       { action: "global-project-cta-opened", projectId: PROJECT_ID },
     ];
     for (const event of actions) {

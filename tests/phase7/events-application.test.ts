@@ -7,6 +7,9 @@ import type { PublicMeasurementEvent } from "../../src/modules/measurement/index
 const portfolioId = createStableId("Portfolio");
 const routeId = createStableId("PublicRoute");
 const projectId = createStableId("Project");
+const targetProjectId = createStableId("Project");
+const mediaAssetId = createStableId("MediaAsset");
+const testimonialId = createStableId("Testimonial");
 const subject = createStableId("MeasurementVisitor");
 const consentId = createStableId("Consent");
 const eventId = createStableId("PublicEvent");
@@ -32,7 +35,7 @@ const evidence = {
   expiresAt: "2026-11-13T11:00:00.000Z",
 };
 
-function setup() {
+function setup(options: { media?: "ready" | "missing" | "unavailable" } = {}) {
   const writes: unknown[] = [];
   const jobs: unknown[] = [];
   const requests = new Map<string, { hash: string; result: Record<string, unknown> }>();
@@ -71,9 +74,18 @@ function setup() {
       async hasRetainedPublicRoute(query: { routeId: string }) {
         return { ok: true as const, value: query.routeId === routeId };
       },
-      async getRelatedProjectFact() { return { ok: false as const, error: { kind: "not_found" as const, code: "PROJECT_UNAVAILABLE" } }; },
-      async getTestimonialFact() { return { ok: false as const, error: { kind: "not_found" as const, code: "TESTIMONIAL_UNAVAILABLE" } }; },
+      async getRelatedProjectFact(query: { sourceProjectId: string; targetProjectId: string; locale: string }) {
+        return { ok: true as const, value: query.sourceProjectId === projectId && query.targetProjectId === targetProjectId && query.locale === "en" };
+      },
+      async getTestimonialFact(query: { testimonialId: string; projectId?: string; locale: string }) {
+        return { ok: true as const, value: query.testimonialId === testimonialId && query.projectId === projectId && query.locale === "en" };
+      },
     } as never,
+    ...(options.media === "missing" ? {} : { media: { async getPublicUseFact(query: { mediaAssetId: string; projectId?: string; locale: string }) {
+      return options.media === "unavailable"
+        ? { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_FACTS_DOWN" } }
+        : { ok: true as const, value: query.mediaAssetId === mediaAssetId && query.projectId === projectId && query.locale === "en" };
+    } } }),
     repository: { async insert(event: unknown) { writes.push(event); } },
     clock: { now: () => "2026-10-15T12:00:00.000Z" },
     ids: { generate(kind: string) { return kind === "Job" ? jobId : (++generatedEvents, eventId); } },
@@ -101,10 +113,52 @@ describe("Measurement event ingestion application seam", () => {
     expect(JSON.stringify({ receipt: result, job: jobs[0] })).not.toContain(subject);
   });
 
+  it("accepts Media, related-Project and Testimonial facts as distinct persisted actions", async () => {
+    const { service, command, writes, jobs } = setup();
+    const events: PublicMeasurementEvent[] = [
+      { action: "media-engaged", context, projectId, mediaAssetId, engagement: "completed" },
+      { action: "related-project-opened", context, sourceProjectId: projectId, targetProjectId },
+      { action: "testimonial-engaged", context, testimonialId, projectId },
+    ];
+    for (const [index, event] of events.entries()) {
+      expect(await service.ingestEvent(command(event, `event-facts-${index + 1}`))).toMatchObject({ ok: true });
+    }
+    expect(writes).toHaveLength(3);
+    expect(writes.map((write) => (write as { event: PublicMeasurementEvent }).event)).toEqual(events);
+    expect(jobs).toHaveLength(3);
+  });
+
+  it("rejects forged or mismatched Media, related-Project, and Testimonial facts without effects", async () => {
+    const invalidEvents = [
+      { action: "media-engaged", context, projectId: createStableId("Project"), mediaAssetId, engagement: "opened" },
+      { action: "related-project-opened", context, sourceProjectId: createStableId("Project"), targetProjectId },
+      { action: "related-project-opened", context, sourceProjectId: projectId, targetProjectId: projectId },
+      { action: "testimonial-engaged", context, testimonialId, projectId: createStableId("Project") },
+    ];
+    for (const event of invalidEvents) {
+      const { service, command, writes, jobs } = setup();
+      expect((await service.ingestEvent(command(event as unknown as PublicMeasurementEvent))).ok).toBe(false);
+      expect(writes).toHaveLength(0);
+      expect(jobs).toHaveLength(0);
+    }
+  });
+
+  it.each(["missing", "unavailable"] as const)("fails only Media engagement safely when its optional public-use capability is %s", async (media) => {
+    const { service, command, writes, jobs } = setup({ media });
+    const rejected = await service.ingestEvent(command({ action: "media-engaged", context, mediaAssetId, engagement: "opened" }));
+    expect(rejected).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable" } });
+    expect(writes).toHaveLength(0);
+    expect(jobs).toHaveLength(0);
+    expect((await service.ingestEvent(command({ action: "page-viewed", context }, "independent-event-key"))).ok).toBe(true);
+    expect(writes).toHaveLength(1);
+  });
+
   it.each([
     ["unknown event field", { action: "page-viewed", context, unexpected: "private" }],
     ["unknown nested context field", { action: "page-viewed", context: { ...context, ipAddress: "192.0.2.1" } }],
-    ["unsupported action", { action: "media-engaged", context, mediaAssetId: createStableId("MediaAsset"), engagement: "opened" }],
+    ["invalid Media engagement", { action: "media-engaged", context, mediaAssetId, engagement: "liked" }],
+    ["invalid relationship payload", { action: "related-project-opened", context, sourceProjectId: projectId, targetProjectId, extra: true }],
+    ["unknown testimonial property", { action: "testimonial-engaged", context, testimonialId, personalEmail: "private@example.test" }],
     ["out-of-range engagement", { action: "active-engagement-sampled", context, activeMilliseconds: 999 }],
     ["duplicate Journey context", { action: "page-viewed", context: { ...context, journeyContext: [routeId, routeId] } }],
     ["overlong Journey context", { action: "page-viewed", context: { ...context, journeyContext: Array.from({ length: 11 }, () => createStableId("PublicRoute")) } }],

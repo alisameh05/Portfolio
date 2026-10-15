@@ -12,19 +12,33 @@ export interface MeasurementEventRepositoryPort {
   insert(event: PublicEventData, transaction: TransactionContext): Promise<void>;
 }
 
+/** Optional cross-module capability. Its absence rejects Media observations only. */
+export interface MeasurementMediaPublicFactsPort {
+  getPublicUseFact(input: {
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly mediaAssetId: StableId<"MediaAsset">;
+    readonly projectId?: StableId<"Project">;
+    readonly locale: "en" | "ar";
+  }, transaction: TransactionContext): Promise<Result<boolean, Rejection>>;
+}
+
 export interface MeasurementEventApplicationDeps {
   readonly portfolioId: StableId<"Portfolio">;
   readonly transactions: OperationsPersistencePorts["transactions"];
   readonly operations: OperationsPersistencePorts;
   readonly consent: Pick<ConsentApplicationService, "checkCurrentEvidence">;
-  readonly content: Pick<ContentMeasurementPublicFactsPort, "getRouteFacts" | "hasRetainedPublicRoute">;
+  readonly content: Pick<ContentMeasurementPublicFactsPort, "getRouteFacts" | "hasRetainedPublicRoute"> &
+    Partial<Pick<ContentMeasurementPublicFactsPort, "getRelatedProjectFact" | "getTestimonialFact">>;
+  readonly media?: MeasurementMediaPublicFactsPort;
   readonly repository: MeasurementEventRepositoryPort;
   readonly clock: Clock;
   readonly ids: StableIdGenerator;
 }
 
-type SupportedEvent = Extract<PublicMeasurementEvent,
-  { action: "page-viewed" | "project-viewed" | "active-engagement-sampled" }>;
+type SupportedEvent = Extract<PublicMeasurementEvent, {
+  readonly action: "page-viewed" | "project-viewed" | "active-engagement-sampled" |
+    "media-engaged" | "related-project-opened" | "testimonial-engaged";
+}>;
 
 const unavailable = (): Result<never, Rejection> => err({ kind: "not_found", code: "PUBLIC_ROUTE_UNAVAILABLE" });
 const denied = (): Result<never, Rejection> => err({ kind: "forbidden", code: "MEASUREMENT_CONSENT_REQUIRED" });
@@ -35,6 +49,9 @@ const actionKeys: Readonly<Record<SupportedEvent["action"], ReadonlySet<string>>
   "page-viewed": new Set(["action", "context"]),
   "project-viewed": new Set(["action", "context", "projectId"]),
   "active-engagement-sampled": new Set(["action", "context", "projectId", "activeMilliseconds"]),
+  "media-engaged": new Set(["action", "context", "projectId", "mediaAssetId", "engagement"]),
+  "related-project-opened": new Set(["action", "context", "sourceProjectId", "targetProjectId"]),
+  "testimonial-engaged": new Set(["action", "context", "testimonialId", "projectId"]),
 };
 const referrers = new Set(["direct", "search", "social", "professional", "referral", "unknown"]);
 const devices = new Set(["desktop", "mobile", "tablet", "other", "unknown"]);
@@ -78,15 +95,21 @@ function validContext(value: unknown): value is SupportedEvent["context"] {
 }
 
 function validateEvent(value: unknown): Result<SupportedEvent, Rejection> {
-  if (!isRecord(value) || typeof value["action"] !== "string" || !["page-viewed", "project-viewed", "active-engagement-sampled"].includes(value["action"])) return invalid();
+  const actions = ["page-viewed", "project-viewed", "active-engagement-sampled", "media-engaged", "related-project-opened", "testimonial-engaged"] as const;
+  if (!isRecord(value) || typeof value["action"] !== "string" || !actions.includes(value["action"] as typeof actions[number])) return invalid();
   const action = value["action"] as SupportedEvent["action"];
   if (!hasOnlyKeys(value, actionKeys[action]) || !validContext(value["context"])) return invalid();
-  if ((action === "project-viewed" || value["projectId"] !== undefined) &&
+  const projectIdRequired = action === "project-viewed";
+  if ((projectIdRequired || value["projectId"] !== undefined) &&
       (typeof value["projectId"] !== "string" || !parseStableId("Project", value["projectId"]).ok)) return invalid();
   if (action === "page-viewed" && value["projectId"] !== undefined) return invalid();
   if (action === "active-engagement-sampled") {
     if (typeof value["activeMilliseconds"] !== "number" || !Number.isSafeInteger(value["activeMilliseconds"]) || value["activeMilliseconds"] < 1_000 || value["activeMilliseconds"] > 60_000) return invalid();
   } else if (value["activeMilliseconds"] !== undefined) return invalid();
+  if (action === "media-engaged" && (typeof value["mediaAssetId"] !== "string" || !parseStableId("MediaAsset", value["mediaAssetId"]).ok || !["opened", "played", "paused", "completed"].includes(String(value["engagement"])))) return invalid();
+  if (action === "related-project-opened" && (typeof value["sourceProjectId"] !== "string" || !parseStableId("Project", value["sourceProjectId"]).ok ||
+      typeof value["targetProjectId"] !== "string" || !parseStableId("Project", value["targetProjectId"]).ok || value["sourceProjectId"] === value["targetProjectId"])) return invalid();
+  if (action === "testimonial-engaged" && (typeof value["testimonialId"] !== "string" || !parseStableId("Testimonial", value["testimonialId"]).ok)) return invalid();
   return ok(value as unknown as SupportedEvent);
 }
 
@@ -97,12 +120,34 @@ function parseReceipt(value: Readonly<Record<string, unknown>>): EventReceipt {
   return { eventId: value["eventId"] as StableId<"PublicEvent">, acceptedAt: value["acceptedAt"] as string };
 }
 
-async function validatePublicFacts(event: SupportedEvent, portfolioId: StableId<"Portfolio">, content: Pick<ContentMeasurementPublicFactsPort, "getRouteFacts" | "hasRetainedPublicRoute">, tx: TransactionContext): Promise<Result<void, Rejection>> {
+async function validatePublicFacts(event: SupportedEvent, portfolioId: StableId<"Portfolio">, content: MeasurementEventApplicationDeps["content"], media: MeasurementMediaPublicFactsPort | undefined, tx: TransactionContext): Promise<Result<void, Rejection>> {
   const route = await content.getRouteFacts({ portfolioId, routeId: event.context.pageRouteIdentity, locale: event.context.locale }, tx);
   if (!route.ok) return route;
   if (!route.value.published) return unavailable();
   if (event.action === "project-viewed" && route.value.projectId !== event.projectId) return unavailable();
   if (event.action === "active-engagement-sampled" && event.projectId !== undefined && route.value.projectId !== event.projectId) return unavailable();
+  if ((event.action === "media-engaged" || event.action === "testimonial-engaged") && event.projectId !== undefined && route.value.projectId !== event.projectId) return unavailable();
+  if (event.action === "related-project-opened") {
+    if (route.value.contentType !== "project" || route.value.projectId !== event.sourceProjectId) return unavailable();
+    if (!content.getRelatedProjectFact) return transient();
+    const related = await content.getRelatedProjectFact({ portfolioId, sourceProjectId: event.sourceProjectId, targetProjectId: event.targetProjectId, locale: event.context.locale }, tx);
+    if (!related.ok) return related;
+    if (!related.value) return unavailable();
+  }
+  if (event.action === "testimonial-engaged") {
+    if (!content.getTestimonialFact) return transient();
+    const testimonial = await content.getTestimonialFact({ portfolioId, testimonialId: event.testimonialId,
+      ...(event.projectId === undefined ? {} : { projectId: event.projectId }), locale: event.context.locale }, tx);
+    if (!testimonial.ok) return testimonial;
+    if (!testimonial.value) return unavailable();
+  }
+  if (event.action === "media-engaged") {
+    if (!media) return transient();
+    const use = await media.getPublicUseFact({ portfolioId, mediaAssetId: event.mediaAssetId,
+      ...(event.projectId === undefined ? {} : { projectId: event.projectId }), locale: event.context.locale }, tx);
+    if (!use.ok) return use;
+    if (!use.value) return unavailable();
+  }
   for (const routeId of event.context.journeyContext ?? []) {
     const retained = await content.hasRetainedPublicRoute({ portfolioId, routeId: routeId as StableId<"PublicRoute"> }, tx);
     if (!retained.ok) return retained;
@@ -135,7 +180,7 @@ export function createMeasurementEventService(deps: MeasurementEventApplicationD
         return await deps.transactions.run<Result<EventReceipt, Rejection>>(async tx => {
           const currentConsent = await deps.consent.checkCurrentEvidence(evidence, tx);
           if (!currentConsent.ok) return requestTransactionRollback(currentConsent);
-          const facts = await validatePublicFacts(event, deps.portfolioId, deps.content, tx);
+          const facts = await validatePublicFacts(event, deps.portfolioId, deps.content, deps.media, tx);
           if (!facts.ok) return requestTransactionRollback(facts);
           const requestHash = await hashCanonicalRequest(event as unknown as Parameters<typeof hashCanonicalRequest>[0]);
           const execution = await deps.operations.idempotency.execute({
