@@ -92,6 +92,8 @@ export interface LeaseClaimInput {
   readonly now: string;
   readonly leaseDurationSeconds: number;
   readonly limit: number;
+  /** Restricts shared job queues to one handler family. Outbox claims ignore this field. */
+  readonly jobTypes?: readonly string[];
 }
 
 export interface LeasedJobStorePort {

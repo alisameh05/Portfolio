@@ -333,14 +333,21 @@ export function createPostgresOperationsPersistence(
 
   async function claimJobs(input: LeaseClaimInput): Promise<readonly LeasedJobRecord[]> {
     validateLeaseInput(input);
+    if (input.jobTypes !== undefined && (input.jobTypes.length < 1 || input.jobTypes.length > 20 ||
+        new Set(input.jobTypes).size !== input.jobTypes.length ||
+        input.jobTypes.some(type => !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$/.test(type)))) {
+      throw new TypeError("Job type filter is invalid.");
+    }
     return transactions.run(async (context) => {
       const executor = resolvePostgresTransaction(context);
+      const jobTypeFilter = input.jobTypes === undefined ? sql`` : sql`and job_type = any(${input.jobTypes}::text[])`;
       const due = await sql<JobLeaseRow>`
         select job_id::text, job_type, payload_version, payload, attempt_count
           from operations.jobs
          where completed_at is null
            and available_at <= ${input.now}::timestamptz
            and (status = 'available' or lease_expires_at <= ${input.now}::timestamptz)
+           ${jobTypeFilter}
          order by available_at, job_id
          for update skip locked
          limit ${input.limit}
