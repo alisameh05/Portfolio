@@ -1,3 +1,4 @@
+import type { PortfolioRequestScope } from "@shared/application";
 /**
  * owner-moderation.ts — Phase 2 #32 Owner Feedback Moderation HTTP adapter.
  *
@@ -18,8 +19,8 @@
  * Owner session, owner-scoped authorization, and (for mutations) exact
  * origin plus CSRF proof before dispatch. Unauthenticated and forbidden
  * translation is exercised through fakes. Moderation decisions, retention,
- * persistence, and authorization rules remain unimplemented
- * provider-neutral application behavior.
+ * persistence, and scoped authorization are provider-neutral application behavior.
+ * Inspection, approval and rejection use real persistence; suppression is the next ticket.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, queries, results, and rejections crossing the application
@@ -53,6 +54,7 @@ import type {
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
+  OWNER_PRIVATE_RESPONSE_HEADERS,
   type OwnerRequestSecurity,
 } from "./owner-security.js";
 import {
@@ -63,73 +65,11 @@ import {
 
 // ── Provider-neutral application seam ─────────────────────────────────────────
 
-export interface GetOwnerFeedbackModerationQuery {
-  readonly actor: ActorContext;
-  readonly feedbackId: StableId<string>;
-}
-
-export interface ApproveOwnerFeedbackApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly expectedVersion: number;
-  readonly feedbackId: StableId<string>;
-  readonly reason: string;
-}
-
-export interface RejectOwnerFeedbackApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly expectedVersion: number;
-  readonly feedbackId: StableId<string>;
-  readonly reason: string;
-}
-
-export interface SuppressOwnerFeedbackApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly expectedVersion: number;
-  readonly feedbackId: StableId<string>;
-  readonly reason: string;
-}
-
-export interface OwnerModerationDecisionView {
-  readonly decision: "approved" | "rejected" | "suppressed";
-  readonly reason: string;
-  readonly decidedAt: string;
-}
-
-export interface OwnerFeedbackModerationView {
-  readonly feedbackId: StableId<string>;
-  readonly aggregateVersion: number;
-  readonly state: "pending" | "approved" | "rejected" | "suppressed";
-  readonly authorName: string;
-  readonly paragraph: string;
-  readonly submittedAt: string;
-  readonly decisionHistory: ReadonlyArray<OwnerModerationDecisionView>;
-}
-
-export interface OwnerModerationCommandReceipt {
-  readonly aggregateId: StableId<string>;
-  readonly aggregateVersion: number;
-  readonly outcome: "feedback-approved" | "feedback-rejected" | "feedback-suppressed";
-}
-
-export interface OwnerModerationApplicationService {
-  getOwnerFeedbackModeration(
-    query: GetOwnerFeedbackModerationQuery,
-  ): Promise<Result<OwnerFeedbackModerationView, Rejection>>;
-  approveOwnerFeedback(
-    command: ApproveOwnerFeedbackApplicationCommand,
-  ): Promise<Result<OwnerModerationCommandReceipt, Rejection>>;
-  rejectOwnerFeedback(
-    command: RejectOwnerFeedbackApplicationCommand,
-  ): Promise<Result<OwnerModerationCommandReceipt, Rejection>>;
-  suppressOwnerFeedback(
-    command: SuppressOwnerFeedbackApplicationCommand,
-  ): Promise<Result<OwnerModerationCommandReceipt, Rejection>>;
-}
+import type { GetOwnerFeedbackModerationQuery, ApproveOwnerFeedbackApplicationCommand, RejectOwnerFeedbackApplicationCommand, SuppressOwnerFeedbackApplicationCommand, OwnerModerationDecisionView, OwnerFeedbackModerationView, OwnerModerationCommandReceipt, OwnerModerationApplicationService } from "../../modules/interaction-moderation/index.js";
+export type { GetOwnerFeedbackModerationQuery, ApproveOwnerFeedbackApplicationCommand, RejectOwnerFeedbackApplicationCommand, SuppressOwnerFeedbackApplicationCommand, OwnerModerationDecisionView, OwnerFeedbackModerationView, OwnerModerationCommandReceipt, OwnerModerationApplicationService } from "../../modules/interaction-moderation/index.js";
 
 export interface OwnerModerationAdapterDeps {
+  readonly scope?: PortfolioRequestScope;
   service: OwnerModerationApplicationService;
   security: OwnerRequestSecurity;
   logger?: Logger;
@@ -224,8 +164,10 @@ export async function handleGetOwnerFeedbackModeration(
       return reject(logger, traceId, instance, "Invalid path parameters.");
     }
     const query: GetOwnerFeedbackModerationQuery = {
+      scope: deps.scope ?? { kind: "unconfigured" },
+      correlationId: traceId,
       actor: guard.actor,
-      feedbackId: pathResult.data.feedbackId as StableId<string>,
+      feedbackId: pathResult.data.feedbackId as StableId<"Feedback">,
     };
     let result: Awaited<ReturnType<typeof deps.service.getOwnerFeedbackModeration>>;
     try {
@@ -255,7 +197,7 @@ export async function handleGetOwnerFeedbackModeration(
       );
     }
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(parsed.data, { status: 200 });
+    return Response.json(parsed.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
@@ -273,6 +215,8 @@ async function handleModerationCommand(
     readonly response: { safeParse(value: unknown): { success: boolean; data?: unknown } };
   },
   buildCommand: (args: {
+    readonly scope: PortfolioRequestScope;
+    readonly correlationId: string;
     readonly actor: ActorContext;
     readonly path: Record<string, StableId<string>>;
     readonly idempotencyKey: IdempotencyKey;
@@ -324,6 +268,8 @@ async function handleModerationCommand(
       path[key] = value as StableId<string>;
     }
     const command = buildCommand({
+      scope: deps.scope ?? { kind: "unconfigured" },
+      correlationId: traceId,
       actor: guard.actor,
       path,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
@@ -362,7 +308,7 @@ async function handleModerationCommand(
       );
     }
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(parsed.data, { status: 200 });
+    return Response.json(parsed.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
@@ -384,11 +330,13 @@ export async function handleApproveOwnerFeedback(
       body: zApproveOwnerFeedbackBody,
       response: zApproveOwnerFeedbackResponse,
     },
-    ({ actor, path, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, path, idempotencyKey, expectedVersion, body, scope, correlationId }) => ({
+      scope,
+      correlationId,
       actor,
       idempotencyKey,
       expectedVersion,
-      feedbackId: path["feedbackId"] as StableId<string>,
+      feedbackId: path["feedbackId"] as StableId<"Feedback">,
       reason: body["reason"] as string,
     }) as ApproveOwnerFeedbackApplicationCommand,
     (command) => deps.service.approveOwnerFeedback(command),
@@ -412,11 +360,13 @@ export async function handleRejectOwnerFeedback(
       body: zRejectOwnerFeedbackBody,
       response: zRejectOwnerFeedbackResponse,
     },
-    ({ actor, path, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, path, idempotencyKey, expectedVersion, body, scope, correlationId }) => ({
+      scope,
+      correlationId,
       actor,
       idempotencyKey,
       expectedVersion,
-      feedbackId: path["feedbackId"] as StableId<string>,
+      feedbackId: path["feedbackId"] as StableId<"Feedback">,
       reason: body["reason"] as string,
     }) as RejectOwnerFeedbackApplicationCommand,
     (command) => deps.service.rejectOwnerFeedback(command),
@@ -440,11 +390,13 @@ export async function handleSuppressOwnerFeedback(
       body: zSuppressOwnerFeedbackBody,
       response: zSuppressOwnerFeedbackResponse,
     },
-    ({ actor, path, idempotencyKey, expectedVersion, body }) => ({
+    ({ actor, path, idempotencyKey, expectedVersion, body, scope, correlationId }) => ({
+      scope,
+      correlationId,
       actor,
       idempotencyKey,
       expectedVersion,
-      feedbackId: path["feedbackId"] as StableId<string>,
+      feedbackId: path["feedbackId"] as StableId<"Feedback">,
       reason: body["reason"] as string,
     }) as SuppressOwnerFeedbackApplicationCommand,
     (command) => deps.service.suppressOwnerFeedback(command),

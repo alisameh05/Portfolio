@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 1,
+  "ticket": 146,
+  "parent": 145,
+  "runId": "009737b9-086a-4af4-b044-0e2dd60d0f4b",
+  "sourceRevision": "ce9df577692cbb09e65f55a17556b061136604a6",
+  "sourceTreeSha256": "bfb2ed7aa92b52cb843d5c01beb99e8ec2a1c8883d44a7371586321cafa081cb",
+  "startedAt": "2026-10-10T17:55:50.266Z",
+  "completedAt": "2026-10-10T17:58:27.155Z",
+  "scope": "phase6-reproducible-service-and-processor-context",
+  "suite": "phase6-setup-context",
+  "toolVersions": {
+    "node": "v24.21.0",
+    "npm": "11.19.0",
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1"
+  },
+  "toolDefinitions": {
+    "scanner": "clamav/clamav:1.4.3",
+    "imageProcessor": "dpokidov/imagemagick:7.1.1-47",
+    "videoProcessor": "jrottenberg/ffmpeg:7.1-ubuntu2404",
+    "pdfProcessor": "jbarlow83/ocrmypdf-alpine:v17.12.1"
+  },
+  "predecessorContexts": {
+    "phase4": {
+      "issue": 90,
+      "pullRequest": 105,
+      "mergeCommit": "9806af81d4ce705c36d9b22089f77213d16887bc",
+      "evidence": "evidence/phase4-context-90-105.json",
+      "contextRunId": "723edcf8-1e56-4b11-bf54-756977a7d8f1",
+      "executedAt": "2026-10-10T17:55:06.3076041Z",
+      "sourceRevision": "9806af81d4ce705c36d9b22089f77213d16887bc",
+      "gitTreeId": "79253c17f7dc440090ad57724d55fbb906e39f1b",
+      "contextVerdict": "pass",
+      "operations": {
+        "publicOperations": 5,
+        "ownerOperations": 39,
+        "forbiddenFindings": 0
+      },
+      "boundary": "pass",
+      "runtimeArchitecture": "pass",
+      "fixtureResults": [
+        {
+          "name": "phase4-provider-leakage",
+          "path": "tests/fixtures/invalid-deps/phase4-provider-leakage/modules/acme/application/leaky.ts",
+          "expectedRule": "no-provider-in-application",
+          "rejected": true
+        },
+        {
+          "name": "phase4-generated-leakage",
+          "path": "tests/fixtures/invalid-deps/phase4-generated-leakage/modules/acme/application/leaky.ts",
+          "expectedRule": "no-generated-code-leakage",
+          "rejected": true
+        },
+        {
+          "name": "phase4-uncontracted-route",
+          "path": "tests/fixtures/invalid-deps/phase4-uncontracted-route/route.ts",
+          "expectedRule": "uncontracted-route-handler",
+          "rejected": true
+        },
+        {
+          "name": "phase4-cross-module-write",
+          "path": "tests/fixtures/invalid-deps/phase4-cross-module-write/modules/consumer/application/writer.ts",
+          "expectedRule": "cross-module-write-no-foreign-adapters",
+          "rejected": true
+        },
+        {
+          "name": "phase4-frontend-lab-surface",
+          "path": "tests/fixtures/invalid-deps/phase4-frontend-lab-surface/component.tsx",
+          "expectedRule": "frontend-browser-lab-surface",
+          "rejected": true
+        },
+        {
+          "name": "phase4-later-phase-activation",
+          "path": "tests/fixtures/invalid-deps/phase4-later-phase-activation/modules/acme/application/activation.ts",
+          "expectedRule": "later-phase-activation-placeholder-bypass",
+          "rejected": true
+        }
+      ],
+      "depcruiseResults": [
+        {
+          "fixture": "tests/fixtures/invalid-deps/phase4-provider-leakage",
+          "expectedRule": "no-provider-in-application",
+          "rejected": true
+        },
+        {
+          "fixture": "tests/fixtures/invalid-deps/phase4-generated-leakage",
+          "expectedRule": "no-generated-code-leakage",
+          "rejected": true
+        }
+      ]
+    },
+    "phase5": {
+      "issue": 125,
+      "pullRequest": 144,
+      "mergeCommit": "26d6efb3d9e281265cc9c099195492b5dcbec79d",
+      "evidence": "evidence/phase-5-context.json",
+      "contextRunId": "0a9b0dda-83c3-495a-bf45-f0c6f4180991",
+      "sourceRevision": "ce9df577692cbb09e65f55a17556b061136604a6",
+      "sourceTreeSha256": "bfb2ed7aa92b52cb843d5c01beb99e8ec2a1c8883d44a7371586321cafa081cb",
+      "contextVerdict": "pass",
+      "operations": {
+        "public": 5,
+        "owner": 48,
+        "forbiddenFindings": 0
+      },
+      "runtimeBoundary": "pass",
+      "runtimeArchitecture": "pass"
+    },
+    "activationDifferences": {
+      "phase4": [
+        "identity-access",
+        "portfolio-configuration"
+      ],
+      "phase5": [
+        "content-and-publishing",
+        "taxonomy-and-discovery"
+      ],
+      "phase6Owned": [
+        "media",
+        "cv-portfolio"
+      ]
+    }
+  },
+  "serviceDefinitions": {
+    "postgres": "Supabase CLI local stack, PostgreSQL 17 from the committed config",
+    "auth": "Supabase local Auth and API gateway",
+    "storage": "Supabase local private Storage API and private bucket"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "executionCount": 3,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 20
+    }
+  },
+  "formats": [
+    {
+      "id": "pdf",
+      "kind": "document",
+      "mimeType": "application/pdf",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "ea2be33f0a32f8803cc1fc4c18f10c946c25373947c086f53396c32d63c7ecfe",
+      "scannerVerdict": "clean",
+      "processorVersion": "17.12.1"
+    },
+    {
+      "id": "png",
+      "kind": "image",
+      "mimeType": "image/png",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "cad3099f3f4da15146d56889dce523543f4fbd2f534fe32774bf98e97ea0badb",
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "jpeg",
+      "kind": "image",
+      "mimeType": "image/jpeg",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "5860c3c67e54c1f048897405d320e7f982bb1c298e9407c611fb333228882ccb",
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "webp",
+      "kind": "image",
+      "mimeType": "image/webp",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "2bea8f7bccff9bab756080faf8893b36b1a5b1f332e999d581a5c05ce014feda",
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "mp4",
+      "kind": "video",
+      "mimeType": "video/mp4",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "7426629be79bc282dfabce15c8bf8974546b565f618ce020dbc5b7ad1df9de3b",
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    },
+    {
+      "id": "webm",
+      "kind": "video",
+      "mimeType": "video/webm",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "1ade25e0f4981614c131aa56828379d25eeaa4a994dcc3845f745cf74913e6af",
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    }
+  ],
+  "counts": {
+    "expectedFormats": 6,
+    "executedFormats": 6,
+    "failedFormats": 0,
+    "skippedFormats": 0
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:verification"
+  ],
+  "limitations": [
+    "This setup probe does not certify Phase 6 application behavior, RLS matrices, race/rollback scenarios, or the final phase6:gate."
+  ]
+}

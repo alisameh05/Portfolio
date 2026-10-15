@@ -1,0 +1,44 @@
+
+> shipwithali-portfolio@0.0.0 test:setup
+> node --test --test-isolation=none tests/tooling/*.test.mjs
+
+✔ rejects Node 22 even though it shares the major version accepted by the old gate (6.4358ms)
+✔ rejects another Node 24 patch instead of treating any Node 24 as pinned (2.8133ms)
+✔ rejects a different npm patch instead of recording it as accepted (2.6048ms)
+✔ missing Docker and inaccessible daemon fail with safe actionable diagnostics (0.5659ms)
+✔ a skipped or empty integration suite cannot count as passing (0.239ms)
+✔ isolated Auth config preserves signup restrictions and leaves source untouched (3.7346ms)
+✔ remote provider credentials never reach isolated CLI or tests (1.6513ms)
+✔ the required checklist includes every predecessor and Phase 4 acceptance runner (0.2716ms)
+✔ a passing constituent passes only when it exits cleanly (0.8796ms)
+✔ a required local service cannot pass when unavailable even with exit code zero (0.7532ms)
+✔ skipped and partial required results fail (0.3904ms)
+✔ evidence redacts database credentials, bearer [redacted], and private payload fields (1.0245ms)
+✔ malformed database evidence is reported without crashing the gate (0.273ms)
+✔ a successful gate requires every named constituent exactly once (0.263ms)
+✔ missing, stale, or duplicate evidence and failed constituents fail the verdict (0.1111ms)
+✔ counts skipped cases from zero-exit Vitest and Node test summaries (0.3854ms)
+✔ accepts a complete fresh Phase 5 run with real database and deferred-work evidence (1.8104ms)
+✔ fails closed when required Docker/PostgreSQL evidence is missing (0.5465ms)
+✔ rejects partial suites, zero executions, and required skips (0.5986ms)
+✔ rejects stale or malformed source and run identities (0.5115ms)
+✔ rejects failed constituents, missing suites, and unit-only database substitutes (0.4971ms)
+✔ the settings runner isolates both Supabase projects to distinct loopback port ranges (0.333ms)
+✔ the settings runner removes inherited provider credentials (0.1634ms)
+✔ the settings runner rejects missing, partial, failed, or skipped database evidence (0.4766ms)
+✔ Phase 3 predecessor evidence requires every historical suite to pass without skips (0.2578ms)
+✔ rejects Node 20 and mismatched npm before installation (4.9121ms)
+✔ runtime-only preflight works before dependencies exist (3.6126ms)
+✔ reads exact npm from lifecycle metadata without spawning another process (0.2397ms)
+✔ rejects missing development dependencies even with an installation stamp (11.0814ms)
+✔ rejects cached dependencies after lockfile changes (32.236ms)
+✔ requires successful setup and exact installed versions (18.8502ms)
+✔ a registry install failure cannot leave a previously ready environment (195.8691ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 403.3341

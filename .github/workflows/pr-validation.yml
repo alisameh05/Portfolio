@@ -36,6 +36,42 @@ jobs:
       - run: npm run phase4:focus:context
       - run: npm run test:arch
       - run: npm run contract:verify
+      - name: Require real PostgreSQL consent and crypto acceptance with zero skips
+        run: npm run phase7:focus:consent
+      - name: Require private Feedback PostgreSQL acceptance with zero skips
+        run: npm run phase7:focus:feedback
+      - name: Require Owner moderation PostgreSQL acceptance with zero skips
+        run: npm run phase7:focus:moderation
+      - name: Require Feedback suppression and public paging with zero skips
+        run: npm run phase7:focus:suppression
+      - name: Publish sanitized suppression evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase7-suppression
+          path: evidence/phase7-suppression-194.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish sanitized moderation evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase7-moderation
+          path: evidence/phase7-moderation-193.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish sanitized Feedback evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase7-feedback
+          path: evidence/phase7-feedback-192.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish sanitized consent evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase7-consent
+          path: evidence/phase7-consent-189.json
+          if-no-files-found: error
+          retention-days: 14
 
   local-auth:
     name: Local Auth real-token
@@ -63,6 +99,53 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      # The Phase 3 predecessor assertions reject later domain activations.
+      # Replay Phase 4 on its immutable release with that release's lockfile.
+      # Current-source boundaries/contracts are checked by the validation job;
+      # current media database acceptance uses the Phase 6 focused gates.
+      - name: Check out the historical Phase 4 release (PR 105)
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: 9806af81d4ce705c36d9b22089f77213d16887bc
+          path: phase4-release
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: phase4-release/.nvmrc
+          cache: npm
+          cache-dependency-path: phase4-release/package-lock.json
+      - name: Select pinned npm
+        working-directory: phase4-release
+        run: |
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).engines.npm')"
+          npm install --global "npm@$npm_version" --no-audit --no-fund
+      - name: Install locked development dependencies
+        working-directory: phase4-release
+        run: npm run setup:validation
+      - name: Require historical Phase 4 real migration, restricted-role, and settings verification with zero skips
+        working-directory: phase4-release
+        run: npm run phase4:focus:settings
+      - name: Publish sanitized Phase 4 database evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase4-database-integrity
+          path: phase4-release/evidence/phase-4-database-integrity.json
+          if-no-files-found: error
+          retention-days: 14
+
+  phase6-media-cv:
+    name: Phase 6 Media and CV real-PostgreSQL-Storage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Remove stale Phase 6 evidence before setup
+        run: >-
+          node --input-type=module -e 'import { rmSync } from "node:fs";
+          for (const path of ["evidence/phase-6-verification-setup.json", "evidence/phase6-upload-intent-148.json", "evidence/phase6-media-processing-149.json", "evidence/phase6-image-processing-150.json", "evidence/phase6-video-processing-151.json", "evidence/phase6-media-acceptance-152.json", "evidence/phase6-publication-media-153.json", "evidence/phase6-cv-portfolio-154.json", "evidence/phase6-cv-acceptance-155.json", "evidence/phase6-cv-activation-156.json", "evidence/phase6-media-rejection.json", "evidence/phase6-media-delivery-158.json", "evidence/phase6-cv-delivery-159.json", "evidence/phase6-public-capabilities-160.json", "evidence/phase6-owner-composition-161.json", "evidence/phase6-migration-access-162.json", "evidence/phase6-media-integration.json", "evidence/phase6-media-cv-integration-163.json", "evidence/phase6-gate-report.json"]) rmSync(path, { force: true });
+          rmSync("evidence/phase6-gate-checks", { recursive: true, force: true });'
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .nvmrc
@@ -73,14 +156,37 @@ jobs:
           npm install --global "npm@$npm_version" --no-audit --no-fund
       - name: Install locked development dependencies
         run: npm run setup:validation
-      - name: Require real migration, restricted-role, and settings verification with zero skips
-        run: npm run phase4:focus:settings
-      - name: Publish sanitized Phase 4 database evidence
+      - name: Build the portable Linux Docker validation runner
+        run: docker compose -p portfolio-validation -f compose.validation.yaml build validation
+      - name: Require the complete fail-closed Phase 6 gate
+        run: npm run phase6:gate
+      - name: Publish sanitized Phase 6 gate and component evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: phase4-database-integrity
-          path: evidence/phase-4-database-integrity.json
-          if-no-files-found: error
+          name: phase6-gate
+          path: |
+            evidence/phase6-gate-report.json
+            evidence/phase6-gate-checks/*.log
+            evidence/phase-6-verification-setup.json
+            evidence/phase6-upload-intent-148.json
+            evidence/phase6-media-processing-149.json
+            evidence/phase6-image-processing-150.json
+            evidence/phase6-video-processing-151.json
+            evidence/phase6-media-acceptance-152.json
+            evidence/phase6-publication-media-153.json
+            evidence/phase6-cv-portfolio-154.json
+            evidence/phase6-cv-acceptance-155.json
+            evidence/phase6-cv-activation-156.json
+            evidence/phase6-media-rejection.json
+            evidence/phase6-media-delivery-158.json
+            evidence/phase6-cv-delivery-159.json
+            evidence/phase6-public-capabilities-160.json
+            evidence/phase6-owner-composition-161.json
+            evidence/phase6-migration-access-162.json
+            evidence/phase6-media-integration.json
+            evidence/phase6-media-cv-integration-163.json
+          if-no-files-found: warn
           retention-days: 14
 
   cloud-bootstrap:

@@ -16,7 +16,7 @@ import {
 import type { ActorContext, IdempotencyKey, Rejection, Result, StableId } from "../../shared/domain/index.js";
 import type { ContentAuthoringService, ContentProjectStatusValue } from "../../modules/content-publishing/application/authoring.js";
 import { createCorrelation, type Logger } from "../ports.js";
-import { guardOwnerRequest, type OwnerRequestSecurity } from "./owner-security.js";
+import { guardOwnerRequest, OWNER_PRIVATE_RESPONSE_HEADERS, type OwnerRequestSecurity } from "./owner-security.js";
 import { internalErrorProblem, rejectionToProblem, transportProblem } from "./problem.js";
 
 export interface OwnerProjectStatusAdapterDeps {
@@ -74,7 +74,7 @@ export async function handleListOwnerProjectStatusValues(request: Request, deps:
     const parsed = zListOwnerProjectStatusValuesResponse.safeParse({ values: result.value.map(valueView) });
     if (!parsed.success) return internalErrorProblem(new Error("Invalid application result"), traceId, instance, deps.logger);
     deps.logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(parsed.data, { status: 200 });
+    return Response.json(parsed.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) { return internalErrorProblem(error, traceId, instance, deps.logger); }
 }
 

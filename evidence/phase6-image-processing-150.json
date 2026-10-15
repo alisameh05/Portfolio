@@ -1,0 +1,339 @@
+{
+  "schemaVersion": 1,
+  "ticket": 150,
+  "parent": 145,
+  "runId": "a258d923-907d-4f98-bb64-2cc49a8a87a6",
+  "sourceRevision": "e34b169500a2ba13a8c2ef1ed612a2cf6039d335",
+  "sourceTreeSha256": "e6bc21db325aec19a17e9412b426ac41ca1a777cad6488b027e3032da97d8eba",
+  "startedAt": "2026-10-11T12:13:40.042Z",
+  "completedAt": "2026-10-11T12:17:29.353Z",
+  "scope": "trusted-byte-bound-PNG-JPEG-WebP-variants-with-immutable-private-outputs",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "sharp": "sharp-0.35.4;libvips-8.18.6"
+  },
+  "policyIds": {
+    "migration": "20261011230000_process_bounded_media_image_variants.sql",
+    "processing": "image-webp-variants-v1",
+    "limits": {
+      "imageBytes": 10485760,
+      "maxImagePixels": 40000000,
+      "maxVariants": 8,
+      "maxAttemptMs": 60000,
+      "processingDuration": "processing_duration_ms measures byte reads, scans, decode/re-encode and seals; bounded cleanup and failure audit are recorded separately",
+      "storageOperationTimeoutMs": 3000,
+      "databaseAuditStatementTimeoutMs": 3000
+    },
+    "storage": [
+      "media-candidates private",
+      "media-processed private",
+      "create-only WebP output variants"
+    ]
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 11
+    },
+    "scanner": {
+      "available": true,
+      "image": "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4",
+      "executionCount": 15
+    },
+    "imageProcessor": {
+      "available": true,
+      "package": "sharp",
+      "version": "sharp-0.35.4;libvips-8.18.6",
+      "executionCount": 5
+    }
+  },
+  "principalScope": {
+    "database": "shipwithali_application constrained by portfolio_id and owner_id RLS",
+    "storage": [
+      "server service role for exact candidate read and processed write",
+      "anonymous denied processed object read"
+    ],
+    "environment": "disposable loopback Supabase"
+  },
+  "formats": [
+    {
+      "id": "png",
+      "kind": "image",
+      "mimeType": "image/png",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "99bd4007641e36a7649684020cb0a682a28744e848a1961ddbb5f9c8785f0f66",
+      "scannerVerdict": "clean",
+      "processorVersion": "sharp-0.35.4;libvips-8.18.6"
+    },
+    {
+      "id": "jpeg",
+      "kind": "image",
+      "mimeType": "image/jpeg",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "ac998bc4548ead230df3ba5529496eef0d7018bb9cae2a5fd1979abda2901ebf",
+      "scannerVerdict": "clean",
+      "processorVersion": "sharp-0.35.4;libvips-8.18.6"
+    },
+    {
+      "id": "webp",
+      "kind": "image",
+      "mimeType": "image/webp",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "sha256": "d3ce4458d198ae8ce0d1cf33098ab6b261a9af34c01c98ef7bb660ffb444b162",
+      "scannerVerdict": "clean",
+      "processorVersion": "sharp-0.35.4;libvips-8.18.6"
+    }
+  ],
+  "checks": {
+    "integration": {
+      "suite": "tests/database/media-upload-intent.integration.test.ts",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "failedTests": [],
+      "verdict": "pass"
+    },
+    "units": {
+      "suites": [
+        "tests/runtime/media-image-processing.test.ts",
+        "tests/modules/media-image-processing.test.ts",
+        "tests/runtime/supabase-media-processing-storage.test.ts"
+      ],
+      "total": 17,
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "failedTests": [],
+      "scenarios": [
+        {
+          "name": "Media image processing application interface scans source and every output, seals both immutable variants and commits their byte-bound facts",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media image processing application interface does not let a caller's extension choose an image processor for mismatched bytes",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media image processing application interface retains no image object when any output is unsafe or the database commit becomes stale",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media image processing application interface bounds a database commit by the remaining attempt time and does not report success when that bound expires",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media image processing application interface surfaces orphan persistence failure with the exact private object facts after cleanup fails",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "bounded Media image processing fails closed when the shared attempt deadline leaves less than Sharp's one-second minimum",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "bounded Media image processing decodes png bytes and returns verified metadata-free WebP variants",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "bounded Media image processing decodes jpeg bytes and returns verified metadata-free WebP variants",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "bounded Media image processing decodes webp bytes and returns verified metadata-free WebP variants",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "bounded Media image processing rejects unsupported and truncated bytes without returning a variant",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "bounded Media image processing rejects decoded dimensions above the effective pixel limit before encoding",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "bounded Media image processing rejects an actual image whose decoded dimensions exceed the 40 megapixel policy",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "bounded Media image processing rejects actual input over 10 MiB before attempting to decode it",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "bounded Media image processing re-encodes away source EXIF metadata",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Media processing Storage adapter stops a streamed candidate read at the 20 MiB PDF bound",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Media processing Storage adapter rejects oversized declared bodies before reading their stream",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Media processing Storage adapter seals WebP variants create-only and removes only the exact extension-bound output",
+          "executed": true,
+          "status": "passed"
+        }
+      ],
+      "verdict": "pass"
+    }
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "scenarios": [
+    {
+      "name": "real png image pipeline, ClamAV scan and private Storage round-trip",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "real jpeg image pipeline, ClamAV scan and private Storage round-trip",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "real webp image pipeline, ClamAV scan and private Storage round-trip",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "tests/database/media-upload-intent.integration.test.ts",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "Media image processing application interface scans source and every output, seals both immutable variants and commits their byte-bound facts",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "Media image processing application interface does not let a caller's extension choose an image processor for mismatched bytes",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "Media image processing application interface retains no image object when any output is unsafe or the database commit becomes stale",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "Media image processing application interface bounds a database commit by the remaining attempt time and does not report success when that bound expires",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "Media image processing application interface surfaces orphan persistence failure with the exact private object facts after cleanup fails",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "bounded Media image processing fails closed when the shared attempt deadline leaves less than Sharp's one-second minimum",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "bounded Media image processing decodes png bytes and returns verified metadata-free WebP variants",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "bounded Media image processing decodes jpeg bytes and returns verified metadata-free WebP variants",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "bounded Media image processing decodes webp bytes and returns verified metadata-free WebP variants",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "bounded Media image processing rejects unsupported and truncated bytes without returning a variant",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "bounded Media image processing rejects decoded dimensions above the effective pixel limit before encoding",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "bounded Media image processing rejects an actual image whose decoded dimensions exceed the 40 megapixel policy",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "bounded Media image processing rejects actual input over 10 MiB before attempting to decode it",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "bounded Media image processing re-encodes away source EXIF metadata",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "Supabase Media processing Storage adapter stops a streamed candidate read at the 20 MiB PDF bound",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "Supabase Media processing Storage adapter rejects oversized declared bodies before reading their stream",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "Supabase Media processing Storage adapter seals WebP variants create-only and removes only the exact extension-bound output",
+      "executed": true,
+      "status": "passed"
+    }
+  ],
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:media-image-processing"
+  ],
+  "limitations": [
+    "Video processing and the final Phase 6 gate remain separate tickets."
+  ]
+}

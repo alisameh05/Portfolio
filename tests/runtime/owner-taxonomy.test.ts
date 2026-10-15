@@ -99,6 +99,8 @@ describe("Owner Taxonomy aggregate retrieval (#30)", () => {
       { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls.getOwnerTaxonomyAggregate).toHaveLength(1);
     expect(fake.calls.createOwnerTaxonomyValue).toHaveLength(0);
     const query = fake.calls.getOwnerTaxonomyAggregate[0] as { taxonomyId: string };

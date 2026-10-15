@@ -21,7 +21,7 @@ const CLOCK_SKEW_SECONDS = 60;
 const TOKEN_VERSION = "p1";
 
 export interface PseudonymousTokenAdapterDeps {
-  readonly config: PseudonymousIdentityConfig;
+  readonly config: Pick<PseudonymousIdentityConfig, "functional"> & Partial<Pick<PseudonymousIdentityConfig, "measurement">>;
   readonly nowSeconds: () => number;
   /** Injectable for deterministic tests. Production defaults to node:crypto randomBytes. */
   readonly randomBytes?: (size: number) => Uint8Array;
@@ -40,9 +40,9 @@ function rejected(kind: Rejection["kind"], code: string): Rejection {
 }
 
 function purposeKeyring(
-  config: PseudonymousIdentityConfig,
+  config: PseudonymousTokenAdapterDeps["config"],
   purpose: PseudonymousPurpose,
-): PseudonymousKeyring {
+): PseudonymousKeyring | undefined {
   return purpose === "visitor_functional" ? config.functional : config.measurement;
 }
 
@@ -136,6 +136,7 @@ export class AesGcmPseudonymousTokenAdapter implements CryptoPort {
     }
     try {
       const keyring = purposeKeyring(this.deps.config, input.purpose);
+      if (keyring === undefined) return err(rejected("forbidden", "IDENTITY_PURPOSE_UNAVAILABLE"));
       const subject = uuidV7Subject(now, this.random(10));
       const nonce = this.random(12);
       if (subject === null || nonce.length !== 12) {
@@ -203,6 +204,7 @@ export class AesGcmPseudonymousTokenAdapter implements CryptoPort {
       return err(rejected("unauthenticated", "INVALID_TOKEN"));
     }
     const keyring = purposeKeyring(this.deps.config, input.expectedPurpose);
+    if (keyring === undefined) return err(rejected("unauthenticated", "IDENTITY_PURPOSE_UNAVAILABLE"));
     const key = keyForVersion(keyring, version);
     if (key === undefined) {
       return err(rejected("unauthenticated", "UNKNOWN_TOKEN_KEY"));

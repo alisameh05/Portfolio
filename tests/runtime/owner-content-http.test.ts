@@ -36,11 +36,14 @@ const CONTENT = {
   routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current", changedAt: "2026-10-08T00:00:00.000Z" }],
   localizedStreams: { en: { revisionCount: 1, currentPublishedRevisionId: null } },
   revisions: [{ revisionId: REVISION_ID, locale: "en", sequence: 1, reviewed: false }],
+  publicationHistory: [],
 };
 
 function createService() {
   const calls: { create: unknown[]; get: unknown[]; save: unknown[]; preview: unknown[]; review: unknown[]; history: unknown[]; publish: unknown[]; hide: unknown[]; archive: unknown[]; restore: unknown[] } = { create: [], get: [], save: [], preview: [], review: [], history: [], publish: [], hide: [], archive: [], restore: [] };
   const service: ContentAuthoringService = {
+    async getVisibleMediaUsage() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "UNAVAILABLE" } }; },
+    async getPublicProjectMediaUse() { return { ok: true as const, value: false }; },
     async createContent(command) {
       calls.create.push(command);
       return { ok: true, value: { contentId: unsafeStableId<string>(CONTENT_ID), aggregateVersion: 1, revisionId: unsafeStableId<"Revision">(REVISION_ID), outcome: "content-created" } };
@@ -163,6 +166,8 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: publicationFake, contentAuthoring: fake.service, security: ownerTestSecurity(), logger: createTestLogger() },
     );
     expect(get.status).toBe(200);
+    expect(get.headers.get("cache-control")).toBe("private, no-store");
+    expect(get.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await get.json()).toMatchObject({ routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current" }] });
     expect(fake.calls.get).toHaveLength(1);
     const save = await handleSaveOwnerContentRevision(
@@ -231,6 +236,8 @@ describe("Owner content authoring HTTP adapters", () => {
       { service: fake.service, security: ownerTestSecurity(), logger },
     );
     expect(history.status).toBe(200);
+    expect(history.headers.get("cache-control")).toBe("private, no-store");
+    expect(history.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(await history.json()).toMatchObject({ entries: [{ revisionId: REVISION_ID, reviewDecision: "accepted" }], routeHistory: [{ sequence: 1, fromSlug: "route-before", toSlug: "route-current" }], nextCursor: null });
     expect(fake.calls.history[0]).toMatchObject({ limit: 25 });
     expect(JSON.stringify(logger.records)).not.toContain("Private preview");

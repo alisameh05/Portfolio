@@ -1,17 +1,18 @@
 {
   "schemaVersion": 1,
-  "runId": "c69a1799-bcc6-47db-9725-f97087624e5f",
-  "sourceRevision": "b9b3cb34272045b3c63f954cbd921a081d1bb228",
+  "runId": "09ac7e3c-402b-48b3-9833-9f48f9ecbee0",
+  "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+  "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
   "suite": "taxonomy",
-  "startedAt": "2026-10-04T21:44:58.724Z",
+  "startedAt": "2026-10-10T15:57:42.504Z",
   "verdict": "pass",
-  "scenarioAcceptance": false,
-  "suiteAvailable": false,
+  "scenarioAcceptance": true,
+  "suiteAvailable": true,
   "counts": {
-    "executed": 0,
+    "executed": 4,
     "failed": 0,
     "skipped": 0,
-    "total": 0
+    "total": 4
   },
   "partial": false,
   "dependency": {
@@ -20,13 +21,16 @@
     "code": "NOT_REQUIRED"
   },
   "cleanup": {
-    "attempted": false,
+    "attempted": true,
     "passed": true
   },
   "reproduction": [
     "npm run phase5:focus:taxonomy-status-relationships-discovery"
   ],
   "details": {
-    "message": "no Phase 5 business scenarios are implemented in this suite yet"
+    "message": "focused suite executed",
+    "files": [
+      "tests/phase5/taxonomy/public-discovery.test.ts"
+    ]
   }
 }

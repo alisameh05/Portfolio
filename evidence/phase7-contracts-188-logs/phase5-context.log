@@ -1,0 +1,15 @@
+
+> shipwithali-portfolio@0.0.0 prephase5:context
+> npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase5:context
+> node scripts/check-phase5-context.mjs
+
+✓ Phase 5 verification context: 5 public + 48 Owner operations, runtime seams preserved
+{"runId":"81bedcfa-96a0-4449-9bcb-846db291a32f","sourceRevision":"5cb3b6c0e52db74dae2761d81aaa85f3c7970f46","evidence":"evidence/phase-5-context.json","scenarioAcceptance":false}

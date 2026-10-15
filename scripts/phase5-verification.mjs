@@ -7,6 +7,8 @@ import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
+import { invalidateSuiteEvidence } from "./phase5-scenario-coverage.mjs";
+import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const VITEST = join(ROOT, "node_modules", "vitest", "vitest.mjs");
@@ -17,12 +19,14 @@ export const FOCUS_SUITES = Object.freeze({
   taxonomy: "taxonomy",
   database: "database",
   owner: "owner",
+  traceability: "traceability",
 });
 export const FOCUS_ENTRYPOINTS = Object.freeze({
   authoring: "authoring-review-publication-routes",
   taxonomy: "taxonomy-status-relationships-discovery",
   database: "database-rls-migrations-concurrency",
   owner: "owner-adapters-composition",
+  traceability: "scenario-traceability",
 });
 
 function filesUnder(directory) {
@@ -108,6 +112,7 @@ export function localVerificationEnvironment(source = process.env) {
 export function makeVerificationReport({
   runId = randomUUID(),
   sourceRevision,
+  sourceTreeSha256,
   suite,
   result,
   dependency = { required: false, available: true, code: "NOT_REQUIRED" },
@@ -126,6 +131,7 @@ export function makeVerificationReport({
     schemaVersion: 1,
     runId,
     sourceRevision,
+    sourceTreeSha256,
     suite,
     startedAt: new Date().toISOString(),
     verdict: passed ? "pass" : "fail",
@@ -182,10 +188,59 @@ function readReport(path) {
 }
 
 function runFocus(suite) {
-  if (suite === "database") return runSmoke({ suite, reproduction: [`npm run phase5:focus:${FOCUS_ENTRYPOINTS[suite]}`] });
+  invalidateSuiteEvidence(suite);
+  if (suite === "database") {
+    const child = spawnSync(process.execPath, [join(ROOT, "scripts", "portfolio-settings-integration.mjs"), "--ticket-123"], {
+      cwd: ROOT,
+      env: localVerificationEnvironment(),
+      encoding: "utf8",
+      timeout: 1_200_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const evidence = readReport(join(EVIDENCE_DIR, "phase-5-security-migrations-postgres.json"));
+    const executed = evidence?.databaseIntegrationTestsPassed ?? 0;
+    const skipped = evidence?.skippedCases ?? 0;
+    const accepted = child.error === undefined && child.status === 0 && evidence?.ticket === 123 &&
+      evidence?.cleanUpgradeEquivalent === true && evidence?.phase4ReleaseUpgrade !== undefined && executed > 0 && skipped === 0;
+    const report = makeVerificationReport({
+      sourceRevision: sourceRevision(),
+      sourceTreeSha256: workingTreeSourceSha256(),
+      suite,
+      result: {
+        executed,
+        failed: accepted ? 0 : 1,
+        skipped,
+        total: executed + skipped,
+        partial: !accepted,
+        verdict: accepted ? "pass" : "fail",
+        scenarioAcceptance: accepted,
+      },
+      dependency: { required: true, available: accepted, code: accepted ? "PHASE5_REQUIRED_DATABASE_AVAILABLE" : "PHASE5_REQUIRED_DATABASE_UNAVAILABLE" },
+      cleanup: { attempted: true, passed: accepted },
+      suiteAvailable: evidence?.ticket === 123,
+      reproduction: [`npm run phase5:focus:${FOCUS_ENTRYPOINTS[suite]}`],
+      details: accepted ? {
+        migrationCount: evidence.migrationLedger?.length ?? 0,
+        phase5MigrationCount: evidence.phase4ReleaseUpgrade.phase5MigrationChecksums?.length ?? 0,
+        retainedReleaseRecords: evidence.phase4ReleaseUpgrade.retainedRecordsBeforeAndAfterPhase5,
+        zeroSkips: true,
+      } : { outcome: "focused Phase 5 migration and restricted-principal gate failed or produced incomplete evidence" },
+    });
+    const path = writeReport(report);
+    const output = `${child.stdout ?? ""}\n${child.stderr ?? ""}`;
+    if (output.trim() !== "") process.stdout.write(sanitizeVerificationText(output));
+    console.log(JSON.stringify({ ...report, evidence: relative(ROOT, path) }, null, 2));
+    return report.verdict === "pass" ? 0 : 1;
+  }
 
   const directory = join(ROOT, "tests", "phase5", suite);
-  const files = filesUnder(directory);
+  const files = suite === "traceability"
+    ? [
+      join(ROOT, "tests", "phase4", "phase5-scenario-coverage.test.ts"),
+      join(ROOT, "tests", "phase4", "phase5-verification.test.ts"),
+      join(ROOT, "tests", "architecture", "architecture.test.ts"),
+    ]
+    : filesUnder(directory);
   if (suite === "authoring") {
     files.push(
       join(ROOT, "tests", "runtime", "owner-content-authoring.test.ts"),
@@ -222,13 +277,17 @@ function runFocus(suite) {
 
   const report = makeVerificationReport({
     sourceRevision: sourceRevision(),
+    sourceTreeSha256: workingTreeSourceSha256(),
     suite,
     result,
     dependency,
     suiteAvailable,
     cleanup,
     reproduction: [`npm run phase5:focus:${FOCUS_ENTRYPOINTS[suite]}`],
-    details: { message: suiteAvailable ? "focused suite executed" : "no Phase 5 business scenarios are implemented in this suite yet" },
+    details: {
+      message: suiteAvailable ? "focused suite executed" : "no Phase 5 business scenarios are implemented in this suite yet",
+      files: files.map((path) => relative(ROOT, path).replaceAll("\\", "/")),
+    },
   });
   const path = writeReport(report);
   if (output) process.stdout.write(sanitizeVerificationText(output));
@@ -282,6 +341,7 @@ function runSmoke({ suite = "smoke", reproduction = ["npm run phase5:smoke"] } =
   }
   const report = makeVerificationReport({
     sourceRevision: sourceRevision(),
+    sourceTreeSha256: workingTreeSourceSha256(),
     suite,
     result,
     dependency,

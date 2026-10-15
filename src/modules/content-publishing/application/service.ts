@@ -139,6 +139,28 @@ export interface MediaAcceptancePort {
   ): Promise<Result<MediaAcceptanceBatch, Rejection>>;
 }
 
+/** A transaction-bound Content read of Media currently referenced by visible publications. */
+export interface VisibleMediaUsageQuery {
+  readonly ownerId: StableId<"Owner">;
+  readonly mediaAssetIds: readonly StableId<"MediaAsset">[];
+}
+
+export interface VisibleMediaUsageFact {
+  readonly mediaAssetId: StableId<"MediaAsset">;
+  readonly inUse: boolean;
+}
+
+export interface VisibleMediaUsageBatch {
+  /** Exactly one fact for each distinct requested Media identity, in ascending identity order. */
+  readonly facts: readonly VisibleMediaUsageFact[];
+}
+
+/** Exact-locale use check against the currently published public Project projection. */
+export interface GetPublicProjectMediaUseQuery {
+  readonly mediaAssetId: StableId<"MediaAsset">;
+  readonly locale: SupportedLocale;
+}
+
 export interface ProjectTaxonomyAssignmentCommand extends ExistingContentCommandContext {
   readonly projectId: StableId<"Project">;
   readonly valueId: StableId<"TaxonomyValue">;

@@ -5,8 +5,10 @@ import { createContentAuthoringService } from "../../src/modules/content-publish
 import { createPostgresContentAuthoringRepository } from "../../src/modules/content-publishing/adapters/postgres-authoring.js";
 import { createPostgresContentTaxonomyAssignmentsPort } from "../../src/modules/content-publishing/adapters/postgres-taxonomy-assignments.js";
 import { createPostgresProjectDiscoveryProjectionWriter } from "../../src/modules/taxonomy-discovery/adapters/index.js";
+import { createPostgresPublicDiscoveryReader } from "../../src/modules/taxonomy-discovery/adapters/index.js";
 import { createPostgresTaxonomyOwnerRepository } from "../../src/modules/taxonomy-discovery/adapters/index.js";
 import { createTaxonomyOwnerService } from "../../src/modules/taxonomy-discovery/application/owner-taxonomies.js";
+import { createPublicDiscoveryService } from "../../src/modules/taxonomy-discovery/application/public-discovery.js";
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
@@ -179,7 +181,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     title: string,
     achievedOn: string,
     idempotencyPrefix: string,
-    proof?: { artifactId: StableId<"SupportingArtifact">; destinationUrl: string },
+    proof?: { artifactId: StableId<"SupportingArtifact">; destinationUrl: string; mediaAssetId?: StableId<"MediaAsset"> },
   ) {
     const content = service(scope);
     const payload = {
@@ -187,7 +189,8 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       summary: "A career milestone.", body: `Public account of ${title}.`, achievedOn,
       ...(proof === undefined ? {} : { evidence: {
         claims: [{ claimId: createStableId("EvidenceClaim"), text: `${title} is supported by its public record.`, artifactIds: [proof.artifactId] }],
-        artifacts: [{ id: proof.artifactId, title: `${title} public record`, destinationUrl: proof.destinationUrl }],
+        artifacts: [{ id: proof.artifactId, title: `${title} public record`, destinationUrl: proof.destinationUrl,
+          ...(proof.mediaAssetId === undefined ? {} : { mediaAssetId: proof.mediaAssetId }) }],
       } }),
     };
     const created = await content.createContent({ actor: actor(scope.ownerId), idempotencyKey: key(`${idempotencyPrefix}-create`),
@@ -1052,6 +1055,101 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       });
     }
   }, 30_000);
+
+  it("preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable", async () => {
+    const scope = await configuredScope();
+    const owner = actor(scope.ownerId);
+    const initial = await createReviewedProject(scope, "Stable published revision", "media-replacement-stable", "en", {
+      slug: "media-replacement-stable",
+    });
+    const published = await initial.content.publishLanguageVersion({ actor: owner, contentId: initial.contentId,
+      expectedVersion: initial.aggregateVersion, idempotencyKey: key("media-replacement-stable-publish"),
+      correlationId: "media-replacement-stable-publish", locale: "en", revisionId: initial.revisionId });
+    expect(published.ok).toBe(true);
+    if (!published.ok) throw new Error("MEDIA_REPLACEMENT_BASE_PUBLICATION_FAILED");
+    const expectedPublic = await initial.content.getPublicProject({ slug: "media-replacement-stable", locale: "en" });
+    expect(expectedPublic).toMatchObject({ ok: true, value: { revisionId: initial.revisionId, title: "Stable published revision" } });
+    const oldKeyHash = createHash("sha256").update("media-replacement-stable-publish").digest("hex");
+    const snapshot = async () => await admin.query(`select
+      (select publication.revision_id::text from content.language_publications publication where publication.content_id = $1::uuid and publication.locale = 'en') as published_revision,
+      (select item.lifecycle from content.items item where item.content_id = $1::uuid) as lifecycle,
+      (select count(*)::int from content.public_routes where content_id = $1::uuid) as routes,
+      (select count(*)::int from content.publication_history where content_id = $1::uuid) as history,
+      (select revision_id::text from content.public_project_locales where content_id = $1::uuid and locale = 'en') as content_projection,
+      (select revision_id::text from taxonomy.project_discovery_locales where content_id = $1::uuid and locale = 'en') as discovery_projection,
+      (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'content.language_version_published.v1') as events,
+      (select result_envelope->'receipt' from operations.idempotency_records where key_hash = $2) as original_receipt`,
+    [initial.contentId, oldKeyHash]);
+    const before = (await snapshot()).rows[0];
+    const mediaAssetId = createStableId("MediaAsset");
+    const cases = [
+      { name: "missing facts", mode: "missing", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      { name: "foreign Owner fact", mode: "foreign", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      { name: "unsafe bytes", mode: "unsafe", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      { name: "candidate hash mismatch", mode: "wrong-hash", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      { name: "wrong intended Media kind", mode: "wrong-kind", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      { name: "unaccepted asset", mode: "unaccepted", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      { name: "unsuitable asset", mode: "unsuitable", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      { name: "inaccessible asset", mode: "inaccessible", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      { name: "duplicate facts", mode: "duplicate", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      { name: "incomplete facts", mode: "incomplete", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      { name: "malformed consistency token", mode: "malformed", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+      { name: "stale asset version", mode: "stale", code: "MEDIA_ACCEPTANCE_FACTS_INVALID" },
+    ] as const;
+
+    for (const [index, testCase] of cases.entries()) {
+      const aggregate = await initial.content.getOwnerContentAggregate({ actor: owner, contentId: initial.contentId });
+      expect(aggregate.ok).toBe(true);
+      if (!aggregate.ok) throw new Error("MEDIA_REPLACEMENT_AGGREGATE_READ_FAILED");
+      const artifactId = createStableId("SupportingArtifact");
+      const draft = await initial.content.saveRevision({ actor: owner, contentId: initial.contentId,
+        expectedVersion: aggregate.value.aggregateVersion, idempotencyKey: key(`media-replacement-${index}-save`),
+        correlationId: `media-replacement-${index}-save`, locale: "en", title: `Rejected replacement ${index}`,
+        summary: "Replacement must not become public.", body: "The previously published revision must stay current.",
+        draftData: { contentType: "project", caseStudy: { problem: "Replacement problem statement.", ownerRole: "Owner.",
+          contributions: ["Built the replacement."], outcomes: ["Preserved prior release."], lessons: "Recheck evidence." },
+          evidence: { claims: [{ claimId: createStableId("EvidenceClaim"), text: "This asset supports the replacement.", artifactIds: [artifactId] }],
+            artifacts: [{ id: artifactId, title: "Replacement evidence", destinationUrl: "https://example.com/replacement", mediaAssetId }] },
+          externalLinks: [{ id: createStableId("ExternalLink"), label: "Replacement", destination: "https://example.com/replacement", isAvailableInArabic: false }] },
+      });
+      expect(draft.ok).toBe(true);
+      if (!draft.ok) throw new Error("MEDIA_REPLACEMENT_DRAFT_FAILED");
+      const preview = await initial.content.previewRevision({ actor: owner, contentId: initial.contentId, revisionId: draft.value.revisionId });
+      expect(preview.ok).toBe(true);
+      if (!preview.ok) throw new Error("MEDIA_REPLACEMENT_PREVIEW_FAILED");
+      const review = await initial.content.reviewRevision({ actor: owner, contentId: initial.contentId, revisionId: draft.value.revisionId,
+        expectedVersion: draft.value.aggregateVersion, idempotencyKey: key(`media-replacement-${index}-review`),
+        correlationId: `media-replacement-${index}-review`, locale: "en", snapshotHash: preview.value.snapshotHash,
+        evidenceVersion: preview.value.evidenceVersion, decision: "accepted", findings: [] });
+      expect(review.ok).toBe(true);
+      if (!review.ok) throw new Error("MEDIA_REPLACEMENT_REVIEW_FAILED");
+
+      const mediaAcceptance: import("../../src/modules/content-publishing/application/service.js").MediaAcceptancePort = {
+        async getAcceptanceFacts(query) {
+          const fact = { mediaAssetId, ownerId: query.ownerId, accepted: true, safe: true, suitable: true, accessible: true, version: 1 };
+          if (testCase.mode === "missing") return { ok: true, value: { consistencyVersion: "media-test-v1", facts: [] } };
+          if (testCase.mode === "foreign") return { ok: true, value: { consistencyVersion: "media-test-v1", facts: [{ ...fact, ownerId: createStableId("Owner") }] } };
+          if (testCase.mode === "unsafe") return { ok: true, value: { consistencyVersion: "media-test-v1", facts: [{ ...fact, safe: false }] } };
+          if (testCase.mode === "wrong-hash") return { ok: true, value: { consistencyVersion: "media-test-v1", facts: [{ ...fact, safe: false }] } };
+          if (testCase.mode === "wrong-kind") return { ok: true, value: { consistencyVersion: "media-test-v1", facts: [{ ...fact, accessible: false }] } };
+          if (testCase.mode === "unaccepted") return { ok: true, value: { consistencyVersion: "media-test-v1", facts: [{ ...fact, accepted: false }] } };
+          if (testCase.mode === "unsuitable") return { ok: true, value: { consistencyVersion: "media-test-v1", facts: [{ ...fact, suitable: false }] } };
+          if (testCase.mode === "inaccessible") return { ok: true, value: { consistencyVersion: "media-test-v1", facts: [{ ...fact, accessible: false }] } };
+          if (testCase.mode === "duplicate") return { ok: true, value: { consistencyVersion: "media-test-v1", facts: [fact, fact] } };
+          if (testCase.mode === "incomplete") return { ok: true, value: { consistencyVersion: "media-test-v1", facts: [] } };
+          if (testCase.mode === "malformed") return { ok: true, value: { consistencyVersion: "x".repeat(129), facts: [fact] } };
+          return { ok: true, value: { consistencyVersion: "media-test-v1", facts: [{ ...fact, version: 0 }] } };
+        },
+      };
+      const mediaContent = service(scope, operations, undefined, mediaAcceptance);
+      const result = await mediaContent.publishLanguageVersion({ actor: owner, contentId: initial.contentId,
+        expectedVersion: review.value.aggregateVersion, idempotencyKey: key(`media-replacement-${index}-publish`),
+        correlationId: `media-replacement-${index}-publish`, locale: "en", revisionId: draft.value.revisionId });
+      expect(result, testCase.name).toMatchObject({ ok: false, error: { kind: "validation", code: testCase.code } });
+      expect((await snapshot()).rows[0], testCase.name).toEqual(before);
+      expect(await initial.content.getPublicProject({ slug: "media-replacement-stable", locale: "en" }), testCase.name).toEqual(expectedPublic);
+    }
+  }, 60_000);
 
   it("publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline", async () => {
     const scope = await configuredScope();
@@ -2894,4 +2992,264 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     });
     expect(wrongKind).toMatchObject({ ok: false, error: { kind: "not_found", code: "PROJECT_NOT_FOUND" } });
   }, 30_000);
+
+  it("queries only current published locale projections with stable tied-time cursors and controlled facets", async () => {
+    const scope = await configuredScope();
+    const prefix = `discovery-${process.pid}-${randomBytes(3).toString("hex")}`;
+    const publishedAt = "2026-10-09T11:30:00.000Z";
+    const content = service(scope);
+    const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8" as StableId<"Taxonomy">;
+    const taxonomy = taxonomyServiceForMerge(scope);
+    const createdValue = await taxonomy.createOwnerTaxonomyValue({
+      actor: actor(scope.ownerId), idempotencyKey: key(`${prefix}-value`), taxonomyId, expectedVersion: 1, name: "TypeScript",
+    });
+    expect(createdValue.ok).toBe(true);
+    const taxonomyView = await taxonomy.getOwnerTaxonomy({ actor: actor(scope.ownerId), taxonomyId });
+    if (!taxonomyView.ok) throw new Error("DISCOVERY_TAXONOMY_NOT_FOUND");
+    const valueId = taxonomyView.value.values[0]!.valueId;
+
+    const projects = [] as Awaited<ReturnType<typeof createReviewedProject>>[];
+    for (const title of ["Discovery Alpha", "Discovery Beta", "Discovery Hidden"]) {
+      const slug = title.toLowerCase().replaceAll(" ", "-");
+      const project = await createReviewedProject(scope, title, `${prefix}-${slug}`, "en", { service: content });
+      const published = await content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+        expectedVersion: project.aggregateVersion, idempotencyKey: key(`${prefix}-${slug}-publish`),
+        correlationId: `${prefix}-${slug}-publish`, locale: "en", revisionId: project.revisionId });
+      if (!published.ok) throw new Error(`DISCOVERY_PROJECT_PUBLICATION_FAILED:${published.error.kind}:${published.error.code}`);
+      projects.push({ ...project, aggregateVersion: published.value.aggregateVersion });
+    }
+    for (const [index, project] of projects.slice(0, 2).entries()) {
+      const assigned = await content.assignProjectTaxonomyValue({ actor: actor(scope.ownerId), projectId: project.contentId as StableId<"Project">,
+        valueId, expectedVersion: project.aggregateVersion, idempotencyKey: key(`${prefix}-assign-${index}`), correlationId: `${prefix}-assign-${index}` });
+      expect(assigned.ok).toBe(true);
+    }
+    const hidden = await content.hideContent({ actor: actor(scope.ownerId), contentId: projects[2]!.contentId,
+      expectedVersion: projects[2]!.aggregateVersion, idempotencyKey: key(`${prefix}-hide`), correlationId: `${prefix}-hide` });
+    expect(hidden.ok).toBe(true);
+
+    // Separate publish commands observe separate transaction clocks. Align only this fixture's
+    // committed ordering facts so the real PostgreSQL keyset query exercises its tied-time branch.
+    const projectIds = projects.map((project) => project.contentId);
+    let tieFixtureStage = "begin";
+    try {
+      await admin.query("begin");
+      tieFixtureStage = "items";
+      await admin.query("update content.items set first_published_at = $1 where content_id = any($2::uuid[])", [publishedAt, projectIds]);
+      tieFixtureStage = "routes";
+      await admin.query("update content.public_routes set first_published_at = $1 where content_id = any($2::uuid[])", [publishedAt, projectIds]);
+      tieFixtureStage = "projections";
+      await admin.query("update taxonomy.project_discovery_locales set first_published_at = $1 where content_id = any($2::uuid[])", [publishedAt, projectIds]);
+      await admin.query("commit");
+      tieFixtureStage = "committed";
+    } catch {
+      try { await admin.query("rollback"); } catch { /* report the original deterministic setup stage */ }
+      throw new Error(`PHASE5_DISCOVERY_TIE_FIXTURE_FAILED_${tieFixtureStage.toUpperCase()}`);
+    }
+
+    const discovery = createPublicDiscoveryService({
+      reader: createPostgresPublicDiscoveryReader(scope), transactions: operations.transactions,
+    });
+    const first = await discovery.getPublicDiscovery({ locale: "en", limit: 1 });
+    expect(first).toMatchObject({ ok: true, value: { entries: [{ summary: expect.any(String) }], facets: expect.arrayContaining([
+      expect.objectContaining({ valueId, label: "TypeScript", projectCount: 2 }),
+    ]) } });
+    if (!first.ok || first.value.nextCursor === null) throw new Error("DISCOVERY_NEXT_PAGE_MISSING");
+    const second = await discovery.getPublicDiscovery({ locale: "en", limit: 1, cursor: first.value.nextCursor });
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    const ids = [...first.value.entries, ...second.value.entries].map((entry) => entry.projectId);
+    expect(new Set([...first.value.entries, ...second.value.entries].map((entry) => entry.firstPublishedAt)))
+      .toEqual(new Set([publishedAt]));
+    expect(ids).toEqual([...ids].sort((a, b) => b.localeCompare(a)));
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).not.toContain(projects[2]!.contentId);
+    expect(await discovery.getPublicDiscovery({ locale: "ar" })).toMatchObject({ ok: true, value: { entries: [], facets: [], nextCursor: null } });
+    expect(await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: ["01890f3e-7b2f-7cc0-98cf-5a2890378ef0" as StableId<"TaxonomyValue">] }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_FILTER" } });
+    expect(await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [valueId, valueId] }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_FILTER" } });
+    expect(await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: ["not-a-uuid" as StableId<"TaxonomyValue">] }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_FILTER" } });
+    expect(await discovery.getPublicDiscovery({ locale: "en", limit: 101 }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_PAGE_SIZE" } });
+    expect(await discovery.getPublicDiscovery({ locale: "ar", limit: 1, cursor: first.value.nextCursor }))
+      .toMatchObject({ ok: false, error: { kind: "validation", code: "INVALID_DISCOVERY_CURSOR" } });
+
+    const retired = await taxonomy.retireOwnerTaxonomyValue({ actor: actor(scope.ownerId), idempotencyKey: key(`${prefix}-retire`),
+      valueId, expectedVersion: 2, reason: "Retained history remains filterable." });
+    expect(retired.ok).toBe(true);
+    expect(await discovery.getPublicDiscovery({ locale: "en", taxonomyValueIds: [valueId] }))
+      .toMatchObject({ ok: true, value: { entries: expect.arrayContaining([expect.objectContaining({ projectId: projects[0]!.contentId })]) } });
+
+    const orderingIndex = await admin.query("select indexdef from pg_indexes where schemaname = 'taxonomy' and indexname = 'project_discovery_locale_public_order'");
+    expect(orderingIndex.rows[0]?.["indexdef"]).toContain("first_published_at DESC, content_id DESC");
+
+    // The behavioral fixture is deliberately small. Clone the production table and indexes,
+    // seed realistic cardinality, then inspect the same scoped keyset page shape so the planner
+    // can demonstrate that ordering is supplied by the composite index without a sort.
+    await admin.query("create temporary table discovery_plan_probe (like taxonomy.project_discovery_locales including all)");
+    await admin.query(`insert into discovery_plan_probe
+      (content_id, portfolio_id, locale, revision_id, route_identity, title, slug, first_published_at, published_at)
+      select gen_random_uuid(), $1::uuid, 'en', gen_random_uuid(), gen_random_uuid(),
+             'Plan probe ' || series::text, 'plan-probe-' || series::text,
+             timestamptz '2026-10-09 12:00:00+00' - series * interval '1 second',
+             timestamptz '2026-10-09 12:00:00+00' - series * interval '1 second'
+        from generate_series(1, 10000) series`, [scope.portfolioId]);
+    await admin.query("analyze discovery_plan_probe");
+    const plan = await admin.query("explain (analyze, buffers, format json) select content_id from discovery_plan_probe where portfolio_id = $1::uuid and locale = 'en' order by first_published_at desc, content_id desc limit 21", [scope.portfolioId]);
+    const planJson = JSON.stringify(plan.rows[0]?.["QUERY PLAN"]);
+    expect(planJson).toMatch(/\"Node Type\":\"Limit\"/);
+    expect(planJson).toMatch(/\"Actual Rows\":21/);
+    expect(planJson).toMatch(/\"Node Type\":\"Index Scan\"|\"Node Type\":\"Index Only Scan\"/);
+    expect(planJson).not.toContain('"Node Type":"Sort"');
+    await admin.query("drop table discovery_plan_probe");
+  }, 60_000);
+
+  it("reports only Media referenced by currently published Project and Achievement locales", async () => {
+    const scope = await configuredScope();
+    const visibleMediaId = createStableId("MediaAsset");
+    const achievementMediaId = createStableId("MediaAsset");
+    const hiddenMediaId = createStableId("MediaAsset");
+    const archivedMediaId = createStableId("MediaAsset");
+    const draftMediaId = createStableId("MediaAsset");
+    const historicalMediaId = createStableId("MediaAsset");
+    const replacementMediaId = createStableId("MediaAsset");
+    const unusedMediaId = createStableId("MediaAsset");
+    const mediaAcceptance: import("../../src/modules/content-publishing/application/service.js").MediaAcceptancePort = {
+      async getAcceptanceFacts(query) {
+        return { ok: true, value: { consistencyVersion: "content-media-usage-fixture-v1", facts: [...new Set(query.mediaAssetIds)].map((mediaAssetId) => ({
+          mediaAssetId, ownerId: query.ownerId, accepted: true, safe: true, suitable: true, accessible: true, version: 1,
+        })) } };
+      },
+    };
+    const content = service(scope, operations, undefined, mediaAcceptance);
+    const owner = actor(scope.ownerId);
+    const englishProject = await createReviewedProject(scope, "English usage project", "visible-media-en", "en", {
+      slug: "visible-media-en", mediaAssetId: visibleMediaId,
+    });
+    const englishPublished = await content.publishLanguageVersion({ actor: owner, contentId: englishProject.contentId,
+      expectedVersion: englishProject.aggregateVersion, idempotencyKey: key("visible-media-en-publish"),
+      correlationId: "visible-media-en-publish", locale: "en", revisionId: englishProject.revisionId });
+    expect(englishPublished.ok).toBe(true);
+
+    const arabicProject = await createReviewedProject(scope, "Arabic usage project", "visible-media-ar", "ar", {
+      slug: "visible-media-ar", mediaAssetId: visibleMediaId,
+      transformPayload: (payload) => ({ ...payload, title: "مشروع منشور", summary: "ملخص عربي", body: "نص عربي مستقل" }),
+    });
+    const arabicPublished = await content.publishLanguageVersion({ actor: owner, contentId: arabicProject.contentId,
+      expectedVersion: arabicProject.aggregateVersion, idempotencyKey: key("visible-media-ar-publish"),
+      correlationId: "visible-media-ar-publish", locale: "ar", revisionId: arabicProject.revisionId });
+    expect(arabicPublished.ok).toBe(true);
+    if (arabicPublished.ok) expect(await content.getPublicProject({ slug: "visible-media-ar", locale: "ar" }))
+      .toMatchObject({ ok: true, value: { title: "مشروع منشور", summary: "ملخص عربي", body: "نص عربي مستقل" } });
+
+    const achievementArtifactId = createStableId("SupportingArtifact");
+    const achievement = await createReviewedAchievement(scope, "Visible Media Achievement", "2026-10-01", "visible-media-achievement", {
+      artifactId: achievementArtifactId, destinationUrl: "https://example.com/achievement", mediaAssetId: achievementMediaId,
+    });
+    const achievementPublished = await content.publishLanguageVersion({ actor: owner, contentId: achievement.contentId,
+      expectedVersion: achievement.aggregateVersion, idempotencyKey: key("visible-media-achievement-publish"),
+      correlationId: "visible-media-achievement-publish", locale: "en", revisionId: achievement.revisionId });
+    expect(achievementPublished.ok).toBe(true);
+
+    const hiddenProject = await createReviewedProject(scope, "Hidden usage project", "hidden-media", "en", {
+      slug: "hidden-media", mediaAssetId: hiddenMediaId,
+    });
+    const hiddenPublished = await content.publishLanguageVersion({ actor: owner, contentId: hiddenProject.contentId,
+      expectedVersion: hiddenProject.aggregateVersion, idempotencyKey: key("hidden-media-publish"),
+      correlationId: "hidden-media-publish", locale: "en", revisionId: hiddenProject.revisionId });
+    expect(hiddenPublished.ok).toBe(true);
+    if (hiddenPublished.ok) expect(await content.hideContent({ actor: owner, contentId: hiddenProject.contentId,
+      expectedVersion: hiddenPublished.value.aggregateVersion, idempotencyKey: key("hidden-media-hide"),
+      correlationId: "hidden-media-hide" })).toMatchObject({ ok: true });
+
+    const archivedProject = await createReviewedProject(scope, "Archived usage project", "archived-media", "en", {
+      slug: "archived-media", mediaAssetId: archivedMediaId,
+    });
+    const archivedPublished = await content.publishLanguageVersion({ actor: owner, contentId: archivedProject.contentId,
+      expectedVersion: archivedProject.aggregateVersion, idempotencyKey: key("archived-media-publish"),
+      correlationId: "archived-media-publish", locale: "en", revisionId: archivedProject.revisionId });
+    expect(archivedPublished.ok).toBe(true);
+    if (!archivedPublished.ok) throw new Error("CONTENT_MEDIA_ARCHIVE_FIXTURE_PUBLISH_FAILED");
+    expect(await content.archiveContent({ actor: owner, contentId: archivedProject.contentId,
+      expectedVersion: archivedPublished.value.aggregateVersion, idempotencyKey: key("archived-media-archive"),
+      correlationId: "archived-media-archive" })).toMatchObject({ ok: true });
+
+    await createReviewedProject(scope, "Draft usage project", "draft-media", "en", {
+      slug: "draft-media", mediaAssetId: draftMediaId,
+    });
+
+    const historicalArtifactId = createStableId("SupportingArtifact");
+    const historicalProject = await createReviewedProject(scope, "Current revision usage", "current-revision-media", "en", {
+      slug: "current-revision-media", mediaAssetId: historicalMediaId,
+      transformPayload: (payload) => ({ ...payload, evidence: {
+        claims: [{ claimId: createStableId("EvidenceClaim"), text: "The current revision uses a replaced artifact.", artifactIds: [historicalArtifactId] }],
+        artifacts: [{ id: historicalArtifactId, title: "Original revision artifact", mediaAssetId: historicalMediaId }],
+      } }),
+    });
+    const historicalPublished = await content.publishLanguageVersion({ actor: owner, contentId: historicalProject.contentId,
+      expectedVersion: historicalProject.aggregateVersion, idempotencyKey: key("current-revision-media-publish-old"),
+      correlationId: "current-revision-media-publish-old", locale: "en", revisionId: historicalProject.revisionId });
+    expect(historicalPublished.ok).toBe(true);
+    const replacementDraft = await content.saveRevision({ actor: owner, contentId: historicalProject.contentId,
+      expectedVersion: historicalPublished.ok ? historicalPublished.value.aggregateVersion : 0,
+      idempotencyKey: key("current-revision-media-save"), correlationId: "current-revision-media-save", locale: "en",
+      title: "Current revision usage", summary: "Updated supporting media.", body: "The latest revision points at a replacement.",
+      draftData: { contentType: "project", evidence: {
+        claims: [{ claimId: createStableId("EvidenceClaim"), text: "The current revision uses the replacement artifact.", artifactIds: [historicalArtifactId] }],
+        artifacts: [{ id: historicalArtifactId, title: "Replacement revision artifact", mediaAssetId: replacementMediaId }],
+      } } as never });
+    expect(replacementDraft.ok).toBe(true);
+    if (!replacementDraft.ok) throw new Error("CONTENT_MEDIA_REPLACEMENT_REVISION_FAILED");
+    const replacementPreview = await content.previewRevision({ actor: owner, contentId: historicalProject.contentId, revisionId: replacementDraft.value.revisionId });
+    expect(replacementPreview.ok).toBe(true);
+    if (!replacementPreview.ok) throw new Error("CONTENT_MEDIA_REPLACEMENT_PREVIEW_FAILED");
+    const replacementReview = await content.reviewRevision({ actor: owner, contentId: historicalProject.contentId,
+      revisionId: replacementDraft.value.revisionId, expectedVersion: replacementDraft.value.aggregateVersion,
+      idempotencyKey: key("current-revision-media-replacement-review"), correlationId: "current-revision-media-replacement-review", locale: "en",
+      snapshotHash: replacementPreview.value.snapshotHash, evidenceVersion: replacementPreview.value.evidenceVersion,
+      decision: "accepted", findings: [] });
+    expect(replacementReview.ok).toBe(true);
+    if (!replacementReview.ok) throw new Error("CONTENT_MEDIA_REPLACEMENT_REVIEW_FAILED");
+    const replacementPublished = await content.publishLanguageVersion({ actor: owner, contentId: historicalProject.contentId,
+      expectedVersion: replacementReview.value.aggregateVersion, idempotencyKey: key("current-revision-media-publish-new"),
+      correlationId: "current-revision-media-publish-new", locale: "en", revisionId: replacementDraft.value.revisionId });
+    expect(replacementPublished, JSON.stringify(replacementPublished)).toMatchObject({ ok: true });
+
+    const requested = [visibleMediaId, achievementMediaId, hiddenMediaId, archivedMediaId, draftMediaId, historicalMediaId, replacementMediaId, unusedMediaId];
+    const usage = await database.transactions.run((transaction) => content.getVisibleMediaUsage({ ownerId: scope.ownerId, mediaAssetIds: requested }, transaction));
+    expect(usage).toMatchObject({ ok: true, value: { facts: expect.arrayContaining([
+      { mediaAssetId: visibleMediaId, inUse: true }, { mediaAssetId: achievementMediaId, inUse: true },
+      { mediaAssetId: hiddenMediaId, inUse: false }, { mediaAssetId: archivedMediaId, inUse: false }, { mediaAssetId: draftMediaId, inUse: false },
+      { mediaAssetId: historicalMediaId, inUse: false }, { mediaAssetId: replacementMediaId, inUse: true }, { mediaAssetId: unusedMediaId, inUse: false },
+    ]) } });
+    if (usage.ok) {
+      expect(usage.value.facts).toHaveLength(8);
+      expect(usage.value.facts.map((fact) => fact.mediaAssetId)).toEqual([...requested].sort());
+    }
+    const wrongOwner = await database.transactions.run((transaction) => content.getVisibleMediaUsage({
+      ownerId: createStableId("Owner"), mediaAssetIds: requested,
+    }, transaction));
+    expect(wrongOwner).toMatchObject({ ok: false, error: { kind: "forbidden", code: "OWNER_SCOPE_MISMATCH" } });
+    const malformed = await database.transactions.run((transaction) => content.getVisibleMediaUsage({
+      ownerId: scope.ownerId, mediaAssetIds: ["not-a-media-id" as StableId<"MediaAsset">],
+    }, transaction));
+    expect(malformed).toMatchObject({ ok: false, error: { kind: "validation", code: "CONTENT_MEDIA_USAGE_QUERY_INVALID" } });
+
+    await admin.query("begin");
+    try {
+      await admin.query("lock table content.language_publications in access exclusive mode");
+      const timedOutUsage = await database.transactions.run(async (transaction) => {
+        const result = await content.getVisibleMediaUsage({ ownerId: scope.ownerId, mediaAssetIds: [visibleMediaId] }, transaction);
+        const connectionRemainsUsable = await sql<{ ok: boolean }>`select true as ok`.execute(resolvePostgresTransaction(transaction));
+        return { result, connectionRemainsUsable: connectionRemainsUsable.rows[0]?.ok === true };
+      });
+      expect(timedOutUsage).toEqual({
+        result: { ok: false, error: { kind: "temporarily_unavailable", code: "CONTENT_MEDIA_USAGE_UNAVAILABLE" } },
+        connectionRemainsUsable: true,
+      });
+    } finally {
+      await admin.query("rollback");
+    }
+  }, 60_000);
 });

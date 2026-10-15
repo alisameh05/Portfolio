@@ -1,0 +1,755 @@
+{
+  "success": true,
+  "numTotalTests": 1398,
+  "numPassedTests": 1177,
+  "numFailedTests": 0,
+  "numPendingTests": 221,
+  "numFailedTestSuites": 0,
+  "sourceRevision": "4191ffb1858067e4176739cd1308c808b24d9088",
+  "sourceTreeSha256": "486e74270ee5fc96ac2050f701c42555c1253f91db902ed223a9876844f656bb",
+  "startTime": 1792020313168,
+  "tools": {
+    "node": "24.21.0",
+    "npm": "11.19.0"
+  },
+  "reportSha256": "13aec11086b90cafca185d7664aa7f3f9a1e203336474c0fc8a6b6fd3334c863",
+  "command": "npm test -- --no-file-parallelism --reporter=json --outputFile=artifacts/moderation-full-vitest.json",
+  "scope": "Broad suite with opt-in service acceptance disabled. Required moderation/Feedback/vote/PostgreSQL acceptance is separately executed with zero skips.",
+  "suites": [
+    {
+      "path": "architecture/architecture.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "architecture/runtime-boundary.test.ts",
+      "status": "passed",
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "contracts/compatibility-gate.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "contracts/contract-drift-gate.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "contracts/generated-validation.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "contracts/owner-contract.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "contracts/owner-generated-validation.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "contracts/owner-issue-7-generated-validation.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "contracts/owner-issue-8-generated-validation.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "contracts/public-contract.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "contracts/public.test.ts",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "modules/current-cv-delivery.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "modules/cv-portfolio.test.ts",
+      "status": "passed",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "modules/media-acceptance.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "modules/media-cv-contracts.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "modules/media-delivery.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "modules/media-image-processing.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "modules/media-owner-service.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "modules/media-processing.test.ts",
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "modules/media-rejection.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "modules/media-upload-capability-vault.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "modules/media-upload-intent.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase1/gate.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase2/gate-definition.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "database/content-authoring.integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 49
+    },
+    {
+      "path": "database/idempotency.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "database/leased-jobs.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "database/media-upload-intent.integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 7
+    },
+    {
+      "path": "database/migration-security-baseline.test.ts",
+      "status": "passed",
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "database/operations-migration.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "database/optimistic-concurrency.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 3
+    },
+    {
+      "path": "database/outbox.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "database/owner-composition.integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 1
+    },
+    {
+      "path": "database/persistence-contracts.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "database/phase3-database-tests-command.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "database/phase4-migration-integrity.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "database/phase5-security.integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 5
+    },
+    {
+      "path": "database/portfolio-settings.integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 24
+    },
+    {
+      "path": "database/postgres-integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 8
+    },
+    {
+      "path": "database/postgres-runtime.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "database/postgres-transaction-runner.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "database/role-rls-matrix.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 54
+    },
+    {
+      "path": "database/toolchain-workflow.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/functional-identity-orchestration.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/identity-configuration-contracts.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/local-auth-token.integration.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 1
+    },
+    {
+      "path": "phase4/owner-operation-policy.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/owner-request-security.test.ts",
+      "status": "passed",
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/owner-session-auth.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/phase-context.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/phase5-scenario-coverage.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/phase5-verification.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/portfolio-contact-channels-command.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/portfolio-cta-command.test.ts",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/portfolio-profile-command.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/portfolio-settings-service.test.ts",
+      "status": "passed",
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase4/pseudonymous-identity.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "routes/route-inventory.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "routes/runtime-boundary.test.ts",
+      "status": "passed",
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase7/consent-crypto.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase7/consent-postgres.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 11
+    },
+    {
+      "path": "phase7/feedback-postgres.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 13
+    },
+    {
+      "path": "phase7/feedback.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase7/moderation-postgres.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 14
+    },
+    {
+      "path": "phase7/moderation.test.ts",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase7/ratings-postgres.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 16
+    },
+    {
+      "path": "phase7/ratings.test.ts",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase7/reactions-postgres.test.ts",
+      "status": "passed",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 14
+    },
+    {
+      "path": "phase7/reactions.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "shared-domain/actor.test.ts",
+      "status": "passed",
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "shared-domain/domain-event.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "shared-domain/idempotency-key.test.ts",
+      "status": "passed",
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "shared-domain/rejection.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "shared-domain/stable-id.test.ts",
+      "status": "passed",
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/configuration.test.ts",
+      "status": "passed",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/current-cv.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/feedback-limits.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/feedback.test.ts",
+      "status": "passed",
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/livez.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/media-image-processing.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/media-processing-tools.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 1
+    },
+    {
+      "path": "runtime/owner-analytics.test.ts",
+      "status": "passed",
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/owner-configuration.test.ts",
+      "status": "passed",
+      "passed": 31,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/owner-content-authoring.test.ts",
+      "status": "passed",
+      "passed": 28,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/owner-content-http.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/owner-cv.test.ts",
+      "status": "passed",
+      "passed": 55,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/owner-export.test.ts",
+      "status": "passed",
+      "passed": 35,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/owner-media.test.ts",
+      "status": "passed",
+      "passed": 68,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/owner-moderation.test.ts",
+      "status": "passed",
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/owner-project-status.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/owner-project.test.ts",
+      "status": "passed",
+      "passed": 37,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/owner-publication.test.ts",
+      "status": "passed",
+      "passed": 36,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/owner-taxonomy.test.ts",
+      "status": "passed",
+      "passed": 35,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/phase7-contracts.test.ts",
+      "status": "passed",
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/problem.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/public-event.test.ts",
+      "status": "passed",
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/rating.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/reaction.test.ts",
+      "status": "passed",
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/readiness-lifecycle.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/runtime-ports.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/supabase-current-cv-delivery.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/supabase-media-delivery-storage.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/supabase-media-processing-storage.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "runtime/supabase-media-upload-target.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "phase5/taxonomy/public-discovery.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    }
+  ]
+}

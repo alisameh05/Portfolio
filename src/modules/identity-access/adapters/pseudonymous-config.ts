@@ -109,6 +109,19 @@ function parseKeyring(
 }
 
 /** Parse versioned purpose-specific keys without reading ambient environment or exposing values in errors. */
+export function createFunctionalPseudonymousIdentityConfig(env: PseudonymousConfigEnv): Pick<PseudonymousIdentityConfig, "functional"> {
+  const functional = parseKeyring(env, "FUNCTIONAL_ID");
+  // Optional Measurement configuration cannot prevent functional use. When
+  // configured, reject overlapping purpose material without requiring it.
+  const measurementSecrets = [env["MEASUREMENT_ID_HASH_KEY"]?.trim(),
+    ...(env["MEASUREMENT_ID_HASH_PREVIOUS_KEYS"]?.split(",").map(entry => entry.trim().split(":")[1]) ?? [])];
+  if ([functional.active, ...functional.previous].some(key => measurementSecrets.includes(key.secret))) {
+    throw new PseudonymousIdentityConfigError("FUNCTIONAL_ID_HASH_KEY/MEASUREMENT_ID_HASH_KEY", "must use distinct purpose-specific secrets");
+  }
+  return Object.freeze({ functional });
+}
+
+/** Complete two-purpose configuration for callers activating both identities. */
 export function createPseudonymousIdentityConfig(
   env: PseudonymousConfigEnv,
 ): PseudonymousIdentityConfig {

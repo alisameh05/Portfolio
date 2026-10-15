@@ -65,6 +65,7 @@ import type {
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
+  OWNER_PRIVATE_RESPONSE_HEADERS,
   type OwnerRequestSecurity,
 } from "./owner-security.js";
 import {
@@ -168,6 +169,19 @@ export interface OwnerProjectAggregateView {
     }>;
   } | null;
   readonly relatedProjectIds: ReadonlyArray<StableId<"Project">>;
+  readonly relationshipHistory: ReadonlyArray<{
+    readonly sequence: number;
+    readonly relatedProjectId: StableId<"Project">;
+    readonly action: "related";
+    readonly changedAt: string;
+  }>;
+  readonly statusHistory: ReadonlyArray<{
+    readonly sequence: number;
+    readonly previousValueId: StableId<"ProjectStatusValue"> | null;
+    readonly currentValueId: StableId<"ProjectStatusValue">;
+    readonly aggregateVersion: number;
+    readonly changedAt: string;
+  }>;
   readonly taxonomyAssignments: ReadonlyArray<{
     readonly taxonomyId: StableId<string>;
     readonly taxonomyKind: string;
@@ -313,6 +327,8 @@ export async function handleGetOwnerProjectAggregate(
       featured: result.value.featured,
       publicRoute: result.value.publicRoute,
       relatedProjectIds: [...result.value.relatedProjectIds],
+      relationshipHistory: [...result.value.relationshipHistory],
+      statusHistory: [...result.value.statusHistory],
       taxonomyAssignments: result.value.taxonomyAssignments.map((entry) => ({
         taxonomyId: entry.taxonomyId,
         taxonomyKind: entry.taxonomyKind,
@@ -329,7 +345,7 @@ export async function handleGetOwnerProjectAggregate(
       );
     }
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(parsed.data, { status: 200 });
+    return Response.json(parsed.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }

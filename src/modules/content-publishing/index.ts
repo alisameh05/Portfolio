@@ -65,6 +65,10 @@ export type {
   MediaAcceptanceBatch,
   MediaAcceptanceQuery,
   MediaAcceptancePort,
+  VisibleMediaUsageQuery,
+  VisibleMediaUsageFact,
+  VisibleMediaUsageBatch,
+  GetPublicProjectMediaUseQuery,
   ProjectTaxonomyAssignmentCommand,
   ProjectTaxonomyMergeCommand,
   ContentTaxonomyAssignmentsPort,
@@ -124,3 +128,5 @@ export {
 } from "./application/index.js";
 
 export type { ContentRepositoryPort } from "./ports/index.js";
+
+export type { ProjectInteractionFacts, ProjectInteractionEligibilityPort, ContentMeasurementPublicFactsPort } from "./application/interaction-facts.js";

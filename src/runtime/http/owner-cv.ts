@@ -48,6 +48,16 @@ import type {
   Result,
   StableId,
 } from "../../shared/domain/index.js";
+import type {
+  AcceptOwnerCvVersionApplicationCommand,
+  ActivateOwnerCvVersionApplicationCommand,
+  GetOwnerCvPortfolioQuery,
+  OwnerCvApplicationService,
+  OwnerCvCommandReceipt,
+  OwnerCvPortfolioView,
+  RegisterOwnerCvVersionApplicationCommand,
+  RegisterOwnerCvVersionReceipt,
+} from "../../modules/cv-portfolio/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
@@ -59,82 +69,20 @@ import {
   transportProblem,
 } from "./problem.js";
 
-// ── Provider-neutral application seam ─────────────────────────────────────────
-
-export interface GetOwnerCvPortfolioQuery {
-  readonly actor: ActorContext;
-}
-
-export interface RegisterOwnerCvVersionApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly expectedVersion: number;
-  readonly mediaId: StableId<string>;
-  readonly locale: "en";
-  readonly label: string;
-}
-
-export interface AcceptOwnerCvVersionApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly expectedVersion: number;
-  readonly versionId: StableId<string>;
-}
-
-export interface ActivateOwnerCvVersionApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly expectedVersion: number;
-  readonly versionId: StableId<string>;
-}
-
-export interface OwnerCvVersionView {
-  readonly versionId: StableId<string>;
-  readonly mediaId: StableId<string>;
-  readonly locale: "en";
-  readonly label: string;
-  readonly state: "registered" | "accepted";
-  readonly isCurrent: boolean;
-}
-
-export interface OwnerCvActivationView {
-  readonly versionId: StableId<string>;
-  readonly activatedAt: string;
-}
-
-export interface OwnerCvPortfolioView {
-  readonly aggregateVersion: number;
-  readonly currentVersionId: StableId<string> | null;
-  readonly versions: ReadonlyArray<OwnerCvVersionView>;
-  readonly activationHistory: ReadonlyArray<OwnerCvActivationView>;
-}
-
-export interface RegisterOwnerCvVersionReceipt {
-  readonly versionId: StableId<string>;
-  readonly aggregateVersion: number;
-  readonly outcome: "cv-version-registered";
-}
-
-export interface OwnerCvCommandReceipt {
-  readonly aggregateId: StableId<string>;
-  readonly aggregateVersion: number;
-  readonly outcome: "cv-version-accepted" | "current-cv-activated";
-}
-
-export interface OwnerCvApplicationService {
-  getOwnerCvPortfolio(
-    query: GetOwnerCvPortfolioQuery,
-  ): Promise<Result<OwnerCvPortfolioView, Rejection>>;
-  registerOwnerCvVersion(
-    command: RegisterOwnerCvVersionApplicationCommand,
-  ): Promise<Result<RegisterOwnerCvVersionReceipt, Rejection>>;
-  acceptOwnerCvVersion(
-    command: AcceptOwnerCvVersionApplicationCommand,
-  ): Promise<Result<OwnerCvCommandReceipt, Rejection>>;
-  activateOwnerCvVersion(
-    command: ActivateOwnerCvVersionApplicationCommand,
-  ): Promise<Result<OwnerCvCommandReceipt, Rejection>>;
-}
+// Public compatibility exports keep existing adapter consumers stable while
+// the module barrel owns the application contract.
+export type {
+  AcceptOwnerCvVersionApplicationCommand,
+  ActivateOwnerCvVersionApplicationCommand,
+  GetOwnerCvPortfolioQuery,
+  OwnerCvActivationView,
+  OwnerCvApplicationService,
+  OwnerCvCommandReceipt,
+  OwnerCvPortfolioView,
+  OwnerCvVersionView,
+  RegisterOwnerCvVersionApplicationCommand,
+  RegisterOwnerCvVersionReceipt,
+} from "../../modules/cv-portfolio/index.js";
 
 export interface OwnerCvAdapterDeps {
   service: OwnerCvApplicationService;
@@ -232,7 +180,9 @@ export async function handleGetOwnerCvPortfolio(
       aggregateVersion: result.value.aggregateVersion,
       currentVersionId: result.value.currentVersionId,
       versions: [...result.value.versions],
+      versionsTruncated: result.value.versionsTruncated,
       activationHistory: [...result.value.activationHistory],
+      activationHistoryTruncated: result.value.activationHistoryTruncated,
     };
     const parsed = zGetOwnerCvPortfolioResponse.safeParse(payload);
     if (!parsed.success) {

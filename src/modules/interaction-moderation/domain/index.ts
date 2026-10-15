@@ -13,3 +13,5 @@ export type {
   FeedbackRejectedEvent,
   FeedbackSuppressedEvent,
 } from "./types.js";
+
+export type { ReactionReceipt, RatingReceipt, FeedbackReceipt, PublicFeedbackView, PublicFeedbackPage } from "./types.js";

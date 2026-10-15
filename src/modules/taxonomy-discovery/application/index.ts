@@ -28,3 +28,5 @@ export type {
   TaxonomyOwnerService,
 } from "./owner-taxonomies.js";
 export { createTaxonomyOwnerService } from "./owner-taxonomies.js";
+export { createPublicDiscoveryService } from "./public-discovery.js";
+export type { PublicDiscoveryService, PublicDiscoveryReader, PublicDiscoveryReadQuery, PublicDiscoveryReadResult } from "./public-discovery.js";

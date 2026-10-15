@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "ticket": 159,
+  "parent": 145,
+  "predecessor": 156,
+  "runId": "d1735280-6685-41b6-8dca-f4faafc0dc2e",
+  "sourceRevision": "6d945b34cfc6025b0044dd450adb98b8e22cb963",
+  "sourceTreeSha256": "e5f69923ad63dfc2ebc1b5362b4ac00f9ac30ac38d6a0474943a8663857698a0",
+  "startedAt": "2026-10-13T18:32:39.266Z",
+  "completedAt": "2026-10-13T18:42:07.740Z",
+  "scope": "public-current-cv-private-storage-delivery",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1",
+    "sharp": "sharp-0.35.4;libvips-8.18.6"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "executionCount": 3,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 5
+    },
+    "scanner": {
+      "available": true,
+      "version": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+      "executions": 35
+    },
+    "processors": {
+      "pdf": "17.12.1",
+      "image": "sharp-0.35.4;libvips-8.18.6",
+      "video": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+      "executions": {
+        "pdf": 10,
+        "image": 3,
+        "video": 5
+      }
+    }
+  },
+  "principalScope": {
+    "database": "shipwithali_application scoped to the configured portfolio and owner RLS",
+    "storage": "private media-processed bucket; one content-addressed accepted PDF snapshot",
+    "visitor": "anonymous request without identity, consent cookie, or Measurement write"
+  },
+  "checks": {
+    "delivery": [
+      {
+        "name": "T14-02 T14-03 T14-05 the real current pointer streams exact private accepted PDF bytes with matching immutable hash, no-store and sanitized inline filename",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T14-02",
+          "T14-03",
+          "T14-05"
+        ]
+      },
+      {
+        "name": "T14-07 each new request after A-to-B replacement streams B from its new committed pointer while the old snapshot remains distinct",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T14-07"
+        ]
+      },
+      {
+        "name": "T14-08 visitor delivery needs no account, identity or consent cookie and does not set one",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T14-08"
+        ]
+      }
+    ],
+    "currentCvHttpAndStorageUnits": {
+      "suites": [
+        "tests/modules/media-acceptance.test.ts",
+        "tests/modules/media-cv-contracts.test.ts",
+        "tests/runtime/current-cv.test.ts",
+        "tests/modules/current-cv-delivery.test.ts",
+        "tests/runtime/supabase-current-cv-delivery.test.ts"
+      ],
+      "total": 36,
+      "passed": 36,
+      "failed": 0,
+      "skipped": 0,
+      "verdict": "pass"
+    },
+    "mediaAcceptanceOperations": 7,
+    "activationForDelivery": {
+      "name": "T14-02 T14-03 T14-05 the real current pointer streams exact private accepted PDF bytes with matching immutable hash, no-store and sanitized inline filename",
+      "executed": true,
+      "status": "passed"
+    }
+  },
+  "criteria": [
+    {
+      "name": "T14-01 strict locale/disposition and closed query shape reject missing, unsupported, duplicate and unknown fields before dispatch",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-02 each read resolves only the committed accepted English Current CV and never falls back to another version",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-03 the stream returns real PDF bytes with bounded size, no-store and a sanitized filename",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-04 signed redirects are short-lived, origin-allowlisted and honor inline or attachment intent",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-05 the production stream reads real private Storage bytes whose SHA-256 matches the immutable CV snapshot",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-06 no-current, Storage/signing failure, unexpected exceptions and abuse map to safe 404/503/500/429 responses",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-07 every request after replacement resolves the new pointer while older issued targets remain bounded",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-08 Visitor access requires and sets no account, identity or consent cookie and does not depend on Measurement",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-09 foreign/insecure targets, malformed bindings and mismatched stored bytes fail safely without metadata leakage",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-10 public operation inventory remains five and no history or extra public API is added",
+      "executed": true,
+      "status": "passed"
+    }
+  ],
+  "counts": {
+    "integrationExecuted": 3,
+    "integrationFailures": 0,
+    "integrationSkips": 0,
+    "unitExecuted": 36,
+    "unitFailures": 0,
+    "unitSkips": 0
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:cv-delivery"
+  ],
+  "limitations": [
+    "Public signed redirect behavior is verified by HTTP and Storage adapter tests; production composition uses bounded streaming. Replacing the current pointer affects subsequent reads; previously issued signed targets remain valid only until their 300-second expiry."
+  ]
+}

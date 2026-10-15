@@ -1,1 +1,1 @@
-export type { CvRepositoryPort, CvStoragePort } from "./repository.js";
+export type { CvRepositoryPort, CvStoragePort, CvCurrentDeliveryPort } from "./repository.js";

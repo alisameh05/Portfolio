@@ -1,3 +1,4 @@
+import type { PortfolioRequestScope } from "@shared/application";
 /**
  * rating.ts — Phase 2 #28 Rating HTTP adapter.
  *
@@ -23,6 +24,7 @@ import {
 import type {
   InteractionModerationService,
   RatingValue,
+  FunctionalInteractionContextPort,
   SubmitRatingCommand,
 } from "../../modules/interaction-moderation/index.js";
 import type {
@@ -37,6 +39,8 @@ import {
 } from "./problem.js";
 
 export interface RatingAdapterDeps {
+  readonly scope?: PortfolioRequestScope;
+  readonly functionalIdentity?: FunctionalInteractionContextPort;
   service: Pick<InteractionModerationService, "submitRating">;
   logger?: Logger;
 }
@@ -92,8 +96,18 @@ export async function handlePutProjectRating(
       return transportProblem("Invalid request body.", traceId, instance);
     }
 
+    const scope = deps.scope ?? { kind: "unconfigured" as const };
+    const cookies = (request.headers.get("cookie") ?? "").split(";").map(c => c.trim()).filter(c => c.startsWith("visitor_functional="));
+    if (cookies.length > 1) return transportProblem("Ambiguous functional cookie.", traceId, instance);
+    const tokenString = cookies[0]?.slice("visitor_functional=".length);
+    const prepared = deps.functionalIdentity ? await deps.functionalIdentity.prepare({ scope, correlationId: traceId,
+      projectId: pathResult.data.projectId as StableId<"Project">, interaction: "rating", consent: "unknown",
+      ...(tokenString === undefined ? {} : { tokenString }) }) : undefined;
+    if (prepared && !prepared.ok) return rejectionToProblem(prepared.error, traceId, instance);
     const command: SubmitRatingCommand = {
-      actor: { kind: "visitor", consent: "unknown" },
+      scope: deps.scope ?? { kind: "unconfigured" },
+      correlationId: traceId,
+      actor: prepared?.ok ? prepared.value.actor : { kind: "visitor", consent: "unknown" },
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       projectId: pathResult.data.projectId as StableId<"Project">,
       value: bodyResult.data.rating as RatingValue,
@@ -133,7 +147,11 @@ export async function handlePutProjectRating(
     }
 
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(responseResult.data, { status: 200 });
+    const response = Response.json(responseResult.data, { status: 200 });
+    if (prepared?.ok && prepared.value.issued) {
+      response.headers.set("set-cookie", `visitor_functional=${prepared.value.issued.tokenString}; Path=/; Secure; HttpOnly; SameSite=Lax; Expires=${new Date(prepared.value.issued.expiresAt).toUTCString()}`);
+    }
+    return response;
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }

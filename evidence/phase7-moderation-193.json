@@ -1,0 +1,630 @@
+{
+  "runId": "1c72ca60-09b8-4d67-ad0e-345f4a268f5e",
+  "sourceRevision": "4191ffb1858067e4176739cd1308c808b24d9088",
+  "sourceTreeSha256": "486e74270ee5fc96ac2050f701c42555c1253f91db902ed223a9876844f656bb",
+  "version": "postgres (PostgreSQL) 18.3",
+  "migration": "supabase/migrations/20261015010000_retain_feedback_moderation.sql",
+  "migrationQualification": {
+    "cleanUpgradeEquivalent": true,
+    "migrationReplayNoOp": true,
+    "predecessorRatingPreserved": true,
+    "predecessorFeedbackPreserved": true,
+    "ledger": [
+      {
+        "version": "20260922170000"
+      },
+      {
+        "version": "20260922171906"
+      },
+      {
+        "version": "20260922203000"
+      },
+      {
+        "version": "20261001220000"
+      },
+      {
+        "version": "20261002120000"
+      },
+      {
+        "version": "20261002130000"
+      },
+      {
+        "version": "20261002140000"
+      },
+      {
+        "version": "20261002150000"
+      },
+      {
+        "version": "20261005001318"
+      },
+      {
+        "version": "20261007090000"
+      },
+      {
+        "version": "20261007170000"
+      },
+      {
+        "version": "20261007190000"
+      },
+      {
+        "version": "20261007200000"
+      },
+      {
+        "version": "20261008090000"
+      },
+      {
+        "version": "20261008120000"
+      },
+      {
+        "version": "20261008130000"
+      },
+      {
+        "version": "20261008180000"
+      },
+      {
+        "version": "20261008210000"
+      },
+      {
+        "version": "20261009090000"
+      },
+      {
+        "version": "20261009100000"
+      },
+      {
+        "version": "20261010100000"
+      },
+      {
+        "version": "20261010200000"
+      },
+      {
+        "version": "20261011210000"
+      },
+      {
+        "version": "20261011220000"
+      },
+      {
+        "version": "20261011230000"
+      },
+      {
+        "version": "20261012000000"
+      },
+      {
+        "version": "20261012010000"
+      },
+      {
+        "version": "20261012020000"
+      },
+      {
+        "version": "20261012030000"
+      },
+      {
+        "version": "20261012040000"
+      },
+      {
+        "version": "20261012050000"
+      },
+      {
+        "version": "20261012060000"
+      },
+      {
+        "version": "20261013100000"
+      },
+      {
+        "version": "20261014194925"
+      },
+      {
+        "version": "20261014210000"
+      },
+      {
+        "version": "20261014211320"
+      },
+      {
+        "version": "20261015003000"
+      },
+      {
+        "version": "20261015010000"
+      }
+    ],
+    "schemaSha256": "6a75d5098028f05eea6127c00ef683c3bafec1b433fdf5f43b5a7289ff4de145",
+    "cli": "2.117.0"
+  },
+  "migrationSha256": "5dcb17fa99531d21cdbd0ae60af6fd2b7178a6b161b8f66daa56ed70c5136938",
+  "migrations": [
+    {
+      "name": "20260922170000_prepare_migration_capability.sql",
+      "sha256": "0a6b85ed5198b8a58b51a4ed8d702d200968fd2002065d6f48c972817fe800cb"
+    },
+    {
+      "name": "20260922171906_establish_database_security_baseline.sql",
+      "sha256": "f57b86d6718d64f4a1901823a79e3fb01d862e5b57ed627ce47cd94b8ef888de"
+    },
+    {
+      "name": "20260922203000_create_operations_primitives.sql",
+      "sha256": "7dbbfec208f85d0619f623b2d0bf3634212933fa91aca9d3918d1f0c30d197a8"
+    },
+    {
+      "name": "20261001220000_create_identity_access_owner_links.sql",
+      "sha256": "e7e0ef112352594c0ff60bd696cb5f1b8ad3f55ef56401670254b022b85507d9"
+    },
+    {
+      "name": "20261002120000_create_portfolio_configuration_settings.sql",
+      "sha256": "8b85ae5db68761c79a141d0c3f339c9ca3a69b376a074cecb4d4f7904539ea06"
+    },
+    {
+      "name": "20261002130000_allow_versioned_portfolio_profile_updates.sql",
+      "sha256": "1a7a6393cefb10bfe2c05dc2721e35f4f9ab7528f4cfa88f716b3942d1c1f14b"
+    },
+    {
+      "name": "20261002140000_allow_owner_contact_channel_replacement.sql",
+      "sha256": "595ccc57be68861c1fb57f5847c6ad9bb158c7b57c753f40f1de1d12693f8d15"
+    },
+    {
+      "name": "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+      "sha256": "8f5e72eff3e5272cd492ca8d4ea254d54f5e8fda6ffaf5d4621cf1b9907a2286"
+    },
+    {
+      "name": "20261005001318_create_content_authoring.sql",
+      "sha256": "b56a8a0ea567bdd3b16c7843f39db68cba9e575d06a46daa86dce1837f156fd6"
+    },
+    {
+      "name": "20261007090000_add_immutable_content_revision_reviews.sql",
+      "sha256": "1489209223628079f6bcf67305b4eeeeba0a0d82708613c218a6d161d02dc608"
+    },
+    {
+      "name": "20261007170000_add_project_publication_routes.sql",
+      "sha256": "7fec3917e79a5b88295bf43a0a104aaa598c1b15cbb4502d0ae54c5aec6cecb2"
+    },
+    {
+      "name": "20261007190000_add_achievement_publication_timeline.sql",
+      "sha256": "83796eb2527a61a65cb4d5aefa1b80c3b26c88a064321c9998614720871a2d2b"
+    },
+    {
+      "name": "20261007200000_publish_localized_testimonials.sql",
+      "sha256": "b5424eed7afb2da9cdb8041bffca710a97ad58826ad1104139478efa300d8e8d"
+    },
+    {
+      "name": "20261008090000_preserve_project_route_history.sql",
+      "sha256": "7809d7da7e8dc15693215ff48d10ee68448b66af3877ab1fe8233a5597bc4cd4"
+    },
+    {
+      "name": "20261008120000_add_content_lifecycle_history.sql",
+      "sha256": "710f1a5ea135adc7e691c684ebac274ea26fc005fbe7adbe9c0fad3f51dacc91"
+    },
+    {
+      "name": "20261008130000_add_project_status_and_featured.sql",
+      "sha256": "e99a4446ae090ef5f1608e50af8d53cf0df6e6e68bacad5655233c15d31d252e"
+    },
+    {
+      "name": "20261008180000_add_project_relationships.sql",
+      "sha256": "9d3e74830807aec569911742dd714852c1c0e35950a18733986cfbacb6c41deb"
+    },
+    {
+      "name": "20261008210000_provision_project_taxonomies.sql",
+      "sha256": "362936fd680ce6e6bbba06b18d9fa9bf7d18c5631845d256225ffe609315c6bb"
+    },
+    {
+      "name": "20261009090000_record_taxonomy_evolution_actor_reason.sql",
+      "sha256": "db907e8f18da525db9a4dc608aa4a29d0f5b6354e764524fb0b6f3efb0dd29c2"
+    },
+    {
+      "name": "20261009100000_index_project_discovery_reads.sql",
+      "sha256": "e97c149df354f3605b3f9fd6533a9472651be47583f3299de4de74260710ec87"
+    },
+    {
+      "name": "20261010100000_create_private_media_upload_intents.sql",
+      "sha256": "5569b0cf0c3efb059cf050f506db4555c2b554f6d67c5d0b910bcd70d23b2eb9"
+    },
+    {
+      "name": "20261010200000_record_trusted_pdf_processing.sql",
+      "sha256": "849c6090275f93010b20db60b1b258d6ce7f29a2d33435c37d593332fbb61bff"
+    },
+    {
+      "name": "20261011210000_harden_trusted_pdf_processing.sql",
+      "sha256": "e5512c3696bda1d6bdfae7e498864adf31306caf17b31a0e4e959abba6324adf"
+    },
+    {
+      "name": "20261011220000_record_bounded_video_variants.sql",
+      "sha256": "4f4c05452e447387c7218af2d1c3eaa8dbb4eba37327f3934fbdf311a78e4665"
+    },
+    {
+      "name": "20261011230000_process_bounded_media_image_variants.sql",
+      "sha256": "9a6f1fcdf60035c7e1a2eec773b8026c5316a50bd06c4672c03ac61e92f38d07"
+    },
+    {
+      "name": "20261012000000_restore_video_variant_policy_after_images.sql",
+      "sha256": "583ef63c7ac38bcd3b5db84193bb2057244621b168aa7834f4554dad0723c3bb"
+    },
+    {
+      "name": "20261012010000_accept_media_with_editorial_accessibility.sql",
+      "sha256": "ac242536b69fb4221d1c21d8f2cb7580c982dd1499b3f93bf4a2ba6276a6edaa"
+    },
+    {
+      "name": "20261012020000_index_current_visible_media_references.sql",
+      "sha256": "4cd2d584ee37a041ecc8b3ba999f288c0c6659a753e8bd75e2fabe0d54b958c1"
+    },
+    {
+      "name": "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "sha256": "627c72e292212a259dda00b59b12c7900513be247e32f317a8449c14a0556e68"
+    },
+    {
+      "name": "20261012040000_accept_registered_cv_versions.sql",
+      "sha256": "3b3332532f55dbab8b24a88273d65225ada0bf6866eadad1bd27b061005ab916"
+    },
+    {
+      "name": "20261012050000_activate_current_cv_atomically.sql",
+      "sha256": "74aa75fc6047a133c053b2ecf74e03e2959296d87904618746ec91caefde8edf"
+    },
+    {
+      "name": "20261012060000_reject_media_with_usage_guard.sql",
+      "sha256": "fef9b9bf5339b56f5c49b470d5063fddb2aeb12aeefdcbf3bc178a1fcc418655"
+    },
+    {
+      "name": "20261013100000_configure_public_profile_media.sql",
+      "sha256": "1deb7226778179b8b71f1562d7b59e088ec33f9f67f6beaa3b5febef00499d00"
+    },
+    {
+      "name": "20261014194925_measurement_consent.sql",
+      "sha256": "b4b26c586356ed1a360b18b83123d69ce4ace0fd58f1afb6b7699b58c8a832bc"
+    },
+    {
+      "name": "20261014210000_persist_project_reactions.sql",
+      "sha256": "aa79480f009bb1a1fcdd8ee42114ac03c644138f4a932f575ef993c599a68671"
+    },
+    {
+      "name": "20261014211320_persist_project_ratings.sql",
+      "sha256": "027e9b6f1bc024b6d646e2a0da431f58bec9e9280a0548705cf3d5940055baff"
+    },
+    {
+      "name": "20261015003000_persist_private_feedback.sql",
+      "sha256": "76383b9305740d85f0557903924412a936a60df70264801583f141738447852b"
+    },
+    {
+      "name": "20261015010000_retain_feedback_moderation.sql",
+      "sha256": "5dcb17fa99531d21cdbd0ae60af6fd2b7178a6b161b8f66daa56ed70c5136938"
+    }
+  ],
+  "tools": {
+    "node": "24.21.0",
+    "npm": "11.19.0"
+  },
+  "assertions": [
+    {
+      "title": "resolves a verified Owner actor for mutations with valid session, origin, and CSRF proof",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations without a session cookie as 401 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "maps verified non-Owner identities to 403",
+      "status": "passed"
+    },
+    {
+      "title": "maps provider outage to 503 without leaking internals",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with missing Origin as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with mismatched Origin as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with trailing-slash Origin as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with http Origin as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with absent proof as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with empty proof as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with short proof as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with session replayed as proof as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects forged forwarded-host information before authentication",
+      "status": "passed"
+    },
+    {
+      "title": "authenticates reads without requiring origin or CSRF proof",
+      "status": "passed"
+    },
+    {
+      "title": "rejects unauthenticated reads as 401",
+      "status": "passed"
+    },
+    {
+      "title": "maps rate-limit denial to 429 with Retry-After and no dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "fails closed to 503 when the rate-limit check throws",
+      "status": "passed"
+    },
+    {
+      "title": "builds a server-managed session cookie with safe attributes",
+      "status": "passed"
+    },
+    {
+      "title": "omits Secure only for explicit loopback test contexts",
+      "status": "passed"
+    },
+    {
+      "title": "bounds session lifetime and rejects unsafe token material",
+      "status": "passed"
+    },
+    {
+      "title": "resolves a valid Owner session to a stable provider-neutral actor",
+      "status": "passed"
+    },
+    {
+      "title": "rejects forged signatures as unauthenticated",
+      "status": "passed"
+    },
+    {
+      "title": "rejects disallowed algorithms and unknown keys as unauthenticated",
+      "status": "passed"
+    },
+    {
+      "title": "rejects wrong issuer, audience, expired, and malformed sessions as unauthenticated",
+      "status": "passed"
+    },
+    {
+      "title": "rejects non-object JWT segments without throwing",
+      "status": "passed"
+    },
+    {
+      "title": "verifies ES256 and rejects public-key HMAC confusion and wrong curves",
+      "status": "passed"
+    },
+    {
+      "title": "ignores spoofed username/email/metadata and caller Owner IDs",
+      "status": "passed"
+    },
+    {
+      "title": "rejects non-GitHub identities and verified non-Owners as forbidden",
+      "status": "passed"
+    },
+    {
+      "title": "denies continued access after allowlist removal",
+      "status": "passed"
+    },
+    {
+      "title": "enforces revocation and expiry even for otherwise valid JWTs",
+      "status": "passed"
+    },
+    {
+      "title": "maps provider outages safely without exposing provider errors or identity subjects",
+      "status": "passed"
+    },
+    {
+      "title": "validates Owner auth configuration with redacted diagnostics",
+      "status": "passed"
+    },
+    {
+      "title": "keeps raw session material and secrets out of rejection payloads",
+      "status": "passed"
+    },
+    {
+      "title": "T06-01 authorized inspection is private versioned/ordered; missing, non-Owner and foreign scope deny",
+      "status": "passed"
+    },
+    {
+      "title": "T06-01 actual signed Owner Auth rejects missing/tampered/expired/nonallowlisted/revoked before inspection or replay",
+      "status": "passed"
+    },
+    {
+      "title": "T06-02 approval appends stable ordered Owner decision, advances once and displays only approved submitted locale",
+      "status": "passed"
+    },
+    {
+      "title": "T06-03 rejection retains private reason/history and never enters approved query/count",
+      "status": "passed"
+    },
+    {
+      "title": "T06-04 Hidden/Archived moderation succeeds privately and changes no Content fact; restored approval remains exact locale",
+      "status": "passed"
+    },
+    {
+      "title": "T06-05 exact replay survives later version; changed payload/terminal new key conflict and stale HTTP is 412",
+      "status": "passed"
+    },
+    {
+      "title": "invalid private reasons/version/key reject without partial history or leaked payload",
+      "status": "passed"
+    },
+    {
+      "title": "T06-06 independent pools serialize approve/reject and exact-retry races to one decision/state/fact",
+      "status": "passed"
+    },
+    {
+      "title": "inspection waits for a concurrent decision and cannot combine old state with new history",
+      "status": "passed"
+    },
+    {
+      "title": "T06-07 decision/projection/outbox/ledger/receipt failures fully roll back eligibility, state, history and version",
+      "status": "passed"
+    },
+    {
+      "title": "T06-08 logs/outbox/ledger/ordinary receipt exclude private name/text/reason and raw session/subject; public query includes only approved display fields",
+      "status": "passed"
+    },
+    {
+      "title": "existing HTTP enforces origin/CSRF/abuse/quoted positive precondition and sanitized error responses",
+      "status": "passed"
+    },
+    {
+      "title": "restricted RLS denies anonymous/worker/non-Owner/foreign scope and public pending/history; history cannot be edited; pool scope resets",
+      "status": "passed"
+    },
+    {
+      "title": "standard runtime assembles real moderation and approved query; closed DB fails safely without optional Measurement",
+      "status": "passed"
+    },
+    {
+      "title": "T06-01 rejects a Visitor before persistence, even with an Owner-like property",
+      "status": "passed"
+    },
+    {
+      "title": "retrieves the moderation view once and returns the declared view",
+      "status": "passed"
+    },
+    {
+      "title": "rejects invalid feedbackId as 400 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "translates unauthenticated rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "translates forbidden rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "translates not_found rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "translates rate_limited rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "translates temporarily_unavailable rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "fails safely when fake output is contract-invalid",
+      "status": "passed"
+    },
+    {
+      "title": "uses a server-generated trace identifier shared by Problem Details and logs",
+      "status": "passed"
+    },
+    {
+      "title": "approve constructs one command, dispatches once, and returns the declared receipt",
+      "status": "passed"
+    },
+    {
+      "title": "reject constructs one command, dispatches once, and returns the declared receipt",
+      "status": "passed"
+    },
+    {
+      "title": "suppress constructs one command, dispatches once, and returns the declared receipt",
+      "status": "passed"
+    },
+    {
+      "title": "rejects missing Idempotency-Key as 400 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "rejects missing If-Match as 400 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "rejects malformed If-Match as 400 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "rejects malformed JSON as 400 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "rejects missing reason as 400 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "rejects unknown property as 400 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "rejects empty reason as 400 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "rejects an invalid feedbackId as 400 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "translates command validation rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "translates command unauthenticated rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "translates command forbidden rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "translates command not_found rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "translates command conflict rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "translates command precondition_failed rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "translates command rate_limited rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "translates command temporarily_unavailable rejection to NaN",
+      "status": "passed"
+    },
+    {
+      "title": "keeps unauthenticated and forbidden distinct across approve and suppress",
+      "status": "passed"
+    },
+    {
+      "title": "fails safely when command fake output is contract-invalid",
+      "status": "passed"
+    },
+    {
+      "title": "production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED for all four operations",
+      "status": "passed"
+    },
+    {
+      "title": "maps unexpected exceptions to generic 500 without leaking secrets",
+      "status": "passed"
+    }
+  ],
+  "required": {
+    "success": true,
+    "passed": 80,
+    "failed": 0,
+    "skipped": 0,
+    "failedSuites": 0
+  },
+  "roles": [
+    "moderation_runtime",
+    "moderation_worker",
+    "shipwithali_application",
+    "shipwithali_worker",
+    "anon",
+    "authenticated"
+  ],
+  "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:moderation (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
+  "scope": "Native disposable PostgreSQL cluster; all repository migrations through #193. Full Phase 3-6 upgrade qualification belongs to #208.",
+  "cleanup": true
+}

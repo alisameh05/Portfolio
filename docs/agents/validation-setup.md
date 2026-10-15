@@ -94,3 +94,15 @@ When its preflight reports `LOCAL_AUTH_DOCKER_MISSING` or
 `LOCAL_AUTH_DOCKER_UNAVAILABLE`, use the PR's `Local Auth real-token` check or a
 local Docker-capable host for the actual result. Deterministic fixture tests and
 an opt-in test reported as skipped are never real-token acceptance evidence.
+
+The `Portfolio settings real-PostgreSQL` CI check replays the historical Phase 4
+release, PR #105 (`9806af81d4ce705c36d9b22089f77213d16887bc`), in a separate
+checkout with its own pinned runtime and lockfile. Its Phase 3 predecessor
+assertions intentionally reject later domain activations, including the Phase 6
+Storage functions; running it on the current migration tree cannot prove that
+historical contract. The check still requires real clean/upgrade PostgreSQL
+projects, restricted roles, settings assertions, zero skips, and cleanup. Its
+uploaded evidence describes that release, not current Phase 6 acceptance.
+Current-source architecture, contracts, and typechecks remain in the validation
+job; current media acceptance requires the focused gates documented in
+`docs/phase6-verification-setup.md`.

@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "ticket": 160,
+  "parent": 145,
+  "predecessors": [
+    158,
+    159
+  ],
+  "runId": "12abda82-0bad-4196-b29b-d3f492534713",
+  "sourceRevision": "04f318e3b94f2b3e39f75927f32a2729e25af0f5",
+  "sourceTreeSha256": "ec079a29506e141db3f0f52914777f1d964591426d4dc81d862b62abd29cce19",
+  "startedAt": "2026-10-13T20:16:16.886Z",
+  "completedAt": "2026-10-13T20:26:12.289Z",
+  "scope": "locale-aware-media-and-current-cv-capabilities",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1",
+    "sharp": "sharp-0.35.4;libvips-8.18.6"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "executionCount": 3,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 14
+    },
+    "scanner": {
+      "available": true,
+      "version": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+      "executions": 34
+    },
+    "processors": {
+      "pdf": "17.12.1",
+      "image": "sharp-0.35.4;libvips-8.18.6",
+      "video": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+      "executions": {
+        "pdf": 10,
+        "image": 5,
+        "video": 0
+      }
+    }
+  },
+  "checks": {
+    "scenarios": [
+      {
+        "name": "T15-03 reviewed Arabic content resolves shared accepted English Media while preserving Arabic-only case-study text",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T15-01 T15-02 empty Current CV is unavailable in both locales",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T15-01 T15-02 activation exposes only the committed English Current CV capability",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T15-08 public configuration contains stable settings and capability facts without Storage mappings or bearer URLs",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T15-02 public Current CV transport continues to reject Arabic locale",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T15-04 registration and separate acceptance do not replace the existing committed Current CV",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T15-07 configured profile visibility cannot make private or rejected Media candidates deliverable",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "currentCvAndConfigurationUnits": {
+      "suites": [
+        "tests/modules/media-acceptance.test.ts",
+        "tests/modules/media-cv-contracts.test.ts",
+        "tests/runtime/current-cv.test.ts",
+        "tests/modules/current-cv-delivery.test.ts",
+        "tests/runtime/supabase-current-cv-delivery.test.ts",
+        "tests/phase4/portfolio-settings-service.test.ts"
+      ],
+      "total": 64,
+      "passed": 64,
+      "failed": 0,
+      "skipped": 0,
+      "verdict": "pass"
+    },
+    "boundaryChecks": {
+      "routes": {
+        "stdout": "✓ public-exactly-five-operations: 5/5 public operations reconciled\n✓ public-no-forbidden-surface: no owner CRUD, broad reads, Lab, or provider surface\n✓ owner-exact-surface: 48/48 owner operations reconciled\n✓ owner-no-generic-patch-or-lab: command-oriented, no generic patch or Lab entry\n✓ no-undeclared-runtime-http-surface: allowed OpenAPI paths only; 2 operational probe(s), 0 product runtime routes\n✓ operational-probes-allowlisted: exactly /livez and /readyz operational probes\n✓ no-forbidden-source-surface: no Lab, frontend, stub, handler, or leakage surface\n✓ route inventory: all 7 checks passed (5 public, 48 owner, 2 operational, 0 product runtime routes)\n",
+        "stderr": "",
+        "status": 0
+      },
+      "architecture": {
+        "stdout": "✓ runtime architecture: 187 source files preserve framework, environment, transport, provider, and Route Handler boundaries\n",
+        "stderr": "",
+        "status": 0
+      }
+    },
+    "activationForDelivery": {
+      "name": "T14-02 T14-03 T14-05 the real current pointer streams exact private accepted PDF bytes with matching immutable hash, no-store and sanitized inline filename",
+      "executed": true,
+      "status": "passed"
+    }
+  },
+  "criteria": [
+    {
+      "id": "T15-01",
+      "name": "Empty portfolio has no Current CV capability; successful activation exposes the committed eligible English Current CV",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-02",
+      "name": "Arabic Current CV and English-only link capability remain withheld; public CV locale=ar remains rejected",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-03",
+      "name": "Reviewed Arabic content uses accepted English Media without English case-study text fallback",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-04",
+      "name": "Registration and separate acceptance do not replace or publish a Current CV",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-05",
+      "name": "Storage delivery failure fails the capability closed while preserving the durable Current CV snapshot",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-06",
+      "name": "Optional capability failures leave core configuration readable while required database failure remains an error",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-07",
+      "name": "Profile Media delivery requires the configured visibility use and rejects private or rejected candidates",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-08",
+      "name": "Public configuration separates stable identity and transient capability without signed URLs, provider mappings, or private filenames",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-09",
+      "name": "Only completed Phase 6 behavior is composed; later-phase placeholders remain fail closed and public operation count is unchanged",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    }
+  ],
+  "counts": {
+    "integrationExecuted": 7,
+    "integrationFailures": 0,
+    "integrationSkips": 0,
+    "unitExecuted": 64,
+    "unitFailures": 0,
+    "unitSkips": 0
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:cv-delivery"
+  ],
+  "limitations": [
+    "Storage failure behavior is verified through the adapter and application ports with a failing isolated Storage response; successful activation and byte delivery use the real private Storage service."
+  ]
+}

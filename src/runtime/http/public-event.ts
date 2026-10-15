@@ -1,3 +1,5 @@
+import type { PortfolioRequestScope } from "@shared/application";
+import { getConsentApplicationService } from "../../bootstrap/composition-root.js";
 /**
  * public-event.ts — Phase 2 #28 consented Public event adapter.
  *
@@ -10,29 +12,12 @@
  * declared response; complete request logging.
  *
  * Consent: the accepted contract declares AnalyticsConsent security as a
- * signed `sw_analytics_consent` cookie. The adapter reads only the presence
- * of that cookie from the standard `cookie` header and folds it into the
- * provider-neutral visitor actor (`granted` when present and non-empty,
- * otherwise `unknown`). Cookie values, signatures, and raw identifiers
- * never cross the application seam and never appear in logs.
+ * signed `sw_analytics_consent` cookie. Identity/Measurement verifies its
+ * authenticated envelope and current persisted revision before dispatch.
+ * Cookie values never enter event commands or logs.
  *
- * Transport-to-application translation (documented Phase 2 shell mapping):
- * the accepted contract carries nine hyphenated transport actions while the
- * Phase 1 domain MeasurementEventType carries five underscore values. The
- * adapter translates explicitly so the seam stays provider-neutral:
- * page-viewed maps to page_view; project-viewed, active-engagement-sampled,
- * and media-engaged map to case_study_read; related-project-opened and
- * external-project-link-opened map to external_link_click; and
- * contact-channel-opened, testimonial-engaged, and global-project-cta-opened
- * map to cta_click. The domain cv_download value has no Phase 2 transport
- * producer and is reserved for later phases.
- *
- * Route identity, coarse country, and coarse device flow from the validated
- * event context (`pageRouteIdentity`, `countryCode`, `deviceClass`); the
- * `other` and `unknown` device classes are dropped rather than forwarded as
- * coarse signals. Fine-grained context (timestamps, locales, journey
- * attribution, media and testimonial identifiers, engagement details)
- * remains transport-validated and never crosses the seam.
+ * All nine validated action-specific facts cross the owning application seam.
+ * The event application must recheck consent inside its intake transaction (#196).
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, results, and rejections crossing the application seam
@@ -47,9 +32,10 @@ import {
 } from "../../contracts/http/v1/generated/zod.gen.js";
 import type {
   IngestPublicEventCommand,
-  MeasurementEventType,
+  PublicMeasurementEvent,
   MeasurementService,
-  PublicEventData,
+  EventReceipt,
+  ConsentApplicationService,
 } from "../../modules/measurement/index.js";
 import type {
   IdempotencyKey,
@@ -63,6 +49,8 @@ import {
 } from "./problem.js";
 
 export interface PublicEventAdapterDeps {
+  readonly consent?: Pick<ConsentApplicationService, "verifyEvidence">;
+  readonly scope?: PortfolioRequestScope;
   service: Pick<MeasurementService, "ingestEvent">;
   logger?: Logger;
 }
@@ -77,60 +65,20 @@ function requestInstance(request: Request): string {
   }
 }
 
-function hasAnalyticsConsent(request: Request): boolean {
+function analyticsConsentToken(request: Request): string | undefined {
   const cookie = request.headers.get("cookie");
   if (cookie === null || cookie.length === 0) {
-    return false;
+    return undefined;
   }
+  let token: string | undefined;
   for (const part of cookie.split(";")) {
     const [name, ...rest] = part.split("=");
     if (name?.trim() === "sw_analytics_consent" && rest.join("=").trim().length > 0) {
-      return true;
+      if (token !== undefined) return undefined;
+      token = rest.join("=").trim();
     }
   }
-  return false;
-}
-
-type TransportAction =
-  | "page-viewed"
-  | "project-viewed"
-  | "active-engagement-sampled"
-  | "media-engaged"
-  | "related-project-opened"
-  | "contact-channel-opened"
-  | "external-project-link-opened"
-  | "testimonial-engaged"
-  | "global-project-cta-opened";
-
-function toDomainEventType(action: TransportAction): MeasurementEventType {
-  switch (action) {
-    case "page-viewed":
-      return "page_view";
-    case "project-viewed":
-    case "active-engagement-sampled":
-    case "media-engaged":
-      return "case_study_read";
-    case "related-project-opened":
-    case "external-project-link-opened":
-      return "external_link_click";
-    case "contact-channel-opened":
-    case "testimonial-engaged":
-    case "global-project-cta-opened":
-      return "cta_click";
-  }
-}
-
-type ValidatedEventContext = {
-  readonly pageRouteIdentity: string;
-  readonly countryCode?: string;
-  readonly deviceClass?: string;
-};
-
-function toCoarseDevice(deviceClass: string | undefined): IngestPublicEventCommand["coarseDevice"] {
-  if (deviceClass === "desktop" || deviceClass === "mobile" || deviceClass === "tablet") {
-    return deviceClass;
-  }
-  return undefined;
+  return token;
 }
 
 export async function handlePostPublicEvent(
@@ -172,22 +120,19 @@ export async function handlePostPublicEvent(
       return transportProblem("Invalid request body.", traceId, instance);
     }
 
-    const event = bodyResult.data as {
-      readonly action: TransportAction;
-      readonly context: ValidatedEventContext;
-    };
-    const context = event.context;
-    const coarseDevice = toCoarseDevice(context.deviceClass);
-    // ExactOptionalPropertyTypes: only include coarse signals when defined.
+    const scope = deps.scope ?? { kind: "unconfigured" as const };
+    const consent = deps.consent ?? getConsentApplicationService();
+    const token = analyticsConsentToken(request);
+    if (!consent || !token) return rejectionToProblem({ kind: "forbidden", code: "MEASUREMENT_CONSENT_REQUIRED" }, traceId, instance);
+    const verified = await consent.verifyEvidence({ scope, correlationId: traceId, token, noticeVersion: bodyResult.data.context.consentVersion });
+    if (!verified.ok) return rejectionToProblem(verified.error, traceId, instance);
     const command: IngestPublicEventCommand = {
-      actor: {
-        kind: "visitor",
-        consent: hasAnalyticsConsent(request) ? "granted" : "unknown",
-      },
-      eventType: toDomainEventType(event.action),
-      routeIdentity: context.pageRouteIdentity as StableId<"PublicRoute">,
-      ...(context.countryCode === undefined ? {} : { coarseCountry: context.countryCode }),
-      ...(coarseDevice === undefined ? {} : { coarseDevice }),
+      scope,
+      correlationId: traceId,
+      actor: { kind: "visitor", consent: "granted" },
+      measurement: verified.value,
+      idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
+      event: bodyResult.data as unknown as PublicMeasurementEvent,
     };
 
     let result: Awaited<ReturnType<typeof deps.service.ingestEvent>>;
@@ -209,10 +154,10 @@ export async function handlePostPublicEvent(
       return rejection;
     }
 
-    const value = result.value as PublicEventData;
+    const value = result.value as EventReceipt;
     const payload = {
       eventId: value.eventId,
-      acceptedAt: value.timestamp,
+      acceptedAt: value.acceptedAt,
     };
     const responseResult = zPostPublicEventResponse.safeParse(payload);
     if (!responseResult.success) {

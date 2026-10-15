@@ -1,7 +1,8 @@
 import type { StableId, Result, Rejection } from "@shared/domain";
 import { err } from "@shared/domain";
-import type { CvRepositoryPort, CvStoragePort } from "../ports/index.js";
+import type { CvRepositoryPort, CvStoragePort, CvCurrentDeliveryPort } from "../ports/index.js";
 import type { CvVersion } from "../domain/index.js";
+import type { CurrentCvDisposition } from "../domain/index.js";
 
 /**
  * Stub repository adapter for Phase 1 skeleton.
@@ -32,9 +33,24 @@ export class StubCvRepository implements CvRepositoryPort {
 }
 
 export class StubCvStorage implements CvStoragePort {
-  async getDownloadUrl(
-    _mediaAssetId: StableId<"MediaAsset">,
-  ): Promise<Result<string, Rejection>> {
+  async getDownloadUrl(_mediaAssetId: StableId<"MediaAsset">): Promise<Result<string, Rejection>> {
     return err({ kind: "temporarily_unavailable", code: "STORAGE_NOT_IMPLEMENTED" });
   }
 }
+
+export class StubCvCurrentDelivery implements CvCurrentDeliveryPort {
+  async getDownloadTarget(
+    _mediaAssetId: StableId<"MediaAsset">,
+    _disposition: CurrentCvDisposition,
+  ): Promise<Result<{ readonly url: string; readonly expiresAt: string }, Rejection>> {
+    return err({ kind: "temporarily_unavailable", code: "STORAGE_NOT_IMPLEMENTED" });
+  }
+  async getStream(
+    _mediaAssetId: StableId<"MediaAsset">,
+    _disposition: CurrentCvDisposition,
+  ): Promise<Result<AsyncIterable<Uint8Array>, Rejection>> {
+    return err({ kind: "temporarily_unavailable", code: "STORAGE_NOT_IMPLEMENTED" });
+  }
+}
+export { createPostgresCvPortfolioRepository } from "./postgres-portfolio.js";
+export { createPostgresCurrentCvSnapshotRepository } from "./postgres-portfolio.js";

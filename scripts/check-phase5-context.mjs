@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { buildInventory } from "./check-route-inventory.mjs";
 import { buildRuntimeBoundary } from "./check-runtime-boundary.mjs";
 import { inspectRuntimeArchitecture } from "./check-runtime-architecture.mjs";
+import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import {
   EXPECTED_OWNER_OPERATIONS,
   EXPECTED_PUBLIC_OPERATIONS,
@@ -76,7 +77,9 @@ function main() {
     ticket: 107,
     parent: 106,
     runId: randomUUID(),
+    startedAt: new Date().toISOString(),
     sourceRevision: revision(),
+    sourceTreeSha256: workingTreeSourceSha256(),
     scope: "phase-5-verification-context",
     verdict: result.failures.length === 0 ? "pass" : "fail",
     scenarioAcceptance: false,

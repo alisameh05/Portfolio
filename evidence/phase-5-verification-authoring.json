@@ -1,17 +1,18 @@
 {
   "schemaVersion": 1,
-  "runId": "5664e9df-0a70-4731-82a4-bf30e0c05f1c",
-  "sourceRevision": "4eca01b9db2425f147d7c731f3b16c1e8694e23b",
+  "runId": "a9b0cfdc-ff06-4d91-98e1-c1706069e421",
+  "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+  "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
   "suite": "authoring",
-  "startedAt": "2026-10-07T17:28:22.826Z",
+  "startedAt": "2026-10-10T15:57:39.462Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,
   "counts": {
-    "executed": 32,
+    "executed": 36,
     "failed": 0,
     "skipped": 0,
-    "total": 32
+    "total": 36
   },
   "partial": false,
   "dependency": {
@@ -27,6 +28,10 @@
     "npm run phase5:focus:authoring-review-publication-routes"
   ],
   "details": {
-    "message": "focused suite executed"
+    "message": "focused suite executed",
+    "files": [
+      "tests/runtime/owner-content-authoring.test.ts",
+      "tests/runtime/owner-content-http.test.ts"
+    ]
   }
 }

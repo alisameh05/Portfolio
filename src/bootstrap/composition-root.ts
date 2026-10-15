@@ -27,8 +27,35 @@ import type { OwnerConfigurationApplicationService } from "../runtime/http/owner
 import type { ContentAuthoringService } from "../modules/content-publishing/application/authoring.js";
 import type { OwnerProjectApplicationService } from "../runtime/http/owner-project.js";
 import type { OwnerTaxonomyApplicationService } from "../runtime/http/owner-taxonomy.js";
+import type { OwnerPublicationApplicationService } from "../runtime/http/owner-publication.js";
+import type { PublicDiscoveryService } from "../modules/taxonomy-discovery/application/index.js";
 import type { LifecycleResource, ReadinessCheck } from "../runtime/ports.js";
-import { parseStableId } from "../shared/domain/index.js";
+import { createSystemClock, createSystemIdGenerator } from "../runtime/ports.js";
+import { parseStableId, type StableId } from "../shared/domain/index.js";
+import type { OwnerMediaApplicationService } from "../modules/media/index.js";
+import type { MediaDeliveryApplicationService } from "../modules/media/index.js";
+import type { CurrentCvDeliveryService, OwnerCvApplicationService } from "../modules/cv-portfolio/index.js";
+import type { PortfolioSettingsApplicationService } from "../modules/portfolio-configuration/index.js";
+import type { ConsentApplicationService } from "../modules/measurement/index.js";
+import type { InteractionModerationService, FunctionalInteractionContextPort } from "../modules/interaction-moderation/index.js";
+
+export interface ReactionRuntimeServices {
+  readonly scope: { readonly kind: "portfolio"; readonly portfolioId: StableId<"Portfolio"> };
+  readonly service: Pick<InteractionModerationService, "submitReaction">;
+  readonly functionalIdentity: FunctionalInteractionContextPort;
+}
+
+export interface FeedbackRuntimeServices {
+  readonly scope: ReactionRuntimeServices["scope"];
+  readonly service: Pick<InteractionModerationService, "submitFeedback">;
+  readonly rateLimit: import("../runtime/http/current-cv-rate-limit.js").CurrentCvRateLimitCheck;
+}
+
+export interface RatingRuntimeServices {
+  readonly scope: ReactionRuntimeServices["scope"];
+  readonly service: Pick<InteractionModerationService, "submitRating">;
+  readonly functionalIdentity: FunctionalInteractionContextPort;
+}
 
 export type { RuntimeConfig } from "./configuration.js";
 
@@ -37,6 +64,17 @@ let currentOperations: OperationsPersistencePorts | undefined;
 let currentOwnerConfiguration: OwnerConfigurationApplicationService | undefined;
 let currentContentAuthoring: ContentAuthoringService | undefined;
 let currentOwnerTaxonomy: OwnerTaxonomyApplicationService | undefined;
+let currentPublicDiscovery: PublicDiscoveryService | undefined;
+let currentOwnerMedia: OwnerMediaApplicationService | undefined;
+let currentMediaDelivery: MediaDeliveryApplicationService | undefined;
+let currentOwnerCv: OwnerCvApplicationService | undefined;
+let currentCurrentCv: CurrentCvDeliveryService | undefined;
+let currentPublicConfiguration: PortfolioSettingsApplicationService | undefined;
+let currentConsent: ConsentApplicationService | undefined;
+let currentReaction: ReactionRuntimeServices | undefined;
+let currentRating: RatingRuntimeServices | undefined;
+let currentFeedback: FeedbackRuntimeServices | undefined;
+let currentModeration: (import("../modules/interaction-moderation/index.js").OwnerModerationApplicationService & Pick<InteractionModerationService, "getApprovedFeedback">) | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -60,12 +98,35 @@ export interface DatabaseRuntimeState extends RuntimeConfig {
 }
 
 export interface DatabaseRuntimeDependencies {
+  readonly reaction?: ReactionRuntimeServices;
+  readonly rating?: RatingRuntimeServices;
+  readonly feedback?: FeedbackRuntimeServices;
+  readonly moderation?: NonNullable<typeof currentModeration>;
+  readonly consent?: ConsentApplicationService;
   readonly operations: OperationsPersistencePorts;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
   readonly contentAuthoring?: ContentAuthoringService;
   readonly ownerTaxonomy?: OwnerTaxonomyApplicationService;
+  readonly publicDiscovery?: PublicDiscoveryService;
+  readonly ownerMedia?: OwnerMediaApplicationService;
+  readonly mediaDelivery?: MediaDeliveryApplicationService;
+  readonly ownerCv?: OwnerCvApplicationService;
+  readonly currentCv?: CurrentCvDeliveryService;
+  readonly publicConfiguration?: PortfolioSettingsApplicationService;
   readonly resource: LifecycleResource;
   readonly readiness: ReadinessCheck;
+}
+
+/**
+ * Provider-neutral services used by the Phase 5 Owner transport adapters.
+ * Handlers receive this bundle from the standard composition root so routes
+ * cannot assemble repositories or bypass the configured transaction scope.
+ */
+export interface Phase5OwnerApplicationServices {
+  readonly contentAuthoring: ContentAuthoringService;
+  readonly publication: OwnerPublicationApplicationService;
+  readonly project: OwnerProjectApplicationService;
+  readonly taxonomy: OwnerTaxonomyApplicationService;
 }
 
 export type DatabaseRuntimeFactory = () =>
@@ -122,6 +183,82 @@ export async function initializeDatabaseRuntime(
         let ownerConfiguration: OwnerConfigurationApplicationService | undefined;
         let contentAuthoring: ContentAuthoringService | undefined;
         let ownerTaxonomy: OwnerTaxonomyApplicationService | undefined;
+        let publicDiscovery: PublicDiscoveryService | undefined;
+        let ownerMedia: OwnerMediaApplicationService | undefined;
+        let mediaDelivery: MediaDeliveryApplicationService | undefined;
+        let ownerCv: OwnerCvApplicationService | undefined;
+        let currentCv: CurrentCvDeliveryService | undefined;
+        let publicConfiguration: PortfolioSettingsApplicationService | undefined;
+        let consent: ConsentApplicationService | undefined;
+        let reaction: ReactionRuntimeServices | undefined;
+        let rating: RatingRuntimeServices | undefined;
+        let feedback: FeedbackRuntimeServices | undefined;
+        let moderation: NonNullable<typeof currentModeration> | undefined;
+        if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok) {
+          const [{ createFeedbackApplicationService, createOwnerFeedbackModerationService }, { createPostgresFeedbackSubmissionRepository },
+            { createPostgresProjectInteractionFacts }, { createBoundedCurrentCvRateLimit }] = await Promise.all([
+            import("../modules/interaction-moderation/index.js"),
+            import("../modules/interaction-moderation/adapters/postgres-feedback.js"),
+            import("../modules/content-publishing/adapters/postgres-interaction-facts.js"),
+            import("../runtime/http/current-cv-rate-limit.js"),
+          ]);
+          const scope = { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value };
+          const { createPostgresModerationRepository } = await import("../modules/interaction-moderation/adapters/postgres-moderation.js");
+          const { decideAuthorization } = await import("../modules/identity-access/index.js");
+          moderation = createOwnerFeedbackModerationService({ scope, operations,
+            authorize: async query => decideAuthorization(query), repository: createPostgresModerationRepository(),
+            content: createPostgresProjectInteractionFacts(scope), clock: createSystemClock(), ids: createSystemIdGenerator() });
+          feedback = { scope: { kind: "portfolio", portfolioId: scope.portfolioId },
+            service: createFeedbackApplicationService({ portfolioId: scope.portfolioId, content: createPostgresProjectInteractionFacts(scope),
+              operations, repository: createPostgresFeedbackSubmissionRepository(), clock: createSystemClock(), ids: createSystemIdGenerator() }),
+            // Portfolio-wide process budget needs no IP, fingerprint or persistent identity.
+            rateLimit: createBoundedCurrentCvRateLimit({ clientKey: () => "feedback:" + scope.portfolioId,
+              maxRequests: Number(env["FEEDBACK_RATE_LIMIT_MAX_REQUESTS"] ?? 30), windowSeconds: Number(env["FEEDBACK_RATE_LIMIT_WINDOW_SECONDS"] ?? 60) }) };
+        }
+        if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok && env["FUNCTIONAL_ID_HASH_KEY"]) {
+          const [{ createReactionApplicationService, createRatingApplicationService, createFunctionalInteractionContext }, { createPostgresReactionRepository }, { createPostgresRatingRepository },
+            { createPostgresProjectInteractionFacts }, { createIdentityAccessService },
+            { AesGcmPseudonymousTokenAdapter, createFunctionalPseudonymousIdentityConfig, StubAuthProvider }] = await Promise.all([
+            import("../modules/interaction-moderation/index.js"),
+            import("../modules/interaction-moderation/adapters/postgres-reactions.js"),
+            import("../modules/interaction-moderation/adapters/postgres-ratings.js"),
+            import("../modules/content-publishing/adapters/postgres-interaction-facts.js"),
+            import("../modules/identity-access/application/policy.js"),
+            import("../modules/identity-access/adapters/index.js"),
+          ]);
+          const scope = { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value };
+          const content = createPostgresProjectInteractionFacts(scope);
+          const identity = createIdentityAccessService({ auth: new StubAuthProvider(), crypto: new AesGcmPseudonymousTokenAdapter({
+            config: createFunctionalPseudonymousIdentityConfig(env), nowSeconds: () => Math.floor(Date.now() / 1000),
+          }) });
+          reaction = { scope: { kind: "portfolio", portfolioId: scope.portfolioId },
+            service: createReactionApplicationService({ portfolioId: scope.portfolioId, content, operations,
+              repository: createPostgresReactionRepository(), clock: createSystemClock(), ids: createSystemIdGenerator() }),
+            functionalIdentity: createFunctionalInteractionContext({ portfolioId: scope.portfolioId, transactions: operations.transactions, content, identity }) };
+          rating = { scope: reaction.scope,
+            service: createRatingApplicationService({ portfolioId: scope.portfolioId, content, operations,
+              repository: createPostgresRatingRepository(), clock: createSystemClock(), ids: createSystemIdGenerator() }),
+            functionalIdentity: reaction.functionalIdentity };
+        }
+        // Optional Measurement capability does not become a global readiness dependency.
+        if (runtimeKind === "application" && env["MEASUREMENT_CONSENT_NOTICE_VERSIONS"]) {
+          try {
+            const [{ createConsentApplicationService }, { createPostgresConsentRepository },
+              { AesGcmConsentEvidenceAdapter }, { createPseudonymousIdentityConfig }] = await Promise.all([
+              import("../modules/measurement/index.js"),
+              import("../modules/measurement/adapters/postgres-consent.js"),
+              import("../modules/identity-access/adapters/consent-evidence.js"),
+              import("../modules/identity-access/adapters/pseudonymous-config.js"),
+            ]);
+            const clock = createSystemClock();
+            consent = createConsentApplicationService({ transactions: database.transactions,
+              repository: createPostgresConsentRepository(),
+              crypto: new AesGcmConsentEvidenceAdapter(createPseudonymousIdentityConfig(env), clock.now),
+              clock, ids: createSystemIdGenerator(), ttlSeconds: 2_592_000,
+              supportedNoticeVersions: env["MEASUREMENT_CONSENT_NOTICE_VERSIONS"]!.split(",").map(v => v.trim()),
+            });
+          } catch { consent = undefined; }
+        }
         if (runtimeKind === "application") {
           if (configuredScope === undefined || !configuredScope.portfolioId.ok || !configuredScope.ownerId.ok) {
             throw new RuntimeConfigError("PORTFOLIO_ID", "must be configured for Owner configuration commands");
@@ -171,6 +308,17 @@ export async function initializeDatabaseRuntime(
             import("../modules/content-publishing/application/authoring.js"),
           ]);
           const discoveryProjection = createPostgresProjectDiscoveryProjectionWriter();
+          const [{ createPostgresPublicDiscoveryReader }, { createPublicDiscoveryService }] = await Promise.all([
+            import("../modules/taxonomy-discovery/adapters/index.js"),
+            import("../modules/taxonomy-discovery/application/index.js"),
+          ]);
+          publicDiscovery = createPublicDiscoveryService({
+            reader: createPostgresPublicDiscoveryReader({
+              portfolioId: configuredScope.portfolioId.value,
+              ownerId: configuredScope.ownerId.value,
+            }),
+            transactions: operations.transactions,
+          });
           contentAuthoring = createContentAuthoringService({
             repository: createPostgresContentAuthoringRepository(),
             operations,
@@ -195,12 +343,263 @@ export async function initializeDatabaseRuntime(
             scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
             contentAssignments: contentTaxonomyAssignments,
           }), createProductionOwnerTaxonomyService());
+
+          const [
+            { createPostgresMediaUploadIntentRepository },
+            { createPostgresMediaProcessingRepository },
+            { createUploadCapabilityVault },
+            { createMediaUploadIntentApplicationService },
+            { createMediaProcessingApplicationService },
+            { createOwnerMediaApplicationService },
+            { createSupabaseMediaUploadTargetAdapter },
+            { createSupabaseMediaProcessingStorage },
+            { createClamAvScanner, createOcrMyPdfProcessor, createFfmpegVideoProcessor },
+            { createSharpMediaImageProcessor },
+            { createNodeMediaDigest },
+            { createPostgresOwnerMediaAggregateRepository },
+          ] = await Promise.all([
+            import("../modules/media/adapters/postgres-upload-intents.js"),
+            import("../modules/media/adapters/postgres-processing.js"),
+            import("../modules/media/adapters/upload-capability-vault.js"),
+            import("../modules/media/application/upload-intent.js"),
+            import("../modules/media/application/processing.js"),
+            import("../modules/media/application/owner-service.js"),
+            import("../runtime/adapters/supabase-media-upload-target.js"),
+            import("../runtime/adapters/supabase-media-processing-storage.js"),
+            import("../runtime/adapters/media-processing-tools.js"),
+            import("../runtime/adapters/media-image-processing.js"),
+            import("../runtime/adapters/media-digest.js"),
+            import("../modules/media/adapters/postgres-owner-aggregate.js"),
+          ]);
+          const uploadIntentTarget = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
+            ? createSupabaseMediaUploadTargetAdapter({
+              storageUrl: env["SUPABASE_URL"],
+              serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
+              ...(env["MEDIA_CANDIDATE_BUCKET"] === undefined ? {} : { candidateBucket: env["MEDIA_CANDIDATE_BUCKET"] }),
+              ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+            })
+            : {
+              async prepare() {
+                return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } };
+              },
+              async removeAbandoned() {
+                return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } };
+              },
+            };
+          const uploadIntent = createMediaUploadIntentApplicationService({
+            scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
+            repository: createPostgresMediaUploadIntentRepository(database.database, operations.transactions),
+            target: uploadIntentTarget,
+            vault: createUploadCapabilityVault(env["MEDIA_UPLOAD_REPLAY_ENCRYPTION_KEY"]),
+            ids: createSystemIdGenerator(),
+            clock: createSystemClock(),
+          });
+          const mediaStorage = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
+            ? createSupabaseMediaProcessingStorage({
+              storageUrl: env["SUPABASE_URL"],
+              serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
+              ...(env["MEDIA_CANDIDATE_BUCKET"] === undefined ? {} : { candidateBucket: env["MEDIA_CANDIDATE_BUCKET"] }),
+              ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+            })
+            : {
+              async readCandidate() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } }; },
+              async sealProcessedObject() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } }; },
+              async discardSealedObject() {},
+              async preflightAcceptedPdfObject() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_STORAGE_UNAVAILABLE" } }; },
+            };
+          const processing = createMediaProcessingApplicationService({
+              scope: { ownerId: configuredScope.ownerId.value },
+              repository: createPostgresMediaProcessingRepository({
+                database: database.database,
+                transactions: operations.transactions,
+                scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
+              }),
+              storage: mediaStorage,
+              scanner: createClamAvScanner({
+                ...(env["CLAMSCAN_PATH"] === undefined ? {} : { executable: env["CLAMSCAN_PATH"] }),
+                maxBytes: 50 * 1024 * 1024,
+                timeoutMs: 25_000,
+              }),
+              processor: createOcrMyPdfProcessor({
+                ...(env["PYTHON_PATH"] === undefined ? {} : { python: env["PYTHON_PATH"] }),
+                ...(env["OCRMY_PDF_PATH"] === undefined ? {} : { ocrmypdf: env["OCRMY_PDF_PATH"] }),
+              }),
+              videoProcessor: createFfmpegVideoProcessor(),
+              imageProcessor: createSharpMediaImageProcessor(),
+              digest: createNodeMediaDigest(),
+              ids: createSystemIdGenerator(),
+              clock: createSystemClock(),
+            });
+          const [
+            { createPostgresMediaAcceptanceRepository },
+            { createMediaAcceptanceApplicationService },
+            { createPostgresCvPortfolioRepository },
+            { createOwnerCvApplicationService },
+          ] = await Promise.all([
+            import("../modules/media/adapters/postgres-acceptance.js"),
+            import("../modules/media/application/acceptance.js"),
+            import("../modules/cv-portfolio/adapters/postgres-portfolio.js"),
+            import("../modules/cv-portfolio/application/owner-service.js"),
+          ]);
+          const scope = { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value };
+          const mediaAcceptance = createMediaAcceptanceApplicationService({
+            scope: { ownerId: scope.ownerId, portfolioId: scope.portfolioId },
+            repository: createPostgresMediaAcceptanceRepository({
+              database: database.database,
+              transactions: operations.transactions,
+              scope,
+            }),
+            preflight: mediaStorage.preflightAcceptedPdfObject,
+          });
+          ownerCv = createOwnerCvApplicationService({
+            ownerId: scope.ownerId,
+            repository: createPostgresCvPortfolioRepository({
+              database: database.database,
+              transactions: operations.transactions,
+              scope,
+              media: mediaAcceptance,
+            }),
+            ids: createSystemIdGenerator(),
+          });
+          const [{ createCurrentCvDeliveryService }, { createPostgresCurrentCvSnapshotRepository }] = await Promise.all([
+            import("../modules/cv-portfolio/application/current-delivery.js"),
+            import("../modules/cv-portfolio/adapters/postgres-portfolio.js"),
+          ]);
+          const currentCvStorage = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
+            ? (await import("../runtime/adapters/supabase-current-cv-delivery.js")).createSupabaseCurrentCvDelivery({
+                storageUrl: env["SUPABASE_URL"],
+                serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
+                mode: env["NODE_ENV"] === "test" ? "test" : "deployed",
+                ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+              })
+            : {
+                async stream() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "CURRENT_CV_STORAGE_UNAVAILABLE" } }; },
+                async createDownloadTarget() { return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "CURRENT_CV_STORAGE_UNAVAILABLE" } }; },
+              };
+          currentCv = createCurrentCvDeliveryService({
+            repository: createPostgresCurrentCvSnapshotRepository({
+              database: database.database,
+              transactions: operations.transactions,
+              scope,
+              media: mediaAcceptance,
+            }),
+            storage: currentCvStorage,
+          });
+          if (contentAuthoring === undefined) throw new Error("CONTENT_AUTHORING_UNAVAILABLE");
+          const [{ createPortfolioSettingsReader }, { createPostgresMediaDeliveryRepository },
+            { createMediaDeliveryApplicationService }, { createSupabaseMediaDeliveryStorage }] = await Promise.all([
+            import("../modules/portfolio-configuration/application/settings-service.js"),
+            import("../modules/media/adapters/postgres-delivery.js"),
+            import("../modules/media/application/delivery.js"),
+            import("../runtime/adapters/supabase-media-delivery-storage.js"),
+          ]);
+          const profileSettings = createPortfolioSettingsReader({
+            repository,
+            transactions: operations.transactions,
+            scope,
+            capabilityReader: {
+              async getFacts() {
+                return {
+                  currentCv: await currentCv!.getAvailability(),
+                  externalLinks: "unknown",
+                  globalProjectCta: "available",
+                };
+              },
+            },
+          });
+          publicConfiguration = profileSettings;
+          const deliveryStorage = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
+            ? createSupabaseMediaDeliveryStorage({
+              storageUrl: env["SUPABASE_URL"],
+              serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
+              portfolioId: scope.portfolioId,
+              mode: env["NODE_ENV"] === "test" ? "test" : "deployed",
+              ...(env["MEDIA_CANDIDATE_BUCKET"] === undefined ? {} : { candidateBucket: env["MEDIA_CANDIDATE_BUCKET"] }),
+              ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+            })
+            : {
+              async createSignedDeliveryTarget() {
+                return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_DELIVERY_UNAVAILABLE" } };
+              },
+            };
+          mediaDelivery = createMediaDeliveryApplicationService({
+            ownerId: scope.ownerId,
+            transactions: operations.transactions,
+            use: {
+              async isCurrentlyUsed(query, transaction) {
+                if (query.purpose === "project") return contentAuthoring!.getPublicProjectMediaUse({ mediaAssetId: query.mediaAssetId as StableId<"MediaAsset">, locale: query.locale }, transaction);
+                if (query.purpose === "profile") return profileSettings.isPublicProfileMediaUse({ mediaAssetId: query.mediaAssetId as StableId<"MediaAsset">, locale: query.locale }, transaction);
+                return { ok: true, value: false };
+              },
+            },
+            repository: createPostgresMediaDeliveryRepository({
+              database: database.database,
+              scope,
+            }),
+            storage: deliveryStorage,
+          });
+          const [{ createPostgresMediaRejectionRepository }, { createMediaRejectionApplicationService }] = await Promise.all([
+            import("../modules/media/adapters/postgres-rejection.js"),
+            import("../modules/media/application/rejection.js"),
+          ]);
+          const mediaRejection = createMediaRejectionApplicationService({
+            scope: { ownerId: scope.ownerId },
+            repository: createPostgresMediaRejectionRepository({
+              transactions: operations.transactions,
+              scope,
+            }),
+            usage: {
+              async getUsage(query, transaction) {
+                if (contentAuthoring === undefined || ownerCv === undefined) {
+                  return { ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_USAGE_CHECK_UNAVAILABLE" } };
+                }
+                const contentUsage = await contentAuthoring.getVisibleMediaUsage({
+                  ownerId: query.ownerId,
+                  mediaAssetIds: [query.mediaAssetId],
+                }, transaction);
+                if (!contentUsage.ok) return contentUsage;
+                const visible = contentUsage.value.facts.find((fact) => fact.mediaAssetId === query.mediaAssetId);
+                if (visible === undefined) {
+                  return { ok: false, error: { kind: "temporarily_unavailable", code: "CONTENT_MEDIA_USAGE_INCOMPLETE" } };
+                }
+                const currentCv = await ownerCv.getCurrentCvMediaUsage({ ...query, transaction });
+                if (!currentCv.ok) return currentCv;
+                return { ok: true, value: {
+                  hasVisibleContentReference: visible.inUse,
+                  isCurrentCv: currentCv.value,
+                } };
+              },
+            },
+          });
+          ownerMedia = createOwnerMediaApplicationService({
+            ownerId: scope.ownerId,
+            aggregateRepository: createPostgresOwnerMediaAggregateRepository({
+              database: database.database,
+              transactions: operations.transactions,
+              scope,
+            }),
+            uploadIntent: { createOwnerMediaUploadIntent: uploadIntent.create },
+            processing: { recordOwnerMediaProcessing: processing.record },
+            acceptance: { acceptOwnerMediaAsset: mediaAcceptance.acceptOwnerMediaAsset },
+            rejection: { rejectOwnerMediaAsset: mediaRejection.rejectOwnerMediaAsset },
+          });
         }
         return {
           operations,
+          ...(reaction === undefined ? {} : { reaction }),
+          ...(rating === undefined ? {} : { rating }),
+          ...(feedback === undefined ? {} : { feedback }),
+          ...(moderation === undefined ? {} : { moderation }),
+          ...(consent === undefined ? {} : { consent }),
           ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
           ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
           ...(ownerTaxonomy === undefined ? {} : { ownerTaxonomy }),
+          ...(publicDiscovery === undefined ? {} : { publicDiscovery }),
+          ...(ownerMedia === undefined ? {} : { ownerMedia }),
+          ...(mediaDelivery === undefined ? {} : { mediaDelivery }),
+          ...(ownerCv === undefined ? {} : { ownerCv }),
+          ...(currentCv === undefined ? {} : { currentCv }),
+          ...(publicConfiguration === undefined ? {} : { publicConfiguration }),
           resource: database.resource,
           readiness: database.readiness,
         };
@@ -220,9 +619,20 @@ export async function initializeDatabaseRuntime(
     lifecycle.registerReadinessCheck(dependencies.readiness);
     current = config;
     currentOperations = dependencies.operations;
+    currentReaction = dependencies.reaction;
+    currentRating = dependencies.rating;
+    currentFeedback = dependencies.feedback;
+    currentModeration = dependencies.moderation;
+    currentConsent = dependencies.consent;
     currentOwnerConfiguration = dependencies.ownerConfiguration;
     currentContentAuthoring = dependencies.contentAuthoring;
     currentOwnerTaxonomy = dependencies.ownerTaxonomy;
+    currentPublicDiscovery = dependencies.publicDiscovery;
+    currentOwnerMedia = dependencies.ownerMedia;
+    currentMediaDelivery = dependencies.mediaDelivery;
+    currentOwnerCv = dependencies.ownerCv;
+    currentCurrentCv = dependencies.currentCv;
+    currentPublicConfiguration = dependencies.publicConfiguration;
     lifecycle.markReady();
     return Object.freeze({ ...config, runtimeKind });
   } catch (error) {
@@ -259,6 +669,45 @@ export async function getOwnerTaxonomyApplicationService(): Promise<OwnerTaxonom
   return createProductionOwnerTaxonomyService();
 }
 
+/** Locale-aware public discovery is an in-process query over approved projections. */
+export async function getPublicDiscoveryApplicationService(): Promise<PublicDiscoveryService> {
+  if (currentPublicDiscovery !== undefined) return currentPublicDiscovery;
+  throw new Error("Public discovery requires the configured PostgreSQL application assembly.");
+}
+
+/** The first completed Media Owner command is composed with scoped PostgreSQL and private Storage adapters. */
+export async function getOwnerMediaApplicationService(): Promise<OwnerMediaApplicationService> {
+  if (currentOwnerMedia !== undefined) return currentOwnerMedia;
+  const { createProductionOwnerMediaService } = await import("../runtime/fakes/owner-media.js");
+  return createProductionOwnerMediaService();
+}
+
+/** Locale-aware public Media delivery uses only currently visible Content or approved profile settings. */
+export async function getMediaDeliveryApplicationService(): Promise<MediaDeliveryApplicationService> {
+  if (currentMediaDelivery !== undefined) return currentMediaDelivery;
+  throw new Error("Media delivery requires the configured PostgreSQL and private Storage assembly.");
+}
+
+/** CV registration and Owner reads share the configured PostgreSQL and Media acceptance transaction boundary. */
+export async function getOwnerCvApplicationService(): Promise<OwnerCvApplicationService> {
+  if (currentOwnerCv !== undefined) return currentOwnerCv;
+  const { createProductionOwnerCvService } = await import("../runtime/fakes/owner-cv.js");
+  return createProductionOwnerCvService();
+}
+
+/** Public delivery resolves the current pointer through PostgreSQL and the private processed Storage adapter. */
+export async function getCurrentCvApplicationService(): Promise<CurrentCvDeliveryService> {
+  if (currentCurrentCv !== undefined) return currentCurrentCv;
+  const { createProductionCurrentCvService } = await import("../runtime/fakes/current-cv.js");
+  return createProductionCurrentCvService();
+}
+
+/** Locale-aware public configuration combines durable settings with safe composed capability facts. */
+export async function getPublicConfigurationApplicationService(): Promise<PortfolioSettingsApplicationService> {
+  if (currentPublicConfiguration !== undefined) return currentPublicConfiguration;
+  throw new Error("Public configuration requires the configured PostgreSQL application assembly.");
+}
+
 /** Project route, status, and Featured operations share the Content transaction boundary. */
 export async function getOwnerProjectApplicationService(): Promise<OwnerProjectApplicationService> {
   const contentAuthoring = await getContentAuthoringApplicationService();
@@ -269,6 +718,24 @@ export async function getOwnerProjectApplicationService(): Promise<OwnerProjectA
   ]);
   const routeService = createContentBackedOwnerProjectService(contentAuthoring, createProductionOwnerProjectService());
   return createContentOwnerProjectService(contentAuthoring, routeService);
+}
+
+/** Resolve every completed Phase 5 Owner facade from the active runtime. */
+export async function getPhase5OwnerApplicationServices(): Promise<Phase5OwnerApplicationServices> {
+  const [contentAuthoring, project, taxonomy] = await Promise.all([
+    getContentAuthoringApplicationService(),
+    getOwnerProjectApplicationService(),
+    getOwnerTaxonomyApplicationService(),
+  ]);
+  const { createProductionOwnerPublicationService } = await import("../runtime/fakes/owner-publication.js");
+  return Object.freeze({
+    contentAuthoring,
+    // Publication handlers delegate completed operations to contentAuthoring;
+    // this fallback remains fail-closed for any future/unwired operation.
+    publication: createProductionOwnerPublicationService(),
+    project,
+    taxonomy,
+  });
 }
 
 export function getRuntimeConfig(): RuntimeConfig {
@@ -282,12 +749,61 @@ export function isRuntimeInitialized(): boolean {
   return current !== undefined;
 }
 
+/** Trusted future consent presentation and the existing event edge share this boundary. */
+export function getConsentApplicationService(): ConsentApplicationService | undefined {
+  return currentConsent;
+}
+
+/** Completed Reaction operation obtains real persistence and identity from standard assembly. */
+export async function getReactionRuntimeServices(): Promise<ReactionRuntimeServices | { readonly service: Pick<InteractionModerationService, "submitReaction"> }> {
+  if (currentReaction) return currentReaction;
+  const { createProductionReactionService } = await import("../runtime/fakes/reaction.js");
+  return { service: createProductionReactionService() };
+}
+
+export async function getRatingRuntimeServices(): Promise<RatingRuntimeServices | { readonly service: Pick<InteractionModerationService, "submitRating"> }> {
+  if (currentRating) return currentRating;
+  const { createProductionRatingService } = await import("../runtime/fakes/rating.js");
+  return { service: createProductionRatingService() };
+}
+
+/** Existing Feedback HTTP edge obtains persistence and abuse control here. */
+export async function getFeedbackRuntimeServices(): Promise<FeedbackRuntimeServices | { readonly service: Pick<InteractionModerationService, "submitFeedback">; readonly rateLimit: FeedbackRuntimeServices["rateLimit"] }> {
+  if (currentFeedback) return currentFeedback;
+  const { createProductionFeedbackService } = await import("../runtime/fakes/feedback.js");
+  return { service: createProductionFeedbackService(), rateLimit: { check: async () => { throw new Error("FEEDBACK_NOT_CONFIGURED"); } } };
+}
+
+/** Owner adapters use configured scope plus their existing verified-session security boundary. */
+export async function getOwnerModerationRuntimeServices() {
+  if (currentModeration && currentFeedback) return { scope: currentFeedback.scope, service: currentModeration };
+  const { createProductionOwnerModerationService } = await import("../runtime/fakes/owner-moderation.js");
+  return { service: createProductionOwnerModerationService() };
+}
+
+/** The approved exact-locale query is an in-process application capability. */
+export function getApprovedFeedbackApplicationService() {
+  if (!currentModeration) throw new Error("MODERATION_NOT_CONFIGURED");
+  return currentModeration;
+}
+
 /** Test-only seam to isolate focused suites. */
 export function resetRuntimeForTests(): void {
   current = undefined;
   currentOperations = undefined;
+  currentConsent = undefined;
+  currentReaction = undefined;
+  currentRating = undefined;
+  currentFeedback = undefined;
+  currentModeration = undefined;
   currentOwnerConfiguration = undefined;
   currentContentAuthoring = undefined;
   currentOwnerTaxonomy = undefined;
+  currentPublicDiscovery = undefined;
+  currentOwnerMedia = undefined;
+  currentMediaDelivery = undefined;
+  currentOwnerCv = undefined;
+  currentCurrentCv = undefined;
+  currentPublicConfiguration = undefined;
   resetLifecycleForTests();
 }

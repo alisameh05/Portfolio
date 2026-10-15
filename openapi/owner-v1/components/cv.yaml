@@ -50,9 +50,11 @@ schemas:
           - { type: 'null' }
       versions:
         type: array
-        description: Retained registration and acceptance history, including prior Current CV versions.
+        description: Newest-first view of up to 100 retained CV versions. Older rows remain retained; versionsTruncated reports when the view is incomplete.
         items: { $ref: '#/schemas/CvVersionView' }
+      versionsTruncated: { type: boolean, description: True when older retained CV versions are omitted. }
       activationHistory:
         type: array
-        description: Retained Current CV activations in recorded order.
+        description: Newest-first view of up to 100 retained activations. Older rows remain retained; activationHistoryTruncated reports when the view is incomplete.
         items: { $ref: '#/schemas/CvActivationView' }
+      activationHistoryTruncated: { type: boolean, description: True when older retained activations are omitted. }

@@ -1,0 +1,52 @@
+
+> shipwithali-portfolio@0.0.0 prephase5:focus:taxonomy-status-relationships-discovery
+> node scripts/phase5-scenario-coverage.mjs --invalidate-suite taxonomy && npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase5:focus:taxonomy-status-relationships-discovery
+> node scripts/phase5-verification.mjs --suite taxonomy
+
+JSON report written to <TEMP>/shipwithali-phase5-taxonomy-46316-3fa5ae37-00e9-47fe-884c-9fc5da2f6f0f.json
+
+{
+  "schemaVersion": 1,
+  "runId": "09ac7e3c-402b-48b3-9833-9f48f9ecbee0",
+  "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+  "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+  "suite": "taxonomy",
+  "startedAt": "2026-10-10T15:57:42.504Z",
+  "verdict": "pass",
+  "scenarioAcceptance": true,
+  "suiteAvailable": true,
+  "counts": {
+    "executed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "total": 4
+  },
+  "partial": false,
+  "dependency": {
+    "required": false,
+    "available": true,
+    "code": "NOT_REQUIRED"
+  },
+  "cleanup": {
+    "attempted": true,
+    "passed": true
+  },
+  "reproduction": [
+    "npm run phase5:focus:taxonomy-status-relationships-discovery"
+  ],
+  "details": {
+    "message": "focused suite executed",
+    "files": [
+      "tests/phase5/taxonomy/public-discovery.test.ts"
+    ]
+  },
+  "evidence": "evidence\\phase-5-verification-taxonomy.json"
+}

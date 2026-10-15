@@ -65,6 +65,7 @@ export interface UpdateOwnerProfileApplicationCommand {
   readonly displayName: string;
   readonly headline: string;
   readonly bio: string;
+  readonly mediaAssetId?: StableId<"MediaAsset">;
 }
 
 export interface UpdateOwnerContactChannelsApplicationCommand {
@@ -236,6 +237,7 @@ export async function handleUpdateOwnerProfileConfiguration(
       displayName: bodyResult.data.displayName,
       headline: bodyResult.data.headline,
       bio: bodyResult.data.bio,
+      ...(bodyResult.data.mediaAssetId === undefined ? {} : { mediaAssetId: bodyResult.data.mediaAssetId as StableId<"MediaAsset"> }),
     };
     return await dispatchReceipt(
       () => deps.service.updateOwnerProfile(command),

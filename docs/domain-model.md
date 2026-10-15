@@ -83,7 +83,7 @@ An identity remains stable while names, labels, slugs, revisions, states, or pro
 | Lab entry | Lab entry identity | Public lifecycle, Localized revision streams, evidence, links, media references | Media assets, Taxonomy values | No; model only |
 | Taxonomy | Taxonomy identity | name, purpose, Taxonomy values, evolution history | nothing outside the aggregate | Yes |
 | Media library | Media asset identity | safety assessment, accessibility metadata, acceptance and publication history | owning portfolio identity | Yes |
-| Feedback | Feedback identity | submitted name and paragraph, current presentation eligibility, Moderation decisions | one Project, Visitor measurement identity when permitted | Yes |
+| Feedback | Feedback identity | submitted name and paragraph, current presentation eligibility, Moderation decisions | one Project; no persistent Visitor identity | Yes |
 | CV portfolio | CV portfolio identity | CV versions and the Current CV designation | accepted file assets | Yes |
 | Analytics goal | Analytics goal identity | ordered goal versions and current active version | known public actions, pages, and Project identities | Yes |
 | Measurement | Public event identity while detail is retained | privacy-minimized event facts, Journey context, aggregates | Visitor measurement identity, public content identities | Yes |
@@ -98,7 +98,7 @@ An identity remains stable while names, labels, slugs, revisions, states, or pro
 - A Project relationship joins two distinct Projects. It makes them eligible for related-project presentation only while both have a public Language version for the visitor's locale.
 - A Testimonial belongs either to the general profile or to exactly one Project.
 - An External link belongs to one Project. A Contact channel belongs to portfolio settings; the two concepts are not interchangeable.
-- A Reaction and a Rating each belong to one Project and one permitted Visitor measurement identity. Only one current value of each kind may exist for that pair.
+- A Reaction and a Rating each belong to one Project and one purpose-limited FunctionalVisitor identity. Only one current value of each kind may exist for that pair.
 - Feedback belongs to one Project. Public display additionally depends on both Feedback approval and Project visibility.
 - A CV version belongs to the single CV portfolio. Exactly one accepted English CV version is Current CV once CV access is launched.
 
@@ -189,6 +189,11 @@ Evidence state is internal editorial information. It must not be rendered as an 
 - Uploading creates no public entitlement. A Media asset remains private until its type, safety, ownership, and public suitability are accepted.
 - Meaningful images require an approved non-visual description; decorative images require an explicit decorative classification.
 - Meaningful video requires the approved caption or summary appropriate to its public use.
+- Acceptance snapshots the exact current processing evidence and outputs together with separate Owner attestations of ownership and public suitability; it does not replace scanner or processor evidence.
+- Acceptance is a terminal decision for the current candidate. A different idempotency key cannot create a second acceptance or restart processing after that decision.
+- Acceptance facts are read inside the caller's transaction and hold shared per-asset locks until it ends. Acceptance and processing commits take the corresponding exclusive lock, so a referencing decision cannot race with a facts read.
+- A consistency version is an opaque, bounded token over the complete, sorted fact set, intended use, and current processing policy. Missing or foreign assets fail the batch closed.
+- A decorative-only image can satisfy an explicitly decorative use, but cannot satisfy a supporting-artifact use that requires meaningful visual content.
 - A Revision may reference a Media asset only by stable identity. Moving storage providers or regenerating variants does not change that identity.
 - A public page must remain useful when rich media cannot load; media failure cannot block its core message or navigation.
 
@@ -202,11 +207,20 @@ Evidence state is internal editorial information. It must not be rendered as an 
 
 ## Visitor interaction and moderation
 
-- Visitors do not require accounts. Visitor measurement identity is used only when needed to deduplicate or measure permitted behavior.
+- Visitors do not require accounts. FunctionalVisitor deduplicates Reaction and Rating; consented MeasurementVisitor measures allowlisted observations. Feedback needs neither persistent identity.
 - Submitting a new Reaction or Rating for an existing Visitor-and-Project pair replaces the current value where feasible; it does not add another current vote.
 - Reactions, Ratings, Feedback submissions, and their aggregates are Project-wide rather than duplicated by language.
+- Rating accepts only integer values 1 through 5 at the application boundary.
+  Rating and Reaction keep independent current rows for the same recognized
+  FunctionalVisitor and Project. Replacing either leaves the other unchanged;
+  a same-value request with a new key creates a safe receipt without a changed
+  event. Exact retries remain operation-scoped and return the original receipt
+  after rechecking current Project eligibility. Content locks precede the owned
+  vote pair and ledger; state, safe receipt and subject-free changed fact commit
+  atomically. Neither operation depends on Measurement consent or locale.
 - New Feedback is private and pending. It cannot appear publicly until an approval is recorded.
 - An approval makes Feedback eligible for display only while its Project and requested locale are publicly visible.
+- Owner inspection and pending approval/rejection require the currently authorized scoped Owner, including before releasing an exact replay. Each decision retains a stable UUIDv7 identity, increasing sequence, private reason, verified Owner reference and server time. State, eligibility, version, safe fact and receipt/ledger commit together; stale versions fail, and terminal new-key repeats conflict. Retained Hidden/Archived Feedback can be moderated without publishing Content.
 - Rejection keeps Feedback private. Later suppression removes previously approved Feedback from display while retaining Moderation decision history.
 - Hiding or archiving a Project stops new public interactions and removes its interaction summaries and approved Feedback from public presentation. Stored history remains subject to Retention policy.
 - Testimonial suppression uses its Public lifecycle and retained publication history; it does not add a permission-verification requirement.
@@ -218,7 +232,7 @@ Evidence state is internal editorial information. It must not be rendered as an 
 - Geography, device, and language dimensions are coarse; aggregates expose a Low-sample state or suppress detail when observation counts are too small.
 - Engagement estimate is always presented as approximate active attention, never exact reading time.
 - Journey context records sequence without asserting that a page or Project caused a conversion.
-- Each Analytics goal version is immutable after activation. Editing a goal creates a new version so reports can identify the rule used at measurement time.
+- Each Analytics goal definition version is immutable from creation. Activation changes only the active pointer and appends history. Editing a goal creates a new version so reports can identify the rule used at measurement time.
 - Retention policy governs deletion or anonymization of eligible Feedback and Public event data. Aggregate reporting is preferred when detailed events are no longer needed.
 - In the first release, raw Public event data is retained for 14 days and daily aggregates for 13 months; rejected or unresolved Feedback is retained for 90 days and suppressed Feedback history for 12 months, unless a governing deletion requirement shortens those periods.
 - Failure of analytics intake, alerts, contact delivery, a rich-media dependency, or an External link must not block the Core public journey or replace the last valid published state.
@@ -302,3 +316,80 @@ Commands express owner or Visitor intent. Events describe successful domain outc
 | [ADR-0010: Durable public identity and safe media](./adr/0010-durable-public-identity.md) | Stable Public route identity, redirects, private previews, upload distrust, media processing, accessibility metadata, and explicit acceptance. |
 | [ADR-0011: Owner data portability](./adr/0011-owner-portability.md) | Versioned, documented Owner exports preserve required records, relationships, history, and a future migration path. |
 | [ADR-0015: Consent-first measurement and conservative retention](./adr/0015-consent-first-measurement-retention.md) | Non-essential measurement requires consent, functional and analytics identities remain purpose-separated, and first-release retention periods are explicit. |
+
+## Phase 7 contract decisions (#187 / #188)
+
+Accepted ADRs 0004, 0014, 0015, and 0016 retain precedence. This prefactor reconciles application contracts; persistence, crypto verification, consumers, and job execution arrive in the subsequent consuming tickets. It activates no new workflow.
+
+- Reaction and Rating use FunctionalVisitor, independently of Measurement consent and shared across Project languages. Feedback uses neither persistent identity. Losing the first functional cookie prevents same-actor replay of that first request; anonymous callers are never treated as one shared subject.
+
+Reaction implementation (#190) authorizes a stable Published Project with at
+least one published language before functional token issuance/use, then locks
+Content and rechecks before committing the current choice. Content root,
+Interaction pair, and operation/resource/actor/key ledger are acquired in that
+order. Publication/lifecycle changes serialize through the same Content root;
+Interaction never acquires Media locks. The current row is unique by Portfolio,
+Project and FunctionalVisitor, with no language-specific copies. A same-value
+new-key request returns the current choice without a changed event; an exact
+same-actor retry returns its original safe receipt even if a later choice differs,
+provided the Project remains available. The encrypted `visitor_functional`
+cookie is Secure, HttpOnly, SameSite=Lax, path `/`, and bounded to 30 days.
+Its subject is absent from HTTP bodies, ordinary receipts and outbox facts.
+If the initial response cookie is lost, retry cannot prove the original subject:
+a cookie-less request creates another independent recognized subject, even with
+the same idempotency key. This is one current choice per recognized subject,
+not proof of one vote per person or cross-device deduplication.
+- All nine allowlisted actions retain distinct semantics and action-specific fields. Reaction, Rating, Feedback, and Current CV never become Measurement intake or goal actions. Verified Measurement evidence has its own purpose, subject, Portfolio, consent revision, notice version, and expiry; cookie presence is not verification.
+- Owned vote/Feedback/raw-event records are separate from ordinary safe receipts, approved public Feedback pages, and Owner reports. Events carry stable resource facts, never functional subjects, names, paragraphs, or reasons. Owner private views remain distinct from public views. Only approved submitted-locale Feedback can appear publicly; no translation fallback applies.
+- Application request context carries server correlation and explicit Portfolio scope. The legacy shell can represent unconfigured scope and must fail closed. Effectful implementations require configured scope, current authorization, and current consent where applicable. The event edge verifies signed consent against its persisted current revision; intake rechecks it under the same transaction lock before committing (#196).
+
+### Private Feedback submission (#192)
+
+Feedback submission (#192) uses no persistent Visitor identity. Anonymous replay
+is scoped to Portfolio, Project, operation and caller key with a canonical hash
+of normalized plain name/paragraph and submitted locale. Content locks its root
+before the ledger/Feedback write; the row, minimal pending receipt and text-free
+FeedbackSubmitted fact commit together. Current Published lifecycle and the
+exact submitted published language are rechecked before replay. The name and
+paragraph live only in the private row, which starts at aggregate version 1 and
+server submittedAt. Runtime submission privileges are INSERT-only under FORCE
+RLS, never private read/author lookup. NFC/trim normalization rejects blank,
+oversized and disallowed control text without truncation or translation.
+The HTTP edge bounds actual body bytes and checks a configured shared Portfolio
+abuse budget without issuing functional/Measurement tokens or persisting client
+identifiers. Owner inspection/decisions and public presentation remain #193/#194.
+
+### Consent evidence and revocation (#189)
+
+- Trusted in-process `recordConsent` accepts an explicit granted/denied/unknown choice and optimistic revision, never a client subject. Initial revision is zero. Only a granted choice generates an independent MeasurementVisitor and encrypted authenticated evidence. New grants after denial or at/after the prior evidence expiry generate a new subject; renewal can preserve a still-unexpired subject. Ordinary reads, event JSON, cookie presence and Feedback cannot grant consent.
+- Identity and Access uses the separately authenticated `measurement-consent` envelope purpose, with the reviewed Measurement keyring and independent Functional key material. Evidence binds Portfolio, consent ID, notice, state, subject, revision and server issue/expiry times. Supported previous keys preserve the subject for the remaining lifetime. Notice versions are configured explicitly; removed versions and retired keys fail closed.
+- Measurement owns a current row and minimal state/notice/revision/time history. No subject or event payload is copied into history, outbox or replay records. An advisory lock for Portfolio/consent ID precedes the current-row lock; grant, withdrawal and transaction-participating checks share this protocol. Stale optimistic revisions reject; issuance failure rolls back state and history together.
+- Evidence lasts at most 30 UTC days. Withdrawal/denial retains the last granted expiry as the revocation horizon and immediately invalidates prior revisions. Verification never recreates a missing row. Cleanup may remove expired consent/history only after no eligible raw/journey/contribution work remains; `cleanWithdrawnConsent` uses the existing purpose-restricted, 25/50/100-record bounded work contract. #204 implements that cleanup after its stores exist. Run retention at least daily; protected production scheduling and backup/export deletion are Phase 8 handoffs.
+- Standard application composition enables this optional boundary only when `MEASUREMENT_CONSENT_NOTICE_VERSIONS` and valid purpose-separated keyrings are supplied. Missing/invalid optional configuration denies Measurement without adding a global readiness dependency. The five public HTTP operations are unchanged; future trusted consent presentation invokes the boundary in process.
+- Content owns the transaction-bound Project eligibility/public-facts ports. First consumers implement their adapters; Interaction never imports a Content repository. Content eligibility is locked before Interaction state in the existing transaction. This adds no inverse Media lock acquisition.
+- Public Feedback pages use descending display time then stable ID, default 25 and maximum 100. Rating averages are absent below five current raters. Owner Measurement reports use fixed groupings and suppress detail below five distinct consented subjects, preserving no-data, Low-sample, as-of, and incomplete states.
+- Goal definitions are immutable at creation; creating a version does not activate it. Activation changes the pointer and appends history. Missing-root version creation accepts initial If-Match 1, starts root version 1, and returns version 2; GET/activation of a missing goal remains not_found. Matching uses separate same-subject events in order within 30 minutes, historical half-open activation boundaries, and deterministic effective-time/accepted-time/event-ID ordering. Journey metadata alone cannot convert.
+- Event occurredAt is accepted from server acceptance minus 24 hours through plus 60 seconds, inclusive, and future effective time is capped at acceptance. Engagement samples are 1000–60000 milliseconds, journey context at most ten unique routes. Engagement remains approximate and Journey context non-causal.
+- Owned work is purpose-authorized, bounded to at most 100 records per transaction, and restartable. Raw detail/scratch/contributions expire at acceptedAt plus 14 UTC days; daily aggregates at UTC day plus 13 calendar months; pending/rejected Feedback at original submission plus 90 UTC days; suppressed name/text/reasons at suppression plus 12 calendar months. Equality means expired; month additions clamp at month end. Withdrawal cleans subject-linked detail while only irreversible aggregates survive; evidence/revocation auxiliaries have a maximum 30-day horizon.
+- Phase 7 proves owned leased-job execution locally/CI. Protected daily production scheduling, general dispatch/alerts, exports, and backup deletion propagation remain Phase 8 handoffs. Existing schemas and migration ownership remain unchanged in #188.
+
+### Suppression and public Feedback pages (#194)
+
+Owner suppression permits only approved to suppressed. Current scoped Owner
+permission is checked before every ledger replay; stale versions reject with
+precondition_failed, new-key terminal transitions with conflict. State/version,
+ordered private decision, approved-count eligibility, safe fact and receipt commit
+together. No worker computes public eligibility: queries filter committed approved
+state and authoritative exact-locale Content publication. Suppression keeps the
+original approval display time; its later server decidedAt in append-only history
+is the 12-calendar-month text/name/reason cleanup anchor for #205.
+
+Public reads remain in process. Default pages contain 25 records; explicit integer
+limits are 1 through 100. Keyset order is approved time then stable Feedback ID,
+both descending, using a strict tuple comparison and one extra row for nextCursor.
+UTC cursor timestamps preserve database microseconds and validate calendar dates
+and UUIDv7 identities. Pages are live views: later suppression or insertion may
+change subsequent results; cursors do not freeze withdrawn content or count private
+states. DTOs contain only approved name/paragraph, Feedback/Project IDs, original
+locale and display time. The existing partial index, column grants and FORCE RLS
+support this slice without new DDL or a public read/delete/reapproval operation.

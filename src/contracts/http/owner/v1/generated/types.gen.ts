@@ -20,16 +20,17 @@ export type OwnerExportRecord = ({
     scope: 'portfolio-configuration';
 } & PortfolioConfigurationExportRecord);
 
-export type ProfileUpdate = {
-    displayName: string;
-    headline: string;
-    bio: string;
-};
-
 /**
  * Immutable UUIDv7 identity, independent of routes, labels, and providers.
  */
 export type StableId = string;
+
+export type ProfileUpdate = {
+    displayName: string;
+    headline: string;
+    bio: string;
+    mediaAssetId?: StableId;
+};
 
 export type CommandReceipt = {
     aggregateId: StableId;
@@ -89,11 +90,11 @@ export type PublicRouteView = {
     identity: StableId;
     canonicalSlug: string;
     /**
-     * Retained former slugs and their current canonical target.
+     * Retained former slugs and their current canonical target; Owner responses include at most the most recent 100 entries.
      */
     redirects: Array<PublicRouteRedirectView>;
     /**
-     * Immutable canonical slug changes ordered by sequence.
+     * Immutable canonical slug changes ordered by sequence; Owner responses include at most the most recent 100 entries.
      */
     history?: Array<PublicRouteHistoryEntry>;
 };
@@ -108,6 +109,14 @@ export type RevisionHistoryEntry = {
     locale: Locale;
     sequence: number;
     reviewed: boolean;
+};
+
+export type PublicationHistoryEntry = {
+    locale: Locale;
+    sequence: number;
+    revisionId: StableId;
+    reviewId: StableId;
+    publishedAt: string;
 };
 
 export type ContentAggregateView = {
@@ -125,9 +134,13 @@ export type ContentAggregateView = {
         ar?: LocalizedRevisionStreamView;
     };
     /**
-     * Immutable Revision history ordered by sequence within each locale.
+     * Immutable Revision history ordered by sequence within each locale; Owner responses include at most the most recent 100 entries per locale.
      */
     revisions: Array<RevisionHistoryEntry>;
+    /**
+     * Most recent immutable publication facts, capped at 100 entries.
+     */
+    publicationHistory: Array<PublicationHistoryEntry>;
 };
 
 export type ExternalLinkDraft = {
@@ -338,6 +351,21 @@ export type LifecycleReasonCommand = {
     reason?: string;
 };
 
+export type ProjectRelationshipHistoryEntry = {
+    sequence: number;
+    relatedProjectId: StableId;
+    action: 'related';
+    changedAt: string;
+};
+
+export type ProjectStatusHistoryEntry = {
+    sequence: number;
+    previousValueId: StableId | null;
+    currentValueId: StableId;
+    aggregateVersion: number;
+    changedAt: string;
+};
+
 export type ProjectTaxonomyAssignmentView = {
     taxonomyId: StableId;
     taxonomyKind: 'category' | 'ai-ml-domain' | 'technology' | 'project-type';
@@ -351,6 +379,14 @@ export type ProjectAggregateView = {
     featured: boolean;
     publicRoute: PublicRouteView | null;
     relatedProjectIds: Array<StableId>;
+    /**
+     * Most recent retained relationship facts, capped at 100 entries.
+     */
+    relationshipHistory: Array<ProjectRelationshipHistoryEntry>;
+    /**
+     * Most recent Project status transitions, capped at 100 entries.
+     */
+    statusHistory: Array<ProjectStatusHistoryEntry>;
     taxonomyAssignments: Array<ProjectTaxonomyAssignmentView>;
 };
 
@@ -508,10 +544,21 @@ export type MediaAggregateView = {
     byteLength: number;
     state: 'upload-pending' | 'processing' | 'processed' | 'accepted' | 'rejected';
     /**
-     * Retained processing attempts and findings in recorded order.
+     * Newest-first view of up to 100 retained processing attempts. Older rows remain retained; processingHistoryTruncated reports when the view is incomplete.
      */
     processingHistory: Array<MediaProcessingView>;
+    /**
+     * True when older retained processing attempts are omitted.
+     */
+    processingHistoryTruncated?: boolean;
+    /**
+     * Newest-first view of up to 100 retained decisions. Older rows remain retained; decisionHistoryTruncated reports when the view is incomplete.
+     */
     decisionHistory: Array<MediaDecisionView>;
+    /**
+     * True when older retained decisions are omitted.
+     */
+    decisionHistoryTruncated?: boolean;
 };
 
 export type CreateMediaUploadIntentRequest = {
@@ -597,13 +644,21 @@ export type CvPortfolioView = {
     aggregateVersion: number;
     currentVersionId: StableId | null;
     /**
-     * Retained registration and acceptance history, including prior Current CV versions.
+     * Newest-first view of up to 100 retained CV versions. Older rows remain retained; versionsTruncated reports when the view is incomplete.
      */
     versions: Array<CvVersionView>;
     /**
-     * Retained Current CV activations in recorded order.
+     * True when older retained CV versions are omitted.
+     */
+    versionsTruncated?: boolean;
+    /**
+     * Newest-first view of up to 100 retained activations. Older rows remain retained; activationHistoryTruncated reports when the view is incomplete.
      */
     activationHistory: Array<CvActivationView>;
+    /**
+     * True when older retained activations are omitted.
+     */
+    activationHistoryTruncated?: boolean;
 };
 
 export type RegisterCvVersionRequest = {

@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 1,
+  "ticket": 152,
+  "parent": 145,
+  "runId": "b5b8540d-d07a-4205-824f-682375306ee5",
+  "sourceRevision": "b21d60db8a670b44d47d13bcb8997404532e4c75",
+  "sourceTreeSha256": "4e6075910f60074c11b4c939327b4b60e10e6b960cf979557fc2db2ce71c7211",
+  "startedAt": "2026-10-11T17:32:04.347Z",
+  "completedAt": "2026-10-11T17:38:51.319Z",
+  "scope": "explicit-media-acceptance-accessibility-attestations-and-transaction-consistent-facts",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1",
+    "sharp": "sharp-0.35.4;libvips-8.18.6"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 20
+    },
+    "scanner": {
+      "available": true,
+      "version": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+      "executions": 24
+    },
+    "processors": {
+      "pdf": "17.12.1",
+      "image": "sharp-0.35.4;libvips-8.18.6",
+      "video": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+      "executions": {
+        "pdf": 1,
+        "image": 5,
+        "video": 5
+      }
+    }
+  },
+  "policyIds": {
+    "migration": "20261012010000_accept_media_with_editorial_accessibility.sql",
+    "processing": {
+      "document": "pdf-active-content-deny-1",
+      "image": "image-webp-variants-v1",
+      "video": "mp4-webm-bounded-variants-1"
+    },
+    "acceptance": "media-acceptance-v1",
+    "limits": {
+      "maxVariants": 8,
+      "maxAttemptMs": 60000
+    }
+  },
+  "principalScope": {
+    "database": "shipwithali_application constrained by portfolio_id and owner_id RLS",
+    "storage": [
+      "server scoped candidate read and create-only processed outputs",
+      "anonymous denied private processed reads"
+    ],
+    "environment": "disposable loopback Supabase"
+  },
+  "formats": [
+    {
+      "id": "pdf",
+      "kind": "document",
+      "mimeType": "application/pdf",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "17.12.1"
+    },
+    {
+      "id": "png",
+      "kind": "image",
+      "mimeType": "image/png",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "jpeg",
+      "kind": "image",
+      "mimeType": "image/jpeg",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "webp",
+      "kind": "image",
+      "mimeType": "image/webp",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "mp4",
+      "kind": "video",
+      "mimeType": "video/mp4",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    },
+    {
+      "id": "webm",
+      "kind": "video",
+      "mimeType": "video/webm",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    }
+  ],
+  "checks": {
+    "integration": {
+      "suite": "tests/database/media-upload-intent.integration.test.ts",
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "failedTests": [],
+      "verdict": "pass"
+    },
+    "application": {
+      "suites": [
+        "tests/modules/media-acceptance.test.ts",
+        "tests/modules/media-cv-contracts.test.ts"
+      ],
+      "total": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "verdict": "pass"
+    },
+    "acceptanceOperations": 6
+  },
+  "scenarios": [
+    {
+      "name": "T07-01 exact candidate hash, current processing version, same Owner and current kind policy are required",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T07-02 image alt or decorative classification and video/document summaries match actual kind",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T07-03 ownership and public suitability attestations are retained separately from scanner evidence",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T07-04 exact receipt replay is stable and new-key acceptance/reprocessing is rejected after decision",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T07-05 outbox fault rolls back decision, version, receipt and event",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T07-06 distinct-owner batch is complete, sorted, and carries a bounded opaque consistency token",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T07-07 missing, duplicate, foreign and malformed facts fail closed; decorative-only evidence cannot satisfy meaningful use",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T07-08 shared fact read locks block acceptance until the referencing transaction ends",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T07-09 facts and receipts expose no private names, sealed paths, bearer capabilities or provider internals",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T07-10 all six supported formats use real scanner, processor and private Storage evidence",
+      "executed": true,
+      "status": "passed"
+    }
+  ],
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:media-acceptance"
+  ],
+  "limitations": [
+    "This ticket proves Media acceptance and fact consistency; integrated Content/CV workflows and the full Phase 6 gate remain separate tickets."
+  ]
+}

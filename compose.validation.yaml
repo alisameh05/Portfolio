@@ -1,0 +1,38 @@
+services:
+  validation:
+    build:
+      context: ./docker/validation
+    # A private nested daemon keeps ports, temp bind mounts and cleanup isolated.
+    # No host Docker socket or TCP daemon endpoint is exposed.
+    privileged: true
+    stop_grace_period: 30s
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+      GIT_DIR: /git/worktree
+      GIT_COMMON_DIR: /git/common
+      GIT_WORK_TREE: /workspace
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /workspace
+      SUPABASE_TELEMETRY_DISABLED: "1"
+    volumes:
+      - type: bind
+        source: .
+        target: /source
+        read_only: true
+      - type: bind
+        source: ${PORTFOLIO_GIT_DIR:-./.git}
+        target: /git/worktree
+        read_only: true
+      - type: bind
+        source: ${PORTFOLIO_GIT_COMMON_DIR:-./.git}
+        target: /git/common
+        read_only: true
+      - type: bind
+        source: ./evidence
+        target: /evidence
+      - engine-cache:/var/lib/docker
+      - npm-cache:/root/.npm
+volumes:
+  engine-cache:
+  npm-cache:

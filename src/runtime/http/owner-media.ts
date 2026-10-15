@@ -61,6 +61,20 @@ import type {
   Result,
   StableId,
 } from "../../shared/domain/index.js";
+import type {
+  AcceptOwnerMediaAssetApplicationCommand,
+  CreateOwnerMediaUploadIntentApplicationCommand,
+  GetOwnerMediaAggregateQuery,
+  OwnerMediaAccessibility,
+  OwnerMediaAggregateView,
+  OwnerMediaApplicationService,
+  OwnerMediaCommandReceipt,
+  OwnerMediaDecisionView,
+  OwnerMediaProcessingView,
+  OwnerMediaUploadIntentView,
+  RecordOwnerMediaProcessingApplicationCommand,
+  RejectOwnerMediaAssetApplicationCommand,
+} from "../../modules/media/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
@@ -72,116 +86,22 @@ import {
   transportProblem,
 } from "./problem.js";
 
-// ── Provider-neutral application seam ─────────────────────────────────────────
-
-export interface GetOwnerMediaAggregateQuery {
-  readonly actor: ActorContext;
-  readonly mediaId: StableId<string>;
-}
-
-export interface CreateOwnerMediaUploadIntentApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly kind: "image" | "video" | "document";
-  readonly originalFileName: string;
-  readonly declaredMediaType: string;
-  readonly byteLength: number;
-  readonly sha256: string;
-}
-
-export interface RecordOwnerMediaProcessingApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly expectedVersion: number;
-  readonly mediaId: StableId<string>;
-  readonly result: "passed" | "failed";
-  readonly detectedMediaType: string;
-  readonly detectedByteLength: number;
-  readonly sha256: string;
-  readonly findings?: ReadonlyArray<string>;
-}
-
-export type OwnerMediaAccessibility =
-  | { readonly kind: "described-image"; readonly altText: string }
-  | { readonly kind: "decorative-image" }
-  | { readonly kind: "video"; readonly summary: string }
-  | { readonly kind: "document"; readonly summary: string };
-
-export interface AcceptOwnerMediaAssetApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly expectedVersion: number;
-  readonly mediaId: StableId<string>;
-  readonly accessibility: OwnerMediaAccessibility;
-}
-
-export interface RejectOwnerMediaAssetApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly expectedVersion: number;
-  readonly mediaId: StableId<string>;
-  readonly reason: string;
-}
-
-export interface OwnerMediaProcessingView {
-  readonly result: "passed" | "failed";
-  readonly detectedMediaType: string;
-  readonly detectedByteLength: number;
-  readonly sha256: string;
-  readonly findings: ReadonlyArray<string>;
-  readonly recordedAt: string;
-}
-
-export interface OwnerMediaDecisionView {
-  readonly decision: "accepted" | "rejected";
-  readonly decidedAt: string;
-  readonly reason?: string;
-}
-
-export interface OwnerMediaAggregateView {
-  readonly mediaId: StableId<string>;
-  readonly aggregateVersion: number;
-  readonly kind: "image" | "video" | "document";
-  readonly originalFileName: string;
-  readonly declaredMediaType: string;
-  readonly byteLength: number;
-  readonly state: "upload-pending" | "processing" | "processed" | "accepted" | "rejected";
-  readonly processingHistory: ReadonlyArray<OwnerMediaProcessingView>;
-  readonly decisionHistory: ReadonlyArray<OwnerMediaDecisionView>;
-}
-
-export interface OwnerMediaUploadIntentView {
-  readonly mediaId: StableId<string>;
-  readonly aggregateVersion: 1;
-  readonly outcome: "media-upload-intent-created";
-  readonly uploadIntentId: StableId<string>;
-  readonly uploadTarget: string;
-  readonly expiresAt: string;
-}
-
-export interface OwnerMediaCommandReceipt {
-  readonly aggregateId: StableId<string>;
-  readonly aggregateVersion: number;
-  readonly outcome: "media-processing-recorded" | "media-accepted" | "media-rejected";
-}
-
-export interface OwnerMediaApplicationService {
-  getOwnerMediaAggregate(
-    query: GetOwnerMediaAggregateQuery,
-  ): Promise<Result<OwnerMediaAggregateView, Rejection>>;
-  createOwnerMediaUploadIntent(
-    command: CreateOwnerMediaUploadIntentApplicationCommand,
-  ): Promise<Result<OwnerMediaUploadIntentView, Rejection>>;
-  recordOwnerMediaProcessing(
-    command: RecordOwnerMediaProcessingApplicationCommand,
-  ): Promise<Result<OwnerMediaCommandReceipt, Rejection>>;
-  acceptOwnerMediaAsset(
-    command: AcceptOwnerMediaAssetApplicationCommand,
-  ): Promise<Result<OwnerMediaCommandReceipt, Rejection>>;
-  rejectOwnerMediaAsset(
-    command: RejectOwnerMediaAssetApplicationCommand,
-  ): Promise<Result<OwnerMediaCommandReceipt, Rejection>>;
-}
+// Public compatibility exports keep existing adapter consumers stable while
+// the module barrel owns the application contract.
+export type {
+  AcceptOwnerMediaAssetApplicationCommand,
+  CreateOwnerMediaUploadIntentApplicationCommand,
+  GetOwnerMediaAggregateQuery,
+  OwnerMediaAccessibility,
+  OwnerMediaAggregateView,
+  OwnerMediaApplicationService,
+  OwnerMediaCommandReceipt,
+  OwnerMediaDecisionView,
+  OwnerMediaProcessingView,
+  OwnerMediaUploadIntentView,
+  RecordOwnerMediaProcessingApplicationCommand,
+  RejectOwnerMediaAssetApplicationCommand,
+} from "../../modules/media/index.js";
 
 export interface OwnerMediaAdapterDeps {
   service: OwnerMediaApplicationService;
@@ -292,7 +212,9 @@ export async function handleGetOwnerMediaAggregate(
       byteLength: result.value.byteLength,
       state: result.value.state,
       processingHistory: [...result.value.processingHistory],
+      processingHistoryTruncated: result.value.processingHistoryTruncated,
       decisionHistory: [...result.value.decisionHistory],
+      decisionHistoryTruncated: result.value.decisionHistoryTruncated,
     };
     const parsed = zGetOwnerMediaAggregateResponse.safeParse(payload);
     if (!parsed.success) {
@@ -381,7 +303,10 @@ export async function handleCreateOwnerMediaUploadIntent(
       );
     }
     logger?.info("request.completed", { traceId, status: 201 });
-    return Response.json(parsed.data, { status: 201 });
+    return Response.json(parsed.data, {
+      status: 201,
+      headers: { "cache-control": "private, no-store" },
+    });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }

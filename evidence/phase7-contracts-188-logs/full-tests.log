@@ -1,0 +1,5 @@
+
+> shipwithali-portfolio@0.0.0 test
+> vitest run --reporter=json --outputFile=artifacts/phase7-188-full.json
+
+JSON report written to <WORKSPACE>/artifacts/phase7-188-full.json

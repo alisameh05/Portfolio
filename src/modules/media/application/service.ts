@@ -5,6 +5,7 @@ import type {
   MediaVariant,
   MediaDeliveryReference,
 } from "../domain/index.js";
+import type { OwnerMediaApplicationService, MediaReadApplicationService } from "./owner-contracts.js";
 
 export interface CreateUploadIntentCommand {
   readonly actor: ActorContext;
@@ -34,6 +35,7 @@ export interface GetMediaDeliveryReferenceQuery {
   readonly mediaAssetId: StableId<"MediaAsset">;
 }
 
+/** Existing skeleton API retained for source compatibility. */
 export interface MediaService {
   createUploadIntent(
     command: CreateUploadIntentCommand,
@@ -55,3 +57,7 @@ export interface MediaService {
     query: GetMediaDeliveryReferenceQuery,
   ): Promise<Result<MediaDeliveryReference, Rejection>>;
 }
+
+/** Complete Phase 6 API, composed from module-owned application seams. */
+export interface MediaApplicationService
+  extends MediaService, OwnerMediaApplicationService, MediaReadApplicationService {}

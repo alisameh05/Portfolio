@@ -1,3 +1,5 @@
+import type { PortfolioRequestScope } from "@shared/application";
+import type { CurrentCvRateLimitCheck } from "./current-cv-rate-limit.js";
 /**
  * feedback.ts — Phase 2 #28 Feedback HTTP adapter.
  *
@@ -9,11 +11,7 @@
  * command; call one injected application interface once; validate and
  * serialize the declared response; complete request logging.
  *
- * Transport body carries `name`, `paragraph`, and `locale`. The locale is
- * validated through the generated strict validator (English or Arabic per
- * the accepted contract) but intentionally not forwarded: the Phase 1
- * domain Feedback record carries no locale field, so forwarding it would
- * leak transport concerns into the provider-neutral application seam.
+ * Submitted locale crosses the application seam for exact-locale eligibility.
  *
  * Generated transport types and validators remain confined to this HTTP
  * layer. Commands, results, and rejections crossing the application seam
@@ -43,6 +41,8 @@ import {
 } from "./problem.js";
 
 export interface FeedbackAdapterDeps {
+  readonly rateLimit: CurrentCvRateLimitCheck;
+  readonly scope?: PortfolioRequestScope;
   service: Pick<InteractionModerationService, "submitFeedback">;
   logger?: Logger;
 }
@@ -84,9 +84,39 @@ export async function handlePostProjectFeedback(
       return transportProblem("Missing or invalid Idempotency-Key header.", traceId, instance);
     }
 
+    let verdict: Awaited<ReturnType<CurrentCvRateLimitCheck["check"]>>;
+    try { verdict = await deps.rateLimit.check(request); }
+    catch { return rejectionToProblem({ kind: "temporarily_unavailable", code: "FEEDBACK_RATE_LIMIT_UNAVAILABLE" }, traceId, instance); }
+    if (!verdict.allowed) {
+      const retryAfterSeconds = Number.isSafeInteger(verdict.retryAfterSeconds) && (verdict.retryAfterSeconds ?? 0) > 0 ? verdict.retryAfterSeconds! : 60;
+      return rejectionToProblem({ kind: "rate_limited", code: "FEEDBACK_RATE_LIMITED", retryAfterSeconds }, traceId, instance);
+    }
+    // 16 KiB fits even the maximum en/ar payload encoded as JSON escapes.
+    const maximumBytes = 16 * 1024;
+    if (Number(request.headers.get("content-length")) > maximumBytes) {
+      return transportProblem("Request body exceeds the allowed limit.", traceId, instance);
+    }
     let rawBody: unknown;
     try {
-      rawBody = await request.json();
+      const reader = request.body?.getReader();
+      let text = "", size = 0;
+      const decoder = new TextDecoder("utf-8", { fatal: true });
+      if (reader) {
+        try {
+          while (true) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            size += chunk.value.byteLength;
+            if (size > maximumBytes) {
+              await reader.cancel();
+              return transportProblem("Request body exceeds the allowed limit.", traceId, instance);
+            }
+            text += decoder.decode(chunk.value, { stream: true });
+          }
+          text += decoder.decode();
+        } finally { reader.releaseLock(); }
+      }
+      rawBody = JSON.parse(text);
     } catch {
       logger?.warn("request.rejected", { traceId, status: 400 });
       return transportProblem("Malformed JSON body.", traceId, instance);
@@ -99,11 +129,14 @@ export async function handlePostProjectFeedback(
     }
 
     const command: SubmitFeedbackCommand = {
+      scope: deps.scope ?? { kind: "unconfigured" },
+      correlationId: traceId,
       actor: { kind: "visitor", consent: "unknown" },
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       projectId: pathResult.data.projectId as StableId<"Project">,
       authorName: bodyResult.data.name,
       comment: bodyResult.data.paragraph,
+      locale: bodyResult.data.locale,
     };
 
     let result: Awaited<ReturnType<typeof deps.service.submitFeedback>>;

@@ -24,7 +24,7 @@ import type {
   OwnerMediaUploadIntentView,
   RecordOwnerMediaProcessingApplicationCommand,
   RejectOwnerMediaAssetApplicationCommand,
-} from "../http/owner-media.js";
+} from "../../modules/media/index.js";
 
 export type OwnerMediaFakeMode =
   | { readonly type: "success" }
@@ -60,7 +60,9 @@ function aggregateView(mediaId: StableId<string>): OwnerMediaAggregateView {
     byteLength: 204800,
     state: "upload-pending",
     processingHistory: [],
+    processingHistoryTruncated: true,
     decisionHistory: [],
+    decisionHistoryTruncated: true,
   };
 }
 

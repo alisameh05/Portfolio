@@ -48,15 +48,7 @@ export function createPublicEventTestFake(
             ok: true as const,
             value: {
               eventId: FAKE_EVENT_ID as StableId<"PublicEvent">,
-              eventType: command.eventType,
-              timestamp: clock.now(),
-              routeIdentity: command.routeIdentity,
-              ...(command.coarseCountry === undefined
-                ? {}
-                : { coarseCountry: command.coarseCountry }),
-              ...(command.coarseDevice === undefined
-                ? {}
-                : { coarseDevice: command.coarseDevice }),
+              acceptedAt: clock.now(),
             },
           };
         case "rejection":
@@ -66,9 +58,7 @@ export function createPublicEventTestFake(
             ok: true as const,
             value: {
               eventId: "not-a-uuid" as unknown as StableId<"PublicEvent">,
-              eventType: command.eventType,
-              timestamp: clock.now(),
-              routeIdentity: command.routeIdentity,
+              acceptedAt: clock.now(),
             },
           };
       }

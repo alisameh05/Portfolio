@@ -1,0 +1,70 @@
+
+> shipwithali-portfolio@0.0.0 prephase5:focus:database-rls-migrations-concurrency
+> node scripts/phase5-scenario-coverage.mjs --invalidate-suite database && npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase5:focus:database-rls-migrations-concurrency
+> node scripts/phase5-verification.mjs --suite database
+
+Starting isolated loopback PostgreSQL clean and merged Phase 4 release upgrade projects.
+Isolated PostgreSQL projects are healthy; clean install and Phase 4 release schemas are applied.
+Phase 3 historical database invariants: 107 passed, 0 skipped on the merged Phase 4 release schema.
+Captured the Phase 3 operations contract and seeded rows through restricted capability roles.
+Applied the merged Phase 4 release migrations.
+Captured the clean-install normalized database state.
+Captured the upgraded normalized database state.
+Verified Phase 3 operations grants, policies, and schema objects were preserved.
+Clean and upgraded normalized schemas, grants, constraints, and policies match.
+Generated database types match the clean PostgreSQL schema.
+Phase 5 security real PostgreSQL integration: 53 passed, 0 skipped.
+Database, auth-provider, and structured-log diagnostics audit: 32 passed, 0 skipped.
+
+{
+  "schemaVersion": 1,
+  "runId": "d4f2301a-4c14-4716-a5a5-f51e826c2328",
+  "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+  "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+  "suite": "database",
+  "startedAt": "2026-10-10T16:02:27.018Z",
+  "verdict": "pass",
+  "scenarioAcceptance": true,
+  "suiteAvailable": true,
+  "counts": {
+    "executed": 53,
+    "failed": 0,
+    "skipped": 0,
+    "total": 53
+  },
+  "partial": false,
+  "dependency": {
+    "required": true,
+    "available": true,
+    "code": "PHASE5_REQUIRED_DATABASE_AVAILABLE"
+  },
+  "cleanup": {
+    "attempted": true,
+    "passed": true
+  },
+  "reproduction": [
+    "npm run phase5:focus:database-rls-migrations-concurrency"
+  ],
+  "details": {
+    "migrationCount": 20,
+    "phase5MigrationCount": 12,
+    "retainedReleaseRecords": {
+      "configuredPortfolios": 21,
+      "contactChannels": 42,
+      "ownerLinks": 1,
+      "idempotencyRecords": 22,
+      "outboxEvents": 14,
+      "jobs": 3
+    },
+    "zeroSkips": true
+  },
+  "evidence": "evidence\\phase-5-verification-database.json"
+}

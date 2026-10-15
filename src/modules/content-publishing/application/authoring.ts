@@ -4,7 +4,8 @@ import { createSystemClock, createSystemIdGenerator } from "../../../runtime/por
 import { hashCanonicalRequest } from "../../../shared/application/idempotency.js";
 import type { OperationsPersistencePorts, SafeResultEnvelope } from "../../portability-operations/index.js";
 import type { ContentHistoryEntry, ContentHistoryPage, ContentKind, CreateDraftPayload, LocalizedDraftData, PrivateRevisionPreview, SupportedLocale } from "../domain/index.js";
-import type { ChangePublicSlugCommand, CorrectCandidateSlugCommand, MediaAcceptancePort, ProjectCommandReceipt, PublishLanguageVersionCommand, ReviewRevisionCommand } from "./service.js";
+import type { ChangePublicSlugCommand, CorrectCandidateSlugCommand, MediaAcceptancePort, ProjectCommandReceipt, PublishLanguageVersionCommand, ReviewRevisionCommand,
+  GetPublicProjectMediaUseQuery, VisibleMediaUsageBatch, VisibleMediaUsageQuery } from "./service.js";
 
 export interface ContentAuthoringScope {
   readonly portfolioId: StableId<"Portfolio">;
@@ -109,6 +110,8 @@ export interface ContentAuthoringRecord {
   readonly aggregateVersion: number;
   readonly revisions: readonly ContentAuthoringRevision[];
   readonly publications?: readonly ContentAuthoringPublication[];
+  readonly publicationHistory?: readonly ContentAuthoringPublicationHistory[];
+  readonly revisionCounts?: Partial<Record<SupportedLocale, number>>;
   readonly publicRoute?: ContentPublicRouteFacts | null;
 }
 
@@ -128,6 +131,14 @@ export interface ContentAuthoringPublication {
   readonly reviewerId: StableId<"Owner">;
   readonly decision: "accepted" | "rejected";
   readonly mediaFactsVersion: string | null;
+  readonly publishedAt: string;
+}
+
+export interface ContentAuthoringPublicationHistory {
+  readonly locale: SupportedLocale;
+  readonly sequence: number;
+  readonly revisionId: StableId<"Revision">;
+  readonly reviewId: StableId<"ContentReview">;
   readonly publishedAt: string;
 }
 
@@ -351,6 +362,19 @@ export interface ContentProjectOwnerView {
     readonly history: readonly { readonly sequence: number; readonly fromSlug: string; readonly toSlug: string; readonly changedAt: string }[];
   } | null;
   readonly relatedProjectIds: readonly StableId<"Project">[];
+  readonly relationshipHistory: readonly {
+    readonly sequence: number;
+    readonly relatedProjectId: StableId<"Project">;
+    readonly action: "related";
+    readonly changedAt: string;
+  }[];
+  readonly statusHistory: readonly {
+    readonly sequence: number;
+    readonly previousValueId: StableId<"ProjectStatusValue"> | null;
+    readonly currentValueId: StableId<"ProjectStatusValue">;
+    readonly aggregateVersion: number;
+    readonly changedAt: string;
+  }[];
   readonly taxonomyAssignments: readonly {
     readonly taxonomyId: StableId<"Taxonomy">;
     readonly taxonomyKind: string;
@@ -390,8 +414,10 @@ export interface ProjectTaxonomyAssignmentFactsPort {
 
 export interface ContentAuthoringRepository {
   projectExists(projectId: StableId<"Project">, scope: ContentAuthoringScope, context: TransactionContext): Promise<boolean>;
+  getVisibleMediaUsage(input: { readonly mediaAssetIds: readonly StableId<"MediaAsset">[]; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<VisibleMediaUsageBatch, Rejection>>;
+  getPublicProjectMediaUse(input: GetPublicProjectMediaUseQuery & { readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<boolean, Rejection>>;
   create(input: CreateContentPersistenceInput, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
-  get(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
+  get(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext, revisionHistoryLimit?: number): Promise<Result<ContentAuthoringRecord, Rejection>>;
   correctCandidateSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
   changePublicSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number; readonly previousSlug: string; readonly routeIdentity: StableId<"PublicRoute"> }, Rejection>>;
   relateProjects(input: RelateProjectsInput, context: TransactionContext): Promise<Result<RelateProjectsResult, Rejection>>;
@@ -499,9 +525,12 @@ export interface OwnerContentAggregateView {
     readonly reviewed: boolean;
     readonly reviewDecision?: "accepted" | "rejected";
   }[];
+  readonly publicationHistory: readonly ContentAuthoringPublicationHistory[];
 }
 
 export interface ContentAuthoringService {
+  getVisibleMediaUsage(query: VisibleMediaUsageQuery, transaction: TransactionContext): Promise<Result<VisibleMediaUsageBatch, Rejection>>;
+  getPublicProjectMediaUse(query: GetPublicProjectMediaUseQuery, transaction: TransactionContext): Promise<Result<boolean, Rejection>>;
   createContent(command: CreateOwnerContentCommand): Promise<Result<CreateContentReceipt, Rejection>>;
   getOwnerContentAggregate(query: GetOwnerContentAggregateQuery): Promise<Result<OwnerContentAggregateView, Rejection>>;
   saveRevision(command: SaveContentRevisionCommand): Promise<Result<SaveContentRevisionReceipt, Rejection>>;
@@ -782,7 +811,7 @@ function validCorrelation(value: string): boolean {
 function view(record: ContentAuthoringRecord): OwnerContentAggregateView {
   const localizedStreams: OwnerContentAggregateView["localizedStreams"] = {};
   for (const locale of ["en", "ar"] as const) {
-    const count = record.revisions.filter((revision) => revision.locale === locale).length;
+    const count = record.revisionCounts?.[locale] ?? record.revisions.filter((revision) => revision.locale === locale).length;
     if (count > 0) localizedStreams[locale] = {
       revisionCount: count,
       currentPublishedRevisionId: record.publications?.find((publication) => publication.locale === locale)?.revisionId ?? null,
@@ -796,9 +825,10 @@ function view(record: ContentAuthoringRecord): OwnerContentAggregateView {
     publicRoute: record.publicRoute ?? null,
     routeHistory: record.publicRoute?.history ?? [],
     localizedStreams,
-    revisions: record.revisions.map(({ revisionId, locale, sequence, reviewed, reviewDecision }) => ({
+    revisions: record.revisions.slice(-200).map(({ revisionId, locale, sequence, reviewed, reviewDecision }) => ({
       revisionId, locale, sequence, reviewed, ...(reviewDecision === undefined ? {} : { reviewDecision }),
     })),
+    publicationHistory: (record.publicationHistory ?? []).slice(0, 100),
   };
 }
 
@@ -1018,6 +1048,25 @@ export function createContentAuthoringService(input: {
   }
 
   return {
+    async getPublicProjectMediaUse(query, transaction) {
+      if (transaction?.kind !== "transaction") return err({ kind: "validation", code: "CONTENT_TRANSACTION_REQUIRED" });
+      if (!parseStableId("MediaAsset", query.mediaAssetId).ok || !["en", "ar"].includes(query.locale)) {
+        return err({ kind: "validation", code: "CONTENT_MEDIA_USE_QUERY_INVALID" });
+      }
+      return input.repository.getPublicProjectMediaUse({ ...query, scope: input.scope }, transaction);
+    },
+
+    async getVisibleMediaUsage(query, transaction) {
+      if (query.ownerId !== input.scope.ownerId) return err({ kind: "forbidden", code: "OWNER_SCOPE_MISMATCH" });
+      if (transaction?.kind !== "transaction") return err({ kind: "validation", code: "CONTENT_TRANSACTION_REQUIRED" });
+      const mediaAssetIds = [...new Set(query.mediaAssetIds)];
+      if (mediaAssetIds.length > 100 || mediaAssetIds.some((mediaAssetId) =>
+        typeof mediaAssetId !== "string" || !parseStableId("MediaAsset", mediaAssetId).ok)) {
+        return err({ kind: "validation", code: "CONTENT_MEDIA_USAGE_QUERY_INVALID" });
+      }
+      return input.repository.getVisibleMediaUsage({ mediaAssetIds: mediaAssetIds.sort(), scope: input.scope }, transaction);
+    },
+
     async createContent(command) {
       if (!ownerAuthorized(command.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
       if (!validCorrelation(command.correlationId) || !payloadIsValid(command.payload)) {
@@ -1092,7 +1141,7 @@ export function createContentAuthoringService(input: {
     async getOwnerContentAggregate(query) {
       if (!ownerAuthorized(query.actor, input.scope)) return err({ kind: "forbidden", code: "OWNER_REQUIRED" });
       return await input.operations.transactions.run(async (context) => {
-        const result = await input.repository.get(query.contentId, input.scope, context);
+        const result = await input.repository.get(query.contentId, input.scope, context, 100);
         return result.ok ? { ok: true as const, value: view(result.value) } : result;
       });
     },

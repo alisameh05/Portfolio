@@ -61,11 +61,12 @@ import type {
   Result,
   StableId,
 } from "../../shared/domain/index.js";
-import type { ContentAuthoringService, ContentPublicRouteFacts } from "../../modules/content-publishing/application/authoring.js";
+import type { ContentAuthoringPublicationHistory, ContentAuthoringService, ContentPublicRouteFacts } from "../../modules/content-publishing/application/authoring.js";
 import type { LocalizedDraftData } from "../../modules/content-publishing/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
+  OWNER_PRIVATE_RESPONSE_HEADERS,
   type OwnerRequestSecurity,
 } from "./owner-security.js";
 import {
@@ -154,6 +155,7 @@ export interface OwnerContentAggregateView {
     readonly sequence: number;
     readonly reviewed: boolean;
   }>;
+  readonly publicationHistory: readonly ContentAuthoringPublicationHistory[];
 }
 
 export interface SaveOwnerContentRevisionReceipt {
@@ -312,7 +314,13 @@ export async function handleGetOwnerContentAggregate(
       publicRoute: result.value.publicRoute,
       routeHistory: result.value.routeHistory,
       localizedStreams: result.value.localizedStreams,
-      revisions: [...result.value.revisions],
+      revisions: result.value.revisions.map((revision) => ({
+        revisionId: revision.revisionId,
+        locale: revision.locale,
+        sequence: revision.sequence,
+        reviewed: revision.reviewed,
+      })),
+      publicationHistory: result.value.publicationHistory,
     };
     const parsed = zGetOwnerContentAggregateResponse.safeParse(payload);
     if (!parsed.success) {
@@ -324,7 +332,7 @@ export async function handleGetOwnerContentAggregate(
       );
     }
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(parsed.data, { status: 200 });
+    return Response.json(parsed.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }

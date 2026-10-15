@@ -90,6 +90,19 @@ describe("HTTP problem boundary (#26)", () => {
     },
   );
 
+  it.each([
+    [{ kind: "conflict", code: "MEDIA_IN_USE" }, 409, "MEDIA_IN_USE"],
+    [{ kind: "not_found", code: "CURRENT_CV_NOT_FOUND" }, 404, "CURRENT_CV_NOT_FOUND"],
+  ] as const)("preserves required Media/CV code %s", async (rejection, status, code) => {
+    const response = rejectionToProblem(
+      rejection as Parameters<typeof rejectionToProblem>[0],
+      TRACE_ID,
+      INSTANCE,
+    );
+    expect(response.status).toBe(status);
+    expect((await readProblem(response))["code"]).toBe(code);
+  });
+
   it("maps rate limiting to 429 with a Retry-After header", async () => {
     const response = rejectionToProblem(
       { kind: "rate_limited", code: "RATE_LIMIT_EXCEEDED", retryAfterSeconds: 45 },

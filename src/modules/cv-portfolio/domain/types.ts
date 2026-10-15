@@ -1,5 +1,7 @@
 import type { StableId, DomainEvent } from "@shared/domain";
 
+export type CurrentCvDisposition = "inline" | "attachment";
+
 export interface CvVersion {
   readonly id: StableId<"CvVersion">;
   readonly mediaAssetId: StableId<"MediaAsset">;

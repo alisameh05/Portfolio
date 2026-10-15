@@ -73,7 +73,7 @@ describe("POST Feedback adapter (#28)", () => {
     const response = await handlePostProjectFeedback(
       postFeedbackRequest(),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { rateLimit: { check: async () => ({ allowed: true }) }, service: fake, logger },
     );
     expect(response.status).toBe(201);
     expect(fake.calls).toHaveLength(1);
@@ -108,7 +108,7 @@ describe("POST Feedback adapter (#28)", () => {
     const response = await handlePostProjectFeedback(
       postFeedbackRequest(options),
       { projectId: (options as { projectId?: string }).projectId ?? PROJECT_ID },
-      { service: fake, logger },
+      { rateLimit: { check: async () => ({ allowed: true }) }, service: fake, logger },
     );
     expect(response.status).toBe(400);
     expect(fake.calls).toHaveLength(0);
@@ -142,7 +142,7 @@ describe("POST Feedback adapter (#28)", () => {
       const response = await handlePostProjectFeedback(
         postFeedbackRequest(),
         { projectId: PROJECT_ID },
-        { service: fake, logger },
+        { rateLimit: { check: async () => ({ allowed: true }) }, service: fake, logger },
       );
       expect(response.status).toBe(status);
       expect(fake.calls).toHaveLength(1);
@@ -161,7 +161,7 @@ describe("POST Feedback adapter (#28)", () => {
     const response = await handlePostProjectFeedback(
       postFeedbackRequest(),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { rateLimit: { check: async () => ({ allowed: true }) }, service: fake, logger },
     );
     expect(response.status).toBe(500);
     const body = (await response.json()) as Record<string, unknown>;
@@ -170,12 +170,13 @@ describe("POST Feedback adapter (#28)", () => {
 
   it("production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED", async () => {
     const service = createProductionFeedbackService();
-    const direct = await service.submitFeedback({
+    const direct = await service.submitFeedback({ scope: { kind: "unconfigured" }, correlationId: "direct-test",
       actor: { kind: "visitor", consent: "unknown" },
       idempotencyKey: IDEMPOTENCY_KEY as never,
       projectId: PROJECT_ID as never,
       authorName: "Ada",
       comment: "Clear explanation.",
+      locale: "en",
     });
     expect(direct.ok).toBe(false);
     if (!direct.ok) {
@@ -186,7 +187,7 @@ describe("POST Feedback adapter (#28)", () => {
     const response = await handlePostProjectFeedback(
       postFeedbackRequest(),
       { projectId: PROJECT_ID },
-      { service, logger },
+      { rateLimit: { check: async () => ({ allowed: true }) }, service, logger },
     );
     expect(response.status).toBe(503);
     const body = (await response.json()) as Record<string, unknown>;
@@ -203,7 +204,7 @@ describe("POST Feedback adapter (#28)", () => {
     const first = await handlePostProjectFeedback(
       postFeedbackRequest({ inboundTrace: "inbound-attacker-value" }),
       { projectId: PROJECT_ID },
-      { service: fake, logger },
+      { rateLimit: { check: async () => ({ allowed: true }) }, service: fake, logger },
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
@@ -214,7 +215,7 @@ describe("POST Feedback adapter (#28)", () => {
     const second = await handlePostProjectFeedback(
       postFeedbackRequest(),
       { projectId: PROJECT_ID },
-      { service: fake, logger: secondLogger },
+      { rateLimit: { check: async () => ({ allowed: true }) }, service: fake, logger: secondLogger },
     );
     const secondBody = (await second.json()) as Record<string, unknown>;
     expect(secondBody["traceId"]).not.toBe(firstBody["traceId"]);
@@ -231,7 +232,7 @@ describe("POST Feedback adapter (#28)", () => {
     const response = await handlePostProjectFeedback(
       postFeedbackRequest(),
       { projectId: PROJECT_ID },
-      { service: throwing, logger },
+      { rateLimit: { check: async () => ({ allowed: true }) }, service: throwing, logger },
     );
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());

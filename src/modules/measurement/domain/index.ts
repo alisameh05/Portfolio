@@ -7,3 +7,5 @@ export type {
   DailyAggregate,
   AnalyticsGoalVersionActivatedEvent,
 } from "./types.js";
+
+export type { MeasurementEventContext, PublicMeasurementEvent, EventReceipt } from "./types.js";

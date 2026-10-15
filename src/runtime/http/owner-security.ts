@@ -49,6 +49,11 @@ import type {
   Result,
 } from "../../shared/domain/index.js";
 import { err, ok } from "../../shared/domain/index.js";
+
+export const OWNER_PRIVATE_RESPONSE_HEADERS = {
+  "Cache-Control": "private, no-store",
+  "X-Robots-Tag": "noindex, nofollow",
+} as const;
 import {
   decideAuthorization,
   requiredPermissionForOwnerOperation,

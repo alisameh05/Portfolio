@@ -106,6 +106,8 @@ describe("Owner Publication aggregate retrieval (#30)", () => {
       { service: fake, security: ownerTestSecurity(), logger },
     );
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(fake.calls.getOwnerContentAggregate).toHaveLength(1);
     expect(fake.calls.saveOwnerContentRevision).toHaveLength(0);
     const query = fake.calls.getOwnerContentAggregate[0] as { contentId: string };
@@ -125,6 +127,7 @@ describe("Owner Publication aggregate retrieval (#30)", () => {
       revisions: [
         { revisionId: REVISION_ID, locale: "en", sequence: 1, reviewed: false },
       ],
+      publicationHistory: [],
     });
   });
 

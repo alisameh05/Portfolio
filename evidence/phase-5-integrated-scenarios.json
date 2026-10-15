@@ -1,0 +1,850 @@
+{
+  "schemaVersion": 1,
+  "runId": "a135c4e7-02ec-41b1-ab05-812f4b56b814",
+  "ticket": 124,
+  "parent": 106,
+  "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+  "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+  "startedAt": "2026-10-10T16:02:29.604Z",
+  "verdict": "pass",
+  "scenarioAcceptance": true,
+  "counts": {
+    "executed": 124,
+    "failed": 0,
+    "skipped": 0,
+    "total": 124
+  },
+  "constituents": [
+    {
+      "name": "authoring",
+      "ticket": null,
+      "suite": "authoring",
+      "runId": "a9b0cfdc-ff06-4d91-98e1-c1706069e421",
+      "startedAt": "2026-10-10T15:57:39.462Z",
+      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "verdict": "pass",
+      "issues": [],
+      "counts": {
+        "executed": 36,
+        "failed": 0,
+        "skipped": 0,
+        "total": 36
+      }
+    },
+    {
+      "name": "taxonomy",
+      "ticket": null,
+      "suite": "taxonomy",
+      "runId": "09ac7e3c-402b-48b3-9833-9f48f9ecbee0",
+      "startedAt": "2026-10-10T15:57:42.504Z",
+      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "verdict": "pass",
+      "issues": [],
+      "counts": {
+        "executed": 4,
+        "failed": 0,
+        "skipped": 0,
+        "total": 4
+      }
+    },
+    {
+      "name": "traceability",
+      "ticket": null,
+      "suite": "traceability",
+      "runId": "48f0f7cf-df2d-4d1a-8d08-fe8988cb4ade",
+      "startedAt": "2026-10-10T15:57:58.790Z",
+      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "verdict": "pass",
+      "issues": [],
+      "counts": {
+        "executed": 30,
+        "failed": 0,
+        "skipped": 0,
+        "total": 30
+      }
+    },
+    {
+      "name": "owner",
+      "ticket": 122,
+      "suite": null,
+      "runId": "c74e4016-f74b-4130-930c-b993a5cab402",
+      "startedAt": "2026-10-10T15:59:57.602Z",
+      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "verdict": "pass",
+      "issues": [],
+      "counts": {
+        "executed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "total": 1
+      }
+    },
+    {
+      "name": "database",
+      "ticket": 123,
+      "suite": null,
+      "runId": "9bd38f1d-5ba1-43d4-8750-0b4d886f76d6",
+      "startedAt": "2026-10-10T16:02:17.513Z",
+      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
+      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "verdict": "pass",
+      "issues": [],
+      "counts": {
+        "executed": 53,
+        "failed": 0,
+        "skipped": 0,
+        "total": 53
+      }
+    }
+  ],
+  "coverage": {
+    "userStories": [
+      {
+        "id": 1,
+        "tickets": [
+          109,
+          110,
+          111
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 2,
+        "tickets": [
+          109,
+          110,
+          111
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 3,
+        "tickets": [
+          109,
+          110,
+          111
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 4,
+        "tickets": [
+          109,
+          110,
+          111
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 5,
+        "tickets": [
+          109,
+          110,
+          111
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 6,
+        "tickets": [
+          109,
+          110,
+          111
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 7,
+        "tickets": [
+          109,
+          110,
+          111
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 8,
+        "tickets": [
+          109,
+          110,
+          111
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 9,
+        "tickets": [
+          109,
+          110,
+          111
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 10,
+        "tickets": [
+          111,
+          121
+        ],
+        "assertions": [
+          "tests/database/phase5-security.integration.test.ts :: keeps private content private while the in-process discovery query returns only published approved projections"
+        ]
+      },
+      {
+        "id": 11,
+        "tickets": [
+          111,
+          121
+        ],
+        "assertions": [
+          "tests/database/phase5-security.integration.test.ts :: keeps private content private while the in-process discovery query returns only published approved projections"
+        ]
+      },
+      {
+        "id": 12,
+        "tickets": [
+          111
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 13,
+        "tickets": [
+          111
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 14,
+        "tickets": [
+          112
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline"
+        ]
+      },
+      {
+        "id": 15,
+        "tickets": [
+          113
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes minimal Testimonials with explicit associations, localized review, and visibility-safe projections"
+        ]
+      },
+      {
+        "id": 16,
+        "tickets": [
+          113
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes minimal Testimonials with explicit associations, localized review, and visibility-safe projections"
+        ]
+      },
+      {
+        "id": 17,
+        "tickets": [
+          110,
+          111,
+          112,
+          113,
+          114
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 18,
+        "tickets": [
+          110,
+          111,
+          112,
+          113,
+          114
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 19,
+        "tickets": [
+          114
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: corrects candidate collisions and resolves A to B to C to A directly under one durable route identity"
+        ]
+      },
+      {
+        "id": 20,
+        "tickets": [
+          114
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: corrects candidate collisions and resolves A to B to C to A directly under one durable route identity"
+        ]
+      },
+      {
+        "id": 21,
+        "tickets": [
+          114
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: corrects candidate collisions and resolves A to B to C to A directly under one durable route identity"
+        ]
+      },
+      {
+        "id": 22,
+        "tickets": [
+          114,
+          117,
+          121
+        ],
+        "assertions": [
+          "tests/database/phase5-security.integration.test.ts :: keeps private content private while the in-process discovery query returns only published approved projections"
+        ]
+      },
+      {
+        "id": 23,
+        "tickets": [
+          114,
+          117,
+          121
+        ],
+        "assertions": [
+          "tests/database/phase5-security.integration.test.ts :: keeps private content private while the in-process discovery query returns only published approved projections"
+        ]
+      },
+      {
+        "id": 24,
+        "tickets": [
+          115
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: corrects candidate collisions and resolves A to B to C to A directly under one durable route identity"
+        ]
+      },
+      {
+        "id": 25,
+        "tickets": [
+          115
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: corrects candidate collisions and resolves A to B to C to A directly under one durable route identity"
+        ]
+      },
+      {
+        "id": 26,
+        "tickets": [
+          115
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: corrects candidate collisions and resolves A to B to C to A directly under one durable route identity"
+        ]
+      },
+      {
+        "id": 27,
+        "tickets": [
+          110
+        ],
+        "assertions": [
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
+        ]
+      },
+      {
+        "id": 28,
+        "tickets": [
+          116
+        ],
+        "assertions": [
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
+        ]
+      },
+      {
+        "id": 29,
+        "tickets": [
+          116
+        ],
+        "assertions": [
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
+        ]
+      },
+      {
+        "id": 30,
+        "tickets": [
+          116
+        ],
+        "assertions": [
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
+        ]
+      },
+      {
+        "id": 31,
+        "tickets": [
+          117
+        ],
+        "assertions": [
+          "tests/database/phase5-security.integration.test.ts :: keeps private content private while the in-process discovery query returns only published approved projections"
+        ]
+      },
+      {
+        "id": 32,
+        "tickets": [
+          117
+        ],
+        "assertions": [
+          "tests/database/phase5-security.integration.test.ts :: keeps private content private while the in-process discovery query returns only published approved projections"
+        ]
+      },
+      {
+        "id": 33,
+        "tickets": [
+          118
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt"
+        ]
+      },
+      {
+        "id": 34,
+        "tickets": [
+          118
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt"
+        ]
+      },
+      {
+        "id": 35,
+        "tickets": [
+          119
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt"
+        ]
+      },
+      {
+        "id": 36,
+        "tickets": [
+          119
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt"
+        ]
+      },
+      {
+        "id": 37,
+        "tickets": [
+          120
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt"
+        ]
+      },
+      {
+        "id": 38,
+        "tickets": [
+          120
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt"
+        ]
+      },
+      {
+        "id": 39,
+        "tickets": [
+          120
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt"
+        ]
+      },
+      {
+        "id": 40,
+        "tickets": [
+          121
+        ],
+        "assertions": [
+          "tests/database/phase5-security.integration.test.ts :: keeps private content private while the in-process discovery query returns only published approved projections"
+        ]
+      },
+      {
+        "id": 41,
+        "tickets": [
+          121
+        ],
+        "assertions": [
+          "tests/database/phase5-security.integration.test.ts :: keeps private content private while the in-process discovery query returns only published approved projections"
+        ]
+      },
+      {
+        "id": 42,
+        "tickets": [
+          112
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline"
+        ]
+      },
+      {
+        "id": 43,
+        "tickets": [
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122
+        ],
+        "assertions": [
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
+        ]
+      },
+      {
+        "id": 44,
+        "tickets": [
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 45,
+        "tickets": [
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 46,
+        "tickets": [
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 47,
+        "tickets": [
+          123
+        ],
+        "assertions": [
+          "tests/database/phase5-security.integration.test.ts :: denies actual public, authenticated, worker, and backup logins direct access to private Phase 5 rows"
+        ]
+      },
+      {
+        "id": 48,
+        "tickets": [
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 49,
+        "tickets": [
+          106,
+          111,
+          114,
+          124
+        ],
+        "assertions": [
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
+        ]
+      },
+      {
+        "id": 50,
+        "tickets": [
+          106,
+          122
+        ],
+        "assertions": [
+          "tests/phase4/phase5-verification.test.ts :: declares separate focused suites for the five Phase 5 verification seams"
+        ]
+      },
+      {
+        "id": 51,
+        "tickets": [
+          123
+        ],
+        "assertions": [
+          "tests/database/phase5-security.integration.test.ts :: denies actual public, authenticated, worker, and backup logins direct access to private Phase 5 rows"
+        ]
+      },
+      {
+        "id": 52,
+        "tickets": [
+          106,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          118,
+          119,
+          120
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 53,
+        "tickets": [
+          124,
+          125
+        ],
+        "assertions": [
+          "tests/phase4/phase5-scenario-coverage.test.ts :: rejects incomplete or stale focused evidence and accepts only zero-skip fresh results"
+        ]
+      },
+      {
+        "id": 54,
+        "tickets": [
+          106,
+          124
+        ],
+        "assertions": [
+          "tests/architecture/architecture.test.ts :: must contain no Lab entry implementation in modules (ADR-0007)"
+        ]
+      }
+    ],
+    "scenarios": [
+      {
+        "id": 1,
+        "tickets": [
+          111,
+          112,
+          113
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: publishes English and Arabic independently, preserves first publication time, history, and the last valid projection"
+        ]
+      },
+      {
+        "id": 2,
+        "tickets": [
+          121
+        ],
+        "assertions": [
+          "tests/phase5/taxonomy/public-discovery.test.ts :: rejects malformed and cross-locale or cross-filter cursors",
+          "tests/database/phase5-security.integration.test.ts :: keeps private content private while the in-process discovery query returns only published approved projections"
+        ]
+      },
+      {
+        "id": 3,
+        "tickets": [
+          111,
+          114
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: preserves the last valid locale and both projections when a replacement is rejected"
+        ]
+      },
+      {
+        "id": 4,
+        "tickets": [
+          115
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: corrects candidate collisions and resolves A to B to C to A directly under one durable route identity"
+        ]
+      },
+      {
+        "id": 5,
+        "tickets": [
+          114,
+          117,
+          121
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: hides, archives, and restores all three content kinds through atomic owner lifecycle commands",
+          "tests/database/phase5-security.integration.test.ts :: keeps private content private while the in-process discovery query returns only published approved projections"
+        ],
+        "deferred": "Phase 7 Reaction, Rating, Feedback, and aggregate behavior remains deferred."
+      },
+      {
+        "id": 6,
+        "tickets": [
+          116,
+          121
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: keeps Project status identities, histories, Featured state, and published projections atomic",
+          "tests/database/phase5-security.integration.test.ts :: keeps private content private while the in-process discovery query returns only published approved projections"
+        ]
+      },
+      {
+        "id": 7,
+        "tickets": [
+          121
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: queries only current published locale projections with stable tied-time cursors and controlled facets"
+        ]
+      },
+      {
+        "id": 8,
+        "tickets": [
+          118,
+          119,
+          120
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: merges active values atomically across Projects, deduplicates survivors, preserves history, and replays the original receipt"
+        ]
+      },
+      {
+        "id": 12,
+        "tickets": [
+          110,
+          111,
+          112,
+          113,
+          114
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: rejects invalid evidence, review, and Media facts without creating public state"
+        ]
+      },
+      {
+        "id": 13,
+        "tickets": [
+          110,
+          111
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: uses fixture-only accepted Media facts and fails closed when production facts are unresolved",
+          "tests/database/phase5-security.integration.test.ts :: keeps private content private while the in-process discovery query returns only published approved projections"
+        ],
+        "deferred": "Real Media processing and CV delivery are Phase 6 work."
+      },
+      {
+        "id": 14,
+        "tickets": [
+          106,
+          124
+        ],
+        "assertions": [
+          "tests/architecture/architecture.test.ts :: must contain no Lab entry implementation in modules (ADR-0007)"
+        ]
+      },
+      {
+        "id": 15,
+        "tickets": [
+          109,
+          111,
+          114,
+          124
+        ],
+        "assertions": [
+          "tests/database/content-authoring.integration.test.ts :: rolls back route, pointer, projection, success receipt, and event after injected writes fail",
+          "tests/database/owner-composition.integration.test.ts :: keeps the committed route and projection readable after optional delivery port failures"
+        ],
+        "deferred": "Production optional worker integrations and full release/load/restore qualification remain deferred."
+      }
+    ]
+  },
+  "deferred": [
+    "Phase 6: real Media processing, revocation, storage delivery, and CV delivery.",
+    "Phase 7: persisted Reactions, Ratings, Feedback, Moderation, and their public aggregates.",
+    "Phase 8: production optional workers, exports, alerts, analytics pipelines, backups, and recovery automation.",
+    "Phase 9-10 and release: deployed TestSprite, container publication, promotion, load/resilience, and measured backup restore RPO/RTO.",
+    "Phase 5 passes a persisted publication event to injected Media, link, analytics, and alert delivery ports, confirms each failure, and verifies the outbox event, public Project route, and projection remain readable. Production dispatchers and worker integrations remain Phase 6/8 work; required publication acceptance facts remain fail closed."
+  ],
+  "reproduction": [
+    "npm run phase5:focus:authoring-review-publication-routes",
+    "npm run phase5:focus:taxonomy-status-relationships-discovery",
+    "npm run phase5:focus:owner-adapters-composition",
+    "npm run phase5:focus:database-rls-migrations-concurrency",
+    "npm run phase5:focus:integrated-scenarios"
+  ],
+  "cleanup": "Each PostgreSQL constituent creates isolated loopback projects and scoped roles, then verifies cleanup."
+}

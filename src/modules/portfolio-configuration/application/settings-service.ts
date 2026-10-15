@@ -16,6 +16,7 @@ import type { PortfolioAggregateUpdate, PortfolioConfigurationRepositoryPort, Po
 import type {
   GetPortfolioSettingsQuery,
   GetPublicConfigurationQuery,
+  GetPublicProfileMediaUseQuery,
   PublicPortfolioCapabilityFacts,
   PublicPortfolioCapabilityReader,
 } from "./service.js";
@@ -63,6 +64,10 @@ export interface PortfolioSettingsApplicationService {
   getPublicConfiguration(
     query: GetPublicConfigurationQuery,
   ): Promise<Result<PublicPortfolioConfigurationView, Rejection>>;
+  isPublicProfileMediaUse(
+    query: GetPublicProfileMediaUseQuery,
+    transaction: TransactionContext,
+  ): Promise<Result<boolean, Rejection>>;
 }
 
 /** Private controlled provisioning seam; it is intentionally absent from module barrels and HTTP. */
@@ -209,6 +214,14 @@ export function createPortfolioSettingsReader(input: {
   }
 
   return {
+    async isPublicProfileMediaUse(query, transaction) {
+      if (transaction?.kind !== "transaction") return err({ kind: "validation", code: "PORTFOLIO_TRANSACTION_REQUIRED" });
+      if (query.locale !== "en" && query.locale !== "ar") return err({ kind: "validation", code: "PORTFOLIO_LOCALE_INVALID" });
+      const settings = await repository.getSettings(scope, transaction);
+      if (!settings.ok) return settings;
+      return { ok: true, value: settings.value.profile.mediaAssetId === query.mediaAssetId };
+    },
+
     async getSettings(query) {
       const actor: ActorContext = query.actor;
       if (actor.kind !== "owner" || actor.ownerId !== scope.ownerId) {

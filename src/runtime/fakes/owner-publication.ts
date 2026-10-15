@@ -60,6 +60,7 @@ function aggregateView(contentId: StableId<string>): OwnerContentAggregateView {
         reviewed: false,
       },
     ],
+    publicationHistory: [],
   };
 }
 
@@ -82,6 +83,7 @@ function invalidAggregateView(contentId: StableId<string>): OwnerContentAggregat
         reviewed: false,
       },
     ],
+    publicationHistory: [],
   };
 }
 

@@ -1,0 +1,12 @@
+
+> shipwithali-portfolio@0.0.0 route:inventory
+> node scripts/check-route-inventory.mjs
+
+✓ public-exactly-five-operations: 5/5 public operations reconciled
+✓ public-no-forbidden-surface: no owner CRUD, broad reads, Lab, or provider surface
+✓ owner-exact-surface: 48/48 owner operations reconciled
+✓ owner-no-generic-patch-or-lab: command-oriented, no generic patch or Lab entry
+✓ no-undeclared-runtime-http-surface: allowed OpenAPI paths only; 2 operational probe(s), 0 product runtime routes
+✓ operational-probes-allowlisted: exactly /livez and /readyz operational probes
+✓ no-forbidden-source-surface: no Lab, frontend, stub, handler, or leakage surface
+✓ route inventory: all 7 checks passed (5 public, 48 owner, 2 operational, 0 product runtime routes)
