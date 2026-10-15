@@ -5,6 +5,7 @@ export type {
   PublicEventData,
   AnalyticsGoalVersion,
   DailyAggregate,
+  DailyAggregateDimensions,
   AnalyticsGoalVersionActivatedEvent,
 } from "./types.js";
 

@@ -87,6 +87,9 @@ export interface DailyAggregateCheckpoints {
 
 export interface DailyAggregates {
   checkpoint_at: Timestamp;
+  /**
+   * Empty for a summary or exactly one approved coarse dimension. Multi-dimension combinations are not persisted.
+   */
   dimensions: Generated<Json>;
   event_count: Int8;
   goal_id: string | null;

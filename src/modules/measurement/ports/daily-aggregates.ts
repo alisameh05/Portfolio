@@ -5,6 +5,8 @@ import type { AnalyticsGoalDefinition } from "../application/owner-analytics.js"
 
 export interface DailyAggregateReportRecord extends DailyAggregate {
   readonly definitionSnapshot?: AnalyticsGoalDefinition;
+  /** Internal-only signal used to withhold an additive summary above a small cell. */
+  readonly hasSmallDimensionCell?: boolean;
 }
 
 export interface DailyAggregatePage {
@@ -25,6 +27,7 @@ export interface DailyAggregateRepositoryPort {
     readonly startDay: string;
     readonly endDay: string;
     readonly grouping: "daily-action" | "daily-goal";
+    readonly breakdown: "summary" | "locale" | "country" | "device" | "referrer" | "project" | "route";
     readonly action?: string;
     readonly limit: number;
   }, transaction: TransactionContext): Promise<DailyAggregatePage>;
