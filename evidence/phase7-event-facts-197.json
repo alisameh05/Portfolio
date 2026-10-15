@@ -1,7 +1,7 @@
 {
-  "runId": "8fcd08cb-b02d-4f82-8987-e37770ad49a4",
-  "sourceRevision": "da2f79346e50243285aab9d9d3106255442dcc7a",
-  "sourceTreeSha256": "498a6d2d62268a48de94a58425e2f6bfa79e3534b353bda6b4f16b87ab52a510",
+  "runId": "29d99a72-66d6-46a3-9f55-0983a568177e",
+  "sourceRevision": "1fab10430627e92b70b6be4adab4865d0ac243f2",
+  "sourceTreeSha256": "b47d260f277ce14d39880c7ba65119b3461b52e707065b0d2e39ded0929c01f3",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015120000_persist_consented_public_events.sql",
   "migrationSha256": "ab5445a8b8a3e5527c9844742e62bcba37b68066cecb30e6e191d05eb8d441d6",
