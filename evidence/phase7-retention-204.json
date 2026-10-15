@@ -1,8 +1,8 @@
 {
   "ticket": 204,
-  "runId": "987c518b-3ade-46c4-b5ec-2c51b563ff23",
-  "sourceRevision": "01e64a94b3011b71b7f8ded6dbd95b6dfa96e8d4",
-  "sourceTreeSha256": "fcacb473162a364e6235525fa83042b0486af620afd9de4568f83d91737a6deb",
+  "runId": "2ce3c3d4-65c9-418b-ac72-6d5f229702ac",
+  "sourceRevision": "91bbec4348ef45d91b32c8c921d54221d2ffcb18",
+  "sourceTreeSha256": "6f598890d21bb8abe3dcf2efea80c19b2131ee202d34bd7a42d39fc5333b4d98",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
   "migrationSha256": "04e33297a492b55c2dc8b2392fc9f0291fa3e10f9ade40e7c9ef6fc97b297221",
@@ -190,6 +190,10 @@
     {
       "name": "20261015190000_persist_reproducible_daily_aggregates.sql",
       "sha256": "13e96f0d18983edec6091983ab1cf0529eb06c9aaf1b4c942c81ca3532547b1c"
+    },
+    {
+      "name": "20261015200000_enable_fixed_aggregate_dimensions.sql",
+      "sha256": "7a40598e08d446aef162cc3d7fbed12a3680aaa3af8105c3ddfe44ae986058e3"
     },
     {
       "name": "20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
