@@ -36,4 +36,4 @@
 | `phase7:focus:feedback-retention` | 12 | 0 | 0 | true |
 | **Total** | **587** | **0** | **0** | **true** |
 
-The broad HTTP runtime suite passed 624 tests with one environment-gated optional media tool test skipped. That skip is outside this ticket's required acceptance. Hosted CI, Codex review, deterministic CI, and human approval are tracked independently from this local evidence.
+The broad HTTP runtime suite passed 624 tests with one environment-gated optional media tool test skipped. That skip is outside this ticket's required acceptance. Hosted PR validation run 38824834983 failed before any job steps because GitHub reported recent account payment failure or an exceeded spending limit. This is unresolved hosted CI evidence, separate from the passing local acceptance. Codex review, deterministic CI, and human approval remain separate states.
