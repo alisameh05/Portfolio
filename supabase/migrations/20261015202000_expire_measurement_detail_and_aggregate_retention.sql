@@ -7,6 +7,31 @@ set role shipwithali_migration;
 alter table measurement.daily_aggregate_checkpoints
   add column retention_sealed boolean not null default false;
 
+create function measurement.seal_daily_aggregate_checkpoint(
+  target_portfolio uuid, target_day date, mark_incomplete boolean, sealed_at timestamptz
+) returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, measurement
+as $function$
+begin
+  if target_portfolio is distinct from nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid then
+    raise exception 'retention Portfolio scope mismatch' using errcode = '42501';
+  end if;
+  if sealed_at > statement_timestamp() then
+    raise exception 'aggregate seal cannot be future dated' using errcode = '22023';
+  end if;
+  update measurement.daily_aggregate_checkpoints
+    set retention_sealed = true, incomplete = measurement.daily_aggregate_checkpoints.incomplete or mark_incomplete,
+        checkpoint_at = greatest(checkpoint_at, sealed_at)
+    where portfolio_id = target_portfolio and utc_day = target_day;
+end
+$function$;
+revoke all on function measurement.seal_daily_aggregate_checkpoint(uuid, date, boolean, timestamptz)
+  from public, anon, authenticated, shipwithali_application, shipwithali_backup;
+grant execute on function measurement.seal_daily_aggregate_checkpoint(uuid, date, boolean, timestamptz)
+  to shipwithali_worker;
+
 -- A dedicated no-op field gives the Worker row-lock capability without
 -- granting it permission to change consent state or evidence.
 alter table measurement.consents
@@ -181,6 +206,10 @@ create policy daily_aggregate_checkpoints_worker_update on measurement.daily_agg
   for update to shipwithali_worker
   using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid)
   with check (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
+create policy daily_aggregate_checkpoints_migration on measurement.daily_aggregate_checkpoints
+  for all to shipwithali_migration
+  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid)
+  with check (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
 create policy daily_aggregate_checkpoints_worker_delete on measurement.daily_aggregate_checkpoints
   for delete to shipwithali_worker
   using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid
@@ -190,6 +219,10 @@ create policy daily_aggregate_checkpoints_worker_delete on measurement.daily_agg
     and not exists (select 1 from measurement.daily_aggregates aggregate_row
       where aggregate_row.portfolio_id = daily_aggregate_checkpoints.portfolio_id
         and aggregate_row.utc_day = daily_aggregate_checkpoints.utc_day));
+
+revoke update on measurement.daily_aggregate_checkpoints from shipwithali_worker;
+grant update (source_event_count, source_conversion_count, policy_version, checkpoint_at, incomplete)
+  on measurement.daily_aggregate_checkpoints to shipwithali_worker;
 
 create policy consent_history_worker_delete on measurement.consent_history
   for delete to shipwithali_worker

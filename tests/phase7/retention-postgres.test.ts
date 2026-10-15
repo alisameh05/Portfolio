@@ -322,6 +322,18 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
     await addAggregate("2026-10-15", 31);
     await admin.query(`update measurement.daily_aggregate_checkpoints set retention_sealed=true
       where portfolio_id=$1 and utc_day='2026-10-15'`, [portfolioId]);
+    const sealPrivilege = await admin.query(`select
+      has_column_privilege('retention_worker_runtime','measurement.daily_aggregate_checkpoints','retention_sealed','UPDATE') as can_unseal,
+      has_function_privilege('retention_worker_runtime','measurement.seal_daily_aggregate_checkpoint(uuid,date,boolean,timestamptz)','EXECUTE') as can_seal`);
+    expect(sealPrivilege.rows[0]).toEqual({ can_unseal: false, can_seal: true });
+    await expect(worker.transactions.run(async tx => {
+      const { sql } = await import("kysely");
+      const { resolvePostgresTransaction } = await import("../../src/shared/adapters/postgres/runtime.js");
+      const db = resolvePostgresTransaction(tx);
+      await sql`select set_config('shipwithali.portfolio_id', ${portfolioId}, true)`.execute(db);
+      return sql`update measurement.daily_aggregate_checkpoints set retention_sealed=false
+        where portfolio_id=${portfolioId}::uuid and utc_day='2026-10-15'`.execute(db);
+    })).rejects.toThrow();
     const detailJob = nextId("Job"), aggregateJob = nextId("Job");
     await admin.query(`insert into measurement.retention_checkpoints
       (portfolio_id,job_id,work_kind,requested_at,stage,updated_at) values

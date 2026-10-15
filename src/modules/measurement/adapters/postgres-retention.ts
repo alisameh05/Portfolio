@@ -68,9 +68,8 @@ async function sealDays(db: ReturnType<typeof resolvePostgresTransaction>, portf
       numeric(checkpoint.source_conversion_count) < numeric(actual.source_conversion_count) ||
       numeric(actual.pending_rebuild_count) > 0;
     const dayIncomplete = checkpoint.incomplete || missing;
-    await sql`update measurement.daily_aggregate_checkpoints set retention_sealed = true,
-      incomplete = ${dayIncomplete}, checkpoint_at = greatest(checkpoint_at, ${asOf}::timestamptz)
-      where portfolio_id = ${portfolioId}::uuid and utc_day = ${day}::date`.execute(db);
+    await sql`select measurement.seal_daily_aggregate_checkpoint(${portfolioId}::uuid, ${day}::date,
+      ${dayIncomplete}, ${asOf}::timestamptz)`.execute(db);
     incomplete ||= dayIncomplete;
   }
   return incomplete;
