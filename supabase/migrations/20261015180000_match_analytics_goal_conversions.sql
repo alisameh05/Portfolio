@@ -19,12 +19,16 @@ create table measurement.goal_conversion_rebuilds (
   cursor_effective_at timestamptz,
   cursor_accepted_at timestamptz,
   cursor_event_id uuid,
+  timeline_cursor_goal_id uuid,
+  timeline_cursor_activation_sequence bigint,
   progress jsonb not null check (jsonb_typeof(progress) = 'object'),
   completed boolean not null default false,
   updated_at timestamptz not null,
   primary key (portfolio_id, measurement_subject),
   check ((cursor_effective_at is null and cursor_accepted_at is null and cursor_event_id is null) or
-    (cursor_effective_at is not null and cursor_accepted_at is not null and cursor_event_id is not null))
+    (cursor_effective_at is not null and cursor_accepted_at is not null and cursor_event_id is not null)),
+  check ((timeline_cursor_goal_id is null and timeline_cursor_activation_sequence is null) or
+    (timeline_cursor_goal_id is not null and timeline_cursor_activation_sequence is not null))
 );
 
 create table measurement.goal_conversion_contributions (
@@ -87,9 +91,9 @@ create policy goal_conversion_activations_worker_read on measurement.analytics_g
   using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
 
 comment on table measurement.goal_conversion_rebuilds is
-  'Bounded per-subject chronological checkpoints. Generation swaps publish only fully recomputed conversions.';
+  'Bounded per-subject event and activation-history checkpoints. Each transaction pages at most 50 of each, and generation swaps publish only fully recomputed conversions.';
 comment on table measurement.goal_conversion_contributions is
-  'Purpose-limited, retention-bounded goal contributions. Only the completed subject generation is reportable.';
+  'Purpose-limited, retention-bounded goal contributions. Rows are generation-scoped; only the completed subject generation is reportable, so retries and recomputations cannot double count superseded rows.';
 comment on column measurement.goal_conversion_contributions.accepted_at is
   'Anchored to the first matched event so retention cannot outlive the earliest source detail.';
 

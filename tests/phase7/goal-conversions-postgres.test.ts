@@ -72,9 +72,26 @@ async function contributions(subject: StableId<"MeasurementVisitor">, goalId: St
     where c.portfolio_id=$1 and c.measurement_subject=$2 and c.goal_id=$3`, [portfolioId, subject, goalId]);
 }
 
+async function allContributions(subject: StableId<"MeasurementVisitor">, goalId: StableId<"AnalyticsGoal">) {
+  return admin!.query(`select c.goal_id::text,c.version_id::text,c.terminal_event_id::text,c.generation::text
+    from measurement.goal_conversion_contributions c
+    where c.portfolio_id=$1 and c.measurement_subject=$2 and c.goal_id=$3 order by c.generation`, [portfolioId, subject, goalId]);
+}
+
 function makeService(repository: GoalConversionRepositoryPort = createPostgresGoalConversionRepository()) {
   const operations = createPostgresOperationsPersistence(runtime!.database);
   return createGoalConversionWorkService({ portfolioId, operations, repository });
+}
+
+async function drain(trigger: StableId<"PublicEvent">) {
+  let calls = 0;
+  let result = await service!.recomputeGoalConversions(command(trigger));
+  while (result.ok && result.value.incomplete && calls < 500) {
+    calls++;
+    result = await service!.recomputeGoalConversions(command(trigger));
+  }
+  if (!result.ok || result.value.incomplete) throw new Error("GOAL_CONVERSION_DRAIN_FAILED");
+  return { calls: calls + 1, result };
 }
 
 describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement goal conversions PostgreSQL acceptance", () => {
@@ -115,10 +132,48 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement goal conversions
     await service!.recomputeGoalConversions(command(terminal));
     expect((await contributions(subject, goal.goalId)).rows).toHaveLength(0);
     const lateFirst = await addEvent({ subject, action: "project-viewed", occurredAt: "2026-10-15T10:02:00Z", acceptedAt: "2026-10-15T10:04:00Z" });
-    expect((await service!.recomputeGoalConversions(command(lateFirst))).ok).toBe(true);
+    await drain(lateFirst);
     expect((await contributions(subject, goal.goalId)).rows).toEqual([expect.objectContaining({ terminal_event_id: terminal })]);
     expect((await service!.recomputeGoalConversions(command(terminal))).ok).toBe(true);
     expect((await contributions(subject, goal.goalId)).rows).toHaveLength(1);
+  });
+
+  it("resumes across more than 100 activation-history rows with one bounded interval per transaction", async () => {
+    const subject = id("MeasurementVisitor");
+    await addSubject(subject);
+    const goal = await addGoal([{ action: "project-viewed" }]);
+    for (let sequence = 2; sequence <= 101; sequence++) {
+      const versionId = id("AnalyticsGoalVersion");
+      const activationId = id("Event");
+      const activatedAt = new Date(Date.parse("2026-10-15T10:00:00Z") + sequence * 1_000).toISOString();
+      await admin!.query(`insert into measurement.analytics_goal_versions (portfolio_id,goal_id,version_id,version_number,definition,created_at)
+        values ($1,$2,$3,$4,$5::jsonb,$6)`, [portfolioId, goal.goalId, versionId, sequence,
+        JSON.stringify({ name: "Conversion", steps: [{ action: "project-viewed" }] }), activatedAt]);
+      await admin!.query(`insert into measurement.analytics_goal_activation_history
+        (portfolio_id,goal_id,activation_id,version_id,aggregate_version,activated_at,activation_sequence)
+        values ($1,$2,$3,$4,$5,$6,$7)`, [portfolioId, goal.goalId, activationId, versionId, sequence + 2, activatedAt, sequence]);
+    }
+    const terminal = await addEvent({ subject, action: "project-viewed", occurredAt: "2026-10-15T11:00:00Z", project: projectId });
+    const drained = await drain(terminal);
+    expect(drained.calls).toBeGreaterThan(100);
+    expect(drained.result.value.processedCount).toBe(1);
+    expect((await contributions(subject, goal.goalId)).rows).toEqual([expect.objectContaining({ terminal_event_id: terminal })]);
+  });
+
+  it("reports one terminal contribution from only the completed generation after recomputation", async () => {
+    const subject = id("MeasurementVisitor");
+    await addSubject(subject);
+    const goal = await addGoal([{ action: "project-viewed" }]);
+    const terminal = await addEvent({ subject, action: "project-viewed", occurredAt: "2026-10-15T10:05:00Z", project: projectId });
+    await drain(terminal);
+    await addEvent({ subject, action: "page-viewed", occurredAt: "2026-10-15T10:06:00Z" });
+    const recomputeTrigger = await addEvent({ subject, action: "page-viewed", occurredAt: "2026-10-15T10:07:00Z" });
+    await drain(recomputeTrigger);
+    const stored = await allContributions(subject, goal.goalId);
+    const reportable = await contributions(subject, goal.goalId);
+    expect(stored.rows).toHaveLength(2);
+    expect(new Set(stored.rows.map(row => row.generation)).size).toBe(2);
+    expect(reportable.rows).toEqual([expect.objectContaining({ terminal_event_id: terminal })]);
   });
 
   it("does not bridge a consent withdrawal and a later regrant on the same subject", async () => {

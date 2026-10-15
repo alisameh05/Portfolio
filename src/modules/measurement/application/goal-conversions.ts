@@ -23,7 +23,7 @@ export interface GoalConversionVersion {
 export interface GoalConversionTimeline {
   readonly goalId: StableId<"AnalyticsGoal">;
   readonly versions: readonly GoalConversionVersion[];
-  readonly activations: readonly (AnalyticsGoalActivationView & { readonly activationSequence: number })[];
+  readonly activations: readonly (AnalyticsGoalActivationView & { readonly activationSequence: number; readonly deactivatedAt?: string | null })[];
 }
 
 export interface GoalConversionProgressEntry {
@@ -73,6 +73,7 @@ function activeVersionAt(timeline: GoalConversionTimeline, at: string): GoalConv
   let active: GoalConversionActivation | undefined;
   for (const activation of timeline.activations) {
     if (compareInstant(activation.activatedAt, at) > 0) continue;
+    if (activation.deactivatedAt && compareInstant(at, activation.deactivatedAt) >= 0) continue;
     if (!active || compareInstant(activation.activatedAt, active.activatedAt) > 0 ||
         (compareInstant(activation.activatedAt, active.activatedAt) === 0 && activation.activationSequence > active.activationSequence)) {
       active = activation;

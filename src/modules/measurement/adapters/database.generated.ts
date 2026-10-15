@@ -101,6 +101,8 @@ export interface GoalConversionRebuilds {
   measurement_subject: string;
   portfolio_id: string;
   progress: Json;
+  timeline_cursor_activation_sequence: Int8 | null;
+  timeline_cursor_goal_id: string | null;
   trigger_accepted_at: Timestamp;
   trigger_event_id: string;
   updated_at: Timestamp;

@@ -8,6 +8,22 @@ export interface GoalConversionCursor {
   readonly eventId: StableId<"PublicEvent">;
 }
 
+export interface GoalConversionTimelineCursor {
+  readonly goalId: StableId<"AnalyticsGoal">;
+  readonly activationSequence: number;
+}
+
+export interface GoalConversionTimelinePage {
+  readonly timelines: readonly GoalConversionTimeline[];
+  readonly hasMore: boolean;
+  readonly nextCursor: GoalConversionTimelineCursor | null;
+}
+
+export interface GoalConversionEventPage {
+  readonly events: readonly GoalConversionEvent[];
+  readonly hasMore: boolean;
+}
+
 export interface GoalConversionCheckpoint {
   readonly status: "ready" | "already-complete" | "stale-trigger";
   readonly portfolioId: StableId<"Portfolio">;
@@ -16,12 +32,13 @@ export interface GoalConversionCheckpoint {
   readonly triggerEventId: StableId<"PublicEvent">;
   readonly progress: GoalConversionProgress;
   readonly cursor: GoalConversionCursor | null;
+  readonly timelineCursor: GoalConversionTimelineCursor | null;
   readonly consentGranted: boolean;
 }
 
 export interface GoalConversionRepositoryPort {
   beginOrResume(input: { readonly portfolioId: StableId<"Portfolio">; readonly eventId: StableId<"PublicEvent">; readonly now: string }, transaction: TransactionContext): Promise<GoalConversionCheckpoint | null>;
-  listTimelines(portfolioId: StableId<"Portfolio">, transaction: TransactionContext): Promise<readonly GoalConversionTimeline[]>;
-  listEvents(input: { readonly portfolioId: StableId<"Portfolio">; readonly measurementSubject: StableId<"MeasurementVisitor">; readonly after: GoalConversionCursor | null; readonly acceptedAfter: string; readonly limit: number }, transaction: TransactionContext): Promise<readonly GoalConversionEvent[]>;
-  saveBatch(input: { readonly checkpoint: GoalConversionCheckpoint; readonly progress: GoalConversionProgress; readonly cursor: GoalConversionCursor | null; readonly contributions: readonly GoalConversionContribution[]; readonly completed: boolean }, transaction: TransactionContext): Promise<boolean>;
+  listTimelines(portfolioId: StableId<"Portfolio">, after: GoalConversionTimelineCursor | null, limit: number, transaction: TransactionContext): Promise<GoalConversionTimelinePage>;
+  listEvents(input: { readonly portfolioId: StableId<"Portfolio">; readonly measurementSubject: StableId<"MeasurementVisitor">; readonly after: GoalConversionCursor | null; readonly acceptedAfter: string; readonly limit: number }, transaction: TransactionContext): Promise<GoalConversionEventPage>;
+  saveBatch(input: { readonly checkpoint: GoalConversionCheckpoint; readonly progress: GoalConversionProgress; readonly cursor: GoalConversionCursor | null; readonly timelineCursor: GoalConversionTimelineCursor | null; readonly contributions: readonly GoalConversionContribution[]; readonly completed: boolean }, transaction: TransactionContext): Promise<boolean>;
 }

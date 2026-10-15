@@ -42,24 +42,30 @@ export function createGoalConversionWorkService(deps: GoalConversionWorkDependen
           if (!checkpoint) return err({ kind: "not_found", code: "MEASUREMENT_EVENT_UNAVAILABLE" });
           if (checkpoint.status !== "ready") return { ok: true, value: { processedCount: 0, nextCursor: null, incomplete: false } };
           if (!checkpoint.consentGranted) {
-            await deps.repository.saveBatch({ checkpoint, progress: emptyGoalConversionProgress(), cursor: null, contributions: [], completed: true }, transaction);
+            await deps.repository.saveBatch({ checkpoint, progress: emptyGoalConversionProgress(), cursor: null, timelineCursor: null, contributions: [], completed: true }, transaction);
             return { ok: true, value: { processedCount: 0, nextCursor: null, incomplete: false } };
           }
 
-          const timelines = await deps.repository.listTimelines(deps.portfolioId, transaction);
-          const events = await deps.repository.listEvents({ portfolioId: deps.portfolioId,
+          // One activation interval and at most 48 events bound event, timeline, output, and checkpoint rows to 100.
+          const pageLimit = Math.min(command.batchSize, 48);
+          const timelinePage = await deps.repository.listTimelines(deps.portfolioId, checkpoint.timelineCursor, 1, transaction);
+          const eventPage = await deps.repository.listEvents({ portfolioId: deps.portfolioId,
             measurementSubject: checkpoint.measurementSubject, after: checkpoint.cursor,
-            acceptedAfter: new Date(Date.parse(command.now) - 14 * 86_400_000).toISOString(), limit: command.batchSize + 1 }, transaction);
-          const incomplete = events.length > command.batchSize;
-          const batch = incomplete ? events.slice(0, command.batchSize) : events;
-          const advanced = advanceGoalConversionProgress(checkpoint.progress, batch, timelines);
+            acceptedAfter: new Date(Date.parse(command.now) - 14 * 86_400_000).toISOString(), limit: pageLimit }, transaction);
+          const batch = eventPage.events;
+          const eventsComplete = !eventPage.hasMore;
+          const completed = eventsComplete && !timelinePage.hasMore;
+          const advanceToNextTimeline = eventsComplete && timelinePage.hasMore;
+          const advanced = advanceGoalConversionProgress(checkpoint.progress, batch, timelinePage.timelines);
           const last = batch.at(-1);
-          const cursor = last ? { effectiveAt: last.effectiveAt, acceptedAt: last.acceptedAt, eventId: last.eventId } : checkpoint.cursor;
-          const saved = await deps.repository.saveBatch({ checkpoint, progress: advanced.progress, cursor,
-            contributions: advanced.contributions, completed: !incomplete }, transaction);
+          const cursor = advanceToNextTimeline ? null : last ? { effectiveAt: last.effectiveAt, acceptedAt: last.acceptedAt, eventId: last.eventId } : checkpoint.cursor;
+          const timelineCursor = advanceToNextTimeline ? timelinePage.nextCursor : checkpoint.timelineCursor;
+          const progress = advanceToNextTimeline ? emptyGoalConversionProgress() : advanced.progress;
+          const saved = await deps.repository.saveBatch({ checkpoint, progress, cursor, timelineCursor,
+            contributions: advanced.contributions, completed }, transaction);
           if (!saved) return { ok: true, value: { processedCount: 0, nextCursor: null, incomplete: false } };
           return { ok: true, value: { processedCount: batch.length,
-            nextCursor: incomplete ? checkpoint.triggerEventId : null, incomplete } };
+            nextCursor: completed ? null : checkpoint.triggerEventId, incomplete: !completed } };
         });
       } catch {
         return unavailable();
