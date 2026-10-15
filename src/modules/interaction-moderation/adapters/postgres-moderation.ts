@@ -35,20 +35,26 @@ export function createPostgresModerationRepository(): ModerationRepositoryPort {
       await sql`insert into interaction.moderation_decisions (decision_id,portfolio_id,feedback_id,sequence,decision,reason,owner_id,decided_at)
         values (${decision.id}::uuid,${feedback.portfolioId}::uuid,${feedback.id}::uuid,${decision.sequence},${decision.decision},${decision.reason},${decision.ownerId}::uuid,${decision.decidedAt}::timestamptz)`.execute(db);
       const updated = await sql`update interaction.feedback set moderation_state = ${decision.decision}, aggregate_version = aggregate_version + 1,
-        approved_at = ${decision.decision === "approved" ? decision.decidedAt : null}::timestamptz
+        approved_at = case when ${decision.decision} = 'approved' then ${decision.decidedAt}::timestamptz else approved_at end
         where portfolio_id = ${feedback.portfolioId}::uuid and feedback_id = ${feedback.id}::uuid
-          and moderation_state = 'pending' and aggregate_version = ${feedback.aggregateVersion}`.execute(db);
+          and moderation_state = ${decision.decision === "suppressed" ? "approved" : "pending"} and aggregate_version = ${feedback.aggregateVersion}`.execute(db);
       if (updated.numAffectedRows !== 1n) throw new Error("MODERATION_UPDATE_FAILED");
     },
     async approved(input, tx) {
       const db = resolvePostgresTransaction(tx);
       await sql`select set_config('shipwithali.portfolio_id', ${input.portfolioId}, true),
         set_config('shipwithali.feedback_access', 'public', true)`.execute(db);
-      const rows = await sql<{ feedback_id: PublicFeedbackView["feedbackId"]; project_id: PublicFeedbackView["projectId"]; locale: "en" | "ar"; author_name: string; paragraph: string; approved_at: Date }>`
-        select feedback_id,project_id,locale,author_name,paragraph,approved_at from interaction.feedback
+      const rows = await sql<{ feedback_id: PublicFeedbackView["feedbackId"]; project_id: PublicFeedbackView["projectId"]; locale: "en" | "ar"; author_name: string; paragraph: string; displayed_at: string }>`
+        select feedback_id,project_id,locale,author_name,paragraph,
+          to_char(approved_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as displayed_at from interaction.feedback
         where portfolio_id = ${input.portfolioId}::uuid and project_id = ${input.projectId}::uuid and locale = ${input.locale}
-          and moderation_state = 'approved' order by approved_at desc,feedback_id desc limit ${input.limit}`.execute(db);
-      return { items: rows.rows.map(r => ({ feedbackId: r.feedback_id, projectId: r.project_id, locale: r.locale, authorName: r.author_name, paragraph: r.paragraph, displayedAt: r.approved_at.toISOString() })), nextCursor: null };
+          and moderation_state = 'approved'
+          ${input.cursor ? sql`and (approved_at,feedback_id) < (${input.cursor.displayedAt}::timestamptz,${input.cursor.feedbackId}::uuid)` : sql``}
+          order by approved_at desc,feedback_id desc limit ${input.limit + 1}`.execute(db);
+      const items = rows.rows.slice(0, input.limit).map(r => ({ feedbackId: r.feedback_id, projectId: r.project_id, locale: r.locale,
+        authorName: r.author_name, paragraph: r.paragraph, displayedAt: r.displayed_at.replace(/(\.\d{3})000Z$/, "$1Z") }));
+      const last = items.at(-1);
+      return { items, nextCursor: rows.rows.length > input.limit && last ? { displayedAt: last.displayedAt, feedbackId: last.feedbackId } : null };
     },
   };
 }

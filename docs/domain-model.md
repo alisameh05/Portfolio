@@ -372,3 +372,24 @@ identifiers. Owner inspection/decisions and public presentation remain #193/#194
 - Event occurredAt is accepted from server acceptance minus 24 hours through plus 60 seconds, inclusive, and future effective time is capped at acceptance. Engagement samples are 1000–60000 milliseconds, journey context at most ten unique routes. Engagement remains approximate and Journey context non-causal.
 - Owned work is purpose-authorized, bounded to at most 100 records per transaction, and restartable. Raw detail/scratch/contributions expire at acceptedAt plus 14 UTC days; daily aggregates at UTC day plus 13 calendar months; pending/rejected Feedback at original submission plus 90 UTC days; suppressed name/text/reasons at suppression plus 12 calendar months. Equality means expired; month additions clamp at month end. Withdrawal cleans subject-linked detail while only irreversible aggregates survive; evidence/revocation auxiliaries have a maximum 30-day horizon.
 - Phase 7 proves owned leased-job execution locally/CI. Protected daily production scheduling, general dispatch/alerts, exports, and backup deletion propagation remain Phase 8 handoffs. Existing schemas and migration ownership remain unchanged in #188.
+
+### Suppression and public Feedback pages (#194)
+
+Owner suppression permits only approved to suppressed. Current scoped Owner
+permission is checked before every ledger replay; stale versions reject with
+precondition_failed, new-key terminal transitions with conflict. State/version,
+ordered private decision, approved-count eligibility, safe fact and receipt commit
+together. No worker computes public eligibility: queries filter committed approved
+state and authoritative exact-locale Content publication. Suppression keeps the
+original approval display time; its later server decidedAt in append-only history
+is the 12-calendar-month text/name/reason cleanup anchor for #205.
+
+Public reads remain in process. Default pages contain 25 records; explicit integer
+limits are 1 through 100. Keyset order is approved time then stable Feedback ID,
+both descending, using a strict tuple comparison and one extra row for nextCursor.
+UTC cursor timestamps preserve database microseconds and validate calendar dates
+and UUIDv7 identities. Pages are live views: later suppression or insertion may
+change subsequent results; cursors do not freeze withdrawn content or count private
+states. DTOs contain only approved name/paragraph, Feedback/Project IDs, original
+locale and display time. The existing partial index, column grants and FORCE RLS
+support this slice without new DDL or a public read/delete/reapproval operation.

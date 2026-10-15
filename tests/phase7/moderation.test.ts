@@ -14,5 +14,9 @@ describe("Owner moderation application authorization", () => {
     expect(await service.getOwnerFeedbackModeration({ scope: { kind: "portfolio", portfolioId },
       actor: { kind: "visitor", consent: "unknown" }, feedbackId: createStableId("Feedback"), correlationId: "test" }))
       .toMatchObject({ ok: false, error: { kind: "forbidden" } });
+    expect(await service.suppressOwnerFeedback({ scope: { kind: "portfolio", portfolioId },
+      actor: { kind: "visitor", consent: "unknown" }, feedbackId: createStableId("Feedback"),
+      correlationId: "suppression", expectedVersion: 2, reason: "Private reason", idempotencyKey: "retry-key" as never }))
+      .toMatchObject({ ok: false, error: { kind: "forbidden" } });
   });
 });

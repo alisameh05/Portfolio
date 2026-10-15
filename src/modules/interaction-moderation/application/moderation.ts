@@ -8,11 +8,11 @@ import type { Feedback, PublicFeedbackPage } from "../domain/index.js";
 import type { OwnerModerationApplicationService, OwnerFeedbackModerationView, OwnerModerationCommandReceipt, ApproveOwnerFeedbackApplicationCommand, GetOwnerFeedbackModerationQuery } from "./owner-moderation.js";
 import type { InteractionModerationService } from "./service.js";
 
-export type ModerationDecision = "approved" | "rejected";
+export type ModerationDecision = "approved" | "rejected" | "suppressed";
 export interface RetainedModerationDecision {
   readonly id: StableId<"ModerationDecision">;
   readonly sequence: number;
-  readonly decision: ModerationDecision | "suppressed";
+  readonly decision: ModerationDecision;
   readonly reason: string;
   readonly ownerId: StableId<"Owner">;
   readonly decidedAt: string;
@@ -23,7 +23,7 @@ export interface ModerationRepositoryPort {
   history(id: StableId<"Feedback">, tx: TransactionContext): Promise<readonly RetainedModerationDecision[]>;
   decide(feedback: Feedback, decision: RetainedModerationDecision, tx: TransactionContext): Promise<void>;
   /** Reads only approved rows; application holds current exact-locale Content facts. */
-  approved(input: { portfolioId: StableId<"Portfolio">; projectId: StableId<"Project">; locale: "en" | "ar"; limit: number }, tx: TransactionContext): Promise<PublicFeedbackPage>;
+  approved(input: { portfolioId: StableId<"Portfolio">; projectId: StableId<"Project">; locale: "en" | "ar"; limit: number; cursor?: NonNullable<PublicFeedbackPage["nextCursor"]> }, tx: TransactionContext): Promise<PublicFeedbackPage>;
 }
 export interface ModerationApplicationDeps {
   readonly scope: { portfolioId: StableId<"Portfolio">; ownerId: StableId<"Owner"> };
@@ -79,7 +79,7 @@ export function createOwnerFeedbackModerationService(deps: ModerationApplication
           // Typed rejection is rolled back by the outer runner. Throwing here would
           // deliberately become a sanitized infrastructure failure at that boundary.
           if (feedback.aggregateVersion !== command.expectedVersion) return { rejection: "FEEDBACK_VERSION_STALE" };
-          if (feedback.moderationState !== "pending") return { rejection: "MODERATION_TRANSITION_INVALID" };
+          if (feedback.moderationState !== (decision === "suppressed" ? "approved" : "pending")) return { rejection: "MODERATION_TRANSITION_INVALID" };
           const id = parseStableId("ModerationDecision", deps.ids.generate("ModerationDecision"));
           if (!id.ok) throw new Error("INVALID_DECISION_ID");
           await deps.repository.decide(feedback, { id: id.value, sequence: feedback.aggregateVersion, decision, reason, ownerId: owner.value.ownerId, decidedAt: now }, context);
@@ -94,7 +94,7 @@ export function createOwnerFeedbackModerationService(deps: ModerationApplication
         if (receipt["rejection"] === "MODERATION_TRANSITION_INVALID") return requestTransactionRollback(reject("conflict", "MODERATION_TRANSITION_INVALID"));
         if (receipt["aggregateId"] !== feedback.id || receipt["outcome"] !== "feedback-" + decision ||
             typeof receipt["aggregateVersion"] !== "number" || !Number.isSafeInteger(receipt["aggregateVersion"]) || receipt["aggregateVersion"] < 2 || Object.keys(receipt).length !== 3) throw new Error("INVALID_SAFE_RECEIPT");
-        return { ok: true, value: { aggregateId: feedback.id, aggregateVersion: receipt["aggregateVersion"], outcome: decision === "approved" ? "feedback-approved" : "feedback-rejected" } };
+        return { ok: true, value: { aggregateId: feedback.id, aggregateVersion: receipt["aggregateVersion"], outcome: `feedback-${decision}` } };
       });
     } catch { return unavailable(); }
   }
@@ -117,17 +117,32 @@ export function createOwnerFeedbackModerationService(deps: ModerationApplication
     },
     approveOwnerFeedback: command => moderate(command, "approved"),
     rejectOwnerFeedback: command => moderate(command, "rejected"),
-    async suppressOwnerFeedback() { return reject("temporarily_unavailable", "SUPPRESSION_NOT_IMPLEMENTED"); },
+    suppressOwnerFeedback: command => moderate(command, "suppressed"),
     async getApprovedFeedback(query): Promise<Result<PublicFeedbackPage, Rejection>> {
       if (query.scope.kind !== "portfolio" || query.scope.portfolioId !== deps.scope.portfolioId || query.portfolioId !== deps.scope.portfolioId) return missing();
-      if (!parseStableId("Project", query.projectId).ok || !["en", "ar"].includes(query.locale) || ![25, 50, 100].includes(query.limit) || query.cursor) return reject("validation", "FEEDBACK_QUERY_INVALID");
+      const limit = query.limit === undefined ? 25 : query.limit;
+      if (!parseStableId("Project", query.projectId).ok || !["en", "ar"].includes(query.locale) ||
+          !Number.isSafeInteger(limit) || limit < 1 || limit > 100 ||
+          (query.cursor !== undefined && !validCursor(query.cursor))) return reject("validation", "FEEDBACK_QUERY_INVALID");
       try {
         return await deps.operations.transactions.run(async tx => {
           const facts = await deps.content.getProjectInteractionFacts({ portfolioId: deps.scope.portfolioId, projectId: query.projectId }, tx);
-          if (!facts.ok || facts.value.lifecycle !== "published" || !facts.value.publishedLocales.includes(query.locale)) return reject("not_found", "PROJECT_UNAVAILABLE");
-          return { ok: true, value: await deps.repository.approved({ portfolioId: deps.scope.portfolioId, projectId: query.projectId, locale: query.locale, limit: query.limit }, tx) };
+          if (!facts.ok || facts.value.portfolioId !== deps.scope.portfolioId || facts.value.projectId !== query.projectId ||
+              facts.value.lifecycle !== "published" || !facts.value.publishedLocales.includes(query.locale)) return reject("not_found", "PROJECT_UNAVAILABLE");
+          return { ok: true, value: await deps.repository.approved({ portfolioId: deps.scope.portfolioId, projectId: query.projectId,
+            locale: query.locale, limit, ...(query.cursor === undefined ? {} : { cursor: query.cursor }) }, tx) };
         });
       } catch { return unavailable(); }
     },
   };
+}
+
+/** UTC cursor timestamps round-trip exactly, including PostgreSQL microseconds. */
+function validCursor(cursor: NonNullable<PublicFeedbackPage["nextCursor"]>): boolean {
+  if (!cursor || typeof cursor !== "object" || Object.keys(cursor).length !== 2 ||
+      !parseStableId("Feedback", cursor.feedbackId).ok || typeof cursor.displayedAt !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(?:\d{3})?Z$/.test(cursor.displayedAt)) return false;
+  const milliseconds = cursor.displayedAt.replace(/(\.\d{3})\d{3}Z$/, "$1Z");
+  const date = new Date(milliseconds);
+  return Number.isFinite(date.getTime()) && date.toISOString() === milliseconds;
 }
