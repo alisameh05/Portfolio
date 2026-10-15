@@ -456,8 +456,10 @@ keeps only stable scope, state, timestamps, and ordered non-identifying decision
 facts after `decided_at` plus 12 UTC calendar months; the month addition clamps
 at the final day of the target month. The cleanup command locks and rechecks
 current state, removes eligible pending/rejected rows with dependent decision
-history, or atomically nulls suppressed names, paragraphs, and all decision
-reasons. A bounded per-Portfolio job checkpoint makes batches restartable.
+history, or atomically nulls suppressed names, paragraphs, decision reasons,
+and decision owner references. A bounded per-Portfolio job checkpoint makes
+batches restartable, including when competing moderation temporarily holds a
+row lock.
 
 Erased Feedback is not returned through the required-text Owner inspection
 contract, which continues to report compatible `not_found`. Worker access is

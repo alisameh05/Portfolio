@@ -28,7 +28,7 @@ export function createPostgresModerationRepository(): ModerationRepositoryPort {
     async history(id, tx) {
       const rows = await sql<{ decision_id: RetainedModerationDecision["id"]; sequence: string; decision: RetainedModerationDecision["decision"]; reason: string; owner_id: RetainedModerationDecision["ownerId"]; decided_at: Date }>`
         select decision_id, sequence, decision, reason, owner_id, decided_at from interaction.moderation_decisions
-        where feedback_id = ${id}::uuid order by sequence`.execute(resolvePostgresTransaction(tx));
+        where feedback_id = ${id}::uuid and owner_id is not null order by sequence`.execute(resolvePostgresTransaction(tx));
       return rows.rows.map(r => ({ id: r.decision_id, sequence: Number(r.sequence), decision: r.decision, reason: r.reason, ownerId: r.owner_id, decidedAt: r.decided_at.toISOString() }));
     },
     async decide(feedback, decision, tx) {

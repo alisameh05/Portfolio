@@ -48,7 +48,7 @@ export interface ModerationDecisions {
   decision: string;
   decision_id: string;
   feedback_id: string;
-  owner_id: string;
+  owner_id: string | null;
   portfolio_id: string;
   reason: string | null;
   sequence: Int8;

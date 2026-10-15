@@ -138,10 +138,10 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Feedback retention Pos
     expect((await admin.query("select text_erased_at from interaction.feedback where feedback_id=$1", [suppressed.feedbackId])).rows[0].text_erased_at).toBeNull();
     await drain("2025-02-28T12:30:00.000Z");
     const audit = (await admin.query(`select f.feedback_id,f.project_id,f.locale,f.moderation_state,f.aggregate_version::int as aggregate_version,f.submitted_at,f.approved_at,f.text_erased_at,f.author_name,f.paragraph,
-      (select json_agg(json_build_object('decision',d.decision,'reason',d.reason,'sequence',d.sequence) order by d.sequence) from interaction.moderation_decisions d where d.feedback_id=f.feedback_id) as decisions
+      (select json_agg(json_build_object('decision',d.decision,'reason',d.reason,'owner_id',d.owner_id,'sequence',d.sequence) order by d.sequence) from interaction.moderation_decisions d where d.feedback_id=f.feedback_id) as decisions
       from interaction.feedback f where f.feedback_id=$1`, [suppressed.feedbackId])).rows[0];
     expect(audit).toMatchObject({ feedback_id: suppressed.feedbackId, moderation_state: "suppressed", aggregate_version: 3, text_erased_at: new Date("2025-02-28T12:30:00.000Z"), author_name: null, paragraph: null });
-    expect(audit.decisions).toEqual([{ decision: "approved", reason: null, sequence: 1 }, { decision: "suppressed", reason: null, sequence: 2 }]);
+    expect(audit.decisions).toEqual([{ decision: "approved", reason: null, owner_id: null, sequence: 1 }, { decision: "suppressed", reason: null, owner_id: null, sequence: 2 }]);
     expect(JSON.stringify(audit)).not.toContain("ERASURE_SENTINEL");
     expect((await admin.query("select count(*)::int as count from interaction.feedback where feedback_id=any($1::uuid[])", [[approved.feedbackId, approvedHidden.feedbackId, suppressedLater.feedbackId]])).rows[0].count).toBe(3);
     expect(before.results.every(result => result.processedCount <= 25)).toBe(true);
@@ -204,6 +204,23 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Feedback retention Pos
       await drain("2026-10-15T00:00:00.000Z", jobId);
       expect((await admin.query("select count(*)::int as count from interaction.feedback where feedback_id=$1", [feedback.feedbackId])).rows[0].count).toBe(1);
       expect(await inspect(service, feedback.feedbackId)).toMatchObject({ ok: true, value: { state: "suppressed", paragraph: expect.any(String) } });
+    } catch (error) {
+      await admin.query("rollback");
+      throw error;
+    }
+  });
+
+  it("T18-06/07: retries the same checkpoint after a competing row lock rolls back", async () => {
+    const feedback = await seedFeedback({ state: "pending", submittedAt: "2026-01-01T00:00:00.000Z" });
+    const jobId = createStableId("Job"), now = "2026-10-15T00:00:00.000Z";
+    await admin.query("begin");
+    try {
+      await admin.query("select pg_advisory_xact_lock(hashtextextended($1::text, 205))", [feedback.feedbackId]);
+      const deferred = await retention.expireFeedback(command(now, jobId));
+      expect(deferred).toMatchObject({ ok: true, value: { processedCount: 0, nextCursor: jobId, incomplete: true } });
+      await admin.query("rollback");
+      await drain(now, jobId);
+      expect((await admin.query("select count(*)::int as count from interaction.feedback where feedback_id=$1", [feedback.feedbackId])).rows[0].count).toBe(0);
     } catch (error) {
       await admin.query("rollback");
       throw error;

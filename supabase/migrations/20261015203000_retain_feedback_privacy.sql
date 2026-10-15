@@ -16,6 +16,7 @@ alter table interaction.moderation_decisions alter column reason drop not null;
 alter table interaction.moderation_decisions drop constraint moderation_decisions_reason_check;
 alter table interaction.moderation_decisions add constraint moderation_decisions_reason_check
   check (reason is null or char_length(btrim(reason)) between 1 and 500);
+alter table interaction.moderation_decisions alter column owner_id drop not null;
 
 create table interaction.feedback_retention_checkpoints (
   portfolio_id uuid not null,
@@ -34,7 +35,7 @@ grant select (portfolio_id, feedback_id, submitted_at, moderation_state, text_er
 grant delete on interaction.feedback to shipwithali_worker;
 grant update (author_name, paragraph, text_erased_at) on interaction.feedback to shipwithali_worker;
 grant select (portfolio_id, feedback_id, decision, sequence, decided_at) on interaction.moderation_decisions to shipwithali_worker;
-grant update (reason) on interaction.moderation_decisions to shipwithali_worker;
+grant update (reason, owner_id) on interaction.moderation_decisions to shipwithali_worker;
 grant select, insert, update, delete on interaction.feedback_retention_checkpoints to shipwithali_worker;
 
 create policy feedback_retention_read on interaction.feedback for select to shipwithali_worker
@@ -69,7 +70,7 @@ create policy moderation_retention_update on interaction.moderation_decisions fo
   using (portfolio_id::text = current_setting('shipwithali.portfolio_id', true)
     and current_setting('shipwithali.system_purpose', true) = 'feedback.retention'
     and current_setting('shipwithali.feedback_access', true) = 'retention')
-  with check (reason is null and portfolio_id::text = current_setting('shipwithali.portfolio_id', true)
+  with check (reason is null and owner_id is null and portfolio_id::text = current_setting('shipwithali.portfolio_id', true)
     and current_setting('shipwithali.system_purpose', true) = 'feedback.retention'
     and current_setting('shipwithali.feedback_access', true) = 'retention');
 create policy feedback_retention_checkpoint_access on interaction.feedback_retention_checkpoints for all to shipwithali_worker
