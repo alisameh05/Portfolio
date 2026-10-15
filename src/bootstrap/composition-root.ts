@@ -86,6 +86,34 @@ let currentOwnerAnalytics: OwnerAnalyticsApplicationService | undefined;
 let currentOwnerAnalyticsScope: ReactionRuntimeServices["scope"] | undefined;
 let currentOwnerAggregateReport: Pick<MeasurementService, "getAggregateReport"> | undefined;
 
+function phase7RuntimeUnavailable() {
+  return {
+    ok: false as const,
+    error: { kind: "temporarily_unavailable" as const, code: "PHASE7_RUNTIME_NOT_CONFIGURED" },
+  };
+}
+
+const unavailableReactionService: Pick<InteractionModerationService, "submitReaction"> = {
+  async submitReaction() { return phase7RuntimeUnavailable(); },
+};
+const unavailableRatingService: Pick<InteractionModerationService, "submitRating"> = {
+  async submitRating() { return phase7RuntimeUnavailable(); },
+};
+const unavailableFeedbackService: Pick<InteractionModerationService, "submitFeedback"> = {
+  async submitFeedback() { return phase7RuntimeUnavailable(); },
+};
+const unavailableModerationService: import("../modules/interaction-moderation/index.js").OwnerModerationApplicationService = {
+  async getOwnerFeedbackModeration() { return phase7RuntimeUnavailable(); },
+  async approveOwnerFeedback() { return phase7RuntimeUnavailable(); },
+  async rejectOwnerFeedback() { return phase7RuntimeUnavailable(); },
+  async suppressOwnerFeedback() { return phase7RuntimeUnavailable(); },
+};
+const unavailableOwnerAnalyticsService: OwnerAnalyticsApplicationService = {
+  async getOwnerAnalyticsGoal() { return phase7RuntimeUnavailable(); },
+  async createOwnerAnalyticsGoalVersion() { return phase7RuntimeUnavailable(); },
+  async activateOwnerAnalyticsGoalVersion() { return phase7RuntimeUnavailable(); },
+};
+
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
     const config = createRuntimeConfig(env);
@@ -848,21 +876,18 @@ export function getMeasurementEventIngestionService(): MeasurementEventRuntimeSe
 /** Completed Reaction operation obtains real persistence and identity from standard assembly. */
 export async function getReactionRuntimeServices(): Promise<ReactionRuntimeServices | { readonly service: Pick<InteractionModerationService, "submitReaction"> }> {
   if (currentReaction) return currentReaction;
-  const { createProductionReactionService } = await import("../runtime/fakes/reaction.js");
-  return { service: createProductionReactionService() };
+  return { service: unavailableReactionService };
 }
 
 export async function getRatingRuntimeServices(): Promise<RatingRuntimeServices | { readonly service: Pick<InteractionModerationService, "submitRating"> }> {
   if (currentRating) return currentRating;
-  const { createProductionRatingService } = await import("../runtime/fakes/rating.js");
-  return { service: createProductionRatingService() };
+  return { service: unavailableRatingService };
 }
 
 /** Existing Feedback HTTP edge obtains persistence and abuse control here. */
 export async function getFeedbackRuntimeServices(): Promise<FeedbackRuntimeServices | { readonly service: Pick<InteractionModerationService, "submitFeedback">; readonly rateLimit: FeedbackRuntimeServices["rateLimit"] }> {
   if (currentFeedback) return currentFeedback;
-  const { createProductionFeedbackService } = await import("../runtime/fakes/feedback.js");
-  return { service: createProductionFeedbackService(), rateLimit: { check: async () => { throw new Error("FEEDBACK_NOT_CONFIGURED"); } } };
+  return { service: unavailableFeedbackService, rateLimit: { check: async () => { throw new Error("FEEDBACK_NOT_CONFIGURED"); } } };
 }
 
 /** Owner adapters use configured scope plus their existing verified-session security boundary. */
@@ -870,8 +895,7 @@ export async function getOwnerAnalyticsRuntimeServices() {
   if (currentOwnerAnalytics !== undefined && currentOwnerAnalyticsScope !== undefined) {
     return { scope: currentOwnerAnalyticsScope, service: currentOwnerAnalytics };
   }
-  const { createProductionOwnerAnalyticsService } = await import("../runtime/fakes/owner-analytics.js");
-  return { service: createProductionOwnerAnalyticsService() };
+  return { service: unavailableOwnerAnalyticsService };
 }
 
 /** Safe Owner aggregate reports are an in-process capability and expose no HTTP read endpoint. */
@@ -882,8 +906,7 @@ export function getOwnerAggregateReportApplicationService(): Pick<MeasurementSer
 
 export async function getOwnerModerationRuntimeServices() {
   if (currentModeration && currentFeedback) return { scope: currentFeedback.scope, service: currentModeration };
-  const { createProductionOwnerModerationService } = await import("../runtime/fakes/owner-moderation.js");
-  return { service: createProductionOwnerModerationService() };
+  return { service: unavailableModerationService };
 }
 
 /** The approved exact-locale query is an in-process application capability. */

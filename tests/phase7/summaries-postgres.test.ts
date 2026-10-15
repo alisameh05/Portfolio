@@ -23,7 +23,7 @@ import { createSystemIdGenerator } from "../../src/runtime/ports.js";
 const url = process.env["PHASE7_MODERATION_DATABASE_URL"];
 describe.runIf(Boolean(url))("real current interaction summaries", () => {
   const portfolioId = createStableId("Portfolio"), ownerId = createStableId("Owner");
-  const scope = { kind: "portfolio" as const, portfolioId }, now = "2026-10-15T00:00:00.000Z";
+  const scope = { kind: "portfolio" as const, portfolioId }, now = "2099-10-15T00:00:00.000Z";
   const db = createPostgresRuntimeDatabase(url ?? "postgres://invalid");
   const second = createPostgresRuntimeDatabase(url ?? "postgres://invalid");
   const admin = new Client({ connectionString: process.env["PHASE7_MODERATION_ADMIN_URL"] });
@@ -222,7 +222,7 @@ describe.runIf(Boolean(url))("real current interaction summaries", () => {
       // projection write handler; dispatching delayed work invokes this interface.
       expect(await query(projectId)).toMatchObject({ ok: true, value: { approvedFeedbackCount: 0 } });
       expect(await pages(projectId)).toMatchObject({ ok: true, value: { items: [] } });
-      const later = "2026-10-15T00:00:02.000Z";
+      const later = "2099-10-15T00:00:02.000Z";
       const reclaimed = await jobs.claimDue({ ...claim, now: later }); expect(reclaimed).toHaveLength(1);
       expect(reclaimed[0]!.leaseToken).not.toBe(first[0]!.leaseToken);
       expect(await jobs.complete(jobId, first[0]!.leaseToken, later)).toBe(false);
