@@ -173,8 +173,8 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     expect(JSON.stringify(receipts)).not.toContain(evidence.verified.subject);
   });
 
-  it("T11-01/T11-04/T11-06 records only current configured capability facts and stable public identities", async () => {
-    const { projectId, routeId } = await seedProject({ externalLinks: [
+  it("T11-01/T11-03/T11-04/T11-06 records only current configured capability facts and stable public identities", async () => {
+    const { projectId, routeId } = await seedProject({ locales: ["en", "ar"], externalLinks: [
       { type: "github-repository", label: "Private GitHub label", destination: "https://github.com/private-owner/private-repo" },
       { type: "live-demo", label: "Private demo label", destination: "https://private-demo.example/project", availableInArabic: true },
     ] });
@@ -190,33 +190,44 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
       { action: "external-project-link-opened", context: context(routeId), projectId, destination: "live-demo" },
       { action: "global-project-cta-opened", context: context(routeId), projectId },
     ];
+    const arabicDemo: PublicMeasurementEvent = {
+      action: "external-project-link-opened", context: context(routeId, { locale: "ar" }), projectId, destination: "live-demo",
+    };
     let externalReceipt: unknown;
+    const receipts: unknown[] = [];
     const logs: unknown[] = [];
     for (const [index, event] of events.entries()) {
       const eventKey = `ticket-198-event-${index + 1}`;
-      if (event.action === "external-project-link-opened") {
-        const direct = await service.ingestEvent(command(event, evidence.verified, key(eventKey)));
-        expect(direct, event.destination).toMatchObject({ ok: true });
-      }
       const logger = createTestLogger();
       const response = await handlePostPublicEvent(request(evidence.token, event, eventKey), { scope, service, consent, logger });
       logs.push(...logger.records);
       if (response.status !== 202) throw new Error(`T11_ACTION_FAILED:${index}:${event.action}:${await response.clone().text()}`);
       const receipt = await response.json() as Record<string, unknown>;
       expect(Object.keys(receipt).sort()).toEqual(["acceptedAt", "eventId"]);
+      receipts.push(receipt);
       if (index === 1) externalReceipt = receipt;
     }
+    const arabicLogger = createTestLogger();
+    const arabicResponse = await handlePostPublicEvent(request(evidence.token, arabicDemo, "ticket-198-arabic-demo"), {
+      scope, service, consent, logger: arabicLogger,
+    });
+    expect(arabicResponse.status).toBe(202);
+    const arabicReceipt = await arabicResponse.json() as { eventId: string; acceptedAt: string };
+    receipts.push(arabicReceipt);
+    logs.push(...arabicLogger.records);
+    const arabicRow = await admin.query("select action, locale, external_destination from measurement.public_events where event_id=$1", [arabicReceipt.eventId]);
+    expect(arabicRow.rows).toEqual([{ action: "external-project-link-opened", locale: "ar", external_destination: "live-demo" }]);
     await admin.query("update content.public_routes set current_slug='renamed-after-interaction' where route_identity=$1", [routeId]);
     const replay = await handlePostPublicEvent(request(evidence.token, events[1], "ticket-198-event-2"), { scope, service, consent, logger: createTestLogger() });
     expect(replay.status).toBe(202);
     expect(await replay.json()).toEqual(externalReceipt);
     const conflict = await handlePostPublicEvent(request(evidence.token, { ...events[1]!, destination: "live-demo" }, "ticket-198-event-2"), { scope, service, consent, logger: createTestLogger() });
     expect(conflict.status).toBe(409);
-    expect(await countEvents()).toBe(beforeEvents + 4);
-    expect(await countJobs()).toBe(beforeJobs + 4);
+    expect(await countEvents()).toBe(beforeEvents + 5);
+    expect(await countJobs()).toBe(beforeJobs + 5);
     const rows = await admin.query(`select action, page_route_identity::text, project_id::text, contact_channel, external_destination
       from measurement.public_events where event_id = any($1::uuid[]) order by action, external_destination`, [
-      (await admin.query("select event_id from measurement.public_events where action in ('contact-channel-opened','external-project-link-opened','global-project-cta-opened') order by accepted_at desc limit 4")).rows.map(row => row.event_id),
+      (await admin.query("select event_id from measurement.public_events where action in ('contact-channel-opened','external-project-link-opened','global-project-cta-opened') order by accepted_at desc limit 5")).rows.map(row => row.event_id),
     ]);
     expect(rows.rows).toEqual(expect.arrayContaining([
       { action: "contact-channel-opened", page_route_identity: routeId, project_id: null, contact_channel: "linkedin", external_destination: null },
@@ -230,6 +241,22 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     expect(JSON.stringify(rows.rows)).not.toContain("Private fixture title");
     expect(JSON.stringify(logs)).not.toContain("Private");
     expect(JSON.stringify(logs)).not.toContain("github.com");
+    const jobPayloads = await admin.query("select payload from operations.jobs where job_type='measurement.public-event-received.v1' and payload->>'eventId' in (select event_id::text from measurement.public_events where accepted_at >= $1)", [now]);
+    const privateOutputs = JSON.stringify({ receipts, jobs: jobPayloads.rows, logs });
+    expect(privateOutputs).not.toContain(evidence.verified.subject);
+    expect(privateOutputs).not.toContain("Private GitHub label");
+    expect(privateOutputs).not.toContain("private-demo.example");
+
+    const providerSentinel = "provider-connection-error-secret-sentinel";
+    const failureLogger = createTestLogger();
+    const failedRequest = await handlePostPublicEvent(request(evidence.token, events[0], "ticket-198-provider-failure"), {
+      scope, consent, logger: failureLogger,
+      service: { async ingestEvent() { throw new Error(`database connection failed: ${providerSentinel}`); } },
+    });
+    expect(failedRequest.status).toBe(500);
+    expect(await failedRequest.text()).not.toContain(providerSentinel);
+    expect(JSON.stringify(failureLogger.records)).not.toContain(providerSentinel);
+    expect(JSON.stringify({ receipts, jobs: jobPayloads.rows, logs: logs.concat(failureLogger.records) })).not.toContain(evidence.verified.subject);
   });
 
   it("T11-02/T11-03/T11-05 rejects absent or mismatched current configuration without durable effects", async () => {
