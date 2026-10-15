@@ -216,9 +216,12 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
     expect(revoked).toMatchObject({ ok: true, value: { revision: 2, state: "denied" } });
     if (!accepted.ok) throw new Error("RETENTION_TEST_INTAKE_FAILED");
     const retainedEventId = accepted.value.eventId;
+    await addContribution({ subject: checked.value.subject, eventId: retainedEventId, acceptedAt: baseNow, convertedAt: baseNow });
     const cleaned = await drain(input => retention.cleanWithdrawnConsent(input), "withdrawal", now);
     expect(cleaned.results.every(result => result.processedCount <= 25)).toBe(true);
     expect((await admin.query("select 1 from measurement.public_events where event_id=$1", [retainedEventId])).rows).toHaveLength(0);
+    expect((await admin.query("select 1 from measurement.goal_conversion_contributions where portfolio_id=$1 and measurement_subject=$2", [portfolioId, checked.value.subject])).rows).toHaveLength(0);
+    expect((await admin.query("select 1 from measurement.goal_conversion_rebuilds where portfolio_id=$1 and measurement_subject=$2", [portfolioId, checked.value.subject])).rows).toHaveLength(0);
     expect(await consentService.verifyEvidence({ scope, correlationId: "retention-replay", noticeVersion: "2026-10", token }))
       .toMatchObject({ ok: false, error: { kind: "forbidden" } });
     expect(await events.ingestEvent(eventCommand)).toMatchObject({ ok: false, error: { kind: "forbidden" } });

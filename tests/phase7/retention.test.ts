@@ -40,7 +40,9 @@ describe("Measurement retention policy", () => {
   it("permits only the dedicated System purpose and keeps work inside the configured Portfolio", async () => {
     const { service, processBatch } = setup();
     const owner = { kind: "owner", ownerId: "0196a1b2-7c3d-7e11-9f22-000000000004" as StableId<"Owner">, sessionId: "owner" };
+    const visitor = { kind: "visitor", consent: "granted" as const };
     expect(await service.expireDetail(command({ actor: owner as never }))).toMatchObject({ ok: false, error: { kind: "forbidden" } });
+    expect(await service.expireDetail(command({ actor: visitor as never }))).toMatchObject({ ok: false, error: { kind: "forbidden" } });
     expect(await service.cleanWithdrawnConsent(command({ actor: { kind: "system", jobId, purpose: "measurement.retention" } }))).toMatchObject({ ok: false, error: { kind: "forbidden" } });
     expect(await service.expireAggregates(command({ scope: { kind: "portfolio", portfolioId: foreignPortfolioId } }))).toMatchObject({ ok: false, error: { kind: "forbidden" } });
     expect(processBatch).not.toHaveBeenCalled();
