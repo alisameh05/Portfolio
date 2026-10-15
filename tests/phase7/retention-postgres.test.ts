@@ -77,10 +77,10 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
       (portfolio_id,measurement_subject,goal_id,version_id,terminal_event_id,converted_at,accepted_at,consent_revision,activation_sequence,generation)
       values ($1,$2,$3,$4,$5,$6,$7,1,1,1)`, [portfolioId, input.subject, goalId, versionId, input.eventId, input.convertedAt, input.acceptedAt]);
   }
-  async function addAggregate(day: string, count = 7) {
+  async function addAggregate(day: string, count = 7, metricKey = "page-viewed") {
     await admin.query(`insert into measurement.daily_aggregates
       (portfolio_id,utc_day,metric_kind,metric_key,dimensions,event_count,sum_value,observed_subjects,returning_subjects,policy_version,checkpoint_at)
-      values ($1,$2::date,'action','page-viewed','{}'::jsonb,$3,0,5,0,'phase7.daily.v1',($2::date::timestamp at time zone 'UTC'))`, [portfolioId, day, count]);
+      values ($1,$2::date,'action',$4,'{}'::jsonb,$3,0,5,0,'phase7.daily.v1',($2::date::timestamp at time zone 'UTC'))`, [portfolioId, day, count, metricKey]);
     await admin.query(`insert into measurement.daily_aggregate_checkpoints
       (portfolio_id,utc_day,source_event_count,source_conversion_count,policy_version,checkpoint_at)
       values ($1,$2::date,0,0,'phase7.daily.v1',($2::date::timestamp at time zone 'UTC')) on conflict do nothing`, [portfolioId, day]);
@@ -124,6 +124,33 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
     await drain(input => retention.expireAggregates(input), "retention", "2025-03-29T00:00:00.000Z");
     expect((await admin.query("select 1 from measurement.daily_aggregates where portfolio_id=$1 and utc_day='2024-02-29'", [portfolioId])).rows).toHaveLength(0);
     expect((await admin.query("select 1 from measurement.daily_aggregate_checkpoints where portfolio_id=$1 and utc_day='2024-01-31'", [portfolioId])).rows).toHaveLength(0);
+  });
+
+  it("does not recreate an expired aggregate between aggregate and checkpoint expiry stages", async () => {
+    const day = "2024-01-31";
+    const expiry = "2025-02-28T00:00:00.000Z";
+    for (let index = 0; index < 25; index++) await addAggregate(day, 17 + index, `metric-${index}`);
+    const jobId = nextId("Job");
+    const batch = command("retention", jobId, expiry, 25);
+
+    const removed = await retention.expireAggregates(batch);
+    expect(removed).toMatchObject({ ok: true, value: { processedCount: 25, nextCursor: jobId } });
+    const advanced = await retention.expireAggregates(batch);
+    expect(advanced).toMatchObject({ ok: true, value: { processedCount: 0, nextCursor: jobId } });
+    expect((await admin.query("select 1 from measurement.daily_aggregate_checkpoints where portfolio_id=$1 and utc_day=$2", [portfolioId, day])).rows).toHaveLength(1);
+
+    expect((await admin.query("select retention_sealed from measurement.daily_aggregate_checkpoints where portfolio_id=$1 and utc_day=$2", [portfolioId, day])).rows[0])
+      .toEqual({ retention_sealed: true });
+    const aggregateRepository = createPostgresDailyAggregateRepository();
+    const rebuilt = await worker.transactions.run(transaction => aggregateRepository.rebuildDay({
+      portfolioId, utcDay: day, asOf: "2024-02-14T00:00:00.000Z",
+    }, transaction));
+    expect(rebuilt).toBe(0);
+    expect((await admin.query("select 1 from measurement.daily_aggregates where portfolio_id=$1 and utc_day=$2", [portfolioId, day])).rows).toHaveLength(0);
+
+    const checkpointExpiry = await retention.expireAggregates(batch);
+    expect(checkpointExpiry).toMatchObject({ ok: true, value: { nextCursor: null } });
+    expect((await admin.query("select 1 from measurement.daily_aggregate_checkpoints where portfolio_id=$1 and utc_day=$2", [portfolioId, day])).rows).toHaveLength(0);
   });
 
   it("rolls back a failed bounded batch and resumes from the same checkpoint", async () => {

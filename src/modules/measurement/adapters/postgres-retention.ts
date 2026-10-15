@@ -8,6 +8,7 @@ interface RetentionCheckpoint { stage: string; requested_at: string | Date; inco
 interface RemovedDetail { row_id: string; utc_day: string }
 interface RemovedConversion { row_id: string; utc_day: string }
 interface DayCounts { source_event_count: string | number; source_conversion_count: string | number; pending_rebuild_count: string | number }
+interface ExpiringAggregateDay { utc_day: string }
 
 const DAY_MS = 86_400_000;
 const RAW_DAYS = 14;
@@ -180,8 +181,19 @@ async function processStage(db: ReturnType<typeof resolvePostgresTransaction>, i
   }
   if (input.kind === "aggregates" && stage === "aggregates") {
     const expiry = sql`((a.utc_day::timestamp at time zone 'UTC') + interval '13 months') <= ${input.now}::timestamptz`;
+    const candidateDays = await sql<ExpiringAggregateDay>`select distinct a.utc_day::text as utc_day
+      from measurement.daily_aggregates a where a.portfolio_id = ${input.portfolioId}::uuid and ${expiry}
+      order by utc_day limit ${input.batchSize}`.execute(db);
+    const days = candidateDays.rows.map(row => row.utc_day);
+    for (const day of days) {
+      await sql`select pg_advisory_xact_lock(hashtextextended(${input.portfolioId + ":" + day}, 202))`.execute(db);
+      await sql`select measurement.seal_daily_aggregate_checkpoint(${input.portfolioId}::uuid, ${day}::date,
+        false, ${input.now}::timestamptz)`.execute(db);
+    }
+    if (days.length === 0) return { count: 0, incomplete: false };
     const result = await sql`with page as materialized (
         select a.ctid from measurement.daily_aggregates a where a.portfolio_id = ${input.portfolioId}::uuid and ${expiry}
+          and a.utc_day = any(${days}::date[])
         order by a.utc_day, a.metric_kind, a.metric_key limit ${input.batchSize}
       ) delete from measurement.daily_aggregates a using page where a.ctid = page.ctid`.execute(db);
     return { count: numeric(result.numAffectedRows ?? 0n), incomplete: false };
