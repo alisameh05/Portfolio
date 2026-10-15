@@ -47,11 +47,11 @@ async function addEvent(input: { subject: StableId<"MeasurementVisitor">; action
   return eventId;
 }
 
-async function addGoal(subjects: readonly StableId<"MeasurementVisitor">[], terminalEvents: readonly StableId<"PublicEvent">[]) {
+async function addGoal(subjects: readonly StableId<"MeasurementVisitor">[], terminalEvents: readonly StableId<"PublicEvent">[], action: "page-viewed" | "project-viewed" = "project-viewed") {
   const goalId = id("AnalyticsGoal"), versionId = id("AnalyticsGoalVersion"), activationId = id("Event");
   await admin!.query(`insert into measurement.analytics_goals (portfolio_id,goal_id,aggregate_version,active_version_id)
     values ($1,$2,3,null)`, [portfolioId, goalId]);
-  const definition = { name: "Project engagement", steps: [{ action: "project-viewed", projectIds: [projectId] }] };
+  const definition = { name: "Project engagement", steps: [{ action, ...(action === "project-viewed" ? { projectIds: [projectId] } : {}) }] };
   await admin!.query(`insert into measurement.analytics_goal_versions (portfolio_id,goal_id,version_id,version_number,definition,created_at)
     values ($1,$2,$3,1,$4::jsonb,'2026-10-14T00:00:00Z')`, [portfolioId, goalId, versionId, JSON.stringify(definition)]);
   await admin!.query("update measurement.analytics_goals set active_version_id=$3 where portfolio_id=$1 and goal_id=$2", [portfolioId, goalId, versionId]);
@@ -148,34 +148,39 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement daily aggregatio
       .toMatchObject({ ok: true, value: { state: "available", rows: [{ count: 6 }] } });
   });
 
-  it("reclaims an expired daily job, includes late accepted events, and replays the same logical aggregate", async () => {
+  it("reclaims an expired daily job, includes late accepted events, and replays action and goal totals", async () => {
     const subject = id("MeasurementVisitor"), jobId = id("Job");
-    await addEvent({ subject, action: "project-viewed", occurredAt: "2026-10-12T12:00:00Z" });
+    const triggerEvent = await addEvent({ subject, action: "page-viewed", occurredAt: "2026-10-14T12:00:00Z" });
+    const goal = await addGoal([subject], [triggerEvent], "page-viewed");
     const operations = createPostgresOperationsPersistence(worker!.database);
     await operations.transactions.run(tx => operations.jobs.enqueue(tx, { jobId, availableAt: now,
-      payload: { type: "measurement.daily-aggregate.v1", version: 1, value: { portfolioId, utcDay: "2026-10-12" } } }));
+      payload: { type: "measurement.daily-aggregate.v1", version: 1, value: { portfolioId, utcDay: "2026-10-14" } } }));
     const claim = { workerId: "daily-aggregate-proof", now, leaseDurationSeconds: 1, limit: 1 };
     const firstClaim = await operations.jobs.claimDue(claim);
     expect(firstClaim).toHaveLength(1);
     expect(firstClaim[0]!.jobId).toBe(jobId);
     const { workerService } = createServices();
-    await workerService.aggregateDay(command("2026-10-12", jobId));
+    await workerService.aggregateDay(command("2026-10-14", jobId));
     const later = "2026-10-15T12:00:02.000Z";
     const reclaimed = await operations.jobs.claimDue({ ...claim, now: later });
     expect(reclaimed).toHaveLength(1);
     expect(reclaimed[0]!.leaseToken).not.toBe(firstClaim[0]!.leaseToken);
     expect(await operations.jobs.complete(jobId, firstClaim[0]!.leaseToken, later)).toBe(false);
-    const late = await addEvent({ subject, action: "project-viewed", occurredAt: "2026-10-12T11:59:00Z", acceptedAt: "2026-10-15T11:00:00Z" });
+    const late = await addEvent({ subject, action: "page-viewed", occurredAt: "2026-10-14T11:59:00Z", acceptedAt: "2026-10-15T11:00:00Z" });
     expect(late).toBeTruthy();
-    await workerService.aggregateDay(command("2026-10-12", jobId, later));
+    await workerService.aggregateDay(command("2026-10-14", jobId, later));
     const first = await admin!.query(`select event_count::int,observed_subjects::int from measurement.daily_aggregates
-      where portfolio_id=$1 and utc_day='2026-10-12' and metric_key='project-viewed'`, [portfolioId]);
+      where portfolio_id=$1 and utc_day='2026-10-14' and metric_key='page-viewed'`, [portfolioId]);
     expect(await operations.jobs.complete(jobId, reclaimed[0]!.leaseToken, later)).toBe(true);
-    await workerService.aggregateDay(command("2026-10-12", jobId, later));
+    await workerService.aggregateDay(command("2026-10-14", jobId, later));
     const second = await admin!.query(`select event_count::int,observed_subjects::int from measurement.daily_aggregates
-      where portfolio_id=$1 and utc_day='2026-10-12' and metric_key='project-viewed'`, [portfolioId]);
+      where portfolio_id=$1 and utc_day='2026-10-14' and metric_key='page-viewed'`, [portfolioId]);
     expect(first.rows).toEqual([{ event_count: 2, observed_subjects: 1 }]);
     expect(second.rows).toEqual(first.rows);
+    const conversions = await admin!.query(`select metric_key,event_count::int,goal_id::text,goal_version_id::text from measurement.daily_aggregates
+      where portfolio_id=$1 and utc_day='2026-10-14' and metric_kind='goal' and goal_id=$2`, [portfolioId, goal.goalId]);
+    expect(conversions.rows).toEqual([{ metric_key: `${goal.goalId}:${goal.versionId}`, event_count: 1,
+      goal_id: goal.goalId, goal_version_id: goal.versionId }]);
   });
 
   it("distinguishes empty, four-subject Low-sample, and five-subject eligible cohorts despite repeated events", async () => {
