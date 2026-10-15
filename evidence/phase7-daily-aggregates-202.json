@@ -1,7 +1,7 @@
 {
   "ticket": 202,
-  "runId": "3cee5365-b509-4711-af60-896ffdd60511",
-  "sourceRevision": "7caa6ae682e09c4b3338739e1284fa47580e0b95",
+  "runId": "eeadf561-3249-46b7-9434-6fef4faec5cc",
+  "sourceRevision": "c6f9d180ed0fe0856c84ac70dcad02f3937e1020",
   "sourceTreeSha256": "cdde8cf01aeae7429cbb30c2ead3d5baa1d5b1af4ddc55c38d70bf7424100d03",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015190000_persist_reproducible_daily_aggregates.sql",
