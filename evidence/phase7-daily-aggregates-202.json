@@ -1,8 +1,8 @@
 {
   "ticket": 202,
-  "runId": "eeadf561-3249-46b7-9434-6fef4faec5cc",
-  "sourceRevision": "c6f9d180ed0fe0856c84ac70dcad02f3937e1020",
-  "sourceTreeSha256": "cdde8cf01aeae7429cbb30c2ead3d5baa1d5b1af4ddc55c38d70bf7424100d03",
+  "runId": "b36d4bd0-2df9-4838-a4f5-101e2eadcc10",
+  "sourceRevision": "03416ca5b866be1013f81e7760839dfe12d161b1",
+  "sourceTreeSha256": "f3d5ad83538cb68040b9c5a93cb3579252d65598f7a2a6642c70de03e193893a",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015190000_persist_reproducible_daily_aggregates.sql",
   "migrationSha256": "f0bf8f4237f6b16413c521bccb46ef790f607dd791c4e86f319b5016455bfefc",
@@ -202,7 +202,7 @@
       "status": "passed"
     },
     {
-      "title": "reclaims an expired daily job, includes late accepted events, and replays the same logical aggregate",
+      "title": "reclaims an expired daily job, includes late accepted events, and replays action and goal totals",
       "status": "passed"
     },
     {
