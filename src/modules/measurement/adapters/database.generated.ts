@@ -9,7 +9,45 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
 
+export type Json = JsonValue;
+
+export type JsonArray = JsonValue[];
+
+export type JsonObject = {
+  [x: string]: JsonValue | undefined;
+};
+
+export type JsonPrimitive = boolean | number | string | null;
+
+export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+
+export interface AnalyticsGoalActivationHistory {
+  activated_at: Timestamp;
+  activation_id: string;
+  aggregate_version: number;
+  goal_id: string;
+  portfolio_id: string;
+  version_id: string;
+}
+
+export interface AnalyticsGoals {
+  active_version_id: string | null;
+  aggregate_version: Generated<number>;
+  created_at: Generated<Timestamp>;
+  goal_id: string;
+  portfolio_id: string;
+}
+
+export interface AnalyticsGoalVersions {
+  created_at: Timestamp;
+  definition: Json;
+  goal_id: string;
+  portfolio_id: string;
+  version_id: string;
+  version_number: number;
+}
 
 export interface ConsentHistory {
   consent_id: string;
@@ -65,6 +103,9 @@ export interface PublicEvents {
 }
 
 export interface DB {
+  analytics_goal_activation_history: AnalyticsGoalActivationHistory;
+  analytics_goal_versions: AnalyticsGoalVersions;
+  analytics_goals: AnalyticsGoals;
   consent_history: ConsentHistory;
   consents: Consents;
   public_events: PublicEvents;

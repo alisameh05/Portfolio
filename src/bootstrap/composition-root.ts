@@ -36,7 +36,7 @@ import type { OwnerMediaApplicationService } from "../modules/media/index.js";
 import type { MediaDeliveryApplicationService } from "../modules/media/index.js";
 import type { CurrentCvDeliveryService, OwnerCvApplicationService } from "../modules/cv-portfolio/index.js";
 import type { PortfolioSettingsApplicationService } from "../modules/portfolio-configuration/index.js";
-import type { ConsentApplicationService, MeasurementMediaPublicFactsPort, MeasurementService } from "../modules/measurement/index.js";
+import type { ConsentApplicationService, MeasurementMediaPublicFactsPort, MeasurementService, OwnerAnalyticsApplicationService } from "../modules/measurement/index.js";
 import type { InteractionModerationService, FunctionalInteractionContextPort } from "../modules/interaction-moderation/index.js";
 
 export interface ReactionRuntimeServices {
@@ -82,6 +82,8 @@ let currentRating: RatingRuntimeServices | undefined;
 let currentFeedback: FeedbackRuntimeServices | undefined;
 let currentInteractionSummary: Pick<InteractionModerationService, "getProjectAggregate"> | undefined;
 let currentModeration: (import("../modules/interaction-moderation/index.js").OwnerModerationApplicationService & Pick<InteractionModerationService, "getApprovedFeedback">) | undefined;
+let currentOwnerAnalytics: OwnerAnalyticsApplicationService | undefined;
+let currentOwnerAnalyticsScope: ReactionRuntimeServices["scope"] | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -109,6 +111,7 @@ export interface DatabaseRuntimeDependencies {
   readonly rating?: RatingRuntimeServices;
   readonly feedback?: FeedbackRuntimeServices;
   readonly moderation?: NonNullable<typeof currentModeration>;
+  readonly ownerAnalytics?: OwnerAnalyticsApplicationService;
   readonly interactionSummary?: NonNullable<typeof currentInteractionSummary>;
   readonly consent?: ConsentApplicationService;
   readonly eventIngestion?: MeasurementEventRuntimeServices;
@@ -205,8 +208,20 @@ export async function initializeDatabaseRuntime(
         let rating: RatingRuntimeServices | undefined;
         let feedback: FeedbackRuntimeServices | undefined;
         let moderation: NonNullable<typeof currentModeration> | undefined;
+        let ownerAnalytics: OwnerAnalyticsApplicationService | undefined;
         let interactionSummary: NonNullable<typeof currentInteractionSummary> | undefined;
         if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok) {
+          const [{ createOwnerAnalyticsGoalService }, { createPostgresOwnerAnalyticsGoalRepository },
+            { createPostgresAnalyticsGoalScopeFacts }, { decideAuthorization }] = await Promise.all([
+            import("../modules/measurement/index.js"),
+            import("../modules/measurement/adapters/postgres-goals.js"),
+            import("../modules/measurement/adapters/postgres-goal-scope-facts.js"),
+            import("../modules/identity-access/index.js"),
+          ]);
+          const analyticsScope = { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value };
+          ownerAnalytics = createOwnerAnalyticsGoalService({ scope: analyticsScope, operations, authorize: async query => decideAuthorization(query),
+            repository: createPostgresOwnerAnalyticsGoalRepository(), scopeFacts: createPostgresAnalyticsGoalScopeFacts(analyticsScope),
+            clock: createSystemClock(), ids: createSystemIdGenerator() });
           const [{ createFeedbackApplicationService, createOwnerFeedbackModerationService }, { createPostgresFeedbackSubmissionRepository },
             { createPostgresProjectInteractionFacts }, { createBoundedCurrentCvRateLimit }] = await Promise.all([
             import("../modules/interaction-moderation/index.js"),
@@ -220,7 +235,6 @@ export async function initializeDatabaseRuntime(
           interactionSummary = createProjectInteractionSummaryService({ portfolioId: scope.portfolioId, transactions: operations.transactions,
             content: createPostgresProjectInteractionFacts(scope), repository: createPostgresInteractionSummaryRepository() });
           const { createPostgresModerationRepository } = await import("../modules/interaction-moderation/adapters/postgres-moderation.js");
-          const { decideAuthorization } = await import("../modules/identity-access/index.js");
           moderation = createOwnerFeedbackModerationService({ scope, operations,
             authorize: async query => decideAuthorization(query), repository: createPostgresModerationRepository(),
             content: createPostgresProjectInteractionFacts(scope), clock: createSystemClock(), ids: createSystemIdGenerator() });
@@ -643,6 +657,7 @@ export async function initializeDatabaseRuntime(
           ...(rating === undefined ? {} : { rating }),
           ...(feedback === undefined ? {} : { feedback }),
           ...(moderation === undefined ? {} : { moderation }),
+          ...(ownerAnalytics === undefined ? {} : { ownerAnalytics }),
           ...(interactionSummary === undefined ? {} : { interactionSummary }),
           ...(consent === undefined ? {} : { consent }),
           ...(eventIngestion === undefined ? {} : { eventIngestion }),
@@ -678,6 +693,10 @@ export async function initializeDatabaseRuntime(
     currentRating = dependencies.rating;
     currentFeedback = dependencies.feedback;
     currentModeration = dependencies.moderation;
+    currentOwnerAnalytics = dependencies.ownerAnalytics;
+    const scopedPortfolio = parseStableId("Portfolio", env["PORTFOLIO_ID"] ?? "");
+    currentOwnerAnalyticsScope = currentOwnerAnalytics && scopedPortfolio.ok
+      ? { kind: "portfolio", portfolioId: scopedPortfolio.value } : undefined;
     currentInteractionSummary = dependencies.interactionSummary;
     currentConsent = dependencies.consent;
     currentEventIngestion = dependencies.eventIngestion;
@@ -837,6 +856,14 @@ export async function getFeedbackRuntimeServices(): Promise<FeedbackRuntimeServi
 }
 
 /** Owner adapters use configured scope plus their existing verified-session security boundary. */
+export async function getOwnerAnalyticsRuntimeServices() {
+  if (currentOwnerAnalytics !== undefined && currentOwnerAnalyticsScope !== undefined) {
+    return { scope: currentOwnerAnalyticsScope, service: currentOwnerAnalytics };
+  }
+  const { createProductionOwnerAnalyticsService } = await import("../runtime/fakes/owner-analytics.js");
+  return { service: createProductionOwnerAnalyticsService() };
+}
+
 export async function getOwnerModerationRuntimeServices() {
   if (currentModeration && currentFeedback) return { scope: currentFeedback.scope, service: currentModeration };
   const { createProductionOwnerModerationService } = await import("../runtime/fakes/owner-moderation.js");
@@ -865,6 +892,8 @@ export function resetRuntimeForTests(): void {
   currentRating = undefined;
   currentFeedback = undefined;
   currentModeration = undefined;
+  currentOwnerAnalytics = undefined;
+  currentOwnerAnalyticsScope = undefined;
   currentInteractionSummary = undefined;
   currentOwnerConfiguration = undefined;
   currentContentAuthoring = undefined;

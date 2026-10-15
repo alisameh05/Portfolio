@@ -8,6 +8,8 @@ export type {
 } from "./service.js";
 
 export type { AnalyticsEventAction, AnalyticsGoalStep, AnalyticsGoalDefinition, GetOwnerAnalyticsGoalQuery, CreateOwnerAnalyticsGoalVersionApplicationCommand, ActivateOwnerAnalyticsGoalVersionApplicationCommand, AnalyticsGoalVersionView, AnalyticsGoalActivationView, AnalyticsGoalAggregateView, AnalyticsGoalVersionReceipt, AnalyticsGoalActivationReceipt, OwnerAnalyticsApplicationService } from "./owner-analytics.js";
+export { createOwnerAnalyticsGoalService } from "./goal-versions.js";
+export type { AnalyticsGoalScopeFactsPort, OwnerAnalyticsGoalServiceDependencies } from "./goal-versions.js";
 
 export type { VerifiedMeasurementEvidence } from "./service.js";
 
