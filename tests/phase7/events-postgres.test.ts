@@ -173,7 +173,7 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     expect(JSON.stringify(receipts)).not.toContain(evidence.verified.subject);
   });
 
-  it("T11-01/T11-03/T11-04/T11-06 records only current configured capability facts and stable public identities", async () => {
+  it("T11-01/T11-03/T11-04/T11-06/T11-08 records only current configured capability facts and stable public identities", async () => {
     const { projectId, routeId } = await seedProject({ locales: ["en", "ar"], externalLinks: [
       { type: "github-repository", label: "Private GitHub label", destination: "https://github.com/private-owner/private-repo" },
       { type: "live-demo", label: "Private demo label", destination: "https://private-demo.example/project", availableInArabic: true },
