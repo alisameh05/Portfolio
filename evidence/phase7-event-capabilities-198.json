@@ -1,7 +1,7 @@
 {
-  "runId": "d5790eec-a83b-48b7-951a-5f11890747e2",
-  "sourceRevision": "83ec444936270b90e1d0b90dee659378240133b4",
-  "sourceTreeSha256": "b81d221be1436b47aa70c5e1f692d38c6104cd2f386a2af981ef0f31593c52b3",
+  "runId": "26588d98-0f0f-4c34-9452-0412135ce92c",
+  "sourceRevision": "30290c36e86086f889f0c647904b79e6d7655c24",
+  "sourceTreeSha256": "847b6f562d4798c2ab77ec80d588c1a3c398dc861c6c6a173dff81bbad3d3471",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015150000_enable_configuration_interaction_event_facts.sql",
   "migrationSha256": "ce3d4700c6cf9154f8aa5a462bca3032d19ead3faf1b73ef64dca4ff954a03a9",
@@ -24,7 +24,10 @@
     "T11-05": [
       "T11-05 rejects invalid Contact channel before durable effects",
       "T11-05 rejects raw destination URL before durable effects",
-      "T11-05 rejects unknown closed-shape property as 400 before dispatch"
+      "T11-05 rejects unknown closed-shape property as 400 before dispatch",
+      "rejects Contact URL identifying payload as 400 before dispatch",
+      "rejects External link wrong action field as 400 before dispatch",
+      "rejects Global CTA wrong action field as 400 before dispatch"
     ],
     "T11-06": [
       "T11-01/T11-06 accepts and preserves all nine action mappings as distinct facts",
@@ -48,10 +51,6 @@
   },
   "suites": [
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/runtime/public-event.test.ts",
-      "passed": 23
-    },
-    {
       "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/phase7/consent-crypto.test.ts",
       "passed": 5
     },
@@ -62,6 +61,10 @@
     {
       "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/phase7/events-postgres.test.ts",
       "passed": 12
+    },
+    {
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/runtime/public-event.test.ts",
+      "passed": 23
     }
   ],
   "roles": [
