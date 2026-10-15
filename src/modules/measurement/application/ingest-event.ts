@@ -97,10 +97,6 @@ function parseReceipt(value: Readonly<Record<string, unknown>>): EventReceipt {
   return { eventId: value["eventId"] as StableId<"PublicEvent">, acceptedAt: value["acceptedAt"] as string };
 }
 
-function projectIdOf(event: SupportedEvent): StableId<"Project"> | undefined {
-  return event.action === "page-viewed" ? undefined : event.projectId;
-}
-
 async function validatePublicFacts(event: SupportedEvent, portfolioId: StableId<"Portfolio">, content: Pick<ContentMeasurementPublicFactsPort, "getRouteFacts" | "hasRetainedPublicRoute">, tx: TransactionContext): Promise<Result<void, Rejection>> {
   const route = await content.getRouteFacts({ portfolioId, routeId: event.context.pageRouteIdentity, locale: event.context.locale }, tx);
   if (!route.ok) return route;
@@ -143,7 +139,7 @@ export function createMeasurementEventService(deps: MeasurementEventApplicationD
           if (!facts.ok) return requestTransactionRollback(facts);
           const requestHash = await hashCanonicalRequest(event as unknown as Parameters<typeof hashCanonicalRequest>[0]);
           const execution = await deps.operations.idempotency.execute({
-            operationScope: `measurement.public-event:${deps.portfolioId}:${event.context.pageRouteIdentity}`,
+            operationScope: `measurement.public-event:${deps.portfolioId}`,
             actorScope: await hashCanonicalRequest({ purpose: "measurement", portfolioId: deps.portfolioId, subject: evidence.subject }),
             key: parsedKey.value,
             requestHash,

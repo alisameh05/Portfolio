@@ -48,6 +48,8 @@ import {
   transportProblem,
 } from "./problem.js";
 
+const acceptedFirstSliceActions = new Set(["page-viewed", "project-viewed", "active-engagement-sampled"]);
+
 export interface PublicEventAdapterDeps {
   readonly consent?: Pick<ConsentApplicationService, "verifyEvidence">;
   readonly scope?: PortfolioRequestScope;
@@ -116,6 +118,10 @@ export async function handlePostPublicEvent(
 
     const bodyResult = zPostPublicEventBody.safeParse(rawBody);
     if (!bodyResult.success) {
+      logger?.warn("request.rejected", { traceId, status: 400 });
+      return transportProblem("Invalid request body.", traceId, instance);
+    }
+    if (!acceptedFirstSliceActions.has(bodyResult.data.action)) {
       logger?.warn("request.rejected", { traceId, status: 400 });
       return transportProblem("Invalid request body.", traceId, instance);
     }

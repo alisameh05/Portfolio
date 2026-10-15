@@ -180,6 +180,7 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
 
   it("T09-07 commits event, safe receipt and private job once; exact races replay and failures roll back", async () => {
     const { projectId, routeId } = await seedProject();
+    const changedRoute = await seedProject();
     const evidence = await issueEvidence();
     let release!: () => void, entered!: () => void;
     const barrier = new Promise<void>(resolve => { release = resolve; });
@@ -213,6 +214,10 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     expect(await service.ingestEvent(command(
       { ...event, context: context(routeId, { referrerClass: "search" }) }, evidence.verified, raceKey,
     ))).toMatchObject({ ok: false, error: { kind: "conflict" } });
+    expect(await service.ingestEvent(command({ action: "project-viewed", projectId: changedRoute.projectId, context: context(changedRoute.routeId) }, evidence.verified, raceKey)))
+      .toMatchObject({ ok: false, error: { kind: "conflict" } });
+    expect(await countEvents()).toBe(beforeEvents + 1);
+    expect(await countJobs()).toBe(beforeJobs + 1);
 
     const failingRepository: MeasurementEventRepositoryPort = { async insert() { throw new Error("injected persistence failure"); } };
     const failed = await makeService({ repository: failingRepository }).ingestEvent(command(event, evidence.verified, key("rollback-event-key-001")));
