@@ -122,10 +122,11 @@ export function createOwnerAggregateReportService(deps: OwnerAggregateReportDepe
           asOf: page.asOf,
           incomplete,
           policyVersion: POLICY_VERSION,
+          sourceHorizon: "accepted-events-within-14-days-of-as-of",
           grouping: query.grouping,
           breakdown,
         } as const;
-        if (page.incomplete || rows.some(row => row.incomplete || row.policyVersion !== POLICY_VERSION)) {
+        if (incomplete || rows.some(row => row.incomplete)) {
           return { ok: true, value: { ...metadata, state: "incomplete", observedSubjects: "not-disclosed" } };
         }
         if (rows.length === 0) return { ok: true, value: { ...metadata, state: "no-data", observedSubjects: "zero" } };

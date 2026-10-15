@@ -61,6 +61,7 @@ export interface AggregateReportMetadata {
  readonly asOf: string;
  readonly incomplete: boolean;
  readonly policyVersion: string;
+ readonly sourceHorizon: "accepted-events-within-14-days-of-as-of";
  readonly grouping: "daily-action" | "daily-goal";
  readonly breakdown: NonNullable<GetAggregateReportQuery["breakdown"]>;
 }

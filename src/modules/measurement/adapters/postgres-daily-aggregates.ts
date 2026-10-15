@@ -23,7 +23,7 @@ interface ReportRow { utc_day: string | Date; metric_kind: "action" | "goal"; me
   event_count: string | number; sum_value: string | number; observed_subjects: string | number; returning_subjects: string | number;
   policy_version: string; checkpoint_at: string | Date; incomplete: boolean; definition: AnalyticsGoalDefinition | null;
   dimensions: unknown; has_small_dimension_cell: boolean }
-interface CoverageRow { day_count: string | number; incomplete: boolean | null; as_of: string | Date | null }
+interface CoverageRow { day_count: string | number; incomplete: boolean | null; policy_stale: boolean | null; as_of: string | Date | null }
 
 function number(value: string | number): number {
   const parsed = Number(value);
@@ -277,6 +277,7 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
             and ((${summary} and a.dimensions = '{}'::jsonb) or (not ${summary} and a.dimensions ? ${dimensionKey ?? ""}))
           order by a.utc_day, a.metric_key, a.dimensions limit ${input.limit}`.execute(db);
       const coverage = await sql<CoverageRow>`select count(*)::int as day_count, bool_or(incomplete) as incomplete,
+          bool_or(policy_version <> ${POLICY_VERSION}) as policy_stale,
           to_char(max(checkpoint_at) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as as_of
         from measurement.daily_aggregate_checkpoints where portfolio_id = ${input.portfolioId}::uuid
           and utc_day between ${input.startDay}::date and ${input.endDay}::date`.execute(db);
@@ -287,7 +288,8 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
       return {
         rows: pageRows,
         asOf: checkpoint?.as_of ? instant(checkpoint.as_of) : new Date().toISOString(),
-        incomplete: dayCount < expectedDays || checkpoint?.incomplete === true || pageRows.some(row => row.incomplete || row.policyVersion !== POLICY_VERSION),
+        incomplete: dayCount < expectedDays || checkpoint?.incomplete === true || pageRows.some(row => row.incomplete) ||
+          (input.breakdown !== "summary" && checkpoint?.policy_stale === true),
       };
     },
   };

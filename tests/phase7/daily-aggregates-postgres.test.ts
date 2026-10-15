@@ -237,6 +237,19 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement daily aggregatio
     expect(afterReplay.rows).toEqual(beforeReplay.rows);
   });
 
+  it("keeps retained legacy summaries readable while old dimension breakdowns remain incomplete", async () => {
+    await admin!.query(`insert into measurement.daily_aggregates
+      (portfolio_id,utc_day,metric_kind,metric_key,dimensions,event_count,observed_subjects,policy_version,checkpoint_at,incomplete)
+      values ($1,'2026-10-06','action','page-viewed','{}'::jsonb,9,6,'phase7.daily.v1','2026-10-07T00:00:00Z',false)`, [portfolioId]);
+    await admin!.query(`insert into measurement.daily_aggregate_checkpoints
+      (portfolio_id,utc_day,source_event_count,source_conversion_count,policy_version,checkpoint_at,incomplete)
+      values ($1,'2026-10-06',9,0,'phase7.daily.v1','2026-10-07T00:00:00Z',false)`, [portfolioId]);
+    const summary = await report({ startDate: "2026-10-06", endDate: "2026-10-06", grouping: "daily-action", action: "page-viewed" });
+    expect(summary).toMatchObject({ ok: true, value: { state: "available", rows: [{ count: 9, action: "page-viewed" }] } });
+    const country = await report({ startDate: "2026-10-06", endDate: "2026-10-06", grouping: "daily-action", action: "page-viewed", breakdown: "country" });
+    expect(country).toMatchObject({ ok: true, value: { state: "incomplete", incomplete: true, observedSubjects: "not-disclosed" } });
+  });
+
   it("distinguishes empty, four-subject Low-sample, and five-subject eligible cohorts despite repeated events", async () => {
     await aggregate("2026-10-10");
     expect(await report({ startDate: "2026-10-10", endDate: "2026-10-10", grouping: "daily-action" }))

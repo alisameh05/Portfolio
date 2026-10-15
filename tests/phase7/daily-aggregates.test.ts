@@ -69,6 +69,7 @@ describe("daily aggregates and safe Owner reporting", () => {
     expect(await service.getAggregateReport(reportQuery())).toEqual({ ok: true, value: {
       utcPeriod: { startDay: "2026-10-14", endDay: "2026-10-14" }, asOf: now, incomplete: true,
       policyVersion: "phase7.daily.v2", grouping: "daily-action", breakdown: "summary", state: "incomplete", observedSubjects: "not-disclosed",
+      sourceHorizon: "accepted-events-within-14-days-of-as-of",
     } });
   });
 
@@ -84,6 +85,7 @@ describe("daily aggregates and safe Owner reporting", () => {
     const result = await service.getAggregateReport(reportQuery());
     expect(result).toMatchObject({ ok: true, value: { state: "available", observedSubjects: "five-or-more",
       engagementMeaning: "approximate-active-attention", journeyMeaning: "context-without-causation",
+      sourceHorizon: "accepted-events-within-14-days-of-as-of",
       sampleState: "sufficient", rows: [{ utcDay: "2026-10-14", count: 12, sum: 25_000, metric: "action", action: "project-viewed", dimensions: {} }] } });
     expect(JSON.stringify(result)).not.toContain("measurementSubject");
     expect(JSON.stringify(result)).not.toContain("functionalId");
@@ -152,5 +154,15 @@ describe("daily aggregates and safe Owner reporting", () => {
     const result = await harness([actionRow(1, { dimensions: { locale: "ar" }, count: 12_000 })])
       .service.getAggregateReport(reportQuery({ breakdown: "locale" }));
     expect(result).toMatchObject({ ok: true, value: { state: "low-sample", observedSubjects: "not-disclosed" } });
+  });
+
+  it("marks reports over the bounded row limit incomplete", async () => {
+    const rows = Array.from({ length: 501 }, (_, index) => actionRow(5, {
+      date: new Date(Date.parse("2026-10-14T00:00:00.000Z") - index * 86_400_000).toISOString().slice(0, 10),
+      metricKey: `action-${index}`,
+    }));
+    const result = await harness(rows).service.getAggregateReport(reportQuery());
+    expect(result).toMatchObject({ ok: true, value: { state: "incomplete", incomplete: true, observedSubjects: "not-disclosed" } });
+    if (result.ok) expect("rows" in result.value).toBe(false);
   });
 });

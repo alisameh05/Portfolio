@@ -1,5 +1,5 @@
 -- Phase 7 #203: retain fixed, single-dimension sufficient statistics.
--- Existing summary-only rows are marked incomplete until rebuilt with dimensions.
+-- Legacy summary-only rows remain available as summaries; dimensional reads remain incomplete until rebuilt.
 -- Rollback: suppress Owner aggregate reports; preserve aggregate history.
 
 set lock_timeout = '5s';
@@ -31,9 +31,6 @@ alter table measurement.daily_aggregates
 alter table measurement.daily_aggregate_checkpoints
   drop constraint daily_aggregate_checkpoints_policy_version_check,
   add constraint daily_aggregate_checkpoints_policy_version_check check (policy_version in ('phase7.daily.v1', 'phase7.daily.v2'));
-
-update measurement.daily_aggregates set incomplete = true where dimensions = '{}'::jsonb;
-update measurement.daily_aggregate_checkpoints set incomplete = true;
 
 comment on column measurement.daily_aggregates.dimensions is
   'Empty for a summary or exactly one approved coarse dimension. Multi-dimension combinations are not persisted.';
