@@ -13,10 +13,11 @@ export function createPostgresModerationRepository(): ModerationRepositoryPort {
   return {
     async getFeedback(scope, id, lock, tx) {
       const db = resolvePostgresTransaction(tx);
+      if (lock) await sql`select pg_advisory_xact_lock(hashtextextended(${id}::text, 205))`.execute(db);
       await sql`select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
         set_config('shipwithali.owner_id', ${scope.ownerId}, true), set_config('shipwithali.feedback_access', 'owner', true)`.execute(db);
       const rows = await sql<FeedbackRow>`select feedback_id, portfolio_id, project_id, locale, author_name, paragraph, moderation_state, aggregate_version, submitted_at
-        from interaction.feedback where portfolio_id = ${scope.portfolioId}::uuid and feedback_id = ${id}::uuid ${lock ? sql`for update` : sql``}`.execute(db);
+        from interaction.feedback where portfolio_id = ${scope.portfolioId}::uuid and feedback_id = ${id}::uuid\n          and text_erased_at is null ${lock ? sql`for update` : sql``}`.execute(db);
       const r = rows.rows[0];
       if (!r) return null;
       const version = Number(r.aggregate_version);
