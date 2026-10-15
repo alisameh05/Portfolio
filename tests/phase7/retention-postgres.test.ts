@@ -324,14 +324,40 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
       where portfolio_id=$1 and utc_day='2026-10-15'`, [portfolioId]);
     const sealPrivilege = await admin.query(`select
       has_column_privilege('retention_worker_runtime','measurement.daily_aggregate_checkpoints','retention_sealed','UPDATE') as can_unseal,
+      has_column_privilege('retention_worker_runtime','measurement.daily_aggregate_checkpoints','checkpoint_at','UPDATE') as can_rewrite_checkpoint,
+      has_table_privilege('retention_worker_runtime','measurement.daily_aggregates','UPDATE') as can_rewrite_aggregate,
       has_function_privilege('retention_worker_runtime','measurement.seal_daily_aggregate_checkpoint(uuid,date,boolean,timestamptz)','EXECUTE') as can_seal`);
-    expect(sealPrivilege.rows[0]).toEqual({ can_unseal: false, can_seal: true });
+    expect(sealPrivilege.rows[0]).toEqual({ can_unseal: false, can_rewrite_checkpoint: true, can_rewrite_aggregate: false, can_seal: true });
     await expect(worker.transactions.run(async tx => {
       const { sql } = await import("kysely");
       const { resolvePostgresTransaction } = await import("../../src/shared/adapters/postgres/runtime.js");
       const db = resolvePostgresTransaction(tx);
       await sql`select set_config('shipwithali.portfolio_id', ${portfolioId}, true)`.execute(db);
       return sql`update measurement.daily_aggregate_checkpoints set retention_sealed=false
+        where portfolio_id=${portfolioId}::uuid and utc_day='2026-10-15'`.execute(db);
+    })).rejects.toThrow();
+    await expect(worker.transactions.run(async tx => {
+      const { sql } = await import("kysely");
+      const { resolvePostgresTransaction } = await import("../../src/shared/adapters/postgres/runtime.js");
+      const db = resolvePostgresTransaction(tx);
+      await sql`select set_config('shipwithali.portfolio_id', ${portfolioId}, true)`.execute(db);
+      return sql`update measurement.daily_aggregate_checkpoints set source_event_count=999
+        where portfolio_id=${portfolioId}::uuid and utc_day='2026-10-15'`.execute(db);
+    })).rejects.toThrow();
+    await expect(worker.transactions.run(async tx => {
+      const { sql } = await import("kysely");
+      const { resolvePostgresTransaction } = await import("../../src/shared/adapters/postgres/runtime.js");
+      const db = resolvePostgresTransaction(tx);
+      await sql`select set_config('shipwithali.portfolio_id', ${portfolioId}, true)`.execute(db);
+      return sql`update measurement.daily_aggregate_checkpoints set checkpoint_at='2027-01-01T00:00:00Z'
+        where portfolio_id=${portfolioId}::uuid and utc_day='2026-10-15'`.execute(db);
+    })).rejects.toThrow();
+    await expect(worker.transactions.run(async tx => {
+      const { sql } = await import("kysely");
+      const { resolvePostgresTransaction } = await import("../../src/shared/adapters/postgres/runtime.js");
+      const db = resolvePostgresTransaction(tx);
+      await sql`select set_config('shipwithali.portfolio_id', ${portfolioId}, true)`.execute(db);
+      return sql`update measurement.daily_aggregates set event_count=999
         where portfolio_id=${portfolioId}::uuid and utc_day='2026-10-15'`.execute(db);
     })).rejects.toThrow();
     await expect(worker.transactions.run(async tx => {
@@ -380,5 +406,7 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
     expect((await admin.query("select 1 from measurement.consents where portfolio_id=$1 and consent_id=$2", [portfolioId, expiredConsentId])).rows).toHaveLength(1);
     expect((await admin.query(`select retention_sealed,incomplete from measurement.daily_aggregate_checkpoints
       where portfolio_id=$1 and utc_day='2026-10-15'`, [portfolioId])).rows[0]).toEqual({ retention_sealed: true, incomplete: true });
+    expect((await admin.query(`select event_count::int as count from measurement.daily_aggregates
+      where portfolio_id=$1 and utc_day='2026-10-15'`, [portfolioId])).rows[0].count).toBe(31);
   });
 });

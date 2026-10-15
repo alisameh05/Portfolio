@@ -182,7 +182,7 @@ async function processStage(db: ReturnType<typeof resolvePostgresTransaction>, i
     const expiry = sql`((a.utc_day::timestamp at time zone 'UTC') + interval '13 months') <= ${input.now}::timestamptz`;
     const result = await sql`with page as materialized (
         select a.ctid from measurement.daily_aggregates a where a.portfolio_id = ${input.portfolioId}::uuid and ${expiry}
-        order by a.utc_day, a.metric_kind, a.metric_key limit ${input.batchSize} for update of a
+        order by a.utc_day, a.metric_kind, a.metric_key limit ${input.batchSize}
       ) delete from measurement.daily_aggregates a using page where a.ctid = page.ctid`.execute(db);
     return { count: numeric(result.numAffectedRows ?? 0n), incomplete: false };
   }

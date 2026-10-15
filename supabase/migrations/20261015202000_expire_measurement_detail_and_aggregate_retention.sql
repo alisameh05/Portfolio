@@ -13,14 +13,18 @@ language plpgsql
 set search_path = pg_catalog, measurement
 as $function$
 begin
-  if old.retention_sealed and (not new.retention_sealed or (old.incomplete and not new.incomplete)) then
+  if old.retention_sealed and (not new.retention_sealed or (old.incomplete and not new.incomplete)
+    or old.source_event_count is distinct from new.source_event_count
+    or old.source_conversion_count is distinct from new.source_conversion_count
+    or old.policy_version is distinct from new.policy_version
+    or old.checkpoint_at is distinct from new.checkpoint_at) then
     raise exception 'sealed aggregate checkpoint is immutable' using errcode = '42501';
   end if;
   return new;
 end
 $function$;
 create trigger daily_aggregate_checkpoint_seal_guard
-  before update of retention_sealed, incomplete on measurement.daily_aggregate_checkpoints
+  before update on measurement.daily_aggregate_checkpoints
   for each row execute function measurement.prevent_sealed_aggregate_checkpoint_rewrite();
 
 create function measurement.seal_daily_aggregate_checkpoint(
@@ -39,7 +43,8 @@ begin
   end if;
   update measurement.daily_aggregate_checkpoints
     set retention_sealed = true, incomplete = measurement.daily_aggregate_checkpoints.incomplete or mark_incomplete,
-        checkpoint_at = greatest(checkpoint_at, sealed_at)
+        checkpoint_at = case when measurement.daily_aggregate_checkpoints.retention_sealed
+          then measurement.daily_aggregate_checkpoints.checkpoint_at else greatest(checkpoint_at, sealed_at) end
     where portfolio_id = target_portfolio and utc_day = target_day;
 end
 $function$;
@@ -235,6 +240,9 @@ create policy daily_aggregate_checkpoints_worker_delete on measurement.daily_agg
     and not exists (select 1 from measurement.daily_aggregates aggregate_row
       where aggregate_row.portfolio_id = daily_aggregate_checkpoints.portfolio_id
         and aggregate_row.utc_day = daily_aggregate_checkpoints.utc_day));
+
+drop policy daily_aggregates_worker_update on measurement.daily_aggregates;
+revoke update on measurement.daily_aggregates from shipwithali_worker;
 
 revoke update on measurement.daily_aggregate_checkpoints from shipwithali_worker;
 grant update (source_event_count, source_conversion_count, policy_version, checkpoint_at, incomplete)
