@@ -36,7 +36,7 @@ import type { OwnerMediaApplicationService } from "../modules/media/index.js";
 import type { MediaDeliveryApplicationService } from "../modules/media/index.js";
 import type { CurrentCvDeliveryService, OwnerCvApplicationService } from "../modules/cv-portfolio/index.js";
 import type { PortfolioSettingsApplicationService } from "../modules/portfolio-configuration/index.js";
-import type { ConsentApplicationService } from "../modules/measurement/index.js";
+import type { ConsentApplicationService, MeasurementService } from "../modules/measurement/index.js";
 import type { InteractionModerationService, FunctionalInteractionContextPort } from "../modules/interaction-moderation/index.js";
 
 export interface ReactionRuntimeServices {
@@ -57,6 +57,11 @@ export interface RatingRuntimeServices {
   readonly functionalIdentity: FunctionalInteractionContextPort;
 }
 
+export interface MeasurementEventRuntimeServices {
+  readonly scope: { readonly kind: "portfolio"; readonly portfolioId: StableId<"Portfolio"> };
+  readonly service: Pick<MeasurementService, "ingestEvent">;
+}
+
 export type { RuntimeConfig } from "./configuration.js";
 
 let current: RuntimeConfig | undefined;
@@ -71,6 +76,7 @@ let currentOwnerCv: OwnerCvApplicationService | undefined;
 let currentCurrentCv: CurrentCvDeliveryService | undefined;
 let currentPublicConfiguration: PortfolioSettingsApplicationService | undefined;
 let currentConsent: ConsentApplicationService | undefined;
+let currentEventIngestion: MeasurementEventRuntimeServices | undefined;
 let currentReaction: ReactionRuntimeServices | undefined;
 let currentRating: RatingRuntimeServices | undefined;
 let currentFeedback: FeedbackRuntimeServices | undefined;
@@ -105,6 +111,7 @@ export interface DatabaseRuntimeDependencies {
   readonly moderation?: NonNullable<typeof currentModeration>;
   readonly interactionSummary?: NonNullable<typeof currentInteractionSummary>;
   readonly consent?: ConsentApplicationService;
+  readonly eventIngestion?: MeasurementEventRuntimeServices;
   readonly operations: OperationsPersistencePorts;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
   readonly contentAuthoring?: ContentAuthoringService;
@@ -192,6 +199,7 @@ export async function initializeDatabaseRuntime(
         let currentCv: CurrentCvDeliveryService | undefined;
         let publicConfiguration: PortfolioSettingsApplicationService | undefined;
         let consent: ConsentApplicationService | undefined;
+        let eventIngestion: MeasurementEventRuntimeServices | undefined;
         let reaction: ReactionRuntimeServices | undefined;
         let rating: RatingRuntimeServices | undefined;
         let feedback: FeedbackRuntimeServices | undefined;
@@ -264,7 +272,17 @@ export async function initializeDatabaseRuntime(
               clock, ids: createSystemIdGenerator(), ttlSeconds: 2_592_000,
               supportedNoticeVersions: env["MEASUREMENT_CONSENT_NOTICE_VERSIONS"]!.split(",").map(v => v.trim()),
             });
-          } catch { consent = undefined; }
+            const [{ createMeasurementEventService }, { createPostgresMeasurementEventRepository }, { createPostgresContentMeasurementPublicFacts }] = await Promise.all([
+              import("../modules/measurement/index.js"),
+              import("../modules/measurement/adapters/postgres-events.js"),
+              import("../modules/content-publishing/adapters/postgres-interaction-facts.js"),
+            ]);
+            if (!configuredScope?.portfolioId.ok || !configuredScope.ownerId.ok) throw new Error("MEASUREMENT_SCOPE_UNAVAILABLE");
+            eventIngestion = { scope: { kind: "portfolio", portfolioId: configuredScope.portfolioId.value }, service: createMeasurementEventService({ portfolioId: configuredScope.portfolioId.value,
+              transactions: database.transactions, operations, consent,
+              content: createPostgresContentMeasurementPublicFacts({ portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value }),
+              repository: createPostgresMeasurementEventRepository(), clock, ids: createSystemIdGenerator() }) };
+          } catch { consent = undefined; eventIngestion = undefined; }
         }
         if (runtimeKind === "application") {
           if (configuredScope === undefined || !configuredScope.portfolioId.ok || !configuredScope.ownerId.ok) {
@@ -599,6 +617,7 @@ export async function initializeDatabaseRuntime(
           ...(moderation === undefined ? {} : { moderation }),
           ...(interactionSummary === undefined ? {} : { interactionSummary }),
           ...(consent === undefined ? {} : { consent }),
+          ...(eventIngestion === undefined ? {} : { eventIngestion }),
           ...(ownerConfiguration === undefined ? {} : { ownerConfiguration }),
           ...(contentAuthoring === undefined ? {} : { contentAuthoring }),
           ...(ownerTaxonomy === undefined ? {} : { ownerTaxonomy }),
@@ -633,6 +652,7 @@ export async function initializeDatabaseRuntime(
     currentModeration = dependencies.moderation;
     currentInteractionSummary = dependencies.interactionSummary;
     currentConsent = dependencies.consent;
+    currentEventIngestion = dependencies.eventIngestion;
     currentOwnerConfiguration = dependencies.ownerConfiguration;
     currentContentAuthoring = dependencies.contentAuthoring;
     currentOwnerTaxonomy = dependencies.ownerTaxonomy;
@@ -763,6 +783,11 @@ export function getConsentApplicationService(): ConsentApplicationService | unde
   return currentConsent;
 }
 
+/** Optional consent-gated event ingestion assembled with the application runtime. */
+export function getMeasurementEventIngestionService(): MeasurementEventRuntimeServices | undefined {
+  return currentEventIngestion;
+}
+
 /** Completed Reaction operation obtains real persistence and identity from standard assembly. */
 export async function getReactionRuntimeServices(): Promise<ReactionRuntimeServices | { readonly service: Pick<InteractionModerationService, "submitReaction"> }> {
   if (currentReaction) return currentReaction;
@@ -807,6 +832,7 @@ export function resetRuntimeForTests(): void {
   current = undefined;
   currentOperations = undefined;
   currentConsent = undefined;
+  currentEventIngestion = undefined;
   currentReaction = undefined;
   currentRating = undefined;
   currentFeedback = undefined;

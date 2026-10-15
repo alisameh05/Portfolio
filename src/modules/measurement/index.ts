@@ -44,3 +44,6 @@ export type { AggregateReportMetadata, SafeReportDimensions, AggregateReportRow 
 
 export { createConsentApplicationService } from "./application/consent.js";
 export type { ConsentApplicationService, ConsentServiceDependencies, ConsentChoiceReceipt, RecordConsentChoiceCommand, VerifyConsentQuery, CurrentConsent, ConsentRepositoryPort } from "./application/consent.js";
+
+export { createMeasurementEventService } from "./application/ingest-event.js";
+export type { MeasurementEventApplicationDeps, MeasurementEventRepositoryPort } from "./application/ingest-event.js";

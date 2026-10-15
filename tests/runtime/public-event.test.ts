@@ -107,6 +107,28 @@ describe("POST Public event adapter (#28)", () => {
     expect(JSON.stringify(logger.records)).not.toContain("signed-value-123");
   });
 
+  it("rejects all future actions before consent verification or application dispatch", async () => {
+    const actions = [
+      { action: "media-engaged", projectId: PROJECT_ID, mediaAssetId: EVENT_ID, engagement: "played" },
+      { action: "related-project-opened", sourceProjectId: PROJECT_ID, targetProjectId: EVENT_ID },
+      { action: "contact-channel-opened", channel: "linkedin" },
+      { action: "external-project-link-opened", projectId: PROJECT_ID, destination: "github-repository" },
+      { action: "testimonial-engaged", testimonialId: EVENT_ID },
+      { action: "global-project-cta-opened", projectId: PROJECT_ID },
+    ];
+    for (const event of actions) {
+      const fake = createPublicEventTestFake({ type: "success" });
+      let consentCalls = 0;
+      const response = await rawHandlePostPublicEvent(postEventRequest({ body: { ...event, context: validContext() } }), {
+        consent: { async verifyEvidence() { consentCalls += 1; throw new Error("must not verify excluded action"); } },
+        service: fake,
+      });
+      expect(response.status).toBe(400);
+      expect(consentCalls).toBe(0);
+      expect(fake.calls).toHaveLength(0);
+    }
+  });
+
   it.each([
     ["malformed JSON", { rawBody: "{not-json" }],
     ["missing Idempotency-Key", { idempotencyKey: null }],

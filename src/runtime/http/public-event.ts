@@ -1,5 +1,5 @@
 import type { PortfolioRequestScope } from "@shared/application";
-import { getConsentApplicationService } from "../../bootstrap/composition-root.js";
+import { getConsentApplicationService, getMeasurementEventIngestionService } from "../../bootstrap/composition-root.js";
 /**
  * public-event.ts — Phase 2 #28 consented Public event adapter.
  *
@@ -48,10 +48,12 @@ import {
   transportProblem,
 } from "./problem.js";
 
+const acceptedFirstSliceActions = new Set(["page-viewed", "project-viewed", "active-engagement-sampled"]);
+
 export interface PublicEventAdapterDeps {
   readonly consent?: Pick<ConsentApplicationService, "verifyEvidence">;
   readonly scope?: PortfolioRequestScope;
-  service: Pick<MeasurementService, "ingestEvent">;
+  service?: Pick<MeasurementService, "ingestEvent">;
   logger?: Logger;
 }
 
@@ -119,13 +121,20 @@ export async function handlePostPublicEvent(
       logger?.warn("request.rejected", { traceId, status: 400 });
       return transportProblem("Invalid request body.", traceId, instance);
     }
+    if (!acceptedFirstSliceActions.has(bodyResult.data.action)) {
+      logger?.warn("request.rejected", { traceId, status: 400 });
+      return transportProblem("Invalid request body.", traceId, instance);
+    }
 
-    const scope = deps.scope ?? { kind: "unconfigured" as const };
+    const runtime = getMeasurementEventIngestionService();
+    const scope = deps.scope ?? runtime?.scope ?? { kind: "unconfigured" as const };
     const consent = deps.consent ?? getConsentApplicationService();
     const token = analyticsConsentToken(request);
     if (!consent || !token) return rejectionToProblem({ kind: "forbidden", code: "MEASUREMENT_CONSENT_REQUIRED" }, traceId, instance);
     const verified = await consent.verifyEvidence({ scope, correlationId: traceId, token, noticeVersion: bodyResult.data.context.consentVersion });
     if (!verified.ok) return rejectionToProblem(verified.error, traceId, instance);
+    const service = deps.service ?? runtime?.service;
+    if (!service) return rejectionToProblem({ kind: "temporarily_unavailable", code: "MEASUREMENT_UNAVAILABLE" }, traceId, instance);
     const command: IngestPublicEventCommand = {
       scope,
       correlationId: traceId,
@@ -135,9 +144,9 @@ export async function handlePostPublicEvent(
       event: bodyResult.data as unknown as PublicMeasurementEvent,
     };
 
-    let result: Awaited<ReturnType<typeof deps.service.ingestEvent>>;
+    let result: Awaited<ReturnType<typeof service.ingestEvent>>;
     try {
-      result = await deps.service.ingestEvent(command);
+      result = await service.ingestEvent(command);
     } catch (error) {
       return internalErrorProblem(error, traceId, instance, logger);
     }
