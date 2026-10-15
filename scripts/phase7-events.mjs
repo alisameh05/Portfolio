@@ -82,7 +82,7 @@ try {
         "T11-02": ["T11-02/T11-03/T11-05 rejects absent or mismatched current configuration without durable effects", "T11-02/T11-03 rejects unconfigured Contact channel before durable effects", "T11-02/T11-03 rejects unavailable Global CTA destination before durable effects"],
         "T11-03": ["T11-02/T11-03 rejects English-only Project destination in Arabic before durable effects"],
         "T11-04": ["T11-01/T11-04/T11-06 records only current configured capability facts and stable public identities"],
-        "T11-05": ["T11-05 rejects invalid Contact channel before durable effects", "T11-05 rejects raw destination URL before durable effects", "T11-05 rejects unknown closed-shape property as 400 before dispatch"],
+        "T11-05": ["T11-05 rejects invalid Contact channel before durable effects", "T11-05 rejects raw destination URL before durable effects", "T11-05 rejects unknown closed-shape property as 400 before dispatch", "rejects Contact URL identifying payload as 400 before dispatch", "rejects External link wrong action field as 400 before dispatch", "rejects Global CTA wrong action field as 400 before dispatch"],
         "T11-06": ["T11-01/T11-06 accepts and preserves all nine action mappings as distinct facts", "dispatches all nine contract actions through consent verification"],
         "T11-07": ["T11-07 replays and conflicts for each current capability fact exactly once", "T09-07 commits event, safe receipt and private job once; exact races replay and failures roll back"],
         "T11-08": ["T11-01/T11-04/T11-06 records only current configured capability facts and stable public identities", "T11-02/T11-03/T11-05 rejects absent or mismatched current configuration without durable effects"]
