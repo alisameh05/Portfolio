@@ -75,6 +75,36 @@ export interface Consents {
   subject: string | null;
 }
 
+export interface DailyAggregateCheckpoints {
+  checkpoint_at: Timestamp;
+  incomplete: Generated<boolean>;
+  policy_version: string;
+  portfolio_id: string;
+  source_conversion_count: Int8;
+  source_event_count: Int8;
+  utc_day: Timestamp;
+}
+
+export interface DailyAggregates {
+  checkpoint_at: Timestamp;
+  dimensions: Generated<Json>;
+  event_count: Int8;
+  goal_id: string | null;
+  goal_version_id: string | null;
+  incomplete: Generated<boolean>;
+  metric_key: string;
+  metric_kind: string;
+  observed_subjects: Int8;
+  policy_version: string;
+  portfolio_id: string;
+  returning_subjects: Generated<Int8>;
+  /**
+   * Metric-specific sufficient statistic: active-attention milliseconds for actions, or zero for counts and goal conversions.
+   */
+  sum_value: Generated<Int8>;
+  utc_day: Timestamp;
+}
+
 export interface GoalConversionContributions {
   /**
    * Anchored to the first matched event so retention cannot outlive the earliest source detail.
@@ -147,6 +177,8 @@ export interface DB {
   analytics_goals: AnalyticsGoals;
   consent_history: ConsentHistory;
   consents: Consents;
+  daily_aggregate_checkpoints: DailyAggregateCheckpoints;
+  daily_aggregates: DailyAggregates;
   goal_conversion_contributions: GoalConversionContributions;
   goal_conversion_rebuilds: GoalConversionRebuilds;
   public_events: PublicEvents;

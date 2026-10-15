@@ -25,3 +25,5 @@ export type { MeasurementWorkCommand, MeasurementWorkService } from "./work.js";
 export type { SafeAggregateReport } from "./service.js";
 
 export type { AggregateReportMetadata, SafeReportDimensions, AggregateReportRow } from "./service.js";
+export { createDailyAggregateWorkService, createOwnerAggregateReportService } from "./daily-aggregates.js";
+export type { DailyAggregateWorkDependencies, OwnerAggregateReportDependencies } from "./daily-aggregates.js";

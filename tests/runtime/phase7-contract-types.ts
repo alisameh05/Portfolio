@@ -47,7 +47,7 @@ export function checkReviewRegressions(context: PublicMeasurementEvent["context"
  // @ts-expect-error Identifying report dimensions are excluded.
  const privateDimensions: SafeReportDimensions = { functionalId: projectId };
  const metadata = { utcPeriod: { startDay: "2026-10-14", endDay: "2026-10-14" }, asOf: "2026-10-14T12:00:00Z", incomplete: false, policyVersion: "p7-v1", grouping: "daily-goal" as const };
- const report: SafeAggregateReport = { ...metadata, state: "available", rows: [goalRow], engagementMeaning: "approximate-active-attention", journeyMeaning: "context-without-causation" };
+ const report: SafeAggregateReport = { ...metadata, state: "available", observedSubjects: "five-or-more", rows: [goalRow], engagementMeaning: "approximate-active-attention", journeyMeaning: "context-without-causation" };
  // @ts-expect-error Suppressed reports cannot carry detail rows.
  const lowSample: SafeAggregateReport = { ...metadata, state: "low-sample", observedSubjects: "fewer-than-five", rows: [actionRow] };
  void [variableEvent, spreadEvent, wrongFeedback, wrongGoal, wrongVersion, actionRow, goalRow, anonymousGoal, privateDimensions, report, lowSample];

@@ -12,6 +12,8 @@ import type {
   DailyAggregate,
 } from "../domain/index.js";
 
+export { createPostgresDailyAggregateRepository } from "./postgres-daily-aggregates.js";
+
 export { createPostgresOwnerAnalyticsGoalRepository } from "./postgres-goals.js";
 export { createPostgresAnalyticsGoalScopeFacts } from "./postgres-goal-scope-facts.js";
 

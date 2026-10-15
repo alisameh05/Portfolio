@@ -84,6 +84,7 @@ let currentInteractionSummary: Pick<InteractionModerationService, "getProjectAgg
 let currentModeration: (import("../modules/interaction-moderation/index.js").OwnerModerationApplicationService & Pick<InteractionModerationService, "getApprovedFeedback">) | undefined;
 let currentOwnerAnalytics: OwnerAnalyticsApplicationService | undefined;
 let currentOwnerAnalyticsScope: ReactionRuntimeServices["scope"] | undefined;
+let currentOwnerAggregateReport: Pick<MeasurementService, "getAggregateReport"> | undefined;
 
 export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
   try {
@@ -112,6 +113,7 @@ export interface DatabaseRuntimeDependencies {
   readonly feedback?: FeedbackRuntimeServices;
   readonly moderation?: NonNullable<typeof currentModeration>;
   readonly ownerAnalytics?: OwnerAnalyticsApplicationService;
+  readonly ownerAggregateReport?: Pick<MeasurementService, "getAggregateReport">;
   readonly interactionSummary?: NonNullable<typeof currentInteractionSummary>;
   readonly consent?: ConsentApplicationService;
   readonly eventIngestion?: MeasurementEventRuntimeServices;
@@ -209,12 +211,15 @@ export async function initializeDatabaseRuntime(
         let feedback: FeedbackRuntimeServices | undefined;
         let moderation: NonNullable<typeof currentModeration> | undefined;
         let ownerAnalytics: OwnerAnalyticsApplicationService | undefined;
+        let ownerAggregateReport: Pick<MeasurementService, "getAggregateReport"> | undefined;
         let interactionSummary: NonNullable<typeof currentInteractionSummary> | undefined;
         if (runtimeKind === "application" && configuredScope?.portfolioId.ok && configuredScope.ownerId.ok) {
-          const [{ createOwnerAnalyticsGoalService }, { createPostgresOwnerAnalyticsGoalRepository },
+          const [{ createOwnerAnalyticsGoalService, createOwnerAggregateReportService }, { createPostgresOwnerAnalyticsGoalRepository },
+            { createPostgresDailyAggregateRepository },
             { createPostgresAnalyticsGoalScopeFacts }, { decideAuthorization }] = await Promise.all([
             import("../modules/measurement/index.js"),
             import("../modules/measurement/adapters/postgres-goals.js"),
+            import("../modules/measurement/adapters/postgres-daily-aggregates.js"),
             import("../modules/measurement/adapters/postgres-goal-scope-facts.js"),
             import("../modules/identity-access/index.js"),
           ]);
@@ -222,6 +227,9 @@ export async function initializeDatabaseRuntime(
           ownerAnalytics = createOwnerAnalyticsGoalService({ scope: analyticsScope, operations, authorize: async query => decideAuthorization(query),
             repository: createPostgresOwnerAnalyticsGoalRepository(), scopeFacts: createPostgresAnalyticsGoalScopeFacts(analyticsScope),
             clock: createSystemClock(), ids: createSystemIdGenerator() });
+          ownerAggregateReport = createOwnerAggregateReportService({ scope: analyticsScope,
+            authorize: async query => decideAuthorization(query), transactions: operations.transactions,
+            repository: createPostgresDailyAggregateRepository(), clock: createSystemClock() });
           const [{ createFeedbackApplicationService, createOwnerFeedbackModerationService }, { createPostgresFeedbackSubmissionRepository },
             { createPostgresProjectInteractionFacts }, { createBoundedCurrentCvRateLimit }] = await Promise.all([
             import("../modules/interaction-moderation/index.js"),
@@ -658,6 +666,7 @@ export async function initializeDatabaseRuntime(
           ...(feedback === undefined ? {} : { feedback }),
           ...(moderation === undefined ? {} : { moderation }),
           ...(ownerAnalytics === undefined ? {} : { ownerAnalytics }),
+          ...(ownerAggregateReport === undefined ? {} : { ownerAggregateReport }),
           ...(interactionSummary === undefined ? {} : { interactionSummary }),
           ...(consent === undefined ? {} : { consent }),
           ...(eventIngestion === undefined ? {} : { eventIngestion }),
@@ -694,6 +703,7 @@ export async function initializeDatabaseRuntime(
     currentFeedback = dependencies.feedback;
     currentModeration = dependencies.moderation;
     currentOwnerAnalytics = dependencies.ownerAnalytics;
+    currentOwnerAggregateReport = dependencies.ownerAggregateReport;
     const scopedPortfolio = parseStableId("Portfolio", env["PORTFOLIO_ID"] ?? "");
     currentOwnerAnalyticsScope = currentOwnerAnalytics && scopedPortfolio.ok
       ? { kind: "portfolio", portfolioId: scopedPortfolio.value } : undefined;
@@ -864,6 +874,12 @@ export async function getOwnerAnalyticsRuntimeServices() {
   return { service: createProductionOwnerAnalyticsService() };
 }
 
+/** Safe Owner aggregate reports are an in-process capability and expose no HTTP read endpoint. */
+export function getOwnerAggregateReportApplicationService(): Pick<MeasurementService, "getAggregateReport"> {
+  if (!currentOwnerAggregateReport) throw new Error("OWNER_AGGREGATE_REPORT_NOT_CONFIGURED");
+  return currentOwnerAggregateReport;
+}
+
 export async function getOwnerModerationRuntimeServices() {
   if (currentModeration && currentFeedback) return { scope: currentFeedback.scope, service: currentModeration };
   const { createProductionOwnerModerationService } = await import("../runtime/fakes/owner-moderation.js");
@@ -894,6 +910,7 @@ export function resetRuntimeForTests(): void {
   currentModeration = undefined;
   currentOwnerAnalytics = undefined;
   currentOwnerAnalyticsScope = undefined;
+  currentOwnerAggregateReport = undefined;
   currentInteractionSummary = undefined;
   currentOwnerConfiguration = undefined;
   currentContentAuthoring = undefined;
