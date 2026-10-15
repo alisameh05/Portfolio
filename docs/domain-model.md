@@ -422,3 +422,22 @@ also check current Published Project/locale facts. Data API, worker and backup
 roles receive no view grants. There is no Measurement subject join or new HTTP
 operation. Rollback disables summary assembly and preserves retained records;
 policy changes use a reviewed forward migration.
+
+### Measurement retention and withdrawal cleanup (#204)
+
+Raw Measurement events, goal-conversion contributions/rebuild state, and
+consent history are subject-linked detail. Detail expires at acceptedAt plus
+14 days; daily aggregates expire from UTC day start plus 13 calendar months.
+Cleanup runs in bounded, resumable batches under a fixed job time anchor and
+the configured Portfolio's Worker RLS. Withdrawal removes subject-linked
+contributions, events, and rebuild state while retaining only the bounded
+revocation proof needed to reject an old signed token. Aggregate checkpoints
+are sealed before source detail disappears; if the daily summary did not cover
+all eligible sources at that point, it is marked incomplete and never rebuilt
+from a partial remainder.
+
+Phase 8 owns backup and export lifecycle integration. Exports must omit expired
+subject-linked Measurement detail, and backup restore must apply the original
+retention deadlines and withdrawn-consent cleanup before restored data becomes
+available; a restore cannot resurrect expired detail or usable withdrawn
+evidence. This is a handoff, not a Phase 7 backup/export implementation.

@@ -67,6 +67,10 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
       const endDate = new Date(Date.parse(start) + 86_400_000).toISOString();
       const acceptedCutoff = new Date(Date.parse(input.asOf) - 14 * 86_400_000).toISOString();
       await sql`select pg_advisory_xact_lock(hashtextextended(${input.portfolioId + ":" + input.utcDay}, 202))`.execute(db);
+      const retention = await sql<{ retention_sealed: boolean }>`select retention_sealed
+        from measurement.daily_aggregate_checkpoints where portfolio_id = ${input.portfolioId}::uuid
+          and utc_day = ${input.utcDay}::date for update`.execute(db);
+      if (retention.rows[0]?.retention_sealed) return 0;
 
       const actions = await sql<ActionRow>`with day_events as (
         select e.action, e.measurement_subject, e.active_milliseconds
