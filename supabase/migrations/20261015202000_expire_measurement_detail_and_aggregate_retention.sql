@@ -7,6 +7,22 @@ set role shipwithali_migration;
 alter table measurement.daily_aggregate_checkpoints
   add column retention_sealed boolean not null default false;
 
+create function measurement.prevent_sealed_aggregate_checkpoint_rewrite()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, measurement
+as $function$
+begin
+  if old.retention_sealed and (not new.retention_sealed or (old.incomplete and not new.incomplete)) then
+    raise exception 'sealed aggregate checkpoint is immutable' using errcode = '42501';
+  end if;
+  return new;
+end
+$function$;
+create trigger daily_aggregate_checkpoint_seal_guard
+  before update of retention_sealed, incomplete on measurement.daily_aggregate_checkpoints
+  for each row execute function measurement.prevent_sealed_aggregate_checkpoint_rewrite();
+
 create function measurement.seal_daily_aggregate_checkpoint(
   target_portfolio uuid, target_day date, mark_incomplete boolean, sealed_at timestamptz
 ) returns void
