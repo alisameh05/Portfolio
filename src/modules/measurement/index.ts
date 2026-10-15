@@ -56,9 +56,14 @@ export { createDailyAggregateWorkService, createOwnerAggregateReportService } fr
 export type { DailyAggregateWorkDependencies, OwnerAggregateReportDependencies } from "./application/daily-aggregates.js";
 export type { DailyAggregatePage, DailyAggregateRepositoryPort, DailyAggregateReportRecord } from "./ports/daily-aggregates.js";
 export { createPostgresDailyAggregateRepository } from "./adapters/postgres-daily-aggregates.js";
+export { createPostgresMeasurementRetentionRepository } from "./adapters/postgres-retention.js";
 
 export { createConsentApplicationService } from "./application/consent.js";
 export type { ConsentApplicationService, ConsentServiceDependencies, ConsentChoiceReceipt, RecordConsentChoiceCommand, VerifyConsentQuery, CurrentConsent, ConsentRepositoryPort } from "./application/consent.js";
 
 export { createMeasurementEventService } from "./application/ingest-event.js";
 export type { MeasurementEventApplicationDeps, MeasurementEventRepositoryPort, MeasurementMediaPublicFactsPort } from "./application/ingest-event.js";
+export { createMeasurementRetentionWorkService } from "./application/retention.js";
+export { measurementAggregateExpiryAt, measurementDetailExpiryAt } from "./application/retention.js";
+export type { MeasurementRetentionWorkDependencies } from "./application/retention.js";
+export type { MeasurementRetentionKind, MeasurementRetentionBatch, MeasurementRetentionRepositoryPort } from "./ports/retention.js";

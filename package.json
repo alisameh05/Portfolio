@@ -171,6 +171,8 @@
     "phase7:focus:goal-conversions": "node scripts/phase7-goal-conversions.mjs",
     "prephase7:focus:daily-aggregates": "npm run validation:ready",
     "phase7:focus:daily-aggregates": "node scripts/phase7-daily-aggregates.mjs",
+    "prephase7:focus:retention": "npm run validation:ready",
+    "phase7:focus:retention": "node scripts/phase7-retention.mjs",
     "prephase7:focus:aggregate-privacy": "npm run validation:ready",
     "phase7:focus:aggregate-privacy": "node scripts/phase7-daily-aggregates.mjs --privacy"
   },

@@ -13,6 +13,7 @@ import type {
 } from "../domain/index.js";
 
 export { createPostgresDailyAggregateRepository } from "./postgres-daily-aggregates.js";
+export { createPostgresMeasurementRetentionRepository } from "./postgres-retention.js";
 
 export { createPostgresOwnerAnalyticsGoalRepository } from "./postgres-goals.js";
 export { createPostgresAnalyticsGoalScopeFacts } from "./postgres-goal-scope-facts.js";

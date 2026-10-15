@@ -70,6 +70,7 @@ export interface Consents {
   notice_version: string;
   portfolio_id: string;
   recorded_at: Timestamp;
+  retention_lock: Generated<boolean>;
   revision: number;
   state: string;
   subject: string | null;
@@ -80,6 +81,10 @@ export interface DailyAggregateCheckpoints {
   incomplete: Generated<boolean>;
   policy_version: string;
   portfolio_id: string;
+  /**
+   * Set atomically before source detail expires; prevents later rebuilds from replacing retained sufficient statistics with partial data.
+   */
+  retention_sealed: Generated<boolean>;
   source_conversion_count: Int8;
   source_event_count: Int8;
   utc_day: Timestamp;
@@ -174,6 +179,16 @@ export interface PublicEvents {
   testimonial_id: string | null;
 }
 
+export interface RetentionCheckpoints {
+  incomplete: Generated<boolean>;
+  job_id: string;
+  portfolio_id: string;
+  requested_at: Timestamp;
+  stage: string;
+  updated_at: Timestamp;
+  work_kind: string;
+}
+
 export interface DB {
   analytics_goal_activation_history: AnalyticsGoalActivationHistory;
   analytics_goal_versions: AnalyticsGoalVersions;
@@ -185,4 +200,5 @@ export interface DB {
   goal_conversion_contributions: GoalConversionContributions;
   goal_conversion_rebuilds: GoalConversionRebuilds;
   public_events: PublicEvents;
+  retention_checkpoints: RetentionCheckpoints;
 }
