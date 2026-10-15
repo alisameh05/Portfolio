@@ -173,6 +173,8 @@
     "phase7:focus:daily-aggregates": "node scripts/phase7-daily-aggregates.mjs",
     "prephase7:focus:retention": "npm run validation:ready",
     "phase7:focus:retention": "node scripts/phase7-retention.mjs",
+    "prephase7:focus:jobs": "npm run validation:ready",
+    "phase7:focus:jobs": "node scripts/phase7-jobs.mjs",
     "prephase7:focus:feedback-retention": "npm run validation:ready",
     "phase7:focus:feedback-retention": "node scripts/phase7-feedback-retention.mjs",
     "prephase7:focus:aggregate-privacy": "npm run validation:ready",
