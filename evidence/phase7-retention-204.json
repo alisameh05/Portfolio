@@ -1,8 +1,8 @@
 {
   "ticket": 204,
-  "runId": "b81a485d-a5b2-4efd-bb35-410d7dfff085",
-  "sourceRevision": "3e1cf01587a31f001e3299f0e608f6c78cfc3893",
-  "sourceTreeSha256": "44cd3b4510317f36dc2899872f4144261946ea3319196125d2df602189e90eee",
+  "runId": "64f9742a-78e6-4240-bb7c-49403bfe991d",
+  "sourceRevision": "28207c1947efad6d2fff6c57aa0260be93173899",
+  "sourceTreeSha256": "3153b8f60146f78bc93dd7e3b725b4ecf9c60ac2be74d01578268db2aed56e60",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
   "migrationSha256": "572ec22872506a64ac6e8963fe02db2d0865927dabec5b138db59fa58d9b4ecb",
