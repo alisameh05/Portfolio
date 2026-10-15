@@ -51,6 +51,10 @@ export type { MeasurementWorkCommand, MeasurementWorkService } from "./applicati
 export type { SafeAggregateReport } from "./application/service.js";
 
 export type { AggregateReportMetadata, SafeReportDimensions, AggregateReportRow } from "./application/service.js";
+export { createDailyAggregateWorkService, createOwnerAggregateReportService } from "./application/daily-aggregates.js";
+export type { DailyAggregateWorkDependencies, OwnerAggregateReportDependencies } from "./application/daily-aggregates.js";
+export type { DailyAggregatePage, DailyAggregateRepositoryPort, DailyAggregateReportRecord } from "./ports/daily-aggregates.js";
+export { createPostgresDailyAggregateRepository } from "./adapters/postgres-daily-aggregates.js";
 
 export { createConsentApplicationService } from "./application/consent.js";
 export type { ConsentApplicationService, ConsentServiceDependencies, ConsentChoiceReceipt, RecordConsentChoiceCommand, VerifyConsentQuery, CurrentConsent, ConsentRepositoryPort } from "./application/consent.js";

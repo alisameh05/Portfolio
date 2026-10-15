@@ -1,0 +1,31 @@
+import type { StableId } from "@shared/domain";
+import type { TransactionContext } from "../../../runtime/ports.js";
+import type { DailyAggregate } from "../domain/index.js";
+import type { AnalyticsGoalDefinition } from "../application/owner-analytics.js";
+
+export interface DailyAggregateReportRecord extends DailyAggregate {
+  readonly definitionSnapshot?: AnalyticsGoalDefinition;
+}
+
+export interface DailyAggregatePage {
+  readonly rows: readonly DailyAggregateReportRecord[];
+  readonly asOf: string;
+  readonly incomplete: boolean;
+}
+
+export interface DailyAggregateRepositoryPort {
+  rebuildDay(input: {
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly utcDay: string;
+    readonly asOf: string;
+  }, transaction: TransactionContext): Promise<number>;
+  readReport(input: {
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly ownerId: StableId<"Owner">;
+    readonly startDay: string;
+    readonly endDay: string;
+    readonly grouping: "daily-action" | "daily-goal";
+    readonly action?: string;
+    readonly limit: number;
+  }, transaction: TransactionContext): Promise<DailyAggregatePage>;
+}

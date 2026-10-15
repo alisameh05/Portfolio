@@ -59,10 +59,17 @@ export interface AnalyticsGoalVersion {
 
 export interface DailyAggregate {
   readonly date: string;
-  readonly metricName: string;
-  readonly dimensionKey: string;
+  readonly metric: "action" | "goal";
+  readonly metricKey: string;
+  readonly goalId?: StableId<"AnalyticsGoal">;
+  readonly goalVersionId?: StableId<"AnalyticsGoalVersion">;
   readonly count: number;
-  readonly isLowSample: boolean;
+  readonly sum: number;
+  readonly observedSubjects: number;
+  readonly returningSubjects: number;
+  readonly policyVersion: string;
+  readonly asOf: string;
+  readonly incomplete: boolean;
 }
 
 // Domain events

@@ -81,5 +81,5 @@ export type AggregateReportRow = {
 export type SafeAggregateReport = AggregateReportMetadata & (
  { readonly state: "no-data"; readonly observedSubjects: "zero"; readonly rows?: never } |
  { readonly state: "low-sample"; readonly observedSubjects: "fewer-than-five"; readonly rows?: never } |
- { readonly state: "available"; readonly rows: readonly AggregateReportRow[]; readonly engagementMeaning: "approximate-active-attention"; readonly journeyMeaning: "context-without-causation" }
+ { readonly state: "available"; readonly observedSubjects: "five-or-more"; readonly rows: readonly AggregateReportRow[]; readonly engagementMeaning: "approximate-active-attention"; readonly journeyMeaning: "context-without-causation" }
 );
