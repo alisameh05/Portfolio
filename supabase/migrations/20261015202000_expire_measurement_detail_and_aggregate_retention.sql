@@ -30,15 +30,46 @@ create table measurement.retention_checkpoints (
 );
 create index retention_checkpoints_age on measurement.retention_checkpoints (portfolio_id, updated_at, job_id);
 
+create function measurement.begin_retention_checkpoint(
+  requested_portfolio uuid, requested_job uuid, requested_kind text, requested_at timestamptz, initial_stage text
+) returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, measurement
+as $function$
+begin
+  if requested_portfolio is distinct from nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid then
+    raise exception 'retention Portfolio scope mismatch' using errcode = '42501';
+  end if;
+  if requested_at > statement_timestamp() then
+    raise exception 'retention checkpoint cannot be future dated' using errcode = '22023';
+  end if;
+  insert into measurement.retention_checkpoints
+    (portfolio_id, job_id, work_kind, requested_at, stage, updated_at)
+    values (requested_portfolio, requested_job, requested_kind, requested_at, initial_stage, requested_at)
+    on conflict (portfolio_id, job_id, work_kind) do nothing;
+end
+$function$;
+revoke all on function measurement.begin_retention_checkpoint(uuid, uuid, text, timestamptz, text)
+  from public, anon, authenticated, shipwithali_application, shipwithali_backup;
+grant execute on function measurement.begin_retention_checkpoint(uuid, uuid, text, timestamptz, text)
+  to shipwithali_worker;
+
 alter table measurement.retention_checkpoints enable row level security;
 alter table measurement.retention_checkpoints force row level security;
 revoke all on measurement.retention_checkpoints from public, anon, authenticated, shipwithali_application, shipwithali_backup;
 grant usage on schema measurement to shipwithali_worker;
-grant select, insert, update, delete on measurement.retention_checkpoints to shipwithali_worker;
+grant select, delete on measurement.retention_checkpoints to shipwithali_worker;
+grant update (stage, incomplete, updated_at) on measurement.retention_checkpoints to shipwithali_worker;
 create policy retention_checkpoints_worker on measurement.retention_checkpoints
   for all to shipwithali_worker
   using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid)
   with check (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
+create policy retention_checkpoints_migration on measurement.retention_checkpoints
+  for all to shipwithali_migration
+  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid)
+  with check (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
+drop policy consent_worker_expire on measurement.consents;
 create policy consent_worker_expire_checkpoint on measurement.consents
   for delete to shipwithali_worker
   using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid

@@ -7,7 +7,7 @@ import type { MeasurementRetentionBatch, MeasurementRetentionRepositoryPort } fr
 interface RetentionCheckpoint { stage: string; requested_at: string | Date; incomplete: boolean }
 interface RemovedDetail { row_id: string; utc_day: string }
 interface RemovedConversion { row_id: string; utc_day: string }
-interface DayCounts { source_event_count: string | number; source_conversion_count: string | number }
+interface DayCounts { source_event_count: string | number; source_conversion_count: string | number; pending_rebuild_count: string | number }
 
 const DAY_MS = 86_400_000;
 const RAW_DAYS = 14;
@@ -45,7 +45,11 @@ async function sealDays(db: ReturnType<typeof resolvePostgresTransaction>, portf
         join measurement.goal_conversion_rebuilds r on r.portfolio_id = c.portfolio_id
           and r.measurement_subject = c.measurement_subject and r.completed_generation = c.generation
         where c.portfolio_id = ${portfolioId}::uuid and (c.converted_at at time zone 'UTC')::date = ${day}::date
-          and c.accepted_at <= ${asOf}::timestamptz) as source_conversion_count`.execute(db);
+          and c.accepted_at <= ${asOf}::timestamptz) as source_conversion_count,
+      (select count(*) from measurement.goal_conversion_rebuilds r
+        join measurement.public_events e on e.portfolio_id = r.portfolio_id and e.measurement_subject = r.measurement_subject
+        where r.portfolio_id = ${portfolioId}::uuid and (e.effective_at at time zone 'UTC')::date = ${day}::date
+          and e.accepted_at <= ${asOf}::timestamptz and r.completed_generation < r.generation) as pending_rebuild_count`.execute(db);
     const actual = counts.rows[0];
     if (!actual) throw new Error("MEASUREMENT_RETENTION_DAY_COUNTS_MISSING");
     const existing = await sql<{ source_event_count: string | number; source_conversion_count: string | number; incomplete: boolean }>`
@@ -61,7 +65,8 @@ async function sealDays(db: ReturnType<typeof resolvePostgresTransaction>, portf
       continue;
     }
     const missing = numeric(checkpoint.source_event_count) < numeric(actual.source_event_count) ||
-      numeric(checkpoint.source_conversion_count) < numeric(actual.source_conversion_count);
+      numeric(checkpoint.source_conversion_count) < numeric(actual.source_conversion_count) ||
+      numeric(actual.pending_rebuild_count) > 0;
     const dayIncomplete = checkpoint.incomplete || missing;
     await sql`update measurement.daily_aggregate_checkpoints set retention_sealed = true,
       incomplete = ${dayIncomplete}, checkpoint_at = greatest(checkpoint_at, ${asOf}::timestamptz)
@@ -199,9 +204,8 @@ export function createPostgresMeasurementRetentionRepository(): MeasurementReten
     async processBatch(input, transaction): Promise<BoundedWorkResult> {
       const db = await configure(transaction, input.portfolioId);
       const firstStage = retentionStages(input.kind)[0]!;
-      await sql`insert into measurement.retention_checkpoints (portfolio_id, job_id, work_kind, requested_at, stage, updated_at)
-        values (${input.portfolioId}::uuid, ${input.jobId}::uuid, ${input.kind}, ${input.now}::timestamptz, ${firstStage}, ${input.now}::timestamptz)
-        on conflict (portfolio_id, job_id, work_kind) do nothing`.execute(db);
+      await sql`select measurement.begin_retention_checkpoint(${input.portfolioId}::uuid, ${input.jobId}::uuid,
+        ${input.kind}, ${input.now}::timestamptz, ${firstStage})`.execute(db);
       const result = await sql<RetentionCheckpoint>`select stage, requested_at, incomplete from measurement.retention_checkpoints
         where portfolio_id = ${input.portfolioId}::uuid and job_id = ${input.jobId}::uuid and work_kind = ${input.kind} for update`.execute(db);
       const checkpoint = result.rows[0];
