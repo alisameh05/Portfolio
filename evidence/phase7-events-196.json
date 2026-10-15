@@ -1,13 +1,13 @@
 {
-  "runId": "1a12ef09-f3f3-4a7b-a70b-8c8bfdb2b967",
-  "sourceRevision": "c2b2f5d51572b358609a54d68b7beee0f351458b",
-  "sourceTreeSha256": "8fa6a4369fcd3650552ff262dd3dde4655094aacdd80e6731739b0af04b630ea",
+  "runId": "9830be1c-9b8f-4a8a-9aad-6ceea73fae79",
+  "sourceRevision": "e5958a8c44624a182ca5039a763fe1e2923c7717",
+  "sourceTreeSha256": "872fc8da498e9c12a6f5b8f23eb0771f935c621056bccae330bcd7c2ae744e3c",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015120000_persist_consented_public_events.sql",
-  "migrationSha256": "4c810b02aadda8e883b616b44182b32fab656e73369da0ed1e62b29c4196f552",
+  "migrationSha256": "ab5445a8b8a3e5527c9844742e62bcba37b68066cecb30e6e191d05eb8d441d6",
   "required": {
     "success": true,
-    "passed": 48,
+    "passed": 46,
     "failed": 0,
     "skipped": 0,
     "failedSuites": 0
@@ -19,11 +19,11 @@
     },
     {
       "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-measurement-196/tests/phase7/events-application.test.ts",
-      "passed": 15
+      "passed": 14
     },
     {
       "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-measurement-196/tests/phase7/events-postgres.test.ts",
-      "passed": 8
+      "passed": 7
     },
     {
       "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-measurement-196/tests/runtime/public-event.test.ts",
@@ -32,7 +32,6 @@
   ],
   "roles": [
     "event_runtime",
-    "event_worker",
     "shipwithali_application",
     "shipwithali_worker",
     "anon",
