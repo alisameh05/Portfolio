@@ -1,0 +1,83 @@
+{
+  "runId": "8fcd08cb-b02d-4f82-8987-e37770ad49a4",
+  "sourceRevision": "da2f79346e50243285aab9d9d3106255442dcc7a",
+  "sourceTreeSha256": "498a6d2d62268a48de94a58425e2f6bfa79e3534b353bda6b4f16b87ab52a510",
+  "version": "postgres (PostgreSQL) 18.3",
+  "migration": "supabase/migrations/20261015120000_persist_consented_public_events.sql",
+  "migrationSha256": "ab5445a8b8a3e5527c9844742e62bcba37b68066cecb30e6e191d05eb8d441d6",
+  "acceptanceCriteria": {
+    "T10-01": [
+      "T09-01/T09-03 persists each first-slice action and round-trips the full safe context",
+      "T10-01/T10-04 persists related-project and testimonial actions with exact current public associations",
+      "T10-01/T10-03 persists Media facts only when the optional public-use capability accepts them"
+    ],
+    "T10-02": [
+      "T09-04 binds current routes, Project, locale, type and Portfolio while allowing retained journey identities",
+      "T10-01/T10-04 persists related-project and testimonial actions with exact current public associations",
+      "T10-01/T10-03 persists Media facts only when the optional public-use capability accepts them"
+    ],
+    "T10-03": [
+      "T10-01/T10-03 persists Media facts only when the optional public-use capability accepts them",
+      "fails only Media engagement safely when its optional public-use capability is missing",
+      "fails only Media engagement safely when its optional public-use capability is unavailable"
+    ],
+    "T10-04": [
+      "T10-01/T10-04 persists related-project and testimonial actions with exact current public associations"
+    ],
+    "T10-05": [
+      "rejects invalid Media engagement before durable effects",
+      "rejects invalid relationship payload before durable effects",
+      "rejects unknown testimonial property before durable effects",
+      "rejects unknown closed-shape property as 400 before dispatch",
+      "rejects unknown context property as 400 before dispatch"
+    ],
+    "T10-06": [
+      "T09-04 binds current routes, Project, locale, type and Portfolio while allowing retained journey identities",
+      "T10-01/T10-04 persists related-project and testimonial actions with exact current public associations"
+    ],
+    "T10-07": [
+      "T10-01/T10-03 persists Media facts only when the optional public-use capability accepts them",
+      "T09-07 commits event, safe receipt and private job once; exact races replay and failures roll back"
+    ],
+    "T10-08": [
+      "fails only Media engagement safely when its optional public-use capability is missing",
+      "fails only Media engagement safely when its optional public-use capability is unavailable",
+      "T09-09 enforces module RLS and keeps optional event assembly out of core readiness"
+    ]
+  },
+  "required": {
+    "success": true,
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "failedSuites": 0
+  },
+  "suites": [
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-fact-events-197/tests/phase7/consent-crypto.test.ts",
+      "passed": 5
+    },
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-fact-events-197/tests/phase7/events-application.test.ts",
+      "passed": 20
+    },
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-fact-events-197/tests/phase7/events-postgres.test.ts",
+      "passed": 9
+    },
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-fact-events-197/tests/runtime/public-event.test.ts",
+      "passed": 20
+    }
+  ],
+  "roles": [
+    "event_runtime",
+    "shipwithali_application",
+    "shipwithali_worker",
+    "anon",
+    "authenticated"
+  ],
+  "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:events -- --ticket-197; PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries",
+  "scope": "Disposable native PostgreSQL cluster; full repository migration chain, restricted application role, HTTP/application/consent integration. No production database was modified.",
+  "cleanup": true
+}
