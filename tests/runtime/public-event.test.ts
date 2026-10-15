@@ -145,6 +145,9 @@ describe("POST Public event adapter (#28)", () => {
     ["out-of-shape body", { body: [] }],
     ["unknown closed-shape property", { body: { action: "project-viewed", projectId: PROJECT_ID, context: validContext(), extra: "nope" } }],
     ["unknown context property", { body: { action: "project-viewed", projectId: PROJECT_ID, context: { ...validContext(), extra: "nope" } } }],
+    ["Contact URL identifying payload", { body: { action: "contact-channel-opened", context: validContext(), channel: "linkedin", url: "https://private.example/contact" } }],
+    ["External link wrong action field", { body: { action: "external-project-link-opened", context: validContext(), projectId: PROJECT_ID, destination: "live-demo", channel: "linkedin" } }],
+    ["Global CTA wrong action field", { body: { action: "global-project-cta-opened", context: validContext(), projectId: PROJECT_ID, channel: "linkedin" } }],
   ])("rejects %s as 400 before dispatch", async (_label, options) => {
     const fake = createPublicEventTestFake({ type: "success" });
     const logger = createTestLogger();
