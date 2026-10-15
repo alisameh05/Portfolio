@@ -1,7 +1,7 @@
 {
-  "runId": "9410f212-b3e2-43b5-ac6d-22fada9cc5ef",
-  "sourceRevision": "17c5d364d3bd2585b2d3a57d10c17a3a9a9bda15",
-  "sourceTreeSha256": "5c128b28eae3a3610268b6c856315f30ac4d4400794b6a1954e95937bae403c4",
+  "runId": "7382c507-1c97-474a-8d1c-4569d9962a83",
+  "sourceRevision": "224785b5b5f3f4b2a948510a57ce90d4129b076f",
+  "sourceTreeSha256": "5160d82e262b3db27bf12bd4331b3f82dc64285af0e514e7987fb952aeec9a34",
   "tools": {
     "node": "v24.21.0",
     "npm": "11.19.0",
@@ -20,7 +20,7 @@
       "expected version other than one rejects bootstrap and absent-root inspect is not_found"
     ],
     "T12-03": [
-      "independent concurrent initializers yield exactly one root and version one",
+      "a two-party barrier overlaps independent concurrent initializers and yields exactly one root and version one",
       "exact retry replays original receipt and changed payload conflicts without another outbox effect"
     ],
     "T12-04": [
@@ -35,6 +35,7 @@
     ],
     "T12-07": [
       "stale preconditions and non-Owner actors are rejected safely",
+      "replay checks current Owner authorization again",
       "the shared verified Owner boundary rejects invalid origin and CSRF before dispatch"
     ],
     "T12-08": [
@@ -44,7 +45,7 @@
   },
   "required": {
     "success": true,
-    "passed": 66,
+    "passed": 67,
     "failed": 0,
     "skipped": 0,
     "failedSuites": 0
@@ -60,7 +61,7 @@
     },
     {
       "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-versions-199/tests/phase7/goal-versions.test.ts",
-      "passed": 7
+      "passed": 8
     },
     {
       "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-versions-199/tests/runtime/owner-analytics.test.ts",

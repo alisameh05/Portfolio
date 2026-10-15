@@ -89,11 +89,11 @@ try {
       acceptanceCriteria: {
         "T12-01": ["real Owner create-version HTTP operation returns a contract-valid 201 receipt", "authorized inspect returns the immutable ordered version view, nullable pointer, and history"],
         "T12-02": ["version one bootstraps root and snapshot atomically at aggregate version two", "expected version other than one rejects bootstrap and absent-root inspect is not_found"],
-        "T12-03": ["independent concurrent initializers yield exactly one root and version one", "exact retry replays original receipt and changed payload conflicts without another outbox effect"],
+        "T12-03": ["a two-party barrier overlaps independent concurrent initializers and yields exactly one root and version one", "exact retry replays original receipt and changed payload conflicts without another outbox effect"],
         "T12-04": ["name, action, step, scope, duplicate, wrong-type, unavailable, and Portfolio boundaries validated", "one hundred scope and ten step limits accepted; one hundred one and eleven rejected"],
         "T12-05": ["retained Hidden Project and route identities remain valid goal scopes without changing public lifecycle"],
         "T12-06": ["later immutable snapshots advance ordered history while active pointer and activation facts remain unchanged"],
-        "T12-07": ["stale preconditions and non-Owner actors are rejected safely", "the shared verified Owner boundary rejects invalid origin and CSRF before dispatch"],
+        "T12-07": ["stale preconditions and non-Owner actors are rejected safely", "replay checks current Owner authorization again", "the shared verified Owner boundary rejects invalid origin and CSRF before dispatch"],
         "T12-08": ["root, snapshot, outbox, and ledger failures leave no durable root/version/receipt/fact", "restricted application role cannot update or delete immutable snapshots"]
       },
       required: { success: tests.success, passed: tests.numPassedTests, failed: tests.numFailedTests, skipped: tests.numPendingTests, failedSuites: tests.numFailedTestSuites },

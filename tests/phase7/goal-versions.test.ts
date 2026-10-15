@@ -24,6 +24,7 @@ function setup(options: { readonly retainedIds?: readonly string[] } = {}) {
   const activations = new Map<string, Array<{ versionId: StableId<"AnalyticsGoalVersion">; activatedAt: string }>>();
   const ledger = new Map<string, { hash: string; result: Record<string, unknown> }>();
   const writes: unknown[] = [];
+  let authorized = true;
   let ids = 0;
   let versionIds = 0;
   const repository = {
@@ -58,7 +59,7 @@ function setup(options: { readonly retainedIds?: readonly string[] } = {}) {
   };
   const service = createOwnerAnalyticsGoalService({
     scope: { portfolioId, ownerId },
-    authorize: async () => ({ ok: true as const, value: true }),
+    authorize: async () => ({ ok: true as const, value: authorized }),
     operations: operations as never,
     repository: repository as never,
     scopeFacts: {
@@ -78,7 +79,7 @@ function setup(options: { readonly retainedIds?: readonly string[] } = {}) {
     };
   };
   const query = () => ({ scope: { kind: "portfolio" as const, portfolioId }, correlationId: "goal-query", actor: { kind: "owner" as const, ownerId, sessionId: "verified-session" }, goalId });
-  return { service, roots, versions, writes, command, query };
+  return { service, roots, versions, writes, command, query, setAuthorized(value: boolean) { authorized = value; } };
 }
 
 describe("Owner Analytics goal version application seam", () => {
@@ -103,6 +104,16 @@ describe("Owner Analytics goal version application seam", () => {
     expect(writes).toHaveLength(1);
     const changed = await service.createOwnerAnalyticsGoalVersion(command({ definition: { name: "Different", steps: definition.steps } }));
     expect(changed).toMatchObject({ ok: false, error: { kind: "conflict", code: "IDEMPOTENCY_PAYLOAD_CONFLICT" } });
+    expect(writes).toHaveLength(1);
+  });
+
+  it("rechecks current Owner authorization before returning a replayed receipt", async () => {
+    const { service, command, writes, setAuthorized } = setup();
+    const first = await service.createOwnerAnalyticsGoalVersion(command());
+    setAuthorized(false);
+    expect(await service.createOwnerAnalyticsGoalVersion(command()))
+      .toMatchObject({ ok: false, error: { kind: "forbidden" } });
+    expect(first.ok).toBe(true);
     expect(writes).toHaveLength(1);
   });
 
