@@ -75,6 +75,39 @@ export interface Consents {
   subject: string | null;
 }
 
+export interface GoalConversionContributions {
+  /**
+   * Anchored to the first matched event so retention cannot outlive the earliest source detail.
+   */
+  accepted_at: Timestamp;
+  activation_sequence: Int8;
+  consent_revision: number;
+  converted_at: Timestamp;
+  generation: Int8;
+  goal_id: string;
+  measurement_subject: string;
+  portfolio_id: string;
+  terminal_event_id: string;
+  version_id: string;
+}
+
+export interface GoalConversionRebuilds {
+  completed: Generated<boolean>;
+  completed_generation: Generated<Int8>;
+  cursor_accepted_at: Timestamp | null;
+  cursor_effective_at: Timestamp | null;
+  cursor_event_id: string | null;
+  generation: Int8;
+  measurement_subject: string;
+  portfolio_id: string;
+  progress: Json;
+  timeline_cursor_activation_sequence: Int8 | null;
+  timeline_cursor_goal_id: string | null;
+  trigger_accepted_at: Timestamp;
+  trigger_event_id: string;
+  updated_at: Timestamp;
+}
+
 export interface PublicEvents {
   accepted_at: Timestamp;
   action: string;
@@ -114,5 +147,7 @@ export interface DB {
   analytics_goals: AnalyticsGoals;
   consent_history: ConsentHistory;
   consents: Consents;
+  goal_conversion_contributions: GoalConversionContributions;
+  goal_conversion_rebuilds: GoalConversionRebuilds;
   public_events: PublicEvents;
 }

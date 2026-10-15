@@ -1,0 +1,66 @@
+{
+  "ticket": 201,
+  "runId": "e2b38492-3098-490a-9a2d-b9deb75366b6",
+  "sourceRevision": "8051a546b4467a13abeb41b7224b2e37fcae70b3",
+  "sourceTreeSha256": "ae02a21837341dd881a35f13427b05d22ced72be502806e56049f71de44365d8",
+  "node": "v24.21.0",
+  "npm": "11.19.0",
+  "postgres": "postgres (PostgreSQL) 18.3",
+  "migration": {
+    "id": "20261015180000_match_analytics_goal_conversions.sql",
+    "sha256": "682a4c7b6f3fd7e19c10fef259cb0fc50df93eec9c9bfd2c119e436ebea2a03a"
+  },
+  "required": {
+    "success": true,
+    "passed": 15,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "failedSuites": 0
+  },
+  "suites": [
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-conversions-201/tests/phase7/goal-conversions-postgres.test.ts",
+      "passed": 7
+    },
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-conversions-201/tests/phase7/goal-conversions.test.ts",
+      "passed": 8
+    }
+  ],
+  "roles": [
+    "conversion_runtime",
+    "shipwithali_worker",
+    "anon",
+    "authenticated"
+  ],
+  "criteria": {
+    "T14-01": [
+      "single and multi-step event, route, Project, order and same-subject fixtures"
+    ],
+    "T14-02": [
+      "unrelated intervening events accepted; reversed, cross-subject, mis-scoped and metadata-only evidence rejected"
+    ],
+    "T14-03": [
+      "inclusive 30-minute boundary and expired partial reset"
+    ],
+    "T14-04": [
+      "terminal/goal-version uniqueness across job retry, checkpoint resume and generation recomputation"
+    ],
+    "T14-05": [
+      "half-open activation intervals, tied activation sequence and version-switch reset"
+    ],
+    "T14-06": [
+      "late event recomputation and stale/replayed job preserve canonical ordered output"
+    ],
+    "T14-07": [
+      "withdrawal/regrant revision change resets progress; worker reads current consent"
+    ],
+    "T14-08": [
+      "authorized worker, real PostgreSQL persistence, bounded batch and atomic injected rollback"
+    ]
+  },
+  "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:goal-conversions (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
+  "scope": "Full repository migration chain in a loopback-only disposable native PostgreSQL cluster with a restricted non-superuser worker role. No production or development database was modified.",
+  "cleanup": true
+}
