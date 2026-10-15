@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "ShipWithAli backend \u00e2\u20ac\u201d Phase 1 architecture alignment and contracts",
+  "description": "ShipWithAli backend â€” Phase 1 architecture alignment and contracts",
   "packageManager": "npm@11.19.0",
   "engines": {
     "node": "24.21.0",
@@ -160,7 +160,9 @@
     "prephase7:focus:feedback": "npm run validation:ready",
     "phase7:focus:moderation": "node scripts/phase7-moderation.mjs",
     "phase7:focus:suppression": "node scripts/phase7-moderation.mjs --suppression",
-    "phase7:focus:feedback": "node scripts/phase7-feedback.mjs"
+    "phase7:focus:feedback": "node scripts/phase7-feedback.mjs",
+    "prephase7:focus:summaries": "npm run validation:ready",
+    "phase7:focus:summaries": "node scripts/phase7-moderation.mjs --summaries"
   },
   "dependencies": {
     "kysely": "0.29.6",

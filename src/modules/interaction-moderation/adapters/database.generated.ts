@@ -7,7 +7,19 @@ import type { ColumnType } from "kysely";
 
 export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
 
+export type Numeric = ColumnType<string, number | string, number | string>;
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+
+export interface CurrentRatingSummary {
+  average: Numeric | null;
+  raters: Int8 | null;
+}
+
+export interface CurrentReactionCounts {
+  dislikes: Int8 | null;
+  likes: Int8 | null;
+}
 
 export interface Feedback {
   aggregate_version: Int8;
@@ -50,6 +62,8 @@ export interface Reactions {
 }
 
 export interface DB {
+  current_rating_summary: CurrentRatingSummary;
+  current_reaction_counts: CurrentReactionCounts;
   feedback: Feedback;
   moderation_decisions: ModerationDecisions;
   ratings: Ratings;
