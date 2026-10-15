@@ -4,3 +4,4 @@ export type {
   HashPort,
 } from "./repository.js";
 export type { AnalyticsGoalRootRecord, AnalyticsGoalVersionRecord, AnalyticsGoalActivationRecord, OwnerAnalyticsGoalRepositoryPort } from "./repository.js";
+export type { GoalConversionCursor, GoalConversionCheckpoint, GoalConversionRepositoryPort } from "./goal-conversions.js";
