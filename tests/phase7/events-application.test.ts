@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createStableId } from "../../src/shared/domain/index.js";
-import { isTransactionRollback } from "../../src/runtime/ports.js";
+import { isTransactionRollback, type TransactionContext, type TransactionRollback } from "../../src/runtime/ports.js";
 import { createMeasurementEventService } from "../../src/modules/measurement/application/ingest-event.js";
+import { createMeasurementEventRetentionService } from "../../src/modules/measurement/application/event-retention.js";
 import type { PublicMeasurementEvent } from "../../src/modules/measurement/index.js";
 
 const portfolioId = createStableId("Portfolio");
@@ -153,5 +154,27 @@ describe("Measurement event ingestion application seam", () => {
     expect((await service.ingestEvent(command({ action: "project-viewed", context: { ...context, referrerClass: "search" }, projectId }))).ok).toBe(false);
     expect(writes).toHaveLength(1);
     expect(jobs).toHaveLength(1);
+  });
+
+  it("authorizes bounded retention work and expires at acceptedAt plus 14 UTC days inclusively", async () => {
+    const calls: unknown[] = [];
+    const tx = { kind: "transaction" as const } as unknown as TransactionContext;
+    const retention = createMeasurementEventRetentionService({
+      portfolioId,
+      transactions: { async run<T>(work: (context: TransactionContext) => Promise<T | TransactionRollback<T>> | T | TransactionRollback<T>) {
+        const result = await work(tx); return isTransactionRollback(result) ? result.value : result;
+      } },
+      repository: { async expireAcceptedEvents(input) { calls.push(input); return input.limit; } },
+    });
+    const command = {
+      scope: { kind: "portfolio" as const, portfolioId }, correlationId: "retention-test",
+      actor: { kind: "system" as const, jobId, purpose: "measurement.retention" as const },
+      batchSize: 25 as const, now: "2026-10-15T12:00:00.000Z",
+    };
+    expect(await retention.expireDetail({ ...command, actor: { ...command.actor, purpose: "measurement.aggregate" } } as never)).toMatchObject({ ok: false, error: { kind: "forbidden" } });
+    expect(await retention.expireDetail(command)).toEqual({ ok: true, value: {
+      processedCount: 25, nextCursor: null, incomplete: true,
+    } });
+    expect(calls).toEqual([{ portfolioId, acceptedBefore: "2026-10-01T12:00:00.000Z", limit: 25 }]);
   });
 });

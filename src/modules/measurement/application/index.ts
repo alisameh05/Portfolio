@@ -12,7 +12,9 @@ export type { AnalyticsEventAction, AnalyticsGoalStep, AnalyticsGoalDefinition, 
 export type { VerifiedMeasurementEvidence } from "./service.js";
 
 export { createMeasurementEventService } from "./ingest-event.js";
-export type { MeasurementEventApplicationDeps, MeasurementEventRepositoryPort } from "./ingest-event.js";
+export type { MeasurementEventApplicationDeps, MeasurementEventRepositoryPort, MeasurementEventRetentionRepositoryPort } from "./ingest-event.js";
+export { createMeasurementEventRetentionService } from "./event-retention.js";
+export type { MeasurementEventRetentionDependencies } from "./event-retention.js";
 
 export type { MeasurementWorkCommand, MeasurementWorkService } from "./work.js";
 

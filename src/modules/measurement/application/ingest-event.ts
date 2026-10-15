@@ -12,6 +12,10 @@ export interface MeasurementEventRepositoryPort {
   insert(event: PublicEventData, transaction: TransactionContext): Promise<void>;
 }
 
+export interface MeasurementEventRetentionRepositoryPort {
+  expireAcceptedEvents(input: { readonly portfolioId: StableId<"Portfolio">; readonly acceptedBefore: string; readonly limit: number }, transaction: TransactionContext): Promise<number>;
+}
+
 export interface MeasurementEventApplicationDeps {
   readonly portfolioId: StableId<"Portfolio">;
   readonly transactions: OperationsPersistencePorts["transactions"];

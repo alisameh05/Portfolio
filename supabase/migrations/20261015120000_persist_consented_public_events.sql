@@ -49,7 +49,7 @@ alter table measurement.public_events enable row level security;
 alter table measurement.public_events force row level security;
 revoke all on measurement.public_events from public, anon, authenticated, shipwithali_application, shipwithali_worker, shipwithali_backup;
 grant insert on measurement.public_events to shipwithali_application;
-grant select on measurement.public_events to shipwithali_worker;
+grant select, delete on measurement.public_events to shipwithali_worker;
 create policy measurement_event_jobs_application_insert on operations.jobs
   for insert to shipwithali_application
   with check (
@@ -68,6 +68,11 @@ create policy public_events_application_insert on measurement.public_events
 create policy public_events_worker_read on measurement.public_events
   for select to shipwithali_worker
   using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
+create policy public_events_worker_retention_delete on measurement.public_events
+  for delete to shipwithali_worker
+  using (
+    portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid
+  );
 
 comment on table measurement.public_events is
   'Consent-gated, purpose-separated raw Public event data. Retention is anchored to server accepted_at.';
