@@ -3,21 +3,26 @@ import { parseStableId, type StableId } from "@shared/domain";
 import type { TransactionContext } from "../../../runtime/ports.js";
 import { resolvePostgresTransaction } from "../../../shared/adapters/postgres/runtime.js";
 import type { AnalyticsGoalDefinition } from "../application/owner-analytics.js";
-import type { DailyAggregate, MeasurementEventType } from "../domain/index.js";
+import type { DailyAggregate, DailyAggregateDimensions, MeasurementEventType } from "../domain/index.js";
 import type { DailyAggregatePage, DailyAggregateRepositoryPort, DailyAggregateReportRecord } from "../ports/daily-aggregates.js";
 
-const POLICY_VERSION = "phase7.daily.v1";
+const POLICY_VERSION = "phase7.daily.v2";
 const SAFE_ACTIONS = new Set<MeasurementEventType>([
   "page-viewed", "project-viewed", "active-engagement-sampled", "media-engaged", "related-project-opened",
   "contact-channel-opened", "external-project-link-opened", "testimonial-engaged", "global-project-cta-opened",
 ]);
+const DEVICE_CLASSES = ["desktop", "mobile", "tablet", "other", "unknown"] as const;
+const REFERRER_CLASSES = ["direct", "search", "social", "professional", "referral", "unknown"] as const;
 
 interface ActionRow { metric_key: string; event_count: string | number; sum_value: string | number; observed_subjects: string | number; returning_subjects: string | number }
 interface GoalRow { goal_id: string; version_id: string; definition: AnalyticsGoalDefinition; event_count: string | number; sum_value: string | number; observed_subjects: string | number; returning_subjects: string | number }
+interface ActionDimensionRow extends ActionRow { dimension_name: string; dimension_value: string }
+interface GoalDimensionRow extends GoalRow { dimension_name: string; dimension_value: string }
 interface CheckpointRow { source_event_count: string | number; source_conversion_count: string | number }
 interface ReportRow { utc_day: string | Date; metric_kind: "action" | "goal"; metric_key: string; goal_id: string | null; goal_version_id: string | null;
   event_count: string | number; sum_value: string | number; observed_subjects: string | number; returning_subjects: string | number;
-  policy_version: string; checkpoint_at: string | Date; incomplete: boolean; definition: AnalyticsGoalDefinition | null }
+  policy_version: string; checkpoint_at: string | Date; incomplete: boolean; definition: AnalyticsGoalDefinition | null;
+  dimensions: unknown; has_small_dimension_cell: boolean }
 interface CoverageRow { day_count: string | number; incomplete: boolean | null; as_of: string | Date | null }
 
 function number(value: string | number): number {
@@ -36,6 +41,26 @@ function stableId<T extends string>(kind: T, value: string): StableId<T> {
   return parsed.value;
 }
 
+function dimensions(value: unknown): DailyAggregateDimensions {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("DAILY_AGGREGATE_DIMENSIONS_INVALID");
+  const entries = Object.entries(value);
+  if (entries.length === 0) return {};
+  if (entries.length !== 1) throw new Error("DAILY_AGGREGATE_DIMENSIONS_INVALID");
+  const [key, item] = entries[0]!;
+  if (key === "locale" && (item === "en" || item === "ar")) return { locale: item };
+  if (key === "countryCode" && (item === "unknown" || (typeof item === "string" && /^[A-Z]{2}$/.test(item)))) return { countryCode: item as string };
+  if (key === "deviceClass" && typeof item === "string" && DEVICE_CLASSES.includes(item as typeof DEVICE_CLASSES[number])) {
+    return { deviceClass: item as typeof DEVICE_CLASSES[number] };
+  }
+  if (key === "referrerClass" && typeof item === "string" && REFERRER_CLASSES.includes(item as typeof REFERRER_CLASSES[number])) {
+    return { referrerClass: item as typeof REFERRER_CLASSES[number] };
+  }
+  if (key === "projectId" && item === "unknown") return { projectId: "unknown" };
+  if (key === "projectId" && typeof item === "string") return { projectId: stableId("Project", item) };
+  if (key === "publicRouteId" && typeof item === "string") return { publicRouteId: stableId("PublicRoute", item) };
+  throw new Error("DAILY_AGGREGATE_DIMENSIONS_INVALID");
+}
+
 async function configure(tx: TransactionContext, portfolioId: StableId<"Portfolio">, ownerId?: StableId<"Owner">) {
   const db = resolvePostgresTransaction(tx);
   await sql`select set_config('shipwithali.portfolio_id', ${portfolioId}, true)`.execute(db);
@@ -48,15 +73,17 @@ function asRecord(row: ReportRow): DailyAggregateReportRecord {
   const metric: DailyAggregate["metric"] = row.metric_kind;
   const common: DailyAggregate = {
     date, metric, metricKey: row.metric_key, count: number(row.event_count), sum: number(row.sum_value),
+    dimensions: dimensions(row.dimensions),
     observedSubjects: number(row.observed_subjects), returningSubjects: number(row.returning_subjects),
     policyVersion: row.policy_version, asOf: instant(row.checkpoint_at), incomplete: row.incomplete,
   };
   if (metric === "action") {
     if (!SAFE_ACTIONS.has(row.metric_key as MeasurementEventType) || row.goal_id !== null || row.goal_version_id !== null) throw new Error("DAILY_AGGREGATE_ACTION_ROW_INVALID");
-    return common;
+    return { ...common, hasSmallDimensionCell: row.has_small_dimension_cell };
   }
   if (!row.goal_id || !row.goal_version_id || !row.definition) throw new Error("DAILY_AGGREGATE_GOAL_ROW_INVALID");
-  return { ...common, goalId: stableId("AnalyticsGoal", row.goal_id), goalVersionId: stableId("AnalyticsGoalVersion", row.goal_version_id), definitionSnapshot: row.definition };
+  return { ...common, hasSmallDimensionCell: row.has_small_dimension_cell,
+    goalId: stableId("AnalyticsGoal", row.goal_id), goalVersionId: stableId("AnalyticsGoalVersion", row.goal_version_id), definitionSnapshot: row.definition };
 }
 
 export function createPostgresDailyAggregateRepository(): DailyAggregateRepositoryPort {
@@ -87,6 +114,33 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
         ))::bigint as returning_subjects
       from day_events e group by e.action order by e.action`.execute(db);
 
+      const actionDimensions = await sql<ActionDimensionRow>`with day_events as (
+        select e.action, e.measurement_subject, e.active_milliseconds, e.locale, e.country_code,
+          e.device_class, e.referrer_class, e.project_id, e.page_route_identity
+        from measurement.public_events e
+        where e.portfolio_id = ${input.portfolioId}::uuid
+          and e.effective_at >= ${start}::timestamptz and e.effective_at < ${endDate}::timestamptz
+          and e.accepted_at >= ${acceptedCutoff}::timestamptz and e.accepted_at <= ${input.asOf}::timestamptz
+      ), expanded as (
+        select e.*, d.dimension_name, d.dimension_value
+        from day_events e cross join lateral (values
+          ('locale', e.locale::text), ('countryCode', coalesce(e.country_code, 'unknown')),
+          ('deviceClass', coalesce(e.device_class, 'unknown')), ('referrerClass', coalesce(e.referrer_class, 'unknown')),
+          ('projectId', coalesce(e.project_id::text, 'unknown')), ('publicRouteId', e.page_route_identity::text)
+        ) d(dimension_name, dimension_value)
+      )
+      select e.action as metric_key, e.dimension_name, e.dimension_value, count(*)::bigint as event_count,
+        coalesce(sum(e.active_milliseconds), 0)::bigint as sum_value,
+        count(distinct e.measurement_subject)::bigint as observed_subjects,
+        count(distinct e.measurement_subject) filter (where exists (
+          select 1 from measurement.public_events prior
+          where prior.portfolio_id = ${input.portfolioId}::uuid and prior.measurement_subject = e.measurement_subject
+            and prior.effective_at >= ${start}::timestamptz - interval '14 days'
+            and prior.effective_at < ${start}::timestamptz
+            and prior.accepted_at >= ${acceptedCutoff}::timestamptz and prior.accepted_at <= ${input.asOf}::timestamptz
+        ))::bigint as returning_subjects
+      from expanded e group by e.action, e.dimension_name, e.dimension_value order by e.action, e.dimension_name, e.dimension_value`.execute(db);
+
       const goals = await sql<GoalRow>`with day_conversions as (
         select c.goal_id, c.version_id, c.measurement_subject
         from measurement.goal_conversion_contributions c
@@ -111,6 +165,39 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
         on v.portfolio_id = ${input.portfolioId}::uuid and v.goal_id = c.goal_id and v.version_id = c.version_id
       group by c.goal_id, c.version_id, v.definition order by c.goal_id, c.version_id`.execute(db);
 
+      const goalDimensions = await sql<GoalDimensionRow>`with day_conversions as (
+        select c.goal_id, c.version_id, c.measurement_subject, c.terminal_event_id
+        from measurement.goal_conversion_contributions c
+        join measurement.goal_conversion_rebuilds r
+          on r.portfolio_id = c.portfolio_id and r.measurement_subject = c.measurement_subject
+          and r.completed_generation = c.generation
+        where c.portfolio_id = ${input.portfolioId}::uuid
+          and c.converted_at >= ${start}::timestamptz and c.converted_at < ${endDate}::timestamptz
+          and c.accepted_at >= ${acceptedCutoff}::timestamptz and c.accepted_at <= ${input.asOf}::timestamptz
+      ), expanded as (
+        select c.goal_id, c.version_id, c.measurement_subject, d.dimension_name, d.dimension_value
+        from day_conversions c join measurement.public_events e on e.event_id = c.terminal_event_id
+        cross join lateral (values
+          ('locale', e.locale::text), ('countryCode', coalesce(e.country_code, 'unknown')),
+          ('deviceClass', coalesce(e.device_class, 'unknown')), ('referrerClass', coalesce(e.referrer_class, 'unknown')),
+          ('projectId', coalesce(e.project_id::text, 'unknown')), ('publicRouteId', e.page_route_identity::text)
+        ) d(dimension_name, dimension_value)
+      )
+      select c.goal_id::text as goal_id, c.version_id::text as version_id, v.definition,
+        c.dimension_name, c.dimension_value, count(*)::bigint as event_count, 0::bigint as sum_value,
+        count(distinct c.measurement_subject)::bigint as observed_subjects,
+        count(distinct c.measurement_subject) filter (where exists (
+          select 1 from measurement.public_events prior
+          where prior.portfolio_id = ${input.portfolioId}::uuid and prior.measurement_subject = c.measurement_subject
+            and prior.effective_at >= ${start}::timestamptz - interval '14 days'
+            and prior.effective_at < ${start}::timestamptz
+            and prior.accepted_at >= ${acceptedCutoff}::timestamptz and prior.accepted_at <= ${input.asOf}::timestamptz
+        ))::bigint as returning_subjects
+      from expanded c join measurement.analytics_goal_versions v
+        on v.portfolio_id = ${input.portfolioId}::uuid and v.goal_id = c.goal_id and v.version_id = c.version_id
+      group by c.goal_id, c.version_id, v.definition, c.dimension_name, c.dimension_value
+      order by c.goal_id, c.version_id, c.dimension_name, c.dimension_value`.execute(db);
+
       await sql`delete from measurement.daily_aggregates where portfolio_id = ${input.portfolioId}::uuid and utc_day = ${input.utcDay}::date`.execute(db);
       for (const row of actions.rows) {
         if (!SAFE_ACTIONS.has(row.metric_key as MeasurementEventType)) throw new Error("DAILY_AGGREGATE_ACTION_UNSUPPORTED");
@@ -119,11 +206,24 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
           values (${input.portfolioId}::uuid, ${input.utcDay}::date, 'action', ${row.metric_key}, '{}'::jsonb,
             ${number(row.event_count)}, ${number(row.sum_value)}, ${number(row.observed_subjects)}, ${number(row.returning_subjects)}, ${POLICY_VERSION}, ${input.asOf}::timestamptz, false)`.execute(db);
       }
+      for (const row of actionDimensions.rows) {
+        await sql`insert into measurement.daily_aggregates
+          (portfolio_id, utc_day, metric_kind, metric_key, dimensions, event_count, sum_value, observed_subjects, returning_subjects, policy_version, checkpoint_at, incomplete)
+          values (${input.portfolioId}::uuid, ${input.utcDay}::date, 'action', ${row.metric_key}, jsonb_build_object(${row.dimension_name}::text, ${row.dimension_value}::text),
+            ${number(row.event_count)}, ${number(row.sum_value)}, ${number(row.observed_subjects)}, ${number(row.returning_subjects)}, ${POLICY_VERSION}, ${input.asOf}::timestamptz, false)`.execute(db);
+      }
       for (const row of goals.rows) {
         await sql`insert into measurement.daily_aggregates
           (portfolio_id, utc_day, metric_kind, metric_key, goal_id, goal_version_id, dimensions, event_count, sum_value, observed_subjects, returning_subjects, policy_version, checkpoint_at, incomplete)
           values (${input.portfolioId}::uuid, ${input.utcDay}::date, 'goal', ${row.goal_id + ":" + row.version_id}, ${row.goal_id}::uuid, ${row.version_id}::uuid, '{}'::jsonb,
             ${number(row.event_count)}, 0, ${number(row.observed_subjects)}, ${number(row.returning_subjects)}, ${POLICY_VERSION}, ${input.asOf}::timestamptz, false)`.execute(db);
+      }
+      for (const row of goalDimensions.rows) {
+        await sql`insert into measurement.daily_aggregates
+          (portfolio_id, utc_day, metric_kind, metric_key, goal_id, goal_version_id, dimensions, event_count, sum_value, observed_subjects, returning_subjects, policy_version, checkpoint_at, incomplete)
+          values (${input.portfolioId}::uuid, ${input.utcDay}::date, 'goal', ${row.goal_id + ":" + row.version_id}, ${row.goal_id}::uuid, ${row.version_id}::uuid,
+            jsonb_build_object(${row.dimension_name}::text, ${row.dimension_value}::text), ${number(row.event_count)}, 0, ${number(row.observed_subjects)},
+            ${number(row.returning_subjects)}, ${POLICY_VERSION}, ${input.asOf}::timestamptz, false)`.execute(db);
       }
       const counts = await sql<CheckpointRow>`select
         (select count(*) from measurement.public_events e where e.portfolio_id = ${input.portfolioId}::uuid
@@ -141,24 +241,41 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
         on conflict (portfolio_id, utc_day) do update set source_event_count = excluded.source_event_count,
           source_conversion_count = excluded.source_conversion_count, policy_version = excluded.policy_version,
           checkpoint_at = excluded.checkpoint_at, incomplete = false`.execute(db);
-      return actions.rows.length + goals.rows.length;
+      return actions.rows.length + actionDimensions.rows.length + goals.rows.length + goalDimensions.rows.length;
     },
 
     async readReport(input, transaction): Promise<DailyAggregatePage> {
       const db = await configure(transaction, input.portfolioId, input.ownerId);
+      const dimensionKey = ({ locale: "locale", country: "countryCode", device: "deviceClass", referrer: "referrerClass",
+        project: "projectId", route: "publicRouteId" } as const)[input.breakdown as Exclude<typeof input.breakdown, "summary">];
+      const summary = input.breakdown === "summary";
       const rows = input.grouping === "daily-action"
-        ? await sql<ReportRow>`select a.utc_day, a.metric_kind, a.metric_key, a.goal_id::text as goal_id, a.goal_version_id::text as goal_version_id,
-            a.event_count, a.sum_value, a.observed_subjects, a.returning_subjects, a.policy_version, a.checkpoint_at, a.incomplete, null::jsonb as definition
+        ? await sql<ReportRow>`select a.utc_day::text as utc_day, a.metric_kind, a.metric_key, a.goal_id::text as goal_id, a.goal_version_id::text as goal_version_id,
+            a.event_count, a.sum_value, a.observed_subjects, a.returning_subjects, a.policy_version, a.checkpoint_at, a.incomplete,
+            null::jsonb as definition, a.dimensions,
+            case when ${summary} then exists (
+              select 1 from measurement.daily_aggregates small
+              where small.portfolio_id = a.portfolio_id and small.utc_day = a.utc_day and small.metric_kind = a.metric_kind
+                and small.metric_key = a.metric_key and small.dimensions <> '{}'::jsonb and small.observed_subjects < 5
+            ) else false end as has_small_dimension_cell
           from measurement.daily_aggregates a where a.portfolio_id = ${input.portfolioId}::uuid
             and a.utc_day between ${input.startDay}::date and ${input.endDay}::date and a.metric_kind = 'action'
+            and ((${summary} and a.dimensions = '{}'::jsonb) or (not ${summary} and a.dimensions ? ${dimensionKey ?? ""}))
             and (${input.action ?? null}::text is null or a.metric_key = ${input.action ?? null})
-          order by a.utc_day, a.metric_key limit ${input.limit}`.execute(db)
-        : await sql<ReportRow>`select a.utc_day, a.metric_kind, a.metric_key, a.goal_id::text as goal_id, a.goal_version_id::text as goal_version_id,
-            a.event_count, a.sum_value, a.observed_subjects, a.returning_subjects, a.policy_version, a.checkpoint_at, a.incomplete, v.definition
+          order by a.utc_day, a.metric_key, a.dimensions limit ${input.limit}`.execute(db)
+        : await sql<ReportRow>`select a.utc_day::text as utc_day, a.metric_kind, a.metric_key, a.goal_id::text as goal_id, a.goal_version_id::text as goal_version_id,
+            a.event_count, a.sum_value, a.observed_subjects, a.returning_subjects, a.policy_version, a.checkpoint_at, a.incomplete,
+            v.definition, a.dimensions,
+            case when ${summary} then exists (
+              select 1 from measurement.daily_aggregates small
+              where small.portfolio_id = a.portfolio_id and small.utc_day = a.utc_day and small.metric_kind = a.metric_kind
+                and small.metric_key = a.metric_key and small.dimensions <> '{}'::jsonb and small.observed_subjects < 5
+            ) else false end as has_small_dimension_cell
           from measurement.daily_aggregates a join measurement.analytics_goal_versions v
             on v.portfolio_id = a.portfolio_id and v.goal_id = a.goal_id and v.version_id = a.goal_version_id
           where a.portfolio_id = ${input.portfolioId}::uuid and a.utc_day between ${input.startDay}::date and ${input.endDay}::date and a.metric_kind = 'goal'
-          order by a.utc_day, a.metric_key limit ${input.limit}`.execute(db);
+            and ((${summary} and a.dimensions = '{}'::jsonb) or (not ${summary} and a.dimensions ? ${dimensionKey ?? ""}))
+          order by a.utc_day, a.metric_key, a.dimensions limit ${input.limit}`.execute(db);
       const coverage = await sql<CoverageRow>`select count(*)::int as day_count, bool_or(incomplete) as incomplete,
           to_char(max(checkpoint_at) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as as_of
         from measurement.daily_aggregate_checkpoints where portfolio_id = ${input.portfolioId}::uuid
@@ -170,7 +287,7 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
       return {
         rows: pageRows,
         asOf: checkpoint?.as_of ? instant(checkpoint.as_of) : new Date().toISOString(),
-        incomplete: dayCount < expectedDays || checkpoint?.incomplete === true || pageRows.some(row => row.incomplete),
+        incomplete: dayCount < expectedDays || checkpoint?.incomplete === true || pageRows.some(row => row.incomplete || row.policyVersion !== POLICY_VERSION),
       };
     },
   };

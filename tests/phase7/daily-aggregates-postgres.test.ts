@@ -35,15 +35,17 @@ function command(utcDay: string, jobId = id("Job"), at = now): MeasurementWorkCo
 }
 
 async function addEvent(input: { subject: StableId<"MeasurementVisitor">; action: "page-viewed" | "project-viewed" | "active-engagement-sampled";
-  occurredAt: string; acceptedAt?: string; activeMilliseconds?: number }): Promise<StableId<"PublicEvent">> {
+  occurredAt: string; acceptedAt?: string; activeMilliseconds?: number; locale?: "en" | "ar"; countryCode?: string | null;
+  deviceClass?: "desktop" | "mobile" | "tablet" | "other" | "unknown"; referrerClass?: "direct" | "search" | "social" | "professional" | "referral" | "unknown" }): Promise<StableId<"PublicEvent">> {
   const eventId = id("PublicEvent");
   await admin!.query(`insert into measurement.public_events
     (event_id,portfolio_id,measurement_subject,action,occurred_at,accepted_at,effective_at,page_route_identity,project_id,
-      locale,consent_version,active_milliseconds)
-    values ($1,$2,$3,$4,$5,$6,$5,$7,$8,'en','v1',$9)`,
+      locale,consent_version,active_milliseconds,country_code,device_class,referrer_class)
+    values ($1,$2,$3,$4,$5,$6,$5,$7,$8,$10,'v1',$9,$11,$12,$13)`,
     [eventId, portfolioId, input.subject, input.action, input.occurredAt, input.acceptedAt ?? input.occurredAt,
       routeId, input.action === "page-viewed" ? null : projectId,
-      input.action === "active-engagement-sampled" ? input.activeMilliseconds ?? 5_000 : null]);
+      input.action === "active-engagement-sampled" ? input.activeMilliseconds ?? 5_000 : null,
+      input.locale ?? "en", input.countryCode ?? "EG", input.deviceClass ?? "mobile", input.referrerClass ?? "direct"]);
   return eventId;
 }
 
@@ -84,7 +86,8 @@ async function aggregate(day: string) {
   return createServices().workerService.aggregateDay(command(day));
 }
 
-async function report(input: { startDate: string; endDate: string; grouping: "daily-action" | "daily-goal"; action?: MeasurementEventType }) {
+async function report(input: { startDate: string; endDate: string; grouping: "daily-action" | "daily-goal"; action?: MeasurementEventType;
+  breakdown?: "summary" | "locale" | "country" | "device" | "referrer" | "project" | "route" }) {
   return createServices().reportService.getAggregateReport({ scope: { kind: "portfolio", portfolioId },
     correlationId: "phase7-daily-aggregate-report", actor: { kind: "owner", ownerId, sessionId: "owner-session" }, ...input });
 }
@@ -123,7 +126,7 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement daily aggregatio
     expect(await aggregate("2026-10-14")).toMatchObject({ ok: true, value: { incomplete: false } });
 
     const projectViews = await report({ startDate: "2026-10-14", endDate: "2026-10-14", grouping: "daily-action", action: "project-viewed" });
-    expect(projectViews).toMatchObject({ ok: true, value: { state: "available", policyVersion: "phase7.daily.v1", asOf: now, incomplete: false,
+    expect(projectViews).toMatchObject({ ok: true, value: { state: "available", policyVersion: "phase7.daily.v2", asOf: now, incomplete: false,
       rows: [{ count: 6, metric: "action", action: "project-viewed" }] } });
     const engagement = await report({ startDate: "2026-10-14", endDate: "2026-10-14", grouping: "daily-action", action: "active-engagement-sampled" });
     expect(engagement).toMatchObject({ ok: true, value: { state: "available", rows: [{ count: 6, sum: 30_000, action: "active-engagement-sampled" }] } });
@@ -170,17 +173,68 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement daily aggregatio
     expect(late).toBeTruthy();
     await workerService.aggregateDay(command("2026-10-14", jobId, later));
     const first = await admin!.query(`select event_count::int,observed_subjects::int from measurement.daily_aggregates
-      where portfolio_id=$1 and utc_day='2026-10-14' and metric_key='page-viewed'`, [portfolioId]);
+      where portfolio_id=$1 and utc_day='2026-10-14' and metric_key='page-viewed' and dimensions='{}'::jsonb`, [portfolioId]);
     expect(await operations.jobs.complete(jobId, reclaimed[0]!.leaseToken, later)).toBe(true);
     await workerService.aggregateDay(command("2026-10-14", jobId, later));
     const second = await admin!.query(`select event_count::int,observed_subjects::int from measurement.daily_aggregates
-      where portfolio_id=$1 and utc_day='2026-10-14' and metric_key='page-viewed'`, [portfolioId]);
+      where portfolio_id=$1 and utc_day='2026-10-14' and metric_key='page-viewed' and dimensions='{}'::jsonb`, [portfolioId]);
     expect(first.rows).toEqual([{ event_count: 2, observed_subjects: 1 }]);
     expect(second.rows).toEqual(first.rows);
     const conversions = await admin!.query(`select metric_key,event_count::int,goal_id::text,goal_version_id::text from measurement.daily_aggregates
-      where portfolio_id=$1 and utc_day='2026-10-14' and metric_kind='goal' and goal_id=$2`, [portfolioId, goal.goalId]);
+      where portfolio_id=$1 and utc_day='2026-10-14' and metric_kind='goal' and goal_id=$2 and dimensions='{}'::jsonb`, [portfolioId, goal.goalId]);
     expect(conversions.rows).toEqual([{ metric_key: `${goal.goalId}:${goal.versionId}`, event_count: 1,
       goal_id: goal.goalId, goal_version_id: goal.versionId }]);
+  });
+
+  it("persists bounded single-dimension groupings and applies report-wide and complementary suppression", async () => {
+    const groups = [
+      { country: "EG", count: 2, locale: "en" as const },
+      { country: "CA", count: 5, locale: "en" as const },
+      { country: "US", count: 6, locale: "ar" as const },
+    ];
+    for (const group of groups) for (let index = 0; index < group.count; index++) {
+      await addEvent({ subject: id("MeasurementVisitor"), action: "page-viewed", occurredAt: "2026-10-07T10:00:00Z",
+        countryCode: group.country, locale: group.locale, deviceClass: "mobile", referrerClass: "search" });
+    }
+    await aggregate("2026-10-07");
+    const summary = await createServices().reportService.getAggregateReport({ scope: { kind: "portfolio", portfolioId },
+      correlationId: "aggregate-privacy-summary", actor: { kind: "owner", ownerId, sessionId: "owner-session" },
+      grouping: "daily-action", action: "page-viewed", startDate: "2026-10-07", endDate: "2026-10-07" });
+    expect(summary).toMatchObject({ ok: true, value: { state: "low-sample", observedSubjects: "not-disclosed" } });
+    const country = await createServices().reportService.getAggregateReport({ scope: { kind: "portfolio", portfolioId },
+      correlationId: "aggregate-privacy-country", actor: { kind: "owner", ownerId, sessionId: "owner-session" },
+      grouping: "daily-action", breakdown: "country", action: "page-viewed", startDate: "2026-10-07", endDate: "2026-10-07" });
+    expect(country).toMatchObject({ ok: true, value: { state: "available", sampleState: "low-sample", rows: [
+      { count: 6, dimensions: { countryCode: "US" } },
+    ] } });
+    expect(JSON.stringify(country)).not.toContain("EG");
+    expect(JSON.stringify(country)).not.toContain("CA");
+    expect(await createServices().reportService.getAggregateReport({ scope: { kind: "portfolio", portfolioId },
+      correlationId: "aggregate-privacy-country-replay", actor: { kind: "owner", ownerId, sessionId: "owner-session" },
+      grouping: "daily-action", breakdown: "country", action: "page-viewed", startDate: "2026-10-07", endDate: "2026-10-07" })).toEqual(country);
+    const locale = await createServices().reportService.getAggregateReport({ scope: { kind: "portfolio", portfolioId },
+      correlationId: "aggregate-privacy-locale", actor: { kind: "owner", ownerId, sessionId: "owner-session" },
+      grouping: "daily-action", breakdown: "locale", action: "page-viewed", startDate: "2026-10-07", endDate: "2026-10-07" });
+    expect(locale).toMatchObject({ ok: true, value: { state: "available", sampleState: "sufficient", rows: [
+      { count: 6, dimensions: { locale: "ar" } }, { count: 7, dimensions: { locale: "en" } },
+    ] } });
+    const stored = await admin!.query(`select dimensions,event_count::int,observed_subjects::int from measurement.daily_aggregates
+      where portfolio_id=$1 and utc_day='2026-10-07' and metric_kind='action' and metric_key='page-viewed' order by dimensions`, [portfolioId]);
+    expect(stored.rows).toContainEqual({ dimensions: {}, event_count: 13, observed_subjects: 13 });
+    expect(stored.rows).toContainEqual({ dimensions: { countryCode: "EG" }, event_count: 2, observed_subjects: 2 });
+    expect(stored.rows).toContainEqual({ dimensions: { locale: "en" }, event_count: 7, observed_subjects: 7 });
+    await admin!.query("set enable_seqscan=off");
+    const groupedPlan = await admin!.query(`explain (format json) select metric_key from measurement.daily_aggregates
+      where portfolio_id=$1 and utc_day between '2026-10-07' and '2026-10-07' and metric_kind='action'
+        and dimensions ? 'countryCode'`, [portfolioId]);
+    expect(JSON.stringify(groupedPlan.rows)).toContain("daily_aggregates_report_range");
+    await admin!.query("reset enable_seqscan");
+    const beforeReplay = await admin!.query(`select dimensions,event_count::int,observed_subjects::int from measurement.daily_aggregates
+      where portfolio_id=$1 and utc_day='2026-10-07' and metric_kind='action' and metric_key='page-viewed' order by dimensions`, [portfolioId]);
+    await aggregate("2026-10-07");
+    const afterReplay = await admin!.query(`select dimensions,event_count::int,observed_subjects::int from measurement.daily_aggregates
+      where portfolio_id=$1 and utc_day='2026-10-07' and metric_kind='action' and metric_key='page-viewed' order by dimensions`, [portfolioId]);
+    expect(afterReplay.rows).toEqual(beforeReplay.rows);
   });
 
   it("distinguishes empty, four-subject Low-sample, and five-subject eligible cohorts despite repeated events", async () => {

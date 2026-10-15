@@ -12,6 +12,7 @@ export type {
   PublicEventData,
   AnalyticsGoalVersion,
   DailyAggregate,
+  DailyAggregateDimensions,
   AnalyticsGoalVersionActivatedEvent,
 } from "./domain/index.js";
 
