@@ -1,0 +1,105 @@
+{
+  "runId": "637585c7-a3cb-48a8-abc5-253deecce53b",
+  "sourceRevision": "fbe6a6b557687fe3370734ac908939df4a456aa6",
+  "sourceTreeSha256": "7fa7bb2fce5b82a483ab608ef26d0a7e529f1fd5f0e22f1b57768b932c7619db",
+  "tools": {
+    "node": "v24.21.0",
+    "npm": "11.19.0",
+    "supabase": "2.117.0",
+    "postgres": "postgres (PostgreSQL) 18.3"
+  },
+  "migration": "supabase/migrations/20261015170000_activate_analytics_goal_versions.sql",
+  "migrationSha256": "7f6a8d3444468125fd9bbecf8d3f95bd1ea6c953f8a1626b140a707a82c54f66",
+  "acceptanceCriteria": {
+    "T12-01": [
+      "real Owner create-version HTTP operation returns a contract-valid 201 receipt",
+      "authorized inspect returns the immutable ordered version view, nullable pointer, and history"
+    ],
+    "T12-02": [
+      "version one bootstraps root and snapshot atomically at aggregate version two",
+      "expected version other than one rejects bootstrap and absent-root inspect is not_found"
+    ],
+    "T12-03": [
+      "a two-party barrier overlaps independent concurrent initializers and yields exactly one root and version one",
+      "exact retry replays original receipt and changed payload conflicts without another outbox effect"
+    ],
+    "T12-04": [
+      "name, action, step, scope, duplicate, wrong-type, unavailable, and Portfolio boundaries validated",
+      "one hundred scope and ten step limits accepted; one hundred one and eleven rejected"
+    ],
+    "T12-05": [
+      "retained Hidden Project and route identities remain valid goal scopes without changing public lifecycle"
+    ],
+    "T12-06": [
+      "later versions append ordered snapshots without changing the active pointer or activation facts"
+    ],
+    "T12-07": [
+      "stale preconditions and non-Owner actors are rejected safely",
+      "replay checks current Owner authorization again",
+      "the shared verified Owner boundary rejects invalid origin and CSRF before dispatch"
+    ],
+    "T12-08": [
+      "root, snapshot, outbox, and ledger failures leave no durable root/version/receipt/fact",
+      "restricted application role cannot update or delete immutable snapshots"
+    ],
+    "T13-01": [
+      "existing Owner activation HTTP operation returns contract-valid 200 and inspect exposes the active pointer and ordered history"
+    ],
+    "T13-02": [
+      "creation leaves activation unchanged and activation preserves definition snapshot bytes with one active pointer"
+    ],
+    "T13-03": [
+      "cross-goal and foreign-Portfolio version IDs reject without private leakage or state changes; absent root is not_found"
+    ],
+    "T13-04": [
+      "exact replay and fresh-key same-version activation add no duplicate fact or aggregate increment"
+    ],
+    "T13-05": [
+      "changed-payload key reuse conflicts, stale If-Match returns 412, and replay requires current Owner authorization"
+    ],
+    "T13-06": [
+      "independent concurrent activations serialize to one pointer/history",
+      "injected pointer-history, outbox, and ledger failures roll back together"
+    ],
+    "T13-07": [
+      "fixed-clock tied activation timestamps retain deterministic goal-local sequence for delayed matching"
+    ],
+    "T13-08": [
+      "scoped Owner composition, real PostgreSQL/RLS, and generated strict HTTP response validation pass"
+    ]
+  },
+  "required": {
+    "success": true,
+    "passed": 77,
+    "failed": 0,
+    "skipped": 0,
+    "failedSuites": 0
+  },
+  "suites": [
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-activation-200/tests/phase4/owner-request-security.test.ts",
+      "passed": 20
+    },
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-activation-200/tests/phase7/goal-versions-postgres.test.ts",
+      "passed": 13
+    },
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-activation-200/tests/phase7/goal-versions.test.ts",
+      "passed": 12
+    },
+    {
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-activation-200/tests/runtime/owner-analytics.test.ts",
+      "passed": 32
+    }
+  ],
+  "roles": [
+    "goal_runtime",
+    "shipwithali_application",
+    "anon",
+    "authenticated"
+  ],
+  "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:goal-versions (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
+  "scope": "Full repository migration chain in a loopback-only disposable native PostgreSQL cluster, restricted non-superuser application role, real Owner application and HTTP adapters; no production or development database was modified.",
+  "cleanup": true
+}
