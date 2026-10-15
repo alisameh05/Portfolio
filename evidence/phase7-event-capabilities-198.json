@@ -1,7 +1,7 @@
 {
-  "runId": "6a55c314-a28e-4d8b-a308-07ccb272a2ac",
-  "sourceRevision": "8ef3fefb891e93b7c390d2eeb3af6ba340e35412",
-  "sourceTreeSha256": "01ecbf38816bcadb1ecb35bfdbf913b504357380a7c90775ac3a97bafddd9167",
+  "runId": "d5790eec-a83b-48b7-951a-5f11890747e2",
+  "sourceRevision": "83ec444936270b90e1d0b90dee659378240133b4",
+  "sourceTreeSha256": "b81d221be1436b47aa70c5e1f692d38c6104cd2f386a2af981ef0f31593c52b3",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015150000_enable_configuration_interaction_event_facts.sql",
   "migrationSha256": "ce3d4700c6cf9154f8aa5a462bca3032d19ead3faf1b73ef64dca4ff954a03a9",
@@ -41,12 +41,16 @@
   },
   "required": {
     "success": true,
-    "passed": 69,
+    "passed": 72,
     "failed": 0,
     "skipped": 0,
     "failedSuites": 0
   },
   "suites": [
+    {
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/runtime/public-event.test.ts",
+      "passed": 23
+    },
     {
       "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/phase7/consent-crypto.test.ts",
       "passed": 5
@@ -58,10 +62,6 @@
     {
       "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/phase7/events-postgres.test.ts",
       "passed": 12
-    },
-    {
-      "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/runtime/public-event.test.ts",
-      "passed": 20
     }
   ],
   "roles": [
