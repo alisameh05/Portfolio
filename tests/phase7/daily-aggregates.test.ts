@@ -14,15 +14,15 @@ const versionId = createStableId("AnalyticsGoalVersion");
 const now = "2026-10-15T12:00:00.000Z";
 
 function actionRow(observedSubjects: number, overrides: Partial<DailyAggregateReportRecord> = {}): DailyAggregateReportRecord {
-  return { date: "2026-10-14", metric: "action", metricKey: "project-viewed", count: 80, sum: 0,
-    observedSubjects, returningSubjects: Math.min(3, observedSubjects), policyVersion: "phase7.daily.v1", asOf: now,
+  return { date: "2026-10-14", metric: "action", metricKey: "project-viewed", dimensions: {}, count: 80, sum: 0,
+    observedSubjects, returningSubjects: Math.min(3, observedSubjects), policyVersion: "phase7.daily.v2", asOf: now,
     incomplete: false, ...overrides };
 }
 
 function goalRow(observedSubjects: number): DailyAggregateReportRecord {
-  return { date: "2026-10-14", metric: "goal", metricKey: `${goalId}:${versionId}`, goalId, goalVersionId: versionId,
+  return { date: "2026-10-14", metric: "goal", metricKey: `${goalId}:${versionId}`, dimensions: {}, goalId, goalVersionId: versionId,
     definitionSnapshot: { name: "Project journey", steps: [{ action: "project-viewed" }, { action: "contact-channel-opened" }] },
-    count: 8, sum: 0, observedSubjects, returningSubjects: Math.min(2, observedSubjects), policyVersion: "phase7.daily.v1",
+    count: 8, sum: 0, observedSubjects, returningSubjects: Math.min(2, observedSubjects), policyVersion: "phase7.daily.v2",
     asOf: now, incomplete: false };
 }
 
@@ -68,7 +68,8 @@ describe("daily aggregates and safe Owner reporting", () => {
     const { service } = harness([], true);
     expect(await service.getAggregateReport(reportQuery())).toEqual({ ok: true, value: {
       utcPeriod: { startDay: "2026-10-14", endDay: "2026-10-14" }, asOf: now, incomplete: true,
-      policyVersion: "phase7.daily.v1", grouping: "daily-action", state: "no-data", observedSubjects: "zero",
+      policyVersion: "phase7.daily.v2", grouping: "daily-action", breakdown: "summary", state: "incomplete", observedSubjects: "not-disclosed",
+      sourceHorizon: "accepted-events-within-14-days-of-as-of",
     } });
   });
 
@@ -84,7 +85,8 @@ describe("daily aggregates and safe Owner reporting", () => {
     const result = await service.getAggregateReport(reportQuery());
     expect(result).toMatchObject({ ok: true, value: { state: "available", observedSubjects: "five-or-more",
       engagementMeaning: "approximate-active-attention", journeyMeaning: "context-without-causation",
-      rows: [{ utcDay: "2026-10-14", count: 12, sum: 25_000, metric: "action", action: "project-viewed", dimensions: {} }] } });
+      sourceHorizon: "accepted-events-within-14-days-of-as-of",
+      sampleState: "sufficient", rows: [{ utcDay: "2026-10-14", count: 12, sum: 25_000, metric: "action", action: "project-viewed", dimensions: {} }] } });
     expect(JSON.stringify(result)).not.toContain("measurementSubject");
     expect(JSON.stringify(result)).not.toContain("functionalId");
   });
@@ -108,5 +110,59 @@ describe("daily aggregates and safe Owner reporting", () => {
       .toMatchObject({ ok: false, error: { kind: "validation" } });
     expect(await denied.service.getAggregateReport(reportQuery({ startDate: "2026-09-01" })))
       .toMatchObject({ ok: false, error: { kind: "validation" } });
+    expect(await denied.service.getAggregateReport(reportQuery({ breakdown: "country+device" as never })))
+      .toMatchObject({ ok: false, error: { kind: "validation" } });
+  });
+
+  it.each([
+    ["locale", { locale: "en" }], ["country", { countryCode: "EG" }], ["device", { deviceClass: "mobile" }],
+    ["referrer", { referrerClass: "search" }], ["project", { projectId: createStableId("Project") }],
+    ["route", { publicRouteId: createStableId("PublicRoute") }],
+  ] as const)("uses distinct-subject zero/four/five thresholds for the fixed %s breakdown", async (breakdown, dimensions) => {
+    expect(await harness().service.getAggregateReport(reportQuery({ breakdown })))
+      .toMatchObject({ ok: true, value: { state: "no-data", observedSubjects: "zero", breakdown } });
+    const small = await harness([actionRow(4, { dimensions, count: 900 })]).service.getAggregateReport(reportQuery({ breakdown }));
+    expect(small).toMatchObject({ ok: true, value: { state: "low-sample", observedSubjects: "not-disclosed" } });
+    if (small.ok) expect("rows" in small.value).toBe(false);
+    const eligible = await harness([actionRow(5, { dimensions, count: 6 })]).service.getAggregateReport(reportQuery({ breakdown }));
+    expect(eligible).toMatchObject({ ok: true, value: { state: "available", sampleState: "sufficient", rows: [{ count: 6, dimensions }] } });
+  });
+
+  it("withholds small cells and deterministic complementary cells from additive breakdown queries", async () => {
+    const rows = [
+      actionRow(2, { dimensions: { countryCode: "EG" }, metricKey: "page-viewed", count: 100 }),
+      actionRow(7, { dimensions: { countryCode: "CA" }, metricKey: "page-viewed", count: 700 }),
+      actionRow(8, { dimensions: { countryCode: "US" }, metricKey: "page-viewed", count: 800 }),
+      actionRow(9, { dimensions: { countryCode: "GB" }, metricKey: "page-viewed", count: 900 }),
+    ];
+    const result = await harness(rows).service.getAggregateReport(reportQuery({ breakdown: "country" }));
+    expect(result).toMatchObject({ ok: true, value: { state: "available", sampleState: "low-sample", rows: [
+      { dimensions: { countryCode: "GB" }, count: 900 }, { dimensions: { countryCode: "US" }, count: 800 },
+    ] } });
+    expect(JSON.stringify(result)).not.toContain('"countryCode":"EG"');
+    expect(JSON.stringify(result)).not.toContain('"countryCode":"CA"');
+  });
+
+  it("withholds aggregate summaries for any metric/day with a small dimension cell", async () => {
+    const { service, repository } = harness([actionRow(20, { hasSmallDimensionCell: true })]);
+    const result = await service.getAggregateReport(reportQuery());
+    expect(result).toMatchObject({ ok: true, value: { state: "low-sample", observedSubjects: "not-disclosed" } });
+    expect(repository.readReport).toHaveBeenCalledWith(expect.objectContaining({ breakdown: "summary" }), expect.anything());
+  });
+
+  it("keeps high event volume from one subject in the low-sample state", async () => {
+    const result = await harness([actionRow(1, { dimensions: { locale: "ar" }, count: 12_000 })])
+      .service.getAggregateReport(reportQuery({ breakdown: "locale" }));
+    expect(result).toMatchObject({ ok: true, value: { state: "low-sample", observedSubjects: "not-disclosed" } });
+  });
+
+  it("marks reports over the bounded row limit incomplete", async () => {
+    const rows = Array.from({ length: 501 }, (_, index) => actionRow(5, {
+      date: new Date(Date.parse("2026-10-14T00:00:00.000Z") - index * 86_400_000).toISOString().slice(0, 10),
+      metricKey: `action-${index}`,
+    }));
+    const result = await harness(rows).service.getAggregateReport(reportQuery());
+    expect(result).toMatchObject({ ok: true, value: { state: "incomplete", incomplete: true, observedSubjects: "not-disclosed" } });
+    if (result.ok) expect("rows" in result.value).toBe(false);
   });
 });

@@ -1,0 +1,315 @@
+{
+  "ticket": 203,
+  "runId": "967815ff-118f-4983-9bde-31b1f7d830b7",
+  "sourceRevision": "e896c6ae65e135dcf45a67f9382136957cf99a02",
+  "sourceTreeSha256": "12548aa382e2d4c37b3941a4963051962a211e25758db1026c1e902331a409df",
+  "postgresVersion": "postgres (PostgreSQL) 18.3",
+  "migration": "supabase/migrations/20261015200000_enable_fixed_aggregate_dimensions.sql",
+  "migrationSha256": "bf2e22a2e285faedba9b13962303da71b2c18f59cb4131720a8917722c02bd79",
+  "migrations": [
+    {
+      "name": "20260922170000_prepare_migration_capability.sql",
+      "sha256": "0a6b85ed5198b8a58b51a4ed8d702d200968fd2002065d6f48c972817fe800cb"
+    },
+    {
+      "name": "20260922171906_establish_database_security_baseline.sql",
+      "sha256": "f57b86d6718d64f4a1901823a79e3fb01d862e5b57ed627ce47cd94b8ef888de"
+    },
+    {
+      "name": "20260922203000_create_operations_primitives.sql",
+      "sha256": "7dbbfec208f85d0619f623b2d0bf3634212933fa91aca9d3918d1f0c30d197a8"
+    },
+    {
+      "name": "20261001220000_create_identity_access_owner_links.sql",
+      "sha256": "e7e0ef112352594c0ff60bd696cb5f1b8ad3f55ef56401670254b022b85507d9"
+    },
+    {
+      "name": "20261002120000_create_portfolio_configuration_settings.sql",
+      "sha256": "8b85ae5db68761c79a141d0c3f339c9ca3a69b376a074cecb4d4f7904539ea06"
+    },
+    {
+      "name": "20261002130000_allow_versioned_portfolio_profile_updates.sql",
+      "sha256": "1a7a6393cefb10bfe2c05dc2721e35f4f9ab7528f4cfa88f716b3942d1c1f14b"
+    },
+    {
+      "name": "20261002140000_allow_owner_contact_channel_replacement.sql",
+      "sha256": "595ccc57be68861c1fb57f5847c6ad9bb158c7b57c753f40f1de1d12693f8d15"
+    },
+    {
+      "name": "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+      "sha256": "8f5e72eff3e5272cd492ca8d4ea254d54f5e8fda6ffaf5d4621cf1b9907a2286"
+    },
+    {
+      "name": "20261005001318_create_content_authoring.sql",
+      "sha256": "b56a8a0ea567bdd3b16c7843f39db68cba9e575d06a46daa86dce1837f156fd6"
+    },
+    {
+      "name": "20261007090000_add_immutable_content_revision_reviews.sql",
+      "sha256": "1489209223628079f6bcf67305b4eeeeba0a0d82708613c218a6d161d02dc608"
+    },
+    {
+      "name": "20261007170000_add_project_publication_routes.sql",
+      "sha256": "7fec3917e79a5b88295bf43a0a104aaa598c1b15cbb4502d0ae54c5aec6cecb2"
+    },
+    {
+      "name": "20261007190000_add_achievement_publication_timeline.sql",
+      "sha256": "83796eb2527a61a65cb4d5aefa1b80c3b26c88a064321c9998614720871a2d2b"
+    },
+    {
+      "name": "20261007200000_publish_localized_testimonials.sql",
+      "sha256": "b5424eed7afb2da9cdb8041bffca710a97ad58826ad1104139478efa300d8e8d"
+    },
+    {
+      "name": "20261008090000_preserve_project_route_history.sql",
+      "sha256": "7809d7da7e8dc15693215ff48d10ee68448b66af3877ab1fe8233a5597bc4cd4"
+    },
+    {
+      "name": "20261008120000_add_content_lifecycle_history.sql",
+      "sha256": "710f1a5ea135adc7e691c684ebac274ea26fc005fbe7adbe9c0fad3f51dacc91"
+    },
+    {
+      "name": "20261008130000_add_project_status_and_featured.sql",
+      "sha256": "e99a4446ae090ef5f1608e50af8d53cf0df6e6e68bacad5655233c15d31d252e"
+    },
+    {
+      "name": "20261008180000_add_project_relationships.sql",
+      "sha256": "9d3e74830807aec569911742dd714852c1c0e35950a18733986cfbacb6c41deb"
+    },
+    {
+      "name": "20261008210000_provision_project_taxonomies.sql",
+      "sha256": "362936fd680ce6e6bbba06b18d9fa9bf7d18c5631845d256225ffe609315c6bb"
+    },
+    {
+      "name": "20261009090000_record_taxonomy_evolution_actor_reason.sql",
+      "sha256": "db907e8f18da525db9a4dc608aa4a29d0f5b6354e764524fb0b6f3efb0dd29c2"
+    },
+    {
+      "name": "20261009100000_index_project_discovery_reads.sql",
+      "sha256": "e97c149df354f3605b3f9fd6533a9472651be47583f3299de4de74260710ec87"
+    },
+    {
+      "name": "20261010100000_create_private_media_upload_intents.sql",
+      "sha256": "5569b0cf0c3efb059cf050f506db4555c2b554f6d67c5d0b910bcd70d23b2eb9"
+    },
+    {
+      "name": "20261010200000_record_trusted_pdf_processing.sql",
+      "sha256": "849c6090275f93010b20db60b1b258d6ce7f29a2d33435c37d593332fbb61bff"
+    },
+    {
+      "name": "20261011210000_harden_trusted_pdf_processing.sql",
+      "sha256": "e5512c3696bda1d6bdfae7e498864adf31306caf17b31a0e4e959abba6324adf"
+    },
+    {
+      "name": "20261011220000_record_bounded_video_variants.sql",
+      "sha256": "4f4c05452e447387c7218af2d1c3eaa8dbb4eba37327f3934fbdf311a78e4665"
+    },
+    {
+      "name": "20261011230000_process_bounded_media_image_variants.sql",
+      "sha256": "9a6f1fcdf60035c7e1a2eec773b8026c5316a50bd06c4672c03ac61e92f38d07"
+    },
+    {
+      "name": "20261012000000_restore_video_variant_policy_after_images.sql",
+      "sha256": "583ef63c7ac38bcd3b5db84193bb2057244621b168aa7834f4554dad0723c3bb"
+    },
+    {
+      "name": "20261012010000_accept_media_with_editorial_accessibility.sql",
+      "sha256": "ac242536b69fb4221d1c21d8f2cb7580c982dd1499b3f93bf4a2ba6276a6edaa"
+    },
+    {
+      "name": "20261012020000_index_current_visible_media_references.sql",
+      "sha256": "4cd2d584ee37a041ecc8b3ba999f288c0c6659a753e8bd75e2fabe0d54b958c1"
+    },
+    {
+      "name": "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "sha256": "627c72e292212a259dda00b59b12c7900513be247e32f317a8449c14a0556e68"
+    },
+    {
+      "name": "20261012040000_accept_registered_cv_versions.sql",
+      "sha256": "3b3332532f55dbab8b24a88273d65225ada0bf6866eadad1bd27b061005ab916"
+    },
+    {
+      "name": "20261012050000_activate_current_cv_atomically.sql",
+      "sha256": "74aa75fc6047a133c053b2ecf74e03e2959296d87904618746ec91caefde8edf"
+    },
+    {
+      "name": "20261012060000_reject_media_with_usage_guard.sql",
+      "sha256": "fef9b9bf5339b56f5c49b470d5063fddb2aeb12aeefdcbf3bc178a1fcc418655"
+    },
+    {
+      "name": "20261013100000_configure_public_profile_media.sql",
+      "sha256": "1deb7226778179b8b71f1562d7b59e088ec33f9f67f6beaa3b5febef00499d00"
+    },
+    {
+      "name": "20261014194925_measurement_consent.sql",
+      "sha256": "b4b26c586356ed1a360b18b83123d69ce4ace0fd58f1afb6b7699b58c8a832bc"
+    },
+    {
+      "name": "20261014210000_persist_project_reactions.sql",
+      "sha256": "aa79480f009bb1a1fcdd8ee42114ac03c644138f4a932f575ef993c599a68671"
+    },
+    {
+      "name": "20261014211320_persist_project_ratings.sql",
+      "sha256": "027e9b6f1bc024b6d646e2a0da431f58bec9e9280a0548705cf3d5940055baff"
+    },
+    {
+      "name": "20261015003000_persist_private_feedback.sql",
+      "sha256": "76383b9305740d85f0557903924412a936a60df70264801583f141738447852b"
+    },
+    {
+      "name": "20261015010000_retain_feedback_moderation.sql",
+      "sha256": "7bdf4bad8b8c7bbf06b97eed67f7c3cfa432cea8680a23c9520b6f60042c36f9"
+    },
+    {
+      "name": "20261015093040_query_current_interaction_summaries.sql",
+      "sha256": "484eaa3c4f9fa63394dcdc14bb884c03a288d81eb605af15afcc44fbe907af90"
+    },
+    {
+      "name": "20261015120000_persist_consented_public_events.sql",
+      "sha256": "ab5445a8b8a3e5527c9844742e62bcba37b68066cecb30e6e191d05eb8d441d6"
+    },
+    {
+      "name": "20261015130000_enable_public_interaction_event_facts.sql",
+      "sha256": "3bbae95e8b77169329a39936a75ccdb34d1961824def42d3d9f7bae03d733e05"
+    },
+    {
+      "name": "20261015150000_enable_configuration_interaction_event_facts.sql",
+      "sha256": "38016ab6d1760426f0b06c446d4e4817c14ba063ed35cde4dba511775a66bbbd"
+    },
+    {
+      "name": "20261015160000_persist_immutable_analytics_goal_versions.sql",
+      "sha256": "022761106ef61ac38316a09dfe42a7a8e902b8a9539cf7832f0c402e082f3bde"
+    },
+    {
+      "name": "20261015170000_activate_analytics_goal_versions.sql",
+      "sha256": "b866f5b1d964b192b1a14bbd073131bcc3c02513ee171e53dd993d1a86454ae3"
+    },
+    {
+      "name": "20261015180000_match_analytics_goal_conversions.sql",
+      "sha256": "1b0d0d82e298cc8a522f4c1ad9cc8df1bf5519adb683ec1553a282fc9bb8b1dd"
+    },
+    {
+      "name": "20261015190000_persist_reproducible_daily_aggregates.sql",
+      "sha256": "13e96f0d18983edec6091983ab1cf0529eb06c9aaf1b4c942c81ca3532547b1c"
+    },
+    {
+      "name": "20261015200000_enable_fixed_aggregate_dimensions.sql",
+      "sha256": "bf2e22a2e285faedba9b13962303da71b2c18f59cb4131720a8917722c02bd79"
+    }
+  ],
+  "tools": {
+    "node": "24.21.0",
+    "npm": "11.19.0"
+  },
+  "assertions": [
+    {
+      "title": "reconciles UTC action totals, active-attention sums, and completed goal-version conversions",
+      "status": "passed"
+    },
+    {
+      "title": "reclaims an expired daily job, includes late accepted events, and replays action and goal totals",
+      "status": "passed"
+    },
+    {
+      "title": "persists bounded single-dimension groupings and applies report-wide and complementary suppression",
+      "status": "passed"
+    },
+    {
+      "title": "keeps retained legacy summaries readable while old dimension breakdowns remain incomplete",
+      "status": "passed"
+    },
+    {
+      "title": "distinguishes empty, four-subject Low-sample, and five-subject eligible cohorts despite repeated events",
+      "status": "passed"
+    },
+    {
+      "title": "rolls back failed day replacement and enforces isolated application and worker access",
+      "status": "passed"
+    },
+    {
+      "title": "exposes safe aggregate reports through the standard application composition without an HTTP route",
+      "status": "passed"
+    },
+    {
+      "title": "replaces one UTC day through a bounded worker command and rejects other purposes or old data",
+      "status": "passed"
+    },
+    {
+      "title": "reports no-data and marks missing aggregation coverage",
+      "status": "passed"
+    },
+    {
+      "title": "suppresses all report rows when the canonical cohort has fewer than five subjects",
+      "status": "passed"
+    },
+    {
+      "title": "returns only safe daily action facts with approximate and non-causal labels for eligible cohorts",
+      "status": "passed"
+    },
+    {
+      "title": "includes immutable goal and version meaning without exposing subjects",
+      "status": "passed"
+    },
+    {
+      "title": "fails closed for unauthorized scope, unknown Owner, and report ranges above 31 days",
+      "status": "passed"
+    },
+    {
+      "title": "uses distinct-subject zero/four/five thresholds for the fixed locale breakdown",
+      "status": "passed"
+    },
+    {
+      "title": "uses distinct-subject zero/four/five thresholds for the fixed country breakdown",
+      "status": "passed"
+    },
+    {
+      "title": "uses distinct-subject zero/four/five thresholds for the fixed device breakdown",
+      "status": "passed"
+    },
+    {
+      "title": "uses distinct-subject zero/four/five thresholds for the fixed referrer breakdown",
+      "status": "passed"
+    },
+    {
+      "title": "uses distinct-subject zero/four/five thresholds for the fixed project breakdown",
+      "status": "passed"
+    },
+    {
+      "title": "uses distinct-subject zero/four/five thresholds for the fixed route breakdown",
+      "status": "passed"
+    },
+    {
+      "title": "withholds small cells and deterministic complementary cells from additive breakdown queries",
+      "status": "passed"
+    },
+    {
+      "title": "withholds aggregate summaries for any metric/day with a small dimension cell",
+      "status": "passed"
+    },
+    {
+      "title": "keeps high event volume from one subject in the low-sample state",
+      "status": "passed"
+    },
+    {
+      "title": "marks reports over the bounded row limit incomplete",
+      "status": "passed"
+    }
+  ],
+  "required": {
+    "success": true,
+    "passed": 23,
+    "failed": 0,
+    "skipped": 0,
+    "failedSuites": 0
+  },
+  "databaseRoles": [
+    "aggregate_app_runtime",
+    "aggregate_worker_runtime",
+    "shipwithali_application",
+    "shipwithali_worker",
+    "anon",
+    "authenticated"
+  ],
+  "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:aggregate-privacy (use --refresh-types only when regenerating database.generated.ts)",
+  "scope": "All committed repository migrations on a disposable native PostgreSQL cluster; source-bound unit and real-PostgreSQL acceptance.",
+  "cleanup": true
+}

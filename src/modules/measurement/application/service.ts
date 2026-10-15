@@ -29,6 +29,8 @@ export interface GetAggregateReportQuery extends ApplicationRequestContext {
   readonly actor: ActorContext;
   readonly action?: MeasurementEventType;
   readonly grouping: "daily-action" | "daily-goal";
+  /** One approved dimension at a time; arbitrary combinations are not reportable. */
+  readonly breakdown?: "summary" | "locale" | "country" | "device" | "referrer" | "project" | "route";
   readonly startDate: string;
   readonly endDate: string;
 }
@@ -59,14 +61,16 @@ export interface AggregateReportMetadata {
  readonly asOf: string;
  readonly incomplete: boolean;
  readonly policyVersion: string;
+ readonly sourceHorizon: "accepted-events-within-14-days-of-as-of";
  readonly grouping: "daily-action" | "daily-goal";
+ readonly breakdown: NonNullable<GetAggregateReportQuery["breakdown"]>;
 }
 export interface SafeReportDimensions {
  readonly locale?: "en" | "ar";
  readonly countryCode?: string;
  readonly deviceClass?: "desktop" | "mobile" | "tablet" | "other" | "unknown";
  readonly referrerClass?: "direct" | "search" | "social" | "professional" | "referral" | "unknown";
- readonly projectId?: StableId<"Project">;
+ readonly projectId?: StableId<"Project"> | "unknown";
  readonly publicRouteId?: StableId<"PublicRoute">;
 }
 export type AggregateReportRow = {
@@ -80,6 +84,7 @@ export type AggregateReportRow = {
 );
 export type SafeAggregateReport = AggregateReportMetadata & (
  { readonly state: "no-data"; readonly observedSubjects: "zero"; readonly rows?: never } |
- { readonly state: "low-sample"; readonly observedSubjects: "fewer-than-five"; readonly rows?: never } |
- { readonly state: "available"; readonly observedSubjects: "five-or-more"; readonly rows: readonly AggregateReportRow[]; readonly engagementMeaning: "approximate-active-attention"; readonly journeyMeaning: "context-without-causation" }
+ { readonly state: "incomplete"; readonly observedSubjects: "not-disclosed"; readonly rows?: never } |
+ { readonly state: "low-sample"; readonly observedSubjects: "fewer-than-five" | "not-disclosed"; readonly rows?: never } |
+ { readonly state: "available"; readonly observedSubjects: "five-or-more"; readonly rows: readonly AggregateReportRow[]; readonly sampleState: "sufficient" | "low-sample"; readonly engagementMeaning: "approximate-active-attention"; readonly journeyMeaning: "context-without-causation" }
 );

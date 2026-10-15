@@ -61,6 +61,7 @@ export interface DailyAggregate {
   readonly date: string;
   readonly metric: "action" | "goal";
   readonly metricKey: string;
+  readonly dimensions: DailyAggregateDimensions;
   readonly goalId?: StableId<"AnalyticsGoal">;
   readonly goalVersionId?: StableId<"AnalyticsGoalVersion">;
   readonly count: number;
@@ -71,6 +72,16 @@ export interface DailyAggregate {
   readonly asOf: string;
   readonly incomplete: boolean;
 }
+
+/** A persisted aggregate has either no breakdown or exactly one approved coarse dimension. */
+export type DailyAggregateDimensions =
+  | Readonly<Record<never, never>>
+  | { readonly locale: "en" | "ar" }
+  | { readonly countryCode: string }
+  | { readonly deviceClass: "desktop" | "mobile" | "tablet" | "other" | "unknown" }
+  | { readonly referrerClass: "direct" | "search" | "social" | "professional" | "referral" | "unknown" }
+  | { readonly projectId: StableId<"Project"> | "unknown" }
+  | { readonly publicRouteId: StableId<"PublicRoute"> };
 
 // Domain events
 export type AnalyticsGoalVersionActivatedEvent = DomainEvent<

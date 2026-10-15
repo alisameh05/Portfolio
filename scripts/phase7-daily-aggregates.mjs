@@ -9,6 +9,7 @@ import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 
 const root = process.cwd();
 const runId = randomUUID();
+const privacyAcceptance = process.argv.includes("--privacy");
 const refreshTypes = process.argv.includes("--refresh-types");
 const initialSource = workingTreeSourceSha256();
 const discoveredBin = process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" :
@@ -23,10 +24,10 @@ function run(command, args, env = process.env) {
   return result.stdout;
 }
 
-const temp = join(tmpdir(), `portfolio-daily-aggregates-202-${runId}`);
+const temp = join(tmpdir(), `portfolio-daily-aggregates-${privacyAcceptance ? "203" : "202"}-${runId}`);
 const data = join(temp, "data");
-const reportPath = resolve("artifacts/daily-aggregates-vitest.json");
-const evidencePath = resolve("evidence/phase7-daily-aggregates-202.json");
+const reportPath = resolve(`artifacts/daily-aggregates-${privacyAcceptance ? "203" : "202"}-vitest.json`);
+const evidencePath = resolve(`evidence/phase7-${privacyAcceptance ? "aggregate-privacy-203" : "daily-aggregates-202"}.json`);
 mkdirSync(temp, { recursive: true });
 mkdirSync("artifacts", { recursive: true });
 rmSync(reportPath, { force: true });
@@ -83,16 +84,17 @@ try {
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
   const assertions = tests.testResults.flatMap(suite => suite.assertionResults ?? []);
   if (!tests.success || tests.numFailedTestSuites !== 0 || tests.numFailedTests !== 0 || tests.numPendingTests !== 0 || tests.numTodoTests !== 0 ||
-      tests.numPassedTests !== 11 || assertions.length !== 11 || tests.testResults.length !== 2 ||
+      tests.numPassedTests !== 23 || assertions.length !== 23 || tests.testResults.length !== 2 ||
       tests.testResults.some(suite => suite.status !== "passed") || assertions.some(assertion => assertion.status !== "passed")) {
     throw new Error("DAILY_AGGREGATE_ACCEPTANCE_INCOMPLETE");
   }
   if (workingTreeSourceSha256() !== testedSource) throw new Error("DAILY_AGGREGATE_SOURCE_CHANGED_DURING_ACCEPTANCE");
 
-  const migrationName = "supabase/migrations/20261015190000_persist_reproducible_daily_aggregates.sql";
+  const migrationName = privacyAcceptance ? "supabase/migrations/20261015200000_enable_fixed_aggregate_dimensions.sql" :
+    "supabase/migrations/20261015190000_persist_reproducible_daily_aggregates.sql";
   const migrationHashes = migrations.map(name => ({ name, sha256: createHash("sha256").update(readFileSync(join("supabase/migrations", name))).digest("hex") }));
   result = {
-    ticket: 202,
+    ticket: privacyAcceptance ? 203 : 202,
     runId,
     sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
     sourceTreeSha256: testedSource,
@@ -104,7 +106,7 @@ try {
     assertions: assertions.map(assertion => ({ title: assertion.title, status: assertion.status })),
     required: { success: tests.success, passed: tests.numPassedTests, failed: tests.numFailedTests, skipped: tests.numPendingTests, failedSuites: tests.numFailedTestSuites },
     databaseRoles: ["aggregate_app_runtime", "aggregate_worker_runtime", "shipwithali_application", "shipwithali_worker", "anon", "authenticated"],
-    reproduction: "npm run setup:validation; npm run validation:ready; npm run phase7:focus:daily-aggregates (use --refresh-types only when regenerating database.generated.ts)",
+    reproduction: `npm run setup:validation; npm run validation:ready; npm run phase7:focus:${privacyAcceptance ? "aggregate-privacy" : "daily-aggregates"} (use --refresh-types only when regenerating database.generated.ts)`,
     scope: "All committed repository migrations on a disposable native PostgreSQL cluster; source-bound unit and real-PostgreSQL acceptance.",
   };
   console.log(JSON.stringify({ required: result.required, runId, sourceTreeSha256: testedSource }));
@@ -130,6 +132,6 @@ try {
   if (result && cleanup) {
     mkdirSync("evidence", { recursive: true });
     writeFileSync(evidencePath, `${JSON.stringify({ ...result, cleanup }, null, 2)}\n`);
-    console.log(JSON.stringify({ evidence: "evidence/phase7-daily-aggregates-202.json", cleanup }));
+    console.log(JSON.stringify({ evidence: `evidence/phase7-${privacyAcceptance ? "aggregate-privacy-203" : "daily-aggregates-202"}.json`, cleanup }));
   }
 }
