@@ -44,7 +44,13 @@ create policy consent_worker_expire_checkpoint on measurement.consents
   using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid
     and exists (select 1 from measurement.retention_checkpoints checkpoint
       where checkpoint.portfolio_id = consents.portfolio_id and checkpoint.work_kind = 'detail'
-        and consents.evidence_expires_at <= checkpoint.requested_at));
+        and consents.evidence_expires_at <= checkpoint.requested_at)
+    and not exists (select 1 from measurement.public_events event
+      where event.portfolio_id = consents.portfolio_id and event.measurement_subject = consents.subject)
+    and not exists (select 1 from measurement.goal_conversion_rebuilds rebuild
+      where rebuild.portfolio_id = consents.portfolio_id and rebuild.measurement_subject = consents.subject)
+    and not exists (select 1 from measurement.consent_history history
+      where history.portfolio_id = consents.portfolio_id and history.consent_id = consents.consent_id));
 
 grant delete on measurement.public_events, measurement.goal_conversion_rebuilds,
   measurement.goal_conversion_contributions, measurement.daily_aggregates,
@@ -52,7 +58,14 @@ grant delete on measurement.public_events, measurement.goal_conversion_rebuilds,
 
 create policy public_events_worker_delete on measurement.public_events
   for delete to shipwithali_worker
-  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
+  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid
+    and (exists (select 1 from measurement.retention_checkpoints checkpoint
+      where checkpoint.portfolio_id = public_events.portfolio_id and checkpoint.work_kind = 'detail'
+        and public_events.accepted_at <= checkpoint.requested_at - interval '14 days')
+      or exists (select 1 from measurement.retention_checkpoints checkpoint
+        join measurement.consents consent on consent.portfolio_id = checkpoint.portfolio_id
+          and consent.subject = public_events.measurement_subject and consent.state <> 'granted'
+        where checkpoint.portfolio_id = public_events.portfolio_id and checkpoint.work_kind = 'withdrawal')));
 
 -- The Worker may remove only expired conversion scratch or records for a
 -- subject whose current consent no longer grants Measurement.
@@ -69,7 +82,20 @@ create policy goal_conversion_rebuild_worker_update on measurement.goal_conversi
   with check (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
 create policy goal_conversion_rebuild_worker_delete on measurement.goal_conversion_rebuilds
   for delete to shipwithali_worker
-  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
+  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid
+    and (exists (select 1 from measurement.retention_checkpoints checkpoint
+        where checkpoint.portfolio_id = goal_conversion_rebuilds.portfolio_id and checkpoint.work_kind = 'detail'
+          and goal_conversion_rebuilds.trigger_accepted_at <= checkpoint.requested_at - interval '14 days'
+          and not exists (select 1 from measurement.public_events event
+            where event.portfolio_id = goal_conversion_rebuilds.portfolio_id
+              and event.measurement_subject = goal_conversion_rebuilds.measurement_subject
+              and event.accepted_at > checkpoint.requested_at - interval '14 days'))
+      or exists (select 1 from measurement.retention_checkpoints checkpoint
+        join measurement.consents consent on consent.portfolio_id = checkpoint.portfolio_id
+          and consent.subject = goal_conversion_rebuilds.measurement_subject and consent.state <> 'granted'
+        where checkpoint.portfolio_id = goal_conversion_rebuilds.portfolio_id and checkpoint.work_kind = 'withdrawal'
+          and not exists (select 1 from measurement.public_events event where event.portfolio_id = goal_conversion_rebuilds.portfolio_id
+            and event.measurement_subject = goal_conversion_rebuilds.measurement_subject))));
 
 drop policy goal_conversion_contribution_worker on measurement.goal_conversion_contributions;
 create policy goal_conversion_contribution_worker_read on measurement.goal_conversion_contributions
@@ -80,7 +106,17 @@ create policy goal_conversion_contribution_worker_insert on measurement.goal_con
   with check (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
 create policy goal_conversion_contribution_worker_delete on measurement.goal_conversion_contributions
   for delete to shipwithali_worker
-  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
+  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid
+    and (exists (select 1 from measurement.retention_checkpoints checkpoint
+        where checkpoint.portfolio_id = goal_conversion_contributions.portfolio_id and checkpoint.work_kind = 'detail'
+          and (goal_conversion_contributions.accepted_at <= checkpoint.requested_at - interval '14 days'
+            or exists (select 1 from measurement.public_events event where event.portfolio_id = goal_conversion_contributions.portfolio_id
+              and event.event_id = goal_conversion_contributions.terminal_event_id
+              and event.accepted_at <= checkpoint.requested_at - interval '14 days')))
+      or exists (select 1 from measurement.retention_checkpoints checkpoint
+        join measurement.consents consent on consent.portfolio_id = checkpoint.portfolio_id
+          and consent.subject = goal_conversion_contributions.measurement_subject and consent.state <> 'granted'
+        where checkpoint.portfolio_id = goal_conversion_contributions.portfolio_id and checkpoint.work_kind = 'withdrawal')));
 
 drop policy daily_aggregates_worker on measurement.daily_aggregates;
 create policy daily_aggregates_worker_read on measurement.daily_aggregates
@@ -95,7 +131,13 @@ create policy daily_aggregates_worker_update on measurement.daily_aggregates
   with check (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
 create policy daily_aggregates_worker_delete on measurement.daily_aggregates
   for delete to shipwithali_worker
-  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
+  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid
+    and (exists (select 1 from measurement.daily_aggregate_checkpoints checkpoint
+        where checkpoint.portfolio_id = daily_aggregates.portfolio_id and checkpoint.utc_day = daily_aggregates.utc_day
+          and not checkpoint.retention_sealed)
+      or exists (select 1 from measurement.retention_checkpoints checkpoint
+        where checkpoint.portfolio_id = daily_aggregates.portfolio_id and checkpoint.work_kind = 'aggregates'
+          and ((daily_aggregates.utc_day::timestamp at time zone 'UTC') + interval '13 months') <= checkpoint.requested_at)));
 
 drop policy daily_aggregate_checkpoints_worker on measurement.daily_aggregate_checkpoints;
 create policy daily_aggregate_checkpoints_worker_read on measurement.daily_aggregate_checkpoints
@@ -110,11 +152,26 @@ create policy daily_aggregate_checkpoints_worker_update on measurement.daily_agg
   with check (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
 create policy daily_aggregate_checkpoints_worker_delete on measurement.daily_aggregate_checkpoints
   for delete to shipwithali_worker
-  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
+  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid
+    and exists (select 1 from measurement.retention_checkpoints checkpoint
+      where checkpoint.portfolio_id = daily_aggregate_checkpoints.portfolio_id and checkpoint.work_kind = 'aggregates'
+        and ((daily_aggregate_checkpoints.utc_day::timestamp at time zone 'UTC') + interval '13 months') <= checkpoint.requested_at)
+    and not exists (select 1 from measurement.daily_aggregates aggregate_row
+      where aggregate_row.portfolio_id = daily_aggregate_checkpoints.portfolio_id
+        and aggregate_row.utc_day = daily_aggregate_checkpoints.utc_day));
 
 create policy consent_history_worker_delete on measurement.consent_history
   for delete to shipwithali_worker
-  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid);
+  using (portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid
+    and exists (select 1 from measurement.retention_checkpoints checkpoint
+      join measurement.consents consent on consent.portfolio_id = checkpoint.portfolio_id
+        and consent.consent_id = consent_history.consent_id
+      where checkpoint.portfolio_id = consent_history.portfolio_id and checkpoint.work_kind = 'detail'
+        and consent.evidence_expires_at <= checkpoint.requested_at
+        and (consent.subject is null or not exists (select 1 from measurement.public_events event
+          where event.portfolio_id = consent_history.portfolio_id and event.measurement_subject = consent.subject))
+        and (consent.subject is null or not exists (select 1 from measurement.goal_conversion_rebuilds rebuild
+          where rebuild.portfolio_id = consent_history.portfolio_id and rebuild.measurement_subject = consent.subject))));
 
 comment on column measurement.daily_aggregate_checkpoints.retention_sealed is
   'Set atomically before source detail expires; prevents later rebuilds from replacing retained sufficient statistics with partial data.';

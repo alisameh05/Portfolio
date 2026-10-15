@@ -20,7 +20,7 @@ function numeric(value: string | number | bigint): number {
   return number;
 }
 function retentionStages(kind: MeasurementRetentionBatch["kind"]): readonly string[] {
-  if (kind === "detail") return ["contributions", "events", "rebuilds", "consent-history", "consents", "checkpoints"];
+  if (kind === "detail") return ["contributions", "events", "rebuilds", "consent-history", "consents"];
   if (kind === "aggregates") return ["aggregates", "checkpoints"];
   return ["contributions", "events", "rebuilds"];
 }
@@ -35,18 +35,17 @@ async function configure(tx: TransactionContext, portfolioId: string) {
 async function sealDays(db: ReturnType<typeof resolvePostgresTransaction>, portfolioId: string,
   days: readonly string[], asOf: string): Promise<boolean> {
   let incomplete = false;
-  const cutoff = asCutoff(asOf);
   for (const day of [...new Set(days)].sort()) {
     await sql`select pg_advisory_xact_lock(hashtextextended(${portfolioId + ":" + day}, 202))`.execute(db);
     const counts = await sql<DayCounts>`select
       (select count(*) from measurement.public_events e where e.portfolio_id = ${portfolioId}::uuid
         and (e.effective_at at time zone 'UTC')::date = ${day}::date
-        and e.accepted_at >= ${cutoff}::timestamptz and e.accepted_at <= ${asOf}::timestamptz) as source_event_count,
+        and e.accepted_at <= ${asOf}::timestamptz) as source_event_count,
       (select count(*) from measurement.goal_conversion_contributions c
         join measurement.goal_conversion_rebuilds r on r.portfolio_id = c.portfolio_id
           and r.measurement_subject = c.measurement_subject and r.completed_generation = c.generation
         where c.portfolio_id = ${portfolioId}::uuid and (c.converted_at at time zone 'UTC')::date = ${day}::date
-          and c.accepted_at >= ${cutoff}::timestamptz and c.accepted_at <= ${asOf}::timestamptz) as source_conversion_count`.execute(db);
+          and c.accepted_at <= ${asOf}::timestamptz) as source_conversion_count`.execute(db);
     const actual = counts.rows[0];
     if (!actual) throw new Error("MEASUREMENT_RETENTION_DAY_COUNTS_MISSING");
     const existing = await sql<{ source_event_count: string | number; source_conversion_count: string | number; incomplete: boolean }>`
@@ -173,14 +172,6 @@ async function processStage(db: ReturnType<typeof resolvePostgresTransaction>, i
           and not exists (select 1 from measurement.consent_history h where h.portfolio_id = c.portfolio_id and h.consent_id = c.consent_id)
         order by c.evidence_expires_at, c.consent_id limit ${input.batchSize} for update of c
       ) delete from measurement.consents c using page where c.ctid = page.ctid`.execute(db);
-    return { count: numeric(result.numAffectedRows ?? 0n), incomplete: false };
-  }
-  if (input.kind === "detail" && stage === "checkpoints") {
-    const result = await sql`with page as materialized (
-        select ctid from measurement.retention_checkpoints where portfolio_id = ${input.portfolioId}::uuid
-          and job_id <> ${input.jobId}::uuid and updated_at <= ${new Date(Date.parse(input.now) - 30 * DAY_MS).toISOString()}::timestamptz
-        order by updated_at, job_id, work_kind limit ${input.batchSize} for update
-      ) delete from measurement.retention_checkpoints c using page where c.ctid = page.ctid`.execute(db);
     return { count: numeric(result.numAffectedRows ?? 0n), incomplete: false };
   }
   if (input.kind === "aggregates" && stage === "aggregates") {

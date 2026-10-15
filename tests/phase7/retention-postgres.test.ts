@@ -168,6 +168,24 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
     expect((await admin.query("select retention_sealed,incomplete from measurement.daily_aggregate_checkpoints where portfolio_id=$1 and utc_day='2026-10-02'", [portfolioId])).rows[0]).toEqual({ retention_sealed: true, incomplete: false });
   });
 
+  it("marks coverage incomplete when an older unprocessed event expires", async () => {
+    now = "2026-10-16T12:00:00.000Z";
+    const subject = nextId("MeasurementVisitor");
+    await addEvent({ subject, acceptedAt: "2026-10-01T12:00:00.000Z", occurredAt: "2026-10-01T12:00:00.000Z" });
+    await addEvent({ subject: nextId("MeasurementVisitor"), acceptedAt: "2026-10-01T13:00:00.000Z", occurredAt: "2026-10-01T13:00:00.000Z" });
+    await addAggregate("2026-10-01", 23);
+    await admin.query(`update measurement.daily_aggregate_checkpoints set source_event_count=1, checkpoint_at=$2
+      where portfolio_id=$1 and utc_day='2026-10-01'`, [portfolioId, now]);
+
+    const expired = await drain(input => retention.expireDetail(input), "retention", now);
+
+    expect(expired.results.some(result => result.incomplete)).toBe(true);
+    expect((await admin.query(`select incomplete,retention_sealed from measurement.daily_aggregate_checkpoints
+      where portfolio_id=$1 and utc_day='2026-10-01'`, [portfolioId])).rows[0]).toEqual({ incomplete: true, retention_sealed: true });
+    expect((await admin.query(`select count(*)::int as count from measurement.public_events
+      where portfolio_id=$1 and effective_at >= '2026-10-01T00:00:00Z' and effective_at < '2026-10-02T00:00:00Z'`, [portfolioId])).rows[0].count).toBe(0);
+  });
+
   it("cleans withdrawn subjects while preserving the bounded revocation proof and rejecting the old signed token", async () => {
     now = baseNow;
     const cryptoConfig = {
@@ -257,5 +275,45 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
     });
     expect(Number(deleted.numAffectedRows ?? 0n)).toBe(0);
     expect((await admin.query("select 1 from measurement.public_events where event_id=$1", [foreignEvent])).rows).toHaveLength(1);
+  });
+
+  it("blocks Worker deletes of unexpired detail, consent, and aggregate rows", async () => {
+    const subject = nextId("MeasurementVisitor");
+    const eventId = await addEvent({ subject, acceptedAt: baseNow });
+    const consentId = await addConsent({ subject, state: "granted", evidenceExpiresAt: "2026-10-20T12:00:00.000Z", recordedAt: baseNow });
+    await addContribution({ subject, eventId, acceptedAt: baseNow, convertedAt: baseNow });
+    await addAggregate("2026-10-15", 31);
+    await admin.query(`update measurement.daily_aggregate_checkpoints set retention_sealed=true
+      where portfolio_id=$1 and utc_day='2026-10-15'`, [portfolioId]);
+    const detailJob = nextId("Job"), aggregateJob = nextId("Job");
+    await admin.query(`insert into measurement.retention_checkpoints
+      (portfolio_id,job_id,work_kind,requested_at,stage,updated_at) values
+      ($1,$2,'detail',$3,'events',$3),($1,$4,'aggregates',$3,'aggregates',$3)`,
+    [portfolioId, detailJob, baseNow, aggregateJob]);
+
+    const deleted = await worker.transactions.run(async tx => {
+      const { sql } = await import("kysely");
+      const { resolvePostgresTransaction } = await import("../../src/shared/adapters/postgres/runtime.js");
+      const db = resolvePostgresTransaction(tx);
+      await sql`select set_config('shipwithali.portfolio_id', ${portfolioId}, true)`.execute(db);
+      const events = await sql`delete from measurement.public_events where portfolio_id=${portfolioId}::uuid and event_id=${eventId}::uuid`.execute(db);
+      const contributions = await sql`delete from measurement.goal_conversion_contributions
+        where portfolio_id=${portfolioId}::uuid and measurement_subject=${subject}::uuid`.execute(db);
+      const rebuilds = await sql`delete from measurement.goal_conversion_rebuilds
+        where portfolio_id=${portfolioId}::uuid and measurement_subject=${subject}::uuid`.execute(db);
+      const history = await sql`delete from measurement.consent_history
+        where portfolio_id=${portfolioId}::uuid and consent_id=${consentId}::uuid`.execute(db);
+      const consents = await sql`delete from measurement.consents
+        where portfolio_id=${portfolioId}::uuid and consent_id=${consentId}::uuid`.execute(db);
+      const aggregates = await sql`delete from measurement.daily_aggregates
+        where portfolio_id=${portfolioId}::uuid and utc_day='2026-10-15'`.execute(db);
+      const checkpoints = await sql`delete from measurement.daily_aggregate_checkpoints
+        where portfolio_id=${portfolioId}::uuid and utc_day='2026-10-15'`.execute(db);
+      return [events, contributions, rebuilds, history, consents, aggregates, checkpoints]
+        .map(result => Number(result.numAffectedRows ?? 0n));
+    });
+    expect(deleted).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    expect((await admin.query("select 1 from measurement.public_events where event_id=$1", [eventId])).rows).toHaveLength(1);
+    expect((await admin.query("select 1 from measurement.consents where portfolio_id=$1 and consent_id=$2", [portfolioId, consentId])).rows).toHaveLength(1);
   });
 });
