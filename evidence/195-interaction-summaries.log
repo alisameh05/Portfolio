@@ -1,0 +1,11 @@
+# Evidence — Issue 195 interaction summaries (slice 08/22)
+
+Branch: codex/issue-195-interaction-summaries
+Commit: c49944c + follow-up
+
+Validation setup: npm run setup:validation timed out (network); used existing installed environment (Node 24.21.0 / vitest v3.2.4).
+
+Focused tests: tests/interaction-summary-195.focused.test.ts — 5 passed, 0 failed, 0 skipped.
+Coverage: T08-01 (reconciliation), T08-02 (rejection), T08-03 (hide/archive visibility), T08-07 (DTO bounds), average/low-sample boundaries.
+
+Remaining for full delivery (noted in PR): DB migrations, full HTTP wiring, race-proof integration with measurement module, complete evidence log with fixed-clock / disposable-PostgreSQL replay.
