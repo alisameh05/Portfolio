@@ -19,4 +19,6 @@ export interface ContentMeasurementPublicFactsPort {
  getRelatedProjectFact(input: { readonly portfolioId: StableId<"Portfolio">; readonly sourceProjectId: StableId<"Project">; readonly targetProjectId: StableId<"Project">; readonly locale: SupportedLocale }, transaction: TransactionContext): Promise<Result<boolean, Rejection>>;
  /** Current public Testimonial and exact profile/Project association in the requested locale. */
  getTestimonialFact(input: { readonly portfolioId: StableId<"Portfolio">; readonly testimonialId: StableId<"Testimonial">; readonly projectId?: StableId<"Project">; readonly locale: SupportedLocale }, transaction: TransactionContext): Promise<Result<boolean, Rejection>>;
+ /** Validates an action category against the current published External link for this Project and locale. */
+ getExternalProjectLinkFact(input: { readonly portfolioId: StableId<"Portfolio">; readonly projectId: StableId<"Project">; readonly destination: "github-repository" | "live-demo"; readonly locale: SupportedLocale }, transaction: TransactionContext): Promise<Result<boolean, Rejection>>;
 }

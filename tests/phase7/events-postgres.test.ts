@@ -7,9 +7,10 @@ import { createPostgresOperationsPersistence } from "../../src/modules/portabili
 import { createPostgresConsentRepository } from "../../src/modules/measurement/adapters/postgres-consent.js";
 import { createPostgresMeasurementEventRepository } from "../../src/modules/measurement/adapters/postgres-events.js";
 import { createPostgresContentMeasurementPublicFacts } from "../../src/modules/content-publishing/adapters/postgres-interaction-facts.js";
+import { createPostgresMeasurementConfigurationPublicFacts } from "../../src/modules/portfolio-configuration/adapters/postgres-measurement-public-facts.js";
 import { createMediaAcceptanceApplicationService } from "../../src/modules/media/index.js";
 import { createPostgresMediaAcceptanceRepository } from "../../src/modules/media/adapters/postgres-acceptance.js";
-import { createPortfolioSettingsReader } from "../../src/modules/portfolio-configuration/index.js";
+import { createPortfolioSettingsReader, type MeasurementConfigurationPublicFactsPort } from "../../src/modules/portfolio-configuration/index.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createConsentApplicationService, createMeasurementEventService, type PublicMeasurementEvent, type VerifiedMeasurementEvidence } from "../../src/modules/measurement/index.js";
 import type { MeasurementEventRepositoryPort, MeasurementMediaPublicFactsPort } from "../../src/modules/measurement/application/ingest-event.js";
@@ -37,10 +38,12 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     crypto: new AesGcmConsentEvidenceAdapter(config, () => now), clock: { now: () => now }, ids: createSystemIdGenerator(),
     supportedNoticeVersions: ["2026-10"], ttlSeconds: 2_592_000 });
   const content = createPostgresContentMeasurementPublicFacts({ portfolioId, ownerId });
+  const configuration = createPostgresMeasurementConfigurationPublicFacts({ portfolioId, ownerId });
   const repository = createPostgresMeasurementEventRepository();
-  const makeService = (options: { operations?: typeof operations; repository?: MeasurementEventRepositoryPort; facts?: typeof content; media?: MeasurementMediaPublicFactsPort; consentService?: ConsentApplicationService } = {}) => createMeasurementEventService({
+  const makeService = (options: { operations?: typeof operations; repository?: MeasurementEventRepositoryPort; facts?: typeof content; media?: MeasurementMediaPublicFactsPort; configuration?: MeasurementConfigurationPublicFactsPort; omitConfiguration?: boolean; consentService?: ConsentApplicationService } = {}) => createMeasurementEventService({
     portfolioId, transactions: (options.operations ?? operations).transactions, operations: options.operations ?? operations,
-    consent: options.consentService ?? consent, content: options.facts ?? content, ...(options.media ? { media: options.media } : {}), repository: options.repository ?? repository,
+    consent: options.consentService ?? consent, content: options.facts ?? content, ...(options.media ? { media: options.media } : {}),
+    ...(options.omitConfiguration ? {} : { configuration: options.configuration ?? configuration }), repository: options.repository ?? repository,
     clock: { now: () => now }, ids: createSystemIdGenerator(),
   });
   const service = makeService();
@@ -61,7 +64,7 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     expect(verified.ok).toBe(true); if (!verified.ok) throw new Error("CONSENT_VERIFY_FAILED");
     return { ...granted.value, token: granted.value.evidence, verified: verified.value };
   }
-  async function seedProject(options: { lifecycle?: string; locales?: readonly ("en" | "ar")[]; portfolio?: StableId<"Portfolio"> } = {}) {
+  async function seedProject(options: { lifecycle?: string; locales?: readonly ("en" | "ar")[]; portfolio?: StableId<"Portfolio">; externalLinks?: readonly { readonly type?: "github-repository" | "live-demo"; readonly label: string; readonly destination: string; readonly availableInArabic?: boolean }[] } = {}) {
     const projectId = createStableId("Project"), routeId = createStableId("PublicRoute"), targetPortfolio = options.portfolio ?? portfolioId;
     const lifecycle = options.lifecycle ?? "published", locales = options.locales ?? ["en"];
     await admin.query("insert into content.items (content_id,portfolio_id,content_type,lifecycle) values ($1,$2,'project',$3)", [projectId, targetPortfolio, lifecycle]);
@@ -72,6 +75,15 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
       await admin.query("insert into content.revisions (revision_id,content_id,portfolio_id,content_type,locale,stream_sequence,aggregate_version,title,summary,body,payload,saved_at) values ($1,$2,$3,'project',$4,1,1,'Private fixture title','Fixture summary','Fixture body',$5,$6)", [revision, projectId, targetPortfolio, locale, payload, now]);
       await admin.query("insert into content.revision_reviews (review_id,content_id,portfolio_id,content_type,revision_id,locale,review_sequence,snapshot_hash,evidence_version,reviewer_id,decision,reviewed_at) values ($1,$2,$3,'project',$4,$5,1,$6,1,$7,'accepted',$8)", [review, projectId, targetPortfolio, revision, locale, "a".repeat(64), ownerId, now]);
       await admin.query("insert into content.language_publications (content_id,portfolio_id,content_type,locale,revision_id,review_id,route_identity,publication_sequence,published_at) values ($1,$2,'project',$3,$4,$5,$6,1,$7)", [projectId, targetPortfolio, locale, revision, review, routeId, now]);
+      if (options.externalLinks !== undefined) {
+        const publicLinks = locale === "en" ? options.externalLinks : options.externalLinks.filter(link => link.availableInArabic === true);
+        await admin.query(`insert into content.public_project_locales
+          (content_id,portfolio_id,content_type,locale,revision_id,route_identity,title,summary,body,case_study,claims,external_links,first_published_at,published_at)
+          values ($1,$2,'project',$3,$4,$5,'Private fixture title','Fixture summary','Fixture body','{}'::jsonb,'[]'::jsonb,$6::jsonb,$7,$7)
+          on conflict (content_id,locale) do update set revision_id=excluded.revision_id, route_identity=excluded.route_identity,
+            external_links=excluded.external_links, published_at=excluded.published_at`,
+          [projectId, targetPortfolio, locale, revision, routeId, JSON.stringify(publicLinks.map(({ type, label, destination }) => ({ ...(type === undefined ? {} : { type }), label, destination }))), now]);
+      }
     }
     return { projectId, routeId };
   }
@@ -125,6 +137,8 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
   beforeAll(async () => {
     await admin.connect();
     await admin.query("insert into portfolio_config.settings (portfolio_id,owner_id,display_name,headline,bio,global_cta_label,global_cta_destination,global_cta_unavailable_fallback) values ($1,$2,'Owner','Headline','Bio','Contact','https://example.com','Unavailable')", [portfolioId, ownerId]);
+    await admin.query("insert into portfolio_config.contact_channels(portfolio_id,position,channel,label,destination,available_locales) values ($1,0,'linkedin','Private channel label','https://linkedin.com/in/private','[\"en\"]'::jsonb)", [portfolioId]);
+    await admin.query("insert into portfolio_config.contact_channels(portfolio_id,position,channel,label,destination,available_locales) values ($1,1,'whatsapp','Private alternate label','https://wa.me/15555550123','[\"en\"]'::jsonb)", [portfolioId]);
   });
   afterAll(async () => { await admin.end(); await database.resource.close(); await otherDatabase.resource.close(); resetRuntimeForTests(); });
 
@@ -139,7 +153,7 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     const receipts = [];
     for (const event of events) {
       const response = await handlePostPublicEvent(request(evidence.token, event, "http-" + event.action), { scope, service, consent, logger: createTestLogger() });
-      expect(response.status, await response.clone().text()).toBe(202);
+      expect(response.status, `${event.action}: ${await response.clone().text()}`).toBe(202);
       const body = await response.json() as Record<string, unknown>;
       expect(Object.keys(body).sort()).toEqual(["acceptedAt", "eventId"]);
       receipts.push(body);
@@ -157,6 +171,154 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
       journey_context: [routeId], referrer_class: "professional", device_class: "desktop", country_code: "EG", active_milliseconds: 12_500 });
     expect(JSON.stringify({ receipts, jobs: await admin.query("select payload from operations.jobs where job_type='measurement.public-event-received.v1'") })).not.toContain(evidence.verified.subject);
     expect(JSON.stringify(receipts)).not.toContain(evidence.verified.subject);
+  });
+
+  it("T11-01/T11-03/T11-04/T11-06/T11-08 records only current configured capability facts and stable public identities", async () => {
+    const { projectId, routeId } = await seedProject({ locales: ["en", "ar"], externalLinks: [
+      { type: "github-repository", label: "Private GitHub label", destination: "https://github.com/private-owner/private-repo" },
+      { type: "live-demo", label: "Private demo label", destination: "https://private-demo.example/project", availableInArabic: true },
+    ] });
+    const evidence = await issueEvidence();
+    const beforeEvents = await countEvents(), beforeJobs = await countJobs();
+    for (const destination of ["github-repository", "live-demo"] as const) {
+      const fact = await database.transactions.run(tx => content.getExternalProjectLinkFact({ portfolioId, projectId, destination, locale: "en" }, tx));
+      expect(fact, destination).toEqual({ ok: true, value: true });
+    }
+    const events: PublicMeasurementEvent[] = [
+      { action: "contact-channel-opened", context: context(routeId), channel: "linkedin" },
+      { action: "external-project-link-opened", context: context(routeId), projectId, destination: "github-repository" },
+      { action: "external-project-link-opened", context: context(routeId), projectId, destination: "live-demo" },
+      { action: "global-project-cta-opened", context: context(routeId), projectId },
+    ];
+    const arabicDemo: PublicMeasurementEvent = {
+      action: "external-project-link-opened", context: context(routeId, { locale: "ar" }), projectId, destination: "live-demo",
+    };
+    let externalReceipt: unknown;
+    const receipts: unknown[] = [];
+    const logs: unknown[] = [];
+    for (const [index, event] of events.entries()) {
+      const eventKey = `ticket-198-event-${index + 1}`;
+      const logger = createTestLogger();
+      const response = await handlePostPublicEvent(request(evidence.token, event, eventKey), { scope, service, consent, logger });
+      logs.push(...logger.records);
+      if (response.status !== 202) throw new Error(`T11_ACTION_FAILED:${index}:${event.action}:${await response.clone().text()}`);
+      const receipt = await response.json() as Record<string, unknown>;
+      expect(Object.keys(receipt).sort()).toEqual(["acceptedAt", "eventId"]);
+      receipts.push(receipt);
+      if (index === 1) externalReceipt = receipt;
+    }
+    const arabicLogger = createTestLogger();
+    const arabicResponse = await handlePostPublicEvent(request(evidence.token, arabicDemo, "ticket-198-arabic-demo"), {
+      scope, service, consent, logger: arabicLogger,
+    });
+    expect(arabicResponse.status).toBe(202);
+    const arabicReceipt = await arabicResponse.json() as { eventId: string; acceptedAt: string };
+    receipts.push(arabicReceipt);
+    logs.push(...arabicLogger.records);
+    const arabicRow = await admin.query("select action, locale, external_destination from measurement.public_events where event_id=$1", [arabicReceipt.eventId]);
+    expect(arabicRow.rows).toEqual([{ action: "external-project-link-opened", locale: "ar", external_destination: "live-demo" }]);
+    await admin.query("update content.public_routes set current_slug='renamed-after-interaction' where route_identity=$1", [routeId]);
+    const replay = await handlePostPublicEvent(request(evidence.token, events[1], "ticket-198-event-2"), { scope, service, consent, logger: createTestLogger() });
+    expect(replay.status).toBe(202);
+    expect(await replay.json()).toEqual(externalReceipt);
+    const conflict = await handlePostPublicEvent(request(evidence.token, { ...events[1]!, destination: "live-demo" }, "ticket-198-event-2"), { scope, service, consent, logger: createTestLogger() });
+    expect(conflict.status).toBe(409);
+    expect(await countEvents()).toBe(beforeEvents + 5);
+    expect(await countJobs()).toBe(beforeJobs + 5);
+    const rows = await admin.query(`select action, page_route_identity::text, project_id::text, contact_channel, external_destination
+      from measurement.public_events where event_id = any($1::uuid[]) order by action, external_destination`, [
+      (await admin.query("select event_id from measurement.public_events where action in ('contact-channel-opened','external-project-link-opened','global-project-cta-opened') order by accepted_at desc limit 5")).rows.map(row => row.event_id),
+    ]);
+    expect(rows.rows).toEqual(expect.arrayContaining([
+      { action: "contact-channel-opened", page_route_identity: routeId, project_id: null, contact_channel: "linkedin", external_destination: null },
+      { action: "external-project-link-opened", page_route_identity: routeId, project_id: projectId, contact_channel: null, external_destination: "github-repository" },
+      { action: "external-project-link-opened", page_route_identity: routeId, project_id: projectId, contact_channel: null, external_destination: "live-demo" },
+      { action: "global-project-cta-opened", page_route_identity: routeId, project_id: projectId, contact_channel: null, external_destination: null },
+    ]));
+    expect(JSON.stringify(rows.rows)).not.toContain("Private GitHub label");
+    expect(JSON.stringify(rows.rows)).not.toContain("Private demo label");
+    expect(JSON.stringify(rows.rows)).not.toContain("private-demo.example");
+    expect(JSON.stringify(rows.rows)).not.toContain("Private fixture title");
+    expect(JSON.stringify(logs)).not.toContain("Private");
+    expect(JSON.stringify(logs)).not.toContain("github.com");
+    const jobPayloads = await admin.query("select payload from operations.jobs where job_type='measurement.public-event-received.v1' and payload->>'eventId' in (select event_id::text from measurement.public_events where accepted_at >= $1)", [now]);
+    const privateOutputs = JSON.stringify({ receipts, jobs: jobPayloads.rows, logs });
+    expect(privateOutputs).not.toContain(evidence.verified.subject);
+    expect(privateOutputs).not.toContain("Private GitHub label");
+    expect(privateOutputs).not.toContain("private-demo.example");
+
+    const providerSentinel = "provider-connection-error-secret-sentinel";
+    const failureLogger = createTestLogger();
+    const failedRequest = await handlePostPublicEvent(request(evidence.token, events[0], "ticket-198-provider-failure"), {
+      scope, consent, logger: failureLogger,
+      service: { async ingestEvent() { throw new Error(`database connection failed: ${providerSentinel}`); } },
+    });
+    expect(failedRequest.status).toBe(500);
+    expect(await failedRequest.text()).not.toContain(providerSentinel);
+    expect(JSON.stringify(failureLogger.records)).not.toContain(providerSentinel);
+    expect(JSON.stringify({ receipts, jobs: jobPayloads.rows, logs: logs.concat(failureLogger.records) })).not.toContain(evidence.verified.subject);
+  });
+
+  it("T11-02/T11-03/T11-05 rejects absent or mismatched current configuration without durable effects", async () => {
+    const { projectId, routeId } = await seedProject({ locales: ["en", "ar"], externalLinks: [
+      { type: "github-repository", label: "English-only repository", destination: "https://github.com/private-owner/private-repo" },
+    ] });
+    const untypedProject = await seedProject({ externalLinks: [
+      { label: "Documentation, not a demo", destination: "https://docs.example.com/guide" },
+    ] });
+    const evidence = await issueEvidence();
+    const beforeEvents = await countEvents(), beforeJobs = await countJobs();
+    const invalidEvents: PublicMeasurementEvent[] = [
+      { action: "contact-channel-opened", context: context(routeId), channel: "instagram" },
+      { action: "contact-channel-opened", context: context(routeId, { locale: "ar" }), channel: "linkedin" },
+      { action: "external-project-link-opened", context: context(routeId, { locale: "ar" }), projectId, destination: "github-repository" },
+      { action: "external-project-link-opened", context: context(routeId), projectId: createStableId("Project"), destination: "github-repository" },
+      { action: "global-project-cta-opened", context: context(routeId), projectId: createStableId("Project") },
+      { action: "external-project-link-opened", context: context(untypedProject.routeId), projectId: untypedProject.projectId, destination: "live-demo" },
+    ];
+    for (const [index, event] of invalidEvents.entries()) {
+      const response = await handlePostPublicEvent(request(evidence.token, event, `ticket-198-rejected-${index + 1}`), { scope, service, consent, logger: createTestLogger() });
+      expect(response.status).not.toBe(202);
+    }
+    const privacySentinels = ["https://private-referrer.example/path?token=private-referrer-sentinel", "192.0.2.77"];
+    const privacyLogger = createTestLogger();
+    const privateDimensions = await handlePostPublicEvent(request(evidence.token, {
+      action: "contact-channel-opened", context: { ...context(routeId), fullReferrer: privacySentinels[0], ipAddress: privacySentinels[1] }, channel: "linkedin",
+    }, "ticket-198-private-dimensions"), { scope, service, consent, logger: privacyLogger });
+    expect(privateDimensions.status).toBe(400);
+    expect(JSON.stringify(privacyLogger.records)).not.toContain(privacySentinels[0]);
+    expect(JSON.stringify(privacyLogger.records)).not.toContain(privacySentinels[1]);
+    const unavailable = await makeService({ omitConfiguration: true }).ingestEvent(command(invalidEvents[0]!, evidence.verified, key("ticket-198-missing-capability")));
+    expect(unavailable).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable" } });
+    expect(await countEvents()).toBe(beforeEvents);
+    expect(await countJobs()).toBe(beforeJobs);
+  });
+
+  it("T11-07 replays and conflicts for each current capability fact exactly once", async () => {
+    const { projectId, routeId } = await seedProject({ externalLinks: [
+      { type: "github-repository", label: "Replay repository", destination: "https://github.com/replay-owner/replay-project" },
+      { type: "live-demo", label: "Replay demo", destination: "https://replay-demo.example/project" },
+    ] });
+    const evidence = await issueEvidence();
+    const beforeEvents = await countEvents(), beforeJobs = await countJobs();
+    const liveDemoFact = await database.transactions.run(tx => content.getExternalProjectLinkFact({ portfolioId, projectId, destination: "live-demo", locale: "en" }, tx));
+    expect(liveDemoFact).toEqual({ ok: true, value: true });
+    const events: PublicMeasurementEvent[] = [
+      { action: "contact-channel-opened", context: context(routeId), channel: "linkedin" },
+      { action: "external-project-link-opened", context: context(routeId), projectId, destination: "github-repository" },
+      { action: "global-project-cta-opened", context: context(routeId), projectId },
+    ];
+    for (const [index, event] of events.entries()) {
+      const keyValue = `ticket-198-replay-${index + 1}`;
+      const first = await service.ingestEvent(command(event, evidence.verified, key(keyValue)));
+      expect(await service.ingestEvent(command(event, evidence.verified, key(keyValue)))).toEqual(first);
+      const changed = index === 0 ? { ...event, channel: "whatsapp" } as PublicMeasurementEvent :
+        index === 1 ? { ...event, destination: "live-demo" } as PublicMeasurementEvent :
+          { ...event, context: context(routeId, { referrerClass: "search" }) } as PublicMeasurementEvent;
+      expect(await service.ingestEvent(command(changed, evidence.verified, key(keyValue))), event.action).toMatchObject({ ok: false, error: { kind: "conflict" } });
+    }
+    expect(await countEvents()).toBe(beforeEvents + 3);
+    expect(await countJobs()).toBe(beforeJobs + 3);
   });
 
   it("T10-01/T10-04 persists related-project and testimonial actions with exact current public associations", async () => {

@@ -131,5 +131,28 @@ export function createPostgresContentMeasurementPublicFacts(scope: { portfolioId
           `.execute(db);
       return { ok: true, value: result.rows.length === 1 };
     },
+    async getExternalProjectLinkFact(input, tx) {
+      if (input.portfolioId !== scope.portfolioId) return { ok: true, value: false };
+      const db = resolvePostgresTransaction(tx);
+      await sql`select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
+        set_config('shipwithali.owner_id', ${scope.ownerId}, true)`.execute(db);
+      const result = await sql<{ configured: boolean }>`
+        select exists (
+          select 1
+            from content.items item
+            join content.public_project_locales projection
+              on projection.portfolio_id = item.portfolio_id and projection.content_id = item.content_id
+             and projection.locale = ${input.locale}
+            join content.language_publications publication
+              on publication.portfolio_id = projection.portfolio_id and publication.content_id = projection.content_id
+             and publication.locale = projection.locale and publication.revision_id = projection.revision_id
+            cross join lateral jsonb_array_elements(projection.external_links) link
+           where item.portfolio_id = ${scope.portfolioId}::uuid
+             and item.content_id = ${input.projectId}::uuid and item.content_type = 'project' and item.lifecycle = 'published'
+             and link->>'type' = ${input.destination}
+        ) as configured
+      `.execute(db);
+      return { ok: true, value: result.rows[0]?.configured === true };
+    },
   };
 }

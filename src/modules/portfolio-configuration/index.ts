@@ -34,6 +34,7 @@ export type {
   UpdateGlobalProjectCtaCommand,
   PortfolioConfigurationService,
 } from "./application/index.js";
+export type { MeasurementConfigurationPublicFactsPort } from "./application/measurement-public-facts.js";
 export {
   createPortfolioSettingsReader,
   type PortfolioSettingsApplicationService,

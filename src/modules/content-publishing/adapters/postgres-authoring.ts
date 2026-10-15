@@ -1196,7 +1196,7 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         }));
         const links = (input.payload.externalLinks ?? [])
           .filter((link) => input.locale === "en" || link.isAvailableInArabic)
-          .map(({ label, destination }) => ({ label, destination }));
+          .map(({ type, label, destination }) => ({ ...(type === undefined ? {} : { type }), label, destination }));
         await sql`
           insert into content.public_project_locales (
             content_id, portfolio_id, content_type, locale, revision_id, route_identity,

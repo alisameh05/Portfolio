@@ -166,7 +166,7 @@ describe("generated Owner v1 validators", () => {
 
   it("accepts reference-only evidence, media, and Project links in create and localized save contracts", () => {
     const artifact = { id: ids.value, title: "Demo", mediaAssetId: ids.taxonomy, destinationUrl: "https://example.com/demo" };
-    const projectLink = { id: ids.route, label: "Live project", destination: "https://example.com/project", isAvailableInArabic: true };
+    const projectLink = { id: ids.route, type: "live-demo", label: "Live project", destination: "https://example.com/project", isAvailableInArabic: true };
     expect(zCreateOwnerContentBody.safeParse({
       contentType: "project", locale: "en", title: "Atlas", summary: "Draft", body: "Draft body",
       evidence: { artifacts: [artifact] }, externalLinks: [projectLink],
@@ -175,6 +175,10 @@ describe("generated Owner v1 validators", () => {
       locale: "ar", title: "أطلس", summary: "مسودة", body: "محتوى أولي",
       draftData: { contentType: "project", evidence: { artifacts: [artifact] }, externalLinks: [projectLink] },
     }).success).toBe(true);
+    expect(zCreateOwnerContentBody.safeParse({
+      contentType: "project", locale: "en", title: "Atlas", summary: "Draft", body: "Draft body",
+      externalLinks: [{ ...projectLink, type: "documentation" }],
+    }).success).toBe(false);
     expect(zCreateOwnerContentBody.safeParse({
       contentType: "achievement", locale: "en", title: "Milestone", summary: "Draft", body: "Draft body",
       evidence: { artifacts: [artifact] },

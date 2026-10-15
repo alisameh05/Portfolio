@@ -111,6 +111,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     locale: "en" | "ar" = "en",
     options: {
       readonly slug?: string;
+      readonly externalLinkType?: "github-repository" | "live-demo";
       readonly mediaAssetId?: StableId<"MediaAsset">;
       readonly service?: ReturnType<typeof service>;
       readonly reviewDecision?: "accepted" | "rejected";
@@ -127,7 +128,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       evidence: { claims: [{ claimId: createStableId("EvidenceClaim"), text: "The supporting demo shows this workflow.", artifactIds: [artifactId] }],
         artifacts: [{ id: artifactId, title: "Project demo", destinationUrl: "https://example.com/demo",
           ...(options.mediaAssetId === undefined ? {} : { mediaAssetId: options.mediaAssetId }) }] },
-      externalLinks: [{ id: createStableId("ExternalLink"), label: locale === "en" ? "English demo" : "Arabic demo",
+      externalLinks: [{ id: createStableId("ExternalLink"), ...(options.externalLinkType === undefined ? {} : { type: options.externalLinkType }), label: locale === "en" ? "English demo" : "Arabic demo",
         destination: locale === "en" ? "https://example.com/en" : "https://example.com/ar", isAvailableInArabic: locale === "ar" }],
     };
     const payload = options.transformPayload?.(basePayload) ?? basePayload;
@@ -563,6 +564,23 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
     expect(rejected).toMatchObject({ ok: false, error: { kind: "validation", code: "RELATED_PROJECT_UNAVAILABLE" } });
     const roots = await admin.query("select count(*)::int as count from content.items where portfolio_id = $1::uuid", [portfolio.portfolioId]);
     expect(roots.rows[0].count).toBe(0);
+  }, 30_000);
+
+  it("publishes the explicit External link type in the locale-filtered public projection", async () => {
+    const scope = await configuredScope();
+    const project = await createReviewedProject(scope, "Typed public destination", "typed-external-link", "en", {
+      slug: "typed-external-link", externalLinkType: "live-demo",
+    });
+    const published = await project.content.publishLanguageVersion({ actor: actor(scope.ownerId), contentId: project.contentId,
+      expectedVersion: project.aggregateVersion, idempotencyKey: key("typed-external-link-publish"),
+      correlationId: "typed-external-link-publish", locale: "en", revisionId: project.revisionId });
+    expect(published.ok).toBe(true);
+    if (!published.ok) return;
+
+    const view = await project.content.getPublicProject({ slug: "typed-external-link", locale: "en" });
+    expect(view).toMatchObject({ ok: true, value: { externalLinks: [{ type: "live-demo", label: "English demo", destination: "https://example.com/en" }] } });
+    const projection = await admin.query("select external_links from content.public_project_locales where content_id=$1::uuid and locale='en'", [project.contentId]);
+    expect(projection.rows[0]?.external_links).toEqual([{ type: "live-demo", label: "English demo", destination: "https://example.com/en" }]);
   }, 30_000);
 
   it("publishes English and Arabic independently, preserves first publication time, history, and the last valid projection", async () => {

@@ -35,7 +35,7 @@ const evidence = {
   expiresAt: "2026-11-13T11:00:00.000Z",
 };
 
-function setup(options: { media?: "ready" | "missing" | "unavailable" } = {}) {
+function setup(options: { media?: "ready" | "missing" | "unavailable"; contactAvailable?: boolean; linkAvailable?: boolean; linkAvailableInArabic?: boolean; ctaAvailable?: boolean; arabicPublished?: boolean; configuration?: boolean; externalFacts?: boolean } = {}) {
   const writes: unknown[] = [];
   const jobs: unknown[] = [];
   const requests = new Map<string, { hash: string; result: Record<string, unknown> }>();
@@ -67,7 +67,7 @@ function setup(options: { media?: "ready" | "missing" | "unavailable" } = {}) {
     consent: { async checkCurrentEvidence(value: typeof evidence) { return value.revision === 1 ? { ok: true as const, value } : { ok: false as const, error: { kind: "forbidden" as const, code: "MEASUREMENT_CONSENT_REQUIRED" } }; } } as never,
     content: {
       async getRouteFacts(query: { routeId: string; locale: string }) {
-        return query.routeId === routeId && query.locale === "en"
+        return query.routeId === routeId && (query.locale === "en" || (query.locale === "ar" && options.arabicPublished === true))
           ? { ok: true as const, value: { routeId, projectId, contentType: "project" as const, published: true } }
           : { ok: false as const, error: { kind: "not_found" as const, code: "PUBLIC_ROUTE_UNAVAILABLE" } };
       },
@@ -80,7 +80,16 @@ function setup(options: { media?: "ready" | "missing" | "unavailable" } = {}) {
       async getTestimonialFact(query: { testimonialId: string; projectId?: string; locale: string }) {
         return { ok: true as const, value: query.testimonialId === testimonialId && query.projectId === projectId && query.locale === "en" };
       },
+      ...(options.externalFacts === false ? {} : { async getExternalProjectLinkFact(query: { projectId: string; destination: string; locale: string }) {
+        return { ok: true as const, value: query.projectId === projectId && options.linkAvailable !== false && (query.locale === "en" || options.linkAvailableInArabic === true) };
+      } }),
     } as never,
+    ...(options.configuration === false ? {} : { configuration: {
+      async hasPublicContactChannel(query: { channel: string; locale: string }) {
+        return { ok: true as const, value: options.contactAvailable !== false && query.channel === "linkedin" && query.locale === "en" };
+      },
+      async hasAvailableGlobalProjectCta() { return { ok: true as const, value: options.ctaAvailable !== false }; },
+    } as never }),
     ...(options.media === "missing" ? {} : { media: { async getPublicUseFact(query: { mediaAssetId: string; projectId?: string; locale: string }) {
       return options.media === "unavailable"
         ? { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_FACTS_DOWN" } }
@@ -128,6 +137,50 @@ describe("Measurement event ingestion application seam", () => {
     expect(jobs).toHaveLength(3);
   });
 
+  it("T11-01/T11-06 accepts and preserves all nine action mappings as distinct facts", async () => {
+    const { service, command, writes, jobs } = setup();
+    const events: PublicMeasurementEvent[] = [
+      { action: "page-viewed", context },
+      { action: "project-viewed", context, projectId },
+      { action: "active-engagement-sampled", context, projectId, activeMilliseconds: 4_000 },
+      { action: "media-engaged", context, projectId, mediaAssetId, engagement: "played" },
+      { action: "related-project-opened", context, sourceProjectId: projectId, targetProjectId },
+      { action: "testimonial-engaged", context, testimonialId, projectId },
+      { action: "contact-channel-opened", context, projectId, channel: "linkedin" },
+      { action: "external-project-link-opened", context, projectId, destination: "github-repository" },
+      { action: "global-project-cta-opened", context, projectId },
+    ];
+    for (const [index, event] of events.entries()) {
+      expect(await service.ingestEvent(command(event, `all-nine-events-${index + 1}`))).toMatchObject({ ok: true });
+    }
+    expect(writes.map((write) => (write as { event: PublicMeasurementEvent }).event)).toEqual(events);
+    expect(jobs).toHaveLength(9);
+  });
+
+  it.each([
+    ["unconfigured Contact channel", { action: "contact-channel-opened", context, channel: "linkedin" }, { contactAvailable: false }],
+    ["unavailable Global CTA destination", { action: "global-project-cta-opened", context, projectId }, { ctaAvailable: false }],
+    ["unconfigured Project destination", { action: "external-project-link-opened", context, projectId, destination: "live-demo" }, { linkAvailable: false }],
+    ["English-only Project destination in Arabic", { action: "external-project-link-opened", context: { ...context, locale: "ar" }, projectId, destination: "github-repository" }, { arabicPublished: true }],
+    ["wrong Project page", { action: "global-project-cta-opened", context, projectId: createStableId("Project") }, {}],
+  ] as const)("T11-02/T11-03 rejects %s before durable effects", async (_label, event, options) => {
+    const { service, command, writes, jobs } = setup(options);
+    expect(await service.ingestEvent(command(event as unknown as PublicMeasurementEvent))).toMatchObject({ ok: false });
+    expect(writes).toHaveLength(0);
+    expect(jobs).toHaveLength(0);
+  });
+
+  it.each([
+    ["missing Configuration capability", { action: "contact-channel-opened", context, channel: "linkedin" }, { configuration: false }],
+    ["missing External link capability", { action: "external-project-link-opened", context, projectId, destination: "live-demo" }, { externalFacts: false }],
+  ] as const)("fails closed for %s without blocking independent page observations", async (_label, event, options) => {
+    const { service, command, writes, jobs } = setup(options);
+    expect(await service.ingestEvent(command(event as unknown as PublicMeasurementEvent))).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable" } });
+    expect(await service.ingestEvent(command({ action: "page-viewed", context }, "independent-public-page"))).toMatchObject({ ok: true });
+    expect(writes).toHaveLength(1);
+    expect(jobs).toHaveLength(1);
+  });
+
   it("rejects forged or mismatched Media, related-Project, and Testimonial facts without effects", async () => {
     const invalidEvents = [
       { action: "media-engaged", context, projectId: createStableId("Project"), mediaAssetId, engagement: "opened" },
@@ -159,6 +212,10 @@ describe("Measurement event ingestion application seam", () => {
     ["invalid Media engagement", { action: "media-engaged", context, mediaAssetId, engagement: "liked" }],
     ["invalid relationship payload", { action: "related-project-opened", context, sourceProjectId: projectId, targetProjectId, extra: true }],
     ["unknown testimonial property", { action: "testimonial-engaged", context, testimonialId, personalEmail: "private@example.test" }],
+    ["invalid Contact channel", { action: "contact-channel-opened", context, channel: "email" }],
+    ["raw destination URL", { action: "external-project-link-opened", context, projectId, destination: "live-demo", url: "https://private.example" }],
+    ["invalid destination category", { action: "external-project-link-opened", context, projectId, destination: "other" }],
+    ["wrong action fields", { action: "global-project-cta-opened", context, projectId, channel: "linkedin" }],
     ["out-of-range engagement", { action: "active-engagement-sampled", context, activeMilliseconds: 999 }],
     ["duplicate Journey context", { action: "page-viewed", context: { ...context, journeyContext: [routeId, routeId] } }],
     ["overlong Journey context", { action: "page-viewed", context: { ...context, journeyContext: Array.from({ length: 11 }, () => createStableId("PublicRoute")) } }],

@@ -170,6 +170,7 @@ export const zContentAggregateView = z.strictObject({
 
 export const zExternalLinkDraft = z.strictObject({
     id: zStableId,
+    type: z.enum(['github-repository', 'live-demo']).optional(),
     label: z.string().min(1).max(120),
     destination: z.string().url().max(2048),
     isAvailableInArabic: z.boolean()

@@ -4046,6 +4046,13 @@
           "id": {
             "$ref": "#/components/schemas/StableId"
           },
+          "type": {
+            "type": "string",
+            "enum": [
+              "github-repository",
+              "live-demo"
+            ]
+          },
           "label": {
             "type": "string",
             "minLength": 1,

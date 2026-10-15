@@ -17,6 +17,7 @@ export type {
   EvidencePackage,
   EvidencePackageDraft,
   ExternalLink,
+  ExternalLinkType,
   PublicRoute,
   Project,
   LanguagePublication,

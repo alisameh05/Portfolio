@@ -197,10 +197,13 @@ export interface ContentHistoryPage {
 
 export interface ExternalLink {
   readonly id: StableId<"ExternalLink">;
+  readonly type?: ExternalLinkType;
   readonly label: string;
   readonly destination: string;
   readonly isAvailableInArabic: boolean;
 }
+
+export type ExternalLinkType = "github-repository" | "live-demo";
 
 export interface PublicRoute {
   readonly routeIdentity: StableId<"PublicRoute"> | null;

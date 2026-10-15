@@ -36,11 +36,13 @@ export interface PublicEvents {
   action: string;
   active_milliseconds: number | null;
   consent_version: string;
+  contact_channel: string | null;
   country_code: string | null;
   created_at: Generated<Timestamp>;
   device_class: string | null;
   effective_at: Timestamp;
   event_id: string;
+  external_destination: string | null;
   /**
    * At most ten distinct ordered retained PublicRoute identities; no route content is copied.
    */

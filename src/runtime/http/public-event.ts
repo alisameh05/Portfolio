@@ -48,7 +48,10 @@ import {
   transportProblem,
 } from "./problem.js";
 
-const acceptedFirstSliceActions = new Set(["page-viewed", "project-viewed", "active-engagement-sampled", "media-engaged", "related-project-opened", "testimonial-engaged"]);
+const acceptedActions = new Set([
+  "page-viewed", "project-viewed", "active-engagement-sampled", "media-engaged", "related-project-opened",
+  "testimonial-engaged", "contact-channel-opened", "external-project-link-opened", "global-project-cta-opened",
+]);
 
 export interface PublicEventAdapterDeps {
   readonly consent?: Pick<ConsentApplicationService, "verifyEvidence">;
@@ -121,7 +124,7 @@ export async function handlePostPublicEvent(
       logger?.warn("request.rejected", { traceId, status: 400 });
       return transportProblem("Invalid request body.", traceId, instance);
     }
-    if (!acceptedFirstSliceActions.has(bodyResult.data.action)) {
+    if (!acceptedActions.has(bodyResult.data.action)) {
       logger?.warn("request.rejected", { traceId, status: 400 });
       return transportProblem("Invalid request body.", traceId, instance);
     }
