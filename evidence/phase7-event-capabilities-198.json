@@ -1,6 +1,6 @@
 {
-  "runId": "2e02be25-81b3-4da7-b5be-a788c32ca626",
-  "sourceRevision": "3bdf5377036ce13510822db6f62a99a8e206f5a1",
+  "runId": "781ea821-d3b6-4a7b-893b-0322dd2eab2f",
+  "sourceRevision": "b0c8cf0082cc91696a6c89783b684816f2885e15",
   "sourceTreeSha256": "a5258c950203990fe5acfe73ffed6f8170833e15f1f21572b8850d0be79c2e8c",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015150000_enable_configuration_interaction_event_facts.sql",
