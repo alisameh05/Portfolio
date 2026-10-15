@@ -36,7 +36,7 @@ import type { OwnerMediaApplicationService } from "../modules/media/index.js";
 import type { MediaDeliveryApplicationService } from "../modules/media/index.js";
 import type { CurrentCvDeliveryService, OwnerCvApplicationService } from "../modules/cv-portfolio/index.js";
 import type { PortfolioSettingsApplicationService } from "../modules/portfolio-configuration/index.js";
-import type { ConsentApplicationService, MeasurementService } from "../modules/measurement/index.js";
+import type { ConsentApplicationService, MeasurementMediaPublicFactsPort, MeasurementService } from "../modules/measurement/index.js";
 import type { InteractionModerationService, FunctionalInteractionContextPort } from "../modules/interaction-moderation/index.js";
 
 export interface ReactionRuntimeServices {
@@ -200,6 +200,7 @@ export async function initializeDatabaseRuntime(
         let publicConfiguration: PortfolioSettingsApplicationService | undefined;
         let consent: ConsentApplicationService | undefined;
         let eventIngestion: MeasurementEventRuntimeServices | undefined;
+        let eventMediaFacts: MeasurementMediaPublicFactsPort | undefined;
         let reaction: ReactionRuntimeServices | undefined;
         let rating: RatingRuntimeServices | undefined;
         let feedback: FeedbackRuntimeServices | undefined;
@@ -281,6 +282,10 @@ export async function initializeDatabaseRuntime(
             eventIngestion = { scope: { kind: "portfolio", portfolioId: configuredScope.portfolioId.value }, service: createMeasurementEventService({ portfolioId: configuredScope.portfolioId.value,
               transactions: database.transactions, operations, consent,
               content: createPostgresContentMeasurementPublicFacts({ portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value }),
+              media: { async getPublicUseFact(input, transaction) {
+                if (!eventMediaFacts) return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEASUREMENT_MEDIA_FACTS_UNAVAILABLE" } };
+                return eventMediaFacts.getPublicUseFact(input, transaction);
+              } },
               repository: createPostgresMeasurementEventRepository(), clock, ids: createSystemIdGenerator() }) };
           } catch { consent = undefined; eventIngestion = undefined; }
         }
@@ -533,6 +538,27 @@ export async function initializeDatabaseRuntime(
             },
           });
           publicConfiguration = profileSettings;
+          eventMediaFacts = {
+            async getPublicUseFact(query, transaction) {
+              const acceptance = await mediaAcceptance.getAcceptanceFacts({ ownerId: scope.ownerId,
+                mediaAssetIds: [query.mediaAssetId], intendedUse: "supporting-artifact" }, transaction);
+              if (!acceptance.ok) return acceptance;
+              const fact = acceptance.value[0];
+              if (!fact || fact.mediaAssetId !== query.mediaAssetId || !fact.accepted || !fact.safe || !fact.suitable || !fact.accessible) {
+                return { ok: true as const, value: false };
+              }
+              if (query.projectId !== undefined) {
+                return contentAuthoring!.getPublicProjectMediaUse({ mediaAssetId: query.mediaAssetId, projectId: query.projectId, locale: query.locale }, transaction);
+              }
+              const [projectUse, profileUse] = await Promise.all([
+                contentAuthoring!.getPublicProjectMediaUse({ mediaAssetId: query.mediaAssetId, locale: query.locale }, transaction),
+                profileSettings.isPublicProfileMediaUse({ mediaAssetId: query.mediaAssetId, locale: query.locale }, transaction),
+              ]);
+              if (!projectUse.ok) return projectUse;
+              if (!profileUse.ok) return profileUse;
+              return { ok: true as const, value: projectUse.value || profileUse.value };
+            },
+          };
           const deliveryStorage = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
             ? createSupabaseMediaDeliveryStorage({
               storageUrl: env["SUPABASE_URL"],

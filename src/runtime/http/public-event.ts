@@ -48,7 +48,7 @@ import {
   transportProblem,
 } from "./problem.js";
 
-const acceptedFirstSliceActions = new Set(["page-viewed", "project-viewed", "active-engagement-sampled"]);
+const acceptedFirstSliceActions = new Set(["page-viewed", "project-viewed", "active-engagement-sampled", "media-engaged", "related-project-opened", "testimonial-engaged"]);
 
 export interface PublicEventAdapterDeps {
   readonly consent?: Pick<ConsentApplicationService, "verifyEvidence">;

@@ -50,11 +50,16 @@ export interface PublicEvents {
    * Purpose-limited MeasurementVisitor identity; never copied to receipts, idempotency results, jobs, or outbox payloads.
    */
   measurement_subject: string;
+  media_asset_id: string | null;
+  media_engagement: string | null;
   occurred_at: Timestamp;
   page_route_identity: string;
   portfolio_id: string;
   project_id: string | null;
   referrer_class: string | null;
+  source_project_id: string | null;
+  target_project_id: string | null;
+  testimonial_id: string | null;
 }
 
 export interface DB {
