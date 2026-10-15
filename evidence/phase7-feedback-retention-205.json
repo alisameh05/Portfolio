@@ -1,11 +1,11 @@
 {
   "ticket": 205,
-  "runId": "2ccc140c-3bbd-4a14-a160-2b616cc575ff",
-  "sourceRevision": "dfa363a7be819408de786b1635428bfb2f57635c",
-  "sourceTreeSha256": "23d8fe7ea00f04af2ed71a186c665a7f7b4e2ba1790ccfcb5f6518051935a76f",
+  "runId": "2c7eb843-c0f0-44c2-8b12-cc5095e8eb5f",
+  "sourceRevision": "e1f88c03319ba557543e8e69a7fa8e641cb2284e",
+  "sourceTreeSha256": "7d1526bf74388a65cab11d7345dc83cdf5ab76cf65fe61a52ac5c5e26c10cf09",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015203000_retain_feedback_privacy.sql",
-  "migrationSha256": "d327d0d94daec107c209424106562aa4074ca0328fb6dc7e10d1b0e2fe4366cf",
+  "migrationSha256": "fe0d3e9dd6644b6d7ba4480562b5e36d9043635bdad4f5f6e4472611d0318a1e",
   "migrations": [
     {
       "name": "20260922170000_prepare_migration_capability.sql",
@@ -201,7 +201,7 @@
     },
     {
       "name": "20261015203000_retain_feedback_privacy.sql",
-      "sha256": "d327d0d94daec107c209424106562aa4074ca0328fb6dc7e10d1b0e2fe4366cf"
+      "sha256": "fe0d3e9dd6644b6d7ba4480562b5e36d9043635bdad4f5f6e4472611d0318a1e"
     }
   ],
   "tools": {
@@ -223,6 +223,10 @@
     },
     {
       "title": "T18-06: independent moderation wins a pending-to-approved race with cleanup",
+      "status": "passed"
+    },
+    {
+      "title": "T18-06/07: retries the same checkpoint after a competing row lock rolls back",
       "status": "passed"
     },
     {
@@ -256,7 +260,7 @@
   ],
   "required": {
     "success": true,
-    "passed": 11,
+    "passed": 12,
     "failed": 0,
     "skipped": 0,
     "failedSuites": 0
