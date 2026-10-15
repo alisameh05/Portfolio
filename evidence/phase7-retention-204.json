@@ -1,11 +1,11 @@
 {
   "ticket": 204,
-  "runId": "64f9742a-78e6-4240-bb7c-49403bfe991d",
-  "sourceRevision": "28207c1947efad6d2fff6c57aa0260be93173899",
-  "sourceTreeSha256": "3153b8f60146f78bc93dd7e3b725b4ecf9c60ac2be74d01578268db2aed56e60",
+  "runId": "987c518b-3ade-46c4-b5ec-2c51b563ff23",
+  "sourceRevision": "01e64a94b3011b71b7f8ded6dbd95b6dfa96e8d4",
+  "sourceTreeSha256": "fcacb473162a364e6235525fa83042b0486af620afd9de4568f83d91737a6deb",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
-  "migrationSha256": "572ec22872506a64ac6e8963fe02db2d0865927dabec5b138db59fa58d9b4ecb",
+  "migrationSha256": "04e33297a492b55c2dc8b2392fc9f0291fa3e10f9ade40e7c9ef6fc97b297221",
   "migrations": [
     {
       "name": "20260922170000_prepare_migration_capability.sql",
@@ -193,7 +193,7 @@
     },
     {
       "name": "20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
-      "sha256": "572ec22872506a64ac6e8963fe02db2d0865927dabec5b138db59fa58d9b4ecb"
+      "sha256": "04e33297a492b55c2dc8b2392fc9f0291fa3e10f9ade40e7c9ef6fc97b297221"
     }
   ],
   "tools": {
@@ -210,6 +210,10 @@
       "status": "passed"
     },
     {
+      "title": "does not recreate an expired aggregate between aggregate and checkpoint expiry stages",
+      "status": "passed"
+    },
+    {
       "title": "rolls back a failed bounded batch and resumes from the same checkpoint",
       "status": "passed"
     },
@@ -218,11 +222,23 @@
       "status": "passed"
     },
     {
+      "title": "marks coverage incomplete when an older unprocessed event expires",
+      "status": "passed"
+    },
+    {
+      "title": "marks coverage incomplete before expiring events with pending goal rebuilds",
+      "status": "passed"
+    },
+    {
       "title": "cleans withdrawn subjects while preserving the bounded revocation proof and rejecting the old signed token",
       "status": "passed"
     },
     {
       "title": "does not grant cross-Portfolio delete access to the Worker or delete access to the application role",
+      "status": "passed"
+    },
+    {
+      "title": "blocks Worker deletes of unexpired detail, consent, and aggregate rows",
       "status": "passed"
     },
     {
@@ -244,7 +260,7 @@
   ],
   "required": {
     "success": true,
-    "passed": 10,
+    "passed": 14,
     "failed": 0,
     "skipped": 0,
     "failedSuites": 0
