@@ -1,0 +1,103 @@
+{
+  "sourceRevision": "af6b8236ba8792180572c0603ad2cddace283ece",
+  "sourceTreeSha256": "2998c790a4cfd8fd9a047a90d02ff8bdda8f4a0560f8a00b86653945c73122ce",
+  "requiredRunId": "8edb1160-dad9-461b-8751-123c93f81f40",
+  "required": {
+    "success": true,
+    "passed": 132,
+    "failed": 0,
+    "skipped": 0,
+    "failedSuites": 0
+  },
+  "cleanup": true,
+  "fullSuite": {
+    "command": "npm test -- --no-file-parallelism --testTimeout=20000 --reporter=json --outputFile=artifacts/phase7-summaries-full-vitest.json",
+    "success": true,
+    "passed": 1177,
+    "failed": 0,
+    "skipped": 243,
+    "todo": 0,
+    "failedSuites": 0,
+    "reportSha256": "1cc4951e618a7ca4c4a89aad9c5f191381ad206aff40d0520d4b9d2c4b455c4e",
+    "skipMeaning": "Optional environment-gated suites only; required focused database acceptance has zero skips."
+  },
+  "commands": [
+    {
+      "command": "npm run setup:validation",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run validation:ready",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run typecheck",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run lint",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run contract:verify",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:arch",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run runtime:boundary",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run route:inventory",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run phase5:context",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:setup",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run build",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    }
+  ],
+  "tooling": {
+    "passed": 68,
+    "failed": 0,
+    "skipped": 0
+  },
+  "reviews": {
+    "fixedPoint": "2a77193b4c660418fced685d75b61c53d33a463c",
+    "reviewedHead": "af6b8236ba8792180572c0603ad2cddace283ece",
+    "standards": {
+      "actionableFindings": 0,
+      "independent": true
+    },
+    "spec": {
+      "issue": 195,
+      "parent": 187,
+      "actionableFindings": 0,
+      "independent": true
+    }
+  },
+  "hostedCI": {
+    "status": "separate-pending-fresh-delivery",
+    "priorRun": "https://github.com/alisameh05/Portfolio/actions/runs/38668717266",
+    "priorBlocker": "GitHub account billing or spending limit prevented job startup."
+  },
+  "delivery": {
+    "pullRequest": "https://github.com/alisameh05/Portfolio/pull/217",
+    "mergePerformed": false,
+    "productionDeployment": false
+  }
+}
