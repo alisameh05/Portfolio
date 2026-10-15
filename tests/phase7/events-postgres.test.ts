@@ -249,6 +249,14 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
       const response = await handlePostPublicEvent(request(evidence.token, event, `ticket-198-rejected-${index + 1}`), { scope, service, consent, logger: createTestLogger() });
       expect(response.status).not.toBe(202);
     }
+    const privacySentinels = ["https://private-referrer.example/path?token=private-referrer-sentinel", "192.0.2.77"];
+    const privacyLogger = createTestLogger();
+    const privateDimensions = await handlePostPublicEvent(request(evidence.token, {
+      action: "contact-channel-opened", context: { ...context(routeId), fullReferrer: privacySentinels[0], ipAddress: privacySentinels[1] }, channel: "linkedin",
+    }, "ticket-198-private-dimensions"), { scope, service, consent, logger: privacyLogger });
+    expect(privateDimensions.status).toBe(400);
+    expect(JSON.stringify(privacyLogger.records)).not.toContain(privacySentinels[0]);
+    expect(JSON.stringify(privacyLogger.records)).not.toContain(privacySentinels[1]);
     const unavailable = await makeService({ omitConfiguration: true }).ingestEvent(command(invalidEvents[0]!, evidence.verified, key("ticket-198-missing-capability")));
     expect(unavailable).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable" } });
     expect(await countEvents()).toBe(beforeEvents);
