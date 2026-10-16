@@ -8,13 +8,25 @@ import { evaluatePhase8Prerequisites, PHASE8_PREREQUISITES } from "../../scripts
 const revision = "a".repeat(40);
 const tree = "b".repeat(64);
 const now = Date.parse("2026-10-16T12:00:00.000Z");
+const migrationInventory = [{ name: "migration.sql", sha256: "c".repeat(64) }, { name: "second.sql", sha256: "d".repeat(64) }];
+const executedChecks = (phase) => Array.from({ length: 10 }, (_, index) => ({ name: `acceptance-${index + 1}`, runId: `phase-${phase}-run-123456`, executed: true, passed: true }));
+const evaluate = (root, overrides = {}) => evaluatePhase8Prerequisites({ root, sourceRevision: "d".repeat(40),
+  sourceTreeSha256: "e".repeat(64), now, resolveSourceTree: () => tree,
+  resolveMigrationInventory: () => migrationInventory, isAncestor: () => true, ...overrides });
 const valid = (phase, overrides = {}) => ({ ticket: phase === 3 ? 55 : phase === 4 ? 90 : phase === 5 ? 125 : phase === 6 ? 164 : 209,
   verdict: "pass", runId: `phase-${phase}-run-123456`, sourceRevision: revision, sourceTreeSha256: tree,
   startedAt: new Date(now - 60_000).toISOString(), completedAt: new Date(now - 30_000).toISOString(),
-  required: { success: true, executed: 10, failed: 0, skipped: 0 }, cleanup: true,
+  required: { success: true, executed: 10, failed: 0, skipped: 0 }, counts: { total: 10 }, checks: executedChecks(phase), cleanup: true,
   guarantees: { sourceBound: true, successfulCleanup: true },
-  migrations: [{ name: "migration.sql", sha256: "c".repeat(64) }], toolVersions: { node: "24.21.0", npm: "11.19.0" },
-  realServiceScope: "isolated-postgresql", ...overrides });
+  migrations: migrationInventory, toolVersions: { node: "24.21.0", npm: "11.19.0" },
+  realServiceScope: { postgresVersion: "PostgreSQL 18.3", runId: `phase-${phase}-run-123456`, sourceRevision: revision,
+    sourceTreeSha256: tree, isolation: "isolated-loopback",
+    startedAt: new Date(now - 60_000).toISOString(), completedAt: new Date(now - 30_000).toISOString(),
+    cleanup: true, cleanUpgrade: { equivalent: true }, restrictedAccess: { matrix: [
+      { grantee: "anon", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges: "{}" },
+      { grantee: "authenticated", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges: "{}" },
+      { grantee: "service_role", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges: "{}" },
+    ] }, required: { success: true }, checks: [{ command: "postgres-clean-upgrade", passed: true }] }, ...overrides });
 
 function fixture(reports) {
   const root = mkdtempSync(join(tmpdir(), "phase8-prereq-"));
@@ -30,8 +42,7 @@ function fixture(reports) {
 test("accepts only complete source-bound successful artifacts with cleanup", () => {
   const root = fixture({});
   try {
-    const result = evaluatePhase8Prerequisites({ root, sourceRevision: "d".repeat(40), sourceTreeSha256: "e".repeat(64), now,
-      resolveTree: () => tree, isAncestor: () => true });
+    const result = evaluate(root);
     assert.equal(result.verdict, "pass");
     assert.equal(result.mergeEligible, true);
     assert.deepEqual(result.acceptedPhases, [3, 4, 5, 6, 7]);
@@ -49,8 +60,7 @@ test("reports precise safe blockers for missing, stale, mismatched, partial, ski
     7: valid(7, { verdict: "fail", required: { success: false, executed: 10, failed: 2, skipped: 1 }, cleanup: false }),
   });
   try {
-    const result = evaluatePhase8Prerequisites({ root, sourceRevision: "d".repeat(40), sourceTreeSha256: "e".repeat(64), now,
-      resolveTree: () => tree, isAncestor: () => true });
+    const result = evaluate(root);
     assert.equal(result.verdict, "blocked");
     assert.equal(result.mergeEligible, false);
     const reasonMap = new Map(result.blockers.map((blocker) => [blocker.phase, blocker.reasons]));
@@ -63,14 +73,138 @@ test("reports precise safe blockers for missing, stale, mismatched, partial, ski
     assert.ok(reasonMap.get(7).includes("required-skips-present"));
     assert.ok(reasonMap.get(7).includes("cleanup-failed"));
     assert.equal(JSON.stringify(result).includes("TOKEN"), false);
+    assert.equal(result.guarantees.allPrerequisitesSourceBound, false);
+    assert.equal(result.guarantees.zeroRequiredFailures, false);
+    assert.equal(result.guarantees.zeroRequiredSkips, false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("rejects evidence whose source is outside the evaluated history", () => {
   const root = fixture({});
   try {
-    const result = evaluatePhase8Prerequisites({ root, sourceRevision: "d".repeat(40), sourceTreeSha256: "e".repeat(64), now,
-      resolveTree: () => tree, isAncestor: (source) => source !== revision });
+    const result = evaluate(root, { isAncestor: (source) => source !== revision });
     assert.ok(result.blockers.every(({ reasons }) => reasons.includes("source-revision-not-in-evaluated-history")));
+    assert.equal(result.guarantees.zeroRequiredFailures, false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("rejects a source-tree fingerprint that does not match the immutable source revision", () => {
+  const root = fixture({});
+  try {
+    const result = evaluate(root, { resolveSourceTree: () => "f".repeat(64) });
+    assert.ok(result.blockers.every(({ reasons }) => reasons.includes("source-tree-fingerprint-mismatch")));
+    assert.equal(result.guarantees.zeroRequiredSkips, false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("rejects absent denominators, unnamed coverage, wrong tool pins, and incomplete migration checksums", () => {
+  const root = fixture({
+    3: valid(3, { counts: undefined, checks: undefined }),
+    4: valid(4, { toolVersions: { node: "18.0.0", npm: "8.0.0" } }),
+    5: valid(5, { migrations: [{ name: "migration.sql" }] }),
+    6: valid(6, { counts: { total: 10 }, checks: Array.from({ length: 10 }, (_, index) => ({ id: `check-${index}`, executed: true, passed: true })).map(({ id }) => ({ executed: true, passed: true, id: "" })) }),
+  });
+  try {
+    const result = evaluate(root);
+    const reasonMap = new Map(result.blockers.map((blocker) => [blocker.phase, blocker.reasons]));
+    assert.ok(reasonMap.get(3).includes("executed-coverage-partial"));
+    assert.ok(reasonMap.get(4).includes("tool-version-mismatch"));
+    assert.ok(reasonMap.get(5).includes("migration-checksum-incomplete-or-invalid"));
+    assert.ok(reasonMap.get(6).includes("executed-coverage-partial"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("uses a complete named gate checklist as the denominator when aggregate counts are absent", () => {
+  const phaseFourChecks = Array.from({ length: 19 }, (_, index) => ({ name: `phase4-check-${index + 1}`, passed: true }));
+  const root = fixture({ 4: valid(4, { counts: undefined, required: undefined, checks: phaseFourChecks, migrations: migrationInventory }) });
+  try {
+    const result = evaluate(root);
+    const phaseFour = result.phases.find((phase) => phase.phase === 4);
+    assert.equal(phaseFour.required.executed, 19);
+    assert.equal(phaseFour.reasons.includes("executed-coverage-partial"), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("component cleanup failures cannot be overridden by aggregate cleanup claims", () => {
+  const root = fixture({ 7: valid(7, { components: [{ cleanup: false }], cleanup: true,
+    guarantees: { sourceBound: true, successfulCleanup: true } }) });
+  try {
+    const result = evaluate(root);
+    const phaseSeven = result.phases.find((phase) => phase.phase === 7);
+    assert.ok(phaseSeven.reasons.includes("cleanup-failed"));
+    assert.equal(result.guarantees.successfulCleanup, false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("rejects incomplete migration inventories and malformed real-service scope", () => {
+  const root = fixture({ 5: valid(5, { migrations: migrationInventory.slice(0, 1) }),
+    4: valid(4, { realServiceScope: { ...valid(4).realServiceScope, sourceRevision: "f".repeat(40) } }),
+    3: valid(3, { realServiceScope: "isolated PostgreSQL" }),
+    7: valid(7, { realServiceScope: { ...valid(7).realServiceScope, isolation: "not isolated-loopback" } }),
+    6: valid(6, { realServiceScope: { postgresVersion: "PostgreSQL 18.3", projects: ["production"], isolatedLoopbackProjects: ["production"], required: { success: true },
+      cleanUpgrade: { equivalent: true }, restrictedAccess: { matrix: [
+        { grantee: "anon", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges: "{}" },
+        { grantee: "authenticated", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges: "{}" },
+      ] }, checks: [{ command: "check", passed: true }],
+      runId: "phase-6-run-123456", sourceRevision: revision, sourceTreeSha256: tree,
+      startedAt: new Date(now - 60_000).toISOString(), completedAt: new Date(now - 30_000).toISOString(), cleanup: true } }) });
+  try {
+    const result = evaluate(root);
+    const reasonMap = new Map(result.blockers.map((blocker) => [blocker.phase, blocker.reasons]));
+    assert.ok(reasonMap.get(5).includes("migration-checksum-incomplete-or-invalid"));
+    assert.ok(reasonMap.get(4).includes("real-service-scope-unverified"));
+    assert.ok(reasonMap.get(4).includes("source-binding-mismatch"));
+    assert.ok(reasonMap.get(3).includes("real-service-scope-unverified"));
+    assert.ok(reasonMap.get(6).includes("real-service-scope-unverified"));
+    assert.ok(reasonMap.get(7).includes("real-service-scope-unverified"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("rejects restricted-access matrices with empty schema privileges or malformed table grants", () => {
+  const malformedScope = (tablePrivileges) => ({ ...valid(4).realServiceScope,
+    restrictedAccess: { matrix: [
+      { grantee: "anon", schemaPrivileges: {}, tablePrivileges },
+      { grantee: "authenticated", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges },
+    ] } });
+  const root = fixture({ 3: valid(3, { realServiceScope: malformedScope("{}") }),
+    4: valid(4, { realServiceScope: malformedScope("not-json") }) });
+  try {
+    const result = evaluate(root);
+    const reasonMap = new Map(result.blockers.map((blocker) => [blocker.phase, blocker.reasons]));
+    assert.ok(reasonMap.get(3).includes("real-service-scope-unverified"));
+    assert.ok(reasonMap.get(4).includes("real-service-scope-unverified"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("requires unique Phase 7 restricted-access principals including service_role", () => {
+  const matrix = valid(7).realServiceScope.restrictedAccess.matrix;
+  for (const incomplete of [matrix.slice(0, 2), [matrix[0], matrix[0], matrix[2]]]) {
+    const root = fixture({ 7: valid(7, { realServiceScope: { ...valid(7).realServiceScope,
+      restrictedAccess: { matrix: incomplete } } }) });
+    try {
+      const result = evaluate(root);
+      const phaseSeven = result.phases.find((phase) => phase.phase === 7);
+      assert.ok(phaseSeven.reasons.includes("real-service-scope-unverified"));
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test("rejects Phase 7 public-role grants to sensitive schemas", () => {
+  const scope = valid(7).realServiceScope;
+  const root = fixture({ 7: valid(7, { realServiceScope: { ...scope, restrictedAccess: { matrix: scope.restrictedAccess.matrix.map((row, index) =>
+    index === 0 ? { ...row, schemaPrivileges: { measurement: { usage: true, create: false } }, tablePrivileges: JSON.stringify({ SELECT: true }) } : row) } } }) });
+  try {
+    const result = evaluate(root);
+    const phaseSeven = result.phases.find((phase) => phase.phase === 7);
+    assert.ok(phaseSeven.reasons.includes("real-service-scope-unverified"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("reports malformed evidence collection shapes without throwing", () => {
+  const root = fixture({ 4: valid(4, { checks: {} }), 5: valid(5, { evidenceArtifacts: {} }), 6: valid(6, { components: {} }) });
+  try {
+    const result = evaluate(root);
+    const reasonMap = new Map(result.blockers.map((blocker) => [blocker.phase, blocker.reasons]));
+    for (const phase of [4, 5, 6]) assert.ok(reasonMap.get(phase).includes("evidence-structure-invalid"));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
