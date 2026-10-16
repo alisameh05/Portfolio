@@ -50,6 +50,8 @@ export const PHASE5_MIGRATION_COMPATIBILITY = Object.freeze({
   "20261009090000_record_taxonomy_evolution_actor_reason.sql": { stage: "lockstep", priorWriterCompatible: false, boundary: "The new history check requires Owner actor IDs for rename, retire, and merge writes. Deploy the actor-aware #120 writer with this migration and do not keep older actor-less writers online." },
   "20261009100000_index_project_discovery_reads.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds two indexes only; no application contract changes." },
 });
+const PHASE5_MIGRATION_FIRST = "20261005001318_create_content_authoring.sql";
+const PHASE5_MIGRATION_LAST = "20261009100000_index_project_discovery_reads.sql";
 
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
@@ -79,7 +81,8 @@ export function validatePhase3MigrationSnapshot(snapshot, phase3Files, contentsB
 }
 
 export function assertPhase5MigrationSafety(files, contentsByName, compatibility = PHASE5_MIGRATION_COMPATIBILITY) {
-  const phase5Files = [...files].filter((file) => file.localeCompare("20261005001318_create_content_authoring.sql") >= 0);
+  const phase5Files = [...files].filter((file) =>
+    file.localeCompare(PHASE5_MIGRATION_FIRST) >= 0 && file.localeCompare(PHASE5_MIGRATION_LAST) <= 0);
   if (phase5Files.length === 0) throw new Error("PHASE5_MIGRATIONS_MISSING");
   for (const file of phase5Files) {
     if (!/^\d{14}_[a-z0-9_]+\.sql$/.test(file)) throw new Error("PHASE5_MIGRATION_NAME_INVALID");

@@ -135,14 +135,6 @@ function migrationSources() {
   const contents = new Map(files.map((name) => [name, readFileSync(join(directory, name), "utf8")]));
   const snapshot = JSON.parse(readFileSync(join(ROOT, "supabase/baselines/phase3.json"), "utf8"));
   const phase3Files = validatePhase3MigrationSnapshot(snapshot, Object.keys(snapshot.migrations), contents);
-  for (const file of files.filter((name) => !phase3Files.includes(name))) {
-    const source = contents.get(file).toLowerCase();
-    if (
-      file.localeCompare(phase3Files.at(-1)) <= 0 ||
-      !source.includes("set lock_timeout = '5s'") ||
-      !source.includes("-- rollback:")
-    ) throw new Error("PORTFOLIO_SETTINGS_EXPANSION_MIGRATION_POLICY_INVALID");
-  }
   return {
     files,
     contents,

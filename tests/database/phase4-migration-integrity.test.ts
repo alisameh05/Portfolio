@@ -136,4 +136,20 @@ describe("Phase 4 migration integrity", () => {
     expect(() => assertPhase5MigrationSafety([file], new Map([[file, source]]), {} as never))
       .toThrow("PHASE5_MIGRATION_COMPATIBILITY_UNDOCUMENTED");
   });
+
+  it("limits Phase 5 safety checks to the Phase 5 migration window", () => {
+    const phase5File = "20261005001318_create_content_authoring.sql";
+    const phase7File = "20261014194925_measurement_consent.sql";
+    const phase5Source = "-- Rollback: restore the previous snapshot.\n-- Forward fix: add a reviewed expansion.\nset lock_timeout = '5s';\ncreate table content.items(id uuid);\n";
+    expect(assertPhase5MigrationSafety([phase5File, phase7File], new Map([
+      [phase5File, phase5Source],
+      [phase7File, "create table measurement.consents(id uuid);"],
+    ]))).toEqual([phase5File]);
+
+    const unclassifiedPhase5File = "20261008140000_add_content_projection.sql";
+    expect(() => assertPhase5MigrationSafety([phase5File, unclassifiedPhase5File], new Map([
+      [phase5File, phase5Source],
+      [unclassifiedPhase5File, phase5Source],
+    ]))).toThrow("PHASE5_MIGRATION_COMPATIBILITY_UNDOCUMENTED");
+  });
 });

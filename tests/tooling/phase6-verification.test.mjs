@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
-  PHASE6_FORMATS, PHASE6_MEDIA_CV_CRITERION_IDS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests,
+  PHASE6_FORMATS, PHASE6_MEDIA_CV_CRITERION_IDS, PHASE6_PREDECESSOR_CONTEXTS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests,
   evaluatePhase6MediaCvIntegration, evaluatePhase6Setup, isolatedPhase6Config,
   loadPhase6PredecessorContexts, makePhase6Report, phase6CvScenarioProof, phase6CvDeferredMigrations, scrubPhase6Environment,
 } from "../../scripts/phase6-verification-support.mjs";
@@ -151,7 +154,30 @@ test("integration diagnostics retain only known Media codes and CV criterion IDs
 });
 
 function passingReport() {
-  const predecessorContexts = loadPhase6PredecessorContexts();
+  const predecessorContexts = {
+    phase4: {
+      ...PHASE6_PREDECESSOR_CONTEXTS.phase4,
+      contextRunId: "90000000-0000-4000-8000-000000000004",
+      executedAt: "2026-10-10T17:55:06.000Z",
+      sourceRevision: PHASE6_PREDECESSOR_CONTEXTS.phase4.mergeCommit,
+      gitTreeId: "a".repeat(40),
+      contextVerdict: "pass",
+      operations: { publicOperations: 5, ownerOperations: 39, forbiddenFindings: 0 },
+      boundary: "pass",
+      runtimeArchitecture: "pass",
+      fixtureResults: Array.from({ length: 6 }, () => ({ rejected: true })),
+      depcruiseResults: Array.from({ length: 2 }, () => ({ rejected: true })),
+    },
+    phase5: {
+      ...PHASE6_PREDECESSOR_CONTEXTS.phase5,
+      contextRunId: PHASE6_PREDECESSOR_CONTEXTS.phase5.runId,
+      contextVerdict: "pass",
+      operations: { public: 5, owner: 48, forbiddenFindings: 0 },
+      runtimeBoundary: "pass",
+      runtimeArchitecture: "pass",
+    },
+    activationDifferences: PHASE6_PREDECESSOR_CONTEXTS.activationDifferences,
+  };
   return makePhase6Report({
     sourceRevision: "abc", sourceTreeSha256: "tree", runtime: { node: "v24.21.0", npm: "11.19.0" },
     startedAt: new Date(Date.now() - 60_000).toISOString(), tools: Object.fromEntries(Object.keys(PHASE6_TOOL_DEFINITIONS).map((name) => [name, `tool-${name}`])),
@@ -160,6 +186,46 @@ function passingReport() {
     cleanup: { attempted: true, success: true }, failures: [], predecessorContexts,
   });
 }
+
+test("loads predecessor contexts from an explicit evidence root", () => {
+  const root = mkdtempSync(join(tmpdir(), "phase6-predecessor-fixture-"));
+  const evidenceRoot = join(root, "evidence");
+  mkdirSync(evidenceRoot, { recursive: true });
+  try {
+    writeFileSync(join(evidenceRoot, "phase4-context-90-105.json"), JSON.stringify({
+      runId: "90000000-0000-4000-8000-000000000004",
+      executedAt: "2026-10-10T17:55:06.000Z",
+      sourceRevision: PHASE6_PREDECESSOR_CONTEXTS.phase4.mergeCommit,
+      gitTreeId: "a".repeat(40),
+      report: {
+        verdict: "pass",
+        inventory: { publicOperations: 5, ownerOperations: 39, forbiddenFindings: 0 },
+        boundary: "pass",
+        runtimeArchitecture: "pass",
+        fixtureResults: Array.from({ length: 6 }, () => ({ rejected: true })),
+        depcruiseResults: Array.from({ length: 2 }, () => ({ rejected: true })),
+      },
+    }));
+    writeFileSync(join(evidenceRoot, "phase-5-gate-report.json"), JSON.stringify({
+      runId: PHASE6_PREDECESSOR_CONTEXTS.phase5.runId,
+      sourceRevision: PHASE6_PREDECESSOR_CONTEXTS.phase5.sourceRevision,
+      sourceTreeSha256: PHASE6_PREDECESSOR_CONTEXTS.phase5.sourceTreeSha256,
+      verdict: "pass",
+    }));
+    writeFileSync(join(evidenceRoot, "phase-5-context.json"), JSON.stringify({
+      operations: { public: 5, owner: 48, forbiddenFindings: 0 },
+      runtimeBoundary: "pass",
+      runtimeArchitecture: "pass",
+    }));
+
+    const contexts = loadPhase6PredecessorContexts(root);
+    assert.equal(contexts.phase4.contextVerdict, "pass");
+    assert.equal(contexts.phase5.contextVerdict, "pass");
+    assert.equal(contexts.phase5.contextRunId, PHASE6_PREDECESSOR_CONTEXTS.phase5.runId);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("isolated configuration enables only the local API, Auth and Storage on reserved ports", () => {
   const result = isolatedPhase6Config("project_id = \"before\"\n[api]\nenabled = false\nport = 54321\n[db]\nport = 54322\nshadow_port = 54320\n[auth]\nenabled = false\n[storage]\nenabled = false\n", "after");
