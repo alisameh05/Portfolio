@@ -170,6 +170,25 @@ function sourceBindingState(report, details) {
   return gateProvesBinding ? "verified" : "unverified";
 }
 
+function failedCheckNames(report) {
+  if (!Array.isArray(report?.checks)) return [];
+  return [...new Set(report.checks
+    .filter((check) => check && typeof check === "object" && (check.passed === false || typeof check.failure === "string"))
+    .map((check) => check.name ?? check.id)
+    .filter((name) => typeof name === "string" && /^[a-z0-9][a-z0-9._-]{0,79}$/iu.test(name)))].sort();
+}
+
+function predecessorAction(phase) {
+  const actions = {
+    3: "In predecessor #55, resolve the Phase 3 migration and isolated database failures, then rerun npm run phase3:gate and publish complete source-bound evidence with successful cleanup.",
+    4: "In predecessor #90, resolve the named Phase 4 and prerequisite gate failures, restore isolated PostgreSQL/Auth execution, then rerun npm run phase4:gate and publish complete source-bound evidence with successful cleanup.",
+    5: "In predecessor #125, restore isolated PostgreSQL execution, rerun npm run phase5:gate until the Owner, RLS, and integrated checks pass, then publish complete migration, service-scope, and cleanup evidence.",
+    6: "In predecessor #164, restore isolated PostgreSQL and Storage execution, rerun npm run phase6:gate until every required check passes, then publish complete service-scope and cleanup evidence.",
+    7: "In predecessor #209, resolve the named Phase 7 gate failures, rerun npm run phase7:gate, and publish complete source-bound evidence with zero skips and successful cleanup.",
+  };
+  return actions[phase];
+}
+
 export function evaluatePhase8Prerequisites({ root, sourceRevision, sourceTreeSha256, now = Date.now(),
   maxAgeMs = MAX_EVIDENCE_AGE_MS,
   resolveSourceTree = (revision) => sourceMetadataAtRevision(root, revision).sourceTreeSha256,
@@ -182,6 +201,7 @@ export function evaluatePhase8Prerequisites({ root, sourceRevision, sourceTreeSh
     const absolutePath = join(root, path);
     const report = existsSync(absolutePath) ? parseJson(absolutePath) : null;
     const details = normalize(phase, report);
+    const failedChecks = failedCheckNames(report);
     const reasons = [];
     let sha256 = null;
     const binding = report ? sourceBindingState(report, details) : "unverified";
@@ -226,7 +246,8 @@ export function evaluatePhase8Prerequisites({ root, sourceRevision, sourceTreeSh
     return Object.freeze({ phase, ticket, path, sha256, evidencePresent: Boolean(report), sourceTreeVerified,
       aggregateSuccess: details.aggregateSuccess, sourceRevision: details.sourceRevision,
       sourceTreeSha256: details.sourceTreeSha256, runId: details.runId, generatedAt: details.generatedAt,
-      required: details.required, migrations: details.migrations.map((migration) => ({
+      required: details.required, failedChecks, nextAction: reasons.length ? predecessorAction(phase) : null,
+      migrations: details.migrations.map((migration) => ({
         name: migration?.name ?? migration?.file ?? null, sha256: migration?.sha256 ?? null,
       })), toolVersions: details.tools, realServiceScope: serviceScope, sourceBinding: binding,
       cleanup: details.cleanup, reasons, accepted: reasons.length === 0 });
@@ -237,7 +258,8 @@ export function evaluatePhase8Prerequisites({ root, sourceRevision, sourceTreeSh
       npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? null } },
     verdict: failed.length === 0 ? "pass" : "blocked", mergeEligible: failed.length === 0,
     acceptedPhases: phases.filter((phase) => phase.accepted).map((phase) => phase.phase),
-    blockers: failed.map((phase) => ({ phase: phase.phase, ticket: phase.ticket, reasons: phase.reasons })),
+    blockers: failed.map((phase) => ({ phase: phase.phase, ticket: phase.ticket, reasons: phase.reasons,
+      failedChecks: phase.failedChecks, nextAction: phase.nextAction })),
     phases,
     statusLayers: { localAcceptance: failed.length === 0 ? "passed" : "blocked",
       hostedChecks: "not-recorded-by-this-evaluator", codexReview: "not-recorded-by-this-evaluator",

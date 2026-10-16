@@ -72,6 +72,8 @@ test("reports precise safe blockers for missing, stale, mismatched, partial, ski
     assert.ok(reasonMap.get(7).includes("required-failures-present"));
     assert.ok(reasonMap.get(7).includes("required-skips-present"));
     assert.ok(reasonMap.get(7).includes("cleanup-failed"));
+    assert.ok(result.blockers.every((blocker) => blocker.nextAction.includes(`#${blocker.ticket}`)));
+    assert.ok(result.phases.every((phase) => Array.isArray(phase.failedChecks)));
     assert.equal(JSON.stringify(result).includes("TOKEN"), false);
     assert.equal(result.guarantees.allPrerequisitesSourceBound, false);
     assert.equal(result.guarantees.zeroRequiredFailures, false);
@@ -133,6 +135,21 @@ test("component cleanup failures cannot be overridden by aggregate cleanup claim
     const phaseSeven = result.phases.find((phase) => phase.phase === 7);
     assert.ok(phaseSeven.reasons.includes("cleanup-failed"));
     assert.equal(result.guarantees.successfulCleanup, false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("reports sanitized failed check names and the owning predecessor action", () => {
+  const root = fixture({ 5: valid(5, { checks: [
+    { name: "owner-postgres", passed: false, failure: "exit-nonzero", output: "postgres://private" },
+    { name: "database-rls", passed: true },
+  ] }) });
+  try {
+    const result = evaluate(root);
+    const phaseFive = result.phases.find((phase) => phase.phase === 5);
+    const blocker = result.blockers.find((item) => item.phase === 5);
+    assert.deepEqual(phaseFive.failedChecks, ["owner-postgres"]);
+    assert.match(phaseFive.nextAction, /predecessor #125/u);
+    assert.equal(JSON.stringify(blocker).includes("postgres://private"), false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
