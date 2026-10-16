@@ -73,7 +73,7 @@ function verifyEvidenceInputs() {
     if (!required || required.success !== true || Number(required.failed ?? 0) !== 0 || Number(required.skipped ?? 0) !== 0 || Number(required.failedSuites ?? 0) !== 0 || cleanup !== true || typeof evidence.sourceTreeSha256 !== "string") {
       throw new Error(`PHASE7_INTEGRATION_REQUIRED_EVIDENCE_INVALID:${name}`);
     }
-    return { path: `evidence/${name}`, runId: evidence.runId ?? evidence.validationBatchId ?? "not-recorded", sourceRevision: evidence.sourceRevision ?? evidence.baseCommit ?? "not-recorded", sourceTreeSha256: evidence.sourceTreeSha256, passed: Number(required.passed ?? 0), failed: 0, skipped: 0, cleanup: true };
+    return { path: `evidence/${name}`, runId: evidence.runId ?? evidence.validationBatchId ?? "not-recorded", sourceRevision: evidence.sourceRevision ?? "not-recorded", baseCommit: evidence.baseCommit ?? null, sourceTreeSha256: evidence.sourceTreeSha256, passed: Number(required.passed ?? 0), failed: 0, skipped: 0, cleanup: true };
   });
 }
 function runPackageCheck(name) {
