@@ -1,15 +1,15 @@
 {
-  "runId": "77a26308-7f39-471b-ae6a-0cee7cd77d7c",
-  "sourceRevision": "ebb906865a3a1dda93a34294627bf646feaf731c",
-  "sourceTreeSha256": "2224961795aa4edf5efb208906eed6d43ba9cd9e6d7ed7863c62fe353b14f957",
+  "runId": "183eb431-9118-4b1a-bb31-b2e9121dd4d4",
+  "sourceRevision": "06700cfd2b3861af3eb48a719075d937a3320fbf",
+  "sourceTreeSha256": "f47dbb5f550e97598d671aa613ed5dc4ccee2a561b676ee19caaa352b737ede0",
   "tools": {
     "node": "v24.21.0",
     "npm": "11.19.0",
     "supabase": "2.117.0",
     "postgres": "postgres (PostgreSQL) 18.3"
   },
-  "migration": "supabase/migrations/20261015160000_persist_immutable_analytics_goal_versions.sql",
-  "migrationSha256": "db9ef116e1a8a1a5898b1c2c369c85f043fda60d115f8baee03bbd07ff83d085",
+  "migration": "supabase/migrations/20261015170000_activate_analytics_goal_versions.sql",
+  "migrationSha256": "b866f5b1d964b192b1a14bbd073131bcc3c02513ee171e53dd993d1a86454ae3",
   "acceptanceCriteria": {
     "T12-01": [
       "real Owner create-version HTTP operation returns a contract-valid 201 receipt",
@@ -31,7 +31,7 @@
       "retained Hidden Project and route identities remain valid goal scopes without changing public lifecycle"
     ],
     "T12-06": [
-      "later immutable snapshots advance ordered history while active pointer and activation facts remain unchanged"
+      "later versions append ordered snapshots without changing the active pointer or activation facts"
     ],
     "T12-07": [
       "stale preconditions and non-Owner actors are rejected safely",
@@ -45,26 +45,26 @@
   },
   "required": {
     "success": true,
-    "passed": 67,
+    "passed": 77,
     "failed": 0,
     "skipped": 0,
     "failedSuites": 0
   },
   "suites": [
     {
-      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-versions-199/tests/phase4/owner-request-security.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase4/owner-request-security.test.ts",
       "passed": 20
     },
     {
-      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-versions-199/tests/phase7/goal-versions-postgres.test.ts",
-      "passed": 7
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase7/goal-versions-postgres.test.ts",
+      "passed": 13
     },
     {
-      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-versions-199/tests/phase7/goal-versions.test.ts",
-      "passed": 8
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase7/goal-versions.test.ts",
+      "passed": 12
     },
     {
-      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-versions-199/tests/runtime/owner-analytics.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/runtime/owner-analytics.test.ts",
       "passed": 32
     }
   ],
@@ -76,5 +76,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:goal-versions (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
   "scope": "Full repository migration chain in a loopback-only disposable native PostgreSQL cluster, restricted non-superuser application role, real Owner application and HTTP adapters; no production or development database was modified.",
-  "cleanup": true
+  "cleanup": true,
+  "gateRunId": "d7002ba6-4a4e-44df-8ae2-90d33bbc3309"
 }

@@ -1,0 +1,12 @@
+
+> shipwithali-portfolio@0.0.0 pretypecheck
+> npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 typecheck
+> tsc --noEmit

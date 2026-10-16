@@ -3,7 +3,7 @@
   "title": "Verify complete HTTP assembly, security, and degraded behavior",
   "validationBatchId": "86e683a6-4edb-47d1-9abc-405040ffc7a9",
   "baseCommit": "60bfaac7824753648dca692c5af594c5a445587b",
-  "sourceTreeSha256": "23cd050176f16f6d708e79a8ecde9194cd31037983f2017e69bc33b2c9693753",
+  "sourceTreeSha256": "f47dbb5f550e97598d671aa613ed5dc4ccee2a561b676ee19caaa352b737ede0",
   "toolchain": {
     "node": "24.21.0",
     "npm": "11.19.0",
@@ -140,5 +140,158 @@
     "jobs": 5,
     "reason": "GitHub check annotation reports recent account payment failure or spending limit needs increase; no job steps ran"
   },
-  "cleanup": true
+  "cleanup": true,
+  "runId": "a1bfd17f-605f-4a63-891f-fc958524c9db",
+  "sourceRevision": "06700cfd2b3861af3eb48a719075d937a3320fbf",
+  "startedAt": "2026-10-16T11:45:34.649Z",
+  "completedAt": "2026-10-16T11:45:37.352Z",
+  "tools": {
+    "node": "24.21.0",
+    "npm": "11.19.0"
+  },
+  "routes": {
+    "publicOperations": 5,
+    "ownerOperations": 48,
+    "operationalRoutes": 2,
+    "runtimeRoutes": 0,
+    "phase7PublicMutations": 4,
+    "phase7OwnerOperations": 7
+  },
+  "required": {
+    "success": true,
+    "passed": 171,
+    "failed": 0,
+    "skipped": 0,
+    "failedSuites": 0
+  },
+  "refreshedAcceptance": {
+    "suites": [
+      "tests/runtime/feedback-limits.test.ts",
+      "tests/runtime/feedback.test.ts",
+      "tests/runtime/owner-analytics.test.ts",
+      "tests/runtime/owner-moderation.test.ts",
+      "tests/runtime/phase7-contracts.test.ts",
+      "tests/runtime/phase7-runtime-fail-closed.test.ts",
+      "tests/runtime/public-event.test.ts",
+      "tests/runtime/rating.test.ts",
+      "tests/runtime/reaction.test.ts"
+    ],
+    "routes": {
+      "publicOperations": [
+        "GET /api/v1/cv/current",
+        "POST /api/v1/events",
+        "POST /api/v1/projects/{projectId}/feedback",
+        "PUT /api/v1/projects/{projectId}/rating",
+        "PUT /api/v1/projects/{projectId}/reaction"
+      ],
+      "ownerOperations": [
+        "GET /api/owner/v1/analytics-goals/{goalId}",
+        "GET /api/owner/v1/content/{contentId}",
+        "GET /api/owner/v1/content/{contentId}/history",
+        "GET /api/owner/v1/content/{contentId}/revisions/{revisionId}/preview",
+        "GET /api/owner/v1/cv",
+        "GET /api/owner/v1/exports/{exportId}",
+        "GET /api/owner/v1/exports/{exportId}/download",
+        "GET /api/owner/v1/feedback/{feedbackId}",
+        "GET /api/owner/v1/media/{mediaId}",
+        "GET /api/owner/v1/project-status-values",
+        "GET /api/owner/v1/projects/{projectId}",
+        "GET /api/owner/v1/taxonomies/{taxonomyId}",
+        "POST /api/owner/v1/analytics-goals/{goalId}/commands/activate-version",
+        "POST /api/owner/v1/analytics-goals/{goalId}/versions",
+        "POST /api/owner/v1/content",
+        "POST /api/owner/v1/content/{contentId}/commands/archive",
+        "POST /api/owner/v1/content/{contentId}/commands/hide",
+        "POST /api/owner/v1/content/{contentId}/commands/publish-language",
+        "POST /api/owner/v1/content/{contentId}/commands/restore",
+        "POST /api/owner/v1/content/{contentId}/revisions",
+        "POST /api/owner/v1/content/{contentId}/revisions/{revisionId}/review",
+        "POST /api/owner/v1/cv/versions",
+        "POST /api/owner/v1/cv/versions/{versionId}/commands/accept",
+        "POST /api/owner/v1/cv/versions/{versionId}/commands/activate",
+        "POST /api/owner/v1/exports",
+        "POST /api/owner/v1/feedback/{feedbackId}/commands/approve",
+        "POST /api/owner/v1/feedback/{feedbackId}/commands/reject",
+        "POST /api/owner/v1/feedback/{feedbackId}/commands/suppress",
+        "POST /api/owner/v1/media/upload-intents",
+        "POST /api/owner/v1/media/{mediaId}/commands/accept",
+        "POST /api/owner/v1/media/{mediaId}/commands/record-processing",
+        "POST /api/owner/v1/media/{mediaId}/commands/reject",
+        "POST /api/owner/v1/project-status-values",
+        "POST /api/owner/v1/project-status-values/{valueId}/commands/rename",
+        "POST /api/owner/v1/project-status-values/{valueId}/commands/retire",
+        "POST /api/owner/v1/projects/{projectId}/commands/assign-taxonomy-value",
+        "POST /api/owner/v1/projects/{projectId}/commands/change-slug",
+        "POST /api/owner/v1/projects/{projectId}/commands/change-status",
+        "POST /api/owner/v1/projects/{projectId}/commands/correct-candidate-slug",
+        "POST /api/owner/v1/projects/{projectId}/commands/relate-project",
+        "POST /api/owner/v1/projects/{projectId}/commands/set-featured",
+        "POST /api/owner/v1/taxonomies/{taxonomyId}/values",
+        "POST /api/owner/v1/taxonomy-values/{valueId}/commands/merge",
+        "POST /api/owner/v1/taxonomy-values/{valueId}/commands/rename",
+        "POST /api/owner/v1/taxonomy-values/{valueId}/commands/retire",
+        "PUT /api/owner/v1/configuration/contact-channels",
+        "PUT /api/owner/v1/configuration/profile",
+        "PUT /api/owner/v1/configuration/project-cta"
+      ],
+      "operationalRoutes": [
+        {
+          "file": "src/app/livez/route.ts",
+          "reason": "operational-probe"
+        },
+        {
+          "file": "src/app/readyz/route.ts",
+          "reason": "operational-probe"
+        }
+      ],
+      "runtimeRoutes": []
+    },
+    "vitestCounts": {
+      "passed": 171,
+      "failed": 0,
+      "skipped": 0,
+      "failedSuites": 0
+    },
+    "outputSha256": "ad28b76e7e8bec16508957b73f22f9702cef934b7b3e8dab4288c60d22361be7"
+  },
+  "suites": [
+    {
+      "path": "tests/runtime/feedback-limits.test.ts",
+      "executed": true
+    },
+    {
+      "path": "tests/runtime/feedback.test.ts",
+      "executed": true
+    },
+    {
+      "path": "tests/runtime/owner-analytics.test.ts",
+      "executed": true
+    },
+    {
+      "path": "tests/runtime/owner-moderation.test.ts",
+      "executed": true
+    },
+    {
+      "path": "tests/runtime/phase7-contracts.test.ts",
+      "executed": true
+    },
+    {
+      "path": "tests/runtime/phase7-runtime-fail-closed.test.ts",
+      "executed": true
+    },
+    {
+      "path": "tests/runtime/public-event.test.ts",
+      "executed": true
+    },
+    {
+      "path": "tests/runtime/rating.test.ts",
+      "executed": true
+    },
+    {
+      "path": "tests/runtime/reaction.test.ts",
+      "executed": true
+    }
+  ],
+  "reproduction": "npm run setup:validation; npm run validation:ready; npm run route:inventory; npm run phase7:http:assembly",
+  "gateRunId": "d7002ba6-4a4e-44df-8ae2-90d33bbc3309"
 }

@@ -1,8 +1,8 @@
 {
   "ticket": 205,
-  "runId": "2c7eb843-c0f0-44c2-8b12-cc5095e8eb5f",
-  "sourceRevision": "e1f88c03319ba557543e8e69a7fa8e641cb2284e",
-  "sourceTreeSha256": "7d1526bf74388a65cab11d7345dc83cdf5ab76cf65fe61a52ac5c5e26c10cf09",
+  "runId": "97334333-e295-4999-b404-5acc65a738e7",
+  "sourceRevision": "06700cfd2b3861af3eb48a719075d937a3320fbf",
+  "sourceTreeSha256": "f47dbb5f550e97598d671aa613ed5dc4ccee2a561b676ee19caaa352b737ede0",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015203000_retain_feedback_privacy.sql",
   "migrationSha256": "fe0d3e9dd6644b6d7ba4480562b5e36d9043635bdad4f5f6e4472611d0318a1e",
@@ -286,5 +286,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:feedback-retention (use --refresh-types only when regenerating database.generated.ts)",
   "scope": "All repository migrations on disposable native PostgreSQL with app/worker RLS roles; exact cutoffs, moderation race, bounded restart, rollback and privacy audit.",
-  "cleanup": true
+  "cleanup": true,
+  "gateRunId": "d7002ba6-4a4e-44df-8ae2-90d33bbc3309"
 }

@@ -1,11 +1,11 @@
 {
   "ticket": 202,
-  "runId": "b36d4bd0-2df9-4838-a4f5-101e2eadcc10",
-  "sourceRevision": "03416ca5b866be1013f81e7760839dfe12d161b1",
-  "sourceTreeSha256": "f3d5ad83538cb68040b9c5a93cb3579252d65598f7a2a6642c70de03e193893a",
+  "runId": "9162e268-759f-4a27-b19f-04f6c5bb1f77",
+  "sourceRevision": "06700cfd2b3861af3eb48a719075d937a3320fbf",
+  "sourceTreeSha256": "f47dbb5f550e97598d671aa613ed5dc4ccee2a561b676ee19caaa352b737ede0",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015190000_persist_reproducible_daily_aggregates.sql",
-  "migrationSha256": "f0bf8f4237f6b16413c521bccb46ef790f607dd791c4e86f319b5016455bfefc",
+  "migrationSha256": "13e96f0d18983edec6091983ab1cf0529eb06c9aaf1b4c942c81ca3532547b1c",
   "migrations": [
     {
       "name": "20260922170000_prepare_migration_capability.sql",
@@ -189,7 +189,19 @@
     },
     {
       "name": "20261015190000_persist_reproducible_daily_aggregates.sql",
-      "sha256": "f0bf8f4237f6b16413c521bccb46ef790f607dd791c4e86f319b5016455bfefc"
+      "sha256": "13e96f0d18983edec6091983ab1cf0529eb06c9aaf1b4c942c81ca3532547b1c"
+    },
+    {
+      "name": "20261015200000_enable_fixed_aggregate_dimensions.sql",
+      "sha256": "7a40598e08d446aef162cc3d7fbed12a3680aaa3af8105c3ddfe44ae986058e3"
+    },
+    {
+      "name": "20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
+      "sha256": "61ee7d330b0c16d4fa2bd6aad7f555144fd1206866edc4b55da7843157c8b5aa"
+    },
+    {
+      "name": "20261015203000_retain_feedback_privacy.sql",
+      "sha256": "fe0d3e9dd6644b6d7ba4480562b5e36d9043635bdad4f5f6e4472611d0318a1e"
     }
   ],
   "tools": {
@@ -203,6 +215,14 @@
     },
     {
       "title": "reclaims an expired daily job, includes late accepted events, and replays action and goal totals",
+      "status": "passed"
+    },
+    {
+      "title": "persists bounded single-dimension groupings and applies report-wide and complementary suppression",
+      "status": "passed"
+    },
+    {
+      "title": "keeps retained legacy summaries readable while old dimension breakdowns remain incomplete",
       "status": "passed"
     },
     {
@@ -240,11 +260,51 @@
     {
       "title": "fails closed for unauthorized scope, unknown Owner, and report ranges above 31 days",
       "status": "passed"
+    },
+    {
+      "title": "uses distinct-subject zero/four/five thresholds for the fixed locale breakdown",
+      "status": "passed"
+    },
+    {
+      "title": "uses distinct-subject zero/four/five thresholds for the fixed country breakdown",
+      "status": "passed"
+    },
+    {
+      "title": "uses distinct-subject zero/four/five thresholds for the fixed device breakdown",
+      "status": "passed"
+    },
+    {
+      "title": "uses distinct-subject zero/four/five thresholds for the fixed referrer breakdown",
+      "status": "passed"
+    },
+    {
+      "title": "uses distinct-subject zero/four/five thresholds for the fixed project breakdown",
+      "status": "passed"
+    },
+    {
+      "title": "uses distinct-subject zero/four/five thresholds for the fixed route breakdown",
+      "status": "passed"
+    },
+    {
+      "title": "withholds small cells and deterministic complementary cells from additive breakdown queries",
+      "status": "passed"
+    },
+    {
+      "title": "withholds aggregate summaries for any metric/day with a small dimension cell",
+      "status": "passed"
+    },
+    {
+      "title": "keeps high event volume from one subject in the low-sample state",
+      "status": "passed"
+    },
+    {
+      "title": "marks reports over the bounded row limit incomplete",
+      "status": "passed"
     }
   ],
   "required": {
     "success": true,
-    "passed": 11,
+    "passed": 23,
     "failed": 0,
     "skipped": 0,
     "failedSuites": 0
@@ -259,5 +319,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:daily-aggregates (use --refresh-types only when regenerating database.generated.ts)",
   "scope": "All committed repository migrations on a disposable native PostgreSQL cluster; source-bound unit and real-PostgreSQL acceptance.",
-  "cleanup": true
+  "cleanup": true,
+  "gateRunId": "d7002ba6-4a4e-44df-8ae2-90d33bbc3309"
 }

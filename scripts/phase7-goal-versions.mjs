@@ -12,6 +12,7 @@ const startingSource = workingTreeSourceSha256();
 const refreshTypes = process.argv.includes("--refresh-types");
 const reportPath = resolve("artifacts/goal-versions-vitest.json");
 const evidencePath = resolve("evidence/phase7-goal-activation-200.json");
+const versionEvidencePath = resolve("evidence/phase7-goal-versions-199.json");
 const discoveredBin = process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" :
   spawnSync("pg_config", ["--bindir"], { encoding: "utf8", timeout: 5_000 }).stdout?.trim();
 const bin = process.env.PHASE7_POSTGRES_BIN ?? discoveredBin ?? "";
@@ -29,7 +30,10 @@ function run(command, args, env = process.env) {
 mkdirSync(join(root, "node_modules", ".cache"), { recursive: true });
 mkdirSync("artifacts", { recursive: true });
 rmSync(reportPath, { force: true });
-if (!refreshTypes) rmSync(evidencePath, { force: true });
+if (!refreshTypes) {
+  rmSync(evidencePath, { force: true });
+  rmSync(versionEvidencePath, { force: true });
+}
 const temp = mkdtempSync(join(root, "node_modules", ".cache", "portfolio-goals-199-"));
 const data = join(temp, "data");
 const port = await new Promise((resolvePort, reject) => {
@@ -130,7 +134,10 @@ try {
   } catch { console.error("GOAL_CLEANUP_FAILED"); process.exitCode = 1; }
   if (result && cleanup && !refreshTypes) {
     mkdirSync("evidence", { recursive: true });
-    writeFileSync(evidencePath, `${JSON.stringify({ ...result, cleanup }, null, 2)}\n`);
+    const versionEvidence = { ...result, acceptanceCriteria: Object.fromEntries(Object.entries(result.acceptanceCriteria).filter(([criterion]) => criterion.startsWith("T12-"))), cleanup };
+    const activationEvidence = { ...result, acceptanceCriteria: Object.fromEntries(Object.entries(result.acceptanceCriteria).filter(([criterion]) => criterion.startsWith("T13-"))), cleanup };
+    writeFileSync(versionEvidencePath, `${JSON.stringify(versionEvidence, null, 2)}\n`);
+    writeFileSync(evidencePath, `${JSON.stringify(activationEvidence, null, 2)}\n`);
     console.log(JSON.stringify({ required: result.required, cleanup }));
   }
 }
