@@ -1,10 +1,10 @@
 {
   "ticket": 208,
-  "runId": "bb880f37-91a1-4949-a66d-582d21b41a8d",
-  "sourceRevision": "b4fdb8004e5682d6a077f0554a63e5646aa2c537",
-  "sourceTreeSha256": "2b5a64c4873064c8fec0fe392d81532fdb99c38882a0fb25db0c00288a3ce95c",
-  "startedAt": "2026-10-16T09:57:36.700Z",
-  "completedAt": "2026-10-16T10:00:22.371Z",
+  "runId": "4427f63b-5251-441a-bde0-96c3334fa277",
+  "sourceRevision": "777b03bb28b4daac4e9eaa34a160b8d2edd65233",
+  "sourceTreeSha256": "681d7b7b5ce8f8ac478156d67b7fac5dd6d599f29d8c4bda989ffd91f130d7eb",
+  "startedAt": "2026-10-16T10:03:00.244Z",
+  "completedAt": "2026-10-16T10:05:43.685Z",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "tools": {
     "node": "24.21.0",
@@ -281,8 +281,8 @@
         "indexes": [
           "reactions_pkey"
         ],
-        "planningMs": 0.048,
-        "executionMs": 0.239,
+        "planningMs": 0.057,
+        "executionMs": 0.303,
         "actualRows": 0
       },
       {
@@ -291,8 +291,8 @@
         "indexes": [
           "feedback_project_locale"
         ],
-        "planningMs": 2.885,
-        "executionMs": 0.043,
+        "planningMs": 4.878,
+        "executionMs": 0.079,
         "actualRows": 51
       },
       {
@@ -301,8 +301,8 @@
         "indexes": [
           "daily_aggregates_pkey"
         ],
-        "planningMs": 1.644,
-        "executionMs": 0.025,
+        "planningMs": 1.486,
+        "executionMs": 0.021,
         "actualRows": 1
       },
       {
@@ -311,8 +311,8 @@
         "indexes": [
           "consents_expiry"
         ],
-        "planningMs": 0.338,
-        "executionMs": 2.428,
+        "planningMs": 0.295,
+        "executionMs": 2.174,
         "actualRows": 0,
         "candidateRows": 100,
         "deletedRows": 50
@@ -323,8 +323,8 @@
         "indexes": [
           "jobs_due_idx"
         ],
-        "planningMs": 1.857,
-        "executionMs": 0.055,
+        "planningMs": 1.422,
+        "executionMs": 0.056,
         "actualRows": 50
       }
     ]
@@ -578,6 +578,16 @@
       "sourceRevision": "080aec0f24f8e0cb58c4721ed2589a4a69d0eaa4",
       "sourceTreeSha256": "b0c3baf0ff585239923dc3e53ce8d3f5a8b311641b4a356b3a39447885e26046",
       "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "cleanup": true
+    },
+    {
+      "path": "evidence/phase7-http-assembly-207.json",
+      "runId": "86e683a6-4edb-47d1-9abc-405040ffc7a9",
+      "sourceRevision": "60bfaac7824753648dca692c5af594c5a445587b",
+      "sourceTreeSha256": "23cd050176f16f6d708e79a8ecde9194cd31037983f2017e69bc33b2c9693753",
+      "passed": 587,
       "failed": 0,
       "skipped": 0,
       "cleanup": true
