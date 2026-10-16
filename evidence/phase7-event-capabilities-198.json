@@ -1,7 +1,7 @@
 {
-  "runId": "7b4026a2-1b1c-4856-be08-b7ff21fb2428",
-  "sourceRevision": "06700cfd2b3861af3eb48a719075d937a3320fbf",
-  "sourceTreeSha256": "f47dbb5f550e97598d671aa613ed5dc4ccee2a561b676ee19caaa352b737ede0",
+  "runId": "f1957a26-ea3c-4e76-9170-4f513e5280b6",
+  "sourceRevision": "6972af55047e2ed37d265da79cc4e9eebbae4f44",
+  "sourceTreeSha256": "20a39f370f68e10d1efe9c4ce3b600d9cb4cad47a9b7538946243e331f5b8846",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015150000_enable_configuration_interaction_event_facts.sql",
   "migrationSha256": "38016ab6d1760426f0b06c446d4e4817c14ba063ed35cde4dba511775a66bbbd",
@@ -52,19 +52,19 @@
   },
   "suites": [
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase7/consent-crypto.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase8-ticket-234/Portfolio/tests/phase7/consent-crypto.test.ts",
       "passed": 5
     },
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase7/events-application.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase8-ticket-234/Portfolio/tests/phase7/events-application.test.ts",
       "passed": 32
     },
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase7/events-postgres.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase8-ticket-234/Portfolio/tests/phase7/events-postgres.test.ts",
       "passed": 12
     },
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/runtime/public-event.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase8-ticket-234/Portfolio/tests/runtime/public-event.test.ts",
       "passed": 23
     }
   ],
@@ -78,5 +78,5 @@
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:events -- --ticket-198; PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries",
   "scope": "Disposable native PostgreSQL cluster; full repository migration chain, restricted application role, HTTP/application/consent integration. No production database was modified.",
   "cleanup": true,
-  "gateRunId": "d7002ba6-4a4e-44df-8ae2-90d33bbc3309"
+  "gateRunId": "a6180c7c-d93a-4dea-9eab-f805f24440f3"
 }
