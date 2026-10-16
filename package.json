@@ -175,6 +175,8 @@
     "phase7:focus:retention": "node scripts/phase7-retention.mjs",
     "prephase7:focus:jobs": "npm run validation:ready",
     "phase7:focus:jobs": "node scripts/phase7-jobs.mjs",
+    "prephase7:focus:integrated": "npm run validation:ready",
+    "phase7:focus:integrated": "node scripts/phase7-integration-208.mjs",
     "prephase7:focus:feedback-retention": "npm run validation:ready",
     "phase7:focus:feedback-retention": "node scripts/phase7-feedback-retention.mjs",
     "prephase7:focus:aggregate-privacy": "npm run validation:ready",
