@@ -37,11 +37,13 @@ function normalize(phase, report) {
     report?.guarantees?.successfulCleanup === true ||
     (phase === 7 && Array.isArray(report?.components) && report.components.length > 0 && report.components.every((item) => item.cleanup === true));
   const generatedAt = report?.completedAt ?? report?.generatedAt ?? report?.startedAt ?? null;
-  const migrations = report?.migrations ?? report?.migrationChecksums ?? report?.databaseProof?.migrations ??
-    report?.serviceEvidence?.migrations ?? report?.migrationLedger ?? [];
-  const tools = report?.toolVersions ?? report?.tools ?? report?.runtime ?? report?.expectedToolVersions ?? report?.serviceEvidence?.tools ?? null;
+  const migrations = report?.migrations ?? report?.migrationChecksums ?? report?.coverage?.database?.migrationIdsAndChecksums ??
+    report?.databaseProof?.migrations ?? report?.serviceEvidence?.migrations ?? report?.migrationLedger ?? [];
+  const tools = report?.toolVersions ?? report?.tools ?? report?.runtime ?? report?.expectedToolVersions ?? report?.serviceEvidence?.tools ??
+    (report?.node ? { node: report.node, npm: report.npm ?? null } : null);
   const realServiceScope = report?.realServiceScope ?? report?.databaseProof?.isolatedLoopbackProjects ??
-    report?.serviceEvidence?.postgresVersion ?? report?.reproduction?.services ?? null;
+    report?.serviceEvidence?.postgresVersion ?? report?.reproduction?.services ?? report?.guarantees?.database ??
+    report?.guarantees?.localServices ?? report?.databaseProof ?? null;
   const counts = report?.counts ?? report?.coverage ?? {};
   const expectedExecuted = Number(counts?.total ?? report?.expectedExecuted ?? checks.length ?? 0);
   const coverageComplete = (counts?.criterionCount == null || Number(counts?.executedCriteria) === Number(counts?.criterionCount)) &&
@@ -54,11 +56,13 @@ function normalize(phase, report) {
 }
 
 function sourceBindingState(report, details) {
-  const boundItems = [...(report?.checks ?? []), ...(report?.evidenceArtifacts ?? []), ...(report?.components ?? [])]
+  const checks = report?.checks ?? [];
+  const boundItems = [...checks, ...(report?.evidenceArtifacts ?? []), ...(report?.components ?? [])]
     .filter((item) => item && ("sourceRevision" in item || "sourceTreeSha256" in item || "gateRunId" in item));
   const itemsMatch = boundItems.every((item) => (!item.sourceRevision || item.sourceRevision === details.sourceRevision) &&
-    (!item.sourceTreeSha256 || item.sourceTreeSha256 === details.sourceTreeSha256) && (!item.runId || item.runId === details.runId) &&
-    (!item.gateRunId || item.gateRunId === details.runId));
+    (!item.sourceTreeSha256 || item.sourceTreeSha256 === details.sourceTreeSha256) &&
+    (!item.gateRunId || item.gateRunId === details.runId)) &&
+    checks.every((item) => !item?.runId || item.runId === details.runId);
   const gateProvesBinding = report?.guarantees?.evidenceBoundToSourceTreeAndRun === true ||
     report?.guarantees?.sourceBound === true || report?.sourceBindingVerified === true;
   if (!itemsMatch) return "mismatched";
