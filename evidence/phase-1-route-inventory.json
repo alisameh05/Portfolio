@@ -132,6 +132,10 @@
     {
       "file": "src/runtime/http/owner-content-review.ts",
       "reason": "declared-contract-path-literal:\"/api/owner/v1/content"
+    },
+    {
+      "file": "src/runtime/http/owner-project-status.ts",
+      "reason": "declared-contract-path-literal:\"/api/owner/v1/project-status-values"
     }
   ],
   "undeclaredHttpSurface": [],
