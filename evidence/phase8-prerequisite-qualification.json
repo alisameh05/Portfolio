@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "ticket": 234,
-  "evaluatedAt": "2026-10-16T14:44:26.916Z",
+  "evaluatedAt": "2026-10-16T14:53:04.455Z",
   "evaluator": {
-    "sourceRevision": "cb23270860f954131f18eb8a0a3ddd999fd28b9e",
-    "sourceTreeSha256": "8d9e390b53bae783d9bce9cb5f9b16296b5d36acc3ecb1f0a1c1ea9ab93200ff",
+    "sourceRevision": "ee4e59887a47d7ecb422baf828cfdce0942071b9",
+    "sourceTreeSha256": "a847a951fbba56185ae6dd914662ba2897c4c3e62a9ea3d5cd5d444c49344a0a",
     "runtime": {
       "node": "24.21.0",
       "npm": "11.19.0"
@@ -70,12 +70,6 @@
       "phase": 7,
       "ticket": 209,
       "reasons": [
-        "source-tree-fingerprint-mismatch",
-        "source-binding-mismatch",
-        "aggregate-failed",
-        "executed-coverage-partial",
-        "required-failures-present",
-        "cleanup-failed",
         "real-service-scope-unverified"
       ]
     }
@@ -266,18 +260,18 @@
       "phase": 7,
       "ticket": 209,
       "path": "evidence/phase7-gate-report.json",
-      "sha256": "3269136f8da6dfd402799a04de4bfcd5d3aba3fbd780b946490702d9062442c1",
+      "sha256": "068064e80f3afbbbd112151e8d42c7be77b2758d8beb758732a84ced19f54117",
       "evidencePresent": true,
-      "sourceTreeVerified": false,
-      "aggregateSuccess": false,
-      "sourceRevision": "06700cfd2b3861af3eb48a719075d937a3320fbf",
-      "sourceTreeSha256": "f47dbb5f550e97598d671aa613ed5dc4ccee2a561b676ee19caaa352b737ede0",
-      "runId": "d7002ba6-4a4e-44df-8ae2-90d33bbc3309",
-      "generatedAt": "2026-10-16T11:48:50.848Z",
+      "sourceTreeVerified": true,
+      "aggregateSuccess": true,
+      "sourceRevision": "6972af55047e2ed37d265da79cc4e9eebbae4f44",
+      "sourceTreeSha256": "20a39f370f68e10d1efe9c4ce3b600d9cb4cad47a9b7538946243e331f5b8846",
+      "runId": "a6180c7c-d93a-4dea-9eab-f805f24440f3",
+      "generatedAt": "2026-10-16T13:57:19.774Z",
       "required": {
-        "success": false,
-        "executed": 29,
-        "failed": 6,
+        "success": true,
+        "executed": 31,
+        "failed": 0,
         "skipped": 0
       },
       "migrations": [
@@ -483,15 +477,9 @@
         "npm": "11.19.0"
       },
       "realServiceScope": null,
-      "sourceBinding": "mismatched",
-      "cleanup": false,
+      "sourceBinding": "verified",
+      "cleanup": true,
       "reasons": [
-        "source-tree-fingerprint-mismatch",
-        "source-binding-mismatch",
-        "aggregate-failed",
-        "executed-coverage-partial",
-        "required-failures-present",
-        "cleanup-failed",
         "real-service-scope-unverified"
       ],
       "accepted": false
