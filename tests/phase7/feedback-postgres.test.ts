@@ -16,7 +16,10 @@ import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
 const url = process.env["PHASE7_FEEDBACK_DATABASE_URL"];
 describe.runIf(Boolean(url))("real PostgreSQL private Feedback acceptance", () => {
   const portfolioId = createStableId("Portfolio"), ownerId = createStableId("Owner");
-  const scope = { kind: "portfolio" as const, portfolioId }, now = "2026-10-15T00:00:00.000Z";
+  // Keep fixed test time ahead of the disposable database clock. Content lifecycle
+  // idempotency expires after 24 hours, so a historical fixture makes its
+  // reservation expired at insertion and masks the lock-order assertions below.
+  const scope = { kind: "portfolio" as const, portfolioId }, now = "2099-10-15T00:00:00.000Z";
   const db = createPostgresRuntimeDatabase(url ?? "postgres://invalid"), second = createPostgresRuntimeDatabase(url ?? "postgres://invalid");
   const worker = createPostgresRuntimeDatabase(process.env["PHASE7_FEEDBACK_WORKER_URL"] ?? "postgres://invalid");
   const admin = new Client({ connectionString: process.env["PHASE7_FEEDBACK_ADMIN_URL"] });
