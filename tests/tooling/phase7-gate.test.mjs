@@ -14,7 +14,7 @@ const startedAt = "2026-10-16T10:00:00.000Z";
 
 function fixture() {
   const artifacts = PHASE7_GATE_COMPONENTS.map((component) => ({
-    id: component.id, path: component.path, runId: `run-${component.id}-1234`, sourceRevision, sourceTreeSha256,
+    id: component.id, path: component.path, runId: `run-${component.id}-1234`, gateRunId: "gate-run-12345678", sourceRevision, sourceTreeSha256,
     sha256: "c".repeat(64), fresh: true, sourceBound: true, positiveExecution: true, aggregateSuccess: true,
     cleanup: true, accepted: true,
     ...(component.id === "http-assembly" ? { routes: { publicOperations: 5, ownerOperations: 48, operationalRoutes: 2,
@@ -62,6 +62,10 @@ test("gate rejects runtime mismatch, missing services, stale evidence, skips, fa
   stale.evidenceArtifacts[0].sourceBound = false;
   stale.evidenceArtifacts[0].accepted = false;
   assert.ok(evaluatePhase7Gate(stale).failures.includes("required-evidence-invalid:consent"));
+
+  const mismatchedRun = fixture();
+  mismatchedRun.evidenceArtifacts[0].gateRunId = "different-gate-run";
+  assert.ok(evaluatePhase7Gate(mismatchedRun).failures.includes("required-evidence-invalid:consent"));
 
   const skipped = fixture();
   skipped.checks[0].passed = false;

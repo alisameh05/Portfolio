@@ -4,10 +4,9 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
 import { observeRuntime, verifyEnvironment } from "./validation-environment.mjs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
-import { evaluatePhase7Gate, PHASE7_GATE_COMPONENTS, PHASE7_GATE_REQUIRED_CHECKS, readPhase7GateEvidence } from "./phase7-gate-support.mjs";
+import { evaluatePhase7Gate, PHASE7_GATE_COMPONENTS, PHASE7_GATE_REQUIRED_CHECKS, readPhase7GateEvidence, sanitizePhase7Output } from "./phase7-gate-support.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE = join(ROOT, "evidence");
@@ -55,11 +54,13 @@ function npmInvocation(script, args = []) {
   if (process.env.npm_execpath) return { entry: process.execPath, args: [process.env.npm_execpath, "run", script, ...args] };
   return { entry: process.platform === "win32" ? "npm.cmd" : "npm", args: ["run", script, ...args], shell: process.platform === "win32" };
 }
-function sanitize(output) {
-  const secrets = Object.entries(process.env)
-    .filter(([name, value]) => /(?:TOKEN|SECRET|PASSWORD|PRIVATE_KEY|SERVICE_ROLE_KEY)/iu.test(name) && typeof value === "string" && value.length >= 6)
-    .map(([, value]) => value);
-  return sanitizeEvidenceOutput(String(output ?? ""), { workspace: ROOT, temporary: process.env.TEMP ?? "", secrets });
+function bindComponentEvidence(name, gateRunId) {
+  const ids = name === "goal-versions" ? ["goal-versions", "goal-activation"] : [name];
+  for (const component of PHASE7_GATE_COMPONENTS.filter((item) => ids.includes(item.id))) {
+    const path = join(ROOT, component.path);
+    const report = json(path);
+    if (report) writeFileSync(path, `${JSON.stringify({ ...report, gateRunId }, null, 2)}\n`, "utf8");
+  }
 }
 function countSkipped(output) {
   const values = [...String(output).replaceAll(/\u001B\[[0-9;]*m/gu, "").matchAll(/\b(\d+)\s+skipped\b/giu)].map((match) => Number(match[1]));
@@ -75,7 +76,7 @@ function execute(definition, context) {
     env: { ...process.env, CI: "1", SHIPWITHALI_PHASE: "phase7", PHASE7_GATE_RUN_ID: context.runId },
     encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"], timeout: definition.timeout ?? DEFAULT_TIMEOUT,
     maxBuffer: 32 * 1024 * 1024, shell: invocation.shell ?? false });
-  const output = sanitize(`${result.stdout ?? ""}${result.stderr ?? ""}`);
+  const output = sanitizePhase7Output(`${result.stdout ?? ""}${result.stderr ?? ""}`, { workspace: ROOT });
   const logName = `${definition.name}.log`;
   const logPath = join(CHECKS, logName);
   writeFileSync(logPath, `${output.trimEnd()}${output.trimEnd() ? "\n" : ""}`, "utf8");
@@ -110,6 +111,7 @@ async function main() {
   const validationReady = readinessErrors.length === 0;
   for (const definition of COMMANDS) {
     const result = execute({ ...definition, requiresValidation: true }, { runId, binding, validationReady });
+    bindComponentEvidence(definition.name, runId);
     checks.push(result);
     console.log(`${result.passed ? "PASS" : "FAIL"} ${definition.name}${result.failure ? ` (${result.failure})` : ""}`);
   }
@@ -120,7 +122,7 @@ async function main() {
   if (finalRevision !== sourceRevision || finalTree !== sourceTreeSha256) {
     for (const check of checks) { check.passed = false; check.exitCode = 1; check.failure = "source-changed-during-gate"; }
   }
-  const evidenceArtifacts = readPhase7GateEvidence(ROOT, startedAt, sourceRevision, sourceTreeSha256);
+  const evidenceArtifacts = readPhase7GateEvidence(ROOT, startedAt, sourceRevision, sourceTreeSha256, runId);
   const report = evaluatePhase7Gate({ runId, startedAt, sourceRevision, sourceTreeSha256, runtime, expectedRuntime,
     checks, evidenceArtifacts, serviceEvidence: json(join(EVIDENCE, "phase7-integrated-208.json")) });
   if (finalRevision !== sourceRevision) report.failures.push("HEAD changed while the gate was running");

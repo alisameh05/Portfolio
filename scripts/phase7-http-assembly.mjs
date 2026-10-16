@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
+import { sanitizePhase7Output } from "./phase7-gate-support.mjs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
@@ -19,13 +19,6 @@ const ROUTE_TESTS = Object.freeze([
 
 function git(args) {
   return spawnSync("git", args, { cwd: ROOT, encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] }).stdout.trim();
-}
-
-function sanitize(output) {
-  const secrets = Object.entries(process.env)
-    .filter(([name, value]) => /(?:TOKEN|SECRET|PASSWORD|PRIVATE_KEY|SERVICE_ROLE_KEY)/iu.test(name) && typeof value === "string" && value.length >= 6)
-    .map(([, value]) => value);
-  return sanitizeEvidenceOutput(String(output ?? ""), { workspace: ROOT, temporary: process.env.TEMP ?? "", secrets });
 }
 
 function main() {
@@ -48,7 +41,7 @@ function main() {
   const args = ["node_modules/vitest/vitest.mjs", "run", ...ROUTE_TESTS, "--reporter=json", `--outputFile=${VITEST_REPORT}`];
   const result = spawnSync(process.execPath, args, { cwd: ROOT, env: { ...process.env, CI: "1" }, encoding: "utf8",
     windowsHide: true, timeout: 20 * 60 * 1000, maxBuffer: 32 * 1024 * 1024 });
-  const output = sanitize(`${result.stdout ?? ""}${result.stderr ?? ""}`);
+  const output = sanitizePhase7Output(`${result.stdout ?? ""}${result.stderr ?? ""}`, { workspace: ROOT });
   if (output) process.stdout.write(output);
   let tests;
   try { tests = JSON.parse(readFileSync(VITEST_REPORT, "utf8")); } catch { throw new Error("PHASE7_HTTP_TEST_REPORT_MISSING"); }
