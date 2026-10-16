@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, readdirSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -40,10 +40,15 @@ try {
   await client.connect(); connected = true;
   stage = "baseline";
   await client.query("create role anon nologin; create role authenticated nologin; create role shipwithali_migration nologin nosuperuser nobypassrls; grant create on database postgres to shipwithali_migration");
-  await client.query(readFileSync("supabase/migrations/20260922171906_establish_database_security_baseline.sql", "utf8"));
   const migration = "supabase/migrations/20261014194925_measurement_consent.sql";
-  stage = "consent-migration";
-  await client.query(readFileSync(migration, "utf8"));
+  const migrations = readdirSync("supabase/migrations").filter(name => name.endsWith(".sql")).sort();
+  const migrationProject = join(temp, "migration-project");
+  mkdirSync(join(migrationProject, "supabase/migrations"), { recursive: true });
+  copyFileSync("supabase/config.toml", join(migrationProject, "supabase/config.toml"));
+  for (const name of migrations) copyFileSync(join("supabase/migrations", name), join(migrationProject, "supabase/migrations", name));
+  stage = "consent-migration-chain";
+  run(process.execPath, ["node_modules/supabase/dist/supabase.js", "migration", "up", "--db-url", `${adminUrl}?sslmode=disable`,
+    "--workdir", migrationProject, "--yes"], { ...process.env, SUPABASE_TELEMETRY_DISABLED: "true" });
   await client.query("create role consent_runtime login nosuperuser nobypassrls; grant shipwithali_application to consent_runtime");
   const env = { ...process.env, PHASE7_CONSENT_DATABASE_URL: `postgres://consent_runtime@127.0.0.1:${port}/postgres`, PHASE7_CONSENT_ADMIN_URL: adminUrl };
   const generated = "src/modules/measurement/adapters/database.generated.ts";
@@ -67,10 +72,11 @@ try {
   if (workingTreeSourceSha256() !== testedSource) throw new Error("CONSENT_SOURCE_CHANGED_DURING_RUN");
   result = { runId, sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(), sourceTreeSha256: testedSource, version,
     migration, migrationSha256: createHash("sha256").update(readFileSync(migration)).digest("hex"),
+    migrations: migrations.map(name => ({ name, sha256: createHash("sha256").update(readFileSync(join("supabase/migrations", name))).digest("hex") })),
     required: { success: tests.success, passed: tests.numPassedTests, failed: tests.numFailedTests, skipped: tests.numPendingTests, failedSuites: tests.numFailedTestSuites },
     roles: ["consent_runtime", "shipwithali_application", "shipwithali_worker", "anon", "authenticated"],
     reproduction: "npm run setup:validation; npm run validation:ready; npm run phase7:focus:consent (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
-    scope: "Native disposable PostgreSQL cluster; repository security baseline and this owned migration. Full Phase 3-6 upgrade qualification belongs to #208." };
+    scope: "Native disposable PostgreSQL cluster with the full checked-in migration chain applied to verify the shared Measurement database types; Phase 3-6 upgrade equivalence remains qualified by #208." };
 } catch (error) {
   // No provider messages, connection strings, payloads or secret-bearing PostgreSQL logs.
   console.error(error instanceof Error && /^CONSENT_/.test(error.message) ? error.message : "CONSENT_VALIDATION_FAILED");
