@@ -1,7 +1,7 @@
 {
-  "runId": "96596e69-1cf3-414b-a49e-fe5fbc2a70bf",
-  "sourceRevision": "4191ffb1858067e4176739cd1308c808b24d9088",
-  "sourceTreeSha256": "486e74270ee5fc96ac2050f701c42555c1253f91db902ed223a9876844f656bb",
+  "runId": "e93f35f5-b98c-47cf-893d-c42519df254a",
+  "sourceRevision": "6972af55047e2ed37d265da79cc4e9eebbae4f44",
+  "sourceTreeSha256": "20a39f370f68e10d1efe9c4ce3b600d9cb4cad47a9b7538946243e331f5b8846",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015003000_persist_private_feedback.sql",
   "migrationQualification": {
@@ -122,9 +122,42 @@
       },
       {
         "version": "20261015010000"
+      },
+      {
+        "version": "20261015093040"
+      },
+      {
+        "version": "20261015120000"
+      },
+      {
+        "version": "20261015130000"
+      },
+      {
+        "version": "20261015150000"
+      },
+      {
+        "version": "20261015160000"
+      },
+      {
+        "version": "20261015170000"
+      },
+      {
+        "version": "20261015180000"
+      },
+      {
+        "version": "20261015190000"
+      },
+      {
+        "version": "20261015200000"
+      },
+      {
+        "version": "20261015202000"
+      },
+      {
+        "version": "20261015203000"
       }
     ],
-    "schemaSha256": "1cf793b9d8f7cce1c1e55104cc312a60d837ad40644fb1e2b8dd48a44f15cb98",
+    "schemaSha256": "bce67038124e5867a0faa4903e1c8e685d628881f8e35038fda8347e2abc8ce8",
     "cli": "2.117.0"
   },
   "migrationSha256": "76383b9305740d85f0557903924412a936a60df70264801583f141738447852b",
@@ -279,7 +312,51 @@
     },
     {
       "name": "20261015010000_retain_feedback_moderation.sql",
-      "sha256": "5dcb17fa99531d21cdbd0ae60af6fd2b7178a6b161b8f66daa56ed70c5136938"
+      "sha256": "7bdf4bad8b8c7bbf06b97eed67f7c3cfa432cea8680a23c9520b6f60042c36f9"
+    },
+    {
+      "name": "20261015093040_query_current_interaction_summaries.sql",
+      "sha256": "484eaa3c4f9fa63394dcdc14bb884c03a288d81eb605af15afcc44fbe907af90"
+    },
+    {
+      "name": "20261015120000_persist_consented_public_events.sql",
+      "sha256": "ab5445a8b8a3e5527c9844742e62bcba37b68066cecb30e6e191d05eb8d441d6"
+    },
+    {
+      "name": "20261015130000_enable_public_interaction_event_facts.sql",
+      "sha256": "3bbae95e8b77169329a39936a75ccdb34d1961824def42d3d9f7bae03d733e05"
+    },
+    {
+      "name": "20261015150000_enable_configuration_interaction_event_facts.sql",
+      "sha256": "38016ab6d1760426f0b06c446d4e4817c14ba063ed35cde4dba511775a66bbbd"
+    },
+    {
+      "name": "20261015160000_persist_immutable_analytics_goal_versions.sql",
+      "sha256": "022761106ef61ac38316a09dfe42a7a8e902b8a9539cf7832f0c402e082f3bde"
+    },
+    {
+      "name": "20261015170000_activate_analytics_goal_versions.sql",
+      "sha256": "b866f5b1d964b192b1a14bbd073131bcc3c02513ee171e53dd993d1a86454ae3"
+    },
+    {
+      "name": "20261015180000_match_analytics_goal_conversions.sql",
+      "sha256": "1b0d0d82e298cc8a522f4c1ad9cc8df1bf5519adb683ec1553a282fc9bb8b1dd"
+    },
+    {
+      "name": "20261015190000_persist_reproducible_daily_aggregates.sql",
+      "sha256": "13e96f0d18983edec6091983ab1cf0529eb06c9aaf1b4c942c81ca3532547b1c"
+    },
+    {
+      "name": "20261015200000_enable_fixed_aggregate_dimensions.sql",
+      "sha256": "7a40598e08d446aef162cc3d7fbed12a3680aaa3af8105c3ddfe44ae986058e3"
+    },
+    {
+      "name": "20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
+      "sha256": "61ee7d330b0c16d4fa2bd6aad7f555144fd1206866edc4b55da7843157c8b5aa"
+    },
+    {
+      "name": "20261015203000_retain_feedback_privacy.sql",
+      "sha256": "fe0d3e9dd6644b6d7ba4480562b5e36d9043635bdad4f5f6e4472611d0318a1e"
     }
   ],
   "tools": {
@@ -328,7 +405,7 @@
       "status": "passed"
     },
     {
-      "title": "restricted submission scope has pending-only INSERT and default-deny reads; anonymous/worker deny; pooled scope resets",
+      "title": "restricted submission scope has pending-only INSERT; Worker deletion is purpose- and retention-scoped",
       "status": "passed"
     },
     {
@@ -440,39 +517,39 @@
       "status": "passed"
     },
     {
-      "title": "T01-02 preserves 'page-viewed' with complete context, scope, and idempotency",
+      "title": "T09/T10 preserves 'page-viewed' with complete context, scope, and idempotency",
       "status": "passed"
     },
     {
-      "title": "T01-02 preserves 'project-viewed' with complete context, scope, and idempotency",
+      "title": "T09/T10 preserves 'project-viewed' with complete context, scope, and idempotency",
       "status": "passed"
     },
     {
-      "title": "T01-02 preserves 'active-engagement-sampled' with complete context, scope, and idempotency",
+      "title": "T09/T10 preserves 'active-engagement-sampled' with complete context, scope, and idempotency",
       "status": "passed"
     },
     {
-      "title": "T01-02 preserves 'media-engaged' with complete context, scope, and idempotency",
+      "title": "T09/T10 preserves 'media-engaged' with complete context, scope, and idempotency",
       "status": "passed"
     },
     {
-      "title": "T01-02 preserves 'related-project-opened' with complete context, scope, and idempotency",
+      "title": "T09/T10 preserves 'related-project-opened' with complete context, scope, and idempotency",
       "status": "passed"
     },
     {
-      "title": "T01-02 preserves 'contact-channel-opened' with complete context, scope, and idempotency",
+      "title": "T09/T10 preserves 'testimonial-engaged' with complete context, scope, and idempotency",
       "status": "passed"
     },
     {
-      "title": "T01-02 preserves 'external-project-link-opened' with complete context, scope, and idempotency",
+      "title": "T11-06 dispatches configured capability action shapes: invalid shape",
       "status": "passed"
     },
     {
-      "title": "T01-02 preserves 'testimonial-engaged' with complete context, scope, and idempotency",
+      "title": "T11-06 dispatches configured capability action shapes: invalid shape",
       "status": "passed"
     },
     {
-      "title": "T01-02 preserves 'global-project-cta-opened' with complete context, scope, and idempotency",
+      "title": "T11-06 dispatches configured capability action shapes: invalid shape",
       "status": "passed"
     },
     {
@@ -533,5 +610,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:feedback (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
   "scope": "Native disposable PostgreSQL cluster; all repository migrations through #192. Full Phase 3-6 upgrade qualification belongs to #208.",
-  "cleanup": true
+  "cleanup": true,
+  "gateRunId": "a6180c7c-d93a-4dea-9eab-f805f24440f3"
 }
