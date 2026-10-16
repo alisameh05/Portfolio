@@ -22,7 +22,7 @@ const bin = process.env.PHASE7_POSTGRES_BIN ?? discoveredBin ?? "";
 const exe = name => bin ? join(bin, name + (process.platform === "win32" ? ".exe" : "")) : name;
 const schemas = ["content", "cv", "cv_portfolio", "identity_access", "interaction", "media", "measurement", "operations", "portfolio_config", "public_read", "taxonomy"];
 const id = n => `0196a1b2-7c3d-7e11-9f22-${n.toString(16).padStart(12, "0")}`;
-const evidenceInputs = ["phase7-consent-189.json","phase7-reactions-190.json","phase7-ratings-191.json","phase7-feedback-192.json","phase7-moderation-193.json","phase7-suppression-194.json","phase7-summaries-195.json","phase7-events-196.json","phase7-event-facts-197.json","phase7-event-capabilities-198.json","phase7-goal-versions-199.json","phase7-goal-activation-200.json","phase7-goal-conversions-201.json","phase7-daily-aggregates-202.json","phase7-aggregate-privacy-203.json","phase7-retention-204.json","phase7-feedback-retention-205.json","phase7-due-work-206.json"];
+const evidenceInputs = ["phase7-consent-189.json","phase7-reactions-190.json","phase7-ratings-191.json","phase7-feedback-192.json","phase7-moderation-193.json","phase7-suppression-194.json","phase7-summaries-195.json","phase7-events-196.json","phase7-event-facts-197.json","phase7-event-capabilities-198.json","phase7-goal-versions-199.json","phase7-goal-activation-200.json","phase7-goal-conversions-201.json","phase7-daily-aggregates-202.json","phase7-aggregate-privacy-203.json","phase7-retention-204.json","phase7-feedback-retention-205.json","phase7-due-work-206.json","phase7-http-assembly-207.json"];
 
 export function compareCatalogs(upgrade, clean) {
   if (JSON.stringify(upgrade) !== JSON.stringify(clean)) throw new Error("PHASE7_INTEGRATION_CLEAN_UPGRADE_CATALOG_DIFFERENCE");
@@ -62,11 +62,18 @@ function verifyEvidenceInputs() {
     let evidence;
     try { evidence = JSON.parse(readFileSync(path, "utf8")); }
     catch { throw new Error(`PHASE7_INTEGRATION_REQUIRED_EVIDENCE_MISSING:${name}`); }
-    const required = evidence.required;
-    if (!required || required.success !== true || Number(required.failed ?? 0) !== 0 || Number(required.skipped ?? 0) !== 0 || Number(required.failedSuites ?? 0) !== 0 || evidence.cleanup !== true || typeof evidence.sourceTreeSha256 !== "string") {
+    const required = evidence.required ?? {
+      success: evidence.focusedAcceptance?.success,
+      passed: evidence.focusedAcceptance?.passed,
+      failed: evidence.focusedAcceptance?.failed,
+      skipped: evidence.focusedAcceptance?.requiredSkipped,
+      failedSuites: (evidence.checks ?? []).filter(check => check.failed > 0 || check.success === false).length,
+    };
+    const cleanup = evidence.cleanup ?? evidence.focusedAcceptance?.cleanup;
+    if (!required || required.success !== true || Number(required.failed ?? 0) !== 0 || Number(required.skipped ?? 0) !== 0 || Number(required.failedSuites ?? 0) !== 0 || cleanup !== true || typeof evidence.sourceTreeSha256 !== "string") {
       throw new Error(`PHASE7_INTEGRATION_REQUIRED_EVIDENCE_INVALID:${name}`);
     }
-    return { path: `evidence/${name}`, runId: evidence.runId ?? "not-recorded", sourceRevision: evidence.sourceRevision ?? "not-recorded", sourceTreeSha256: evidence.sourceTreeSha256, passed: Number(required.passed ?? 0), failed: 0, skipped: 0, cleanup: true };
+    return { path: `evidence/${name}`, runId: evidence.runId ?? evidence.validationBatchId ?? "not-recorded", sourceRevision: evidence.sourceRevision ?? evidence.baseCommit ?? "not-recorded", sourceTreeSha256: evidence.sourceTreeSha256, passed: Number(required.passed ?? 0), failed: 0, skipped: 0, cleanup: true };
   });
 }
 function runPackageCheck(name) {
@@ -113,7 +120,7 @@ async function catalogSnapshot(connectionString) {
     const grants = await client.query("select table_schema as schema,table_name as table,grantee,privilege_type,is_grantable from information_schema.role_table_grants where table_schema=any($1::text[]) and grantee=any($2::text[]) order by 1,2,3,4", [schemas, ["PUBLIC", "anon", "authenticated", "service_role", "shipwithali_application", "shipwithali_worker", "shipwithali_backup"]]);
     const indexes = await client.query("select schemaname as schema,tablename as table,indexname as name,indexdef from pg_indexes where schemaname=any($1::text[]) order by 1,2,3", [schemas]);
     const constraints = await client.query("select n.nspname as schema,c.relname as table,con.conname as name,con.contype as type,pg_get_constraintdef(con.oid,true) as definition,con.convalidated as validated from pg_constraint con join pg_class c on c.oid=con.conrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname=any($1::text[]) order by 1,2,3", [schemas]);
-    const functions = await client.query("select n.nspname as schema,p.proname as name,pg_get_function_identity_arguments(p.oid) as args,p.prosecdef as security_definer,coalesce(p.proconfig,'{}') as config,r.rolname as owner,r.rolcanlogin as owner_can_login,r.rolsuper as owner_superuser,r.rolbypassrls as owner_bypass_rls,has_function_privilege('anon',p.oid,'EXECUTE') as anon_execute,has_function_privilege('authenticated',p.oid,'EXECUTE') as authenticated_execute,has_function_privilege('shipwithali_application',p.oid,'EXECUTE') as application_execute,has_function_privilege('shipwithali_backup',p.oid,'EXECUTE') as backup_execute,has_function_privilege('shipwithali_worker',p.oid,'EXECUTE') as worker_execute from pg_proc p join pg_namespace n on n.oid=p.pronamespace join pg_roles r on r.oid=p.proowner where n.nspname=any($1::text[]) order by 1,2,3", [schemas]);
+    const functions = await client.query("select n.nspname as schema,p.proname as name,pg_get_function_identity_arguments(p.oid) as args,p.prosecdef as security_definer,coalesce(p.proconfig,'{}') as config,r.rolname as owner,r.rolcanlogin as owner_can_login,r.rolsuper as owner_superuser,r.rolbypassrls as owner_bypass_rls,has_function_privilege('anon',p.oid,'EXECUTE') as anon_execute,has_function_privilege('authenticated',p.oid,'EXECUTE') as authenticated_execute,has_function_privilege('service_role',p.oid,'EXECUTE') as service_role_execute,has_function_privilege('shipwithali_application',p.oid,'EXECUTE') as application_execute,has_function_privilege('shipwithali_backup',p.oid,'EXECUTE') as backup_execute,has_function_privilege('shipwithali_worker',p.oid,'EXECUTE') as worker_execute from pg_proc p join pg_namespace n on n.oid=p.pronamespace join pg_roles r on r.oid=p.proowner where n.nspname=any($1::text[]) order by 1,2,3", [schemas]);
     const defaults = await client.query("select n.nspname as schema,d.defaclobjtype as object_type,coalesce(r.rolname,'PUBLIC') as grantee,x.privilege_type from pg_default_acl d join pg_namespace n on n.oid=d.defaclnamespace cross join lateral aclexplode(d.defaclacl) x left join pg_roles r on r.oid=x.grantee where n.nspname=any($1::text[]) order by 1,2,3,4", [schemas]);
     if (schemasResult.rowCount !== schemas.length) throw new Error("PHASE7_INTEGRATION_SCHEMA_SNAPSHOT_INCOMPLETE");
     if (objects.rows.filter(row => row.kind === "r" || row.kind === "p").some(row => !row.rls || !row.force_rls)) throw new Error("PHASE7_INTEGRATION_TABLE_RLS_NOT_FORCED");
@@ -125,7 +132,7 @@ async function catalogSnapshot(connectionString) {
       if (view.owner !== "shipwithali_summary_reader" || !view.options.includes("security_barrier=true")) throw new Error(`PHASE7_INTEGRATION_UNRESTRICTED_VIEW_OWNER:${view.schema}.${view.name}`);
     }
     for (const fn of functions.rows.filter(row => row.security_definer && ["interaction", "measurement"].includes(row.schema))) {
-      if (!fn.config.some(value => value.startsWith("search_path=")) || fn.owner_can_login || fn.owner_superuser || fn.owner_bypass_rls || fn.anon_execute || fn.authenticated_execute || fn.application_execute || fn.backup_execute) {
+      if (!fn.config.some(value => value.startsWith("search_path=")) || fn.owner_can_login || fn.owner_superuser || fn.owner_bypass_rls || fn.anon_execute || fn.authenticated_execute || fn.service_role_execute || fn.application_execute || fn.backup_execute) {
         throw new Error("PHASE7_INTEGRATION_UNSAFE_SECURITY_DEFINER_FOUND");
       }
     }
