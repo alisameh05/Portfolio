@@ -126,7 +126,7 @@ export function evaluatePhase7Gate({ runId, startedAt, sourceRevision, sourceTre
   if (!/^[a-f0-9]{40}$/iu.test(sourceRevision ?? "") || !/^[a-f0-9]{64}$/iu.test(sourceTreeSha256 ?? "")) failures.push("gate-source-identity-invalid");
   const start = Date.parse(startedAt ?? "");
   if (!Number.isFinite(start) || start > now || now - start > 24 * 60 * 60 * 1000) failures.push("gate-run-time-invalid");
-  if (runtime?.node !== `v${expectedRuntime?.node}` || runtime?.npm !== expectedRuntime?.npm) failures.push("runtime-pin-mismatch");
+  if (String(runtime?.node ?? "").replace(/^v/iu, "") !== expectedRuntime?.node || runtime?.npm !== expectedRuntime?.npm) failures.push("runtime-pin-mismatch");
 
   const checksByName = new Map();
   for (const check of checks ?? []) {

@@ -33,7 +33,7 @@ function fixture() {
   };
   return {
     runId: "gate-run-12345678", startedAt, sourceRevision, sourceTreeSha256,
-    runtime: { node: "v24.21.0", npm: "11.19.0" }, expectedRuntime: { node: "24.21.0", npm: "11.19.0" },
+    runtime: { node: "24.21.0", npm: "11.19.0" }, expectedRuntime: { node: "24.21.0", npm: "11.19.0" },
     checks, evidenceArtifacts: artifacts, serviceEvidence,
     now: Date.parse("2026-10-16T10:10:00.000Z"),
   };
@@ -46,6 +46,9 @@ test("Phase 7 gate maps each parent criterion and required domain scenario to ex
   const result = evaluatePhase7Gate(fixture());
   assert.equal(result.verdict, "pass", result.failures.join(", "));
   assert.equal(result.counts.executedCriteria, 70);
+  const prefixedNode = fixture();
+  prefixedNode.runtime.node = "v24.21.0";
+  assert.equal(evaluatePhase7Gate(prefixedNode).verdict, "pass");
 });
 
 test("gate rejects runtime mismatch, missing services, stale evidence, skips, failed aggregates, incomplete reports, and failed cleanup", () => {
