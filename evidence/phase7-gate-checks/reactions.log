@@ -1,0 +1,15 @@
+
+> shipwithali-portfolio@0.0.0 prephase7:focus:reactions
+> npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase7:focus:reactions
+> node scripts/phase7-reactions.mjs
+
+Temporary restricted PostgreSQL ready; running real Reaction/crypto acceptance.
+{"required":{"success":true,"passed":16,"failed":0,"skipped":0,"failedSuites":0},"cleanup":true}

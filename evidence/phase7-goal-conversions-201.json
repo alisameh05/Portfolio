@@ -1,14 +1,14 @@
 {
   "ticket": 201,
-  "runId": "e2b38492-3098-490a-9a2d-b9deb75366b6",
-  "sourceRevision": "8051a546b4467a13abeb41b7224b2e37fcae70b3",
-  "sourceTreeSha256": "ae02a21837341dd881a35f13427b05d22ced72be502806e56049f71de44365d8",
+  "runId": "7f18a7a7-13a9-4427-993d-727b80e2482b",
+  "sourceRevision": "06700cfd2b3861af3eb48a719075d937a3320fbf",
+  "sourceTreeSha256": "f47dbb5f550e97598d671aa613ed5dc4ccee2a561b676ee19caaa352b737ede0",
   "node": "v24.21.0",
   "npm": "11.19.0",
   "postgres": "postgres (PostgreSQL) 18.3",
   "migration": {
     "id": "20261015180000_match_analytics_goal_conversions.sql",
-    "sha256": "682a4c7b6f3fd7e19c10fef259cb0fc50df93eec9c9bfd2c119e436ebea2a03a"
+    "sha256": "1b0d0d82e298cc8a522f4c1ad9cc8df1bf5519adb683ec1553a282fc9bb8b1dd"
   },
   "required": {
     "success": true,
@@ -20,11 +20,11 @@
   },
   "suites": [
     {
-      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-conversions-201/tests/phase7/goal-conversions-postgres.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase7/goal-conversions-postgres.test.ts",
       "passed": 7
     },
     {
-      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-conversions-201/tests/phase7/goal-conversions.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase7/goal-conversions.test.ts",
       "passed": 8
     }
   ],
@@ -62,5 +62,6 @@
   },
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:goal-conversions (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
   "scope": "Full repository migration chain in a loopback-only disposable native PostgreSQL cluster with a restricted non-superuser worker role. No production or development database was modified.",
-  "cleanup": true
+  "cleanup": true,
+  "gateRunId": "d7002ba6-4a4e-44df-8ae2-90d33bbc3309"
 }

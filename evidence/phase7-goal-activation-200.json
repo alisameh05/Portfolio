@@ -1,7 +1,7 @@
 {
-  "runId": "0828bec2-7acf-4293-94a8-edcd4ba28b37",
-  "sourceRevision": "69bf9c31b712df1c3a50813bc660c033e92a9e06",
-  "sourceTreeSha256": "5215870a1d46fe6d688c03144111d68a38d7f753d38671454cb9c630278dcdf9",
+  "runId": "183eb431-9118-4b1a-bb31-b2e9121dd4d4",
+  "sourceRevision": "06700cfd2b3861af3eb48a719075d937a3320fbf",
+  "sourceTreeSha256": "f47dbb5f550e97598d671aa613ed5dc4ccee2a561b676ee19caaa352b737ede0",
   "tools": {
     "node": "v24.21.0",
     "npm": "11.19.0",
@@ -9,39 +9,8 @@
     "postgres": "postgres (PostgreSQL) 18.3"
   },
   "migration": "supabase/migrations/20261015170000_activate_analytics_goal_versions.sql",
-  "migrationSha256": "7f6a8d3444468125fd9bbecf8d3f95bd1ea6c953f8a1626b140a707a82c54f66",
+  "migrationSha256": "b866f5b1d964b192b1a14bbd073131bcc3c02513ee171e53dd993d1a86454ae3",
   "acceptanceCriteria": {
-    "T12-01": [
-      "real Owner create-version HTTP operation returns a contract-valid 201 receipt",
-      "authorized inspect returns the immutable ordered version view, nullable pointer, and history"
-    ],
-    "T12-02": [
-      "version one bootstraps root and snapshot atomically at aggregate version two",
-      "expected version other than one rejects bootstrap and absent-root inspect is not_found"
-    ],
-    "T12-03": [
-      "a two-party barrier overlaps independent concurrent initializers and yields exactly one root and version one",
-      "exact retry replays original receipt and changed payload conflicts without another outbox effect"
-    ],
-    "T12-04": [
-      "name, action, step, scope, duplicate, wrong-type, unavailable, and Portfolio boundaries validated",
-      "one hundred scope and ten step limits accepted; one hundred one and eleven rejected"
-    ],
-    "T12-05": [
-      "retained Hidden Project and route identities remain valid goal scopes without changing public lifecycle"
-    ],
-    "T12-06": [
-      "later versions append ordered snapshots without changing the active pointer or activation facts"
-    ],
-    "T12-07": [
-      "stale preconditions and non-Owner actors are rejected safely",
-      "replay checks current Owner authorization again",
-      "the shared verified Owner boundary rejects invalid origin and CSRF before dispatch"
-    ],
-    "T12-08": [
-      "root, snapshot, outbox, and ledger failures leave no durable root/version/receipt/fact",
-      "restricted application role cannot update or delete immutable snapshots"
-    ],
     "T13-01": [
       "existing Owner activation HTTP operation returns contract-valid 200 and inspect exposes the active pointer and ordered history"
     ],
@@ -77,19 +46,19 @@
   },
   "suites": [
     {
-      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-activation-200/tests/phase4/owner-request-security.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase4/owner-request-security.test.ts",
       "passed": 20
     },
     {
-      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-activation-200/tests/phase7/goal-versions-postgres.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase7/goal-versions-postgres.test.ts",
       "passed": 13
     },
     {
-      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-activation-200/tests/phase7/goal-versions.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase7/goal-versions.test.ts",
       "passed": 12
     },
     {
-      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/phase7-goal-activation-200/tests/runtime/owner-analytics.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/runtime/owner-analytics.test.ts",
       "passed": 32
     }
   ],
@@ -101,5 +70,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:goal-versions (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
   "scope": "Full repository migration chain in a loopback-only disposable native PostgreSQL cluster, restricted non-superuser application role, real Owner application and HTTP adapters; no production or development database was modified.",
-  "cleanup": true
+  "cleanup": true,
+  "gateRunId": "d7002ba6-4a4e-44df-8ae2-90d33bbc3309"
 }

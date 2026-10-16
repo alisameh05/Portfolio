@@ -1,11 +1,11 @@
 {
   "ticket": 204,
-  "runId": "2ce3c3d4-65c9-418b-ac72-6d5f229702ac",
-  "sourceRevision": "91bbec4348ef45d91b32c8c921d54221d2ffcb18",
-  "sourceTreeSha256": "6f598890d21bb8abe3dcf2efea80c19b2131ee202d34bd7a42d39fc5333b4d98",
+  "runId": "6dcd5bf8-2c94-421b-af50-4121fb295cbe",
+  "sourceRevision": "06700cfd2b3861af3eb48a719075d937a3320fbf",
+  "sourceTreeSha256": "f47dbb5f550e97598d671aa613ed5dc4ccee2a561b676ee19caaa352b737ede0",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
-  "migrationSha256": "04e33297a492b55c2dc8b2392fc9f0291fa3e10f9ade40e7c9ef6fc97b297221",
+  "migrationSha256": "61ee7d330b0c16d4fa2bd6aad7f555144fd1206866edc4b55da7843157c8b5aa",
   "migrations": [
     {
       "name": "20260922170000_prepare_migration_capability.sql",
@@ -197,7 +197,11 @@
     },
     {
       "name": "20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
-      "sha256": "04e33297a492b55c2dc8b2392fc9f0291fa3e10f9ade40e7c9ef6fc97b297221"
+      "sha256": "61ee7d330b0c16d4fa2bd6aad7f555144fd1206866edc4b55da7843157c8b5aa"
+    },
+    {
+      "name": "20261015203000_retain_feedback_privacy.sql",
+      "sha256": "fe0d3e9dd6644b6d7ba4480562b5e36d9043635bdad4f5f6e4472611d0318a1e"
     }
   ],
   "tools": {
@@ -290,5 +294,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:retention (use --refresh-types only when regenerating database.generated.ts)",
   "scope": "All committed repository migrations on a disposable native PostgreSQL cluster; source-bound retention policy and real PostgreSQL acceptance.",
-  "cleanup": true
+  "cleanup": true,
+  "gateRunId": "d7002ba6-4a4e-44df-8ae2-90d33bbc3309"
 }

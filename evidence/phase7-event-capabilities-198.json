@@ -1,10 +1,10 @@
 {
-  "runId": "f6c69bc4-d95c-40ec-8751-ff2fbf3da783",
-  "sourceRevision": "15cd2fe67bbb9040cef96c289974d211f5cbd0b2",
-  "sourceTreeSha256": "868b59472739dcde6b67dd85a3d572f85f86a4094b02306db10235f606ceb43f",
+  "runId": "7b4026a2-1b1c-4856-be08-b7ff21fb2428",
+  "sourceRevision": "06700cfd2b3861af3eb48a719075d937a3320fbf",
+  "sourceTreeSha256": "f47dbb5f550e97598d671aa613ed5dc4ccee2a561b676ee19caaa352b737ede0",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015150000_enable_configuration_interaction_event_facts.sql",
-  "migrationSha256": "ce3d4700c6cf9154f8aa5a462bca3032d19ead3faf1b73ef64dca4ff954a03a9",
+  "migrationSha256": "38016ab6d1760426f0b06c446d4e4817c14ba063ed35cde4dba511775a66bbbd",
   "acceptanceCriteria": {
     "T11-01": [
       "T11-01/T11-04/T11-06 records only current configured capability facts and stable public identities",
@@ -52,19 +52,19 @@
   },
   "suites": [
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/phase7/consent-crypto.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase7/consent-crypto.test.ts",
       "passed": 5
     },
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/phase7/events-application.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase7/events-application.test.ts",
       "passed": 32
     },
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/phase7/events-postgres.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/phase7/events-postgres.test.ts",
       "passed": 12
     },
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase7-event-capabilities-198/Portfolio/tests/runtime/public-event.test.ts",
+      "name": "C:/Users/alisa/.codex/worktrees/phase7-gate-209/Portfolio/tests/runtime/public-event.test.ts",
       "passed": 23
     }
   ],
@@ -77,5 +77,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:events -- --ticket-198; PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries",
   "scope": "Disposable native PostgreSQL cluster; full repository migration chain, restricted application role, HTTP/application/consent integration. No production database was modified.",
-  "cleanup": true
+  "cleanup": true,
+  "gateRunId": "d7002ba6-4a4e-44df-8ae2-90d33bbc3309"
 }

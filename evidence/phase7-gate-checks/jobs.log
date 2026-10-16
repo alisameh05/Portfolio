@@ -1,0 +1,15 @@
+
+> shipwithali-portfolio@0.0.0 prephase7:focus:jobs
+> npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase7:focus:jobs
+> node scripts/phase7-jobs.mjs
+
+{"required":{"success":true,"passed":8,"failed":0,"skipped":0,"todo":0,"failedSuites":0},"runId":"bd5e730f-36bf-4363-a67b-84d195c33031","sourceTreeSha256":"f47dbb5f550e97598d671aa613ed5dc4ccee2a561b676ee19caaa352b737ede0"}
+{"evidence":"C:\\Users\\alisa\\.codex\\worktrees\\phase7-gate-209\\Portfolio\\evidence\\phase7-due-work-206.json","cleanup":true}
