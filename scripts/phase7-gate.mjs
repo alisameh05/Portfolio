@@ -54,13 +54,33 @@ function npmInvocation(script, args = []) {
   if (process.env.npm_execpath) return { entry: process.execPath, args: [process.env.npm_execpath, "run", script, ...args] };
   return { entry: process.platform === "win32" ? "npm.cmd" : "npm", args: ["run", script, ...args], shell: process.platform === "win32" };
 }
-function bindComponentEvidence(name, gateRunId) {
+function componentPathsForCommand(name) {
   const ids = name === "goal-versions" ? ["goal-versions", "goal-activation"] : [name];
-  for (const component of PHASE7_GATE_COMPONENTS.filter((item) => ids.includes(item.id))) {
+  return PHASE7_GATE_COMPONENTS.filter((item) => ids.includes(item.id));
+}
+function captureComponentEvidence(name) {
+  return new Map(componentPathsForCommand(name).map((component) => {
+    const path = join(ROOT, component.path);
+    try { return [component.id, createHash("sha256").update(readFileSync(path)).digest("hex")]; }
+    catch { return [component.id, null]; }
+  }));
+}
+function bindFreshComponentEvidence(name, gateRunId, sourceRevision, sourceTreeSha256, before) {
+  let refreshed = true;
+  for (const component of componentPathsForCommand(name)) {
     const path = join(ROOT, component.path);
     const report = json(path);
-    if (report) writeFileSync(path, `${JSON.stringify({ ...report, gateRunId }, null, 2)}\n`, "utf8");
+    let hash = null;
+    try { hash = createHash("sha256").update(readFileSync(path)).digest("hex"); } catch { /* missing output is rejected */ }
+    const changed = hash !== null && hash !== before.get(component.id);
+    const validRun = typeof report?.runId === "string" && report.runId.length >= 8;
+    if (!changed || !validRun || report.sourceRevision !== sourceRevision || report.sourceTreeSha256 !== sourceTreeSha256) {
+      refreshed = false;
+      continue;
+    }
+    writeFileSync(path, `${JSON.stringify({ ...report, gateRunId }, null, 2)}\n`, "utf8");
   }
+  return refreshed;
 }
 function countSkipped(output) {
   const values = [...String(output).replaceAll(/\u001B\[[0-9;]*m/gu, "").matchAll(/\b(\d+)\s+skipped\b/giu)].map((match) => Number(match[1]));
@@ -110,8 +130,13 @@ async function main() {
     failure: readinessErrors.length ? "validation-environment-invalid" : null }];
   const validationReady = readinessErrors.length === 0;
   for (const definition of COMMANDS) {
+    const previousEvidence = captureComponentEvidence(definition.name);
     const result = execute({ ...definition, requiresValidation: true }, { runId, binding, validationReady });
-    bindComponentEvidence(definition.name, runId);
+    if (!bindFreshComponentEvidence(definition.name, runId, sourceRevision, sourceTreeSha256, previousEvidence)) {
+      result.passed = false;
+      result.exitCode = 1;
+      result.failure = "component-evidence-not-refreshed";
+    }
     checks.push(result);
     console.log(`${result.passed ? "PASS" : "FAIL"} ${definition.name}${result.failure ? ` (${result.failure})` : ""}`);
   }
