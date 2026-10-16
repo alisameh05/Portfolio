@@ -23,7 +23,8 @@ const url = process.env["PHASE7_RATING_DATABASE_URL"];
 describe.runIf(Boolean(url))("real PostgreSQL Rating acceptance", () => {
   const portfolioId = createStableId("Portfolio"), ownerId = createStableId("Owner");
   const scope = { kind: "portfolio" as const, portfolioId };
-  const now = "2026-10-14T12:00:00.000Z";
+  // Keep the fixed application clock ahead of PostgreSQL's real transaction_timestamp.
+  const now = "2099-10-14T12:00:00.000Z";
   const config = {
     functional: { active: { version: 1, secret: Buffer.alloc(32, 11).toString("base64url") }, previous: [] },
     measurement: { active: { version: 1, secret: Buffer.alloc(32, 22).toString("base64url") }, previous: [] },

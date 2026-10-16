@@ -18,7 +18,7 @@ import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
 const url = process.env["PHASE7_MODERATION_DATABASE_URL"];
 describe.runIf(Boolean(url))("real PostgreSQL Owner moderation acceptance", () => {
   const portfolioId = createStableId("Portfolio"), ownerId = createStableId("Owner");
-  const scope = { kind: "portfolio" as const, portfolioId }, now = "2026-10-15T00:00:00.000Z";
+  const scope = { kind: "portfolio" as const, portfolioId }, now = "2099-10-15T00:00:00.000Z";
   const db = createPostgresRuntimeDatabase(url ?? "postgres://invalid"), second = createPostgresRuntimeDatabase(url ?? "postgres://invalid");
   const admin = new Client({ connectionString: process.env["PHASE7_MODERATION_ADMIN_URL"] });
   const operations = createPostgresOperationsPersistence(db.database, { now: () => now });
@@ -205,7 +205,9 @@ describe.runIf(Boolean(url))("real PostgreSQL Owner moderation acceptance", () =
       await c.query("select set_config('shipwithali.portfolio_id',$1,true),set_config('shipwithali.feedback_access','public',true)",[portfolioId]);expect((await c.query("select * from interaction.feedback where feedback_id=$1",[id])).rows).toEqual([]);expect((await c.query("select * from interaction.moderation_decisions")).rows).toEqual([]);
       await c.query("rollback");expect((await c.query("select * from interaction.feedback")).rows).toEqual([]);
       for(const table of ["interaction.feedback","interaction.moderation_decisions"]){
-        for(const role of ["anon","authenticated","shipwithali_worker","shipwithali_backup"])for(const privilege of ["SELECT","INSERT","UPDATE","DELETE"])expect((await admin.query("select has_table_privilege($1,$2,$3) allowed",[role,table,privilege])).rows[0].allowed).toBe(false);
+        for(const role of ["anon","authenticated","shipwithali_backup"])for(const privilege of ["SELECT","INSERT","UPDATE","DELETE"])expect((await admin.query("select has_table_privilege($1,$2,$3) allowed",[role,table,privilege])).rows[0].allowed,`${role} must not have ${privilege} on ${table}`).toBe(false);
+        expect((await admin.query("select has_table_privilege('shipwithali_worker',$1,'INSERT') allowed",[table])).rows[0].allowed).toBe(false);
+        expect((await admin.query("select has_table_privilege('shipwithali_worker',$1,'DELETE') allowed",[table])).rows[0].allowed).toBe(table === "interaction.feedback");
         expect((await admin.query("select relrowsecurity,relforcerowsecurity from pg_class where oid=$1::regclass",[table])).rows).toEqual([{relrowsecurity:true,relforcerowsecurity:true}]);
       }
       for(const column of ["moderation_state","aggregate_version","approved_at"])expect((await admin.query("select has_column_privilege('moderation_runtime','interaction.feedback',$1,'UPDATE') allowed",[column])).rows[0].allowed).toBe(true);

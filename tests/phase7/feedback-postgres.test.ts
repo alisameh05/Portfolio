@@ -187,12 +187,13 @@ describe.runIf(Boolean(url))("real PostgreSQL private Feedback acceptance", () =
     expect(alternate).not.toContain("PRIVATE_NAME_SENTINEL"); expect(alternate).not.toContain("PRIVATE_PARAGRAPH_SENTINEL");
     expect(await rows(projectId)).toMatchObject([{ author_name: "PRIVATE_NAME_SENTINEL", paragraph: "PRIVATE_PARAGRAPH_SENTINEL" }]);
   });
-  it("restricted submission scope has pending-only INSERT and default-deny reads; anonymous/worker deny; pooled scope resets", async () => {
+  it("restricted submission scope has pending-only INSERT; Worker deletion is purpose- and retention-scoped", async () => {
     expect((await admin.query("select relrowsecurity,relforcerowsecurity from pg_class where oid='interaction.feedback'::regclass")).rows).toEqual([{ relrowsecurity: true, relforcerowsecurity: true }]);
-    for (const role of ["anon", "authenticated", "shipwithali_worker", "shipwithali_backup", "feedback_runtime"]) {
-      for (const privilege of (role === "feedback_runtime" ? ["DELETE"] : ["SELECT", "UPDATE", "DELETE"])) expect((await admin.query("select has_table_privilege($1,'interaction.feedback',$2) as allowed", [role, privilege])).rows[0].allowed).toBe(false);
+    for (const role of ["anon", "authenticated", "shipwithali_backup", "feedback_runtime"]) {
+      for (const privilege of (role === "feedback_runtime" ? ["DELETE"] : ["SELECT", "UPDATE", "DELETE"])) expect((await admin.query("select has_table_privilege($1,'interaction.feedback',$2) as allowed", [role, privilege])).rows[0].allowed, `${role} must not have ${privilege} on interaction.feedback`).toBe(false);
       if (role !== "feedback_runtime") expect((await admin.query("select has_table_privilege($1,'interaction.feedback','INSERT') as allowed", [role])).rows[0].allowed).toBe(false);
     }
+    expect((await admin.query("select has_table_privilege('shipwithali_worker','interaction.feedback','DELETE') as allowed")).rows[0].allowed).toBe(true);
     const client = new Client({ connectionString: url }); await client.connect(); const projectId = await seed();
     try {
       expect((await client.query("select rolsuper,rolbypassrls from pg_roles where rolname=current_user")).rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);

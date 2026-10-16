@@ -18,7 +18,7 @@ import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
 const url = process.env["PHASE7_MODERATION_DATABASE_URL"];
 describe.runIf(Boolean(url))("real PostgreSQL suppression and keyset page acceptance", () => {
   const portfolioId = createStableId("Portfolio"), ownerId = createStableId("Owner");
-  const scope = { kind: "portfolio" as const, portfolioId }, now = "2026-10-15T00:00:00.000Z";
+  const scope = { kind: "portfolio" as const, portfolioId }, now = "2099-10-15T00:00:00.000Z";
   const db = createPostgresRuntimeDatabase(url ?? "postgres://invalid"), second = createPostgresRuntimeDatabase(url ?? "postgres://invalid");
   const admin = new Client({ connectionString: process.env["PHASE7_MODERATION_ADMIN_URL"] });
   const operations = createPostgresOperationsPersistence(db.database, { now: () => now });
@@ -204,10 +204,10 @@ describe.runIf(Boolean(url))("real PostgreSQL suppression and keyset page accept
   });
   it("T07-06 invalid cursor rejects and timestamp ordering preserves database microseconds", async () => {
     const project=await seed(), a=await approved(project), b=await approved(project), c=await approved(project);
-    await admin.query("update interaction.feedback set approved_at=$2 where feedback_id=$1",[a,"2026-10-15T00:00:00.123456Z"]);
-    await admin.query("update interaction.feedback set approved_at=$2 where feedback_id=$1",[b,"2026-10-15T00:00:00.123455Z"]);
+    await admin.query("update interaction.feedback set approved_at=$2 where feedback_id=$1",[a,"2099-10-15T00:00:00.123456Z"]);
+    await admin.query("update interaction.feedback set approved_at=$2 where feedback_id=$1",[b,"2099-10-15T00:00:00.123455Z"]);
     const page=(extra:object={})=>service.getApprovedFeedback({scope,portfolioId,projectId:project,locale:"en",correlationId:"cursor",limit:1,...extra});
-    const first=await page();expect(first).toMatchObject({ok:true,value:{items:[{feedbackId:a,displayedAt:"2026-10-15T00:00:00.123456Z"}]}});if(!first.ok)throw new Error("PAGE_FAILED");
+    const first=await page();expect(first).toMatchObject({ok:true,value:{items:[{feedbackId:a,displayedAt:"2099-10-15T00:00:00.123456Z"}]}});if(!first.ok)throw new Error("PAGE_FAILED");
     const next=await page({cursor:first.value.nextCursor});expect(next).toMatchObject({ok:true,value:{items:[{feedbackId:b}]}});if(!next.ok)throw new Error("PAGE_FAILED");
     expect(await page({cursor:next.value.nextCursor})).toMatchObject({ok:true,value:{items:[{feedbackId:c}],nextCursor:null}});
     for(const cursor of [null,{}, {displayedAt:now,feedbackId:"bad"},{displayedAt:"2026-02-30T00:00:00.000Z",feedbackId:a},{displayedAt:"not-a-time",feedbackId:a},{displayedAt:now,feedbackId:a,extra:"secret"}])

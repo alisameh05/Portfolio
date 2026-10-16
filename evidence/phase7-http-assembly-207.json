@@ -1,0 +1,144 @@
+{
+  "ticket": 207,
+  "title": "Verify complete HTTP assembly, security, and degraded behavior",
+  "validationBatchId": "86e683a6-4edb-47d1-9abc-405040ffc7a9",
+  "baseCommit": "60bfaac7824753648dca692c5af594c5a445587b",
+  "sourceTreeSha256": "23cd050176f16f6d708e79a8ecde9194cd31037983f2017e69bc33b2c9693753",
+  "toolchain": {
+    "node": "24.21.0",
+    "npm": "11.19.0",
+    "postgresql": "18.3",
+    "vitest": "3.2.4"
+  },
+  "focusedAcceptance": {
+    "success": true,
+    "passed": 587,
+    "failed": 0,
+    "requiredSkipped": 0,
+    "cleanup": true,
+    "commands": [
+      {
+        "command": "npm run phase7:focus:events",
+        "passed": 72,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run phase7:focus:reactions",
+        "passed": 16,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run phase7:focus:ratings",
+        "passed": 33,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run phase7:focus:feedback",
+        "passed": 57,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run phase7:focus:moderation",
+        "passed": 80,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run phase7:focus:suppression",
+        "passed": 93,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run phase7:focus:summaries",
+        "passed": 132,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run phase7:focus:goal-versions",
+        "passed": 77,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run phase7:focus:goal-conversions",
+        "passed": 15,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run phase7:focus:feedback-retention",
+        "passed": 12,
+        "failed": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "checks": [
+    {
+      "command": "npx vitest run tests/phase4/owner-request-security.test.ts tests/phase4/owner-operation-policy.test.ts",
+      "passed": 31,
+      "failed": 0
+    },
+    {
+      "command": "npm run test:runtime:http",
+      "passed": 624,
+      "failed": 0,
+      "optionalEnvironmentSkips": 1
+    },
+    {
+      "command": "npm run typecheck",
+      "success": true
+    },
+    {
+      "command": "npm run contract:verify",
+      "success": true,
+      "notes": [
+        "deterministic generation",
+        "no drift",
+        "backward compatible public and Owner contracts"
+      ]
+    },
+    {
+      "command": "npm run test:arch",
+      "success": true
+    },
+    {
+      "command": "npm run route:inventory",
+      "success": true,
+      "publicOperations": 5,
+      "ownerOperations": 48,
+      "operationalProbes": 2,
+      "productRuntimeRoutes": 0
+    },
+    {
+      "command": "npm run runtime:architecture",
+      "success": true
+    }
+  ],
+  "criteria": {
+    "T20-01": "real standard composition, persistence-backed public mutations and Owner operations; unconfigured composition fails closed",
+    "T20-02": "generated contracts, response validation, safe DTOs and cookie semantics",
+    "T20-03": "strict malformed request and unknown-field rejection before business dispatch",
+    "T20-04": "verified Owner authentication, scope, origin, CSRF and authorization",
+    "T20-05": "replay, conflict, stale precondition and no-op behavior",
+    "T20-06": "operation-specific typed problem mapping, 429 Retry-After and 503",
+    "T20-07": "purpose-bound crypto, expiry, rotation and revision checks",
+    "T20-08": "optional Measurement/worker resilience and fail-safe required database loss",
+    "T20-09": "five-operation public boundary, Owner compatibility and architecture checks"
+  },
+  "evidenceDocument": "evidence/phase7-http-assembly-207.md",
+  "hostedCi": {
+    "state": "failed-before-steps",
+    "runId": 38824834983,
+    "url": "https://github.com/alisameh05/Portfolio/actions/runs/38824834983",
+    "jobs": 5,
+    "reason": "GitHub check annotation reports recent account payment failure or spending limit needs increase; no job steps ran"
+  },
+  "cleanup": true
+}
