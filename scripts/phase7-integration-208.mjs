@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { Client, Pool } from "pg";
@@ -11,6 +11,7 @@ import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 
 const root = process.cwd();
 const runId = randomUUID();
+const integrationHost = "127.0.0.1";
 const baseline = "978287ed7863aae3f5390596c0e91229bd546621"; // master immediately before Phase 7 migrations
 const firstPhase7Migration = "20261014194925_measurement_consent.sql";
 const evidencePath = resolve("evidence/phase7-integrated-208.json");
@@ -93,7 +94,18 @@ function currentMigrationNames() {
   return readdirSync(join(root, "supabase", "migrations")).filter(name => /^\d{14}_[a-z0-9_]+\.sql$/u.test(name)).sort();
 }
 function historicalMigration(name) { return git(["show", `${baseline}:supabase/migrations/${name}`]); }
-function connectString(db, user = "postgres", port) { return `postgres://${user}@127.0.0.1:${port}/${db}?sslmode=disable`; }
+function connectString(db, user = "postgres", port) { return `postgres://${user}@${integrationHost}:${port}/${db}?sslmode=disable`; }
+
+export function classifyIntegrationScope({ host, dataDirectory, temporaryDirectory, port }) {
+  const temporaryRoot = resolve(temporaryDirectory);
+  const databasePath = resolve(dataDirectory);
+  const relativeDataPath = relative(temporaryRoot, databasePath);
+  if (host !== integrationHost || !Number.isInteger(port) || port < 1 || port > 65535 ||
+    relativeDataPath.length === 0 || isAbsolute(relativeDataPath) || relativeDataPath.split(/[\\/]/u).includes("..")) {
+    throw new Error("PHASE7_INTEGRATION_DATABASE_SCOPE_INVALID");
+  }
+  return "disposable-loopback";
+}
 
 async function withClient(connectionString, work) {
   const client = new Client({ connectionString, connectionTimeoutMillis: 5_000 });
@@ -328,9 +340,10 @@ async function main() {
   }
   const newNames = current.filter(name => !previous.includes(name));
   if (!newNames.length || newNames.some(name => name < firstPhase7Migration)) throw new Error("PHASE7_INTEGRATION_MIGRATION_DELTA_INVALID");
-  const port = await new Promise((ok, fail) => { const server = createServer(); server.once("error", fail); server.listen(0,"127.0.0.1",()=>{const value=server.address().port;server.close(()=>ok(value));}); });
+  const port = await new Promise((ok, fail) => { const server = createServer(); server.once("error", fail); server.listen(0,integrationHost,()=>{const value=server.address().port;server.close(()=>ok(value));}); });
   const temp = join(root, "node_modules", ".cache", `phase7-integration-208-${runId}`);
   const data = join(temp, "data"); mkdirSync(temp,{recursive:true}); mkdirSync("artifacts",{recursive:true}); rmSync(reportPath,{force:true});
+  const isolationScope = classifyIntegrationScope({ host: integrationHost, dataDirectory: data, temporaryDirectory: temp, port });
   const adminUrl = connectString("postgres","postgres",port); const admin = new Client({connectionString:adminUrl});
   let started=false,connected=false,cleanup=false,result;
   try {
@@ -371,7 +384,7 @@ async function main() {
     const checks=[runUnitCheck(),...(["lint","contract:verify","typecheck","test:arch","route:inventory","runtime:architecture","runtime:boundary","build"].map(runPackageCheck))];
     const sourceTreeSha256=workingTreeSourceSha256();
     if(sourceTreeSha256!==initialSource) throw new Error("PHASE7_INTEGRATION_SOURCE_CHANGED_DURING_RUN");
-    result={ticket:208,runId,sourceRevision:git(["rev-parse","HEAD"]),sourceTreeSha256,startedAt,completedAt:new Date().toISOString(),postgresVersion,
+    result={ticket:208,runId,sourceRevision:git(["rev-parse","HEAD"]),sourceTreeSha256,startedAt,completedAt:new Date().toISOString(),postgresVersion,scope:isolationScope,
       tools:{node:process.versions.node,npm:(process.env.npm_config_user_agent??"").match(/npm\/([^\s]+)/u)?.[1]??"unavailable"},
       baselineCommit:baseline,migrations:current.map(name=>({name,sha256:createHash("sha256").update(readFileSync(join(root,"supabase","migrations",name))).digest("hex")})),
       cleanUpgrade:{equivalent:true,schemas:schemas.length,relations:cleanCatalog.objects.length,policies:cleanCatalog.policies.length,grants:cleanCatalog.grants.length,predecessorFixturePreserved:true,generatedTypesVerified:p7Schemas},
