@@ -3,7 +3,7 @@
   "title": "Verify complete HTTP assembly, security, and degraded behavior",
   "validationBatchId": "86e683a6-4edb-47d1-9abc-405040ffc7a9",
   "baseCommit": "60bfaac7824753648dca692c5af594c5a445587b",
-  "sourceTreeSha256": "f47dbb5f550e97598d671aa613ed5dc4ccee2a561b676ee19caaa352b737ede0",
+  "sourceTreeSha256": "20a39f370f68e10d1efe9c4ce3b600d9cb4cad47a9b7538946243e331f5b8846",
   "toolchain": {
     "node": "24.21.0",
     "npm": "11.19.0",
@@ -141,10 +141,10 @@
     "reason": "GitHub check annotation reports recent account payment failure or spending limit needs increase; no job steps ran"
   },
   "cleanup": true,
-  "runId": "a1bfd17f-605f-4a63-891f-fc958524c9db",
-  "sourceRevision": "06700cfd2b3861af3eb48a719075d937a3320fbf",
-  "startedAt": "2026-10-16T11:45:34.649Z",
-  "completedAt": "2026-10-16T11:45:37.352Z",
+  "runId": "e171b9f8-b119-4f99-96fa-4c3d8f8398ec",
+  "sourceRevision": "6972af55047e2ed37d265da79cc4e9eebbae4f44",
+  "startedAt": "2026-10-16T13:52:29.984Z",
+  "completedAt": "2026-10-16T13:52:32.551Z",
   "tools": {
     "node": "24.21.0",
     "npm": "11.19.0"
@@ -252,7 +252,7 @@
       "skipped": 0,
       "failedSuites": 0
     },
-    "outputSha256": "ad28b76e7e8bec16508957b73f22f9702cef934b7b3e8dab4288c60d22361be7"
+    "outputSha256": "1c1c7529023736ffa79869be162dd0adc47c6f26ea13a8d140516e62bd1a0ec2"
   },
   "suites": [
     {
@@ -293,5 +293,5 @@
     }
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run route:inventory; npm run phase7:http:assembly",
-  "gateRunId": "d7002ba6-4a4e-44df-8ae2-90d33bbc3309"
+  "gateRunId": "a6180c7c-d93a-4dea-9eab-f805f24440f3"
 }

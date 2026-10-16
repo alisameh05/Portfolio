@@ -152,7 +152,6 @@ test("integration diagnostics retain only known Media codes and CV criterion IDs
 
 function passingReport() {
   const predecessorContexts = loadPhase6PredecessorContexts();
-  predecessorContexts.phase5.sourceTreeSha256 = "tree";
   return makePhase6Report({
     sourceRevision: "abc", sourceTreeSha256: "tree", runtime: { node: "v24.21.0", npm: "11.19.0" },
     startedAt: new Date(Date.now() - 60_000).toISOString(), tools: Object.fromEntries(Object.keys(PHASE6_TOOL_DEFINITIONS).map((name) => [name, `tool-${name}`])),
@@ -174,10 +173,11 @@ test("isolated configuration enables only the local API, Auth and Storage on res
 });
 
 test("local runner removes inherited provider credentials", () => {
-  const safe = scrubPhase6Environment({ SUPABASE_ACCESS_TOKEN: "secret", DATABASE_URL: "private", OWNER_GITHUB_ID: "owner", PATH: "safe" });
+  const safe = scrubPhase6Environment({ SUPABASE_ACCESS_TOKEN: "secret", DATABASE_URL: "private", OWNER_GITHUB_ID: "owner", GOTRUE_EXTERNAL_EMAIL_ENABLED: "false", PATH: "safe" });
   assert.equal(safe.SUPABASE_ACCESS_TOKEN, undefined);
   assert.equal(safe.DATABASE_URL, undefined);
   assert.equal(safe.OWNER_GITHUB_ID, undefined);
+  assert.equal(safe.GOTRUE_EXTERNAL_EMAIL_ENABLED, "true");
   assert.equal(safe.PATH, "safe");
 });
 
