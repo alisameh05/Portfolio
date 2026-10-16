@@ -113,7 +113,7 @@ async function catalogSnapshot(connectionString) {
     const grants = await client.query("select table_schema as schema,table_name as table,grantee,privilege_type,is_grantable from information_schema.role_table_grants where table_schema=any($1::text[]) and grantee=any($2::text[]) order by 1,2,3,4", [schemas, ["PUBLIC", "anon", "authenticated", "service_role", "shipwithali_application", "shipwithali_worker", "shipwithali_backup"]]);
     const indexes = await client.query("select schemaname as schema,tablename as table,indexname as name,indexdef from pg_indexes where schemaname=any($1::text[]) order by 1,2,3", [schemas]);
     const constraints = await client.query("select n.nspname as schema,c.relname as table,con.conname as name,con.contype as type,pg_get_constraintdef(con.oid,true) as definition,con.convalidated as validated from pg_constraint con join pg_class c on c.oid=con.conrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname=any($1::text[]) order by 1,2,3", [schemas]);
-    const functions = await client.query("select n.nspname as schema,p.proname as name,pg_get_function_identity_arguments(p.oid) as args,p.prosecdef as security_definer,coalesce(p.proconfig,'{}') as config,has_function_privilege('anon',p.oid,'EXECUTE') as anon_execute,has_function_privilege('authenticated',p.oid,'EXECUTE') as authenticated_execute,has_function_privilege('shipwithali_application',p.oid,'EXECUTE') as application_execute,has_function_privilege('shipwithali_backup',p.oid,'EXECUTE') as backup_execute,has_function_privilege('shipwithali_worker',p.oid,'EXECUTE') as worker_execute from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname=any($1::text[]) order by 1,2,3", [schemas]);
+    const functions = await client.query("select n.nspname as schema,p.proname as name,pg_get_function_identity_arguments(p.oid) as args,p.prosecdef as security_definer,coalesce(p.proconfig,'{}') as config,r.rolname as owner,r.rolcanlogin as owner_can_login,r.rolsuper as owner_superuser,r.rolbypassrls as owner_bypass_rls,has_function_privilege('anon',p.oid,'EXECUTE') as anon_execute,has_function_privilege('authenticated',p.oid,'EXECUTE') as authenticated_execute,has_function_privilege('shipwithali_application',p.oid,'EXECUTE') as application_execute,has_function_privilege('shipwithali_backup',p.oid,'EXECUTE') as backup_execute,has_function_privilege('shipwithali_worker',p.oid,'EXECUTE') as worker_execute from pg_proc p join pg_namespace n on n.oid=p.pronamespace join pg_roles r on r.oid=p.proowner where n.nspname=any($1::text[]) order by 1,2,3", [schemas]);
     const defaults = await client.query("select n.nspname as schema,d.defaclobjtype as object_type,coalesce(r.rolname,'PUBLIC') as grantee,x.privilege_type from pg_default_acl d join pg_namespace n on n.oid=d.defaclnamespace cross join lateral aclexplode(d.defaclacl) x left join pg_roles r on r.oid=x.grantee where n.nspname=any($1::text[]) order by 1,2,3,4", [schemas]);
     if (schemasResult.rowCount !== schemas.length) throw new Error("PHASE7_INTEGRATION_SCHEMA_SNAPSHOT_INCOMPLETE");
     if (objects.rows.filter(row => row.kind === "r" || row.kind === "p").some(row => !row.rls || !row.force_rls)) throw new Error("PHASE7_INTEGRATION_TABLE_RLS_NOT_FORCED");
@@ -125,7 +125,7 @@ async function catalogSnapshot(connectionString) {
       if (view.owner !== "shipwithali_summary_reader" || !view.options.includes("security_barrier=true")) throw new Error(`PHASE7_INTEGRATION_UNRESTRICTED_VIEW_OWNER:${view.schema}.${view.name}`);
     }
     for (const fn of functions.rows.filter(row => row.security_definer && ["interaction", "measurement"].includes(row.schema))) {
-      if (!fn.config.some(value => value.startsWith("search_path=")) || fn.anon_execute || fn.authenticated_execute || fn.application_execute || fn.backup_execute) {
+      if (!fn.config.some(value => value.startsWith("search_path=")) || fn.owner_can_login || fn.owner_superuser || fn.owner_bypass_rls || fn.anon_execute || fn.authenticated_execute || fn.application_execute || fn.backup_execute) {
         throw new Error("PHASE7_INTEGRATION_UNSAFE_SECURITY_DEFINER_FOUND");
       }
     }
@@ -329,8 +329,9 @@ async function main() {
   try {
     run(process.execPath,["scripts/validation-environment.mjs"]);
     const postgresVersion=run(exe("postgres"),["--version"]).trim();
-    run(exe("initdb"),["-D",data,"--no-locale","-A","trust","-U","postgres"]); started=true;
+    run(exe("initdb"),["-D",data,"--no-locale","-A","trust","-U","postgres"]);
     run(exe("pg_ctl"),["-D",data,"-l",join(temp,"server.log"),"-o",`-h 127.0.0.1 -p ${port} -F`,"-w","start"]);
+    started=true;
     await admin.connect(); connected=true;
     await admin.query("create role anon nologin; create role authenticated nologin; create role service_role nologin; create role shipwithali_migration nologin nosuperuser nobypassrls; grant create on database postgres to shipwithali_migration");
     await admin.query("create role phase7_integration_app login nosuperuser nocreatedb nocreaterole noreplication nobypassrls; create role phase7_integration_worker login nosuperuser nocreatedb nocreaterole noreplication nobypassrls");
@@ -369,7 +370,7 @@ async function main() {
       cleanUpgrade:{equivalent:true,schemas:schemas.length,relations:cleanCatalog.objects.length,policies:cleanCatalog.policies.length,grants:cleanCatalog.grants.length,predecessorFixturePreserved:true,generatedTypesVerified:p7Schemas},
       restrictedAccess:scoped,queryPlans:plans,roleFlags:cleanCatalog.roles.filter(row=>["shipwithali_application","shipwithali_worker"].includes(row.rolname)),
       securityObjects:{views:cleanCatalog.objects.filter(row=>["v","m"].includes(row.kind)&&["interaction","measurement"].includes(row.schema)),
-        securityDefinerFunctions:cleanCatalog.functions.filter(row=>row.security_definer).map(row=>({schema:row.schema,name:row.name,args:row.args,config:row.config}))},
+        securityDefinerFunctions:cleanCatalog.functions.filter(row=>row.security_definer).map(row=>({schema:row.schema,name:row.name,args:row.args,owner:row.owner,ownerCanLogin:row.owner_can_login,ownerSuperuser:row.owner_superuser,ownerBypassRls:row.owner_bypass_rls,config:row.config}))},
       evidenceInputs:priorEvidence,checks,
       criteria:{"T21-01":"clean and pre-Phase-7 upgrade schemas including namespace ACLs, grants, policies, indexes, constraints, defaults and generated interaction/measurement types are equivalent; prior Portfolio row preserved",
         "T21-02":"anonymous/authenticated/service-role have no sensitive-schema usage/create or table access; restricted app/worker logins exercise real RLS and narrow grants",
@@ -384,9 +385,13 @@ async function main() {
       required:{success:true,passed:10,failed:0,skipped:0,failedSuites:0},reproduction:"npm run setup:validation; npm run validation:ready; npm run phase7:focus:integrated",cleanup:true};
     result.cleanup=false;
   } finally {
-    if(connected) await admin.end();
-    try {if(started)run(exe("pg_ctl"),["-D",data,"-m","immediate","-w","stop"]);rmSync(temp,{recursive:true,force:true});cleanup=true;}
-    catch {console.error("PHASE7_INTEGRATION_CLEANUP_FAILED");process.exitCode=1;}
+    let connectionClosed=true;
+    if(connected) try {await admin.end();} catch {connectionClosed=false;console.error("PHASE7_INTEGRATION_CONNECTION_CLEANUP_FAILED");process.exitCode=1;}
+    let serverStopped=!started;
+    if(started) try {run(exe("pg_ctl"),["-D",data,"-m","immediate","-w","stop"]);serverStopped=true;} catch {console.error("PHASE7_INTEGRATION_POSTGRES_CLEANUP_FAILED");process.exitCode=1;}
+    let directoryRemoved=false;
+    try {rmSync(temp,{recursive:true,force:true});directoryRemoved=true;} catch {console.error("PHASE7_INTEGRATION_DIRECTORY_CLEANUP_FAILED");process.exitCode=1;}
+    cleanup=connectionClosed&&serverStopped&&directoryRemoved;
     if(result&&cleanup){result.cleanup=true;mkdirSync("evidence",{recursive:true});writeFileSync(evidencePath,`${JSON.stringify(result,null,2)}\n`);console.log(JSON.stringify({required:result.required,runId,sourceTreeSha256:result.sourceTreeSha256,evidence:evidencePath,cleanup}));}
   }
 }
