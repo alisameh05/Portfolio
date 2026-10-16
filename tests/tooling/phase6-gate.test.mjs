@@ -82,6 +82,14 @@ test("Phase 6 gate traceability covers all parent criteria, stories and mandator
   assert.equal(evaluatePhase6Gate(validInput()).verdict, "pass");
 });
 
+test("runtime pin comparison accepts Node versions with or without the version prefix", () => {
+  const input = validInput();
+  input.runtime.node = "24.21.0";
+  assert.equal(evaluatePhase6Gate(input).verdict, "pass");
+  input.runtime.node = "v24.20.0";
+  assert.ok(evaluatePhase6Gate(input).failures.includes("runtime-pin-mismatch"));
+});
+
 test("absent required service is rejected", () => expectFailure((input) => { input.serviceEvidence.services.auth.available = false; }, "required-real-service-evidence-missing"));
 test("stale source evidence is rejected", () => expectFailure((input) => { input.evidenceArtifacts[0].accepted = false; }, "required-evidence-invalid:setup"));
 test("failed constituent is rejected", () => expectFailure((input) => { input.checks[0].passed = false; }, "required-check-failed:validation-ready"));

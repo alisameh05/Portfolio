@@ -242,6 +242,9 @@ async function main() {
   let ownerCompositionChecks;
   let toolVersions = {};
   let status;
+  let testResult;
+  let testReport;
+  let allAssertions = [];
   const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], {
     cwd: ROOT, env, timeout, label: `supabase-${String(args[0] ?? "command")}`,
   }).stdout;
@@ -488,9 +491,10 @@ async function main() {
     // The complete gate includes both isolated scopes: the baseline's bounded
     // PDF/image and video tests plus the bounded rejection/race test.
     const testTimeout = MEDIA_INTEGRATION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? 1_800_000 : 900_000;
-    const testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: testTimeout, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+    testResult = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), ...testArgs], { cwd: ROOT, env: testEnv, encoding: "utf8", timeout: testTimeout, maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
     if (testResult.error || !existsSync(testJsonPath)) throw new Error("PHASE6_UPLOAD_INTENT_TEST_REPORT_MISSING");
-    const testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
+    testReport = JSON.parse(readFileSync(testJsonPath, "utf8"));
+    allAssertions = (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
     if (CV_DELIVERY_ONLY) console.log(JSON.stringify({ cvDeliveryIntegrationTests: (testReport.testResults ?? []).map((suite) => ({
       name: suite.name, status: suite.status,
       assertions: (suite.assertionResults ?? []).map((assertion) => ({ name: assertion.fullName, status: assertion.status })),
@@ -559,7 +563,6 @@ async function main() {
         failedTests: integration.failedTests ?? [],
       })}`);
     }
-    const allAssertions = (testReport.testResults ?? []).flatMap((suite) => suite.assertionResults ?? []);
     if (MEDIA_DELIVERY_ONLY) {
       const assertion = allAssertions.find((item) => String(item.fullName ?? "").includes("issues bounded delivery only for current published-locale and profile Media uses"));
       mediaDeliveryChecks = {
@@ -583,7 +586,7 @@ async function main() {
       ? String(item.fullName ?? "").includes("processes PDF candidates and real PNG JPEG WebP images") || String(item.fullName ?? "").includes("processes MP4 and WebM candidates")
       : VIDEO_PROCESSING_ONLY
       ? String(item.fullName ?? "").includes("processes MP4 and WebM candidates")
-      : IMAGE_PROCESSING_ONLY ? String(item.fullName ?? "").includes("processes PNG, JPEG and WebP candidates")
+      : IMAGE_PROCESSING_ONLY ? String(item.fullName ?? "").includes("processes PDF candidates and real PNG JPEG WebP images")
         : String(item.fullName ?? "").includes("processes PDF candidates"));
     if (MEDIA_REJECTION_ONLY) mediaRejectionTestDiagnostics = {
       exitStatus: testResult.status,
