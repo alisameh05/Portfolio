@@ -208,7 +208,9 @@ export function evaluatePhase6Gate({ runId, startedAt, sourceRevision, sourceTre
   if (!/^[a-f0-9]{40}$/iu.test(sourceRevision ?? "") || !/^[a-f0-9]{64}$/iu.test(sourceTreeSha256 ?? "")) failures.push("gate-source-identity-invalid");
   const start = Date.parse(startedAt ?? "");
   if (!Number.isFinite(start) || start > now || now - start > 24 * 60 * 60 * 1000) failures.push("gate-run-time-invalid");
-  if (runtime?.node !== `v${expectedRuntime?.node}` || runtime?.npm !== expectedRuntime?.npm) failures.push("runtime-pin-mismatch");
+  const runtimeNode = typeof runtime?.node === "string" ? runtime.node.replace(/^v/u, "") : runtime?.node;
+  const expectedNode = typeof expectedRuntime?.node === "string" ? expectedRuntime.node.replace(/^v/u, "") : expectedRuntime?.node;
+  if (runtimeNode !== expectedNode || runtime?.npm !== expectedRuntime?.npm) failures.push("runtime-pin-mismatch");
 
   const checksByName = new Map();
   for (const check of checks ?? []) {

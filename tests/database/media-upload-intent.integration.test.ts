@@ -2247,10 +2247,17 @@ describeReal(group === "baseline"
       (select count(*)::int from cv_portfolio.versions where portfolio_id = $1::uuid and owner_id = $2::uuid) as versions,
       (select count(*)::int from cv_portfolio.registration_commands where portfolio_id = $1::uuid and owner_id = $2::uuid) as receipts,
       (select count(*)::int from operations.outbox_events where aggregate_id = $1::uuid and event_type = 'cv.version_registered.v1') as events`, [portfolioId, ownerId]);
-    cvScenario("T09-04 unprocessed raw PDF, accepted non-PDF image, missing, foreign Owner, and non-English intents reject without writes",
-      !unprocessedRegistration.ok && (!wrongKindRegistration || !wrongKindRegistration.ok) && wrongKindFacts.rows[0]?.kind === "image" &&
-      !missingRegistration.ok && !foreignActorRegistration.ok && !wrongLocale.ok &&
-      JSON.stringify(mutationCountsAfterRejectedIntents.rows[0]) === JSON.stringify(mutationCountsBeforeRejectedIntents.rows[0]));
+    const rejectedIntentChecks = {
+      unprocessed: !unprocessedRegistration.ok,
+      wrongKind: !wrongKindRegistration || !wrongKindRegistration.ok,
+      acceptedImage: wrongKindFacts.rows[0]?.kind === "image",
+      missing: !missingRegistration.ok,
+      foreignOwner: !foreignActorRegistration.ok,
+      nonEnglish: !wrongLocale.ok,
+      noWrites: JSON.stringify(mutationCountsAfterRejectedIntents.rows[0]) === JSON.stringify(mutationCountsBeforeRejectedIntents.rows[0]),
+    };
+    cvScenario(`T09-04 unprocessed raw PDF, accepted non-PDF image, missing, foreign Owner, and non-English intents reject without writes: ${JSON.stringify(rejectedIntentChecks)}`,
+      Object.values(rejectedIntentChecks).every(Boolean));
 
     let expectedCvVersion = 2;
     for (let index = 0; index < 101; index += 1) {
