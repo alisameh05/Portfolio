@@ -1,10 +1,10 @@
 {
   "ticket": 208,
-  "runId": "9bf7bd54-5eb5-45cb-8919-a4c2b82443c1",
-  "sourceRevision": "85f7cad4613db60b0654488126f7de3c722a35e5",
-  "sourceTreeSha256": "a7cd5672c79604ae487315d36e627a93f266f15ba55bca64cad46d4a2cc50298",
-  "startedAt": "2026-10-16T09:53:49.473Z",
-  "completedAt": "2026-10-16T09:55:35.851Z",
+  "runId": "bb880f37-91a1-4949-a66d-582d21b41a8d",
+  "sourceRevision": "b4fdb8004e5682d6a077f0554a63e5646aa2c537",
+  "sourceTreeSha256": "2b5a64c4873064c8fec0fe392d81532fdb99c38882a0fb25db0c00288a3ce95c",
+  "startedAt": "2026-10-16T09:57:36.700Z",
+  "completedAt": "2026-10-16T10:00:22.371Z",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "tools": {
     "node": "24.21.0",
@@ -281,8 +281,8 @@
         "indexes": [
           "reactions_pkey"
         ],
-        "planningMs": 0.046,
-        "executionMs": 0.197,
+        "planningMs": 0.048,
+        "executionMs": 0.239,
         "actualRows": 0
       },
       {
@@ -291,8 +291,8 @@
         "indexes": [
           "feedback_project_locale"
         ],
-        "planningMs": 2.942,
-        "executionMs": 0.045,
+        "planningMs": 2.885,
+        "executionMs": 0.043,
         "actualRows": 51
       },
       {
@@ -301,8 +301,8 @@
         "indexes": [
           "daily_aggregates_pkey"
         ],
-        "planningMs": 1.716,
-        "executionMs": 0.024,
+        "planningMs": 1.644,
+        "executionMs": 0.025,
         "actualRows": 1
       },
       {
@@ -311,8 +311,8 @@
         "indexes": [
           "consents_expiry"
         ],
-        "planningMs": 0.307,
-        "executionMs": 2.557,
+        "planningMs": 0.338,
+        "executionMs": 2.428,
         "actualRows": 0,
         "candidateRows": 100,
         "deletedRows": 50
@@ -323,8 +323,8 @@
         "indexes": [
           "jobs_due_idx"
         ],
-        "planningMs": 1.691,
-        "executionMs": 0.056,
+        "planningMs": 1.857,
+        "executionMs": 0.055,
         "actualRows": 50
       }
     ]
@@ -379,6 +379,10 @@
         "schema": "measurement",
         "name": "begin_retention_checkpoint",
         "args": "requested_portfolio uuid, requested_job uuid, requested_kind text, requested_at timestamp with time zone, initial_stage text",
+        "owner": "shipwithali_migration",
+        "ownerCanLogin": false,
+        "ownerSuperuser": false,
+        "ownerBypassRls": false,
         "config": [
           "search_path=pg_catalog, measurement"
         ]
@@ -387,6 +391,10 @@
         "schema": "measurement",
         "name": "seal_daily_aggregate_checkpoint",
         "args": "target_portfolio uuid, target_day date, mark_incomplete boolean, sealed_at timestamp with time zone",
+        "owner": "shipwithali_migration",
+        "ownerCanLogin": false,
+        "ownerSuperuser": false,
+        "ownerBypassRls": false,
         "config": [
           "search_path=pg_catalog, measurement"
         ]
