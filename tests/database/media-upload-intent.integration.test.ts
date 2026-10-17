@@ -1872,7 +1872,8 @@ describeReal(group === "baseline"
         sha256: staleOriginalSha256 });
       expect(staleResult).toMatchObject({ ok: false, error: { code: "MEDIA_CANDIDATE_STALE" } });
       await admin.query("update media.assets set declared_sha256 = $2 where media_id = $1::uuid", [staleCandidate.mediaId, staleOriginalSha256]);
-      expect(staleOutputs).toHaveLength(2);
+      expect(staleOutputs, JSON.stringify({ staleResult, sealedOutputCount: staleOutputs.length, scannerExecutions, processorExecutions, imageProcessorExecutions }))
+        .toHaveLength(2);
       for (const output of staleOutputs) {
         const objectPath = `/storage/v1/object/media-processed/processed/${portfolioId}/${staleCandidate.mediaId}/${output.objectId}/${output.sha256}.webp`;
         const removed = await storageRequest(objectPath, { headers: headers(SERVICE_ROLE_KEY!) });
