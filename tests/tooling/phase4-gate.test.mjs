@@ -69,7 +69,7 @@ test("skipped and partial required results fail", () => {
 });
 
 test("Phase 2's single known Windows helper-process skip is the only tolerated skip", () => {
-  const knownSkip = "✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped)\nTests 624 passed | 1 skipped (625)";
+  const knownSkip = "✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped) 6357ms\nTests 624 passed | 1 skipped (625)";
   assert.deepEqual(classifyCheckResult({ code: 0, output: knownSkip, failOnSkipped: true,
     allowWindowsPhase2HelperProcessSkip: true, platform: "win32" }),
   { passed: true, exitCode: 0, failure: null });

@@ -77,7 +77,7 @@ export function classifyCheckResult({
   ].map((match) => Number(match[1]));
   const knownWindowsPhase2Skip = allowWindowsPhase2HelperProcessSkip && platform === "win32" &&
     skippedCounts.length === 2 && skippedCounts.every((count) => count === 1) &&
-    /(?:^|\n)\s*✓\s+tests\/runtime\/media-processing-tools\.test\.ts \([^\n]*\b1 skipped\)(?:\n|$)/u.test(cleanOutput) &&
+    /(?:^|\n)\s*✓\s+tests\/runtime\/media-processing-tools\.test\.ts \([^\n]*\b1 skipped\)(?:\s+[^\r\n]+)?(?:\n|$)/u.test(cleanOutput) &&
     /(?:^|\n)\s*Tests\s+\d+ passed \| 1 skipped \(\d+\)(?:\n|$)/u.test(cleanOutput);
   const skippedOrPartial = failOnSkipped &&
     ((skippedCounts.some((count) => count > 0) && !knownWindowsPhase2Skip) || /missing.*service/i.test(cleanOutput) ||
