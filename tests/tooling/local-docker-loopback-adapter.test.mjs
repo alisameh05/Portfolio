@@ -5,6 +5,12 @@ import { isLocalValidationProjectId, localLoopbackDockerArguments } from "../../
 const projectId = "shipwithali-phase3-0123456789abcdef";
 const identity = ["--name", `supabase_db_${projectId}`, "--label", `com.supabase.cli.project=${projectId}`];
 
+test("settings identities use bounded suffixes and reject CLI-truncated upgrade names", () => {
+  assert.equal(isLocalValidationProjectId("shipwithali-settings-upgrade-0123456789"), true);
+  assert.equal(isLocalValidationProjectId("shipwithali-settings-clean-0123456789"), true);
+  assert.equal(isLocalValidationProjectId("shipwithali-settings-upgrade-0123456789ab"), false);
+});
+
 test("local Auth fixture identities remain bounded and share the scoped adapter", () => {
   const auth = "shipwithali-auth-0123456789abcdef";
   assert.equal(isLocalValidationProjectId(auth), true);

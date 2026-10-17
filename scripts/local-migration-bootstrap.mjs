@@ -89,15 +89,20 @@ export function removeOwnedMigrationNetwork(fixture) {
   if (names().includes(name)) throw new Error("LOCAL_MIGRATION_NETWORK_CLEANUP_UNVERIFIED");
 }
 
-// Only the generated disposable project's migration executor is elevated.
-// Application/Worker roles and deployed Supabase projects are never targets.
-export function withLocalMigrationExecutor(fixture, run) {
+function localMigrationContainer(fixture) {
   assertDisposableFixture(fixture);
   const container = `supabase_db_${fixture.projectId}`;
   const projectLabel = docker(["inspect", "--format", '{{index .Config.Labels "com.supabase.cli.project"}}', container], "CONTAINER");
   if (projectLabel !== fixture.projectId) throw new Error("PHASE6_MIGRATION_BOOTSTRAP_CONTAINER_MISMATCH");
   const ports = JSON.parse(docker(["inspect", "--format", "{{json .NetworkSettings.Ports}}", container], "PORT_BINDINGS"));
   if (!loopbackPublishedPorts(ports)) throw new Error("LOCAL_MIGRATION_DATABASE_NOT_LOOPBACK");
+  return container;
+}
+
+// Only the generated disposable project's migration executor is elevated.
+// Application/Worker roles and deployed Supabase projects are never targets.
+export function withLocalMigrationExecutor(fixture, run) {
+  const container = localMigrationContainer(fixture);
   const query = (sql, stage) => docker(["exec", container, "psql", "-X", "-v", "ON_ERROR_STOP=1", "-U", "supabase_admin", "-d", "postgres", "-Atc", sql], stage);
   const originallySuperuser = query("select rolsuper from pg_roles where rolname = 'postgres'", "ROLE_QUERY");
   if (!["t", "f"].includes(originallySuperuser)) throw new Error("PHASE6_MIGRATION_BOOTSTRAP_ROLE_INVALID");
@@ -135,8 +140,19 @@ export function applyLocalProjectMigrations(fixture, migrate) {
   // Create capability roles through the normal CREATEROLE executor first.
   // PostgreSQL grants that creator ADMIN OPTION; creating them as a superuser
   // would skip it and break subsequent restricted-login fixture provisioning.
-  const privilegedNames = readdirSync(migrations).filter(name => /^\d{14}_.+\.sql$/u.test(name) &&
+  let privilegedNames = readdirSync(migrations).filter(name => /^\d{14}_.+\.sql$/u.test(name) &&
     name >= "20261015093040_query_current_interaction_summaries.sql");
+  if (privilegedNames.length === 0) return migrate();
+  const container = localMigrationContainer(fixture);
+  const query = sql => docker(["exec", container, "psql", "-X", "-v", "ON_ERROR_STOP=1", "-U", "supabase_admin", "-d", "postgres", "-Atc", sql], "LEDGER_QUERY");
+  const ledgerExists = query("select to_regclass('supabase_migrations.schema_migrations') is not null");
+  if (!["t", "f"].includes(ledgerExists)) throw new Error("LOCAL_MIGRATION_LEDGER_INVALID");
+  const applied = new Set(ledgerExists === "t"
+    ? query("select version from supabase_migrations.schema_migrations order by version").split(/\r?\n/u).filter(Boolean) : []);
+  if ([...applied].some(version => !/^\d{14}$/u.test(version))) throw new Error("LOCAL_MIGRATION_LEDGER_INVALID");
+  // Keep applied files visible: the CLI checks the full ledger even on no-op
+  // replays. Only pending privileged SQL can be staged behind role creation.
+  privilegedNames = privilegedNames.filter(name => !applied.has(name.slice(0, 14)));
   if (privilegedNames.length === 0) return migrate();
   const privileged = join(fixture.workdir, "validation-privileged-migrations");
   mkdirSync(privileged);

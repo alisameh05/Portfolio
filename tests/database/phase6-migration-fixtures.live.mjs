@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { copyFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { Client } from "pg";
-import { makeProject, startProject, resetProject, applyProjectMigrations, stopProject, seedPredecessorRows, boundedPlans, privilegeMatrix, transferPortableDataset, catalogSnapshot, generatedTypes, phase6MigrationFailureCode } from "../../scripts/phase6-migration-access.mjs";
+import { applyLocalProjectMigrations } from "../../scripts/local-migration-bootstrap.mjs";
+import { localEnvironment } from "../../scripts/portfolio-settings-integration.mjs";
+import { makeProject, startProject, resetProject, stopProject, seedPredecessorRows, boundedPlans, privilegeMatrix, transferPortableDataset, catalogSnapshot, generatedTypes, phase6MigrationFailureCode } from "../../scripts/phase6-migration-access.mjs";
 
 // Explicit live regression command; this never emits acceptance artifacts.
 // node --test tests/database/phase6-migration-fixtures.live.mjs
@@ -17,13 +21,21 @@ test("migration fixtures preserve valid accepted-PDF history, scoped access and 
   try {
     const source = makeProject("fixture-source", basePort, migrations.filter(name => name !== correction)); projects.push(source);
     const sourceStatus = await startProject(source);
+    stage = "LOCAL_MIGRATION_REPLAY";
+    const migrateSource = () => {
+      const result = spawnSync(process.execPath, [fileURLToPath(new URL("../../node_modules/supabase/dist/supabase.js", import.meta.url)),
+        "--workdir", source.workdir, "migration", "up", "--local"], { env: localEnvironment(), encoding: "utf8", timeout: 60_000 });
+      const missingHistory = /Remote migration versions not found in local migrations directory/iu.test(`${result.stderr ?? ""}\n${result.stdout ?? ""}`);
+      if (result.error || result.status !== 0) throw new Error(missingHistory ? "LOCAL_MIGRATION_REPLAY_HISTORY_MISSING" : "LOCAL_MIGRATION_REPLAY_FAILED");
+    };
+    applyLocalProjectMigrations(source, migrateSource);
     stage = "RELEASED_PHASE7_UPGRADE";
     const upgradeProbe = new Client({ connectionString: sourceStatus.DB_URL }); await upgradeProbe.connect();
     try {
       assert.equal((await upgradeProbe.query("select rolsuper from pg_roles where rolname = 'postgres'")).rows[0].rolsuper, false);
       assert.equal((await upgradeProbe.query("select has_function_privilege('anon', 'measurement.prevent_sealed_aggregate_checkpoint_rewrite()', 'EXECUTE') as allowed")).rows[0].allowed, true);
       copyFileSync(new URL(`../../supabase/migrations/${correction}`, import.meta.url), join(source.migrationDir, correction));
-      applyProjectMigrations(source);
+      applyLocalProjectMigrations(source, migrateSource);
       for (const role of ["anon", "authenticated", "shipwithali_application", "shipwithali_backup"]) {
         assert.equal((await upgradeProbe.query("select has_function_privilege($1, 'measurement.prevent_sealed_aggregate_checkpoint_rewrite()', 'EXECUTE') as allowed", [role])).rows[0].allowed, false);
       }
