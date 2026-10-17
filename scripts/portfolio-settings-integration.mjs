@@ -148,8 +148,9 @@ function migrationSources() {
   };
 }
 
-function createProject(name, basePort, migrations) {
-  const projectId = `shipwithali-${name}-${randomBytes(6).toString("hex")}`;
+export function createProject(name, basePort, migrations) {
+  // The pinned CLI truncates project IDs to 40 characters for Docker names.
+  const projectId = `shipwithali-${name}-${randomBytes(5).toString("hex")}`;
   const workdir = mkdtempSync(join(tmpdir(), `${projectId}-`));
   const project = { projectId, workdir, network: `${projectId}-loopback`, basePort, networkCreated: false, attemptedStart: false };
   try {
