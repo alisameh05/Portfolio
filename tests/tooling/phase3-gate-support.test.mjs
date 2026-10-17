@@ -23,6 +23,13 @@ test("Phase 3 gate cleanup rejects a persistent checkout", () => {
   assert.throws(() => removePhase3GateProject({ workdir: process.cwd(), projectId: "shipwithali-portfolio" }));
 });
 
+test("Phase 3 refreshes migration proof before focused suites consume its checksums", () => {
+  const source = readFileSync(new URL("../../scripts/phase3-gate.mjs", import.meta.url), "utf8");
+  const verification = source.indexOf('["role-rls-types-plans",');
+  const consumers = source.indexOf('["phase3-focused-tests",');
+  assert.ok(verification >= 0 && consumers > verification);
+});
+
 test("Phase 3 gate skip reporting counts tests without counting skipped test files twice", () => {
   assert.equal(skippedTestCount("Test Files 1 passed | 1 skipped (2)\nTests 7 passed | 2 skipped (9)"), 2);
 });
