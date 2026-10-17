@@ -55,6 +55,8 @@ const ANON_KEY = process.env["PHASE6_UPLOAD_INTENT_ANON_KEY"];
 const REPLAY_KEY = process.env["PHASE6_UPLOAD_INTENT_REPLAY_KEY"];
 const PDF_FIXTURE = process.env["PHASE6_PDF_PROCESSING_FIXTURE"];
 const SCANNER_IMAGE = process.env["PHASE6_SCANNER_IMAGE"];
+const SCANNER_CONTAINER = process.env["PHASE6_SCANNER_CONTAINER"];
+if (SCANNER_CONTAINER && !/^shipwithali-phase6-scanner-[a-f0-9-]{36}$/u.test(SCANNER_CONTAINER)) throw new Error("PHASE6_SCANNER_CONTAINER_INVALID");
 const PDF_PROCESSOR_IMAGE = process.env["PHASE6_PDF_PROCESSOR_IMAGE"];
 const SCANNER_VERSION = process.env["PHASE6_SCANNER_VERSION"];
 const PDF_PROCESSOR_VERSION = process.env["PHASE6_PDF_PROCESSOR_VERSION"];
@@ -147,6 +149,12 @@ function dockerResult(args: readonly string[], input?: Uint8Array, timeoutMs = 3
 }
 
 function dockerScanner(bytes: Uint8Array, timeoutMs = 24_000) {
+  if (SCANNER_CONTAINER) {
+    const result = dockerResult(["exec", "-i", SCANNER_CONTAINER, "clamdscan", "--stream", "--no-summary", "-"], bytes, timeoutMs);
+    if (result.status === 0) return { ok: true as const, value: { verdict: "clean" as const, version: SCANNER_VERSION! } };
+    if (result.status === 1) return { ok: true as const, value: { verdict: "unsafe" as const, version: SCANNER_VERSION! } };
+    return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_SCANNER_UNAVAILABLE" } };
+  }
   const directory = mkdtempSync(join(tmpdir(), "phase6-media-scan-"));
   try {
     writeFileSync(join(directory, "input.bin"), bytes, { flag: "wx", mode: 0o600 });
@@ -158,6 +166,16 @@ function dockerScanner(bytes: Uint8Array, timeoutMs = 24_000) {
 }
 
 function dockerScannerMany(files: readonly Uint8Array[], timeoutMs = 24_000) {
+  if (SCANNER_CONTAINER) {
+    const deadline = performance.now() + timeoutMs;
+    for (const bytes of files) {
+      const remaining = Math.floor(deadline - performance.now());
+      if (remaining <= 0) return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_SCANNER_UNAVAILABLE" } };
+      const result = dockerScanner(bytes, remaining);
+      if (!result.ok || result.value.verdict !== "clean") return result;
+    }
+    return { ok: true as const, value: { verdict: "clean" as const, version: SCANNER_VERSION! } };
+  }
   const directory = mkdtempSync(join(tmpdir(), "phase6-media-scan-"));
   try {
     const paths = files.map((bytes, index) => {
@@ -1169,7 +1187,7 @@ describeReal(group === "baseline"
         accessibility: { kind: "document", summary: "A readable one page PDF document." } }),
       () => media.rejectOwnerMediaAsset({ actor, mediaId: acceptanceRaceId, expectedVersion: 2,
         idempotencyKey: "phase6-rejection-command-race" as never, reason }),
-    ] as const, true, "Media acceptance versus rejection", 1_800);
+    ] as const, true, "Media acceptance versus rejection");
     if (rejectionRaceResult.ok) {
       expect(acceptanceRaceResult).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
       expect(await rejectionState(acceptanceRaceId)).toMatchObject({ aggregate_version: 3, rejections: 1, receipts: 1 });
@@ -1186,7 +1204,7 @@ describeReal(group === "baseline"
       () => createAcceptanceService().acceptOwnerMediaAsset({ actor, mediaId: rejectionFirstRaceId,
         expectedVersion: 2, idempotencyKey: "phase6-rejection-first-race-accept" as never,
         accessibility: { kind: "document", summary: "A readable one page PDF document." } }),
-      ] as const, true, "rejection before Media acceptance", 1_800);
+      ] as const, true, "rejection before Media acceptance");
     expect(rejectionFirstResult).toMatchObject({ ok: true, value: { outcome: "media-rejected" } });
     expect(acceptanceAfterRejectionResult).toMatchObject({ ok: false, error: { code: "MEDIA_VERSION_MISMATCH" } });
     expect(await rejectionState(rejectionFirstRaceId)).toMatchObject({ aggregate_version: 3, rejections: 1, receipts: 1 });
@@ -2064,7 +2082,7 @@ describeReal(group === "baseline"
     }), { service: observedCvService, security: ownerSecurity() });
     const cvChecks: Array<{ readonly name: string; readonly executed: boolean; readonly status: "passed" | "failed" }> = [];
     const cvScenario = (name: string, passed: boolean) => {
-      if (!REQUIRE_CV_ACTIVATION) return;
+      if (!REQUIRE_FULL_MEDIA) return;
       cvChecks.push({ name, executed: true, status: passed ? "passed" : "failed" });
       if (!passed) saveProcessingCounts({ cvScenarios: cvChecks });
       expect(passed, name).toBe(true);
@@ -3492,7 +3510,8 @@ describeReal(group === "baseline"
     const secondConcurrent = await concurrentService.record(concurrentPayload);
     expect(secondConcurrent).toMatchObject({ ok: false, error: { code: "MEDIA_PROCESSING_IN_PROGRESS" } });
     releaseScanner();
-    expect((await firstConcurrent).ok).toBe(true);
+    const firstConcurrentResult = await firstConcurrent;
+    expect(firstConcurrentResult.ok, JSON.stringify(firstConcurrentResult)).toBe(true);
     const concurrentFacts = await admin.query(
       `select (select count(*)::int from media.processing_attempts where media_id = $1::uuid) as attempts,
               (select count(*)::int from media.processed_objects where media_id = $1::uuid) as outputs,

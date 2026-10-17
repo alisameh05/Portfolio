@@ -373,3 +373,17 @@ export function phase6Root() { return ROOT; }
 export function phase6RunId() { return randomUUID(); }
 export function phase6Readiness() { return verifyEnvironment(ROOT, observeRuntime()); }
 export function phase6Package() { return JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")); }
+
+export function phase6StorageIntegrationProof(report, source, now = Date.now()) {
+  const started = Date.parse(report?.startedAt ?? "");
+  const completed = Date.parse(report?.completedAt ?? "");
+  return report?.schemaVersion >= 1 && report.verdict === "pass" &&
+    typeof report.runId === "string" && report.runId.length >= 8 &&
+    /^[a-f0-9]{40}$/iu.test(report.sourceRevision ?? "") && report.sourceRevision === source.sourceRevision &&
+    /^[a-f0-9]{64}$/iu.test(report.sourceTreeSha256 ?? "") && report.sourceTreeSha256 === source.sourceTreeSha256 &&
+    Number.isFinite(started) && Number.isFinite(completed) && started <= completed && completed <= now &&
+    now - started <= 24 * 60 * 60 * 1000 &&
+    Number.isSafeInteger(report.checks?.total) && report.checks.total >= 7 &&
+    report.checks.passed === report.checks.total && report.checks.failed === 0 && report.checks.skipped === 0 &&
+    report.checks.verdict === "pass" && report.cleanup?.success === true && report.cleanup.attempted === true;
+}

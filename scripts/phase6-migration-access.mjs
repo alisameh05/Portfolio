@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client, Pool } from "pg";
-import { isolatedPhase6Config, scrubPhase6Environment } from "./phase6-verification-support.mjs";
+import { isolatedPhase6Config, phase6StorageIntegrationProof, scrubPhase6Environment } from "./phase6-verification-support.mjs";
 import { getPhase6SourceIdentity } from "./phase6-verification-support.mjs";
 import { migrationSha256 } from "./migration-checksum.mjs";
 
@@ -437,8 +437,7 @@ async function main() {
     if (!text.includes(`set lock_timeout = '${LOCK_TIMEOUT}'`)) throw new Error(`PHASE6_MIGRATION_LOCK_TIMEOUT_MISSING:${name}`);
   }
   const storageIntegration = JSON.parse(readFileSync(MEDIA_INTEGRATION_EVIDENCE, "utf8"));
-  if (storageIntegration.verdict !== "pass" || storageIntegration.sourceTreeSha256 !== SOURCE.sourceTreeSha256 ||
-      storageIntegration.checks?.integration?.total < 7 || storageIntegration.checks?.integration?.skipped !== 0) {
+  if (!phase6StorageIntegrationProof(storageIntegration, SOURCE)) {
     throw new Error("PHASE6_STORAGE_API_EVIDENCE_MISSING_OR_STALE");
   }
   const cvDelivery = JSON.parse(readFileSync(CV_DELIVERY_EVIDENCE, "utf8"));

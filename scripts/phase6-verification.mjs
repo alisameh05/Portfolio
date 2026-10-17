@@ -218,6 +218,8 @@ async function main() {
   mkdirSync(fixturesDir);
   mkdirSync(isolatedSupabase);
   let networkCreated = false;
+  const scannerContainer = `shipwithali-phase6-scanner-${randomUUID()}`;
+  let scannerStarted = false;
   let attemptedStart = false;
   let cleanup = { attempted: true, success: false };
   const services = {
@@ -383,6 +385,12 @@ async function main() {
         toolVersions.sharp = `sharp-${sharpModule.default.versions.sharp};libvips-${sharpModule.default.versions.vips ?? "unknown"}`;
       }
     }
+    // Load the pinned signature database once; every fixture still receives a real scan.
+    run("docker", ["run", "--detach", "--rm", "--name", scannerContainer, "--network", "none", "--memory", "2g", "--cpus", "1",
+      "--entrypoint", "clamd", scanner, "--foreground=true"], { label: "scanner-service-start" });
+    scannerStarted = true;
+    run("docker", ["exec", scannerContainer, "clamdscan", "--ping", "120:1"], { timeout: 150_000, label: "scanner-service-ready" });
+    toolVersions.scannerMode = "isolated-clamd-stream";
     if (!IMAGE_PROCESSING_ONLY) writeFileSync(join(fixturesDir, "fixture.pdf"), pdfFixture());
     activeFormats = MEDIA_PROCESSING_ONLY || MEDIA_REJECTION_ONLY || OWNER_COMPOSITION_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
       : CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY ? PHASE6_FORMATS.filter(({ id, kind }) => id === "pdf" || kind === "image")
@@ -420,7 +428,7 @@ async function main() {
       }
       const storageHash = await storagePutAndCheck(status, fixture, fixture.mimeType);
       console.log(`✓ ${fixture.id}: private Storage upload and byte round-trip passed; scanning.`);
-      run("docker", ["run", "--rm", "--entrypoint", "clamscan", "-v", `${fixturesDir}:/fixtures:ro`, scanner, "--no-summary", `/fixtures/fixture.${fixture.id}`], { timeout: RUN_TIMEOUT, label: `scan-${fixture.id}` });
+      run("docker", ["exec", "-i", scannerContainer, "clamdscan", "--stream", "--no-summary", "-"], { input: readFileSync(fixture.path), timeout: RUN_TIMEOUT, label: `scan-${fixture.id}` });
       formats.push({ id: fixture.id, kind: fixture.kind, mimeType: fixture.mimeType, executed: true, status: "passed", storageRoundTrip: true, sha256: storageHash, scannerVerdict: "clean", processorVersion });
       services.storage.executionCount += 3;
       console.log(`✓ ${fixture.id}: processor, clean scan and private byte round-trip passed.`);
@@ -447,7 +455,7 @@ async function main() {
       PHASE6_MEDIA_ACCEPTANCE_ONLY: RUN_MEDIA_ACCEPTANCE ? "1" : "0",
       PHASE6_MEDIA_REJECTION_ONLY: MEDIA_REJECTION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_REQUIRE_FULL_MEDIA: CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || MEDIA_INTEGRATION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
-      PHASE6_CV_ACTIVATION_ONLY: CV_ACTIVATION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
+      PHASE6_CV_ACTIVATION_ONLY: CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_CV_DELIVERY_ONLY: CV_DELIVERY_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_PUBLIC_CAPABILITIES_ONLY: CV_DELIVERY_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_VIDEO_PROCESSING_MP4_FIXTURE: join(fixturesDir, "fixture.mp4"),
@@ -457,6 +465,7 @@ async function main() {
       PHASE6_SCANNER_IMAGE: scanner,
       PHASE6_PDF_PROCESSOR_IMAGE: pdf,
       PHASE6_SCANNER_VERSION: toolVersions.scanner,
+      PHASE6_SCANNER_CONTAINER: scannerContainer,
       PHASE6_PDF_PROCESSOR_VERSION: toolVersions.pdfProcessor,
       PHASE6_MEDIA_PROCESSING_COUNTS_FILE: processingCountsPath,
     };
@@ -783,6 +792,10 @@ async function main() {
     failures.push(error instanceof Error ? error.message : "PHASE6_SETUP_FAILED");
   } finally {
     let cleanupFailed = false;
+    if (scannerStarted) {
+      const result = spawnSync("docker", ["rm", "--force", scannerContainer], { env, stdio: "ignore", timeout: 30_000 });
+      if (result.error || result.status !== 0) cleanupFailed = true;
+    }
     if (attemptedStart) {
       try { invoke(["stop", "--no-backup"], 120_000); } catch { cleanupFailed = true; }
     }
@@ -811,7 +824,7 @@ async function main() {
     mkdirSync(join(ROOT, "evidence"), { recursive: true });
     writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   }
-  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !MEDIA_DELIVERY_ONLY && !MEDIA_REJECTION_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !CV_DELIVERY_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY && !MEDIA_CV_INTEGRATION_ONLY) {
+  if (uploadIntentChecks !== undefined && (BASELINE_VERIFICATION_ONLY || UPLOAD_INTENT_ONLY)) {
     const uploadIntentEvidence = {
       schemaVersion: 1,
       ticket: 148,

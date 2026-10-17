@@ -7,7 +7,7 @@ import { join } from "node:path";
 import {
   PHASE6_FORMATS, PHASE6_MEDIA_CV_CRITERION_IDS, PHASE6_PREDECESSOR_CONTEXTS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests,
   evaluatePhase6MediaCvIntegration, evaluatePhase6Setup, isolatedPhase6Config,
-  loadPhase6PredecessorContexts, makePhase6Report, phase6CvScenarioProof, phase6CvDeferredMigrations, scrubPhase6Environment,
+  loadPhase6PredecessorContexts, makePhase6Report, phase6CvScenarioProof, phase6CvDeferredMigrations, phase6StorageIntegrationProof, scrubPhase6Environment,
 } from "../../scripts/phase6-verification-support.mjs";
 import { createBarrier, createDeterministicClock, createUuidV7Sequence } from "../phase6/fixtures/deterministic.mjs";
 
@@ -378,4 +378,26 @@ test("race scenarios can wait on independent test actors at a deterministic barr
   await Promise.all([barrier.arrive(), barrier.arrive(), barrier.arrive()].map(async () => { released += 1; }));
   assert.equal(barrier.arrived(), 3);
   assert.equal(released, 3);
+});
+
+test("Storage integration artifact requires complete fresh source/run-bound proof", () => {
+  const source = {sourceRevision: "b".repeat(40), sourceTreeSha256: "a".repeat(64)};
+  const now = Date.parse("2026-10-17T10:15:00Z");
+  const report = {schemaVersion: 1, verdict: "pass", ...source, runId: "storage-run-12345678",
+    startedAt: "2026-10-17T10:00:00Z", completedAt: "2026-10-17T10:10:00Z",
+    checks: {total: 7, passed: 7, failed: 0, skipped: 0, verdict: "pass"}, cleanup: {attempted: true, success: true}};
+  assert.equal(phase6StorageIntegrationProof(report, source, now), true);
+  for (const change of [
+    {schemaVersion: undefined}, {runId: undefined}, {runId: ""},
+    {sourceRevision: undefined}, {sourceRevision: "c".repeat(40)},
+    {sourceTreeSha256: undefined}, {sourceTreeSha256: "d".repeat(64)},
+    {startedAt: undefined}, {completedAt: undefined},
+    {startedAt: "2026-10-15T10:00:00Z"}, {completedAt: "2026-10-18T10:00:00Z"},
+    {completedAt: "2026-10-17T09:59:00Z"},
+    {checks: {...report.checks, total: 6, passed: 6}},
+    {checks: {...report.checks, failed: 1}},
+    {checks: {...report.checks, skipped: 1}},
+    {checks: {integration: report.checks}},
+    {cleanup: {attempted: true, success: false}}, {cleanup: {success: true}},
+  ]) assert.equal(phase6StorageIntegrationProof({...report, ...change}, source, now), false, JSON.stringify(change));
 });
