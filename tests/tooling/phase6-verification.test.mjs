@@ -154,6 +154,8 @@ test("integration diagnostics retain only known Media codes and CV criterion IDs
 });
 
 function passingReport() {
+  const phase5RunId = "90000000-0000-4000-8000-000000000005";
+  const phase5ContextRunId = "90000000-0000-4000-8000-000000000006";
   const predecessorContexts = {
     phase4: {
       ...PHASE6_PREDECESSOR_CONTEXTS.phase4,
@@ -170,8 +172,22 @@ function passingReport() {
     },
     phase5: {
       ...PHASE6_PREDECESSOR_CONTEXTS.phase5,
-      contextRunId: PHASE6_PREDECESSOR_CONTEXTS.phase5.runId,
+      contextRunId: phase5RunId,
+      gateTicket: 125,
+      sourceRevision: "abc",
+      sourceTreeSha256: "tree",
       contextVerdict: "pass",
+      contextTicket: 107,
+      contextPhase: "phase5",
+      contextEvidenceRunId: phase5ContextRunId,
+      contextSourceRevision: "abc",
+      contextSourceTreeSha256: "tree",
+      contextArtifactRunId: phase5ContextRunId,
+      contextArtifactSourceRevision: "abc",
+      contextArtifactSourceTreeSha256: "tree",
+      contextGateRunId: phase5RunId,
+      contextRequiredRunId: phase5RunId,
+      contextArtifactFresh: true,
       operations: { public: 5, owner: 48, forbiddenFindings: 0 },
       runtimeBoundary: "pass",
       runtimeArchitecture: "pass",
@@ -207,12 +223,21 @@ test("loads predecessor contexts from an explicit evidence root", () => {
       },
     }));
     writeFileSync(join(evidenceRoot, "phase-5-gate-report.json"), JSON.stringify({
-      runId: PHASE6_PREDECESSOR_CONTEXTS.phase5.runId,
-      sourceRevision: PHASE6_PREDECESSOR_CONTEXTS.phase5.sourceRevision,
-      sourceTreeSha256: PHASE6_PREDECESSOR_CONTEXTS.phase5.sourceTreeSha256,
+      ticket: 125,
+      runId: "90000000-0000-4000-8000-000000000005",
+      sourceRevision: "a".repeat(40),
+      sourceTreeSha256: "b".repeat(64),
       verdict: "pass",
+      evidenceArtifacts: [{ path: "evidence/phase-5-context.json", runId: "90000000-0000-4000-8000-000000000006",
+        gateRunId: "90000000-0000-4000-8000-000000000005", requiredRunId: "90000000-0000-4000-8000-000000000005",
+        sourceRevision: "a".repeat(40), sourceTreeSha256: "b".repeat(64), fresh: true }],
     }));
     writeFileSync(join(evidenceRoot, "phase-5-context.json"), JSON.stringify({
+      ticket: 107,
+      phase: "phase5",
+      runId: "90000000-0000-4000-8000-000000000006",
+      sourceRevision: "a".repeat(40),
+      sourceTreeSha256: "b".repeat(64),
       operations: { public: 5, owner: 48, forbiddenFindings: 0 },
       runtimeBoundary: "pass",
       runtimeArchitecture: "pass",
@@ -221,7 +246,9 @@ test("loads predecessor contexts from an explicit evidence root", () => {
     const contexts = loadPhase6PredecessorContexts(root);
     assert.equal(contexts.phase4.contextVerdict, "pass");
     assert.equal(contexts.phase5.contextVerdict, "pass");
-    assert.equal(contexts.phase5.contextRunId, PHASE6_PREDECESSOR_CONTEXTS.phase5.runId);
+    assert.equal(contexts.phase5.contextRunId, "90000000-0000-4000-8000-000000000005");
+    assert.equal(contexts.phase5.contextEvidenceRunId, "90000000-0000-4000-8000-000000000006");
+    assert.equal(contexts.phase5.contextGateRunId, contexts.phase5.contextRunId);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -304,6 +331,15 @@ test("predecessor assertions require source-bound Phase 4 and current Phase 5 ru
   const result = evaluatePhase6Setup(report, { sourceRevision: "abc", sourceTreeSha256: "tree", now: Date.now() + 60_000 });
   assert.equal(result.verdict, "fail");
   assert.ok(result.failures.includes("phase4-context-assertions-incomplete"));
+  assert.ok(result.failures.includes("phase5-run-provenance-invalid"));
+});
+
+test("Phase 6 rejects stale or detached Phase 5 context evidence", () => {
+  const report = passingReport();
+  report.predecessorContexts.phase5.contextArtifactFresh = false;
+  report.predecessorContexts.phase5.contextGateRunId = "90000000-0000-4000-8000-000000000099";
+  const result = evaluatePhase6Setup(report, { sourceRevision: "abc", sourceTreeSha256: "tree", now: Date.now() + 60_000 });
+  assert.equal(result.verdict, "fail");
   assert.ok(result.failures.includes("phase5-run-provenance-invalid"));
 });
 
