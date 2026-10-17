@@ -5,6 +5,7 @@ import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wri
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { initializeLocalMigrationProject } from "./local-migration-bootstrap.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
@@ -53,15 +54,15 @@ export function main() {
   const installed = JSON.parse(readFileSync(join(ROOT, "node_modules/supabase/package.json"), "utf8"));
   if (installed.version !== pkg.devDependencies.supabase) throw new Error("LOCAL_AUTH_CLI_PIN_MISMATCH");
   const workdir = mkdtempSync(join(tmpdir(), "shipwithali-auth-"));
-  const id = `shipwithali-auth-${randomUUID()}`;
+  const id = `shipwithali-auth-${randomUUID().replaceAll("-", "").slice(0, 16)}`;
   const env = localEnvironment();
   const network = `${id}-loopback`;
   let networkCreated = false;
   let attemptedStart = false;
   let failure;
-  const invoke = (args, timeout = 600_000) => {
+  const invoke = (args, timeout = 600_000, environment = env) => {
     const result = spawnSync(process.execPath, [CLI, "--workdir", workdir, ...args], {
-      cwd: ROOT, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout,
+      cwd: ROOT, env: environment, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout,
     });
     if (result.error || result.status !== 0) throw new Error(`LOCAL_AUTH_CLI_FAILED:${args[0]} (raw output suppressed to protect credentials)`);
     return result.stdout;
@@ -79,7 +80,10 @@ export function main() {
     networkCreated = true;
     attemptedStart = true;
     console.log("Starting isolated loopback Supabase Auth; first run may download container images.");
-    invoke(["start", "--network-id", network]);
+    initializeLocalMigrationProject({ projectId: id, workdir, network }, {
+      initialize: (_network, dockerEnvironment) => invoke(["start", "--network-id", network], 600_000, { ...env, ...dockerEnvironment }),
+      migrate: () => invoke(["migration", "up", "--local"]),
+    });
     const status = JSON.parse(invoke(["status", "-o", "json"], 30_000));
     const url = new URL(status.API_URL);
     if (url.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(url.hostname) || url.port !== "56321") {
@@ -109,14 +113,14 @@ export function main() {
   } finally {
     let cleanupFailed = false;
     if (attemptedStart) {
-      try { invoke(["stop", "--no-backup"], 90_000); } catch { cleanupFailed = true; }
+      try { invoke(["stop", "--project-id", id, "--no-backup"], 90_000); } catch { cleanupFailed = true; }
     }
     if (networkCreated) {
       const result = spawnSync("docker", ["network", "rm", network], { env, stdio: "ignore", timeout: 20_000 });
       if (result.error || result.status !== 0) cleanupFailed = true;
     }
     // Only remove the absolute directory created by this invocation under tmpdir.
-    if (resolve(workdir).startsWith(`${resolve(tmpdir())}\\`) || resolve(workdir).startsWith(`${resolve(tmpdir())}/`)) {
+    if (!cleanupFailed && (resolve(workdir).startsWith(`${resolve(tmpdir())}\\`) || resolve(workdir).startsWith(`${resolve(tmpdir())}/`))) {
       rmSync(workdir, { recursive: true, force: true });
     }
     if (cleanupFailed) failure = new Error("LOCAL_AUTH_CLEANUP_FAILED: isolated containers/network require cleanup; validation failed.");

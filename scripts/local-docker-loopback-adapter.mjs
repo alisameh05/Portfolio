@@ -3,7 +3,7 @@ import { basename, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export function isLocalValidationProjectId(value) {
-  return /^shipwithali-(?:phase[36]-[a-f0-9]{16}|phase6-162-[a-f0-9]{12}|46-(?:clean|upgrade)-\d+|settings-(?:clean|upgrade)-[a-f0-9]{12})$/u.test(value);
+  return /^shipwithali-(?:(?:phase[36]|auth)-[a-f0-9]{16}|phase6-162-[a-f0-9]{12}|46-(?:clean|upgrade)-\d+|settings-(?:clean|upgrade)-[a-f0-9]{12})$/u.test(value);
 }
 
 // Docker's network default is not honored by every host configuration. Supply

@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { localLoopbackDockerArguments } from "../../scripts/local-docker-loopback-adapter.mjs";
+import { isLocalValidationProjectId, localLoopbackDockerArguments } from "../../scripts/local-docker-loopback-adapter.mjs";
 
 const projectId = "shipwithali-phase3-0123456789abcdef";
 const identity = ["--name", `supabase_db_${projectId}`, "--label", `com.supabase.cli.project=${projectId}`];
+
+test("local Auth fixture identities remain bounded and share the scoped adapter", () => {
+  const auth = "shipwithali-auth-0123456789abcdef";
+  assert.equal(isLocalValidationProjectId(auth), true);
+  assert.equal(isLocalValidationProjectId("shipwithali-auth-01234567-89ab-cdef-0123-456789abcdef"), false);
+  assert.deepEqual(localLoopbackDockerArguments(["create", "--name", `supabase_db_${auth}`,
+    "--label", `com.supabase.cli.project=${auth}`, "-p", "56322:5432", "image"], auth),
+  ["create", "--name", `supabase_db_${auth}`, "--label", `com.supabase.cli.project=${auth}`, "-p", "127.0.0.1:56322:5432", "image"]);
+});
 
 test("local Docker adapter explicitly binds only named and labeled fixture publishes", () => {
   const args = ["create", ...identity, "-p", "59322:5432", "--publish=0.0.0.0:59321:8000/tcp", "-p59323:80", "image"];
