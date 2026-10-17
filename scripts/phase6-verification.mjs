@@ -9,7 +9,7 @@ import { createServer } from "node:net";
 import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
 import {
   PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, getPhase6SourceIdentity, isolatedPhase6Config,
-  evaluatePhase6MediaCvIntegration, PHASE6_MEDIA_CV_CRITERION_IDS, makePhase6Report, phase6CvScenarioProof,
+  evaluatePhase6MediaCvIntegration, PHASE6_MEDIA_CV_CRITERION_IDS, makePhase6Report, phase6CvScenarioProof, phase6FormatProof,
   phase6CvDeferredMigrations, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
 } from "./phase6-verification-support.mjs";
 
@@ -781,7 +781,7 @@ async function main() {
     const acceptanceExecutionsValid = OWNER_COMPOSITION_ONLY
       ? processingCounts?.acceptanceExecutions === 1
       : CV_DELIVERY_ONLY
-      ? Number.isSafeInteger(processingCounts?.acceptanceExecutions) && processingCounts.acceptanceExecutions > 0
+      ? Number.isSafeInteger(processingCounts?.acceptanceExecutions) && processingCounts.acceptanceExecutions >= activeFormats.length
       : MEDIA_CV_INTEGRATION_ONLY
       ? Number.isSafeInteger(processingCounts?.acceptanceExecutions) && processingCounts.acceptanceExecutions >= PHASE6_FORMATS.length
       : processingCounts?.acceptanceExecutions === (MEDIA_DELIVERY_ONLY ? 4
@@ -1286,8 +1286,7 @@ async function main() {
       counts: cvPortfolioChecks?.counts, scenarios, cleanup,
       verdict: Array.isArray(scenarios) && scenarios.length === 9 && scenarios.every((item) => item.executed && item.status === "passed") &&
         cvPortfolioChecks?.counts?.executed === 9 && cvPortfolioChecks?.counts?.failed === 0 && cvPortfolioChecks?.counts?.skipped === 0 &&
-        processingCounts?.acceptanceExecutions === PHASE6_FORMATS.length && formats.length === PHASE6_FORMATS.length &&
-        formats.every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        processingCounts?.acceptanceExecutions === activeFormats.length && phase6FormatProof(formats, activeFormats) &&
         cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:cv-portfolio"],
       limitations: ["This ticket proves registration and bounded Owner reads; separate tickets own CV acceptance, Current CV activation, public delivery and the final Phase 6 gate."],
@@ -1329,8 +1328,8 @@ async function main() {
       counts: cvAcceptanceChecks?.counts, scenarios, cleanup,
       verdict: cvAcceptanceChecks?.verdict === "pass" && scenarios.length === 16 &&
         scenarios.every((item) => item.executed && item.status === "passed") && cvAcceptanceChecks?.counts?.criteriaCovered === 8 &&
-        cvMigrationUpgrade?.verdict === "pass" && processingCounts?.acceptanceExecutions === PHASE6_FORMATS.length &&
-        formats.length === PHASE6_FORMATS.length && formats.every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        cvMigrationUpgrade?.verdict === "pass" && processingCounts?.acceptanceExecutions === activeFormats.length &&
+        phase6FormatProof(formats, activeFormats) &&
         cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:cv-acceptance"],
       limitations: ["Acceptance records approval only; Current CV activation and public delivery remain separate operations."],
@@ -1381,6 +1380,8 @@ async function main() {
       principalScope: { database: "shipwithali_application scoped to the configured portfolio and owner RLS",
         storage: "private media-processed bucket; one content-addressed accepted PDF snapshot",
         visitor: "anonymous request without identity, consent cookie, or Measurement write" },
+      formats: formats.map(({ id, executed, status, storageRoundTrip, scannerVerdict, processorVersion }) =>
+        ({ id, executed, status, storageRoundTrip, scannerVerdict, processorVersion })),
       checks: { delivery: scenarioNames, currentCvHttpAndStorageUnits: acceptanceUnitChecks,
         currentCvStorageMatrix: processingCounts?.currentCvStorageMatrix ?? [],
         mediaAcceptanceOperations: processingCounts?.acceptanceExecutions ?? 0,
@@ -1394,7 +1395,7 @@ async function main() {
         currentCvStorageMatrixFailures: processingCounts?.currentCvStorageMatrix?.filter((item) => item.status !== "passed").length ?? 0 },
       cleanup, verdict: criteria.every((item) => item.executed && item.status === "passed") && integrationPassed &&
         (processingCounts?.currentCvStorageMatrix?.length ?? 0) >= 46 && processingCounts.currentCvStorageMatrix.every((item) => item.executed && item.status === "passed") &&
-        unitPassed && formats.some((format) => format.id === "pdf" && format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        unitPassed && processingCounts?.acceptanceExecutions >= activeFormats.length && phase6FormatProof(formats, activeFormats) &&
         cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:cv-delivery"],
       limitations: ["Public signed redirect behavior is verified by HTTP and Storage adapter tests; production composition uses bounded streaming. Replacing the current pointer affects subsequent reads; previously issued signed targets remain valid only until their 300-second expiry."],
@@ -1494,8 +1495,7 @@ async function main() {
       counts: cvActivationChecks?.counts, scenarios, criteria, cleanup,
       verdict: cvActivationChecks?.verdict === "pass" && scenarios.length >= 16 && scenarios.every((item) => item.executed && item.status === "passed") &&
         cvActivationChecks?.counts?.criteriaCovered === 10 && cvMigrationUpgrade?.verdict === "pass" &&
-        processingCounts?.acceptanceExecutions === activeFormats.length && formats.length === activeFormats.length &&
-        formats.every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        processingCounts?.acceptanceExecutions === activeFormats.length && phase6FormatProof(formats, activeFormats) &&
         cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:cv-activation"],
       limitations: [],

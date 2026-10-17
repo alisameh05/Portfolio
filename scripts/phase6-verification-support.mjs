@@ -387,3 +387,14 @@ export function phase6StorageIntegrationProof(report, source, now = Date.now()) 
     report.checks.passed === report.checks.total && report.checks.failed === 0 && report.checks.skipped === 0 &&
     report.checks.verdict === "pass" && report.cleanup?.success === true && report.cleanup.attempted === true;
 }
+
+export function phase6FormatProof(formats, expectedFormats) {
+  if (!Array.isArray(formats) || !Array.isArray(expectedFormats) || expectedFormats.length === 0) return false;
+  const expectedIds = expectedFormats.map((format) => format?.id);
+  const actualIds = formats.map((format) => format?.id);
+  return expectedIds.every((id) => typeof id === "string" && id.length > 0) &&
+    new Set(expectedIds).size === expectedIds.length && formats.length === expectedIds.length &&
+    new Set(actualIds).size === expectedIds.length && expectedIds.every((id) => actualIds.includes(id)) &&
+    formats.every((format) => format?.executed === true && format.status === "passed" &&
+      format.storageRoundTrip === true && format.scannerVerdict === "clean");
+}

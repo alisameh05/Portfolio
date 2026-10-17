@@ -7,7 +7,7 @@ import { join } from "node:path";
 import {
   PHASE6_FORMATS, PHASE6_MEDIA_CV_CRITERION_IDS, PHASE6_PREDECESSOR_CONTEXTS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests,
   evaluatePhase6MediaCvIntegration, evaluatePhase6Setup, isolatedPhase6Config,
-  loadPhase6PredecessorContexts, makePhase6Report, phase6CvScenarioProof, phase6CvDeferredMigrations, phase6StorageIntegrationProof, scrubPhase6Environment,
+  loadPhase6PredecessorContexts, makePhase6Report, phase6CvScenarioProof, phase6FormatProof, phase6CvDeferredMigrations, phase6StorageIntegrationProof, scrubPhase6Environment,
 } from "../../scripts/phase6-verification-support.mjs";
 import { createBarrier, createDeterministicClock, createUuidV7Sequence } from "../phase6/fixtures/deterministic.mjs";
 
@@ -400,4 +400,25 @@ test("Storage integration artifact requires complete fresh source/run-bound proo
     {checks: {integration: report.checks}},
     {cleanup: {attempted: true, success: false}}, {cleanup: {success: true}},
   ]) assert.equal(phase6StorageIntegrationProof({...report, ...change}, source, now), false, JSON.stringify(change));
+});
+
+test("focused CV format proof uses every selected format exactly once", () => {
+  const expected = PHASE6_FORMATS.filter(({ id, kind }) => id === "pdf" || kind === "image");
+  const formats = expected.map(({ id }) => ({ id, executed: true, status: "passed", storageRoundTrip: true, scannerVerdict: "clean" }));
+  assert.equal(expected.length, 4);
+  assert.equal(phase6FormatProof(formats, expected), true);
+  assert.equal(phase6FormatProof(formats, PHASE6_FORMATS), false);
+  assert.equal(phase6FormatProof(formats.slice(1), expected), false);
+  assert.equal(phase6FormatProof([...formats, formats[0]], expected), false);
+  for (const replacement of [{ id: "unknown" }, { executed: false }, { status: "skipped" }, { status: "failed" }, { storageRoundTrip: false }, { scannerVerdict: "unsafe" }]) {
+    const invalid = structuredClone(formats);
+    invalid[1] = { ...invalid[1], ...replacement };
+    assert.equal(phase6FormatProof(invalid, expected), false, JSON.stringify(replacement));
+  }
+  const duplicate = structuredClone(formats);
+  duplicate[1].id = duplicate[0].id;
+  assert.equal(phase6FormatProof(duplicate, expected), false);
+  assert.equal(phase6FormatProof([], []), false);
+  const complete = PHASE6_FORMATS.map(({ id }) => ({ ...formats[0], id }));
+  assert.equal(phase6FormatProof(complete, PHASE6_FORMATS), true);
 });

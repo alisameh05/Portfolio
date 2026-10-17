@@ -4078,7 +4078,9 @@ describeReal(group === "baseline"
     appNow = Date.now();
     const acceptedCountBeforeVideos = acceptedMediaIds.length;
     const { createClamAvScanner, createFfmpegVideoProcessor } = await import("../../src/runtime/adapters/media-processing-tools.js");
-    const realScanner = createClamAvScanner({ maxBytes: 50 * 1024 * 1024, timeoutMs: 25_000 });
+    const realScanner = REQUIRE_FULL_MEDIA && SCANNER_CONTAINER
+      ? dockerScanner()
+      : createClamAvScanner({ maxBytes: 50 * 1024 * 1024, timeoutMs: 25_000 });
     const realVideoProcessor = createFfmpegVideoProcessor();
     let videoProcessorExecutions = 0;
     let scannerExecutions = 0;

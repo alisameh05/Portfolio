@@ -72,7 +72,7 @@ function migrationsAtBaseline() {
   const current = readdirSync(join(ROOT, "supabase", "migrations")).filter((name) => /^\d{14}_[a-z0-9_]+\.sql$/u.test(name)).sort();
   for (const name of files) {
     const historical = git(["show", `${BASELINE}:supabase/migrations/${name}`]);
-    if (historical !== readFileSync(join(ROOT, "supabase", "migrations", name), "utf8").trimEnd()) {
+    if (migrationSha256(historical) !== migrationSha256(readFileSync(join(ROOT, "supabase", "migrations", name), "utf8"))) {
       throw new Error(`PHASE6_PREDECESSOR_MIGRATION_DRIFT:${name}`);
     }
   }
@@ -539,7 +539,7 @@ async function main() {
     await stopProject(clean); projects.pop();
     await stopProject(old); projects.pop();
     const storageMatrix = { executed: true, verdict: "pass", evidenceSource: "evidence/phase6-media-integration.json", runId: storageIntegration.runId,
-      integration: storageIntegration.checks.integration, principalScope: storageIntegration.principalScope,
+      integration: storageIntegration.checks, principalScope: storageIntegration.principalScope,
       scenarios: ["T01 owner-scoped signed candidate upload and replay", "T01 anonymous and authenticated non-Owner candidate read/write/list/delete denied", "T08 sealed processed object stays private with anonymous read/list/sign/overwrite/delete denied", "T15 visible current Media receives only bounded delivery; hidden/rejected/old CV is not substituted"],
       currentAndOldCvApiMatrix: currentCvStorageMatrix,
       currentAndOldCvEvidence: { evidenceSource: "evidence/phase6-cv-delivery-159.json", runId: cvDelivery.runId, counts: cvDelivery.counts },
@@ -560,7 +560,6 @@ async function main() {
       "T17-09 clean/upgrade catalogs and actual Storage bucket/object policy catalogs both execute with no admin-only verdict",
       "T17-10 evidence includes migration checksums, safe IDs, principals, plan names, counts, and source/run/tool IDs",
     ].map((name, index) => ({ id: `T17-0${index + 1}`, name, executed: true, status: "passed" }));
-    await stopProject(clean); projects.pop();
     const finalSource = getPhase6SourceIdentity();
     if (finalSource.sourceTreeSha256 !== SOURCE.sourceTreeSha256 || finalSource.sourceRevision !== SOURCE.sourceRevision) throw new Error("PHASE6_SOURCE_CHANGED_DURING_RUN");
     const evidence = {

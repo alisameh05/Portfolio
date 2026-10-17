@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { migrationSha256 } from "../../scripts/migration-checksum.mjs";
 
 const root = new URL("../../", import.meta.url);
 const runner = readFileSync(new URL("scripts/phase6-migration-access.mjs", root), "utf8");
@@ -40,4 +41,20 @@ test("Phase 6 migration-access evidence rejects stale generated types, missing i
     "PHASE6_SOURCE_CHANGED_DURING_RUN",
     "criterionResults: criteria",
   ]) assert.ok(runner.includes(required), `missing fail-closed assertion: ${required}`);
+});
+
+test("Phase 6 baseline comparison canonicalizes line endings and still rejects SQL drift", () => {
+  const sql = "set lock_timeout = '5s';\nselect 1;\n";
+  assert.equal(migrationSha256(sql), migrationSha256(sql.replaceAll("\n", "\r\n")));
+  assert.notEqual(migrationSha256(sql), migrationSha256(sql.replace("select 1", "select 2")));
+  assert.match(runner, /migrationSha256\(historical\)\s*!==\s*migrationSha256\(/u);
+});
+
+test("Phase 6 successful migration verification stops each owned project once", () => {
+  assert.equal([...runner.matchAll(/await stopProject\(clean\)/gu)].length, 1);
+  assert.equal([...runner.matchAll(/await stopProject\(old\)/gu)].length, 1);
+});
+
+test("Phase 6 migration evidence retains the validated Storage integration summary", () => {
+  assert.match(runner, /integration: storageIntegration\.checks,/u);
 });
