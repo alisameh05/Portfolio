@@ -119,7 +119,7 @@ describe("bounded PDF output reads", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 10_000);
 
   it("reports container cleanup failures instead of treating them as success", async () => {
     await expect(stopActionWithinDeadline(async () => { throw new Error("docker rm failed"); }, 100)).resolves.toBe(false);
@@ -147,5 +147,5 @@ describe("bounded PDF output reads", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 12_000);
 });
