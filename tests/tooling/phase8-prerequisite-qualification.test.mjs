@@ -68,23 +68,28 @@ const valid = (phase, overrides = {}) => ({ ticket: phase === 3 ? 55 : phase ===
 
 function phase6Aggregate() {
   const base = valid(6);
+  const toolVersions = { scanner: "ClamAV 1.4.3/27927", pdfProcessor: "17.12.1",
+    imageProcessor: "Version: ImageMagick 7.1.1-47 Q16-HDRI", videoProcessor: "ffprobe version 7.1",
+    sharp: "sharp-0.35.4;libvips-8.18.6" };
   const principalScope = { database: "shipwithali_application with scoped Owner/Portfolio policies",
     auth: "disposable loopback Supabase Auth with real issued Owner session claims",
     storage: "private local Storage; anonymous and non-Owner access denied" };
   const evidenceArtifacts = base.evidenceArtifacts.map((artifact, index) => ({ ...artifact,
     ticket: PHASE6_GATE_COMPONENTS[index].ticket }));
+  Object.assign(evidenceArtifacts.find(({ id }) => id === "setup").evidenceBinding,
+    { toolDefinitions: { ...PHASE6_TOOL_DEFINITIONS }, toolVersions: { ...toolVersions } });
   Object.assign(evidenceArtifacts.find(({ id }) => id === "migration-access").evidenceBinding,
     { migrationChecksums: migrationInventory.map(({ name, sha256 }) => ({ file: name, sha256 })), migrationSetEquivalent: true });
   Object.assign(evidenceArtifacts.find(({ id }) => id === "media-cv-integration").evidenceBinding, { principalScope });
   return evaluatePhase6Gate({ runId: base.runId, startedAt: base.startedAt, sourceRevision: revision, sourceTreeSha256: tree,
     runtime: { node: "24.21.0", npm: "11.19.0" }, expectedRuntime: { node: "24.21.0", npm: "11.19.0" }, now,
     checks: base.checks.map((check) => ({ ...check, exitCode: 0, skipped: 0, timedOut: false })), evidenceArtifacts,
-    serviceEvidence: { services: { ...base.realServiceScope.services,
+    serviceEvidence: { toolVersions, services: { ...base.realServiceScope.services,
       postgres: { ...base.realServiceScope.services.postgres, independentConnections: 2 },
-      scanner: { available: true, version: PHASE6_TOOL_DEFINITIONS.scanner, executions: 1 },
-      processors: { pdf: { available: true, version: PHASE6_TOOL_DEFINITIONS.pdfProcessor, executions: 1 },
-        image: { available: true, version: "sharp-0.35.4;libvips-8.18.0", executions: 1 },
-        video: { available: true, version: PHASE6_TOOL_DEFINITIONS.videoProcessor, executions: 1 } } },
+      scanner: { available: true, version: toolVersions.scanner, executions: 1 },
+      processors: { pdf: { available: true, version: toolVersions.pdfProcessor, executions: 1 },
+        image: { available: true, version: toolVersions.sharp, executions: 1 },
+        video: { available: true, version: toolVersions.videoProcessor, executions: 1 } } },
       principalScope, formats: ["pdf", "png", "jpeg", "webp", "mp4", "webm"].map((id) => ({ id, executed: true, status: "passed" })),
       criteria: Array.from({ length: 11 }, (_, index) => ({ id: `T18-${String(index + 1).padStart(2, "0")}`,
         cases: [{ caseId: `case:T18-${index + 1}`, executed: true, status: "passed" }] })),
