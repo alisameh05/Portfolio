@@ -101,7 +101,7 @@ async function execute(action) {
     if (action === "start" || action === "reuse") {
       initializeLocalMigrationProject(fixture, { initialize: network => invoke(["start", "--network-id", network]), migrate: () => invoke(["migration", "up", "--local"]) });
     } else if (action === "reset") {
-      initializeLocalMigrationProject(fixture, { initialize: () => invoke(invocation.args), migrate: () => invoke(["migration", "up", "--local"]) });
+      initializeLocalMigrationProject(fixture, { initialize: network => invoke([...invocation.args, "--network-id", network]), migrate: () => invoke(["migration", "up", "--local"]) });
     } else {
       invoke(action === "stop" ? ["stop", "--project-id", fixture.projectId, "--no-backup"] : invocation.args);
       if (action === "stop") removeOwnedMigrationNetwork(fixture);

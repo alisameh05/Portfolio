@@ -582,7 +582,7 @@ async function verifyLocal() {
       migrate: () => runLocalCommand(cleanProject.workdir, ["migration", "up", "--local"], "CLEAN_MIGRATION_FAILED"),
     });
     initializeLocalMigrationProject(cleanProject, {
-      initialize: () => runLocalCommand(cleanProject.workdir, ["db", "reset", "--local"], "CLEAN_DB_RESET_FAILED"),
+      initialize: network => runLocalCommand(cleanProject.workdir, ["db", "reset", "--local", "--network-id", network], "CLEAN_DB_RESET_FAILED"),
       migrate: () => runLocalCommand(cleanProject.workdir, ["migration", "up", "--local"], "CLEAN_MIGRATION_FAILED"),
     });
     const cleanUrl = readLocalDatabaseUrl(cleanProject.workdir);
