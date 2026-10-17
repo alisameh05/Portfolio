@@ -10,8 +10,10 @@ import { migrationSha256 } from "./migration-checksum.mjs";
 import { REQUIRED_PHASE3_CHECK_NAMES } from "./phase3-gate-support.mjs";
 import { REQUIRED_PHASE4_CHECK_NAMES } from "./phase4-gate-support.mjs";
 import { REQUIRED_PHASE5_GATE_CHECKS } from "./phase5-gate-support.mjs";
-import { PHASE6_GATE_REQUIRED_CHECKS } from "./phase6-gate-support.mjs";
-import { PHASE7_GATE_REQUIRED_CHECKS } from "./phase7-gate-support.mjs";
+import { PHASE6_GATE_REQUIRED_CHECKS, PHASE6_GATE_ACCEPTANCE_MATRIX, PHASE6_GATE_STORY_MATRIX,
+  PHASE6_GATE_MANDATORY_MATRICES, PHASE6_GATE_COMPONENTS } from "./phase6-gate-support.mjs";
+import { PHASE7_GATE_REQUIRED_CHECKS, PHASE7_GATE_CRITERION_MATRIX, PHASE7_GATE_SCENARIOS,
+  PHASE7_GATE_COMPONENTS } from "./phase7-gate-support.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const PHASE8_PREREQUISITES = Object.freeze([
@@ -145,6 +147,74 @@ function summarizeRealServiceScope(phase, scope, parent) {
     }, runId: scope.runId, serviceChecksRecorded: true } : null;
 }
 
+function sameInventory(rows, expected) {
+  if (!Array.isArray(rows) || rows.length !== expected.length || new Set(rows.map((row) => row?.id)).size !== expected.length) return false;
+  const byId = new Map(rows.map((row) => [row?.id, row]));
+  return expected.every((item) => {
+    const row = byId.get(item.id);
+    return row && Object.entries(item).every(([field, value]) => Array.isArray(value)
+      ? Array.isArray(row[field]) && row[field].length === value.length && new Set(row[field]).size === value.length &&
+        value.every((entry) => row[field].includes(entry))
+      : row[field] === value);
+  });
+}
+
+function componentExecutionComplete(phase, component) {
+  const counts = phase === 6 ? component.counts : component.required;
+  const executed = phase === 6 ? counts?.executed : counts?.passed;
+  return Number.isSafeInteger(executed) && executed > 0 && counts.failed === 0 && counts.skipped === 0 &&
+    (phase === 6 || counts.success === true && (counts.failedSuites === 0 || counts.failedSuites === null));
+}
+
+function phaseCoverageComplete(phase, report, checks) {
+  if (phase !== 6 && phase !== 7) return true;
+  const counts = report?.counts;
+  const components = phase === 6 ? report?.evidenceArtifacts : report?.components;
+  const expectedComponents = phase === 6 ? PHASE6_GATE_COMPONENTS : PHASE7_GATE_COMPONENTS;
+  if (!sameInventory(components, expectedComponents.map(({ id, path }) => ({ id, path }))) ||
+      components.some((component) => component.accepted !== true || !componentExecutionComplete(phase, component) ||
+        typeof component.runId !== "string" || component.runId.length < 8 ||
+        !validSha(component.sha256, 64) || component.sourceRevision !== report?.sourceRevision ||
+        component.sourceTreeSha256 !== report?.sourceTreeSha256 || component.cleanup !== true ||
+        component.fresh !== true || component.sourceBound !== true || (phase === 6
+          ? !Number.isFinite(Date.parse(component.startedAt ?? ""))
+          : component.gateRunId !== report?.runId || component.positiveExecution !== true || component.aggregateSuccess !== true))) return false;
+  const artifacts = new Map(components.map((component) => [component.id, component]));
+  const commands = new Map(checks.map((check) => [check?.name, check]));
+  const commandPassed = (id) => commands.get(id)?.passed === true && commands.get(id)?.executed !== false;
+  if (phase === 6) {
+    const coverage = report?.coverage;
+    return counts?.checks === PHASE6_GATE_REQUIRED_CHECKS.length && counts?.checksPassed === PHASE6_GATE_REQUIRED_CHECKS.length &&
+      counts?.acceptanceCriteria === PHASE6_GATE_ACCEPTANCE_MATRIX.length &&
+      counts?.userStories === PHASE6_GATE_STORY_MATRIX.length && counts?.matrices === PHASE6_GATE_MANDATORY_MATRICES.length &&
+      counts?.evidenceReports === expectedComponents.length &&
+      sameInventory(coverage?.acceptanceCriteria, PHASE6_GATE_ACCEPTANCE_MATRIX) &&
+      sameInventory(coverage?.userStories, PHASE6_GATE_STORY_MATRIX) &&
+      sameInventory(coverage?.mandatoryMatrices, PHASE6_GATE_MANDATORY_MATRICES) &&
+      coverage.acceptanceCriteria.every((criterion) => criterion.suites.every((id) => artifacts.get(id)?.accepted === true) &&
+        criterion.checks.every(commandPassed)) &&
+      coverage.mandatoryMatrices.every((matrix) => {
+        const scenarios = artifacts.get(matrix.component)?.evidenceBinding?.scenarioEvidence;
+        if (!matrix.requiredScenarioIds?.length) return true;
+        if (!Array.isArray(scenarios) || new Set(scenarios.map((scenario) => scenario?.id)).size !== scenarios.length) return false;
+        return matrix.requiredScenarioIds.every((id) => scenarios.some((scenario) =>
+          scenario?.id === id && scenario.executed === true && scenario.status === "passed"));
+      });
+  }
+  if (counts?.criterionCount !== PHASE7_GATE_CRITERION_MATRIX.length || counts?.executedCriteria !== PHASE7_GATE_CRITERION_MATRIX.length ||
+      counts?.scenarioCount !== PHASE7_GATE_SCENARIOS.length || counts?.components !== expectedComponents.length ||
+      counts?.acceptedComponents !== expectedComponents.length || !sameInventory(report?.criteria, PHASE7_GATE_CRITERION_MATRIX) ||
+      !sameInventory(report?.scenarios, PHASE7_GATE_SCENARIOS)) return false;
+  return report.criteria.every((criterion) => Array.isArray(criterion.evidence) && criterion.evidence.length === criterion.suites.length &&
+    criterion.suites.every((id, index) => {
+      const artifact = artifacts.get(id);
+      const runId = artifact?.runId ?? commands.get(id)?.runId;
+      return (artifact?.accepted === true || commandPassed(id)) && typeof runId === "string" && runId.length >= 8 &&
+        criterion.evidence[index] === runId;
+    })) && report.scenarios.every((scenario) => scenario.executed === true &&
+      scenario.suites.every((id) => artifacts.get(id)?.accepted === true));
+}
+
 function normalize(phase, report) {
   const checks = Array.isArray(report?.checks) ? report.checks : [];
   const required = report?.required ?? report?.counts ?? {};
@@ -187,9 +257,9 @@ function normalize(phase, report) {
   const namedExecuted = checks.filter((check) => check?.passed === true && check?.executed !== false &&
     typeof (check?.name ?? check?.id ?? check?.artifact) === "string" &&
     (check.name ?? check.id ?? check.artifact).trim().length > 0).length;
-  const coverageComplete = commandCoverageComplete && assertionCoverageComplete &&
+  const coverageComplete = commandCoverageComplete && assertionCoverageComplete && phaseCoverageComplete(phase, report, checks) &&
     (counts?.criterionCount == null || Number(counts?.executedCriteria) === Number(counts?.criterionCount)) &&
-    positive(expectedExecuted) && executed >= expectedExecuted && namedExecuted >= expectedExecuted;
+    positive(expectedExecuted) && (phase === 5 ? executed >= expectedExecuted : executed === expectedExecuted) && namedExecuted >= expectedExecuted;
   return { sourceRevision, sourceTreeSha256, runId, generatedAt, executed, failed, skipped, expectedExecuted, namedExecuted,
     aggregateFailed, aggregateSuccess, coverageComplete, cleanup,
     cleanupFailed: report?.cleanup === false || report?.cleanup?.success === false || report?.guarantees?.successfulCleanup === false || componentCleanupFailed,

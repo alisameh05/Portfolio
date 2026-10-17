@@ -6,12 +6,42 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { evaluatePhase8Prerequisites, sourceMetadataAtRevision, PHASE8_PREREQUISITES, PHASE8_REQUIRED_CHECKS } from "../../scripts/phase8-prerequisite-qualification.mjs";
+import { PHASE6_GATE_ACCEPTANCE_MATRIX, PHASE6_GATE_STORY_MATRIX, PHASE6_GATE_MANDATORY_MATRICES,
+  PHASE6_GATE_COMPONENTS } from "../../scripts/phase6-gate-support.mjs";
+import { PHASE7_GATE_CRITERION_MATRIX, PHASE7_GATE_SCENARIOS, PHASE7_GATE_COMPONENTS } from "../../scripts/phase7-gate-support.mjs";
 
 const revision = "d".repeat(40);
 const tree = "e".repeat(64);
 const now = Date.parse("2026-10-16T12:00:00.000Z");
 const migrationInventory = [{ name: "migration.sql", sha256: "c".repeat(64) }, { name: "second.sql", sha256: "d".repeat(64) }];
 const executedChecks = (phase) => PHASE8_REQUIRED_CHECKS[phase].map((name) => ({ name, runId: `phase-${phase}-run-123456`, executed: true, passed: true }));
+const componentEvidence = ({ id, path }, phase) => ({ id, path, accepted: true, runId: `component-${id}-run`,
+  sha256: "b".repeat(64), sourceRevision: revision, sourceTreeSha256: tree, cleanup: true, fresh: true, sourceBound: true,
+  ...(phase === 6 ? { startedAt: new Date(now - 50_000).toISOString(), counts: { executed: 1, failed: 0, skipped: 0 } } :
+    { gateRunId: "phase-7-run-123456", positiveExecution: true, aggregateSuccess: true,
+      required: { success: true, passed: 1, failed: 0, skipped: 0, failedSuites: 0 } }) });
+function coverageEvidence(phase) {
+  if (phase === 6) return {
+    counts: { checks: 29, checksPassed: 29, acceptanceCriteria: 56, userStories: 48, matrices: PHASE6_GATE_MANDATORY_MATRICES.length,
+      evidenceReports: PHASE6_GATE_COMPONENTS.length },
+    coverage: structuredClone({ acceptanceCriteria: PHASE6_GATE_ACCEPTANCE_MATRIX, userStories: PHASE6_GATE_STORY_MATRIX,
+      mandatoryMatrices: PHASE6_GATE_MANDATORY_MATRICES }),
+    evidenceArtifacts: PHASE6_GATE_COMPONENTS.map((component) => ({ ...componentEvidence(component, phase),
+      evidenceBinding: { scenarioEvidence: [...new Set(PHASE6_GATE_MANDATORY_MATRICES
+        .filter((matrix) => matrix.component === component.id).flatMap((matrix) => matrix.requiredScenarioIds ?? []))]
+        .map((scenarioId) => ({ id: scenarioId, executed: true, status: "passed" })) } })),
+  };
+  if (phase === 7) return {
+    counts: { criterionCount: 70, executedCriteria: 70, scenarioCount: 7,
+      components: PHASE7_GATE_COMPONENTS.length, acceptedComponents: PHASE7_GATE_COMPONENTS.length },
+    criteria: PHASE7_GATE_CRITERION_MATRIX.map((criterion) => ({ ...structuredClone(criterion),
+      evidence: criterion.suites.map((id) => PHASE7_GATE_COMPONENTS.some((component) => component.id === id)
+        ? `component-${id}-run` : "phase-7-run-123456") })),
+    scenarios: PHASE7_GATE_SCENARIOS.map((scenario) => ({ ...structuredClone(scenario), executed: true })),
+    components: PHASE7_GATE_COMPONENTS.map((component) => componentEvidence(component, phase)),
+  };
+  return {};
+}
 const evaluate = (root, overrides = {}) => evaluatePhase8Prerequisites({ root, sourceRevision: "d".repeat(40),
   sourceTreeSha256: "e".repeat(64), now, resolveSourceTree: () => tree,
   resolveMigrationInventory: () => migrationInventory, isAncestor: () => true, ...overrides });
@@ -33,7 +63,7 @@ const valid = (phase, overrides = {}) => ({ ticket: phase === 3 ? 55 : phase ===
       { grantee: "anon", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges: "{}" },
       { grantee: "authenticated", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges: "{}" },
       { grantee: "service_role", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges: "{}" },
-    ] }, required: { success: true }, checks: [{ command: "postgres-clean-upgrade", passed: true }] }, ...overrides });
+    ] }, required: { success: true }, checks: [{ command: "postgres-clean-upgrade", passed: true }] }, ...coverageEvidence(phase), ...overrides });
 
 function fixture(reports) {
   const root = mkdtempSync(join(tmpdir(), "phase8-prereq-"));
@@ -55,6 +85,143 @@ test("accepts only complete source-bound successful artifacts with cleanup", () 
     assert.deepEqual(result.acceptedPhases, [3, 4, 5, 6, 7]);
     assert.equal(result.statusLayers.humanApproval, "not-recorded-by-this-evaluator");
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("rejects absent or partial Phase 6 and Phase 7 coverage despite passing command inventories", () => {
+  const cases = [
+    [6, "missing coverage", (report) => { delete report.coverage; }],
+    [6, "missing counts", (report) => { delete report.counts; }],
+    [6, "missing acceptance", (report) => { delete report.coverage.acceptanceCriteria; }],
+    [6, "missing stories", (report) => { delete report.coverage.userStories; }],
+    [6, "missing matrices", (report) => { delete report.coverage.mandatoryMatrices; }],
+    [6, "truncated acceptance", (report) => { report.coverage.acceptanceCriteria.pop(); }],
+    [6, "truncated stories", (report) => { report.coverage.userStories.pop(); }],
+    [6, "duplicate story", (report) => { report.coverage.userStories[1] = report.coverage.userStories[0]; }],
+    [6, "duplicate acceptance", (report) => { report.coverage.acceptanceCriteria[1] = report.coverage.acceptanceCriteria[0]; }],
+    [6, "duplicate matrix", (report) => { report.coverage.mandatoryMatrices[1] = report.coverage.mandatoryMatrices[0]; }],
+    [6, "truncated matrices", (report) => { report.coverage.mandatoryMatrices.pop(); }],
+    [6, "missing component", (report) => { report.evidenceArtifacts.pop(); }],
+    [6, "duplicate component", (report) => { report.evidenceArtifacts[1] = report.evidenceArtifacts[0]; }],
+    [6, "unaccepted component", (report) => { report.evidenceArtifacts[0].accepted = false; }],
+    [6, "acceptance mapping missing", (report) => { report.coverage.acceptanceCriteria[0].suites = []; }],
+    [6, "story mapping missing", (report) => { report.coverage.userStories[0].acceptanceCriteria = []; }],
+    [6, "matrix mapping replaced", (report) => { report.coverage.mandatoryMatrices[0].component = "unknown"; }],
+    [6, "unexecuted matrix scenario", (report) => {
+      report.evidenceArtifacts.find((item) => item.evidenceBinding.scenarioEvidence.length).evidenceBinding.scenarioEvidence[0].executed = false;
+    }],
+    [6, "missing matrix scenario", (report) => {
+      report.evidenceArtifacts.find((item) => item.evidenceBinding.scenarioEvidence.length).evidenceBinding.scenarioEvidence.pop();
+    }],
+    [6, "duplicated matrix scenario", (report) => {
+      const scenarios = report.evidenceArtifacts.find((item) => item.evidenceBinding.scenarioEvidence.length > 1).evidenceBinding.scenarioEvidence;
+      scenarios[1] = scenarios[0];
+    }],
+    [6, "count mismatch", (report) => { report.counts.acceptanceCriteria = 55; }],
+    [6, "story count mismatch", (report) => { report.counts.userStories = 47; }],
+    [6, "matrix count mismatch", (report) => { report.counts.matrices -= 1; }],
+    [6, "component count mismatch", (report) => { report.counts.evidenceReports -= 1; }],
+    [7, "missing counts", (report) => { delete report.counts; }],
+    [7, "missing criteria", (report) => { delete report.criteria; }],
+    [7, "truncated criteria", (report) => { report.criteria.pop(); }],
+    [7, "duplicate criterion", (report) => { report.criteria[1] = report.criteria[0]; }],
+    [7, "missing scenarios", (report) => { delete report.scenarios; }],
+    [7, "truncated scenarios", (report) => { report.scenarios.pop(); }],
+    [7, "duplicate scenario", (report) => { report.scenarios[1] = report.scenarios[0]; }],
+    [7, "missing components", (report) => { delete report.components; }],
+    [7, "truncated components", (report) => { report.components.pop(); }],
+    [7, "duplicate component", (report) => { report.components[1] = report.components[0]; }],
+    [7, "unaccepted component", (report) => { report.components[0].accepted = false; }],
+    [7, "unexecuted scenario", (report) => { report.scenarios[0].executed = false; }],
+    [7, "count mismatch", (report) => { report.counts.scenarioCount = 6; }],
+    [7, "criterion count mismatch", (report) => { report.counts.criterionCount = 69; }],
+    [7, "executed count mismatch", (report) => { report.counts.executedCriteria = 69; }],
+    [7, "component count mismatch", (report) => { report.counts.components -= 1; }],
+    [7, "accepted count mismatch", (report) => { report.counts.acceptedComponents -= 1; }],
+    [7, "criterion mapping missing", (report) => { report.criteria[0].suites = []; }],
+    [7, "scenario mapping replaced", (report) => { report.scenarios[0].suites[0] = "unknown"; }],
+    [7, "criterion evidence absent", (report) => { report.criteria[0].evidence[0] = null; }],
+    [7, "criterion evidence wrong run", (report) => { report.criteria[0].evidence[0] = "other-valid-run"; }],
+  ];
+  for (const [phase, description, mutate] of cases) {
+    const report = valid(phase);
+    mutate(report);
+    const root = fixture({ [phase]: report });
+    try {
+      const prerequisite = evaluate(root).phases.find((item) => item.phase === phase);
+      assert.equal(prerequisite.accepted, false, `Phase ${phase}: ${description}`);
+      assert.ok(prerequisite.reasons.includes("executed-coverage-partial"), description);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test("requires each Phase 6 and Phase 7 mapped component's actual source, run and cleanup provenance", () => {
+  for (const phase of [6, 7]) {
+    const fields = ["runId", "path", "sha256", "sourceRevision", "sourceTreeSha256", "cleanup", "fresh", "sourceBound",
+      ...(phase === 6 ? ["startedAt"] : ["gateRunId", "positiveExecution", "aggregateSuccess"])];
+    for (const field of fields) {
+      const report = valid(phase);
+      const component = (phase === 6 ? report.evidenceArtifacts : report.components)[0];
+      delete component[field];
+      if (phase === 7 && field === "runId") {
+        for (const criterion of report.criteria) criterion.suites.forEach((id, index) => {
+          if (id === component.id) criterion.evidence[index] = "phase-7-run-123456";
+        });
+      }
+      const root = fixture({ [phase]: report });
+      try {
+        const prerequisite = evaluate(root).phases.find((item) => item.phase === phase);
+        assert.equal(prerequisite.accepted, false, `Phase ${phase}: missing component ${field}`);
+        assert.ok(prerequisite.reasons.includes("executed-coverage-partial"), field);
+      } finally { rmSync(root, { recursive: true, force: true }); }
+    }
+  }
+});
+
+test("component execution counts override accepted and successful aggregate flags", () => {
+  for (const [phase, field, observations] of [
+    [6, "counts", [undefined, {}, { executed: 0 }, { failed: 1 }, { skipped: 1 }, { executed: -1 }, { executed: "1" }]],
+    [7, "required", [undefined, {}, { success: false }, { passed: 0 }, { failed: 1 }, { skipped: 1 },
+      { failedSuites: 1 }, { passed: -1 }, { passed: "1" }]],
+  ]) {
+    for (const observed of observations) {
+      const report = valid(phase);
+      const component = (phase === 6 ? report.evidenceArtifacts : report.components)[0];
+      if (observed === undefined || Object.keys(observed).length === 0) component[field] = observed;
+      else Object.assign(component[field], observed);
+      const root = fixture({ [phase]: report });
+      try {
+        const prerequisite = evaluate(root).phases.find((item) => item.phase === phase);
+        assert.equal(prerequisite.accepted, false, `Phase ${phase}: ${JSON.stringify(observed)}`);
+        assert.ok(prerequisite.reasons.includes("executed-coverage-partial"));
+      } finally { rmSync(root, { recursive: true, force: true }); }
+    }
+  }
+});
+
+test("Phase 7 preserves the producer's explicit null for its optional failed-suite counter", () => {
+  const report = valid(7);
+  report.components[0].required.failedSuites = null;
+  const root = fixture({ 7: report });
+  try { assert.equal(evaluate(root).phases.find((item) => item.phase === 7).accepted, true); }
+  finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("command execution totals equal complete prerequisite inventories", () => {
+  for (const phase of [3, 4, 6, 7]) {
+    const report = valid(phase);
+    report.required.executed += 1;
+    const root = fixture({ [phase]: report });
+    try {
+      assert.equal(evaluate(root).phases.find((item) => item.phase === phase).accepted, false, `Phase ${phase}`);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+  for (const overrides of [{ checks: 28 }, { checksPassed: 28 }, { checks: 30, checksPassed: 30 }]) {
+    const report = valid(6);
+    Object.assign(report.counts, overrides);
+    const root = fixture({ 6: report });
+    try { assert.equal(evaluate(root).phases.find((item) => item.phase === 6).accepted, false, JSON.stringify(overrides)); }
+    finally { rmSync(root, { recursive: true, force: true }); }
+  }
 });
 
 test("rejects a truncated named checklist despite unchanged successful aggregate totals", () => {
