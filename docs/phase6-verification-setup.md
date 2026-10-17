@@ -187,6 +187,8 @@ the adapter reuses the pinned Node executable to preserve multiline SQL
 arguments; on Linux it uses an argument-preserving shell launcher. Its temporary
 files and environment belong to the fixture and are removed or restored during
 cleanup. Actual port inspection remains mandatory before privilege elevation.
+Reset also receives the project's explicit network ID: otherwise the pinned
+CLI can restart Storage on a different network and lose its database DNS name.
 The forward migration revokes direct execution of the aggregate checkpoint
 trigger function without replaying an edited historical migration. The fixture
 regression verifies that upgrade and a clean installation produce equivalent

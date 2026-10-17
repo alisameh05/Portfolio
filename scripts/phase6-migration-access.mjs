@@ -506,7 +506,7 @@ export function applyProjectMigrations(project) {
 
 export function resetProject(project) {
   return initializeLocalMigrationProject(project, {
-    initialize: () => runCli(project.workdir, ["db", "reset", "--local"], "PHASE6_CLEAN_DATABASE_RESET_FAILED"),
+    initialize: network => runCli(project.workdir, ["db", "reset", "--local", "--network-id", network], "PHASE6_CLEAN_DATABASE_RESET_FAILED"),
     migrate: () => runCli(project.workdir, ["migration", "up", "--local"], "PHASE6_MIGRATION_ACCESS_APPLY_FAILED"),
   });
 }
