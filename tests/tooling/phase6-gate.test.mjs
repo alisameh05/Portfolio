@@ -12,6 +12,9 @@ import { PHASE6_TOOL_DEFINITIONS } from "../../scripts/phase6-verification-suppo
 
 const sourceRevision = "a".repeat(40);
 const sourceTreeSha256 = "b".repeat(64);
+const observedToolVersions = Object.freeze({ scanner: "ClamAV 1.4.3/27927", pdfProcessor: "17.12.1",
+  imageProcessor: "Version: ImageMagick 7.1.1-47 Q16-HDRI", videoProcessor: "ffprobe version 7.1",
+  sharp: "sharp-0.35.4;libvips-8.18.6" });
 
 test("gate startup clears stale reports and logs before checks run", async () => {
   const directory = mkdtempSync(join(tmpdir(), "phase6-gate-clear-"));
@@ -41,17 +44,19 @@ function validInput() {
     checks: PHASE6_GATE_REQUIRED_CHECKS.map((name) => ({ name, executed: true, passed: true, exitCode: 0, skipped: 0, timedOut: false })),
     evidenceArtifacts: PHASE6_GATE_COMPONENTS.map(({ id, ticket }) => ({ id, ticket, accepted: true, sha256: "c".repeat(64),
       evidenceBinding: { scenarioEvidence: PHASE6_GATE_MANDATORY_MATRICES.filter((matrix) => matrix.component === id)
-        .flatMap((matrix) => (matrix.requiredScenarioIds ?? []).map((scenarioId) => ({ id: scenarioId, executed: true, status: "passed" }))) } })),
+        .flatMap((matrix) => (matrix.requiredScenarioIds ?? []).map((scenarioId) => ({ id: scenarioId, executed: true, status: "passed" }))),
+      ...(id === "setup" ? { toolDefinitions: { ...PHASE6_TOOL_DEFINITIONS }, toolVersions: { ...observedToolVersions } } : {}) } })),
     serviceEvidence: {
+      toolVersions: { ...observedToolVersions },
       services: {
         postgres: { available: true, executionCount: 12, independentConnections: 2, majorVersion: 17 },
         auth: { available: true, executionCount: 2 },
         storage: { available: true, privateBucketVerified: true, executionCount: 19 },
-        scanner: { available: true, version: PHASE6_TOOL_DEFINITIONS.scanner, executions: 12 },
+        scanner: { available: true, version: observedToolVersions.scanner, executions: 12 },
         processors: {
-          pdf: { available: true, version: PHASE6_TOOL_DEFINITIONS.pdfProcessor, executions: 5 },
-          image: { available: true, version: "sharp-0.35.4;libvips-8.18.0", executions: 3 },
-          video: { available: true, version: PHASE6_TOOL_DEFINITIONS.videoProcessor, executions: 2 },
+          pdf: { available: true, version: observedToolVersions.pdfProcessor, executions: 5 },
+          image: { available: true, version: observedToolVersions.sharp, executions: 3 },
+          video: { available: true, version: observedToolVersions.videoProcessor, executions: 2 },
         },
       },
       principalScope: { database: "shipwithali_application with scoped Owner/Portfolio policies",
@@ -89,6 +94,30 @@ test("runtime pin comparison accepts Node versions with or without the version p
   input.runtime.node = "v24.20.0";
   assert.ok(evaluatePhase6Gate(input).failures.includes("runtime-pin-mismatch"));
 });
+
+test("observed tool versions bind to pinned definitions without equating versions to image references", () => {
+  const input = validInput();
+  assert.notEqual(input.serviceEvidence.services.scanner.version, PHASE6_TOOL_DEFINITIONS.scanner);
+  assert.equal(evaluatePhase6Gate(input).verdict, "pass");
+});
+
+for (const key of Object.keys(PHASE6_TOOL_DEFINITIONS)) {
+  test(`${key} requires the pinned definition and matching independently observed versions`, () => {
+    for (const change of [
+      (input) => { delete input.evidenceArtifacts.find(({ id }) => id === "setup").evidenceBinding.toolDefinitions[key]; },
+      (input) => { input.evidenceArtifacts.find(({ id }) => id === "setup").evidenceBinding.toolDefinitions[key] = "unapproved-tool"; },
+      (input) => { delete input.evidenceArtifacts.find(({ id }) => id === "setup").evidenceBinding.toolVersions[key]; },
+      (input) => { input.serviceEvidence.toolVersions[key] = "inconsistent-observation"; },
+      (input) => {
+        input.evidenceArtifacts.find(({ id }) => id === "setup").evidenceBinding.toolVersions[key] = PHASE6_TOOL_DEFINITIONS[key];
+        input.serviceEvidence.toolVersions[key] = PHASE6_TOOL_DEFINITIONS[key];
+        const service = { scanner: input.serviceEvidence.services.scanner, pdfProcessor: input.serviceEvidence.services.processors.pdf,
+          videoProcessor: input.serviceEvidence.services.processors.video }[key];
+        if (service) service.version = PHASE6_TOOL_DEFINITIONS[key];
+      },
+    ]) expectFailure(change, "real-adapter-tool-or-principal-scope-unverified");
+  });
+}
 
 test("absent required service is rejected", () => expectFailure((input) => { input.serviceEvidence.services.auth.available = false; }, "required-real-service-evidence-missing"));
 test("stale source evidence is rejected", () => expectFailure((input) => { input.evidenceArtifacts[0].accepted = false; }, "required-evidence-invalid:setup"));
