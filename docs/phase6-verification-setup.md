@@ -170,7 +170,7 @@ Phase 6 gate after changes; a passing fixture regression does not qualify
 Phase 6 or permit dependent Phase 8 implementation.
 
 Released migration files retain their original contents. The shared disposable
-local bootstrap used by Phase 3, settings and Phase 6 validation stages SQL
+local bootstrap used by Phase 3, real-token Auth, settings and Phase 6 validation stages SQL
 until CLI start/reset has initialized its restricted administrator. It applies
 the early role-creation migrations with the normal local
 administrator, then temporarily elevates that administrator for the historical
