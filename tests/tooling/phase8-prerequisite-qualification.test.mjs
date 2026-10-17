@@ -7,7 +7,8 @@ import { join } from "node:path";
 import test from "node:test";
 import { evaluatePhase8Prerequisites, sourceMetadataAtRevision, PHASE8_PREREQUISITES, PHASE8_REQUIRED_CHECKS } from "../../scripts/phase8-prerequisite-qualification.mjs";
 import { PHASE6_GATE_ACCEPTANCE_MATRIX, PHASE6_GATE_STORY_MATRIX, PHASE6_GATE_MANDATORY_MATRICES,
-  PHASE6_GATE_COMPONENTS } from "../../scripts/phase6-gate-support.mjs";
+  PHASE6_GATE_COMPONENTS, evaluatePhase6Gate } from "../../scripts/phase6-gate-support.mjs";
+import { PHASE6_TOOL_DEFINITIONS } from "../../scripts/phase6-verification-support.mjs";
 import { PHASE7_GATE_CRITERION_MATRIX, PHASE7_GATE_SCENARIOS, PHASE7_GATE_COMPONENTS } from "../../scripts/phase7-gate-support.mjs";
 
 const revision = "d".repeat(40);
@@ -65,6 +66,32 @@ const valid = (phase, overrides = {}) => ({ ticket: phase === 3 ? 55 : phase ===
       { grantee: "service_role", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges: "{}" },
     ] }, required: { success: true }, checks: [{ command: "postgres-clean-upgrade", passed: true }] }, ...coverageEvidence(phase), ...overrides });
 
+function phase6Aggregate() {
+  const base = valid(6);
+  const principalScope = { database: "shipwithali_application with scoped Owner/Portfolio policies",
+    auth: "disposable loopback Supabase Auth with real issued Owner session claims",
+    storage: "private local Storage; anonymous and non-Owner access denied" };
+  const evidenceArtifacts = base.evidenceArtifacts.map((artifact, index) => ({ ...artifact,
+    ticket: PHASE6_GATE_COMPONENTS[index].ticket }));
+  Object.assign(evidenceArtifacts.find(({ id }) => id === "migration-access").evidenceBinding,
+    { migrationChecksums: migrationInventory.map(({ name, sha256 }) => ({ file: name, sha256 })), migrationSetEquivalent: true });
+  Object.assign(evidenceArtifacts.find(({ id }) => id === "media-cv-integration").evidenceBinding, { principalScope });
+  return evaluatePhase6Gate({ runId: base.runId, startedAt: base.startedAt, sourceRevision: revision, sourceTreeSha256: tree,
+    runtime: { node: "24.21.0", npm: "11.19.0" }, expectedRuntime: { node: "24.21.0", npm: "11.19.0" }, now,
+    checks: base.checks.map((check) => ({ ...check, exitCode: 0, skipped: 0, timedOut: false })), evidenceArtifacts,
+    serviceEvidence: { services: { ...base.realServiceScope.services,
+      postgres: { ...base.realServiceScope.services.postgres, independentConnections: 2 },
+      scanner: { available: true, version: PHASE6_TOOL_DEFINITIONS.scanner, executions: 1 },
+      processors: { pdf: { available: true, version: PHASE6_TOOL_DEFINITIONS.pdfProcessor, executions: 1 },
+        image: { available: true, version: "sharp-0.35.4;libvips-8.18.0", executions: 1 },
+        video: { available: true, version: PHASE6_TOOL_DEFINITIONS.videoProcessor, executions: 1 } } },
+      principalScope, formats: ["pdf", "png", "jpeg", "webp", "mp4", "webm"].map((id) => ({ id, executed: true, status: "passed" })),
+      criteria: Array.from({ length: 11 }, (_, index) => ({ id: `T18-${String(index + 1).padStart(2, "0")}`,
+        cases: [{ caseId: `case:T18-${index + 1}`, executed: true, status: "passed" }] })),
+      counts: { executed: 11, failed: 0, skipped: 0 }, testRun: { exitStatus: 0, total: 11, failed: 0, skipped: 0 },
+      cleanup: { attempted: true, success: true } } });
+}
+
 function fixture(reports) {
   const root = mkdtempSync(join(tmpdir(), "phase8-prereq-"));
   for (const { phase, ticket, path } of PHASE8_PREREQUISITES) {
@@ -85,6 +112,90 @@ test("accepts only complete source-bound successful artifacts with cleanup", () 
     assert.deepEqual(result.acceptedPhases, [3, 4, 5, 6, 7]);
     assert.equal(result.statusLayers.humanApproval, "not-recorded-by-this-evaluator");
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("qualifies the actual Phase 6 aggregate producer's migration and service evidence shape", () => {
+  const report = phase6Aggregate();
+  assert.equal(report.verdict, "pass", JSON.stringify(report.failures));
+  assert.equal(Object.hasOwn(report, "migrations"), false);
+  assert.equal(Object.hasOwn(report, "realServiceScope"), false);
+  assert.equal(Object.hasOwn(report, "serviceEvidence"), false);
+  const root = fixture({ 6: report });
+  try {
+    const prerequisite = evaluate(root).phases.find((item) => item.phase === 6);
+    assert.equal(prerequisite.accepted, true, JSON.stringify(prerequisite.reasons));
+    assert.deepEqual(prerequisite.migrations, migrationInventory);
+    assert.deepEqual(prerequisite.realServiceScope.services, { postgres: true, auth: true, storage: true });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("actual Phase 6 aggregate evidence rejects missing or contradictory migrations, services and execution", () => {
+  const mutations = [
+    ["missing migrations", (report) => { delete report.evidenceSummary.migrationAccess.migrationChecksums; }],
+    ["invalid migration checksum", (report) => { report.evidenceSummary.migrationAccess.migrationChecksums[0].sha256 = "invalid"; }],
+    ["missing migration equivalence", (report) => { delete report.evidenceSummary.migrationAccess.migrationSetEquivalent; }],
+    ["failed migration equivalence", (report) => { report.evidenceSummary.migrationAccess.migrationSetEquivalent = false; }],
+    ["missing service proof", (report) => { delete report.evidenceSummary.realServiceAndAdapterProof; }],
+    ["missing principal scope", (report) => { delete report.evidenceSummary.realServiceAndAdapterProof.principalScope; }],
+    ...["database", "auth", "storage"].map((principal) => [`missing ${principal} scope`, (report) => {
+      delete report.evidenceSummary.realServiceAndAdapterProof.principalScope[principal];
+    }]),
+    ...["database", "auth", "storage"].map((principal) => [`malformed ${principal} scope`, (report) => {
+      const scope = report.evidenceSummary.realServiceAndAdapterProof.principalScope;
+      scope[principal] = [scope[principal]];
+    }]),
+    ...["postgres", "auth", "storage", "scanner"].flatMap((service) => [
+      [`missing ${service}`, (report) => { delete report.services[service]; }],
+      [`unavailable ${service}`, (report) => { report.services[service].available = false; }],
+    ]),
+    ["zero postgres execution", (report) => { report.services.postgres.executionCount = 0; }],
+    ["one postgres connection", (report) => { report.services.postgres.independentConnections = 1; }],
+    ["zero auth execution", (report) => { report.services.auth.executionCount = 0; }],
+    ["zero storage execution", (report) => { report.services.storage.executionCount = 0; }],
+    ["public storage", (report) => { report.services.storage.privateBucketVerified = false; }],
+    ["zero scanner execution", (report) => { report.services.scanner.executions = 0; }],
+    ["missing scanner version", (report) => { delete report.services.scanner.version; }],
+    ...["pdf", "image", "video"].flatMap((kind) => [
+      [`missing ${kind} processor`, (report) => { delete report.services.processors[kind]; }],
+      [`unavailable ${kind} processor`, (report) => { report.services.processors[kind].available = false; }],
+      [`zero ${kind} executions`, (report) => { report.services.processors[kind].executions = 0; }],
+    ]),
+    ["missing format execution", (report) => { report.formats.pop(); }],
+    ["unexecuted format", (report) => { report.formats[0].executed = false; }],
+    ["missing failure count", (report) => { delete report.failureCount; }],
+    ["nonzero failure count", (report) => { report.failureCount = 1; }],
+    ["unreported failure", (report) => { report.failures.push("REQUIRED_CHECK_FAILED"); }],
+    ["failed command", (report) => { report.checks[0].passed = false; }],
+    ["failed command exit", (report) => { report.checks[0].exitCode = 1; }],
+    ["skipped command", (report) => { report.checks[0].skipped = 1; }],
+    ["timed out command", (report) => { report.checks[0].timedOut = true; }],
+    ["contradictory check count", (report) => { report.counts.checksPassed -= 1; }],
+    ["component execution failure", (report) => { report.evidenceArtifacts[0].counts.failed = 1; }],
+    ["unattempted cleanup", (report) => { report.cleanup.attempted = false; }],
+    ["unbound migration summary", (report) => {
+      report.evidenceSummary = structuredClone(report.evidenceSummary);
+      report.evidenceSummary.migrationAccess.unbound = true;
+    }],
+    ["unbound service summary", (report) => {
+      report.evidenceSummary = structuredClone(report.evidenceSummary);
+      report.evidenceSummary.realServiceAndAdapterProof.unbound = true;
+    }],
+  ];
+  for (const [description, mutate] of mutations) {
+    const report = phase6Aggregate();
+    mutate(report);
+    const root = fixture({ 6: report });
+    try { assert.equal(evaluate(root).phases.find((item) => item.phase === 6).accepted, false, description); }
+    finally { rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test("malformed Phase 6 aggregate check rows block qualification without throwing", () => {
+  const report = phase6Aggregate();
+  report.checks.push(null);
+  const root = fixture({ 6: report });
+  try { assert.doesNotThrow(() => assert.equal(evaluate(root).phases.find((item) => item.phase === 6).accepted, false)); }
+  finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("rejects absent or partial Phase 6 and Phase 7 coverage despite passing command inventories", () => {

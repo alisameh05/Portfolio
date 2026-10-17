@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { isDeepStrictEqual } from "node:util";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { migrationSha256 } from "./migration-checksum.mjs";
 import { REQUIRED_PHASE3_CHECK_NAMES } from "./phase3-gate-support.mjs";
@@ -215,6 +216,40 @@ function phaseCoverageComplete(phase, report, checks) {
       scenario.suites.every((id) => artifacts.get(id)?.accepted === true));
 }
 
+function phase6AggregateServiceScope(report) {
+  const artifacts = Array.isArray(report?.evidenceArtifacts) ? report.evidenceArtifacts : [];
+  const migration = artifacts.find((artifact) => artifact?.id === "migration-access");
+  const integration = artifacts.find((artifact) => artifact?.id === "media-cv-integration");
+  const summary = report?.evidenceSummary;
+  if (report?.ticket !== 164 || report.schemaVersion !== 1 || migration?.accepted !== true || integration?.accepted !== true ||
+      !summary?.migrationAccess || !summary?.realServiceAndAdapterProof ||
+      !isDeepStrictEqual(summary.migrationAccess, migration.evidenceBinding) ||
+      !isDeepStrictEqual(summary.realServiceAndAdapterProof, integration.evidenceBinding) ||
+      summary.migrationAccess.migrationSetEquivalent !== true) return null;
+  const principalScope = summary.realServiceAndAdapterProof.principalScope;
+  const services = report.services;
+  const checks = Array.isArray(report.checks) ? report.checks : [];
+  const realAdapters = services?.scanner?.available === true && positive(services.scanner.executions) &&
+    typeof services.scanner.version === "string" && services.scanner.version.length > 0 &&
+    ["pdf", "image", "video"].every((kind) => services?.processors?.[kind]?.available === true &&
+      positive(services.processors[kind].executions) && typeof services.processors[kind].version === "string" &&
+      services.processors[kind].version.length > 0);
+  const scopeRecorded = [["database", "shipwithali_application"], ["auth", "loopback Supabase Auth"],
+    ["storage", "private local Storage"]].every(([field, marker]) =>
+    typeof principalScope?.[field] === "string" && principalScope[field].includes(marker));
+  const formatProof = sameInventory(report.formats, ["pdf", "png", "jpeg", "webp", "mp4", "webm"]
+    .map((id) => ({ id, executed: true, status: "passed" })));
+  const success = report.verdict === "pass" && report.failureCount === 0 && Array.isArray(report.failures) && report.failures.length === 0 &&
+    phaseCoverageComplete(6, report, checks) && checks.every((check) => check?.executed === true && check.passed === true &&
+      check.exitCode === 0 && check.skipped === 0 && check.timedOut !== true) &&
+    positive(services?.postgres?.executionCount) && Number(services?.postgres?.independentConnections) >= 2 &&
+    report.cleanup?.attempted === true && realAdapters && scopeRecorded && formatProof;
+  return { runId: report.runId, sourceRevision: report.sourceRevision, sourceTreeSha256: report.sourceTreeSha256,
+    startedAt: report.startedAt, completedAt: report.completedAt, services, principalScope, checks,
+    cleanup: report.cleanup, cleanUpgradeEquivalent: summary.migrationAccess.migrationSetEquivalent,
+    required: { success } };
+}
+
 function normalize(phase, report) {
   const checks = Array.isArray(report?.checks) ? report.checks : [];
   const required = report?.required ?? report?.counts ?? {};
@@ -236,11 +271,11 @@ function normalize(phase, report) {
   const generatedAt = report?.completedAt ?? report?.generatedAt ?? report?.startedAt ?? null;
   const migrations = report?.migrations ?? report?.migrationChecksums ?? report?.coverage?.database?.migrationIdsAndChecksums ??
     report?.databaseProof?.migrations ?? report?.serviceEvidence?.migrations ?? report?.evidenceSummary?.database?.migrationChecksums ??
-    report?.migrationLedger ?? [];
+    (phase === 6 ? report?.evidenceSummary?.migrationAccess?.migrationChecksums : null) ?? report?.migrationLedger ?? [];
   const tools = report?.toolVersions ?? report?.tools ?? report?.runtime ?? report?.expectedToolVersions ?? report?.serviceEvidence?.tools ??
     (report?.node ? { node: report.node, npm: report.npm ?? null } : null);
   const realServiceScope = report?.realServiceScope ?? report?.serviceEvidence ?? report?.databaseProof ??
-    report?.reproduction?.services ?? null;
+    report?.reproduction?.services ?? (phase === 6 ? phase6AggregateServiceScope(report) : null);
   const counts = report?.counts ?? report?.coverage ?? {};
   const checksEstablishDenominator = checks.length > 0 && checks.every((check) =>
     typeof (check?.name ?? check?.id ?? check?.artifact) === "string" &&
