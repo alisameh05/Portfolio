@@ -1,12 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { rmSync } from "node:fs";
+import { isLocalValidationProjectId } from "../../scripts/local-docker-loopback-adapter.mjs";
 import {
+  createProject,
   isolatedConfig,
   localEnvironment,
   requireExecutedTests,
   requirePredecessorTests,
 } from "../../scripts/portfolio-settings-integration.mjs";
 import { migrationsAfterPhase5, phase4ReleaseMigrationFiles } from "../../scripts/phase4-migration-integrity.mjs";
+
+test("settings project identities fit the CLI's 40-character container identity limit", () => {
+  for (const kind of ["clean", "upgrade"]) {
+    const project = createProject(`settings-${kind}`, 57320, []);
+    try {
+      assert.ok(project.projectId.length <= 40, `${kind} identity is truncated by the CLI`);
+      assert.ok(isLocalValidationProjectId(project.projectId));
+    } finally { rmSync(project.workdir, { recursive: true, force: true }); }
+  }
+});
 
 test("Phase 5 upgrade history applies Phase 4, Phase 5, then dependent later migrations", () => {
   const files = [
