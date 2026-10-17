@@ -9,7 +9,7 @@ import { Client, Pool } from "pg";
 import { isolatedPhase6Config, phase6StorageIntegrationProof, phase6PdfFixture, scrubPhase6Environment } from "./phase6-verification-support.mjs";
 import { getPhase6SourceIdentity } from "./phase6-verification-support.mjs";
 import { migrationSha256 } from "./migration-checksum.mjs";
-import { startPhase6LocalProject, withPhase6MigrationExecutor } from "./phase6-local-migration-bootstrap.mjs";
+import { initializeLocalMigrationProject, withLocalMigrationExecutor } from "./local-migration-bootstrap.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules", "supabase", "dist", "supabase.js");
@@ -496,13 +496,20 @@ export async function generatedTypes(connectionString) {
 }
 
 export function applyProjectMigrations(project) {
-  return withPhase6MigrationExecutor(project, () =>
+  return withLocalMigrationExecutor(project, () =>
     runCli(project.workdir, ["migration", "up", "--local"], "PHASE6_MIGRATION_ACCESS_UPGRADE_FAILED"));
 }
 
+export function resetProject(project) {
+  return initializeLocalMigrationProject(project, {
+    initialize: () => runCli(project.workdir, ["db", "reset", "--local"], "PHASE6_CLEAN_DATABASE_RESET_FAILED"),
+    migrate: () => runCli(project.workdir, ["migration", "up", "--local"], "PHASE6_MIGRATION_ACCESS_APPLY_FAILED"),
+  });
+}
+
 export async function startProject(project) {
-  startPhase6LocalProject(project, {
-    start: () => runCli(project.workdir, ["start"], "PHASE6_MIGRATION_ACCESS_START_FAILED"),
+  initializeLocalMigrationProject(project, {
+    initialize: () => runCli(project.workdir, ["start"], "PHASE6_MIGRATION_ACCESS_START_FAILED"),
     migrate: () => runCli(project.workdir, ["migration", "up", "--local"], "PHASE6_MIGRATION_ACCESS_UPGRADE_FAILED"),
   });
   return readStatus(project.workdir);
@@ -596,7 +603,7 @@ async function main() {
     stage = "CLEAN_INSTALL";
     const clean = makeProject("clean", basePort + 20, allMigrations); projects.push(clean);
     const cleanStatus = await startProject(clean);
-    withPhase6MigrationExecutor(clean, () => runCli(clean.workdir, ["db", "reset", "--local"], "PHASE6_CLEAN_DATABASE_RESET_FAILED"));
+    resetProject(clean);
     stage = "COMPARE_CATALOG";
     const cleanSnapshot = await catalogSnapshot(cleanStatus.DB_URL);
     const cleanTypes = await generatedTypes(cleanStatus.DB_URL);

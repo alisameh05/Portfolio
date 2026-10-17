@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
-import { skippedTestCount } from "./phase3-gate-support.mjs";
+import { createPhase3GateProject, removePhase3GateProject, skippedTestCount } from "./phase3-gate-support.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const REPORT = join(ROOT, "evidence", "phase-3-gate-report.json");
@@ -86,9 +86,9 @@ function run(name, entry, args, { env = {}, evidence, failOnSkipped = false } = 
   });
 }
 
-async function readLocalDatabaseUrl() {
+async function readLocalDatabaseUrl(workdir) {
   const chunks = [];
-  const child = spawn(process.execPath, [CLI, "status", "--output", "json"], {
+  const child = spawn(process.execPath, [CLI, "--workdir", workdir, "status", "--output", "json"], {
     cwd: ROOT,
     env: { ...process.env, CI: "1" },
     stdio: ["ignore", "pipe", "pipe"],
@@ -140,6 +140,7 @@ console.log("══════════════════════�
 
 const results = [];
 let databaseStarted = false;
+let databaseProject;
 try {
   results.push(
     await run("phase2-gate", "scripts/phase2-gate.mjs", [], {
@@ -167,7 +168,10 @@ try {
     }),
   );
 
+  databaseProject = createPhase3GateProject(ROOT);
+  const databaseEnvironment = { SHIPWITHALI_LOCAL_VALIDATION_WORKDIR: databaseProject.workdir };
   const start = await run("local-database-start", "scripts/local-database.mjs", ["start"], {
+    env: databaseEnvironment,
     evidence: "evidence/phase-3-local-start.log",
   });
   results.push(start);
@@ -175,6 +179,7 @@ try {
   if (databaseStarted) {
     results.push(
       await run("local-database-reset", "scripts/local-database.mjs", ["reset"], {
+        env: databaseEnvironment,
         evidence: "evidence/phase-3-local-reset.log",
       }),
     );
@@ -184,7 +189,7 @@ try {
     throw new Error("PHASE3_PREREQUISITE_FAILED");
   }
 
-  const databaseUrl = await readLocalDatabaseUrl();
+  const databaseUrl = await readLocalDatabaseUrl(databaseProject.workdir);
   const versionClient = new Client({ connectionString: databaseUrl });
   await versionClient.connect();
   try {
@@ -212,12 +217,13 @@ try {
     : "PHASE3_GATE_FAILED";
   console.error(`✗ ${code}`);
 } finally {
-  if (databaseStarted) {
-    results.push(
-      await run("local-database-stop", "scripts/local-database.mjs", ["stop"], {
+  if (databaseProject) {
+    const stopped = await run("local-database-stop", "scripts/local-database.mjs", ["stop"], {
+        env: { SHIPWITHALI_LOCAL_VALIDATION_WORKDIR: databaseProject.workdir },
         evidence: "evidence/phase-3-local-stop.log",
-      }),
-    );
+      });
+    results.push(stopped);
+    if (stopped.passed) removePhase3GateProject(databaseProject);
   }
 }
 

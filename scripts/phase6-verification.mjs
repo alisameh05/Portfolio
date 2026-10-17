@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
-import { startPhase6LocalProject, withPhase6MigrationExecutor } from "./phase6-local-migration-bootstrap.mjs";
+import { initializeLocalMigrationProject, withLocalMigrationExecutor } from "./local-migration-bootstrap.mjs";
 import {
   PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, getPhase6SourceIdentity, isolatedPhase6Config,
   evaluatePhase6MediaCvIntegration, PHASE6_MEDIA_CV_CRITERION_IDS, makePhase6Report, phase6CvScenarioProof, phase6FormatProof,
@@ -259,8 +259,8 @@ async function main() {
     networkCreated = true;
     attemptedStart = true;
     console.log("Starting isolated loopback PostgreSQL, Auth and private Storage services.");
-    startPhase6LocalProject({ workdir, projectId }, {
-      start: () => invoke(["start", "--network-id", network], 900_000),
+    initializeLocalMigrationProject({ workdir, projectId }, {
+      initialize: () => invoke(["start", "--network-id", network], 900_000),
       migrate: () => invoke(["migration", "up", "--local"], 120_000),
     });
     status = JSON.parse(invoke(["status", "-o", "json"], 30_000));
@@ -288,7 +288,7 @@ async function main() {
       for (const name of deferredCvMigrations) {
         copyFileSync(join(migrations, name), join(isolatedSupabase, "migrations", name));
       }
-      const migrationUpOutput = withPhase6MigrationExecutor({ workdir, projectId }, () => invoke(["migration", "up", "--local"], 120_000));
+      const migrationUpOutput = withLocalMigrationExecutor({ workdir, projectId }, () => invoke(["migration", "up", "--local"], 120_000));
       console.log(`Applying the deferred CV migration: ${migrationUpOutput.trim().slice(0, 400)}`);
       const verificationClient = new Client({ connectionString: status.DB_URL, connectionTimeoutMillis: 5000 });
       await verificationClient.connect();

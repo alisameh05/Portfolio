@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { phase6StorageDefaultDenyProof, stopProject, PHASE6_APPLICATION_COLUMN_UPDATES, phase6ColumnUpdateProof, phase6DefinerFunctionProof, phase6WorkerSchemaProof, makeProject, phase6MediaFactPlanProof, phase6MigrationFailureCode } from "../../scripts/phase6-migration-access.mjs";
 import { phase6PdfFixture } from "../../scripts/phase6-verification-support.mjs";
 import { migrationSha256 } from "../../scripts/migration-checksum.mjs";
-import { withPhase6MigrationExecutor } from "../../scripts/phase6-local-migration-bootstrap.mjs";
+import { withLocalMigrationExecutor } from "../../scripts/local-migration-bootstrap.mjs";
 
 const root = new URL("../../", import.meta.url);
 const runner = readFileSync(new URL("scripts/phase6-migration-access.mjs", root), "utf8");
@@ -23,7 +23,7 @@ test("released Phase 7 migrations retain the checksums published at d652fd4", ()
 
 test("historical migration bootstrap rejects targets outside its disposable fixture scope", () => {
   let invoked = false;
-  assert.throws(() => withPhase6MigrationExecutor({ workdir: process.cwd(), projectId: "production" }, () => { invoked = true; }),
+  assert.throws(() => withLocalMigrationExecutor({ workdir: process.cwd(), projectId: "production" }, () => { invoked = true; }),
     { message: "PHASE6_MIGRATION_BOOTSTRAP_SCOPE_INVALID" });
   assert.equal(invoked, false);
 });

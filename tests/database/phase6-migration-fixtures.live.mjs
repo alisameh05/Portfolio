@@ -3,7 +3,7 @@ import { copyFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { Client } from "pg";
-import { makeProject, startProject, applyProjectMigrations, stopProject, seedPredecessorRows, boundedPlans, privilegeMatrix, transferPortableDataset, catalogSnapshot, generatedTypes, phase6MigrationFailureCode } from "../../scripts/phase6-migration-access.mjs";
+import { makeProject, startProject, resetProject, applyProjectMigrations, stopProject, seedPredecessorRows, boundedPlans, privilegeMatrix, transferPortableDataset, catalogSnapshot, generatedTypes, phase6MigrationFailureCode } from "../../scripts/phase6-migration-access.mjs";
 
 // Explicit live regression command; this never emits acceptance artifacts.
 // node --test tests/database/phase6-migration-fixtures.live.mjs
@@ -90,6 +90,8 @@ test("migration fixtures preserve valid accepted-PDF history, scoped access and 
     stage = "START_TARGET";
     const target = makeProject("fixture-target", basePort + 20, migrations); projects.push(target);
     const targetStatus = await startProject(target);
+    stage = "CLEAN_RESET";
+    resetProject(target);
     stage = "TARGET_CATALOG";
     assert.deepEqual(await catalogSnapshot(targetStatus.DB_URL), sourceCatalog);
     assert.equal(await generatedTypes(targetStatus.DB_URL), sourceTypes);

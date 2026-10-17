@@ -169,8 +169,10 @@ This regression emits no acceptance artifact. Run the complete source-bound
 Phase 6 gate after changes; a passing fixture regression does not qualify
 Phase 6 or permit dependent Phase 8 implementation.
 
-Released migration files retain their original contents. The disposable local
-bootstrap applies the early role-creation migrations with the normal local
+Released migration files retain their original contents. The shared disposable
+local bootstrap used by Phase 3, settings and Phase 6 validation stages SQL
+until CLI start/reset has initialized its restricted administrator. It applies
+the early role-creation migrations with the normal local
 administrator, then temporarily elevates that administrator for the historical
 migration suffix that transfers ownership of a superuser-owned function. It
 checks the exact fixture container identity and restores the original privilege

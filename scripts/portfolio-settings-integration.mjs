@@ -7,6 +7,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { migrationSha256 } from "./migration-checksum.mjs";
+import { applyLocalProjectMigrations, initializeLocalMigrationProject } from "./local-migration-bootstrap.mjs";
 import { invalidateIntegratedEvidence } from "./phase5-scenario-coverage.mjs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import {
@@ -148,7 +149,7 @@ function migrationSources() {
 }
 
 function createProject(name, basePort, migrations) {
-  const projectId = `shipwithali-${name}-${process.pid}-${randomBytes(4).toString("hex")}`;
+  const projectId = `shipwithali-${name}-${randomBytes(6).toString("hex")}`;
   const workdir = mkdtempSync(join(tmpdir(), `${projectId}-`));
   const project = { projectId, workdir, network: `${projectId}-loopback`, basePort, networkCreated: false, attemptedStart: false };
   try {
@@ -183,8 +184,14 @@ function startProject(project, env) {
   });
   project.networkCreated = true;
   project.attemptedStart = true;
-  invokeProject(project, ["start", "--network-id", project.network], env);
-  invokeProject(project, ["db", "reset", "--local"], env);
+  initializeLocalMigrationProject(project, {
+    initialize: () => invokeProject(project, ["start", "--network-id", project.network], env),
+    migrate: () => invokeProject(project, ["migration", "up", "--local"], env),
+  });
+  initializeLocalMigrationProject(project, {
+    initialize: () => invokeProject(project, ["db", "reset", "--local"], env),
+    migrate: () => invokeProject(project, ["migration", "up", "--local"], env),
+  });
   return readDatabaseUrl(project.workdir, project.basePort + 2);
 }
 
@@ -435,7 +442,7 @@ export async function main() {
     for (const file of phase4MigrationsToApply) {
       copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
     }
-    invokeProject(upgradeProject, ["migration", "up", "--local"], env);
+    applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env));
     console.log(ticket123 ? "Applied the merged Phase 4 release migrations." : "Applied Phase 4 migrations to the Phase 3 upgrade database.");
     let phase4ReleaseRows;
     let phase4ReleaseLedger;
@@ -454,7 +461,7 @@ export async function main() {
         copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
       }
       failureStage = "phase5-release-migrations";
-      invokeProject(upgradeProject, ["migration", "up", "--local"], env);
+      applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env));
       failureStage = "phase5-release-data-preservation";
       const afterPhase5Rows = await countRetainedReleaseRecords(upgradeUrl);
       if (JSON.stringify(afterPhase5Rows) !== JSON.stringify(phase4ReleaseRows)) {
@@ -464,7 +471,7 @@ export async function main() {
       for (const file of postPhase5Files) {
         copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
       }
-      invokeProject(upgradeProject, ["migration", "up", "--local"], env);
+      applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env));
     }
     if (ticket123) {
       failureStage = "current-settings-integration";
@@ -508,7 +515,7 @@ export async function main() {
       migrations.files.map((file) => ({ version: file.slice(0, 14), name: file.slice(15, -4) })),
     )) throw new Error("PORTFOLIO_SETTINGS_MIGRATION_LEDGER_MISMATCH");
     invokeProject(cleanProject, ["migration", "up", "--local"], env);
-    invokeProject(upgradeProject, ["migration", "up", "--local"], env);
+    applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env));
     assertPhase4SnapshotsEquivalent(cleanSnapshot, await snapshotPhase4Database(cleanUrl));
     assertPhase4SnapshotsEquivalent(upgradeSnapshot, await snapshotPhase4Database(upgradeUrl));
     const preservedRows = await assertPhase3OperationsPreserved(upgradeUrl, phase3Rows);
