@@ -25,6 +25,7 @@ import { RuntimeConfigError } from "./configuration.js";
 import type { OperationsPersistencePorts } from "../modules/portability-operations/application/index.js";
 import type { OwnerConfigurationApplicationService } from "../runtime/http/owner-configuration.js";
 import type { ContentAuthoringService } from "../modules/content-publishing/application/authoring.js";
+import type { MediaAcceptancePort } from "../modules/content-publishing/application/service.js";
 import type { OwnerProjectApplicationService } from "../runtime/http/owner-project.js";
 import type { OwnerTaxonomyApplicationService } from "../runtime/http/owner-taxonomy.js";
 import type { OwnerPublicationApplicationService } from "../runtime/http/owner-publication.js";
@@ -401,13 +402,6 @@ export async function initializeDatabaseRuntime(
             }),
             transactions: operations.transactions,
           });
-          contentAuthoring = createContentAuthoringService({
-            repository: createPostgresContentAuthoringRepository(),
-            operations,
-            discoveryProjection,
-            taxonomyAssignments: discoveryProjection,
-            scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
-          });
           const [{ createPostgresTaxonomyOwnerRepository }, { createTaxonomyOwnerService }, { createContentBackedOwnerTaxonomyService }, { createProductionOwnerTaxonomyService }, { createPostgresContentTaxonomyAssignmentsPort }] = await Promise.all([
             import("../modules/taxonomy-discovery/adapters/index.js"),
             import("../modules/taxonomy-discovery/application/index.js"),
@@ -532,6 +526,27 @@ export async function initializeDatabaseRuntime(
               scope,
             }),
             preflight: mediaStorage.preflightAcceptedPdfObject,
+          });
+          const contentMediaAcceptance: MediaAcceptancePort = {
+            async getAcceptanceFacts(query, transaction) {
+              const result = await mediaAcceptance.getAcceptanceFacts({ ownerId: query.ownerId,
+                mediaAssetIds: query.mediaAssetIds, intendedUse: "supporting-artifact" }, transaction);
+              if (!result.ok) return result;
+              return { ok: true as const, value: {
+                consistencyVersion: result.value[0]?.consistencyVersion ?? "media-acceptance-v1:empty",
+                facts: result.value.map(({ mediaAssetId, ownerId, accepted, safe, suitable, accessible, assetVersion }) => ({
+                  mediaAssetId, ownerId, accepted, safe, suitable, accessible, version: assetVersion,
+                })),
+              } };
+            },
+          };
+          contentAuthoring = createContentAuthoringService({
+            repository: createPostgresContentAuthoringRepository(),
+            operations,
+            discoveryProjection,
+            taxonomyAssignments: discoveryProjection,
+            scope: { portfolioId: scope.portfolioId, ownerId: scope.ownerId },
+            mediaAcceptance: contentMediaAcceptance,
           });
           ownerCv = createOwnerCvApplicationService({
             ownerId: scope.ownerId,

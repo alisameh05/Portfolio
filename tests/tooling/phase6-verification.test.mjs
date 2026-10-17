@@ -227,14 +227,16 @@ test("loads predecessor contexts from an explicit evidence root", () => {
   }
 });
 
-test("isolated configuration enables only the local API, Auth and Storage on reserved ports", () => {
-  const result = isolatedPhase6Config("project_id = \"before\"\n[api]\nenabled = false\nport = 54321\n[db]\nport = 54322\nshadow_port = 54320\n[auth]\nenabled = false\n[storage]\nenabled = false\n", "after");
+test("isolated configuration enables local Auth signups and private Storage on reserved ports", () => {
+  const result = isolatedPhase6Config("project_id = \"before\"\n[api]\nenabled = false\nport = 54321\n[db]\nport = 54322\nshadow_port = 54320\n[auth]\nenabled = false\nenable_signup = false\n[auth.email]\nenable_signup = false\n[storage]\nenabled = false\n", "after");
   assert.match(result, /project_id = "after"/u);
   assert.match(result, /port = 57321/u);
   assert.match(result, /port = 57322/u);
   assert.match(result, /\[storage\.buckets\.phase6-private-fixtures\]\s+public = false/u);
   assert.match(result, /\[storage\.buckets\.media-candidates\]\s+public = false\s+file_size_limit = "50MiB"/u);
   assert.match(result, /\[storage\.buckets\.media-processed\]\s+public = false\s+file_size_limit = "50MiB"/u);
+  assert.match(result, /\[auth\][\s\S]*?enable_signup = true/u);
+  assert.match(result, /\[auth\.email\][\s\S]*?enable_signup = true/u);
   assert.doesNotMatch(result, /\[studio\][\s\S]*?enabled = true/u);
 });
 

@@ -45,6 +45,16 @@ import { forbiddenSourceReasons } from "./runtime-source-policy.mjs";
 import { ensureDependencyCruiserTsSupport } from "./ensure-depcruise-support.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
+const PHASE4_MIGRATIONS = Object.freeze([
+  "20260922170000_prepare_migration_capability.sql",
+  "20260922171906_establish_database_security_baseline.sql",
+  "20260922203000_create_operations_primitives.sql",
+  "20261001220000_create_identity_access_owner_links.sql",
+  "20261002120000_create_portfolio_configuration_settings.sql",
+  "20261002130000_allow_versioned_portfolio_profile_updates.sql",
+  "20261002140000_allow_owner_contact_channel_replacement.sql",
+  "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+]);
 const EVIDENCE = join(ROOT, "evidence", "phase-4-context.json");
 
 function toPosix(path) {
@@ -205,16 +215,7 @@ function checkNoLaterPhaseActivation(root) {
       }
     }
   }
-  const migrations = (() => {
-    try {
-      return readdirSync(join(root, "supabase", "migrations"))
-        .filter((name) => /^\d{14}_[a-z0-9_]+\.sql$/.test(name))
-        .sort();
-    } catch {
-      return [];
-    }
-  })();
-  const migrationText = migrations
+  const migrationText = PHASE4_MIGRATIONS
     .map((file) => {
       try {
         return readFileSync(join(root, "supabase", "migrations", file), "utf8");
@@ -223,11 +224,11 @@ function checkNoLaterPhaseActivation(root) {
       }
     })
     .join("\n");
-  // Phase 4 #80 evolution: Spec #77 explicitly permits identity-access and
-  // portfolio-configuration activation, so only later-phase business tables
-  // (content, taxonomy, media, cv, interaction, measurement) are forbidden
-  // here. Historical Phase 3 infrastructure-only restrictions remain enforced
-  // against the Phase 3 baseline, not against current Phase 4 migrations.
+  // Phase 4 #80 permits identity-access and portfolio-configuration
+  // activation. Check the migration set present at the Phase 4 merge so later
+  // phases can add their own business tables without invalidating this
+  // historical boundary check. Current source and runtime architecture remain
+  // scanned above.
   if (/create\s+table\s+(?:content|taxonomy|media|cv|interaction|measurement)\./i.test(migrationText)) {
     violations.push("supabase/migrations: later-phase-business-table");
   }

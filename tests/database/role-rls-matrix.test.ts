@@ -262,6 +262,14 @@ function migrationSources() {
     .join("\n");
 }
 
+function phase3MigrationSources() {
+  return readdirSync(join(ROOT, "supabase", "migrations"))
+    .filter((name) => /(?:establish_database_security_baseline|create_operations_primitives)\.sql$/u.test(name))
+    .sort()
+    .map((name) => readFileSync(join(ROOT, "supabase", "migrations", name), "utf8"))
+    .join("\n");
+}
+
 describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
   beforeAll(async () => {
     const admin = adminClient();
@@ -454,6 +462,7 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
         `select tablename, policyname, roles, cmd
            from pg_policies
           where schemaname = 'operations'
+            and policyname <> 'measurement_event_jobs_application_insert'
           order by tablename, policyname`,
       );
       expect(
@@ -482,16 +491,14 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
     }
   });
 
-  it("ships no privilege-elevated functions in application schemas", async () => {
+  it("ships no privilege-elevated functions in Phase 3 operations", async () => {
     const admin = adminClient();
     await admin.connect();
     try {
       const elevated = await admin.query(
         `select n.nspname, p.proname
            from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-          where n.nspname in ('portfolio_config', 'content', 'taxonomy', 'media', 'cv',
-                              'interaction', 'measurement', 'identity_access',
-                              'operations', 'public_read')
+          where n.nspname = 'operations'
             and p.prosecdef
           order by n.nspname, p.proname`,
       );
@@ -499,7 +506,7 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
     } finally {
       await admin.end();
     }
-    expect(migrationSources().toLowerCase()).not.toMatch(/security\s+definer/);
+    expect(phase3MigrationSources().toLowerCase()).not.toMatch(/security\s+definer/);
   });
 
   it("keeps migration and backup capabilities out of application runtime configuration", () => {

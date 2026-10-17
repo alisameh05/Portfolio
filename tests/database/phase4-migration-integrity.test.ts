@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   assertPhase4ApplicationRls,
   assertPhase4SnapshotsEquivalent,
+  roleMembershipContract,
+  phase3OperationsContract,
+  phase4ReleaseContract,
   assertPhase5MigrationSafety,
   PHASE5_MIGRATION_COMPATIBILITY,
   PHASE4_APPLICATION_TABLES,
@@ -18,6 +21,20 @@ const contents = new Map(phase3Files.map((name) => [name, `-- ${name}\n`]));
 const sha256 = (text: string) => createHash("sha256").update(text.replaceAll("\r\n", "\n")).digest("hex");
 
 describe("Phase 4 migration integrity", () => {
+  it("compares migration role memberships as order-independent catalog facts", () => {
+    const rows = [
+      { role: "shipwithali_migration", member: "postgres", adminOption: false },
+      { role: "shipwithali_summary_reader", member: "shipwithali_migration", adminOption: false },
+    ];
+    expect(roleMembershipContract(rows)).toEqual(roleMembershipContract([...rows].reverse()));
+    expect(roleMembershipContract(rows)).not.toEqual(roleMembershipContract([
+      ...rows.slice(0, 1), { ...rows[1]!, adminOption: true },
+    ]));
+    const baseline = { roleMemberships: rows, policies: [], grants: [] };
+    const reordered = { roleMemberships: [...rows].reverse(), policies: [], grants: [] };
+    expect(phase4ReleaseContract(baseline)).toEqual(phase4ReleaseContract(reordered));
+  });
+
   it("accepts only the committed Phase 3 migration snapshot and matching checksums", () => {
     const checksums = Object.fromEntries(phase3Files.map((name) => [name, sha256(contents.get(name)!)]));
     const snapshot = { release: "phase-3", migrations: checksums };
@@ -52,6 +69,49 @@ describe("Phase 4 migration integrity", () => {
       clean,
       { ...structuredClone(clean), policies: [{ table: "settings", using: "true" }] },
     )).toThrow("PORTFOLIO_SETTINGS_DATABASE_STATE_DIFFER:policies");
+  });
+
+  it("preserves the Phase 3 contract while allowing the declared Phase 7 event-job extension", () => {
+    const phase3 = {
+      schemas: [{ name: "operations", owner: "shipwithali_migration" }],
+      objects: [{ schema: "operations", name: "jobs", kind: "r" }],
+      columns: [],
+      constraints: [],
+      policies: [{ schema: "operations", tableName: "jobs", name: "jobs_worker_insert_policy" }],
+      grants: [{ schema: "operations", object: "jobs", grantee: "shipwithali_worker", privilege: "INSERT" }],
+      defaultPrivileges: [],
+      indexes: [],
+      functions: [],
+      triggers: [],
+      types: [],
+    };
+    const upgraded = {
+      ...structuredClone(phase3),
+      policies: [
+        ...phase3.policies,
+        { schema: "operations", tableName: "jobs", name: "measurement_event_jobs_application_insert" },
+      ],
+      grants: [
+        ...phase3.grants,
+        { schema: "operations", object: "jobs", grantee: "shipwithali_application", privilege: "INSERT" },
+      ],
+    };
+
+    expect(() => assertPhase4SnapshotsEquivalent(
+      phase3OperationsContract(phase3),
+      phase3OperationsContract(upgraded),
+    )).not.toThrow();
+    expect(() => assertPhase4SnapshotsEquivalent(
+      phase4ReleaseContract(phase3),
+      phase4ReleaseContract(upgraded),
+    )).not.toThrow();
+    expect(() => assertPhase4SnapshotsEquivalent(
+      phase3OperationsContract(phase3),
+      phase3OperationsContract({
+        ...upgraded,
+        grants: [...upgraded.grants, { schema: "operations", object: "jobs", grantee: "PUBLIC", privilege: "DELETE" }],
+      }),
+    )).toThrow("PORTFOLIO_SETTINGS_DATABASE_STATE_DIFFER:grants");
   });
 
   it("requires forced RLS and the intended policy roles and scope on every Phase 4 application table", () => {

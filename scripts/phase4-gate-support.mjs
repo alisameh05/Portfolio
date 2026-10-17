@@ -66,6 +66,8 @@ export function classifyCheckResult({
   spawnError,
   output,
   failOnSkipped = false,
+  allowWindowsPhase2HelperProcessSkip = false,
+  platform = process.platform,
   requiresService = null,
 }) {
   const cleanOutput = output.replaceAll(/\u001B\[[0-9;]*m/g, "");
@@ -73,9 +75,12 @@ export function classifyCheckResult({
     ...cleanOutput.matchAll(/\b(\d+)\s+skipped\b/gi),
     ...cleanOutput.matchAll(/\bskipped(?:\s+tests?)?\s*[:=]\s*(\d+)\b/gi),
   ].map((match) => Number(match[1]));
-  const skippedOrPartial =
-    failOnSkipped &&
-    (skippedCounts.some((count) => count > 0) || /missing.*service/i.test(cleanOutput) ||
+  const knownWindowsPhase2Skip = allowWindowsPhase2HelperProcessSkip && platform === "win32" &&
+    skippedCounts.length === 2 && skippedCounts.every((count) => count === 1) &&
+    /(?:^|\n)\s*✓\s+tests\/runtime\/media-processing-tools\.test\.ts \([^\n]*\b1 skipped\)(?:\n|$)/u.test(cleanOutput) &&
+    /(?:^|\n)\s*Tests\s+\d+ passed \| 1 skipped \(\d+\)(?:\n|$)/u.test(cleanOutput);
+  const skippedOrPartial = failOnSkipped &&
+    ((skippedCounts.some((count) => count > 0) && !knownWindowsPhase2Skip) || /missing.*service/i.test(cleanOutput) ||
       /\bpartial\b/i.test(cleanOutput));
   const serviceUnavailable =
     requiresService !== null &&

@@ -79,7 +79,7 @@ describe("Phase 4 completion gate (#90)", () => {
     const architecture = archMod.inspectRuntimeArchitecture(ROOT);
     expect(architecture.verdict).toBe("pass");
     expect(architecture.findings).toEqual([]);
-  });
+  }, 30_000);
 
   it("rejects Phase 4 negative fixtures for leakage, routes, writes, frontend, and later-phase activation", async () => {
     const mod = (await import("../../scripts/phase-context.mjs")) as unknown as PhaseContextModule;

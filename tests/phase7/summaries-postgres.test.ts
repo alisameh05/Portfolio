@@ -259,6 +259,7 @@ describe.runIf(Boolean(url))("real current interaction summaries", () => {
       await expect(c.query("set role shipwithali_summary_reader")).rejects.toMatchObject({ code: "42501" });
     } finally { await c.query("rollback"); await c.end(); }
     expect((await admin.query("select rolcanlogin,rolbypassrls,rolsuper from pg_roles where rolname='shipwithali_summary_reader'")).rows).toEqual([{ rolcanlogin: false, rolbypassrls: false, rolsuper: false }]);
+    expect((await admin.query("select has_schema_privilege('shipwithali_summary_reader','interaction','create') as can_create")).rows).toEqual([{ can_create: false }]);
     expect((await admin.query("select pg_has_role('shipwithali_application','shipwithali_summary_reader','MEMBER') as member")).rows).toEqual([{ member: false }]);
     for (const role of ["anon", "authenticated", "shipwithali_worker", "shipwithali_backup"])
       expect((await admin.query("select has_table_privilege($1,'interaction.current_reaction_counts','select') as reactions,has_table_privilege($1,'interaction.current_rating_summary','select') as ratings", [role])).rows).toEqual([{ reactions: false, ratings: false }]);

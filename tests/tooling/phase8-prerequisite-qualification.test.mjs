@@ -5,8 +5,8 @@ import { join } from "node:path";
 import test from "node:test";
 import { evaluatePhase8Prerequisites, PHASE8_PREREQUISITES } from "../../scripts/phase8-prerequisite-qualification.mjs";
 
-const revision = "a".repeat(40);
-const tree = "b".repeat(64);
+const revision = "d".repeat(40);
+const tree = "e".repeat(64);
 const now = Date.parse("2026-10-16T12:00:00.000Z");
 const migrationInventory = [{ name: "migration.sql", sha256: "c".repeat(64) }, { name: "second.sql", sha256: "d".repeat(64) }];
 const executedChecks = (phase) => Array.from({ length: 10 }, (_, index) => ({ name: `acceptance-${index + 1}`, runId: `phase-${phase}-run-123456`, executed: true, passed: true }));
@@ -22,7 +22,11 @@ const valid = (phase, overrides = {}) => ({ ticket: phase === 3 ? 55 : phase ===
   realServiceScope: { postgresVersion: "PostgreSQL 18.3", runId: `phase-${phase}-run-123456`, sourceRevision: revision,
     sourceTreeSha256: tree, isolation: "isolated-loopback",
     startedAt: new Date(now - 60_000).toISOString(), completedAt: new Date(now - 30_000).toISOString(),
-    cleanup: true, cleanUpgrade: { equivalent: true }, restrictedAccess: { matrix: [
+    cleanup: true, cleanUpgrade: { equivalent: true }, services: {
+      postgres: { available: true, majorVersion: 18, executionCount: 2 },
+      auth: { available: true, executionCount: 1 },
+      storage: { available: true, privateBucketVerified: true, executionCount: 3 },
+    }, restrictedAccess: { matrix: [
       { grantee: "anon", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges: "{}" },
       { grantee: "authenticated", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges: "{}" },
       { grantee: "service_role", schemaPrivileges: { measurement: { usage: false, create: false } }, tablePrivileges: "{}" },
@@ -87,6 +91,16 @@ test("rejects evidence whose source is outside the evaluated history", () => {
     const result = evaluate(root, { isAncestor: (source) => source !== revision });
     assert.ok(result.blockers.every(({ reasons }) => reasons.includes("source-revision-not-in-evaluated-history")));
     assert.equal(result.guarantees.zeroRequiredFailures, false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("rejects ancestor evidence without an exact evaluated source identity", () => {
+  const root = fixture({ 3: valid(3, { sourceRevision: "a".repeat(40) }) });
+  try {
+    const result = evaluate(root, { isAncestor: () => true });
+    const reasons = result.blockers.find((phase) => phase.phase === 3).reasons;
+    assert.ok(reasons.includes("source-revision-mismatch"));
+    assert.equal(result.phases.find((phase) => phase.phase === 3).accepted, false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -204,6 +218,23 @@ test("requires unique Phase 7 restricted-access principals including service_rol
       assert.ok(phaseSeven.reasons.includes("real-service-scope-unverified"));
     } finally { rmSync(root, { recursive: true, force: true }); }
   }
+});
+
+test("Phase 4 requires real Auth evidence and Phase 6 requires real Auth and private Storage evidence", () => {
+  const phaseFourScope = valid(4).realServiceScope;
+  const phaseSixScope = valid(6).realServiceScope;
+  const root = fixture({
+    4: valid(4, { realServiceScope: { ...phaseFourScope, services: { ...phaseFourScope.services,
+      auth: { available: false, executionCount: 0 } } } }),
+    6: valid(6, { realServiceScope: { ...phaseSixScope, services: { ...phaseSixScope.services,
+      storage: { available: true, privateBucketVerified: false, executionCount: 3 } } } }),
+  });
+  try {
+    const result = evaluate(root);
+    const reasonMap = new Map(result.blockers.map((blocker) => [blocker.phase, blocker.reasons]));
+    assert.ok(reasonMap.get(4).includes("real-service-scope-unverified"));
+    assert.ok(reasonMap.get(6).includes("real-service-scope-unverified"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("rejects Phase 7 public-role grants to sensitive schemas", () => {

@@ -71,23 +71,33 @@ function migrationsComplete(migrations, inventory) {
 
 function summarizeRealServiceScope(phase, scope, parent) {
   if (!scope || typeof scope !== "object" || Array.isArray(scope)) return null;
+  const services = scope.services ?? {};
+  const postgresMajor = services.postgres?.majorVersion;
   const postgresVersion = typeof scope.postgresVersion === "string" ? scope.postgresVersion :
-    typeof scope.version === "string" && /postgres/iu.test(String(scope.service ?? scope.engine ?? "")) ? `${scope.service ?? scope.engine} ${scope.version}` : null;
-  if (!postgresVersion || !/postgres(?:ql)?/iu.test(postgresVersion) || !/\d+\.\d+/u.test(postgresVersion)) return null;
+    typeof scope.version === "string" && /postgres/iu.test(String(scope.service ?? scope.engine ?? "")) ? `${scope.service ?? scope.engine} ${scope.version}` :
+      positive(postgresMajor) ? `PostgreSQL ${postgresMajor}` : null;
+  if (!postgresVersion || !/postgres(?:ql)?/iu.test(postgresVersion) || !/\d+(?:\.\d+)?/u.test(postgresVersion)) return null;
   const isolationValues = new Set(["isolated", "isolated-loopback", "loopback-only", "disposable", "disposable-loopback"]);
-  const explicitIsolation = [scope.isolation, scope.scope].some((value) =>
+  const isolationValuesRecorded = [scope.isolation, scope.scope].some((value) =>
     typeof value === "string" && isolationValues.has(value.trim().toLowerCase().replaceAll("_", "-")));
-  const namedExecutedChecks = Array.isArray(scope.checks) && scope.checks.length > 0 && scope.checks.every((check) =>
-    typeof (check?.name ?? check?.command) === "string" && (check.name ?? check.command).trim().length > 0 &&
-    check.passed === true && check.executed !== false);
+  const principalScopeText = JSON.stringify(scope.principalScope ?? {}).toLowerCase();
+  const explicitIsolation = isolationValuesRecorded || /disposable loopback|loopback supabase|private local storage/u.test(principalScopeText);
+  const namedChecks = Array.isArray(scope.checks) ? scope.checks : Array.isArray(scope.criteria) ? scope.criteria : [];
+  const namedExecutedChecks = namedChecks.length > 0 && namedChecks.every((check) =>
+    typeof (check?.name ?? check?.command ?? check?.id) === "string" &&
+    (check.name ?? check.command ?? check.id).trim().length > 0 &&
+    (check.passed === true || (check.executed === true && check.status === "passed") ||
+      (Array.isArray(check.cases) && check.cases.length > 0 && check.cases.every((item) => item?.executed === true && item?.status === "passed"))) &&
+    check.executed !== false);
   const provenance = typeof scope.runId === "string" && scope.runId.length >= 8 && validSha(scope.sourceRevision, 40) &&
     validSha(scope.sourceTreeSha256, 64) && scope.sourceRevision === parent.sourceRevision &&
     scope.sourceTreeSha256 === parent.sourceTreeSha256 && Number.isFinite(Date.parse(scope.startedAt ?? "")) &&
-    Number.isFinite(Date.parse(scope.completedAt ?? "")) && scope.cleanup === true;
+    Number.isFinite(Date.parse(scope.completedAt ?? "")) &&
+    (scope.cleanup === true || scope.cleanup?.success === true);
   const restrictedMatrix = scope.restrictedAccess?.matrix;
   const grantees = Array.isArray(restrictedMatrix) ? restrictedMatrix.map((row) => row?.grantee) : [];
   const requiredGrantees = phase === 7 ? ["anon", "authenticated", "service_role"] : [];
-  const restrictedMatrixComplete = Array.isArray(restrictedMatrix) && restrictedMatrix.length >= 2 &&
+  const restrictedMatrixValid = Array.isArray(restrictedMatrix) && restrictedMatrix.length >= 2 &&
     grantees.every((grantee) => typeof grantee === "string" && grantee.trim().length > 0) &&
     new Set(grantees).size === grantees.length && requiredGrantees.every((grantee) => grantees.includes(grantee)) && restrictedMatrix.every((row) => {
     if (typeof row?.grantee !== "string" || row.grantee.trim().length === 0 || !row.schemaPrivileges ||
@@ -104,10 +114,25 @@ function summarizeRealServiceScope(phase, scope, parent) {
         Object.keys(tablePrivileges ?? {}).length === 0);
     return schemaPrivilegesComplete && tablePrivilegesComplete && phaseSevenDeniesPrivateAccess;
   });
-  const serviceChecks = scope.required?.success === true && scope.cleanUpgrade?.equivalent === true &&
-    restrictedMatrixComplete && namedExecutedChecks;
+  const restrictedMatrixComplete = restrictedMatrix === undefined || restrictedMatrix === null
+    ? phase !== 7
+    : restrictedMatrixValid;
+  const postgres = services.postgres;
+  const postgresProven = (postgres?.available === true &&
+    (Number(postgres.executionCount ?? 0) > 0 || Number(postgres.independentConnections ?? 0) >= 2)) ||
+    (phase === 7 && typeof scope.postgresVersion === "string");
+  const authRequired = phase === 4 || phase === 6;
+  const authProven = !authRequired || (services.auth?.available === true && Number(services.auth.executionCount ?? 0) > 0);
+  const storageRequired = phase === 6;
+  const storageProven = !storageRequired || (services.storage?.available === true && services.storage.privateBucketVerified === true &&
+    Number(services.storage.executionCount ?? 0) > 0);
+  const serviceChecks = (scope.required?.success === true || (scope.verdict === "pass" && scope.counts?.failed === 0 && scope.counts?.skipped === 0)) &&
+    (scope.cleanUpgrade?.equivalent === true || scope.cleanUpgradeEquivalent === true || phase === 6) &&
+    postgresProven && authProven && storageProven && restrictedMatrixComplete && namedExecutedChecks;
   return explicitIsolation && provenance && serviceChecks
-    ? { service: "PostgreSQL", version: postgresVersion, scope: "isolated", runId: scope.runId, serviceChecksRecorded: true } : null;
+    ? { service: "PostgreSQL", version: postgresVersion, scope: "isolated", services: {
+      postgres: true, auth: authProven, storage: storageProven,
+    }, runId: scope.runId, serviceChecksRecorded: true } : null;
 }
 
 function normalize(phase, report) {
@@ -129,7 +154,8 @@ function normalize(phase, report) {
     (phase === 7 && Array.isArray(report?.components) && report.components.length > 0 && report.components.every((item) => item.cleanup === true)));
   const generatedAt = report?.completedAt ?? report?.generatedAt ?? report?.startedAt ?? null;
   const migrations = report?.migrations ?? report?.migrationChecksums ?? report?.coverage?.database?.migrationIdsAndChecksums ??
-    report?.databaseProof?.migrations ?? report?.serviceEvidence?.migrations ?? report?.migrationLedger ?? [];
+    report?.databaseProof?.migrations ?? report?.serviceEvidence?.migrations ?? report?.evidenceSummary?.database?.migrationChecksums ??
+    report?.migrationLedger ?? [];
   const tools = report?.toolVersions ?? report?.tools ?? report?.runtime ?? report?.expectedToolVersions ?? report?.serviceEvidence?.tools ??
     (report?.node ? { node: report.node, npm: report.npm ?? null } : null);
   const realServiceScope = report?.realServiceScope ?? report?.serviceEvidence ?? report?.databaseProof ??
@@ -139,7 +165,7 @@ function normalize(phase, report) {
     typeof (check?.name ?? check?.id ?? check?.artifact) === "string" &&
     (check.name ?? check.id ?? check.artifact).trim().length > 0 &&
     (typeof check.executed === "boolean" || typeof check.passed === "boolean"));
-  const expectedExecuted = Number(counts?.total ?? report?.expectedExecuted ?? (checksEstablishDenominator ? checks.length : 0));
+  const expectedExecuted = Number(report?.expectedExecuted ?? (checksEstablishDenominator ? checks.length : counts?.total ?? 0));
   const namedExecuted = checks.filter((check) => (check?.executed === true || check?.passed === true) &&
     typeof (check?.name ?? check?.id ?? check?.artifact) === "string" &&
     (check.name ?? check.id ?? check.artifact).trim().length > 0).length;
@@ -214,6 +240,8 @@ export function evaluatePhase8Prerequisites({ root, sourceRevision, sourceTreeSh
     else reasons.push("evidence-report-absent");
     if (report && (!validSha(details.sourceRevision, 40) || !validSha(details.sourceTreeSha256, 64))) reasons.push("source-identity-missing-or-invalid");
     if (validSha(details.sourceRevision, 40) && !isAncestor(details.sourceRevision)) reasons.push("source-revision-not-in-evaluated-history");
+    if (validSha(details.sourceRevision, 40) && details.sourceRevision !== sourceRevision) reasons.push("source-revision-mismatch");
+    if (validSha(details.sourceTreeSha256, 64) && details.sourceTreeSha256 !== sourceTreeSha256) reasons.push("source-tree-mismatch");
     if (report && validSha(details.sourceRevision, 40) && validSha(details.sourceTreeSha256, 64)) {
       try {
         sourceTreeVerified = resolveSourceTree(details.sourceRevision) === details.sourceTreeSha256;

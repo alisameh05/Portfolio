@@ -88,7 +88,7 @@ export function evaluatePhase6MediaCvIntegration(evidence, expected = {}) {
 }
 
 export function isolatedPhase6Config(source, projectId, ports = { api: 57321, db: 57322, shadow: 57320, studio: 57323 }) {
-  const config = source
+  let config = source
     .replace(/^project_id = .*$/m, `project_id = "${projectId}"`)
     .replace(/(\[api\]\s*)enabled = false/, "$1enabled = true")
     .replace(/(\[auth\]\s*)enabled = false/, "$1enabled = true")
@@ -97,6 +97,22 @@ export function isolatedPhase6Config(source, projectId, ports = { api: 57321, db
     .replace(/(\[db\][\s\S]*?^port = )54322$/m, (_match, prefix) => `${prefix}${ports.db}`)
     .replace(/^shadow_port = 54320$/m, `shadow_port = ${ports.shadow}`)
     .replace(/(\[studio\][\s\S]*?^port = )54323$/m, (_match, prefix) => `${prefix}${ports.studio}`);
+  // Authenticated negative tests need a disposable non-Owner account. Scope
+  // both options to their exact TOML sections so a later auth subsection
+  // cannot accidentally supply the match for an earlier one.
+  for (const section of ["auth", "auth.email"]) {
+    const header = `[${section}]`;
+    const start = config.split(/\r?\n/u).findIndex((line) => line.trim() === header);
+    if (start < 0) continue;
+    const lines = config.split(/\r?\n/u);
+    const end = lines.findIndex((line, index) => index > start && /^\s*\[[^\]]+\]\s*(?:#.*)?$/u.test(line));
+    const sectionLines = lines.slice(start + 1, end < 0 ? undefined : end);
+    const option = sectionLines.findIndex((line) => /^\s*enable_signup\s*=\s*false\s*(?:#.*)?$/u.test(line));
+    if (option < 0) continue;
+    sectionLines[option] = sectionLines[option].replace(/false/u, "true");
+    lines.splice(start + 1, sectionLines.length, ...sectionLines);
+    config = lines.join("\n");
+  }
   return `${config.trimEnd()}\n\n[storage.buckets.phase6-private-fixtures]\npublic = false\nfile_size_limit = "50MiB"\n\n[storage.buckets.media-candidates]\npublic = false\nfile_size_limit = "50MiB"\nallowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]\n\n[storage.buckets.media-processed]\npublic = false\nfile_size_limit = "50MiB"\nallowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]\n`;
 }
 
@@ -254,7 +270,7 @@ function predecessorContextFailures(contexts) {
   return failures;
 }
 
-export function makePhase6Report({ sourceRevision, sourceTreeSha256, runtime, startedAt, tools, services, formats, cleanup, failures, predecessorContexts = loadPhase6PredecessorContexts() }) {
+export function makePhase6Report({ sourceRevision, sourceTreeSha256, runtime, startedAt, tools, services, formats, cleanup, failures, expectedFormats = PHASE6_FORMATS, predecessorContexts = loadPhase6PredecessorContexts() }) {
   const executed = formats.filter((item) => item.executed).length;
   const failed = formats.filter((item) => item.status === "failed").length;
   const skipped = formats.filter((item) => item.status === "skipped").length;
@@ -279,17 +295,17 @@ export function makePhase6Report({ sourceRevision, sourceTreeSha256, runtime, st
     },
     services,
     formats,
-    counts: { expectedFormats: PHASE6_FORMATS.length, executedFormats: executed, failedFormats: failed, skippedFormats: skipped },
+    counts: { expectedFormats: expectedFormats.length, executedFormats: executed, failedFormats: failed, skippedFormats: skipped },
     cleanup,
     failures,
-    verdict: failures.length === 0 && executed === PHASE6_FORMATS.length && failed === 0 && skipped === 0 && cleanup.success === true ? "pass" : "fail",
+    verdict: failures.length === 0 && executed === expectedFormats.length && failed === 0 && skipped === 0 && cleanup.success === true ? "pass" : "fail",
     reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:verification"],
     limitations: ["This setup probe does not certify Phase 6 application behavior, RLS matrices, race/rollback scenarios, or the final phase6:gate."],
   };
   return report;
 }
 
-export function evaluatePhase6Setup(report, { sourceRevision, sourceTreeSha256, now = Date.now() } = {}) {
+export function evaluatePhase6Setup(report, { sourceRevision, sourceTreeSha256, expectedFormats = PHASE6_FORMATS, now = Date.now() } = {}) {
   const failures = [];
   if (!report || report.schemaVersion !== PHASE6_SCHEMA_VERSION) failures.push("evidence-schema-invalid");
   if (report?.sourceRevision !== sourceRevision || report?.sourceTreeSha256 !== sourceTreeSha256) failures.push("evidence-source-stale-or-mismatched");
@@ -302,7 +318,7 @@ export function evaluatePhase6Setup(report, { sourceRevision, sourceTreeSha256, 
     failed: formatRows.filter((item) => item?.status === "failed").length,
     skipped: formatRows.filter((item) => item?.status === "skipped").length,
   };
-  if (report?.counts?.expectedFormats !== PHASE6_FORMATS.length || report?.counts?.executedFormats !== PHASE6_FORMATS.length || report?.counts?.failedFormats !== 0 || report?.counts?.skippedFormats !== 0 || actualCounts.executed !== PHASE6_FORMATS.length || actualCounts.failed !== 0 || actualCounts.skipped !== 0) failures.push("format-execution-counts-incomplete");
+  if (report?.counts?.expectedFormats !== expectedFormats.length || report?.counts?.executedFormats !== expectedFormats.length || report?.counts?.failedFormats !== 0 || report?.counts?.skippedFormats !== 0 || actualCounts.executed !== expectedFormats.length || actualCounts.failed !== 0 || actualCounts.skipped !== 0) failures.push("format-execution-counts-incomplete");
   if (!report?.services?.postgres?.available || !report?.services?.auth?.available || !report?.services?.storage?.privateBucketVerified) failures.push("required-service-probe-missing");
   if (!Number.isSafeInteger(report?.services?.postgres?.independentConnections) || report.services.postgres.independentConnections < 2) failures.push("independent-postgres-connections-unavailable");
   if (!report?.cleanup?.success) failures.push("cleanup-not-confirmed");
@@ -310,8 +326,8 @@ export function evaluatePhase6Setup(report, { sourceRevision, sourceTreeSha256, 
     if (report?.toolDefinitions?.[Object.keys(PHASE6_TOOL_DEFINITIONS).find((key) => PHASE6_TOOL_DEFINITIONS[key] === tool)] !== tool) failures.push("processor-definition-missing");
   }
   const byFormat = new Map(formatRows.map((item) => [item.id, item]));
-  if (byFormat.size !== PHASE6_FORMATS.length) failures.push("format-matrix-incomplete-or-duplicated");
-  for (const format of PHASE6_FORMATS) {
+  if (byFormat.size !== expectedFormats.length) failures.push("format-matrix-incomplete-or-duplicated");
+  for (const format of expectedFormats) {
     const result = byFormat.get(format.id);
     if (!result?.executed || result?.status !== "passed" || result?.storageRoundTrip !== true || result?.scannerVerdict !== "clean" || result?.processorVersion !== report?.toolVersions?.[format.processor]) failures.push(`format-probe-incomplete:${format.id}`);
   }

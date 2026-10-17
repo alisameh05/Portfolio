@@ -46,6 +46,7 @@ const PUBLICATION_MEDIA_ONLY = process.argv.includes("--publication-media-only")
 const MEDIA_INTEGRATION_ONLY = process.argv.includes("--media-integration-only");
 const OWNER_COMPOSITION_ONLY = process.argv.includes("--owner-composition-only");
 const MEDIA_CV_INTEGRATION_ONLY = process.argv.includes("--media-cv-integration-only");
+const BASELINE_VERIFICATION_ONLY = process.argv.length === 2;
 const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || MEDIA_DELIVERY_ONLY || MEDIA_REJECTION_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || PUBLICATION_MEDIA_ONLY || MEDIA_INTEGRATION_ONLY || OWNER_COMPOSITION_ONLY || MEDIA_CV_INTEGRATION_ONLY;
 const RUN_TIMEOUT = 180_000;
 
@@ -225,6 +226,7 @@ async function main() {
     storage: { available: false, privateBucketVerified: false, executionCount: 0 },
   };
   const formats = [];
+  let activeFormats = PHASE6_FORMATS;
   const failures = [];
   let uploadIntentChecks;
   let mediaProcessingChecks;
@@ -357,12 +359,13 @@ async function main() {
     const video = PHASE6_TOOL_DEFINITIONS.videoProcessor;
     const pdf = PHASE6_TOOL_DEFINITIONS.pdfProcessor;
     const scanner = PHASE6_TOOL_DEFINITIONS.scanner;
-    if (IMAGE_PROCESSING_ONLY) {
+    if (IMAGE_PROCESSING_ONLY || MEDIA_PROCESSING_ONLY) {
       const sharpModule = await import("sharp");
       toolVersions = {
         supabaseCli: supabasePkg.version,
         postgres: database.rows[0].version,
         scanner: serviceVersion(scanner, "clamscan"),
+        pdfProcessor: serviceVersion(pdf, "ocrmypdf"),
         sharp: `sharp-${sharpModule.default.versions.sharp};libvips-${sharpModule.default.versions.vips ?? "unknown"}`,
       };
     } else {
@@ -381,8 +384,8 @@ async function main() {
       }
     }
     if (!IMAGE_PROCESSING_ONLY) writeFileSync(join(fixturesDir, "fixture.pdf"), pdfFixture());
-    const activeFormats = MEDIA_PROCESSING_ONLY || MEDIA_REJECTION_ONLY || OWNER_COMPOSITION_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
-      : CV_DELIVERY_ONLY ? PHASE6_FORMATS.filter(({ id, kind }) => id === "pdf" || kind === "image")
+    activeFormats = MEDIA_PROCESSING_ONLY || MEDIA_REJECTION_ONLY || OWNER_COMPOSITION_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
+      : CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY ? PHASE6_FORMATS.filter(({ id, kind }) => id === "pdf" || kind === "image")
       : IMAGE_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ kind }) => kind === "image")
         : VIDEO_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ kind }) => kind === "video") : PHASE6_FORMATS;
     if (IMAGE_PROCESSING_ONLY) {
@@ -392,7 +395,7 @@ async function main() {
       await sharp(imageInput).png().toFile(join(fixturesDir, "fixture.png"));
       await sharp(imageInput).jpeg().toFile(join(fixturesDir, "fixture.jpeg"));
       await sharp(imageInput).webp().toFile(join(fixturesDir, "fixture.webp"));
-    } else if (!MEDIA_PROCESSING_ONLY && !MEDIA_REJECTION_ONLY) {
+    } else if (!MEDIA_REJECTION_ONLY) {
       console.log("Generating safe fixtures with the pinned image and video processors.");
       run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.png"], { label: "fixture-generate-png" });
       run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.jpeg"], { label: "fixture-generate-jpeg" });
@@ -433,13 +436,14 @@ async function main() {
       PHASE6_UPLOAD_INTENT_ANON_KEY: status.ANON_KEY,
       PHASE6_UPLOAD_INTENT_REPLAY_KEY: randomBytes(32).toString("base64"),
       PHASE6_REQUIRE_UPLOAD_INTENT: "1",
+      PHASE6_PDF_PROCESSING_ONLY: MEDIA_PROCESSING_ONLY || BASELINE_VERIFICATION_ONLY ? "1" : "0",
       PHASE6_OWNER_COMPOSITION_ONLY: OWNER_COMPOSITION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_PDF_PROCESSING_FIXTURE: join(fixturesDir, "fixture.pdf"),
-      PHASE6_IMAGE_FIXTURE_PNG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.png"),
-      PHASE6_IMAGE_FIXTURE_JPEG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.jpeg"),
-      PHASE6_IMAGE_FIXTURE_WEBP: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.webp"),
+      PHASE6_IMAGE_FIXTURE_PNG: join(fixturesDir, "fixture.png"),
+      PHASE6_IMAGE_FIXTURE_JPEG: join(fixturesDir, "fixture.jpeg"),
+      PHASE6_IMAGE_FIXTURE_WEBP: join(fixturesDir, "fixture.webp"),
       PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !OWNER_COMPOSITION_ONLY) ? "1" : "0",
-      PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !CV_DELIVERY_ONLY && !OWNER_COMPOSITION_ONLY) ? "1" : "0",
+      PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !CV_DELIVERY_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !OWNER_COMPOSITION_ONLY) ? "1" : "0",
       PHASE6_MEDIA_ACCEPTANCE_ONLY: RUN_MEDIA_ACCEPTANCE ? "1" : "0",
       PHASE6_MEDIA_REJECTION_ONLY: MEDIA_REJECTION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_REQUIRE_FULL_MEDIA: CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || MEDIA_INTEGRATION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
@@ -476,18 +480,22 @@ async function main() {
       testArgs.push("tests/database/content-authoring.integration.test.ts", "tests/phase4/owner-request-security.test.ts", "tests/phase4/owner-session-auth.test.ts",
         "tests/phase4/owner-operation-policy.test.ts", "tests/phase4/local-auth-token.integration.test.ts",
         "-t", testNamePattern(PHASE6_MEDIA_CV_TEST_NAMES));
-    } else if (OWNER_COMPOSITION_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism", "-t", "composes all nine Owner Media and CV operations through real services");
+    } else if (UPLOAD_INTENT_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism", "-t",
+      "commits a scoped candidate and replays the same encrypted target without re-signing|allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes|rolls back a failed candidate commit and idempotently removes its expired private orphan");
+    else if (OWNER_COMPOSITION_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism", "-t", "composes all nine Owner Media and CV operations through real services");
     else if (VIDEO_PROCESSING_ONLY) testArgs.push("-t", "processes MP4 and WebM candidates");
     else if (IMAGE_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images");
     else if (MEDIA_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates");
     else if (MEDIA_DELIVERY_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|issues bounded delivery only for current published-locale and profile Media uses");
     else if (MEDIA_REJECTION_ONLY) testArgs.push("-t", "rejects accepted Media safely and serializes with current usage changes");
     else if (CV_DELIVERY_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|issues bounded delivery only for current published-locale and profile Media uses");
-    else if (MEDIA_ACCEPTANCE_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates");
+    else if (CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images");
+    else if (MEDIA_ACCEPTANCE_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates");
     else if (PUBLICATION_MEDIA_ONLY) {
       testArgs.push("tests/database/content-authoring.integration.test.ts", "-t",
         "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates|reports only Media referenced by currently published Project and Achievement locales|preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable|rejects invalid evidence, review, and Media facts without creating public state|publishes English and Arabic independently, preserves first publication time, history, and the last valid projection|publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline|hides, archives, and restores all three content kinds through atomic owner lifecycle commands|revalidates each exact locale publication before restore and changes none when one Media fact fails");
-    }
+    } else if (BASELINE_VERIFICATION_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism", "-t",
+      "commits a scoped candidate and replays the same encrypted target without re-signing|allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes|rolls back a failed candidate commit and idempotently removes its expired private orphan|processes PDF candidates");
     // The complete gate includes both isolated scopes: the baseline's bounded
     // PDF/image and video tests plus the bounded rejection/race test.
     const testTimeout = MEDIA_INTEGRATION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? 1_800_000 : 900_000;
@@ -508,7 +516,9 @@ async function main() {
       ownerCompositionChecks = { suite: "tests/database/media-upload-intent.integration.test.ts", test: assertion?.fullName,
         counts: { executed: executed ? 1 : 0, failed: assertion?.status === "failed" ? 1 : 0,
           skipped: assertion?.status === "pending" || assertion?.status === "disabled" || assertion === undefined ? 1 : 0 },
-        scenarios: recorded, verdict: executed && testResult.status === 0 ? "pass" : "fail" };
+        scenarios: recorded,
+        failure: assertion?.status === "failed" ? String(assertion.failureMessages?.[0] ?? "assertion-failed").split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 1000) : undefined,
+        verdict: executed && testResult.status === 0 ? "pass" : "fail" };
       if (ownerCompositionChecks.verdict !== "pass") throw new Error("PHASE6_OWNER_COMPOSITION_ACCEPTANCE_INVALID");
     }
     if (MEDIA_INTEGRATION_ONLY) {
@@ -561,6 +571,8 @@ async function main() {
       throw new Error(`PHASE6_CV_SCENARIO_EXECUTION_PROOF_MISSING:${JSON.stringify({
         assertions: { total: integration.total, passed: integration.passed, failed: integration.failed, skipped: integration.skipped },
         failedTests: integration.failedTests ?? [],
+        recordedCvScenarios: processingCounts?.cvScenarios,
+        recordedCvActivationScenarios: processingCounts?.cvActivationScenarios,
       })}`);
     }
     if (MEDIA_DELIVERY_ONLY) {
@@ -577,8 +589,12 @@ async function main() {
       };
       if (mediaDeliveryChecks.verdict !== "pass") failures.push("PHASE6_MEDIA_DELIVERY_ACCEPTANCE_INVALID");
     }
-    const uploadAssertions = allAssertions.filter((item) => !/processes (?:PDF|MP4 and WebM|PNG, JPEG and WebP) candidates/u.test(String(item.fullName ?? "")));
-    const processingAssertions = allAssertions.filter((item) => MEDIA_DELIVERY_ONLY || CV_DELIVERY_ONLY
+    const uploadAssertions = allAssertions.filter((item) => [
+      "commits a scoped candidate and replays the same encrypted target without re-signing",
+      "allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes",
+      "rolls back a failed candidate commit and idempotently removes its expired private orphan",
+    ].some((name) => String(item.fullName ?? "").includes(name)));
+    const processingAssertions = allAssertions.filter((item) => MEDIA_DELIVERY_ONLY || CV_DELIVERY_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY
       ? String(item.fullName ?? "").includes("processes PDF candidates and real PNG JPEG WebP images")
       : MEDIA_REJECTION_ONLY
       ? String(item.fullName ?? "").includes("rejects accepted Media safely and serializes with current usage changes")
@@ -700,10 +716,10 @@ async function main() {
         name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
         reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
       })),
-      verdict: (MEDIA_DELIVERY_ONLY || testResult.status === 0) && processingAssertions.length === (MEDIA_DELIVERY_ONLY || MEDIA_REJECTION_ONLY || CV_DELIVERY_ONLY || !RUN_MEDIA_ACCEPTANCE ? 1 : 2) && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
+      verdict: (MEDIA_DELIVERY_ONLY || testResult.status === 0) && processingAssertions.length === (MEDIA_DELIVERY_ONLY || MEDIA_REJECTION_ONLY || CV_DELIVERY_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || !RUN_MEDIA_ACCEPTANCE ? 1 : 2) && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
     };
-    if (!VIDEO_PROCESSING_ONLY && !RUN_MEDIA_ACCEPTANCE && uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
-    if (mediaProcessingChecks.verdict !== "pass" && !MEDIA_REJECTION_ONLY) throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
+    if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !RUN_MEDIA_ACCEPTANCE && uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
+    if (!UPLOAD_INTENT_ONLY && mediaProcessingChecks.verdict !== "pass" && !MEDIA_REJECTION_ONLY && !OWNER_COMPOSITION_ONLY) throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
     if (CV_PORTFOLIO_ONLY && (!Array.isArray(cvPortfolioChecks?.scenarios) || cvPortfolioChecks.scenarios.length !== 9 ||
         cvPortfolioChecks.scenarios.some((item) => item.executed !== true || item.status !== "passed") ||
         cvPortfolioChecks?.counts?.executed !== 9 || cvPortfolioChecks?.counts?.failed !== 0 || cvPortfolioChecks?.counts?.skipped !== 0)) {
@@ -757,7 +773,10 @@ async function main() {
       ? processingCounts?.acceptanceExecutions === 1
       : CV_DELIVERY_ONLY
       ? Number.isSafeInteger(processingCounts?.acceptanceExecutions) && processingCounts.acceptanceExecutions > 0
-      : processingCounts?.acceptanceExecutions === (MEDIA_DELIVERY_ONLY ? 4 : PHASE6_FORMATS.length);
+      : MEDIA_CV_INTEGRATION_ONLY
+      ? Number.isSafeInteger(processingCounts?.acceptanceExecutions) && processingCounts.acceptanceExecutions >= PHASE6_FORMATS.length
+      : processingCounts?.acceptanceExecutions === (MEDIA_DELIVERY_ONLY ? 4
+        : CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY ? activeFormats.length : PHASE6_FORMATS.length);
     if (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !acceptanceExecutionsValid) throw new Error("PHASE6_MEDIA_ACCEPTANCE_FORMAT_COUNTS_MISSING");
     if (PUBLICATION_MEDIA_ONLY && publicationChecks?.verdict !== "pass") throw new Error("PHASE6_PUBLICATION_MEDIA_ASSERTION_COUNTS_INVALID");
   } catch (error) {
@@ -782,9 +801,9 @@ async function main() {
   const finalSource = getPhase6SourceIdentity();
   if (finalSource.sourceRevision !== source.sourceRevision || finalSource.sourceTreeSha256 !== source.sourceTreeSha256) failures.push("PHASE6_SOURCE_CHANGED_DURING_RUN");
   let report;
-  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !MEDIA_DELIVERY_ONLY && !MEDIA_REJECTION_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !CV_DELIVERY_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY && !MEDIA_CV_INTEGRATION_ONLY) {
-    report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
-    const evaluated = evaluatePhase6Setup(report, source);
+  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !MEDIA_DELIVERY_ONLY && !MEDIA_REJECTION_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !CV_DELIVERY_ONLY && !PUBLICATION_MEDIA_ONLY && !OWNER_COMPOSITION_ONLY && !MEDIA_INTEGRATION_ONLY && !MEDIA_CV_INTEGRATION_ONLY) {
+    report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures, expectedFormats: activeFormats });
+    const evaluated = evaluatePhase6Setup(report, { ...source, expectedFormats: activeFormats });
     if (evaluated.failures.length) {
       report.failures.push(...evaluated.failures);
       report.verdict = "fail";
@@ -1023,22 +1042,32 @@ async function main() {
           ...scenarioCases(processingCounts?.mediaRejectionScenarios, ["T12-09"]), ...ownerUnitCases] },
       { id: "T18-10", name: "Real Owner/session/CSRF/scope checks and restricted-principal policies remain green",
         cases: [...scenarioCases(processingCounts?.cvActivationScenarios, ["T11-02"]), ...ownerCompositionCases, ...ownerSecurityCases] },
-      { id: "T18-11", name: "Every integrated scenario is mapped to executed case IDs, counts, sanitized evidence, and honest limitations",
-        cases: [{ caseId: "evidence:eleven-criteria", name: "all eleven T18 criteria and source-bound case IDs are present",
-          executed: criteria.length === PHASE6_MEDIA_CV_CRITERION_IDS.length && criteria.every((item) => item.cases.length > 0),
-          status: criteria.length === PHASE6_MEDIA_CV_CRITERION_IDS.length && criteria.every((item) => item.cases.length > 0) ? "passed" : "failed" },
-        { caseId: "evidence:zero-required-skips", name: "integrated and unit suites report zero failures and skips",
-          executed: testResult.status === 0 && acceptanceUnitChecks?.verdict === "pass",
-          status: testResult.status === 0 && acceptanceUnitChecks?.verdict === "pass" ? "passed" : "failed" }] },
     ];
+    const mappedCriteriaValid = criteria.length === PHASE6_MEDIA_CV_CRITERION_IDS.length - 1 && criteria.every((item) => item.cases.length > 0);
+    criteria.push({ id: "T18-11", name: "Every integrated scenario is mapped to executed case IDs, counts, sanitized evidence, and honest limitations",
+      cases: [{ caseId: "evidence:eleven-criteria", name: "all eleven T18 criteria and source-bound case IDs are present",
+        executed: mappedCriteriaValid,
+        status: mappedCriteriaValid ? "passed" : "failed" },
+      { caseId: "evidence:zero-required-skips", name: "integrated and unit suites report zero failures and skips",
+        executed: testResult.status === 0 && acceptanceUnitChecks?.verdict === "pass",
+        status: testResult.status === 0 && acceptanceUnitChecks?.verdict === "pass" ? "passed" : "failed" }] });
     const caseList = criteria.flatMap(({ cases }) => cases);
     const counts = { executed: caseList.filter((item) => item.executed && item.status === "passed").length,
       failed: caseList.filter((item) => item.executed && item.status === "failed").length,
       skipped: caseList.filter((item) => item.executed !== true || item.status === "skipped").length };
-    const testRun = { exitStatus: testResult.status ?? 1, total: Number(testReport.numTotalTests ?? allAssertions.length),
-      failed: Number(testReport.numFailedTests ?? allAssertions.filter((item) => item.status === "failed").length),
-      skipped: Number(testReport.numPendingTests ?? allAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length),
-      passed: Number(testReport.numPassedTests ?? allAssertions.filter((item) => item.status === "passed").length),
+    const requiredIntegrationAssertions = MEDIA_CV_INTEGRATION_ONLY
+      ? allAssertions.filter((item) => PHASE6_MEDIA_CV_TEST_NAMES.some((name) => String(item.fullName ?? "").includes(name)) ||
+        ["processes PDF candidates and real PNG JPEG WebP images", "processes MP4 and WebM candidates"]
+          .some((name) => String(item.fullName ?? "").includes(name)))
+      : allAssertions;
+    const testRun = { exitStatus: testResult.status ?? 1, total: requiredIntegrationAssertions.length,
+      failed: requiredIntegrationAssertions.filter((item) => item.status === "failed").length,
+      skipped: requiredIntegrationAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length,
+      passed: requiredIntegrationAssertions.filter((item) => item.status === "passed").length,
+      rawDiscovery: { total: Number(testReport.numTotalTests ?? allAssertions.length),
+        failed: Number(testReport.numFailedTests ?? allAssertions.filter((item) => item.status === "failed").length),
+        unselected: Number(testReport.numPendingTests ?? allAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length),
+        passed: Number(testReport.numPassedTests ?? allAssertions.filter((item) => item.status === "passed").length) },
       unit: acceptanceUnitChecks };
     const evidence = {
       schemaVersion: 1, ticket: 163, parent: 145, predecessor: 162, runId: randomUUID(),
@@ -1452,7 +1481,7 @@ async function main() {
       counts: cvActivationChecks?.counts, scenarios, criteria, cleanup,
       verdict: cvActivationChecks?.verdict === "pass" && scenarios.length >= 16 && scenarios.every((item) => item.executed && item.status === "passed") &&
         cvActivationChecks?.counts?.criteriaCovered === 10 && cvMigrationUpgrade?.verdict === "pass" &&
-        processingCounts?.acceptanceExecutions === PHASE6_FORMATS.length && formats.length === PHASE6_FORMATS.length &&
+        processingCounts?.acceptanceExecutions === activeFormats.length && formats.length === activeFormats.length &&
         formats.every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
         cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:cv-activation"],

@@ -23,6 +23,8 @@ begin
   return new;
 end
 $function$;
+revoke all on function measurement.prevent_sealed_aggregate_checkpoint_rewrite()
+  from public, anon, authenticated, shipwithali_application, shipwithali_backup;
 create trigger daily_aggregate_checkpoint_seal_guard
   before update on measurement.daily_aggregate_checkpoints
   for each row execute function measurement.prevent_sealed_aggregate_checkpoint_rewrite();

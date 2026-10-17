@@ -498,7 +498,12 @@ async function snapshot(baseUrl) {
     }
     if (
       privileges.rows.some((row) => {
-        if (!PHASE3_MODE) return row.has_usage || row.has_create;
+        if (row.has_create) return true;
+        if (!PHASE3_MODE) return row.has_usage;
+        // Phase 3 owns the operations schema ACL. Later phase migrations add
+        // scoped usage grants to their own schemas, so they cannot be judged
+        // by the original empty-schema expectation here.
+        if (row.schema_name !== "operations") return false;
         const expectedUsage =
           row.schema_name === "operations" &&
           [
@@ -506,7 +511,7 @@ async function snapshot(baseUrl) {
             "shipwithali_worker",
             "shipwithali_backup",
           ].includes(row.role_name);
-        return row.has_create || row.has_usage !== expectedUsage;
+        return row.has_usage !== expectedUsage;
       })
     ) {
       throw new Error("CAPABILITY_SCHEMA_ACCESS_MISMATCH");
