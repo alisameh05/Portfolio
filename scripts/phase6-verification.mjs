@@ -227,8 +227,8 @@ async function main() {
   let testResult;
   let testReport;
   let allAssertions = [];
-  const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], {
-    cwd: ROOT, env, timeout, label: `supabase-${String(args[0] ?? "command")}`,
+  const invoke = (args, timeout = 600_000, environment = env) => run(process.execPath, [CLI, "--workdir", workdir, ...args], {
+    cwd: ROOT, env: environment, timeout, label: `supabase-${String(args[0] ?? "command")}`,
   }).stdout;
   try {
     let config = isolatedPhase6Config(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId, phase6Ports);
@@ -260,7 +260,7 @@ async function main() {
     attemptedStart = true;
     console.log("Starting isolated loopback PostgreSQL, Auth and private Storage services.");
     initializeLocalMigrationProject({ workdir, projectId, network }, {
-      initialize: () => invoke(["start", "--network-id", network], 900_000),
+      initialize: (_network, dockerEnvironment) => invoke(["start", "--network-id", network], 900_000, { ...env, ...dockerEnvironment }),
       migrate: () => invoke(["migration", "up", "--local"], 120_000),
     });
     status = JSON.parse(invoke(["status", "-o", "json"], 30_000));
