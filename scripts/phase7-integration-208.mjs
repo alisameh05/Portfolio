@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { Client, Pool } from "pg";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
+import { migrationSha256 } from "./migration-checksum.mjs";
 
 const root = process.cwd();
 const runId = randomUUID();
@@ -386,7 +387,7 @@ async function main() {
     if(sourceTreeSha256!==initialSource) throw new Error("PHASE7_INTEGRATION_SOURCE_CHANGED_DURING_RUN");
     result={ticket:208,runId,sourceRevision:git(["rev-parse","HEAD"]),sourceTreeSha256,startedAt,completedAt:new Date().toISOString(),postgresVersion,scope:isolationScope,
       tools:{node:process.versions.node,npm:(process.env.npm_config_user_agent??"").match(/npm\/([^\s]+)/u)?.[1]??"unavailable"},
-      baselineCommit:baseline,migrations:current.map(name=>({name,sha256:createHash("sha256").update(readFileSync(join(root,"supabase","migrations",name))).digest("hex")})),
+      baselineCommit:baseline,migrations:current.map(name=>({name,sha256:migrationSha256(readFileSync(join(root,"supabase","migrations",name),"utf8"))})),
       cleanUpgrade:{equivalent:true,schemas:schemas.length,relations:cleanCatalog.objects.length,policies:cleanCatalog.policies.length,grants:cleanCatalog.grants.length,predecessorFixturePreserved:true,generatedTypesVerified:p7Schemas},
       restrictedAccess:scoped,queryPlans:plans,roleFlags:cleanCatalog.roles.filter(row=>["shipwithali_application","shipwithali_worker"].includes(row.rolname)),
       securityObjects:{views:cleanCatalog.objects.filter(row=>["v","m"].includes(row.kind)&&["interaction","measurement"].includes(row.schema)),

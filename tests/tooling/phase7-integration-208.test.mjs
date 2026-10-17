@@ -1,4 +1,5 @@
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { assertNoPublicSensitiveAccess, classifyIntegrationScope, collectPlanIndexes, compareCatalogs } from "../../scripts/phase7-integration-208.mjs";
 
@@ -50,4 +51,9 @@ test("query plan index collector reports nested index usage", () => {
     "Node Type": "Limit",
     Plans: [{ "Node Type": "Index Scan", "Index Name": "feedback_project_locale", Plans: [{ "Node Type": "Index Only Scan", "Index Name": "daily_aggregates_pkey" }] }],
   }), ["feedback_project_locale", "daily_aggregates_pkey"]);
+});
+
+test("Phase 7 aggregate migration inventory records canonical SQL checksums", () => {
+  const runner = readFileSync(new URL("../../scripts/phase7-integration-208.mjs", import.meta.url), "utf8");
+  assert.ok(/migrations:current\.map\(name=>\(\{name,sha256:migrationSha256\(/u.test(runner), "aggregate inventory must use canonical migration digests");
 });

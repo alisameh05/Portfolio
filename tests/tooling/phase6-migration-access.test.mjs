@@ -58,3 +58,9 @@ test("Phase 6 successful migration verification stops each owned project once", 
 test("Phase 6 migration evidence retains the validated Storage integration summary", () => {
   assert.match(runner, /integration: storageIntegration\.checks,/u);
 });
+test("Phase 6 baseline preserves Git's existing trailing-whitespace comparison", () => {
+  const historical = "select 1;";
+  const checkout = "select 1;\r\n";
+  assert.equal(migrationSha256(historical), migrationSha256(checkout.trimEnd()));
+  assert.match(runner, /migrationSha256\(readFileSync\(join\(ROOT, "supabase", "migrations", name\), "utf8"\)\.trimEnd\(\)\)/u);
+});

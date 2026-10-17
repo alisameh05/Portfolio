@@ -72,7 +72,7 @@ function migrationsAtBaseline() {
   const current = readdirSync(join(ROOT, "supabase", "migrations")).filter((name) => /^\d{14}_[a-z0-9_]+\.sql$/u.test(name)).sort();
   for (const name of files) {
     const historical = git(["show", `${BASELINE}:supabase/migrations/${name}`]);
-    if (migrationSha256(historical) !== migrationSha256(readFileSync(join(ROOT, "supabase", "migrations", name), "utf8"))) {
+    if (migrationSha256(historical) !== migrationSha256(readFileSync(join(ROOT, "supabase", "migrations", name), "utf8").trimEnd())) {
       throw new Error(`PHASE6_PREDECESSOR_MIGRATION_DRIFT:${name}`);
     }
   }

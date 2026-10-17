@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
+import { migrationSha256 } from "./migration-checksum.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const PHASE8_PREREQUISITES = Object.freeze([
@@ -23,7 +24,7 @@ const validSha = (value, length) => typeof value === "string" && new RegExp(`^[a
 const parseJson = (path) => { try { return JSON.parse(readFileSync(path, "utf8")); } catch { return null; } };
 const positive = (value) => Number.isFinite(Number(value)) && Number(value) > 0;
 
-function sourceMetadataAtRevision(root, revision) {
+export function sourceMetadataAtRevision(root, revision) {
   const cacheKey = `${root}\0${revision}`;
   if (sourceMetadataCache.has(cacheKey)) return sourceMetadataCache.get(cacheKey);
   const checkout = mkdtempSync(join(tmpdir(), "phase8-source-"));
@@ -40,7 +41,7 @@ function sourceMetadataAtRevision(root, revision) {
       const content = stat.isSymbolicLink() ? Buffer.from(readlinkSync(absolute)) : readFileSync(absolute);
       const sha256 = createHash("sha256").update(content).digest("hex");
       digest.update(JSON.stringify([path, stat.isSymbolicLink() ? "symlink" : "file", sha256])).update("\0");
-      if (/^supabase\/migrations\/[^/]+\.sql$/iu.test(path)) migrations.push({ name: path.slice("supabase/migrations/".length), sha256 });
+      if (/^supabase\/migrations\/[^/]+\.sql$/iu.test(path)) migrations.push({ name: path.slice("supabase/migrations/".length), sha256: migrationSha256(content.toString("utf8")) });
     }
     const metadata = Object.freeze({ sourceTreeSha256: digest.digest("hex"), migrations: Object.freeze(migrations) });
     sourceMetadataCache.set(cacheKey, metadata);

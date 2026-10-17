@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { migrationSha256 } from "../../scripts/migration-checksum.mjs";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { evaluatePhase8Prerequisites, PHASE8_PREREQUISITES } from "../../scripts/phase8-prerequisite-qualification.mjs";
+import { evaluatePhase8Prerequisites, sourceMetadataAtRevision, PHASE8_PREREQUISITES } from "../../scripts/phase8-prerequisite-qualification.mjs";
 
 const revision = "d".repeat(40);
 const tree = "e".repeat(64);
@@ -256,5 +258,24 @@ test("reports malformed evidence collection shapes without throwing", () => {
     const result = evaluate(root);
     const reasonMap = new Map(result.blockers.map((blocker) => [blocker.phase, blocker.reasons]));
     for (const phase of [4, 5, 6]) assert.ok(reasonMap.get(phase).includes("evidence-structure-invalid"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("immutable migration inventory uses canonical checksums on Windows checkouts", () => {
+  const root = mkdtempSync(join(tmpdir(), "phase8-immutable-migrations-"));
+  const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  try {
+    git("init", "--initial-branch=fixture");
+    git("config", "core.autocrlf", "true");
+    git("config", "user.name", "Validation Fixture");
+    git("config", "user.email", "fixture@example.invalid");
+    mkdirSync(join(root, "supabase", "migrations"), { recursive: true });
+    const sql = "set lock_timeout = '5s';\nselect 1;\n";
+    writeFileSync(join(root, "supabase", "migrations", "20261017000000_fixture.sql"), sql);
+    git("add", "supabase/migrations/20261017000000_fixture.sql");
+    git("commit", "-m", "Fixture migration");
+    const metadata = sourceMetadataAtRevision(root, git("rev-parse", "HEAD"));
+    assert.deepEqual(metadata.migrations, [{ name: "20261017000000_fixture.sql", sha256: migrationSha256(sql) }]);
+    assert.notEqual(metadata.migrations[0].sha256, migrationSha256(sql.replace("select 1", "select 2")));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
