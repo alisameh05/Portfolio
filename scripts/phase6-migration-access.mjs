@@ -255,15 +255,24 @@ export async function seedPredecessorRows(connectionString) {
   } finally { await client.end(); }
 }
 
-async function predecessorDataSnapshot(connectionString) {
+export async function predecessorDataSnapshot(connectionString, predecessor = null) {
   const client = new Client({ connectionString });
   await client.connect();
   try {
     const tables = ["portfolio_config.settings", "content.items", "content.revisions", "content.lifecycle_history", "content.public_routes", "content.public_route_reservations", "taxonomy.roots", "taxonomy.taxonomy_values", "taxonomy.value_history", "content.project_taxonomy_assignments", "operations.idempotency_records", "operations.outbox_events"];
     const data = {};
     for (const table of tables) {
-      const rows = await client.query(`select to_jsonb(t)::text as row from ${table} t order by to_jsonb(t)::text`);
-      data[table] = { count: rows.rowCount, digest: createHash("sha256").update(rows.rows.map((row) => row.row).join("\n")).digest("hex") };
+      const attributes = await client.query("select attname from pg_catalog.pg_attribute where attrelid=$1::regclass and attnum>0 and not attisdropped order by attnum", [table]);
+      const available = attributes.rows.map(row => row.attname);
+      const columns = predecessor === null ? available : predecessor[table]?.columns;
+      if (!Array.isArray(columns) || columns.length === 0 || columns.some(column => !available.includes(column))) {
+        throw new Error("PHASE6_PREDECESSOR_COLUMNS_CHANGED");
+      }
+      // Retain every original column, while allowing reviewed additive columns.
+      // Catalog/type equivalence independently checks the entire upgraded schema.
+      const projection = columns.map(column => `"${column.replaceAll('"', '""')}"`).join(",");
+      const rows = await client.query(`select to_jsonb(t)::text as row from (select ${projection} from ${table}) t order by to_jsonb(t)::text`);
+      data[table] = { columns, count: rows.rowCount, digest: createHash("sha256").update(rows.rows.map((row) => row.row).join("\n")).digest("hex") };
     }
     return data;
   } finally { await client.end(); }
@@ -593,7 +602,7 @@ async function main() {
     for (const name of phase6Migrations) copyFileSync(join(ROOT, "supabase", "migrations", name), join(old.migrationDir, name));
     stage = "APPLY_UPGRADE";
     applyProjectMigrations(old);
-    upgradeDataAfter = await predecessorDataSnapshot(oldStatus.DB_URL);
+    upgradeDataAfter = await predecessorDataSnapshot(oldStatus.DB_URL, upgradeDataBefore);
     if (JSON.stringify(upgradeDataBefore) !== JSON.stringify(upgradeDataAfter)) throw new Error("PHASE6_PREDECESSOR_ROWS_CHANGED");
     stage = "UPGRADE_CATALOG";
     upgrade = await catalogSnapshot(oldStatus.DB_URL);
