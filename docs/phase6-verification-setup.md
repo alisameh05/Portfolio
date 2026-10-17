@@ -169,6 +169,21 @@ This regression emits no acceptance artifact. Run the complete source-bound
 Phase 6 gate after changes; a passing fixture regression does not qualify
 Phase 6 or permit dependent Phase 8 implementation.
 
+Released migration files retain their original contents. The disposable local
+bootstrap applies the early role-creation migrations with the normal local
+administrator, then temporarily elevates that administrator for the historical
+migration suffix that transfers ownership of a superuser-owned function. It
+checks the exact fixture container identity and restores the original privilege
+in a `finally` block. Application, Worker, and probe roles remain restricted.
+The forward migration revokes direct execution of the aggregate checkpoint
+trigger function without replaying an edited historical migration. The fixture
+regression verifies that upgrade and a clean installation produce equivalent
+catalogs and types, and that the administrator is restricted again afterward.
+
+This bootstrap is limited to disposable local Docker projects. Managed Supabase
+does not permit granting superuser to its `postgres` role; this local evidence
+does not qualify the historical ownership transition for a managed deployment.
+
 ## Complete Phase 6 gate
 
 After network-enabled setup has completed, run `npm run phase6:gate` on a

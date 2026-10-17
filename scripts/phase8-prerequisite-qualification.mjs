@@ -7,6 +7,11 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { migrationSha256 } from "./migration-checksum.mjs";
+import { REQUIRED_PHASE3_CHECK_NAMES } from "./phase3-gate-support.mjs";
+import { REQUIRED_PHASE4_CHECK_NAMES } from "./phase4-gate-support.mjs";
+import { REQUIRED_PHASE5_GATE_CHECKS } from "./phase5-gate-support.mjs";
+import { PHASE6_GATE_REQUIRED_CHECKS } from "./phase6-gate-support.mjs";
+import { PHASE7_GATE_REQUIRED_CHECKS } from "./phase7-gate-support.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const PHASE8_PREREQUISITES = Object.freeze([
@@ -18,6 +23,10 @@ export const PHASE8_PREREQUISITES = Object.freeze([
 ]);
 export const MAX_EVIDENCE_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 export const REQUIRED_TOOL_VERSIONS = Object.freeze({ node: "24.21.0", npm: "11.19.0" });
+export const PHASE8_REQUIRED_CHECKS = Object.freeze({
+  3: REQUIRED_PHASE3_CHECK_NAMES, 4: REQUIRED_PHASE4_CHECK_NAMES, 5: REQUIRED_PHASE5_GATE_CHECKS,
+  6: PHASE6_GATE_REQUIRED_CHECKS, 7: PHASE7_GATE_REQUIRED_CHECKS,
+});
 const sourceMetadataCache = new Map();
 
 const validSha = (value, length) => typeof value === "string" && new RegExp(`^[a-f0-9]{${length}}$`, "iu").test(value);
@@ -144,8 +153,9 @@ function normalize(phase, report) {
   const runId = report?.runId ?? checks.find((check) => check?.runId)?.runId ?? null;
   const executed = Number(required?.executed ?? required?.passed ?? report?.coverage?.executed ??
     checks.filter((check) => check?.executed === true || check?.passed === true).length ?? 0);
-  const failed = Number(required?.failed ?? report?.failureCount ?? checks.filter((check) => check?.passed !== true).length ?? 0);
-  const skipped = Number(required?.skipped ?? required?.requiredSkipped ?? report?.skipped ??
+  const failed = Math.max(Number(required?.failed ?? report?.failureCount ?? 0),
+    checks.filter((check) => check?.passed === false || check?.executed === false).length);
+  const skipped = Math.max(Number(required?.skipped ?? required?.requiredSkipped ?? report?.skipped ?? 0),
     checks.reduce((total, check) => total + Number(check?.skipped ?? 0), 0));
   const aggregateFailed = report?.verdict === "fail" || required?.success === false || failed > 0;
   const aggregateSuccess = report?.verdict === "pass" && required?.success !== false && failed === 0 && skipped === 0;
@@ -166,11 +176,19 @@ function normalize(phase, report) {
     typeof (check?.name ?? check?.id ?? check?.artifact) === "string" &&
     (check.name ?? check.id ?? check.artifact).trim().length > 0 &&
     (typeof check.executed === "boolean" || typeof check.passed === "boolean"));
-  const expectedExecuted = Number(report?.expectedExecuted ?? (checksEstablishDenominator ? checks.length : counts?.total ?? 0));
-  const namedExecuted = checks.filter((check) => (check?.executed === true || check?.passed === true) &&
+  // Gate command coverage comes from the owning gate's manifest. Phase 5's
+  // counts.total counts assertions, so it cannot serve as a command inventory.
+  const requiredNames = PHASE8_REQUIRED_CHECKS[phase];
+  const expectedExecuted = requiredNames.length;
+  const names = checks.map((check) => check?.name ?? check?.id ?? check?.artifact);
+  const commandCoverageComplete = checksEstablishDenominator && names.length === expectedExecuted &&
+    new Set(names).size === expectedExecuted && requiredNames.every((name) => names.includes(name));
+  const assertionCoverageComplete = phase !== 5 || positive(counts.total) && Number(counts.executed ?? required.executed) === Number(counts.total);
+  const namedExecuted = checks.filter((check) => check?.passed === true && check?.executed !== false &&
     typeof (check?.name ?? check?.id ?? check?.artifact) === "string" &&
     (check.name ?? check.id ?? check.artifact).trim().length > 0).length;
-  const coverageComplete = (counts?.criterionCount == null || Number(counts?.executedCriteria) === Number(counts?.criterionCount)) &&
+  const coverageComplete = commandCoverageComplete && assertionCoverageComplete &&
+    (counts?.criterionCount == null || Number(counts?.executedCriteria) === Number(counts?.criterionCount)) &&
     positive(expectedExecuted) && executed >= expectedExecuted && namedExecuted >= expectedExecuted;
   return { sourceRevision, sourceTreeSha256, runId, generatedAt, executed, failed, skipped, expectedExecuted, namedExecuted,
     aggregateFailed, aggregateSuccess, coverageComplete, cleanup,

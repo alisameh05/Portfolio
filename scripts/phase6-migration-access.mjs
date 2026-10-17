@@ -9,6 +9,7 @@ import { Client, Pool } from "pg";
 import { isolatedPhase6Config, phase6StorageIntegrationProof, phase6PdfFixture, scrubPhase6Environment } from "./phase6-verification-support.mjs";
 import { getPhase6SourceIdentity } from "./phase6-verification-support.mjs";
 import { migrationSha256 } from "./migration-checksum.mjs";
+import { startPhase6LocalProject, withPhase6MigrationExecutor } from "./phase6-local-migration-bootstrap.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules", "supabase", "dist", "supabase.js");
@@ -494,9 +495,16 @@ export async function generatedTypes(connectionString) {
   } finally { rmSync(outFile, { force: true }); }
 }
 
-export async function startProject(project, migrations) {
-  runCli(project.workdir, ["start"], "PHASE6_MIGRATION_ACCESS_START_FAILED");
-  if (!migrations.alreadyApplied) runCli(project.workdir, ["migration", "up", "--local"], "PHASE6_MIGRATION_ACCESS_UPGRADE_FAILED");
+export function applyProjectMigrations(project) {
+  return withPhase6MigrationExecutor(project, () =>
+    runCli(project.workdir, ["migration", "up", "--local"], "PHASE6_MIGRATION_ACCESS_UPGRADE_FAILED"));
+}
+
+export async function startProject(project) {
+  startPhase6LocalProject(project, {
+    start: () => runCli(project.workdir, ["start"], "PHASE6_MIGRATION_ACCESS_START_FAILED"),
+    migrate: () => runCli(project.workdir, ["migration", "up", "--local"], "PHASE6_MIGRATION_ACCESS_UPGRADE_FAILED"),
+  });
   return readStatus(project.workdir);
 }
 
@@ -566,13 +574,13 @@ async function main() {
   let upgrade; let upgradeDataBefore; let upgradeDataAfter; let upgradeTypes; let plans; let rls; let portability; let cleanupSuccess = true;
   try {
     const old = makeProject("upgrade", basePort, predecessorMigrations); projects.push(old);
-    const oldStatus = await startProject(old, { alreadyApplied: false });
+    const oldStatus = await startProject(old);
     stage = "SEED_PREDECESSOR";
     await seedPredecessorRows(oldStatus.DB_URL);
     upgradeDataBefore = await predecessorDataSnapshot(oldStatus.DB_URL);
     for (const name of phase6Migrations) copyFileSync(join(ROOT, "supabase", "migrations", name), join(old.migrationDir, name));
     stage = "APPLY_UPGRADE";
-    runCli(old.workdir, ["migration", "up", "--local"], "PHASE6_MIGRATION_ACCESS_UPGRADE_FAILED");
+    applyProjectMigrations(old);
     upgradeDataAfter = await predecessorDataSnapshot(oldStatus.DB_URL);
     if (JSON.stringify(upgradeDataBefore) !== JSON.stringify(upgradeDataAfter)) throw new Error("PHASE6_PREDECESSOR_ROWS_CHANGED");
     stage = "UPGRADE_CATALOG";
@@ -587,8 +595,8 @@ async function main() {
 
     stage = "CLEAN_INSTALL";
     const clean = makeProject("clean", basePort + 20, allMigrations); projects.push(clean);
-    const cleanStatus = await startProject(clean, { alreadyApplied: true });
-    runCli(clean.workdir, ["db", "reset", "--local"], "PHASE6_CLEAN_DATABASE_RESET_FAILED");
+    const cleanStatus = await startProject(clean);
+    withPhase6MigrationExecutor(clean, () => runCli(clean.workdir, ["db", "reset", "--local"], "PHASE6_CLEAN_DATABASE_RESET_FAILED"));
     stage = "COMPARE_CATALOG";
     const cleanSnapshot = await catalogSnapshot(cleanStatus.DB_URL);
     const cleanTypes = await generatedTypes(cleanStatus.DB_URL);

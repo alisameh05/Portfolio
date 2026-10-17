@@ -870,8 +870,8 @@ describeReal(group === "baseline"
         // the advisory lock. Keep both observations inside that three-second
         // window even when the preflight needs a little extra time.
         const allCommandsQueued = await waitFor(commands.length, stageFirst ? 1_000 : 2_900, true, false);
-        if (!allCommandsQueued && outcomes.length > 0) {
-          throw new Error(`${scenario}: a command completed before all expected advisory-lock waiters were observed`);
+        if (!allCommandsQueued) {
+          throw new Error(`${scenario}: not all expected advisory-lock waiters were observed before the barrier deadline`);
         }
         await admin.query("commit");
         released = true;
@@ -882,6 +882,32 @@ describeReal(group === "baseline"
         if (!released) await admin.query("rollback");
         if (pending.length > 0) await Promise.allSettled(pending);
       }
+    }
+
+    // A second session stalled before the Media lock must not be counted as
+    // contention. A real table lock holds it back until the barrier releases;
+    // no sleep or successful command result can substitute for two waiters.
+    const barrierProbeId = createStableId("MediaAsset");
+    const firstProbe = new Client({ connectionString: applicationDatabaseUrl });
+    const delayedProbe = new Client({ connectionString: applicationDatabaseUrl });
+    await firstProbe.connect();
+    await delayedProbe.connect();
+    try {
+      await delayedProbe.query("begin");
+      await expect(contendAtMediaLock(barrierProbeId, [
+        async () => {
+          await admin.query("lock table operations.idempotency_records in access exclusive mode");
+          return firstProbe.query("select pg_advisory_xact_lock(hashtextextended($1::text, 0))", [barrierProbeId]);
+        },
+        async () => {
+          await delayedProbe.query("lock table operations.idempotency_records in access share mode");
+          return delayedProbe.query("select pg_advisory_xact_lock(hashtextextended($1::text, 0))", [barrierProbeId]);
+        },
+      ], true, "missing-media-lock-waiter")).rejects.toThrow(/missing-media-lock-waiter/u);
+    } finally {
+      await delayedProbe.query("rollback");
+      await firstProbe.end();
+      await delayedProbe.end();
     }
 
     // A candidate with no current Content or CV use can be rejected. The

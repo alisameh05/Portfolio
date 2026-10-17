@@ -5,20 +5,21 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { evaluatePhase8Prerequisites, sourceMetadataAtRevision, PHASE8_PREREQUISITES } from "../../scripts/phase8-prerequisite-qualification.mjs";
+import { evaluatePhase8Prerequisites, sourceMetadataAtRevision, PHASE8_PREREQUISITES, PHASE8_REQUIRED_CHECKS } from "../../scripts/phase8-prerequisite-qualification.mjs";
 
 const revision = "d".repeat(40);
 const tree = "e".repeat(64);
 const now = Date.parse("2026-10-16T12:00:00.000Z");
 const migrationInventory = [{ name: "migration.sql", sha256: "c".repeat(64) }, { name: "second.sql", sha256: "d".repeat(64) }];
-const executedChecks = (phase) => Array.from({ length: 10 }, (_, index) => ({ name: `acceptance-${index + 1}`, runId: `phase-${phase}-run-123456`, executed: true, passed: true }));
+const executedChecks = (phase) => PHASE8_REQUIRED_CHECKS[phase].map((name) => ({ name, runId: `phase-${phase}-run-123456`, executed: true, passed: true }));
 const evaluate = (root, overrides = {}) => evaluatePhase8Prerequisites({ root, sourceRevision: "d".repeat(40),
   sourceTreeSha256: "e".repeat(64), now, resolveSourceTree: () => tree,
   resolveMigrationInventory: () => migrationInventory, isAncestor: () => true, ...overrides });
 const valid = (phase, overrides = {}) => ({ ticket: phase === 3 ? 55 : phase === 4 ? 90 : phase === 5 ? 125 : phase === 6 ? 164 : 209,
   verdict: "pass", runId: `phase-${phase}-run-123456`, sourceRevision: revision, sourceTreeSha256: tree,
   startedAt: new Date(now - 60_000).toISOString(), completedAt: new Date(now - 30_000).toISOString(),
-  required: { success: true, executed: 10, failed: 0, skipped: 0 }, counts: { total: 10 }, checks: executedChecks(phase), cleanup: true,
+  required: { success: true, executed: PHASE8_REQUIRED_CHECKS[phase].length, failed: 0, skipped: 0 },
+  counts: { total: PHASE8_REQUIRED_CHECKS[phase].length }, checks: executedChecks(phase), cleanup: true,
   guarantees: { sourceBound: true, successfulCleanup: true },
   migrations: migrationInventory, toolVersions: { node: "24.21.0", npm: "11.19.0" },
   realServiceScope: { postgresVersion: "PostgreSQL 18.3", runId: `phase-${phase}-run-123456`, sourceRevision: revision,
@@ -54,6 +55,46 @@ test("accepts only complete source-bound successful artifacts with cleanup", () 
     assert.deepEqual(result.acceptedPhases, [3, 4, 5, 6, 7]);
     assert.equal(result.statusLayers.humanApproval, "not-recorded-by-this-evaluator");
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("rejects a truncated named checklist despite unchanged successful aggregate totals", () => {
+  for (const phase of [3, 4, 5, 6, 7]) {
+    const report = valid(phase);
+    const root = fixture({ [phase]: { ...report, checks: report.checks.slice(0, 1) } });
+    try {
+      const result = evaluate(root);
+      const prerequisite = result.phases.find((item) => item.phase === phase);
+      assert.equal(prerequisite.accepted, false, `Phase ${phase} must reject incomplete command coverage`);
+      assert.ok(prerequisite.reasons.includes("executed-coverage-partial"));
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test("rejects duplicate check names that conceal a missing required command", () => {
+  const report = valid(6);
+  report.checks[1].name = report.checks[0].name;
+  const root = fixture({ 6: report });
+  try {
+    assert.ok(evaluate(root).phases.find((item) => item.phase === 6).reasons.includes("executed-coverage-partial"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a failed or skipped named command overrides passing aggregate claims", () => {
+  for (const command of [{ passed: false }, { skipped: 1 }, { executed: false }]) {
+    const report = valid(3);
+    Object.assign(report.checks[0], command);
+    const root = fixture({ 3: report });
+    try {
+      assert.equal(evaluate(root).phases.find((item) => item.phase === 3).accepted, false);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test("Phase 5 keeps assertion totals separate from its complete command inventory", () => {
+  const report = valid(5, { counts: { total: 146, executed: 146, failed: 0, skipped: 0 } });
+  const root = fixture({ 5: report });
+  try { assert.equal(evaluate(root).phases.find((item) => item.phase === 5).accepted, true); }
+  finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("reports precise safe blockers for missing, stale, mismatched, partial, skipped and failed evidence", () => {
@@ -135,7 +176,7 @@ test("rejects absent denominators, unnamed coverage, wrong tool pins, and incomp
 });
 
 test("uses a complete named gate checklist as the denominator when aggregate counts are absent", () => {
-  const phaseFourChecks = Array.from({ length: 19 }, (_, index) => ({ name: `phase4-check-${index + 1}`, passed: true }));
+  const phaseFourChecks = executedChecks(4).map(({ name }) => ({ name, passed: true }));
   const root = fixture({ 4: valid(4, { counts: undefined, required: undefined, checks: phaseFourChecks, migrations: migrationInventory }) });
   try {
     const result = evaluate(root);

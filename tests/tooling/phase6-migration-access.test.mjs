@@ -5,11 +5,28 @@ import { join } from "node:path";
 import { phase6StorageDefaultDenyProof, stopProject, PHASE6_APPLICATION_COLUMN_UPDATES, phase6ColumnUpdateProof, phase6DefinerFunctionProof, phase6WorkerSchemaProof, makeProject, phase6MediaFactPlanProof, phase6MigrationFailureCode } from "../../scripts/phase6-migration-access.mjs";
 import { phase6PdfFixture } from "../../scripts/phase6-verification-support.mjs";
 import { migrationSha256 } from "../../scripts/migration-checksum.mjs";
+import { withPhase6MigrationExecutor } from "../../scripts/phase6-local-migration-bootstrap.mjs";
 
 const root = new URL("../../", import.meta.url);
 const runner = readFileSync(new URL("scripts/phase6-migration-access.mjs", root), "utf8");
 const packageJson = JSON.parse(readFileSync(new URL("package.json", root), "utf8"));
 const entrypoint = readFileSync(new URL("docker/validation/entrypoint.sh", root), "utf8");
+
+test("released Phase 7 migrations retain the checksums published at d652fd4", () => {
+  for (const [name, sha256] of [
+    ["20261015093040_query_current_interaction_summaries.sql", "8fbef1951cc33e3a6ae286dc9f1d53bee87b45eb0dc9e45e4c080eb7a56cea88"],
+    ["20261015202000_expire_measurement_detail_and_aggregate_retention.sql", "04e33297a492b55c2dc8b2392fc9f0291fa3e10f9ade40e7c9ef6fc97b297221"],
+  ]) {
+    assert.equal(migrationSha256(readFileSync(new URL(`supabase/migrations/${name}`, root), "utf8")), sha256);
+  }
+});
+
+test("historical migration bootstrap rejects targets outside its disposable fixture scope", () => {
+  let invoked = false;
+  assert.throws(() => withPhase6MigrationExecutor({ workdir: process.cwd(), projectId: "production" }, () => { invoked = true; }),
+    { message: "PHASE6_MIGRATION_BOOTSTRAP_SCOPE_INVALID" });
+  assert.equal(invoked, false);
+});
 
 test("Phase 6 migration-access gate has one runnable focused entrypoint and follows real Storage evidence", () => {
   assert.equal(packageJson.scripts["phase6:focus:migration-access"], "node scripts/phase6-migration-access.mjs");

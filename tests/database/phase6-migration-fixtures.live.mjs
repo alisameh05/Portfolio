@@ -1,19 +1,34 @@
 import assert from "node:assert/strict";
-import { readdirSync } from "node:fs";
+import { copyFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 import { Client } from "pg";
-import { makeProject, startProject, stopProject, seedPredecessorRows, boundedPlans, privilegeMatrix, transferPortableDataset, catalogSnapshot, generatedTypes, phase6MigrationFailureCode } from "../../scripts/phase6-migration-access.mjs";
+import { makeProject, startProject, applyProjectMigrations, stopProject, seedPredecessorRows, boundedPlans, privilegeMatrix, transferPortableDataset, catalogSnapshot, generatedTypes, phase6MigrationFailureCode } from "../../scripts/phase6-migration-access.mjs";
 
 // Explicit live regression command; this never emits acceptance artifacts.
 // node --test tests/database/phase6-migration-fixtures.live.mjs
 test("migration fixtures preserve valid accepted-PDF history, scoped access and portable references", { timeout: 300_000 }, async () => {
   const migrations = readdirSync(new URL("../../supabase/migrations/", import.meta.url)).filter(name => /^\d{14}_.+\.sql$/u.test(name)).sort();
+  const correction = "20261017142000_revoke_public_aggregate_guard_execution.sql";
+  assert.ok(migrations.includes(correction));
   const projects = [];
   const basePort = 56_000 + (process.pid % 100) * 40;
   let stage = "START_SOURCE";
   try {
-    const source = makeProject("fixture-source", basePort, migrations); projects.push(source);
-    const sourceStatus = await startProject(source, { alreadyApplied: false });
+    const source = makeProject("fixture-source", basePort, migrations.filter(name => name !== correction)); projects.push(source);
+    const sourceStatus = await startProject(source);
+    stage = "RELEASED_PHASE7_UPGRADE";
+    const upgradeProbe = new Client({ connectionString: sourceStatus.DB_URL }); await upgradeProbe.connect();
+    try {
+      assert.equal((await upgradeProbe.query("select rolsuper from pg_roles where rolname = 'postgres'")).rows[0].rolsuper, false);
+      assert.equal((await upgradeProbe.query("select has_function_privilege('anon', 'measurement.prevent_sealed_aggregate_checkpoint_rewrite()', 'EXECUTE') as allowed")).rows[0].allowed, true);
+      copyFileSync(new URL(`../../supabase/migrations/${correction}`, import.meta.url), join(source.migrationDir, correction));
+      applyProjectMigrations(source);
+      for (const role of ["anon", "authenticated", "shipwithali_application", "shipwithali_backup"]) {
+        assert.equal((await upgradeProbe.query("select has_function_privilege($1, 'measurement.prevent_sealed_aggregate_checkpoint_rewrite()', 'EXECUTE') as allowed", [role])).rows[0].allowed, false);
+      }
+      assert.equal((await upgradeProbe.query("select rolsuper from pg_roles where rolname = 'postgres'")).rows[0].rolsuper, false);
+    } finally { await upgradeProbe.end(); }
     stage = "SOURCE_CATALOG";
     const sourceCatalog = await catalogSnapshot(sourceStatus.DB_URL);
     const sourceTypes = await generatedTypes(sourceStatus.DB_URL);
@@ -74,7 +89,7 @@ test("migration fixtures preserve valid accepted-PDF history, scoped access and 
     assert.equal((await privilegeMatrix(sourceStatus.DB_URL)).executionCount, 17);
     stage = "START_TARGET";
     const target = makeProject("fixture-target", basePort + 20, migrations); projects.push(target);
-    const targetStatus = await startProject(target, { alreadyApplied: false });
+    const targetStatus = await startProject(target);
     stage = "TARGET_CATALOG";
     assert.deepEqual(await catalogSnapshot(targetStatus.DB_URL), sourceCatalog);
     assert.equal(await generatedTypes(targetStatus.DB_URL), sourceTypes);
