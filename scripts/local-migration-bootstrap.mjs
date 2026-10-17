@@ -17,6 +17,38 @@ function docker(args, stage) {
   return result.stdout.trim();
 }
 
+export function loopbackPublishedPorts(ports) {
+  if (!ports || typeof ports !== "object" || Array.isArray(ports)) return false;
+  const bindings = Object.values(ports).flatMap(value => Array.isArray(value) ? value : []);
+  return bindings.length > 0 && bindings.every(binding => ["127.0.0.1", "::1"].includes(binding?.HostIp));
+}
+
+function migrationNetwork(fixture) {
+  if (fixture.network) return fixture.network;
+  const name = `${fixture.projectId}-loopback`;
+  const names = docker(["network", "ls", "--filter", `name=${name}`, "--format", "{{.Name}}"], "NETWORK_LIST").split(/\r?\n/u);
+  if (!names.includes(name)) {
+    docker(["network", "create", "--label", `shipwithali.validation.project=${fixture.projectId}`,
+      "-o", "com.docker.network.bridge.host_binding_ipv4=127.0.0.1", name], "NETWORK_CREATE");
+  }
+  const [network] = JSON.parse(docker(["network", "inspect", name], "NETWORK_INSPECT"));
+  if (network?.Labels?.["shipwithali.validation.project"] !== fixture.projectId ||
+      network?.Options?.["com.docker.network.bridge.host_binding_ipv4"] !== "127.0.0.1") {
+    throw new Error("LOCAL_MIGRATION_NETWORK_SCOPE_INVALID");
+  }
+  return name;
+}
+
+export function removeOwnedMigrationNetwork(fixture) {
+  assertDisposableFixture(fixture);
+  const name = `${fixture.projectId}-loopback`;
+  const names = () => docker(["network", "ls", "--filter", `name=${name}`, "--format", "{{.Name}}"], "NETWORK_LIST").split(/\r?\n/u);
+  if (!names().includes(name)) return;
+  migrationNetwork({ workdir: fixture.workdir, projectId: fixture.projectId });
+  docker(["network", "rm", name], "NETWORK_REMOVE");
+  if (names().includes(name)) throw new Error("LOCAL_MIGRATION_NETWORK_CLEANUP_UNVERIFIED");
+}
+
 // Only the generated disposable project's migration executor is elevated.
 // Application/Worker roles and deployed Supabase projects are never targets.
 export function withLocalMigrationExecutor(fixture, run) {
@@ -24,6 +56,8 @@ export function withLocalMigrationExecutor(fixture, run) {
   const container = `supabase_db_${fixture.projectId}`;
   const projectLabel = docker(["inspect", "--format", '{{index .Config.Labels "com.supabase.cli.project"}}', container], "CONTAINER");
   if (projectLabel !== fixture.projectId) throw new Error("PHASE6_MIGRATION_BOOTSTRAP_CONTAINER_MISMATCH");
+  const ports = JSON.parse(docker(["inspect", "--format", "{{json .NetworkSettings.Ports}}", container], "PORT_BINDINGS"));
+  if (!loopbackPublishedPorts(ports)) throw new Error("LOCAL_MIGRATION_DATABASE_NOT_LOOPBACK");
   const query = (sql, stage) => docker(["exec", container, "psql", "-X", "-v", "ON_ERROR_STOP=1", "-U", "supabase_admin", "-d", "postgres", "-Atc", sql], stage);
   const originallySuperuser = query("select rolsuper from pg_roles where rolname = 'postgres'", "ROLE_QUERY");
   if (!["t", "f"].includes(originallySuperuser)) throw new Error("PHASE6_MIGRATION_BOOTSTRAP_ROLE_INVALID");
@@ -42,11 +76,12 @@ export function withLocalMigrationExecutor(fixture, run) {
 // and reset restores its restricted role. Stage SQL until initialization ends.
 export function initializeLocalMigrationProject(fixture, { initialize, migrate }) {
   assertDisposableFixture(fixture);
+  const network = migrationNetwork(fixture);
   const migrations = join(fixture.workdir, "supabase", "migrations");
   const staged = join(fixture.workdir, "validation-pending-migrations");
   renameSync(migrations, staged);
   mkdirSync(migrations);
-  try { initialize(); }
+  try { initialize(network); }
   finally {
     rmdirSync(migrations);
     renameSync(staged, migrations);

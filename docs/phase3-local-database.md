@@ -217,6 +217,7 @@ gate removes its owned services, volumes and temporary directory. The regular
 The disposable migration bootstrap creates capability roles with the normal
 local administrator, then elevates only that administrator while applying the
 historical migration suffix requiring privileged ownership changes. It verifies
-the exact container/project identity and restores the original privilege even
+the exact container/project identity and actual loopback-only published ports,
+and restores the original privilege even
 when migration application fails. This local fixture does not establish managed
 Supabase deployment compatibility.

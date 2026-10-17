@@ -16,7 +16,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { migrationSha256 } from "./migration-checksum.mjs";
-import { applyLocalProjectMigrations, initializeLocalMigrationProject } from "./local-migration-bootstrap.mjs";
+import { applyLocalProjectMigrations, initializeLocalMigrationProject, removeOwnedMigrationNetwork } from "./local-migration-bootstrap.mjs";
 import {
   assertBaselineSnapshotsEquivalent,
   assertPhase3Rls,
@@ -298,6 +298,7 @@ function cleanupIsolatedProjects(projects) {
         ["stop", "--project-id", project.projectId, "--no-backup"],
         "LOCAL_DB_STOP_FAILED",
       );
+      removeOwnedMigrationNetwork(project);
     },
     remove: (workdir) => rmSync(workdir, { recursive: true, force: true }),
   });
@@ -549,7 +550,10 @@ async function verifyLocal() {
     const cleanProject = createIsolatedWorkdir("clean", basePort + 10, true);
     projects.push(cleanProject);
 
-    runLocalCommand(upgradeProject.workdir, ["start"], "UPGRADE_DB_START_FAILED");
+    initializeLocalMigrationProject(upgradeProject, {
+      initialize: network => runLocalCommand(upgradeProject.workdir, ["start", "--network-id", network], "UPGRADE_DB_START_FAILED"),
+      migrate: () => runLocalCommand(upgradeProject.workdir, ["migration", "up", "--local"], "UPGRADE_MIGRATION_FAILED"),
+    });
     const upgradeUrl = readLocalDatabaseUrl(upgradeProject.workdir);
     await assertPriorBaseline(upgradeUrl);
 
@@ -574,7 +578,7 @@ async function verifyLocal() {
     }
 
     initializeLocalMigrationProject(cleanProject, {
-      initialize: () => runLocalCommand(cleanProject.workdir, ["start"], "CLEAN_DB_START_FAILED"),
+      initialize: network => runLocalCommand(cleanProject.workdir, ["start", "--network-id", network], "CLEAN_DB_START_FAILED"),
       migrate: () => runLocalCommand(cleanProject.workdir, ["migration", "up", "--local"], "CLEAN_MIGRATION_FAILED"),
     });
     initializeLocalMigrationProject(cleanProject, {
