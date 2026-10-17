@@ -10,7 +10,7 @@ import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
 import {
   PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, getPhase6SourceIdentity, isolatedPhase6Config,
   evaluatePhase6MediaCvIntegration, PHASE6_MEDIA_CV_CRITERION_IDS, makePhase6Report, phase6CvScenarioProof, phase6FormatProof,
-  phase6CvDeferredMigrations, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
+  phase6CvDeferredMigrations, phase6PdfFixture, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
 } from "./phase6-verification-support.mjs";
 
 const ROOT = phase6Root();
@@ -126,30 +126,6 @@ function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEO
     throw new Error(`PHASE6_COMMAND_FAILED:${label}:${detail}${diagnostic ? `:${diagnostic}` : ""}`);
   }
   return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status };
-}
-
-function pdfFixture() {
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 72] /Resources << >> /Contents 4 0 R >>",
-    "<< /Length 0 >>\nstream\n\nendstream",
-  ];
-  const chunks = [Buffer.from("%PDF-1.4\n")];
-  const offsets = [0];
-  let cursor = chunks[0].length;
-  for (let index = 0; index < objects.length; index += 1) {
-    offsets.push(cursor);
-    const part = Buffer.from(`${index + 1} 0 obj\n${objects[index]}\nendobj\n`);
-    chunks.push(part);
-    cursor += part.length;
-  }
-  const xref = cursor;
-  let trailer = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (const offset of offsets.slice(1)) trailer += `${String(offset).padStart(10, "0")} 00000 n \n`;
-  trailer += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  chunks.push(Buffer.from(trailer));
-  return Buffer.concat(chunks);
 }
 
 async function portIsAvailable(port) {
@@ -391,7 +367,7 @@ async function main() {
     scannerStarted = true;
     run("docker", ["exec", scannerContainer, "clamdscan", "--ping", "120:1"], { timeout: 150_000, label: "scanner-service-ready" });
     toolVersions.scannerMode = "isolated-clamd-stream";
-    if (!IMAGE_PROCESSING_ONLY) writeFileSync(join(fixturesDir, "fixture.pdf"), pdfFixture());
+    if (!IMAGE_PROCESSING_ONLY) writeFileSync(join(fixturesDir, "fixture.pdf"), phase6PdfFixture());
     activeFormats = MEDIA_PROCESSING_ONLY || MEDIA_REJECTION_ONLY || OWNER_COMPOSITION_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
       : CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY ? PHASE6_FORMATS.filter(({ id, kind }) => id === "pdf" || kind === "image")
       : IMAGE_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ kind }) => kind === "image")

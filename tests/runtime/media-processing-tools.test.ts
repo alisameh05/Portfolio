@@ -129,10 +129,11 @@ describe("bounded PDF output reads", () => {
     const directory = await mkdtemp(join(tmpdir(), "media-processing-tools-"));
     const path = join(directory, "hard-limited.pdf");
     const writer = "import sys; open(sys.argv[1], 'wb').write(b'x' * (2 * 1024 * 1024))";
+    // Give this host/container integration probe its own startup budget; production caps stay unchanged.
     try {
       if (process.platform === "win32") {
         const limited = runWithBoundedOutput("python3", ["-c", "import sys; open(sys.argv[1], 'wb').write(b'x' * (2 * 1024 * 1024))", path], path,
-          { maxBytes: 8, timeoutMs: 8_000, python: "python3" });
+          { maxBytes: 8, timeoutMs: 20_000, python: "python3" });
         if (process.env["PHASE6_PDF_PROCESSOR_IMAGE"] === "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c") {
           await expect(limited).rejects.toBeDefined();
           expect((await stat(path)).size).toBeLessThanOrEqual(8);
@@ -141,11 +142,11 @@ describe("bounded PDF output reads", () => {
         }
       } else {
         await expect(runWithBoundedOutput("python3", ["-c", writer, path], path,
-          { maxBytes: 8, timeoutMs: 8_000, python: "python3" })).rejects.toBeDefined();
+          { maxBytes: 8, timeoutMs: 20_000, python: "python3" })).rejects.toBeDefined();
         expect((await stat(path)).size).toBeLessThanOrEqual(8);
       }
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  }, 12_000);
+  }, 25_000);
 });
