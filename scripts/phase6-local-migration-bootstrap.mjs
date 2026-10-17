@@ -28,13 +28,14 @@ export function withPhase6MigrationExecutor(fixture, run) {
   const originallySuperuser = query("select rolsuper from pg_roles where rolname = 'postgres'", "ROLE_QUERY");
   if (!["t", "f"].includes(originallySuperuser)) throw new Error("PHASE6_MIGRATION_BOOTSTRAP_ROLE_INVALID");
   if (originallySuperuser === "f") query("alter role postgres superuser", "ELEVATE");
-  try { return run(); }
-  finally {
+  const restorePrivilege = () => {
     if (originallySuperuser === "f") query("alter role postgres nosuperuser", "RESTORE");
     if (query("select rolsuper from pg_roles where rolname = 'postgres'", "RESTORE_VERIFY") !== originallySuperuser) {
       throw new Error("PHASE6_MIGRATION_BOOTSTRAP_PRIVILEGE_RESTORE_FAILED");
     }
-  }
+  };
+  try { return run(); }
+  finally { restorePrivilege(); }
 }
 
 // CLI start normally applies migrations before a local administrator can be
