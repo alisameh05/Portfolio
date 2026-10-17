@@ -175,7 +175,8 @@ until CLI start/reset has initialized its restricted administrator. It applies
 the early role-creation migrations with the normal local
 administrator, then temporarily elevates that administrator for the historical
 migration suffix that transfers ownership of a superuser-owned function. It
-checks the exact fixture container identity and restores the original privilege
+checks the exact fixture container identity and actual loopback-only published
+database ports, and restores the original privilege
 in a `finally` block. Application, Worker, and probe roles remain restricted.
 The forward migration revokes direct execution of the aggregate checkpoint
 trigger function without replaying an edited historical migration. The fixture

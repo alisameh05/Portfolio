@@ -4,7 +4,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { localValidationFixture, initializeLocalMigrationProject } from "./local-migration-bootstrap.mjs";
+import { localValidationFixture, initializeLocalMigrationProject, removeOwnedMigrationNetwork } from "./local-migration-bootstrap.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const ROOT_PACKAGE_PATH = join(ROOT, "package.json");
@@ -99,11 +99,12 @@ async function execute(action) {
       if (result.error || result.status !== 0) throw new Error("LOCAL_DB_DISPOSABLE_COMMAND_FAILED");
     };
     if (action === "start" || action === "reuse") {
-      initializeLocalMigrationProject(fixture, { initialize: () => invoke(["start"]), migrate: () => invoke(["migration", "up", "--local"]) });
+      initializeLocalMigrationProject(fixture, { initialize: network => invoke(["start", "--network-id", network]), migrate: () => invoke(["migration", "up", "--local"]) });
     } else if (action === "reset") {
       initializeLocalMigrationProject(fixture, { initialize: () => invoke(invocation.args), migrate: () => invoke(["migration", "up", "--local"]) });
     } else {
       invoke(action === "stop" ? ["stop", "--project-id", fixture.projectId, "--no-backup"] : invocation.args);
+      if (action === "stop") removeOwnedMigrationNetwork(fixture);
     }
     console.log(`✓ ${SUCCESS[action]}`);
     return 0;

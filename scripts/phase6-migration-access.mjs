@@ -9,7 +9,7 @@ import { Client, Pool } from "pg";
 import { isolatedPhase6Config, phase6StorageIntegrationProof, phase6PdfFixture, scrubPhase6Environment } from "./phase6-verification-support.mjs";
 import { getPhase6SourceIdentity } from "./phase6-verification-support.mjs";
 import { migrationSha256 } from "./migration-checksum.mjs";
-import { initializeLocalMigrationProject, withLocalMigrationExecutor } from "./local-migration-bootstrap.mjs";
+import { initializeLocalMigrationProject, removeOwnedMigrationNetwork, withLocalMigrationExecutor } from "./local-migration-bootstrap.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules", "supabase", "dist", "supabase.js");
@@ -509,7 +509,7 @@ export function resetProject(project) {
 
 export async function startProject(project) {
   initializeLocalMigrationProject(project, {
-    initialize: () => runCli(project.workdir, ["start"], "PHASE6_MIGRATION_ACCESS_START_FAILED"),
+    initialize: network => runCli(project.workdir, ["start", "--network-id", network], "PHASE6_MIGRATION_ACCESS_START_FAILED"),
     migrate: () => runCli(project.workdir, ["migration", "up", "--local"], "PHASE6_MIGRATION_ACCESS_UPGRADE_FAILED"),
   });
   return readStatus(project.workdir);
@@ -523,6 +523,7 @@ export async function stopProject(project) {
     throw new Error("PHASE6_MIGRATION_ACCESS_CLEANUP_SCOPE_INVALID");
   }
   runCli(project.workdir, ["stop", "--project-id", project.projectId, "--no-backup"], "PHASE6_MIGRATION_ACCESS_STOP_FAILED");
+  removeOwnedMigrationNetwork(project);
   for (const resource of [["ps", "-aq", "--filter"], ["volume", "ls", "-q", "--filter"]]) {
     const result = spawnSync("docker", [...resource, `label=com.supabase.cli.project=${project.projectId}`], {
       encoding: "utf8", timeout: 10_000, windowsHide: true,

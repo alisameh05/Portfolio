@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { phase6StorageDefaultDenyProof, stopProject, PHASE6_APPLICATION_COLUMN_UPDATES, phase6ColumnUpdateProof, phase6DefinerFunctionProof, phase6WorkerSchemaProof, makeProject, phase6MediaFactPlanProof, phase6MigrationFailureCode } from "../../scripts/phase6-migration-access.mjs";
 import { phase6PdfFixture } from "../../scripts/phase6-verification-support.mjs";
 import { migrationSha256 } from "../../scripts/migration-checksum.mjs";
-import { withLocalMigrationExecutor } from "../../scripts/local-migration-bootstrap.mjs";
+import { loopbackPublishedPorts, removeOwnedMigrationNetwork, withLocalMigrationExecutor } from "../../scripts/local-migration-bootstrap.mjs";
 
 const root = new URL("../../", import.meta.url);
 const runner = readFileSync(new URL("scripts/phase6-migration-access.mjs", root), "utf8");
@@ -26,6 +26,16 @@ test("historical migration bootstrap rejects targets outside its disposable fixt
   assert.throws(() => withLocalMigrationExecutor({ workdir: process.cwd(), projectId: "production" }, () => { invoked = true; }),
     { message: "PHASE6_MIGRATION_BOOTSTRAP_SCOPE_INVALID" });
   assert.equal(invoked, false);
+  assert.throws(() => removeOwnedMigrationNetwork({ workdir: process.cwd(), projectId: "production" }));
+});
+
+test("privileged local migration bootstrap requires actual loopback-only published ports", () => {
+  assert.equal(loopbackPublishedPorts({ "5432/tcp": [{ HostIp: "127.0.0.1", HostPort: "59322" }] }), true);
+  for (const ports of [undefined, {}, { "5432/tcp": null }, { "5432/tcp": [{ HostIp: "" }] },
+    { "5432/tcp": [{ HostIp: "0.0.0.0" }] }, { "5432/tcp": [{ HostIp: "::" }] },
+    { "5432/tcp": [{ HostIp: "127.0.0.1" }, { HostIp: "0.0.0.0" }] }]) {
+    assert.equal(loopbackPublishedPorts(ports), false);
+  }
 });
 
 test("Phase 6 migration-access gate has one runnable focused entrypoint and follows real Storage evidence", () => {

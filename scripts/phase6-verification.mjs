@@ -259,7 +259,7 @@ async function main() {
     networkCreated = true;
     attemptedStart = true;
     console.log("Starting isolated loopback PostgreSQL, Auth and private Storage services.");
-    initializeLocalMigrationProject({ workdir, projectId }, {
+    initializeLocalMigrationProject({ workdir, projectId, network }, {
       initialize: () => invoke(["start", "--network-id", network], 900_000),
       migrate: () => invoke(["migration", "up", "--local"], 120_000),
     });
