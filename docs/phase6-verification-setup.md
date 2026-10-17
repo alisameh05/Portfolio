@@ -178,6 +178,15 @@ migration suffix that transfers ownership of a superuser-owned function. It
 checks the exact fixture container identity and actual loopback-only published
 database ports, and restores the original privilege
 in a `finally` block. Application, Worker, and probe roles remain restricted.
+Because some Docker host configurations override the network's default bind
+address, startup supplies explicit `127.0.0.1` publish flags through a scoped
+Docker command adapter. It rewrites only named containers carrying the exact
+disposable project's Supabase label, denies unbounded or unsupported publishes,
+and preserves all other arguments and streams without logging them. On Windows
+the adapter reuses the pinned Node executable to preserve multiline SQL
+arguments; on Linux it uses an argument-preserving shell launcher. Its temporary
+files and environment belong to the fixture and are removed or restored during
+cleanup. Actual port inspection remains mandatory before privilege elevation.
 The forward migration revokes direct execution of the aggregate checkpoint
 trigger function without replaying an edited historical migration. The fixture
 regression verifies that upgrade and a clean installation produce equivalent

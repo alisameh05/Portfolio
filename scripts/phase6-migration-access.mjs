@@ -74,7 +74,11 @@ function runCli(workdir, args, code) {
   const result = spawnSync(process.execPath, [CLI, "--workdir", workdir, ...args], {
     cwd: ROOT, env: scrubPhase6Environment(), encoding: "utf8", timeout: 900_000, maxBuffer: 8 * 1024 * 1024,
   });
-  if (result.error || result.status !== 0) throw new Error(code);
+  if (result.error || result.status !== 0) {
+    const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+    const safeAdapterFailure = output.match(/\bLOCAL_DOCKER_[A-Z_]+\b/u)?.[0];
+    throw new Error(safeAdapterFailure ? `${code}:${safeAdapterFailure}` : code);
+  }
   return result.stdout ?? "";
 }
 
@@ -130,7 +134,7 @@ function stableId(n) { return `0196a1b2-7c3d-7e11-9f22-${n.toString(16).padStart
 function cvVersionId(n) { return `0196a1b2-7c3d-7e11-9f66-${n.toString(16).padStart(12, "0")}`; }
 
 export function phase6MigrationFailureCode(error, stage = "UNKNOWN") {
-  if (error instanceof Error && /^(?:PHASE6_|VALIDATION_)[A-Z0-9_:-]+$/u.test(error.message)) return error.message;
+  if (error instanceof Error && /^(?:PHASE6_|VALIDATION_|LOCAL_MIGRATION_)[A-Z0-9_:-]+$/u.test(error.message)) return error.message;
   const safeStage = /^[A-Z_]{1,40}$/u.test(stage) ? stage : "UNKNOWN";
   const sqlState = /^[A-Z0-9]{5}$/u.test(error?.code ?? "") ? `:${error.code}` : "";
   return `PHASE6_MIGRATION_ACCESS_${safeStage}_FAILED${sqlState}`;

@@ -1,13 +1,53 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { isLocalValidationProjectId } from "./local-docker-loopback-adapter.mjs";
 
 function assertDisposableFixture({ workdir, projectId }) {
-  if (!/^shipwithali-(?:phase[36]-[a-f0-9]{16}|phase6-162-[a-f0-9]{12}|46-(?:clean|upgrade)-\d+|settings-(?:clean|upgrade)-[a-f0-9]{12})$/u.test(projectId) ||
+  if (!isLocalValidationProjectId(projectId) ||
       dirname(resolve(workdir)) !== resolve(tmpdir()) || !basename(workdir).startsWith("shipwithali-") ||
       !readFileSync(join(workdir, "supabase", "config.toml"), "utf8").includes(`project_id = "${projectId}"`)) {
     throw new Error("PHASE6_MIGRATION_BOOTSTRAP_SCOPE_INVALID");
+  }
+}
+
+function withLoopbackDockerCommands(fixture, run) {
+  assertDisposableFixture(fixture);
+  const locate = spawnSync(process.platform === "win32" ? "where.exe" : "which", [process.platform === "win32" ? "docker.exe" : "docker"],
+    { encoding: "utf8", timeout: 10_000, windowsHide: true });
+  const actual = locate.status === 0 ? locate.stdout.trim().split(/\r?\n/u)[0] : "";
+  if (!actual) throw new Error("LOCAL_DOCKER_EXECUTABLE_MISSING");
+  const directory = join(fixture.workdir, "validation-docker-bin");
+  mkdirSync(directory, { recursive: true });
+  const shim = join(directory, process.platform === "win32" ? "docker.exe" : "docker");
+  const adapter = fileURLToPath(new URL("./local-docker-loopback-adapter.mjs", import.meta.url));
+  if (process.platform === "win32") {
+    // A real executable preserves the CLI's multiline SQL arguments. A .cmd
+    // launcher cannot safely accept them. Reuse the exact pinned Node binary.
+    if (!existsSync(shim)) copyFileSync(process.execPath, shim);
+  } else {
+    writeFileSync(shim, '#!/bin/sh\nexec "$SHIPWITHALI_VALIDATION_NODE" "$SHIPWITHALI_DOCKER_ADAPTER" "$@"\n');
+    chmodSync(shim, 0o700);
+  }
+  const environment = {
+    PATH: `${directory}${process.platform === "win32" ? ";" : ":"}${process.env.PATH ?? ""}`,
+    SHIPWITHALI_VALIDATION_NODE: process.execPath,
+    SHIPWITHALI_DOCKER_ADAPTER: adapter,
+    SHIPWITHALI_DOCKER_SHIM: shim,
+    SHIPWITHALI_REAL_DOCKER: actual,
+    SHIPWITHALI_DOCKER_PROJECT: fixture.projectId,
+  };
+  if (process.platform === "win32") environment.NODE_OPTIONS =
+    `${process.env.NODE_OPTIONS ?? ""} --import=${pathToFileURL(adapter).href}`.trim();
+  const previous = Object.fromEntries(Object.keys(environment).map(name => [name, process.env[name]]));
+  Object.assign(process.env, environment);
+  try { return run(environment); }
+  finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
   }
 }
 
@@ -81,7 +121,7 @@ export function initializeLocalMigrationProject(fixture, { initialize, migrate }
   const staged = join(fixture.workdir, "validation-pending-migrations");
   renameSync(migrations, staged);
   mkdirSync(migrations);
-  try { initialize(network); }
+  try { withLoopbackDockerCommands(fixture, environment => initialize(network, environment)); }
   finally {
     rmdirSync(migrations);
     renameSync(staged, migrations);
