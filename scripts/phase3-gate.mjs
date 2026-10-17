@@ -202,8 +202,8 @@ try {
     PHASE3_REQUIRE_DATABASE: "1",
   };
   const checks = [
-    ["phase3-focused-tests", "node_modules/vitest/vitest.mjs", ["run", ...PHASE3_DATABASE_TESTS], databaseEnv, "evidence/phase-3-focused-tests.log"],
     ["role-rls-types-plans", "scripts/check-phase3-database.mjs", [], databaseEnv, "evidence/phase-3-security-types-plans.log"],
+    ["phase3-focused-tests", "node_modules/vitest/vitest.mjs", ["run", ...PHASE3_DATABASE_TESTS], databaseEnv, "evidence/phase-3-focused-tests.log"],
     ["strict-typecheck", "node_modules/typescript/bin/tsc", ["--noEmit"], {}, "evidence/phase-3-typecheck.log"],
     ["deterministic-lint", "node_modules/eslint/bin/eslint.js", ["."], {}, "evidence/phase-3-lint.log"],
     ["architecture", "scripts/architecture-check.mjs", [], {}, "evidence/phase-3-architecture.log"],
