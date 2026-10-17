@@ -185,11 +185,11 @@ function startProject(project, env) {
   project.networkCreated = true;
   project.attemptedStart = true;
   initializeLocalMigrationProject(project, {
-    initialize: () => invokeProject(project, ["start", "--network-id", project.network], env),
+    initialize: (_network, dockerEnvironment) => invokeProject(project, ["start", "--network-id", project.network], { ...env, ...dockerEnvironment }),
     migrate: () => invokeProject(project, ["migration", "up", "--local"], env),
   });
   initializeLocalMigrationProject(project, {
-    initialize: () => invokeProject(project, ["db", "reset", "--local"], env),
+    initialize: (_network, dockerEnvironment) => invokeProject(project, ["db", "reset", "--local"], { ...env, ...dockerEnvironment }),
     migrate: () => invokeProject(project, ["migration", "up", "--local"], env),
   });
   return readDatabaseUrl(project.workdir, project.basePort + 2);
