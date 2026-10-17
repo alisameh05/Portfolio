@@ -333,6 +333,23 @@ async function main() {
   });
   const report = {
     ...evaluated,
+    realServiceScope: {
+      runId: databaseEvidence?.runId ?? runId,
+      sourceRevision,
+      sourceTreeSha256: finalTree,
+      startedAt: databaseEvidence?.startedAt ?? startedAt,
+      completedAt: new Date().toISOString(),
+      postgresVersion: databaseEvidence?.postgresVersion ?? null,
+      isolation: databaseEvidence?.isolatedLoopbackProjects === true ? "isolated-loopback" : null,
+      required: { success: reportPassesDatabaseChecks(checks, databaseEvidence) },
+      cleanUpgrade: { equivalent: databaseEvidence?.cleanUpgradeEquivalent === true },
+      services: { postgres: { available: databaseEvidence?.isolatedLoopbackProjects === true,
+        executionCount: databaseEvidence?.databaseIntegrationTestsPassed ?? 0 } },
+      checks: checks.filter((check) => ["owner-postgres", "database-rls-postgres"].includes(check.name))
+        .map((check) => ({ name: check.name, executed: check.executed === true, passed: check.passed === true })),
+      cleanup: databaseEvidence?.isolatedLoopbackProjects === true && ownerEvidence?.isolatedLoopbackProjects === true,
+    },
+    cleanup: { success: databaseEvidence?.isolatedLoopbackProjects === true && ownerEvidence?.isolatedLoopbackProjects === true },
     expectedToolVersions: expectedVersions,
     evidenceArtifacts: artifacts,
     evidenceSummary: safeEvidenceSummary({ contextEvidence, integratedEvidence, databaseEvidence, ownerEvidence }),
@@ -362,6 +379,12 @@ async function main() {
     evidence: "evidence/phase-5-gate-report.json",
   }, null, 2));
   return report.verdict === "pass" ? 0 : 1;
+}
+
+function reportPassesDatabaseChecks(checks, databaseEvidence) {
+  return databaseEvidence?.isolatedLoopbackProjects === true && databaseEvidence?.cleanUpgradeEquivalent === true &&
+    checks.some((check) => check.name === "owner-postgres" && check.executed === true && check.passed === true) &&
+    checks.some((check) => check.name === "database-rls-postgres" && check.executed === true && check.passed === true);
 }
 
 if (process.argv[1]?.replaceAll("\\", "/").endsWith("scripts/phase5-gate.mjs")) {

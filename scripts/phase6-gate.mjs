@@ -33,8 +33,8 @@ const COMMANDS = Object.freeze([
   { name: "media-delivery", script: "phase6:focus:media-delivery", timeout: LONG_TIMEOUT },
   { name: "cv-delivery-capabilities", script: "phase6:focus:cv-delivery", timeout: LONG_TIMEOUT },
   { name: "owner-composition", script: "phase6:focus:owner-composition", timeout: LONG_TIMEOUT },
-  { name: "migration-access", script: "phase6:focus:migration-access", timeout: LONG_TIMEOUT },
   { name: "media-integration", script: "phase6:focus:media-integration", timeout: LONG_TIMEOUT },
+  { name: "migration-access", script: "phase6:focus:migration-access", timeout: LONG_TIMEOUT },
   { name: "media-cv-integration", script: "phase6:focus:media-cv-integration", timeout: LONG_TIMEOUT },
   { name: "contract-verification", script: "contract:verify" },
   { name: "tooling-tests", script: "test:setup" },
@@ -47,6 +47,8 @@ const COMMANDS = Object.freeze([
   { name: "typecheck", script: "typecheck" },
   { name: "production-build", script: "build", timeout: LONG_TIMEOUT },
 ]);
+
+export { COMMANDS as PHASE6_GATE_COMMANDS };
 
 const REPORTS_TO_REFRESH = Object.freeze([
   "phase-6-verification-setup.json", "phase6-upload-intent-148.json", "phase6-media-processing-149.json",

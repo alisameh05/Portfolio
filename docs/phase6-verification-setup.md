@@ -148,6 +148,44 @@ cleanup. It proves the integrated local behavior for this ticket; it does not
 certify deployment outage survival, release qualification, frontend behavior,
 Measurement interactions, or backup operations.
 
+## Migration/access fixture regression
+
+After validation setup, run:
+
+```sh
+node --test tests/database/phase6-migration-fixtures.live.mjs
+```
+
+This focused regression starts two disposable Supabase projects. It compares
+current catalogs and generated database types, checks the exact table/column
+grants and reviewed Worker retention capabilities, exercises transaction scope
+on reused pooled backends, and imports the accepted-PDF/CV fixture history into
+the second database. It verifies bounded indexed reads and removal of each
+owned container and volume. The fixture represents processing history; real
+scanner/processor and Storage API authorization proof remains required by the
+full gate.
+
+This regression emits no acceptance artifact. Run the complete source-bound
+Phase 6 gate after changes; a passing fixture regression does not qualify
+Phase 6 or permit dependent Phase 8 implementation.
+
+Released migration files retain their original contents. The shared disposable
+local bootstrap used by Phase 3, settings and Phase 6 validation stages SQL
+until CLI start/reset has initialized its restricted administrator. It applies
+the early role-creation migrations with the normal local
+administrator, then temporarily elevates that administrator for the historical
+migration suffix that transfers ownership of a superuser-owned function. It
+checks the exact fixture container identity and restores the original privilege
+in a `finally` block. Application, Worker, and probe roles remain restricted.
+The forward migration revokes direct execution of the aggregate checkpoint
+trigger function without replaying an edited historical migration. The fixture
+regression verifies that upgrade and a clean installation produce equivalent
+catalogs and types, and that the administrator is restricted again afterward.
+
+This bootstrap is limited to disposable local Docker projects. Managed Supabase
+does not permit granting superuser to its `postgres` role; this local evidence
+does not qualify the historical ownership transition for a managed deployment.
+
 ## Complete Phase 6 gate
 
 After network-enabled setup has completed, run `npm run phase6:gate` on a

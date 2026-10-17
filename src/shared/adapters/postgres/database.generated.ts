@@ -9,6 +9,8 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
 
+export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
+
 export type Json = JsonValue;
 
 export type JsonArray = JsonValue[];
@@ -302,6 +304,96 @@ export interface ContentTestimonialPublicationHistory {
   revision_id: string;
 }
 
+export interface CvPortfolioAcceptanceCommands {
+  aggregate_version: number;
+  created_at: Generated<Timestamp>;
+  idempotency_key_hash: string;
+  owner_id: string;
+  portfolio_id: string;
+  request_hash: string;
+  version_id: string;
+}
+
+export interface CvPortfolioAcceptanceHistory {
+  accepted_at: Generated<Timestamp>;
+  accepted_by: string;
+  approval_id: string;
+  media_decision_id: string;
+  media_object_id: string;
+  media_object_version: string;
+  media_sha256: string;
+  owner_id: string;
+  portfolio_id: string;
+  version_id: string;
+}
+
+export interface CvPortfolioActivationCommands {
+  aggregate_version: number;
+  created_at: Generated<Timestamp>;
+  idempotency_key_hash: string;
+  owner_id: string;
+  portfolio_id: string;
+  request_hash: string;
+  version_id: string;
+}
+
+export interface CvPortfolioActivationHistory {
+  activated_at: Generated<Timestamp>;
+  activation_id: string;
+  owner_id: string;
+  portfolio_id: string;
+  version_id: string;
+}
+
+export interface CvPortfolioPortfolios {
+  aggregate_version: Generated<number>;
+  created_at: Generated<Timestamp>;
+  current_version_id: string | null;
+  current_version_locale: Generated<string>;
+  current_version_state: Generated<string>;
+  /**
+   * Monotonic guard set by the pointer trigger; once activated, the portfolio cannot commit without a Current CV.
+   */
+  ever_activated: Generated<boolean>;
+  owner_id: string;
+  portfolio_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface CvPortfolioRegistrationCommands {
+  aggregate_version: number;
+  created_at: Generated<Timestamp>;
+  idempotency_key_hash: string;
+  owner_id: string;
+  portfolio_id: string;
+  request_hash: string;
+  version_id: string;
+}
+
+export interface CvPortfolioVersions {
+  /**
+   * Denormalized Owner current flag; a deferred constraint trigger requires exact agreement with the authoritative portfolio pointer.
+   */
+  is_current: Generated<boolean>;
+  label: string;
+  locale: Generated<string>;
+  /**
+   * Snapshot of the accepted Media aggregate version observed inside the registration transaction.
+   */
+  media_asset_version: number;
+  media_decision_id: string;
+  media_id: string;
+  media_object_id: string;
+  media_object_version: string;
+  media_sha256: string;
+  owner_id: string;
+  portfolio_id: string;
+  registered_at: Generated<Timestamp>;
+  state: Generated<string>;
+  version_id: string;
+  version_number: number;
+}
+
 export interface IdentityAccessOwnerLinks {
   created_at: Generated<Timestamp>;
   /**
@@ -313,6 +405,223 @@ export interface IdentityAccessOwnerLinks {
    * Stable domain Owner identity; unchanged by session or provider refresh.
    */
   owner_id: string;
+}
+
+export interface MediaAcceptanceCommands {
+  aggregate_version: number;
+  created_at: Generated<Timestamp>;
+  idempotency_key_hash: string;
+  media_id: string;
+  outcome: string;
+  owner_id: string;
+  portfolio_id: string;
+  request_hash: string;
+}
+
+export interface MediaAssets {
+  aggregate_version: Generated<number>;
+  created_at: Generated<Timestamp>;
+  declared_byte_length: Int8;
+  declared_media_type: string;
+  declared_sha256: string;
+  kind: string;
+  lifecycle: Generated<string>;
+  media_id: string;
+  /**
+   * Private display metadata only; never a Storage path, object identity, log field or public projection.
+   */
+  original_file_name: string;
+  owner_id: string;
+  portfolio_id: string;
+}
+
+export interface MediaDecisionHistory {
+  accessibility: Json;
+  aggregate_version: number;
+  decided_at: Generated<Timestamp>;
+  decided_by: string;
+  decision: string;
+  decision_id: string;
+  detected_byte_length: Int8;
+  detected_mime_type: string;
+  input_object_id: string;
+  input_sha256: string;
+  media_id: string;
+  owner_id: string;
+  ownership_attested_at: Timestamp;
+  ownership_attested_by: string;
+  portfolio_id: string;
+  processing_attempt_id: string;
+  processing_policy_version: string;
+  processor_version: string;
+  public_suitability_attested_at: Timestamp;
+  public_suitability_attested_by: string;
+  reason_code: string | null;
+  scanner_version: string;
+  /**
+   * Immutable, provider-neutral descriptors of the exact processed objects approved by this decision.
+   */
+  sealed_outputs: Json;
+}
+
+export interface MediaProcessedObjects {
+  byte_length: Int8;
+  created_at: Generated<Timestamp>;
+  media_id: string;
+  mime_type: string;
+  object_id: string;
+  object_version: string;
+  owner_id: string;
+  portfolio_id: string;
+  sha256: string;
+  source_object_id: string;
+}
+
+export interface MediaProcessingAttemptOutputs {
+  attempt_id: string;
+  byte_length: Int8;
+  codec: string;
+  height: number;
+  media_id: string;
+  mime_type: string;
+  object_id: string;
+  object_version: string;
+  owner_id: string;
+  portfolio_id: string;
+  sha256: string;
+  variant_name: string;
+  width: number;
+}
+
+export interface MediaProcessingAttempts {
+  attempt_id: string;
+  detected_byte_length: Int8;
+  detected_mime_type: string;
+  finding_codes: Json;
+  finished_at: Timestamp;
+  input_object_id: string;
+  input_sha256: string;
+  media_id: string;
+  output_object_id: string | null;
+  output_sha256: string | null;
+  output_variants: Generated<Json>;
+  owner_id: string;
+  policy_version: string;
+  portfolio_id: string;
+  processing_duration_ms: number | null;
+  processor_version: string;
+  result: string;
+  scanner_version: string;
+  started_at: Timestamp;
+}
+
+export interface MediaProcessingAttemptVariants {
+  attempt_id: string;
+  created_at: Generated<Timestamp>;
+  height: number;
+  media_id: string;
+  mime_type: Generated<string>;
+  object_id: string;
+  owner_id: string;
+  portfolio_id: string;
+  source_sha256: string;
+  variant_name: string;
+  width: number;
+}
+
+export interface MediaProcessingClaims {
+  claim_id: string;
+  idempotency_key_hash: string;
+  lease_expires_at: Timestamp;
+  media_id: string;
+  owner_id: string;
+  portfolio_id: string;
+  request_hash: string;
+}
+
+export interface MediaProcessingCommands {
+  aggregate_version: number;
+  attempt_id: string;
+  created_at: Generated<Timestamp>;
+  failure_code: string | null;
+  idempotency_key_hash: string;
+  media_id: string;
+  outcome: string;
+  owner_id: string;
+  portfolio_id: string;
+  request_hash: string;
+}
+
+export interface MediaProcessingOrphans {
+  created_at: Generated<Timestamp>;
+  media_id: string;
+  mime_type: Generated<string>;
+  object_id: string;
+  owner_id: string;
+  portfolio_id: string;
+  reconciled_at: Timestamp | null;
+  sha256: string;
+  state: Generated<string>;
+}
+
+export interface MediaProcessingStates {
+  aggregate_version: Generated<number>;
+  latest_attempt_id: string | null;
+  media_id: string;
+  owner_id: string;
+  portfolio_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface MediaRejectionHistory {
+  aggregate_version: number;
+  media_id: string;
+  owner_id: string;
+  portfolio_id: string;
+  /**
+   * Private editorial rationale. Never copy into public DTOs, logs, command receipts, or outbox payloads.
+   */
+  private_reason: string;
+  reason_code: Generated<string>;
+  rejected_at: Generated<Timestamp>;
+  rejected_by: string;
+  rejection_id: string;
+}
+
+export interface MediaUploadIntentCapabilities {
+  authentication_tag: Buffer;
+  ciphertext: Buffer;
+  created_at: Generated<Timestamp>;
+  encryption_version: number;
+  nonce: Buffer;
+  owner_id: string;
+  portfolio_id: string;
+  upload_intent_id: string;
+}
+
+export interface MediaUploadIntentCommands {
+  command_state: string;
+  completed_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  idempotency_key_hash: string;
+  media_id: string;
+  media_object_id: string;
+  owner_id: string;
+  portfolio_id: string;
+  request_hash: string;
+  reservation_expires_at: Timestamp;
+  safe_receipt: Json | null;
+  upload_intent_id: string;
+}
+
+export interface MediaUploadIntents {
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  media_id: string;
+  media_object_id: string;
+  owner_id: string;
+  portfolio_id: string;
+  upload_intent_id: string;
 }
 
 export interface OperationsIdempotencyRecords {
@@ -382,8 +691,11 @@ export interface PortfolioConfigSettings {
    * Private stable Owner scope used only by trusted application authorization and RLS.
    */
   owner_id: string;
-  profile_media_asset_id: string | null;
   portfolio_id: string;
+  /**
+   * Optional stable identity of the explicitly configured public profile image; delivery still requires current accepted Media evidence.
+   */
+  profile_media_asset_id: string | null;
   updated_at: Generated<Timestamp>;
   version: Generated<number>;
 }
@@ -473,7 +785,29 @@ export interface DB {
   "content.revisions": ContentRevisions;
   "content.testimonial_language_publications": ContentTestimonialLanguagePublications;
   "content.testimonial_publication_history": ContentTestimonialPublicationHistory;
+  "cv_portfolio.acceptance_commands": CvPortfolioAcceptanceCommands;
+  "cv_portfolio.acceptance_history": CvPortfolioAcceptanceHistory;
+  "cv_portfolio.activation_commands": CvPortfolioActivationCommands;
+  "cv_portfolio.activation_history": CvPortfolioActivationHistory;
+  "cv_portfolio.portfolios": CvPortfolioPortfolios;
+  "cv_portfolio.registration_commands": CvPortfolioRegistrationCommands;
+  "cv_portfolio.versions": CvPortfolioVersions;
   "identity_access.owner_links": IdentityAccessOwnerLinks;
+  "media.acceptance_commands": MediaAcceptanceCommands;
+  "media.assets": MediaAssets;
+  "media.decision_history": MediaDecisionHistory;
+  "media.processed_objects": MediaProcessedObjects;
+  "media.processing_attempt_outputs": MediaProcessingAttemptOutputs;
+  "media.processing_attempt_variants": MediaProcessingAttemptVariants;
+  "media.processing_attempts": MediaProcessingAttempts;
+  "media.processing_claims": MediaProcessingClaims;
+  "media.processing_commands": MediaProcessingCommands;
+  "media.processing_orphans": MediaProcessingOrphans;
+  "media.processing_states": MediaProcessingStates;
+  "media.rejection_history": MediaRejectionHistory;
+  "media.upload_intent_capabilities": MediaUploadIntentCapabilities;
+  "media.upload_intent_commands": MediaUploadIntentCommands;
+  "media.upload_intents": MediaUploadIntents;
   "operations.idempotency_records": OperationsIdempotencyRecords;
   "operations.jobs": OperationsJobs;
   "operations.outbox_events": OperationsOutboxEvents;

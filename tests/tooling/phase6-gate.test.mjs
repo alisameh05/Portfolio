@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { clearGateArtifacts } from "../../scripts/phase6-gate.mjs";
+import { clearGateArtifacts, PHASE6_GATE_COMMANDS } from "../../scripts/phase6-gate.mjs";
 import {
   evaluatePhase6Gate, PHASE6_GATE_ACCEPTANCE_MATRIX, PHASE6_GATE_COMPONENTS,
   PHASE6_GATE_MANDATORY_MATRICES, PHASE6_GATE_REQUIRED_CHECKS, PHASE6_GATE_STORY_MATRIX,
@@ -111,3 +111,10 @@ test("fake-only evidence is rejected", () => expectFailure((input) => { input.se
 test("required skip is rejected", () => expectFailure((input) => { input.checks[0].skipped = 1; }, "required-check-failed:validation-ready"));
 test("timeout is rejected", () => expectFailure((input) => { input.checks[0].timedOut = true; }, "check-timeout"));
 test("failed cleanup is rejected", () => expectFailure((input) => { input.serviceEvidence.cleanup.success = false; }, "real-service-cleanup-unconfirmed"));
+
+test("gate dependencies are produced before migration access consumes them", () => {
+  const names = PHASE6_GATE_COMMANDS.map((check) => check.name);
+  for (const dependency of ["media-integration", "cv-delivery-capabilities", "owner-composition", "cv-activation"]) {
+    assert.ok(names.indexOf(dependency) >= 0 && names.indexOf(dependency) < names.indexOf("migration-access"), dependency);
+  }
+});

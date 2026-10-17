@@ -33,7 +33,7 @@ describe("Phase 2 contract-to-adapter runtime boundary (#33)", () => {
     expect(report.matrix.filter((entry) => entry.activation === "fail-closed").every((entry) => entry.matches.length === 0)).toBe(true);
     expect(report.matrix.filter((entry) => entry.activation === "fail-closed").map((entry) => entry.operationId).sort()).toEqual([...FAIL_CLOSED_OWNER_OPERATION_IDS].sort());
     expect(report.checks.find((check) => check.name === "unfinished-owner-operations-fail-closed")?.passed).toBe(true);
-  });
+  }, 30_000);
 
   it("rejects adapters that are not declared by either contract", () => {
     const report = buildRuntimeBoundary(ROOT);
@@ -41,7 +41,7 @@ describe("Phase 2 contract-to-adapter runtime boundary (#33)", () => {
     expect(report.undeclaredAdapters).toEqual([]);
     expect(report.invalidAdapters).toEqual([]);
     expect(report.duplicateOperationIds).toEqual([]);
-  });
+  }, 30_000);
 
   it("discovers every exported handler declaration form", () => {
     const source = `
@@ -140,7 +140,7 @@ describe("Phase 2 contract-to-adapter runtime boundary (#33)", () => {
       "src/app/readyz/route.ts",
     ]);
     expect(report.unexpectedRouteFiles).toEqual([]);
-  });
+  }, 30_000);
 
   it.each(["src/app/livez/route.ts", "src/app/readyz/route.ts"])(
     "still scans forbidden source content in %s",

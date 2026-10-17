@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { localValidationFixture, initializeLocalMigrationProject } from "./local-migration-bootstrap.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const ROOT_PACKAGE_PATH = join(ROOT, "package.json");
@@ -88,6 +89,25 @@ function classifyFailure(output) {
 async function execute(action) {
   const invocation = plan(action);
   console.log(`… ${action}: running ${invocation.package} from this repository`);
+
+  if (process.env.SHIPWITHALI_LOCAL_VALIDATION_WORKDIR) {
+    const fixture = localValidationFixture(process.env.SHIPWITHALI_LOCAL_VALIDATION_WORKDIR);
+    const invoke = (args) => {
+      const result = spawnSync(process.execPath, [CLI_ENTRY, "--workdir", fixture.workdir, ...args], {
+        cwd: ROOT, env: localOnlyEnvironment(), encoding: "utf8", timeout: 600_000, windowsHide: true,
+      });
+      if (result.error || result.status !== 0) throw new Error("LOCAL_DB_DISPOSABLE_COMMAND_FAILED");
+    };
+    if (action === "start" || action === "reuse") {
+      initializeLocalMigrationProject(fixture, { initialize: () => invoke(["start"]), migrate: () => invoke(["migration", "up", "--local"]) });
+    } else if (action === "reset") {
+      initializeLocalMigrationProject(fixture, { initialize: () => invoke(invocation.args), migrate: () => invoke(["migration", "up", "--local"]) });
+    } else {
+      invoke(action === "stop" ? ["stop", "--project-id", fixture.projectId, "--no-backup"] : invocation.args);
+    }
+    console.log(`✓ ${SUCCESS[action]}`);
+    return 0;
+  }
 
   const child = spawn(process.execPath, [CLI_ENTRY, ...invocation.args], {
     cwd: ROOT,

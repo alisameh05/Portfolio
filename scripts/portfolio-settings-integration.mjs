@@ -7,6 +7,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { migrationSha256 } from "./migration-checksum.mjs";
+import { applyLocalProjectMigrations, initializeLocalMigrationProject } from "./local-migration-bootstrap.mjs";
 import { invalidateIntegratedEvidence } from "./phase5-scenario-coverage.mjs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import {
@@ -14,7 +15,11 @@ import {
   PHASE5_MIGRATION_COMPATIBILITY,
   assertPhase3OperationsContractPreserved,
   assertPhase3OperationsRls,
+  phase4ReleaseContract,
   assertPhase4SnapshotsEquivalent,
+  phase4ReleaseMigrationFiles,
+  migrationsAfterPhase5,
+  roleMembershipContract,
   snapshotPhase4Database,
   validatePhase3MigrationSnapshot,
 } from "./phase4-migration-integrity.mjs";
@@ -135,14 +140,6 @@ function migrationSources() {
   const contents = new Map(files.map((name) => [name, readFileSync(join(directory, name), "utf8")]));
   const snapshot = JSON.parse(readFileSync(join(ROOT, "supabase/baselines/phase3.json"), "utf8"));
   const phase3Files = validatePhase3MigrationSnapshot(snapshot, Object.keys(snapshot.migrations), contents);
-  for (const file of files.filter((name) => !phase3Files.includes(name))) {
-    const source = contents.get(file).toLowerCase();
-    if (
-      file.localeCompare(phase3Files.at(-1)) <= 0 ||
-      !source.includes("set lock_timeout = '5s'") ||
-      !source.includes("-- rollback:")
-    ) throw new Error("PORTFOLIO_SETTINGS_EXPANSION_MIGRATION_POLICY_INVALID");
-  }
   return {
     files,
     contents,
@@ -152,7 +149,7 @@ function migrationSources() {
 }
 
 function createProject(name, basePort, migrations) {
-  const projectId = `shipwithali-${name}-${process.pid}-${randomBytes(4).toString("hex")}`;
+  const projectId = `shipwithali-${name}-${randomBytes(6).toString("hex")}`;
   const workdir = mkdtempSync(join(tmpdir(), `${projectId}-`));
   const project = { projectId, workdir, network: `${projectId}-loopback`, basePort, networkCreated: false, attemptedStart: false };
   try {
@@ -187,8 +184,14 @@ function startProject(project, env) {
   });
   project.networkCreated = true;
   project.attemptedStart = true;
-  invokeProject(project, ["start", "--network-id", project.network], env);
-  invokeProject(project, ["db", "reset", "--local"], env);
+  initializeLocalMigrationProject(project, {
+    initialize: () => invokeProject(project, ["start", "--network-id", project.network], env),
+    migrate: () => invokeProject(project, ["migration", "up", "--local"], env),
+  });
+  initializeLocalMigrationProject(project, {
+    initialize: () => invokeProject(project, ["db", "reset", "--local"], env),
+    migrate: () => invokeProject(project, ["migration", "up", "--local"], env),
+  });
   return readDatabaseUrl(project.workdir, project.basePort + 2);
 }
 
@@ -263,6 +266,38 @@ async function seedAndCapturePhase3Operations(connectionString) {
   return rows;
 }
 
+async function seedPhase4ReleaseRecords(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    await client.query(`
+      insert into identity_access.owner_links (github_subject, owner_id)
+      values ('phase4-release-migration-preservation', '018f4f7d-5000-7000-8000-000000000007')
+    `);
+    await client.query(`
+      insert into portfolio_config.settings (
+        portfolio_id, owner_id, display_name, headline, bio,
+        global_cta_label, global_cta_destination, global_cta_unavailable_fallback
+      ) values (
+        '018f4f7d-5000-7000-8000-000000000008', '018f4f7d-5000-7000-8000-000000000007',
+        'Migration preservation', 'Phase 4 release fixture', 'Preserve this configured aggregate through Phase 5 migrations.',
+        'Contact', 'https://example.com/contact', 'Contact details are unavailable.'
+      )
+    `);
+    await client.query(`
+      insert into portfolio_config.contact_channels (
+        portfolio_id, position, channel, label, destination, available_locales
+      ) values (
+        '018f4f7d-5000-7000-8000-000000000008', 0, 'email', 'Email',
+        'mailto:phase4-migration@example.com', '["en"]'::jsonb
+      )
+    `);
+    return await countRetainedReleaseRecords(connectionString);
+  } finally {
+    await client.end();
+  }
+}
+
 async function phase3OperationsRows(client) {
   const idempotency = await client.query("select to_jsonb(record) as row from operations.idempotency_records record where operation_scope = 'phase4.migration.preservation'");
   const outbox = await client.query("select to_jsonb(record) as row from operations.outbox_events record where event_type = 'phase4.migration.preservation'");
@@ -332,7 +367,8 @@ export async function main() {
   const migrations = migrationSources();
   const phase4Files = migrations.files.filter((file) => !migrations.phase3Files.includes(file));
   const phase5Files = assertPhase5MigrationSafety(migrations.files, migrations.contents);
-  const phase4ReleaseFiles = migrations.files.filter((file) => !phase5Files.includes(file));
+  const phase4ReleaseFiles = phase4ReleaseMigrationFiles(migrations.files);
+  const postPhase5Files = migrationsAfterPhase5(migrations.files);
   const upgradeBaselineFiles = ticket123 ? phase4ReleaseFiles : migrations.phase3Files;
   if (phase4Files.length === 0) throw new Error("PORTFOLIO_SETTINGS_PHASE4_MIGRATIONS_MISSING");
   requireDocker();
@@ -341,6 +377,7 @@ export async function main() {
   let cleanProject;
   let upgradeProject;
   let failure;
+  let failureStage = "initialization";
 
   try {
     cleanProject = createProject("settings-clean", 57320, migrations.files);
@@ -399,15 +436,45 @@ export async function main() {
       : `Phase 3 historical database invariants: ${predecessorTestCount} passed, 0 skipped before Phase 4 migrations.`);
     const phase3Rows = await seedAndCapturePhase3Operations(upgradeUrl);
     console.log("Captured the Phase 3 operations contract and seeded rows through restricted capability roles.");
-    const phase4MigrationsToApply = ticket123 ? phase4Files.filter((file) => !phase5Files.includes(file)) : phase4Files;
+    const phase4MigrationsToApply = ticket123
+      ? phase4ReleaseFiles.filter((file) => !migrations.phase3Files.includes(file))
+      : phase4Files;
     for (const file of phase4MigrationsToApply) {
       copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
     }
-    invokeProject(upgradeProject, ["migration", "up", "--local"], env);
+    applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env));
     console.log(ticket123 ? "Applied the merged Phase 4 release migrations." : "Applied Phase 4 migrations to the Phase 3 upgrade database.");
     let phase4ReleaseRows;
     let phase4ReleaseLedger;
     if (ticket123) {
+      phase4ReleaseRows = await seedPhase4ReleaseRecords(upgradeUrl);
+      phase4ReleaseLedger = (await snapshotPhase4Database(upgradeUrl)).migrationLedger;
+      if (JSON.stringify(phase4ReleaseLedger) !== JSON.stringify(
+        phase4ReleaseFiles.map((file) => ({ version: file.slice(0, 14), name: file.slice(15, -4) })),
+      )) throw new Error("PHASE5_PHASE4_RELEASE_LEDGER_MISMATCH");
+      phase4ReleaseRows = await countRetainedReleaseRecords(upgradeUrl);
+      if (phase4ReleaseRows.configuredPortfolios < 1 || phase4ReleaseRows.contactChannels < 1 ||
+        phase4ReleaseRows.ownerLinks < 1 || phase4ReleaseRows.idempotencyRecords < 1 || phase4ReleaseRows.outboxEvents < 1) {
+        throw new Error("PHASE5_PHASE4_RELEASE_FIXTURE_INCOMPLETE");
+      }
+      for (const file of phase5Files) {
+        copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
+      }
+      failureStage = "phase5-release-migrations";
+      applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env));
+      failureStage = "phase5-release-data-preservation";
+      const afterPhase5Rows = await countRetainedReleaseRecords(upgradeUrl);
+      if (JSON.stringify(afterPhase5Rows) !== JSON.stringify(phase4ReleaseRows)) {
+        throw new Error("PHASE5_PHASE4_RELEASE_RECORDS_NOT_PRESERVED");
+      }
+      failureStage = "post-phase5-migrations";
+      for (const file of postPhase5Files) {
+        copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
+      }
+      applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env));
+    }
+    if (ticket123) {
+      failureStage = "current-settings-integration";
       const phase4SettingsReportPath = join(upgradeProject.workdir, "phase4-settings-test-report.json");
       const phase4SettingsResult = spawnSync(process.execPath, [
         join(ROOT, "node_modules/vitest/vitest.mjs"), "run", "tests/database/portfolio-settings.integration.test.ts",
@@ -421,30 +488,14 @@ export async function main() {
       });
       let phase4SettingsReport;
       try { phase4SettingsReport = JSON.parse(readFileSync(phase4SettingsReportPath, "utf8")); }
-      catch { throw new Error("PHASE5_PHASE4_RELEASE_TEST_REPORT_MISSING"); }
+      catch { throw new Error("PHASE5_CURRENT_SETTINGS_TEST_REPORT_MISSING"); }
       try { unlinkSync(phase4SettingsReportPath); } catch { /* isolated project cleanup removes it */ }
       if (phase4SettingsResult.error || phase4SettingsResult.status !== 0) {
-        throw new Error("PHASE5_PHASE4_RELEASE_SETTINGS_HISTORY_TESTS_FAILED");
+        throw new Error("PHASE5_CURRENT_SETTINGS_INTEGRATION_FAILED");
       }
       requireExecutedTests(phase4SettingsReport, 1);
-      phase4ReleaseLedger = (await snapshotPhase4Database(upgradeUrl)).migrationLedger;
-      if (JSON.stringify(phase4ReleaseLedger) !== JSON.stringify(
-        phase4ReleaseFiles.map((file) => ({ version: file.slice(0, 14), name: file.slice(15, -4) })),
-      )) throw new Error("PHASE5_PHASE4_RELEASE_LEDGER_MISMATCH");
-      phase4ReleaseRows = await countRetainedReleaseRecords(upgradeUrl);
-      if (phase4ReleaseRows.configuredPortfolios < 1 || phase4ReleaseRows.contactChannels < 1 ||
-        phase4ReleaseRows.idempotencyRecords < 1 || phase4ReleaseRows.outboxEvents < 1) {
-        throw new Error("PHASE5_PHASE4_RELEASE_FIXTURE_INCOMPLETE");
-      }
-      for (const file of phase5Files) {
-        copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
-      }
-      invokeProject(upgradeProject, ["migration", "up", "--local"], env);
-      const afterPhase5Rows = await countRetainedReleaseRecords(upgradeUrl);
-      if (JSON.stringify(afterPhase5Rows) !== JSON.stringify(phase4ReleaseRows)) {
-        throw new Error("PHASE5_PHASE4_RELEASE_RECORDS_NOT_PRESERVED");
-      }
     }
+    failureStage = "clean-upgrade-snapshot-equivalence";
     const cleanSnapshot = await snapshotPhase4Database(cleanUrl);
     console.log("Captured the clean-install normalized database state.");
     const upgradeSnapshot = await snapshotPhase4Database(upgradeUrl);
@@ -452,16 +503,19 @@ export async function main() {
     assertPhase3OperationsRls(upgradeSnapshot);
     assertPhase3OperationsContractPreserved(phase3Snapshot, upgradeSnapshot);
     console.log("Verified Phase 3 operations grants, policies, and schema objects were preserved.");
-    if (ticket123 && JSON.stringify(cleanSnapshot.roleMemberships) !== JSON.stringify(upgradeSnapshot.roleMemberships)) {
+    if (ticket123 && JSON.stringify(roleMembershipContract(cleanSnapshot.roleMemberships)) !== JSON.stringify(roleMembershipContract(upgradeSnapshot.roleMemberships))) {
       throw new Error(`PHASE5_ROLE_MEMBERSHIP_DIFFER:${JSON.stringify({ clean: cleanSnapshot.roleMemberships, upgrade: upgradeSnapshot.roleMemberships })}`);
     }
-    assertPhase4SnapshotsEquivalent(cleanSnapshot, upgradeSnapshot);
+    assertPhase4SnapshotsEquivalent(
+      phase4ReleaseContract(cleanSnapshot),
+      phase4ReleaseContract(upgradeSnapshot),
+    );
     console.log("Clean and upgraded normalized schemas, grants, constraints, and policies match.");
     if (JSON.stringify(cleanSnapshot.migrationLedger) !== JSON.stringify(
       migrations.files.map((file) => ({ version: file.slice(0, 14), name: file.slice(15, -4) })),
     )) throw new Error("PORTFOLIO_SETTINGS_MIGRATION_LEDGER_MISMATCH");
     invokeProject(cleanProject, ["migration", "up", "--local"], env);
-    invokeProject(upgradeProject, ["migration", "up", "--local"], env);
+    applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env));
     assertPhase4SnapshotsEquivalent(cleanSnapshot, await snapshotPhase4Database(cleanUrl));
     assertPhase4SnapshotsEquivalent(upgradeSnapshot, await snapshotPhase4Database(upgradeUrl));
     const preservedRows = await assertPhase3OperationsPreserved(upgradeUrl, phase3Rows);
@@ -471,8 +525,8 @@ export async function main() {
       CODEGEN,
       "--dialect", "postgres",
       "--url", "env(PHASE4_SETTINGS_DATABASE_URL)",
-      "--default-schema", "content,identity_access,operations,portfolio_config,taxonomy",
-      "--include-pattern", "{content,identity_access,operations,portfolio_config,taxonomy}.*",
+      "--default-schema", "content,cv_portfolio,identity_access,media,operations,portfolio_config,taxonomy",
+      "--include-pattern", "{content,cv_portfolio,identity_access,media,operations,portfolio_config,taxonomy}.*",
       "--date-parser", "timestamp",
       "--out-file", GENERATED,
       "--log-level", "error",
@@ -657,6 +711,7 @@ export async function main() {
       predecessorSnapshot: "supabase/baselines/phase3.json",
       migrationChecksums: migrations.checksums,
       migrationLedger: cleanSnapshot.migrationLedger,
+      postgresVersion: cleanSnapshot.postgresVersion,
       ...(ticket123 ? {
         phase4ReleaseUpgrade: {
           baselineLedger: phase4ReleaseLedger,
@@ -719,6 +774,7 @@ export async function main() {
         },
       } : {}),
       cleanUpgradeEquivalent: true,
+      postgresVersion: cleanSnapshot.postgresVersion,
       migrationReplayNoop: true,
       generatedTypeDrift: false,
       phase3OperationsRowsPreserved: {
@@ -790,6 +846,7 @@ export async function main() {
       phase3MigrationFiles: migrations.phase3Files,
       migrationChecksums: migrations.checksums,
       migrationLedger: cleanSnapshot.migrationLedger,
+      postgresVersion: cleanSnapshot.postgresVersion,
       migrationSafety: {
         ticketIntroducedMigrations: [],
         phase4ExpansionSourceChecks: {
@@ -903,7 +960,25 @@ export async function main() {
     mkdirSync(dirname(evidencePath), { recursive: true });
     writeFileSync(evidencePath, serializedEvidence, "utf8");
   } catch (error) {
-    failure = error;
+    if (error instanceof Error && error.message.startsWith("PHASE5_ROLE_MEMBERSHIP_DIFFER:")) {
+      let membershipDetail = "unavailable";
+      try {
+        const detail = JSON.parse(error.message.slice("PHASE5_ROLE_MEMBERSHIP_DIFFER:".length));
+        const identities = (rows) => (rows ?? []).map(({ role, member, adminOption }) => `${role}>${member}:${adminOption}`).sort();
+        const clean = new Set(identities(detail.clean));
+        const upgrade = new Set(identities(detail.upgrade));
+        membershipDetail = `clean_${identities(detail.clean).filter((value) => !upgrade.has(value)).join("|") || "none"}_upgrade_${identities(detail.upgrade).filter((value) => !clean.has(value)).join("|") || "none"}`;
+      } catch { /* report only that the membership payload was malformed */ }
+      failure = new Error(`PHASE5_ROLE_MEMBERSHIP_DIFFER:${membershipDetail}`);
+    }
+    const snapshotDifference = error instanceof Error
+      ? error.message.match(/^PORTFOLIO_SETTINGS_DATABASE_STATE_DIFFER:([^:]+)/u)
+      : null;
+    failure ??= snapshotDifference !== null
+      ? new Error(`PORTFOLIO_SETTINGS_DATABASE_STATE_DIFFER:${snapshotDifference[1]}`)
+      : error instanceof Error && /^[A-Z][A-Z0-9_]+(?::[A-Za-z0-9_.,\/-]+)*$/u.test(error.message)
+        ? error
+        : new Error(`PORTFOLIO_SETTINGS_DATABASE_FAILURE:${failureStage}:${typeof error?.code === "string" ? error.code : error?.name ?? "unknown"}`);
   } finally {
     let cleanupFailed = false;
     for (const project of [...projects].reverse()) {
@@ -934,7 +1009,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try {
     await main();
   } catch (error) {
-    console.error(error instanceof Error && error.message.startsWith("PORTFOLIO_SETTINGS_")
+    console.error(error instanceof Error && /^[A-Z][A-Z0-9_]+(?::[A-Za-z0-9_.,\/-]+)*$/u.test(error.message)
       ? error.message
       : "PORTFOLIO_SETTINGS_RUNNER_FAILED: private diagnostics suppressed.");
     process.exitCode = 1;

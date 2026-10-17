@@ -16,6 +16,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { migrationSha256 } from "./migration-checksum.mjs";
+import { applyLocalProjectMigrations, initializeLocalMigrationProject } from "./local-migration-bootstrap.mjs";
 import {
   assertBaselineSnapshotsEquivalent,
   assertPhase3Rls,
@@ -498,7 +499,12 @@ async function snapshot(baseUrl) {
     }
     if (
       privileges.rows.some((row) => {
-        if (!PHASE3_MODE) return row.has_usage || row.has_create;
+        if (row.has_create) return true;
+        if (!PHASE3_MODE) return row.has_usage;
+        // Phase 3 owns the operations schema ACL. Later phase migrations add
+        // scoped usage grants to their own schemas, so they cannot be judged
+        // by the original empty-schema expectation here.
+        if (row.schema_name !== "operations") return false;
         const expectedUsage =
           row.schema_name === "operations" &&
           [
@@ -506,7 +512,7 @@ async function snapshot(baseUrl) {
             "shipwithali_worker",
             "shipwithali_backup",
           ].includes(row.role_name);
-        return row.has_create || row.has_usage !== expectedUsage;
+        return row.has_usage !== expectedUsage;
       })
     ) {
       throw new Error("CAPABILITY_SCHEMA_ACCESS_MISMATCH");
@@ -548,11 +554,11 @@ async function verifyLocal() {
     await assertPriorBaseline(upgradeUrl);
 
     copyRepositoryMigrations(upgradeProject.workdir);
-    runLocalCommand(
+    applyLocalProjectMigrations(upgradeProject, () => runLocalCommand(
       upgradeProject.workdir,
       ["migration", "up", "--local"],
       "UPGRADE_MIGRATION_FAILED",
-    );
+    ));
     await verifyFutureDefaults(upgradeUrl);
     const upgrade = await snapshot(upgradeUrl);
     if (PHASE3_MODE) assertPhase3Rls(upgrade.objects);
@@ -567,12 +573,14 @@ async function verifyLocal() {
       throw new Error("UPGRADE_MIGRATION_IS_NOT_NOOP");
     }
 
-    runLocalCommand(cleanProject.workdir, ["start"], "CLEAN_DB_START_FAILED");
-    runLocalCommand(
-      cleanProject.workdir,
-      ["db", "reset", "--local"],
-      "CLEAN_DB_RESET_FAILED",
-    );
+    initializeLocalMigrationProject(cleanProject, {
+      initialize: () => runLocalCommand(cleanProject.workdir, ["start"], "CLEAN_DB_START_FAILED"),
+      migrate: () => runLocalCommand(cleanProject.workdir, ["migration", "up", "--local"], "CLEAN_MIGRATION_FAILED"),
+    });
+    initializeLocalMigrationProject(cleanProject, {
+      initialize: () => runLocalCommand(cleanProject.workdir, ["db", "reset", "--local"], "CLEAN_DB_RESET_FAILED"),
+      migrate: () => runLocalCommand(cleanProject.workdir, ["migration", "up", "--local"], "CLEAN_MIGRATION_FAILED"),
+    });
     const cleanUrl = readLocalDatabaseUrl(cleanProject.workdir);
     await verifyFutureDefaults(cleanUrl);
     const clean = await snapshot(cleanUrl);

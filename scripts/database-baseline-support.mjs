@@ -95,6 +95,39 @@ export async function cleanupProbeRole({ admin, probe, login, role }) {
  */
 export function findUnrevokedFunctions(source) {
   const normalized = source.toLowerCase();
+  const builtInTypeStarts = new Set([
+    "bigint", "bigserial", "bit", "boolean", "bool", "box", "bytea", "char", "character",
+    "cidr", "circle", "date", "daterange", "double", "float", "inet", "int", "int2",
+    "int4", "int8", "integer", "interval", "json", "jsonb", "line", "lseg", "macaddr",
+    "money", "numeric", "path", "pg_lsn", "point", "polygon", "real", "serial", "serial2",
+    "serial4", "serial8", "smallint", "smallserial", "text", "time", "timestamp", "timestamptz",
+    "timetz", "tsquery", "tsrange", "tstzrange", "uuid", "varbit", "varchar", "xml",
+  ]);
+  const splitArguments = (rawArguments) => {
+    const argumentsList = [];
+    let depth = 0;
+    let start = 0;
+    for (let index = 0; index < rawArguments.length; index += 1) {
+      if (rawArguments[index] === "(") depth += 1;
+      else if (rawArguments[index] === ")") depth -= 1;
+      else if (rawArguments[index] === "," && depth === 0) {
+        argumentsList.push(rawArguments.slice(start, index));
+        start = index + 1;
+      }
+    }
+    if (rawArguments.trim()) argumentsList.push(rawArguments.slice(start));
+    return argumentsList;
+  };
+  const normalizeDeclaredArguments = (rawArguments) => splitArguments(rawArguments)
+    .map((argument) => {
+      const trimmed = argument.trim().replace(/^(?:in|out|inout|variadic)\s+/u, "");
+      const first = trimmed.match(/^([a-z_][a-z0-9_$]*)\b/u)?.[1];
+      if (first && !builtInTypeStarts.has(first) && !first.includes(".")) {
+        return trimmed.replace(/^[a-z_][a-z0-9_$]*\s+/u, "");
+      }
+      return trimmed;
+    })
+    .join(",");
   const functionIdentities = (pattern) => {
     const identities = [];
     for (const match of normalized.matchAll(pattern)) {
@@ -107,11 +140,14 @@ export function findUnrevokedFunctions(source) {
         close += 1;
       }
       if (depth === 0) {
-        const args = normalized
+        const rawArguments = normalized
           .slice(open + 1, close - 1)
           .replace(/\s*,\s*/g, ",")
           .replace(/\s+/g, " ")
           .trim();
+        const args = pattern.source.startsWith("create\\s")
+          ? normalizeDeclaredArguments(rawArguments)
+          : splitArguments(rawArguments).map((argument) => argument.trim()).join(",");
         identities.push({ identity: `${match[1]}(${args})`, index: match.index });
       }
     }

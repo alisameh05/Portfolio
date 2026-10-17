@@ -88,7 +88,7 @@ export function evaluatePhase6MediaCvIntegration(evidence, expected = {}) {
 }
 
 export function isolatedPhase6Config(source, projectId, ports = { api: 57321, db: 57322, shadow: 57320, studio: 57323 }) {
-  const config = source
+  let config = source
     .replace(/^project_id = .*$/m, `project_id = "${projectId}"`)
     .replace(/(\[api\]\s*)enabled = false/, "$1enabled = true")
     .replace(/(\[auth\]\s*)enabled = false/, "$1enabled = true")
@@ -97,6 +97,22 @@ export function isolatedPhase6Config(source, projectId, ports = { api: 57321, db
     .replace(/(\[db\][\s\S]*?^port = )54322$/m, (_match, prefix) => `${prefix}${ports.db}`)
     .replace(/^shadow_port = 54320$/m, `shadow_port = ${ports.shadow}`)
     .replace(/(\[studio\][\s\S]*?^port = )54323$/m, (_match, prefix) => `${prefix}${ports.studio}`);
+  // Authenticated negative tests need a disposable non-Owner account. Scope
+  // both options to their exact TOML sections so a later auth subsection
+  // cannot accidentally supply the match for an earlier one.
+  for (const section of ["auth", "auth.email"]) {
+    const header = `[${section}]`;
+    const start = config.split(/\r?\n/u).findIndex((line) => line.trim() === header);
+    if (start < 0) continue;
+    const lines = config.split(/\r?\n/u);
+    const end = lines.findIndex((line, index) => index > start && /^\s*\[[^\]]+\]\s*(?:#.*)?$/u.test(line));
+    const sectionLines = lines.slice(start + 1, end < 0 ? undefined : end);
+    const option = sectionLines.findIndex((line) => /^\s*enable_signup\s*=\s*false\s*(?:#.*)?$/u.test(line));
+    if (option < 0) continue;
+    sectionLines[option] = sectionLines[option].replace(/false/u, "true");
+    lines.splice(start + 1, sectionLines.length, ...sectionLines);
+    config = lines.join("\n");
+  }
   return `${config.trimEnd()}\n\n[storage.buckets.phase6-private-fixtures]\npublic = false\nfile_size_limit = "50MiB"\n\n[storage.buckets.media-candidates]\npublic = false\nfile_size_limit = "50MiB"\nallowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]\n\n[storage.buckets.media-processed]\npublic = false\nfile_size_limit = "50MiB"\nallowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]\n`;
 }
 
@@ -198,15 +214,18 @@ export function phase6CvScenarioProof(processingCounts) {
 export const PHASE6_PREDECESSOR_CONTEXTS = Object.freeze({
   phase4: Object.freeze({ issue: 90, pullRequest: 105, mergeCommit: "9806af81d4ce705c36d9b22089f77213d16887bc", evidence: "evidence/phase4-context-90-105.json" }),
   phase5: Object.freeze({ issue: 125, pullRequest: 144, mergeCommit: "26d6efb3d9e281265cc9c099195492b5dcbec79d", evidence: "evidence/phase-5-gate-report.json",
-    sourceRevision: "73b691e9c406bbd0434a9014d716c8bb0aa20ca6", sourceTreeSha256: "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
-    runId: "0956f779-3025-43f5-a4fc-2b311a78cae2", contextEvidence: "evidence/phase-5-context.json" }),
+    contextEvidence: "evidence/phase-5-context.json" }),
   activationDifferences: Object.freeze({ phase4: ["identity-access", "portfolio-configuration"], phase5: ["content-and-publishing", "taxonomy-and-discovery"], phase6Owned: ["media", "cv-portfolio"] }),
 });
 
 export function loadPhase6PredecessorContexts(root = ROOT) {
   const phase4Evidence = JSON.parse(readFileSync(join(root, PHASE6_PREDECESSOR_CONTEXTS.phase4.evidence), "utf8"));
   const phase5Evidence = JSON.parse(readFileSync(join(root, PHASE6_PREDECESSOR_CONTEXTS.phase5.evidence), "utf8"));
-  const phase5Context = JSON.parse(readFileSync(join(root, PHASE6_PREDECESSOR_CONTEXTS.phase5.contextEvidence), "utf8"));
+  const phase5ContextBytes = readFileSync(join(root, PHASE6_PREDECESSOR_CONTEXTS.phase5.contextEvidence));
+  const phase5Context = JSON.parse(phase5ContextBytes.toString("utf8"));
+  const phase5ContextArtifact = Array.isArray(phase5Evidence.evidenceArtifacts)
+    ? phase5Evidence.evidenceArtifacts.find((item) => item?.path === PHASE6_PREDECESSOR_CONTEXTS.phase5.contextEvidence)
+    : null;
   const phase4Report = phase4Evidence.report;
   return {
     phase4: {
@@ -225,9 +244,23 @@ export function loadPhase6PredecessorContexts(root = ROOT) {
     phase5: {
       ...PHASE6_PREDECESSOR_CONTEXTS.phase5,
       contextRunId: phase5Evidence.runId,
+      gateTicket: phase5Evidence.ticket,
       sourceRevision: phase5Evidence.sourceRevision,
       sourceTreeSha256: phase5Evidence.sourceTreeSha256,
       contextVerdict: phase5Evidence.verdict,
+      contextTicket: phase5Context.ticket,
+      contextPhase: phase5Context.phase,
+      contextEvidenceRunId: phase5Context.runId,
+      contextSourceRevision: phase5Context.sourceRevision,
+      contextSourceTreeSha256: phase5Context.sourceTreeSha256,
+      contextArtifactRunId: phase5ContextArtifact?.runId,
+      contextArtifactSourceRevision: phase5ContextArtifact?.sourceRevision,
+      contextArtifactSourceTreeSha256: phase5ContextArtifact?.sourceTreeSha256,
+      contextGateRunId: phase5ContextArtifact?.gateRunId,
+      contextRequiredRunId: phase5ContextArtifact?.requiredRunId,
+      contextArtifactFresh: phase5ContextArtifact?.fresh,
+      contextArtifactSha256: phase5ContextArtifact?.sha256,
+      contextEvidenceSha256: createHash("sha256").update(phase5ContextBytes).digest("hex"),
       operations: phase5Context.operations,
       runtimeBoundary: phase5Context.runtimeBoundary,
       runtimeArchitecture: phase5Context.runtimeArchitecture,
@@ -236,7 +269,7 @@ export function loadPhase6PredecessorContexts(root = ROOT) {
   };
 }
 
-function predecessorContextFailures(contexts) {
+function predecessorContextFailures(contexts, { sourceTreeSha256 } = {}) {
   const failures = [];
   const phase4 = contexts?.phase4;
   const phase4Fixtures = Array.isArray(phase4?.fixtureResults) ? phase4.fixtureResults : [];
@@ -245,16 +278,25 @@ function predecessorContextFailures(contexts) {
   if (phase4?.contextVerdict !== "pass" || phase4?.operations?.publicOperations !== 5 || phase4?.operations?.ownerOperations !== 39 || phase4?.operations?.forbiddenFindings !== 0 || phase4?.boundary !== "pass" || phase4?.runtimeArchitecture !== "pass" || phase4Fixtures.length !== 6 || phase4Fixtures.some((item) => item?.rejected !== true) || phase4Depcruise.length !== 2 || phase4Depcruise.some((item) => item?.rejected !== true)) failures.push("phase4-context-assertions-incomplete");
 
   const phase5 = contexts?.phase5;
-  if (phase5?.issue !== 125 || phase5?.pullRequest !== 144 || phase5?.sourceRevision !== PHASE6_PREDECESSOR_CONTEXTS.phase5.sourceRevision ||
-      phase5?.sourceTreeSha256 !== PHASE6_PREDECESSOR_CONTEXTS.phase5.sourceTreeSha256 || phase5?.contextRunId !== PHASE6_PREDECESSOR_CONTEXTS.phase5.runId ||
-      !/^[0-9a-f-]{36}$/iu.test(phase5?.contextRunId ?? "")) failures.push("phase5-run-provenance-invalid");
+  if (phase5?.issue !== 125 || phase5?.pullRequest !== 144 || phase5?.gateTicket !== 125 || phase5?.contextVerdict !== "pass" ||
+      !/^[a-f0-9]{40}$/u.test(phase5?.sourceRevision ?? "") ||
+      phase5?.sourceTreeSha256 !== sourceTreeSha256 || !/^[0-9a-f-]{36}$/iu.test(phase5?.contextRunId ?? "") ||
+      phase5?.contextTicket !== 107 || phase5?.contextPhase !== "phase5" ||
+      !/^[0-9a-f-]{36}$/iu.test(phase5?.contextEvidenceRunId ?? "") ||
+      phase5?.contextSourceRevision !== phase5?.sourceRevision || phase5?.contextSourceTreeSha256 !== sourceTreeSha256 ||
+      phase5?.contextArtifactRunId !== phase5?.contextEvidenceRunId ||
+      phase5?.contextArtifactSourceRevision !== phase5?.sourceRevision || phase5?.contextArtifactSourceTreeSha256 !== sourceTreeSha256 ||
+      !/^[a-f0-9]{64}$/u.test(phase5?.contextArtifactSha256 ?? "") ||
+      phase5?.contextArtifactSha256 !== phase5?.contextEvidenceSha256 ||
+      phase5?.contextGateRunId !== phase5?.contextRunId || phase5?.contextRequiredRunId !== phase5?.contextRunId ||
+      phase5?.contextArtifactFresh !== true) failures.push("phase5-run-provenance-invalid");
   if (phase5?.contextVerdict !== "pass" || phase5?.operations?.public !== 5 || phase5?.operations?.owner !== 48 || phase5?.operations?.forbiddenFindings !== 0 || phase5?.runtimeBoundary !== "pass" || phase5?.runtimeArchitecture !== "pass") failures.push("phase5-context-assertions-incomplete");
   const differences = contexts?.activationDifferences;
   if (JSON.stringify(differences) !== JSON.stringify(PHASE6_PREDECESSOR_CONTEXTS.activationDifferences)) failures.push("predecessor-activation-differences-missing");
   return failures;
 }
 
-export function makePhase6Report({ sourceRevision, sourceTreeSha256, runtime, startedAt, tools, services, formats, cleanup, failures, predecessorContexts = loadPhase6PredecessorContexts() }) {
+export function makePhase6Report({ sourceRevision, sourceTreeSha256, runtime, startedAt, tools, services, formats, cleanup, failures, expectedFormats = PHASE6_FORMATS, predecessorContexts = loadPhase6PredecessorContexts() }) {
   const executed = formats.filter((item) => item.executed).length;
   const failed = formats.filter((item) => item.status === "failed").length;
   const skipped = formats.filter((item) => item.status === "skipped").length;
@@ -279,30 +321,30 @@ export function makePhase6Report({ sourceRevision, sourceTreeSha256, runtime, st
     },
     services,
     formats,
-    counts: { expectedFormats: PHASE6_FORMATS.length, executedFormats: executed, failedFormats: failed, skippedFormats: skipped },
+    counts: { expectedFormats: expectedFormats.length, executedFormats: executed, failedFormats: failed, skippedFormats: skipped },
     cleanup,
     failures,
-    verdict: failures.length === 0 && executed === PHASE6_FORMATS.length && failed === 0 && skipped === 0 && cleanup.success === true ? "pass" : "fail",
+    verdict: failures.length === 0 && executed === expectedFormats.length && failed === 0 && skipped === 0 && cleanup.success === true ? "pass" : "fail",
     reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:verification"],
     limitations: ["This setup probe does not certify Phase 6 application behavior, RLS matrices, race/rollback scenarios, or the final phase6:gate."],
   };
   return report;
 }
 
-export function evaluatePhase6Setup(report, { sourceRevision, sourceTreeSha256, now = Date.now() } = {}) {
+export function evaluatePhase6Setup(report, { sourceRevision, sourceTreeSha256, expectedFormats = PHASE6_FORMATS, now = Date.now() } = {}) {
   const failures = [];
   if (!report || report.schemaVersion !== PHASE6_SCHEMA_VERSION) failures.push("evidence-schema-invalid");
   if (report?.sourceRevision !== sourceRevision || report?.sourceTreeSha256 !== sourceTreeSha256) failures.push("evidence-source-stale-or-mismatched");
   if (!Number.isFinite(Date.parse(report?.startedAt)) || !Number.isFinite(Date.parse(report?.completedAt)) || Date.parse(report.completedAt) < Date.parse(report.startedAt) || Date.parse(report.completedAt) > now) failures.push("evidence-time-invalid");
   if (report?.verdict !== "pass") failures.push("report-verdict-not-pass");
-  failures.push(...predecessorContextFailures(report?.predecessorContexts));
+  failures.push(...predecessorContextFailures(report?.predecessorContexts, { sourceTreeSha256 }));
   const formatRows = Array.isArray(report?.formats) ? report.formats : [];
   const actualCounts = {
     executed: formatRows.filter((item) => item?.executed === true).length,
     failed: formatRows.filter((item) => item?.status === "failed").length,
     skipped: formatRows.filter((item) => item?.status === "skipped").length,
   };
-  if (report?.counts?.expectedFormats !== PHASE6_FORMATS.length || report?.counts?.executedFormats !== PHASE6_FORMATS.length || report?.counts?.failedFormats !== 0 || report?.counts?.skippedFormats !== 0 || actualCounts.executed !== PHASE6_FORMATS.length || actualCounts.failed !== 0 || actualCounts.skipped !== 0) failures.push("format-execution-counts-incomplete");
+  if (report?.counts?.expectedFormats !== expectedFormats.length || report?.counts?.executedFormats !== expectedFormats.length || report?.counts?.failedFormats !== 0 || report?.counts?.skippedFormats !== 0 || actualCounts.executed !== expectedFormats.length || actualCounts.failed !== 0 || actualCounts.skipped !== 0) failures.push("format-execution-counts-incomplete");
   if (!report?.services?.postgres?.available || !report?.services?.auth?.available || !report?.services?.storage?.privateBucketVerified) failures.push("required-service-probe-missing");
   if (!Number.isSafeInteger(report?.services?.postgres?.independentConnections) || report.services.postgres.independentConnections < 2) failures.push("independent-postgres-connections-unavailable");
   if (!report?.cleanup?.success) failures.push("cleanup-not-confirmed");
@@ -310,8 +352,8 @@ export function evaluatePhase6Setup(report, { sourceRevision, sourceTreeSha256, 
     if (report?.toolDefinitions?.[Object.keys(PHASE6_TOOL_DEFINITIONS).find((key) => PHASE6_TOOL_DEFINITIONS[key] === tool)] !== tool) failures.push("processor-definition-missing");
   }
   const byFormat = new Map(formatRows.map((item) => [item.id, item]));
-  if (byFormat.size !== PHASE6_FORMATS.length) failures.push("format-matrix-incomplete-or-duplicated");
-  for (const format of PHASE6_FORMATS) {
+  if (byFormat.size !== expectedFormats.length) failures.push("format-matrix-incomplete-or-duplicated");
+  for (const format of expectedFormats) {
     const result = byFormat.get(format.id);
     if (!result?.executed || result?.status !== "passed" || result?.storageRoundTrip !== true || result?.scannerVerdict !== "clean" || result?.processorVersion !== report?.toolVersions?.[format.processor]) failures.push(`format-probe-incomplete:${format.id}`);
   }
@@ -331,3 +373,52 @@ export function phase6Root() { return ROOT; }
 export function phase6RunId() { return randomUUID(); }
 export function phase6Readiness() { return verifyEnvironment(ROOT, observeRuntime()); }
 export function phase6Package() { return JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")); }
+
+export function phase6StorageIntegrationProof(report, source, now = Date.now()) {
+  const started = Date.parse(report?.startedAt ?? "");
+  const completed = Date.parse(report?.completedAt ?? "");
+  return report?.schemaVersion >= 1 && report.verdict === "pass" &&
+    typeof report.runId === "string" && report.runId.length >= 8 &&
+    /^[a-f0-9]{40}$/iu.test(report.sourceRevision ?? "") && report.sourceRevision === source.sourceRevision &&
+    /^[a-f0-9]{64}$/iu.test(report.sourceTreeSha256 ?? "") && report.sourceTreeSha256 === source.sourceTreeSha256 &&
+    Number.isFinite(started) && Number.isFinite(completed) && started <= completed && completed <= now &&
+    now - started <= 24 * 60 * 60 * 1000 &&
+    Number.isSafeInteger(report.checks?.total) && report.checks.total >= 7 &&
+    report.checks.passed === report.checks.total && report.checks.failed === 0 && report.checks.skipped === 0 &&
+    report.checks.verdict === "pass" && report.cleanup?.success === true && report.cleanup.attempted === true;
+}
+
+export function phase6FormatProof(formats, expectedFormats) {
+  if (!Array.isArray(formats) || !Array.isArray(expectedFormats) || expectedFormats.length === 0) return false;
+  const expectedIds = expectedFormats.map((format) => format?.id);
+  const actualIds = formats.map((format) => format?.id);
+  return expectedIds.every((id) => typeof id === "string" && id.length > 0) &&
+    new Set(expectedIds).size === expectedIds.length && formats.length === expectedIds.length &&
+    new Set(actualIds).size === expectedIds.length && expectedIds.every((id) => actualIds.includes(id)) &&
+    formats.every((format) => format?.executed === true && format.status === "passed" &&
+      format.storageRoundTrip === true && format.scannerVerdict === "clean");
+}
+
+export function phase6PdfFixture() {
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 72] /Resources << >> /Contents 4 0 R >>",
+    "<< /Length 0 >>\nstream\n\nendstream",
+  ];
+  const chunks = [Buffer.from("%PDF-1.4\n")];
+  const offsets = [0];
+  let cursor = chunks[0].length;
+  for (let index = 0; index < objects.length; index += 1) {
+    offsets.push(cursor);
+    const part = Buffer.from(`${index + 1} 0 obj\n${objects[index]}\nendobj\n`);
+    chunks.push(part);
+    cursor += part.length;
+  }
+  const xref = cursor;
+  let trailer = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets.slice(1)) trailer += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  trailer += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  chunks.push(Buffer.from(trailer));
+  return Buffer.concat(chunks);
+}

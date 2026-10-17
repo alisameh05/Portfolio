@@ -68,6 +68,19 @@ test("skipped and partial required results fail", () => {
   );
 });
 
+test("Phase 2's single known Windows helper-process skip is the only tolerated skip", () => {
+  const knownSkip = "✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped) 6357ms\nTests 624 passed | 1 skipped (625)";
+  assert.deepEqual(classifyCheckResult({ code: 0, output: knownSkip, failOnSkipped: true,
+    allowWindowsPhase2HelperProcessSkip: true, platform: "win32" }),
+  { passed: true, exitCode: 0, failure: null });
+  assert.deepEqual(classifyCheckResult({ code: 0, output: "Tests 623 passed | 2 skipped (625)", failOnSkipped: true,
+    allowWindowsPhase2HelperProcessSkip: true, platform: "win32" }),
+  { passed: false, exitCode: 1, failure: "skipped-or-partial" });
+  assert.deepEqual(classifyCheckResult({ code: 0, output: knownSkip, failOnSkipped: true,
+    allowWindowsPhase2HelperProcessSkip: true, platform: "linux" }),
+  { passed: false, exitCode: 1, failure: "skipped-or-partial" });
+});
+
 test("evidence redacts database credentials, bearer tokens, and private payload fields", () => {
   const output = sanitizeEvidenceOutput(
     'postgres://user:db-secret@127.0.0.1/db Authorization: Bearer signed-token password=app-secret githubSubject=gh-private-123 eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwcml2YXRlIn0.signature123456 eyJhbGciOiJub25lIn0.e30. {"email":"owner@example.test","access_token":"access-secret","sessionId":"session-secret","githubSubject":"gh-private-456","github_subject":"gh-private-789","provider-user-subject":"provider-secret-123","provider_user_subject":"provider-secret-456","external_subject":"external-secret-123"}',
