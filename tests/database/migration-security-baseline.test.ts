@@ -239,7 +239,7 @@ describe("Phase 3 migration and security baseline (#46)", () => {
     expect(verifier).toContain("shipwithali-46-upgrade");
     expect(verifier).toContain("shipwithali-46-clean");
     expect(verifier).toContain('["migration", "up", "--local"]');
-    expect(verifier).toContain('["db", "reset", "--local"]');
+    expect(verifier).toContain('["db", "reset", "--local", "--network-id", network]');
     expect(verifier).toContain("migrationVersions");
     expect(verifier).not.toMatch(/drop\s+role/i);
   });
