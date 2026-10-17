@@ -240,7 +240,6 @@ export function evaluatePhase8Prerequisites({ root, sourceRevision, sourceTreeSh
     else reasons.push("evidence-report-absent");
     if (report && (!validSha(details.sourceRevision, 40) || !validSha(details.sourceTreeSha256, 64))) reasons.push("source-identity-missing-or-invalid");
     if (validSha(details.sourceRevision, 40) && !isAncestor(details.sourceRevision)) reasons.push("source-revision-not-in-evaluated-history");
-    if (validSha(details.sourceRevision, 40) && details.sourceRevision !== sourceRevision) reasons.push("source-revision-mismatch");
     if (validSha(details.sourceTreeSha256, 64) && details.sourceTreeSha256 !== sourceTreeSha256) reasons.push("source-tree-mismatch");
     if (report && validSha(details.sourceRevision, 40) && validSha(details.sourceTreeSha256, 64)) {
       try {

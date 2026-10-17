@@ -221,7 +221,8 @@ export const PHASE6_PREDECESSOR_CONTEXTS = Object.freeze({
 export function loadPhase6PredecessorContexts(root = ROOT) {
   const phase4Evidence = JSON.parse(readFileSync(join(root, PHASE6_PREDECESSOR_CONTEXTS.phase4.evidence), "utf8"));
   const phase5Evidence = JSON.parse(readFileSync(join(root, PHASE6_PREDECESSOR_CONTEXTS.phase5.evidence), "utf8"));
-  const phase5Context = JSON.parse(readFileSync(join(root, PHASE6_PREDECESSOR_CONTEXTS.phase5.contextEvidence), "utf8"));
+  const phase5ContextBytes = readFileSync(join(root, PHASE6_PREDECESSOR_CONTEXTS.phase5.contextEvidence));
+  const phase5Context = JSON.parse(phase5ContextBytes.toString("utf8"));
   const phase5ContextArtifact = Array.isArray(phase5Evidence.evidenceArtifacts)
     ? phase5Evidence.evidenceArtifacts.find((item) => item?.path === PHASE6_PREDECESSOR_CONTEXTS.phase5.contextEvidence)
     : null;
@@ -258,6 +259,8 @@ export function loadPhase6PredecessorContexts(root = ROOT) {
       contextGateRunId: phase5ContextArtifact?.gateRunId,
       contextRequiredRunId: phase5ContextArtifact?.requiredRunId,
       contextArtifactFresh: phase5ContextArtifact?.fresh,
+      contextArtifactSha256: phase5ContextArtifact?.sha256,
+      contextEvidenceSha256: createHash("sha256").update(phase5ContextBytes).digest("hex"),
       operations: phase5Context.operations,
       runtimeBoundary: phase5Context.runtimeBoundary,
       runtimeArchitecture: phase5Context.runtimeArchitecture,
@@ -266,7 +269,7 @@ export function loadPhase6PredecessorContexts(root = ROOT) {
   };
 }
 
-function predecessorContextFailures(contexts, { sourceRevision, sourceTreeSha256 } = {}) {
+function predecessorContextFailures(contexts, { sourceTreeSha256 } = {}) {
   const failures = [];
   const phase4 = contexts?.phase4;
   const phase4Fixtures = Array.isArray(phase4?.fixtureResults) ? phase4.fixtureResults : [];
@@ -276,13 +279,15 @@ function predecessorContextFailures(contexts, { sourceRevision, sourceTreeSha256
 
   const phase5 = contexts?.phase5;
   if (phase5?.issue !== 125 || phase5?.pullRequest !== 144 || phase5?.gateTicket !== 125 || phase5?.contextVerdict !== "pass" ||
-      phase5?.sourceRevision !== sourceRevision ||
+      !/^[a-f0-9]{40}$/u.test(phase5?.sourceRevision ?? "") ||
       phase5?.sourceTreeSha256 !== sourceTreeSha256 || !/^[0-9a-f-]{36}$/iu.test(phase5?.contextRunId ?? "") ||
       phase5?.contextTicket !== 107 || phase5?.contextPhase !== "phase5" ||
       !/^[0-9a-f-]{36}$/iu.test(phase5?.contextEvidenceRunId ?? "") ||
-      phase5?.contextSourceRevision !== sourceRevision || phase5?.contextSourceTreeSha256 !== sourceTreeSha256 ||
+      phase5?.contextSourceRevision !== phase5?.sourceRevision || phase5?.contextSourceTreeSha256 !== sourceTreeSha256 ||
       phase5?.contextArtifactRunId !== phase5?.contextEvidenceRunId ||
-      phase5?.contextArtifactSourceRevision !== sourceRevision || phase5?.contextArtifactSourceTreeSha256 !== sourceTreeSha256 ||
+      phase5?.contextArtifactSourceRevision !== phase5?.sourceRevision || phase5?.contextArtifactSourceTreeSha256 !== sourceTreeSha256 ||
+      !/^[a-f0-9]{64}$/u.test(phase5?.contextArtifactSha256 ?? "") ||
+      phase5?.contextArtifactSha256 !== phase5?.contextEvidenceSha256 ||
       phase5?.contextGateRunId !== phase5?.contextRunId || phase5?.contextRequiredRunId !== phase5?.contextRunId ||
       phase5?.contextArtifactFresh !== true) failures.push("phase5-run-provenance-invalid");
   if (phase5?.contextVerdict !== "pass" || phase5?.operations?.public !== 5 || phase5?.operations?.owner !== 48 || phase5?.operations?.forbiddenFindings !== 0 || phase5?.runtimeBoundary !== "pass" || phase5?.runtimeArchitecture !== "pass") failures.push("phase5-context-assertions-incomplete");
@@ -332,7 +337,7 @@ export function evaluatePhase6Setup(report, { sourceRevision, sourceTreeSha256, 
   if (report?.sourceRevision !== sourceRevision || report?.sourceTreeSha256 !== sourceTreeSha256) failures.push("evidence-source-stale-or-mismatched");
   if (!Number.isFinite(Date.parse(report?.startedAt)) || !Number.isFinite(Date.parse(report?.completedAt)) || Date.parse(report.completedAt) < Date.parse(report.startedAt) || Date.parse(report.completedAt) > now) failures.push("evidence-time-invalid");
   if (report?.verdict !== "pass") failures.push("report-verdict-not-pass");
-  failures.push(...predecessorContextFailures(report?.predecessorContexts, { sourceRevision, sourceTreeSha256 }));
+  failures.push(...predecessorContextFailures(report?.predecessorContexts, { sourceTreeSha256 }));
   const formatRows = Array.isArray(report?.formats) ? report.formats : [];
   const actualCounts = {
     executed: formatRows.filter((item) => item?.executed === true).length,

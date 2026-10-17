@@ -94,13 +94,15 @@ test("rejects evidence whose source is outside the evaluated history", () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("rejects ancestor evidence without an exact evaluated source identity", () => {
-  const root = fixture({ 3: valid(3, { sourceRevision: "a".repeat(40) }) });
+test("accepts ancestor evidence when its source tree matches the evaluated tree", () => {
+  const ancestorEvidence = valid(3, { sourceRevision: "a".repeat(40) });
+  ancestorEvidence.realServiceScope.sourceRevision = "a".repeat(40);
+  const root = fixture({ 3: ancestorEvidence });
   try {
     const result = evaluate(root, { isAncestor: () => true });
-    const reasons = result.blockers.find((phase) => phase.phase === 3).reasons;
-    assert.ok(reasons.includes("source-revision-mismatch"));
-    assert.equal(result.phases.find((phase) => phase.phase === 3).accepted, false);
+    const reasons = result.blockers.find((phase) => phase.phase === 3)?.reasons ?? [];
+    assert.equal(reasons.includes("source-revision-mismatch"), false);
+    assert.equal(result.phases.find((phase) => phase.phase === 3).accepted, true);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

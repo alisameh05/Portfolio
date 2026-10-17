@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -153,7 +154,7 @@ test("integration diagnostics retain only known Media codes and CV criterion IDs
   assert.doesNotMatch(JSON.stringify(result), /fixture-secret|MEDIA_PRIVATE_SECRET|token=/u);
 });
 
-function passingReport() {
+function passingReport(predecessorContextsOverride, sourceRevision = "abc", sourceTreeSha256 = "tree") {
   const phase5RunId = "90000000-0000-4000-8000-000000000005";
   const phase5ContextRunId = "90000000-0000-4000-8000-000000000006";
   const predecessorContexts = {
@@ -174,17 +175,19 @@ function passingReport() {
       ...PHASE6_PREDECESSOR_CONTEXTS.phase5,
       contextRunId: phase5RunId,
       gateTicket: 125,
-      sourceRevision: "abc",
-      sourceTreeSha256: "tree",
+      sourceRevision: sourceRevision === "abc" ? "a".repeat(40) : sourceRevision,
+      sourceTreeSha256,
       contextVerdict: "pass",
       contextTicket: 107,
       contextPhase: "phase5",
       contextEvidenceRunId: phase5ContextRunId,
-      contextSourceRevision: "abc",
-      contextSourceTreeSha256: "tree",
+      contextSourceRevision: sourceRevision === "abc" ? "a".repeat(40) : sourceRevision,
+      contextSourceTreeSha256: sourceTreeSha256,
       contextArtifactRunId: phase5ContextRunId,
-      contextArtifactSourceRevision: "abc",
-      contextArtifactSourceTreeSha256: "tree",
+      contextArtifactSourceRevision: sourceRevision === "abc" ? "a".repeat(40) : sourceRevision,
+      contextArtifactSourceTreeSha256: sourceTreeSha256,
+      contextArtifactSha256: "c".repeat(64),
+      contextEvidenceSha256: "c".repeat(64),
       contextGateRunId: phase5RunId,
       contextRequiredRunId: phase5RunId,
       contextArtifactFresh: true,
@@ -195,11 +198,11 @@ function passingReport() {
     activationDifferences: PHASE6_PREDECESSOR_CONTEXTS.activationDifferences,
   };
   return makePhase6Report({
-    sourceRevision: "abc", sourceTreeSha256: "tree", runtime: { node: "v24.21.0", npm: "11.19.0" },
+    sourceRevision, sourceTreeSha256, runtime: { node: "v24.21.0", npm: "11.19.0" },
     startedAt: new Date(Date.now() - 60_000).toISOString(), tools: Object.fromEntries(Object.keys(PHASE6_TOOL_DEFINITIONS).map((name) => [name, `tool-${name}`])),
     services: { postgres: { available: true, executionCount: 3, independentConnections: 2 }, auth: { available: true, executionCount: 1 }, storage: { available: true, privateBucketVerified: true, executionCount: 20 } },
     formats: PHASE6_FORMATS.map((item) => ({ id: item.id, executed: true, status: "passed", storageRoundTrip: true, scannerVerdict: "clean", processorVersion: `tool-${item.processor}` })),
-    cleanup: { attempted: true, success: true }, failures: [], predecessorContexts,
+    cleanup: { attempted: true, success: true }, failures: [], predecessorContexts: predecessorContextsOverride ?? predecessorContexts,
   });
 }
 
@@ -222,17 +225,7 @@ test("loads predecessor contexts from an explicit evidence root", () => {
         depcruiseResults: Array.from({ length: 2 }, () => ({ rejected: true })),
       },
     }));
-    writeFileSync(join(evidenceRoot, "phase-5-gate-report.json"), JSON.stringify({
-      ticket: 125,
-      runId: "90000000-0000-4000-8000-000000000005",
-      sourceRevision: "a".repeat(40),
-      sourceTreeSha256: "b".repeat(64),
-      verdict: "pass",
-      evidenceArtifacts: [{ path: "evidence/phase-5-context.json", runId: "90000000-0000-4000-8000-000000000006",
-        gateRunId: "90000000-0000-4000-8000-000000000005", requiredRunId: "90000000-0000-4000-8000-000000000005",
-        sourceRevision: "a".repeat(40), sourceTreeSha256: "b".repeat(64), fresh: true }],
-    }));
-    writeFileSync(join(evidenceRoot, "phase-5-context.json"), JSON.stringify({
+    const phase5Context = JSON.stringify({
       ticket: 107,
       phase: "phase5",
       runId: "90000000-0000-4000-8000-000000000006",
@@ -241,7 +234,19 @@ test("loads predecessor contexts from an explicit evidence root", () => {
       operations: { public: 5, owner: 48, forbiddenFindings: 0 },
       runtimeBoundary: "pass",
       runtimeArchitecture: "pass",
+    });
+    writeFileSync(join(evidenceRoot, "phase-5-gate-report.json"), JSON.stringify({
+      ticket: 125,
+      runId: "90000000-0000-4000-8000-000000000005",
+      sourceRevision: "a".repeat(40),
+      sourceTreeSha256: "b".repeat(64),
+      verdict: "pass",
+      evidenceArtifacts: [{ path: "evidence/phase-5-context.json", runId: "90000000-0000-4000-8000-000000000006",
+        gateRunId: "90000000-0000-4000-8000-000000000005", requiredRunId: "90000000-0000-4000-8000-000000000005",
+        sourceRevision: "a".repeat(40), sourceTreeSha256: "b".repeat(64),
+        sha256: createHash("sha256").update(phase5Context).digest("hex"), fresh: true }],
     }));
+    writeFileSync(join(evidenceRoot, "phase-5-context.json"), phase5Context);
 
     const contexts = loadPhase6PredecessorContexts(root);
     assert.equal(contexts.phase4.contextVerdict, "pass");
@@ -249,6 +254,15 @@ test("loads predecessor contexts from an explicit evidence root", () => {
     assert.equal(contexts.phase5.contextRunId, "90000000-0000-4000-8000-000000000005");
     assert.equal(contexts.phase5.contextEvidenceRunId, "90000000-0000-4000-8000-000000000006");
     assert.equal(contexts.phase5.contextGateRunId, contexts.phase5.contextRunId);
+
+    const report = passingReport(contexts, "a".repeat(40), "b".repeat(64));
+    assert.equal(evaluatePhase6Setup(report, { sourceRevision: "a".repeat(40), sourceTreeSha256: "b".repeat(64), now: Date.now() + 60_000 }).verdict, "pass");
+
+    writeFileSync(join(evidenceRoot, "phase-5-context.json"), `${phase5Context} `);
+    const tamperedReport = passingReport(loadPhase6PredecessorContexts(root), "a".repeat(40), "b".repeat(64));
+    const tampered = evaluatePhase6Setup(tamperedReport, { sourceRevision: "a".repeat(40), sourceTreeSha256: "b".repeat(64), now: Date.now() + 60_000 });
+    assert.equal(tampered.verdict, "fail");
+    assert.ok(tampered.failures.includes("phase5-run-provenance-invalid"));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -335,12 +349,14 @@ test("predecessor assertions require source-bound Phase 4 and current Phase 5 ru
 });
 
 test("Phase 6 rejects stale or detached Phase 5 context evidence", () => {
-  const report = passingReport();
-  report.predecessorContexts.phase5.contextArtifactFresh = false;
-  report.predecessorContexts.phase5.contextGateRunId = "90000000-0000-4000-8000-000000000099";
-  const result = evaluatePhase6Setup(report, { sourceRevision: "abc", sourceTreeSha256: "tree", now: Date.now() + 60_000 });
-  assert.equal(result.verdict, "fail");
-  assert.ok(result.failures.includes("phase5-run-provenance-invalid"));
+  for (const [field, value] of [["contextArtifactFresh", false], ["contextGateRunId", "90000000-0000-4000-8000-000000000099"],
+    ["contextRequiredRunId", "90000000-0000-4000-8000-000000000099"], ["contextArtifactRunId", "90000000-0000-4000-8000-000000000099"]]) {
+    const report = passingReport();
+    report.predecessorContexts.phase5[field] = value;
+    const result = evaluatePhase6Setup(report, { sourceRevision: "abc", sourceTreeSha256: "tree", now: Date.now() + 60_000 });
+    assert.equal(result.verdict, "fail", `${field} must be bound to the Phase 5 gate run`);
+    assert.ok(result.failures.includes("phase5-run-provenance-invalid"));
+  }
 });
 
 test("future acceptance tests have deterministic time and UUIDv7 identity factories", () => {
