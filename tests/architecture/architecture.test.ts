@@ -157,6 +157,12 @@ describe("Architecture Checker Dependency Rules Enforcement", () => {
     expect(result.output).toContain("no-generated-code-leakage");
   });
 
+  it("rejects runtime HTTP imports from module application code", () => {
+    const result = runDepcruise("tests/fixtures/invalid-deps/module-http-leakage");
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("no-runtime-http-in-module-application");
+  });
+
   it("rejects deep-cross-module-import fixture with rule: no-deep-cross-module-import", () => {
     const result = runDepcruise("tests/fixtures/invalid-deps/deep-cross-module-import");
     expect(result.ok).toBe(false);

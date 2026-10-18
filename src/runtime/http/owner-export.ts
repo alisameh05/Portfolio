@@ -13,12 +13,12 @@
  * application interface once; validate and serialize the declared response;
  * complete request logging.
  *
- * The download operation exercises only the declared response shape: the
- * injected fake supplies an in-memory package payload with its versioned
- * filename and export schema version, and the adapter returns it as the
- * declared `application/vnd.shipwithali.owner-export+zip` binary response
- * with `Content-Disposition` and `X-ShipWithAli-Export-Schema-Version`
- * headers. The adapter never accesses storage and never emits signed URLs;
+ * The download operation consumes a bounded provider-neutral byte stream
+ * with its versioned filename and schema version, and the adapter returns it
+ * as the declared `application/vnd.shipwithali.owner-export+zip` binary
+ * response with `Content-Disposition` and
+ * `X-ShipWithAli-Export-Schema-Version` headers. The adapter never accesses
+ * storage and never emits signed URLs;
  * export generation, storage, delivery, retention, identity, and
  * authorization behavior remain later-phase work behind provider-neutral
  * application interfaces.
@@ -50,6 +50,17 @@ import type {
   Result,
   StableId,
 } from "../../shared/domain/index.js";
+import { parseStableId } from "../../shared/domain/index.js";
+import { MAX_OWNER_EXPORT_ARTIFACT_BYTES } from "../../modules/portability-operations/index.js";
+import type {
+  DownloadOwnerExportQuery,
+  ExportScope,
+  GetOwnerExportQuery,
+  OwnerExportApplicationService,
+  OwnerExportAuthorizationContext,
+  OwnerExportDownloadView,
+  RequestOwnerExportApplicationCommand,
+} from "../../modules/portability-operations/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
@@ -61,88 +72,23 @@ import {
   transportProblem,
 } from "./problem.js";
 
-// ── Provider-neutral application seam ─────────────────────────────────────────
-
-export type OwnerExportScope =
-  | "portfolio-content"
-  | "taxonomy"
-  | "media-metadata"
-  | "cv-metadata"
-  | "moderation-history"
-  | "analytics-reports"
-  | "portfolio-configuration";
-
-export interface RequestOwnerExportApplicationCommand {
-  readonly actor: ActorContext;
-  readonly idempotencyKey: IdempotencyKey;
-  readonly includedScopes: ReadonlyArray<OwnerExportScope>;
-}
-
-export interface GetOwnerExportQuery {
-  readonly actor: ActorContext;
-  readonly exportId: StableId<string>;
-}
-
-export interface DownloadOwnerExportQuery {
-  readonly actor: ActorContext;
-  readonly exportId: StableId<string>;
-}
-
-export interface OwnerExportRequestReceipt {
-  readonly exportId: StableId<string>;
-  readonly outcome: "owner-export-requested";
-  readonly state: "requested";
-}
-
-export interface RequestedOwnerExportView {
-  readonly exportId: StableId<string>;
-  readonly state: "requested";
-  readonly schemaVersion: string;
-  readonly requestedAt: string;
-  readonly includedScopes: ReadonlyArray<OwnerExportScope>;
-  readonly publicEventDataCoverage: { readonly mode: "excluded" };
-  readonly downloadAvailable: false;
-}
-
-export type OwnerExportView = RequestedOwnerExportView;
-
-/**
- * Provider-neutral download payload.
- *
- * The package content is an in-memory byte sequence supplied by the
- * application fake; the adapter never touches storage and never produces
- * signed URLs. `schemaVersion` follows the documented package-schema
- * version pattern and `filename` is a safe attachment name.
- */
-export interface OwnerExportDownloadView {
-  readonly exportId: StableId<string>;
-  readonly schemaVersion: string;
-  readonly filename: string;
-  readonly content: Uint8Array;
-}
-
-export interface OwnerExportApplicationService {
-  requestOwnerExport(
-    command: RequestOwnerExportApplicationCommand,
-  ): Promise<Result<OwnerExportRequestReceipt, Rejection>>;
-  getOwnerExport(
-    query: GetOwnerExportQuery,
-  ): Promise<Result<OwnerExportView, Rejection>>;
-  downloadOwnerExport(
-    query: DownloadOwnerExportQuery,
-  ): Promise<Result<OwnerExportDownloadView, Rejection>>;
-}
-
 export interface OwnerExportAdapterDeps {
   service: OwnerExportApplicationService;
   security: OwnerRequestSecurity;
+  portfolioId: StableId<"Portfolio">;
   logger?: Logger;
 }
 
 export const OWNER_EXPORT_MEDIA_TYPE = "application/vnd.shipwithali.owner-export+zip";
 const SCHEMA_VERSION_PATTERN = /^[1-9][0-9]*\.[0-9]+$/;
 const FILENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\.zip$/;
-const MAX_DOWNLOAD_BYTES = 25_000_000;
+
+function ownerAuthorizationContext(
+  actor: ActorContext,
+  portfolioId: StableId<"Portfolio">,
+): OwnerExportAuthorizationContext | undefined {
+  return actor.kind === "owner" ? { actor, portfolioId } : undefined;
+}
 
 function requestInstance(request: Request): string {
   try {
@@ -209,6 +155,10 @@ export async function handleRequestOwnerExport(
     if (!guard.ok) {
       return guard.response;
     }
+    const authorization = ownerAuthorizationContext(guard.actor, deps.portfolioId);
+    if (authorization === undefined) {
+      return toRejection({ kind: "forbidden", code: "OWNER_REQUIRED" }, traceId, instance, logger);
+    }
     const headersResult = zRequestOwnerExportHeaders.safeParse({
       "Idempotency-Key": request.headers.get("idempotency-key") ?? undefined,
     });
@@ -223,9 +173,9 @@ export async function handleRequestOwnerExport(
     if (!bodyResult.success) {
       return reject(logger, traceId, instance, "Invalid request body.");
     }
-    const body = bodyResult.data as { includedScopes: OwnerExportScope[] };
+    const body = bodyResult.data as { includedScopes: ExportScope[] };
     const command: RequestOwnerExportApplicationCommand = {
-      actor: guard.actor,
+      ...authorization,
       idempotencyKey: headersResult.data["Idempotency-Key"] as IdempotencyKey,
       includedScopes: [...body.includedScopes],
     };
@@ -238,12 +188,7 @@ export async function handleRequestOwnerExport(
     if (!result.ok) {
       return toRejection(result.error, traceId, instance, logger);
     }
-    const payload = {
-      exportId: result.value.exportId,
-      outcome: result.value.outcome,
-      state: result.value.state,
-    };
-    const parsed = zRequestOwnerExportResponse.safeParse(payload);
+    const parsed = zRequestOwnerExportResponse.safeParse(result.value);
     if (!parsed.success) {
       return internalErrorProblem(
         new Error("Invalid application result"),
@@ -281,16 +226,19 @@ export async function handleGetOwnerExport(
     if (!guard.ok) {
       return guard.response;
     }
+    const authorization = ownerAuthorizationContext(guard.actor, deps.portfolioId);
+    if (authorization === undefined) {
+      return toRejection({ kind: "forbidden", code: "OWNER_REQUIRED" }, traceId, instance, logger);
+    }
     const pathResult = zGetOwnerExportPath.safeParse({
       exportId: params.exportId,
     });
     if (!pathResult.success) {
       return reject(logger, traceId, instance, "Invalid path parameters.");
     }
-    const query: GetOwnerExportQuery = {
-      actor: guard.actor,
-      exportId: pathResult.data.exportId as StableId<string>,
-    };
+    const exportId = parseStableId("OwnerExport", pathResult.data.exportId);
+    if (!exportId.ok) return reject(logger, traceId, instance, "Invalid path parameters.");
+    const query: GetOwnerExportQuery = { ...authorization, exportId: exportId.value };
     let result: Awaited<ReturnType<typeof deps.service.getOwnerExport>>;
     try {
       result = await deps.service.getOwnerExport(query);
@@ -300,16 +248,7 @@ export async function handleGetOwnerExport(
     if (!result.ok) {
       return toRejection(result.error, traceId, instance, logger);
     }
-    const payload = {
-      exportId: result.value.exportId,
-      state: result.value.state,
-      schemaVersion: result.value.schemaVersion,
-      requestedAt: result.value.requestedAt,
-      includedScopes: [...result.value.includedScopes],
-      publicEventDataCoverage: { mode: result.value.publicEventDataCoverage.mode },
-      downloadAvailable: result.value.downloadAvailable,
-    };
-    const parsed = zGetOwnerExportResponse.safeParse(payload);
+    const parsed = zGetOwnerExportResponse.safeParse(result.value);
     if (!parsed.success) {
       return internalErrorProblem(
         new Error("Invalid application result"),
@@ -327,7 +266,7 @@ export async function handleGetOwnerExport(
 
 function isValidDownloadView(
   value: OwnerExportDownloadView,
-  exportId: StableId<string>,
+  exportId: StableId<"OwnerExport">,
 ): boolean {
   if (value.exportId !== exportId) {
     return false;
@@ -338,13 +277,47 @@ function isValidDownloadView(
   if (!FILENAME_PATTERN.test(value.filename)) {
     return false;
   }
-  if (!(value.content instanceof Uint8Array)) {
+  if (!Number.isSafeInteger(value.contentLength) || value.contentLength <= 0 || value.contentLength > MAX_OWNER_EXPORT_ARTIFACT_BYTES) {
     return false;
   }
-  if (value.content.byteLength === 0 || value.content.byteLength > MAX_DOWNLOAD_BYTES) {
+  if (value.content === null || typeof value.content[Symbol.asyncIterator] !== "function") {
     return false;
   }
   return true;
+}
+
+function createBoundedDownloadStream(
+  content: AsyncIterable<Uint8Array>,
+  expectedLength: number,
+): ReadableStream<Uint8Array> {
+  const iterator = content[Symbol.asyncIterator]();
+  let observedLength = 0;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const item = await iterator.next();
+        if (item.done) {
+          if (observedLength !== expectedLength) {
+            controller.error(new Error("Export stream length did not match its descriptor."));
+            return;
+          }
+          controller.close();
+          return;
+        }
+        if (!(item.value instanceof Uint8Array) || observedLength + item.value.byteLength > expectedLength) {
+          controller.error(new Error("Export stream exceeded its declared length."));
+          return;
+        }
+        observedLength += item.value.byteLength;
+        controller.enqueue(item.value.slice());
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    async cancel() {
+      await iterator.return?.();
+    },
+  });
 }
 
 export async function handleDownloadOwnerExport(
@@ -369,17 +342,20 @@ export async function handleDownloadOwnerExport(
     if (!guard.ok) {
       return guard.response;
     }
+    const authorization = ownerAuthorizationContext(guard.actor, deps.portfolioId);
+    if (authorization === undefined) {
+      return toRejection({ kind: "forbidden", code: "OWNER_REQUIRED" }, traceId, instance, logger);
+    }
     const pathResult = zDownloadOwnerExportPath.safeParse({
       exportId: params.exportId,
     });
     if (!pathResult.success) {
       return reject(logger, traceId, instance, "Invalid path parameters.");
     }
-    const exportId = pathResult.data.exportId as StableId<string>;
-    const query: DownloadOwnerExportQuery = {
-      actor: guard.actor,
-      exportId,
-    };
+    const exportIdResult = parseStableId("OwnerExport", pathResult.data.exportId);
+    if (!exportIdResult.ok) return reject(logger, traceId, instance, "Invalid path parameters.");
+    const exportId = exportIdResult.value;
+    const query: DownloadOwnerExportQuery = { ...authorization, exportId };
     let result: Awaited<ReturnType<typeof deps.service.downloadOwnerExport>>;
     try {
       result = await deps.service.downloadOwnerExport(query);
@@ -391,7 +367,7 @@ export async function handleDownloadOwnerExport(
     }
     // The generated binary schema carries no structural validator, so the
     // adapter enforces the declared shape (versioned filename, schema
-    // version, non-empty in-memory payload) before emitting the response.
+    // version, and bounded byte-stream descriptor) before emitting the response.
     // An invalid fake result fails safely instead of emitting an
     // undeclared payload.
     if (!isValidDownloadView(result.value, exportId)) {
@@ -403,8 +379,7 @@ export async function handleDownloadOwnerExport(
       );
     }
     logger?.info("request.completed", { traceId, status: 200 });
-    const payload = result.value.content.slice();
-    return new Response(payload, {
+    return new Response(createBoundedDownloadStream(result.value.content, result.value.contentLength), {
       status: 200,
       headers: {
         "content-type": OWNER_EXPORT_MEDIA_TYPE,

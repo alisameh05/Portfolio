@@ -1,6 +1,12 @@
+/**
+ * Portability and Operations ports are declared beside their consuming
+ * application interfaces and re-exported by the module public barrel.
+ * Provider adapters must implement only the ports needed by an accepted
+ * vertical slice.
+ */
 export type {
-  ExportRepositoryPort,
-  OutboxRepositoryPort,
-  JobRepositoryPort,
-  ModuleDataReaderPort,
-} from "./repository.js";
+  ModuleOwnedSnapshotReader,
+  OperationsObservationPort,
+  OwnerExportObjectReadPort,
+  OwnerExportSnapshotReaders,
+} from "../application/index.js";

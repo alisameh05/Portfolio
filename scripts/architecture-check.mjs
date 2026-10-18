@@ -83,6 +83,11 @@ const FIXTURE_SUITES = [
     expectedRule: "no-generated-code-leakage",
   },
   {
+    name: "Runtime HTTP leakage fixture",
+    path: "tests/fixtures/invalid-deps/module-http-leakage",
+    expectedRule: "no-runtime-http-in-module-application",
+  },
+  {
     name: "Deep cross-module import fixture",
     path: "tests/fixtures/invalid-deps/deep-cross-module-import",
     expectedRule: "no-deep-cross-module-import",

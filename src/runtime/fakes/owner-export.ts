@@ -14,16 +14,17 @@
  */
 
 import type { Rejection, StableId } from "../../shared/domain/index.js";
+import { unsafeStableId } from "../../shared/domain/index.js";
 import type {
   DownloadOwnerExportQuery,
+  ExportScope,
   GetOwnerExportQuery,
   OwnerExportApplicationService,
   OwnerExportDownloadView,
   OwnerExportRequestReceipt,
-  OwnerExportScope,
   OwnerExportView,
   RequestOwnerExportApplicationCommand,
-} from "../http/owner-export.js";
+} from "../../modules/portability-operations/index.js";
 
 export type OwnerExportFakeMode =
   | { readonly type: "success" }
@@ -42,12 +43,12 @@ export const OWNER_EXPORT_ID = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ee0";
 export const OWNER_EXPORT_SCHEMA_VERSION = "1.0";
 export const OWNER_EXPORT_FILENAME = "shipwithali-owner-export-1.0.zip";
 
-const DEFAULT_SCOPES: ReadonlyArray<OwnerExportScope> = [
+const DEFAULT_SCOPES: ReadonlyArray<ExportScope> = [
   "portfolio-content",
   "taxonomy",
 ];
 
-function requestedView(exportId: StableId<string>): OwnerExportView {
+function requestedView(exportId: StableId<"OwnerExport">): OwnerExportView {
   return {
     exportId,
     state: "requested",
@@ -59,13 +60,13 @@ function requestedView(exportId: StableId<string>): OwnerExportView {
   };
 }
 
-function invalidRequestedView(exportId: StableId<string>): OwnerExportView {
+function invalidRequestedView(exportId: StableId<"OwnerExport">): OwnerExportView {
   return {
-    exportId: "not-a-uuid" as unknown as StableId<string>,
+    exportId: "not-a-uuid" as unknown as StableId<"OwnerExport">,
     state: "requested",
     schemaVersion: "not-a-version",
     requestedAt: "not-a-datetime",
-    includedScopes: [],
+    includedScopes: [] as unknown as ExportScope[],
     publicEventDataCoverage: { mode: "excluded" },
     downloadAvailable: false,
   };
@@ -73,7 +74,7 @@ function invalidRequestedView(exportId: StableId<string>): OwnerExportView {
 
 function receipt(exportId: string): OwnerExportRequestReceipt {
   return {
-    exportId: exportId as StableId<string>,
+    exportId: unsafeStableId<"OwnerExport">(exportId),
     outcome: "owner-export-requested",
     state: "requested",
   };
@@ -81,29 +82,32 @@ function receipt(exportId: string): OwnerExportRequestReceipt {
 
 function invalidReceipt(): OwnerExportRequestReceipt {
   return {
-    exportId: "not-a-uuid" as unknown as StableId<string>,
+    exportId: "not-a-uuid" as unknown as StableId<"OwnerExport">,
     outcome: "owner-export-requested",
     state: "requested",
   };
 }
 
-function downloadView(exportId: StableId<string>): OwnerExportDownloadView {
+function downloadView(exportId: StableId<"OwnerExport">): OwnerExportDownloadView {
+  const bytes = new TextEncoder().encode(
+    `{"packageFormat":"shipwithali-owner-export","schemaVersion":"${OWNER_EXPORT_SCHEMA_VERSION}","exportId":"${exportId}"}`,
+  );
   return {
     exportId,
     schemaVersion: OWNER_EXPORT_SCHEMA_VERSION,
     filename: OWNER_EXPORT_FILENAME,
-    content: new TextEncoder().encode(
-      `{"packageFormat":"shipwithali-owner-export","schemaVersion":"${OWNER_EXPORT_SCHEMA_VERSION}","exportId":"${exportId}"}`,
-    ),
+    contentLength: bytes.byteLength,
+    content: (async function* () { yield bytes; })(),
   };
 }
 
-function invalidDownloadView(exportId: StableId<string>): OwnerExportDownloadView {
+function invalidDownloadView(exportId: StableId<"OwnerExport">): OwnerExportDownloadView {
   return {
-    exportId: "not-a-uuid" as unknown as StableId<string>,
+    exportId: "not-a-uuid" as unknown as StableId<"OwnerExport">,
     schemaVersion: "not-a-version",
     filename: "https://storage.example/signed?token=tok_123",
-    content: new Uint8Array(0),
+    contentLength: 0,
+    content: (async function* () {})(),
   };
 }
 
