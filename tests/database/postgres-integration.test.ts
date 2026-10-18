@@ -22,9 +22,9 @@ if (process.env["PHASE3_REQUIRE_DATABASE"] === "1" && !DATABASE_URL) {
 }
 
 const describeDatabase = DATABASE_URL === undefined ? describe.skip : describe;
-const NOW = "2026-09-22T12:00:00.000Z";
-const LATER = "2026-09-22T12:01:00.000Z";
-const AFTER_LATER = "2026-09-22T12:02:00.000Z";
+const NOW = new Date(Date.now() - 5_000).toISOString();
+const LATER = new Date(Date.parse(NOW) + 60_000).toISOString();
+const AFTER_LATER = new Date(Date.parse(NOW) + 120_000).toISOString();
 const EVENT_A = "018f4f7d-0000-7000-8000-000000000001";
 const EVENT_B = "018f4f7d-0000-7000-8000-000000000002";
 const EVENT_C = "018f4f7d-0000-7000-8000-000000000003";
@@ -462,6 +462,8 @@ describeDatabase("PostgreSQL production adapters (#48-#52)", () => {
     const event = eventsOne[0] ?? eventsTwo[0];
     expect(event?.eventId).toBe(EVENT_D);
     expect(await store.outbox.complete(EVENT_D, "stale-token", LATER)).toBe(false);
+    await sql`update operations.outbox_events set lease_expires_at = clock_timestamp() - interval '1 second'
+      where event_id = ${EVENT_D}::uuid`.execute(first.database);
     const reclaimedEvent = await secondStore.outbox.claimDue({
       ...claim,
       now: LATER,
@@ -503,6 +505,8 @@ describeDatabase("PostgreSQL production adapters (#48-#52)", () => {
     expect(jobsOne[0]?.jobId).toBe(JOB_A);
     expect(jobsTwo).toHaveLength(0);
     expect(await store.jobs.release(JOB_A, "stale-token")).toBe(false);
+    await sql`update operations.jobs set lease_expires_at = clock_timestamp() - interval '1 second'
+      where job_id = ${JOB_A}::uuid`.execute(first.database);
     const reclaimed = await secondStore.jobs.claimDue({ ...claim, now: LATER, workerId: "worker-two" });
     expect(reclaimed).toHaveLength(1);
     expect(reclaimed[0]?.leaseToken).not.toBe(jobsOne[0]?.leaseToken);
@@ -541,7 +545,7 @@ describeDatabase("PostgreSQL production adapters (#48-#52)", () => {
     const remainingId = remaining?.jobId ?? "";
     const remainingToken = remaining?.leaseToken ?? "";
     expect(
-      await secondStore.jobs.fail(remainingId, remainingToken, parseSafeErrorCode("HANDLER_TIMEOUT")),
+      await secondStore.jobs.scheduleRetry(remainingId, remainingToken, parseSafeErrorCode("HANDLER_TIMEOUT"), 0),
     ).toBe(true);
     const afterFail = await store.jobs.claimDue({ ...claim, workerId: "worker-three" });
     expect(afterFail.map((job) => job.jobId)).toEqual([remainingId]);
@@ -552,6 +556,8 @@ describeDatabase("PostgreSQL production adapters (#48-#52)", () => {
     );
 
     const crashToken = afterFail[0]?.leaseToken ?? "";
+    await sql`update operations.jobs set lease_expires_at = clock_timestamp() - interval '1 second'
+      where job_id = ${remainingId}::uuid`.execute(first.database);
     const recovered = await secondStore.jobs.claimDue({
       ...claim,
       now: LATER,

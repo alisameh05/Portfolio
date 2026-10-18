@@ -138,6 +138,10 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     // Simulate a worker crash after its PostgreSQL effect committed and before lease completion.
     await admin!.query("update operations.jobs set lease_expires_at=clock_timestamp() - interval '1 second' where job_id=$1", [jobId]);
     const afterExpiry = new Date().toISOString();
+    expect(await firstOperations.jobs.complete(jobId, firstLease.leaseToken, afterExpiry)).toBe(false);
+    expect(await firstOperations.jobs.fail(jobId, firstLease.leaseToken, parseSafeErrorCode("PHASE7_WORK_FAILED"))).toBe(false);
+    expect(await firstOperations.jobs.scheduleRetry(jobId, firstLease.leaseToken, parseSafeErrorCode("PHASE7_WORK_FAILED"), 0)).toBe(false);
+    expect(await firstOperations.jobs.release(jobId, firstLease.leaseToken)).toBe(false);
     const reclaimed = await secondOperations.jobs.claimDue({ ...claimInput, workerId: "worker-two", now: afterExpiry });
     expect(reclaimed).toHaveLength(1);
     expect(reclaimed[0]!.leaseToken).not.toBe(firstLease.leaseToken);
@@ -235,6 +239,8 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     }
     expect((await admin!.query("select available_at > clock_timestamp() as delayed from operations.jobs where job_id=$1", [failedJob.job_id])).rows)
       .toEqual([{ delayed: true }]);
+    expect(await operations.jobs.claimDue({ workerId: "phase7-no-early-retry", now: new Date().toISOString(),
+      leaseDurationSeconds: 30, limit: 1, jobTypes: ["measurement.detail-retention.v1"] })).toHaveLength(0);
     expect(JSON.stringify(failedJob)).not.toContain("PRIVATE_SUBJECT_TOKEN_SHOULD_NOT_PERSIST");
     expect((await admin!.query("select 1 from measurement.public_events where event_id=$1", [expiredEvent])).rows).toHaveLength(1);
     expect((await admin!.query("select stage from measurement.retention_checkpoints where job_id=$1 and work_kind='detail'", [failedJob.job_id])).rows)
@@ -372,5 +378,20 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     expect(unsafe).toMatchObject({ ok: false, error: { kind: "validation", code: "JOB_REDRIVE_PAYLOAD_UNSAFE" } });
     expect((await admin!.query("select status from operations.jobs where job_id=$1", [unsafeJobId])).rows)
       .toEqual([{ status: "dead" }]);
+
+    const failedExportJobId = id("Job");
+    const failedExportId = id("OwnerExport");
+    await admin!.query(`insert into operations.jobs(job_id,job_type,payload_version,payload,available_at,attempt_count,status,last_error_code)
+      values ($1,'portability.export_assembly.v1',1,$2::jsonb,clock_timestamp(),5,'dead','EXPORT_ASSEMBLY_FAILED')`,
+    [failedExportJobId, JSON.stringify({ exportId: failedExportId })]);
+    const exportRedrive = await redriveDeadJob({ jobs: operations.jobs, authorizeOperator: async () => "a".repeat(64),
+      generateJobId: () => id("Job") }, {
+      actor: { kind: "system", jobId: id("Job"), purpose: "operations.redrive" }, originalJobId: failedExportJobId,
+    });
+    expect(exportRedrive).toMatchObject({ ok: false, error: { kind: "validation", code: "JOB_REDRIVE_POLICY_OBSOLETE" } });
+    expect((await admin!.query("select status,attempt_count,payload from operations.jobs where job_id=$1", [failedExportJobId])).rows)
+      .toEqual([{ status: "dead", attempt_count: 5, payload: { exportId: failedExportId } }]);
+    expect((await admin!.query("select count(*)::integer as count from operations.job_redrive_audit where original_job_id=$1", [failedExportJobId])).rows)
+      .toEqual([{ count: 0 }]);
   });
 });

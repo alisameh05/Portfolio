@@ -636,6 +636,29 @@ export interface OperationsIdempotencyRecords {
   status: string;
 }
 
+export interface OperationsIncidents {
+  category: string;
+  first_observed_at: Generated<Timestamp>;
+  incident_id: Generated<string>;
+  incident_key: string;
+  last_observed_at: Generated<Timestamp>;
+  occurrences: Generated<number>;
+  resolved_at: Timestamp | null;
+  safe_error_code: string;
+  severity: string;
+  source_id: string | null;
+}
+
+export interface OperationsJobRedriveAudit {
+  audit_id: Generated<string>;
+  created_at: Generated<Timestamp>;
+  operator_scope_hash: string;
+  original_job_id: string;
+  payload_sha256: string;
+  policy_version: string;
+  replacement_job_id: string;
+}
+
 export interface OperationsJobs {
   attempt_count: Generated<number>;
   available_at: Timestamp;
@@ -659,6 +682,7 @@ export interface OperationsOutboxEvents {
   causation_id: string | null;
   completed_at: Timestamp | null;
   correlation_id: string;
+  dead_at: Timestamp | null;
   event_id: string;
   event_type: string;
   last_error_code: string | null;
@@ -809,6 +833,8 @@ export interface DB {
   "media.upload_intent_commands": MediaUploadIntentCommands;
   "media.upload_intents": MediaUploadIntents;
   "operations.idempotency_records": OperationsIdempotencyRecords;
+  "operations.incidents": OperationsIncidents;
+  "operations.job_redrive_audit": OperationsJobRedriveAudit;
   "operations.jobs": OperationsJobs;
   "operations.outbox_events": OperationsOutboxEvents;
   "portfolio_config.contact_channels": PortfolioConfigContactChannels;

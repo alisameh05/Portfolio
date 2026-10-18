@@ -297,7 +297,7 @@ describe("leased-job store adapter (#52)", () => {
     const stub = stubOperationsDatabase([{ rows: [] }, { rows: [] }, { rows: [] }]);
     const store = createPostgresOperationsPersistence(stub.database);
     expect(Object.keys(store.jobs).sort()).toEqual(
-      ["claimDue", "complete", "enqueue", "fail", "release", "scheduleRetry"].sort(),
+      ["claimDue", "complete", "enqueue", "fail", "getDeadForRedrive", "redriveDead", "release", "scheduleRetry"].sort(),
     );
     const source = JSON.stringify(Object.keys(store.jobs));
     expect(source).not.toMatch(/"schedule"|handle|backoff|alert|dashboard/i);
