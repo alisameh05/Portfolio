@@ -131,19 +131,19 @@ describe("bounded PDF output reads", () => {
     const writer = "import sys; open(sys.argv[1], 'wb').write(b'x' * (2 * 1024 * 1024))";
     // Give this host/container integration probe its own startup budget; production caps stay unchanged.
     try {
-      if (process.platform === "win32") {
-        const limited = runWithBoundedOutput("python3", ["-c", "import sys; open(sys.argv[1], 'wb').write(b'x' * (2 * 1024 * 1024))", path], path,
-          { maxBytes: 8, timeoutMs: 20_000, python: "python3" });
-        if (process.env["PHASE6_PDF_PROCESSOR_IMAGE"] === "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c") {
-          await expect(limited).rejects.toBeDefined();
-          expect((await stat(path)).size).toBeLessThanOrEqual(8);
-        } else {
-          await expect(limited).rejects.toThrow(/MEDIA_PDF_PROCESSOR_UNAVAILABLE|spawn docker/iu);
-        }
+      const limited = runWithBoundedOutput("python3", ["-c", writer, path], path,
+        { maxBytes: 8, timeoutMs: 20_000, python: "python3" });
+      await expect(limited).rejects.toThrow(/MEDIA_PDF_PROCESSOR_UNAVAILABLE|MEDIA_PDF_OUTPUT_INVALID|MEDIA_CONTAINER_CLEANUP_FAILED|spawn docker/iu);
+      // Required container validation must observe real output capped by the
+      // kernel. Plain Node-only hosts certify fail-closed behavior, not limits.
+      if (process.env["PHASE6_PDF_PROCESSOR_IMAGE"] === "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c") {
+        expect((await stat(path)).size).toBe(8);
       } else {
-        await expect(runWithBoundedOutput("python3", ["-c", writer, path], path,
-          { maxBytes: 8, timeoutMs: 20_000, python: "python3" })).rejects.toBeDefined();
-        expect((await stat(path)).size).toBeLessThanOrEqual(8);
+        const output = await stat(path).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return null;
+          throw error;
+        });
+        if (output !== null) expect(output.size).toBeLessThanOrEqual(8);
       }
     } finally {
       await rm(directory, { recursive: true, force: true });

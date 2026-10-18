@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { sourceMetadataAtRevision } from "./phase8-prerequisite-qualification.mjs";
@@ -15,6 +15,25 @@ export const QUALIFICATION_STEPS = Object.freeze([
   ["prerequisite qualification", "scripts/phase8-prerequisite-qualification.mjs"],
 ].map(Object.freeze));
 
+/** Check the real Linux engine before any gate can overwrite acceptance evidence. */
+export function requireQualificationDocker(probe = spawnSync) {
+  const options = { cwd: ROOT, encoding: "utf8", timeout: 15_000, maxBuffer: 16 * 1024, windowsHide: true };
+  const engine = probe("docker", ["info", "--format", "{{.OSType}}"], options);
+  if (engine.error?.code === "ENOENT") {
+    throw new Error("PHASE8_DOCKER_MISSING: Docker is not on PATH. Run qualification on a Docker-capable host; a Node-only cloud runner cannot run real-service gates.");
+  }
+  if (engine.error || engine.status !== 0) {
+    throw new Error("PHASE8_DOCKER_UNAVAILABLE: Start the Linux Docker engine and allow this process to access it, then rerun qualification.");
+  }
+  if (String(engine.stdout ?? "").trim() !== "linux") {
+    throw new Error("PHASE8_DOCKER_LINUX_REQUIRED: Switch Docker Desktop to Linux containers before qualification.");
+  }
+  const compose = probe("docker", ["compose", "version"], options);
+  if (compose.error || compose.status !== 0) {
+    throw new Error("PHASE8_DOCKER_COMPOSE_REQUIRED: Install the Docker Compose plugin or Docker Desktop before qualification.");
+  }
+}
+
 function identity() {
   const revision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
   return { revision, tree: workingTreeSourceSha256(), committedTree: sourceMetadataAtRevision(ROOT, revision).sourceTreeSha256 };
@@ -29,7 +48,9 @@ function execute([, script, ...args]) {
 }
 
 /** Regenerate all evidence on one committed source tree; never reuse a failed gate. */
-export async function qualifyPrerequisites({ getIdentity = identity, run = execute, log = console.log } = {}) {
+export async function qualifyPrerequisites({ checkEnvironment = requireQualificationDocker, getIdentity = identity, run = execute, log = console.log } = {}) {
+  try { checkEnvironment(); }
+  catch (error) { log(error.message); return 1; }
   const expected = getIdentity();
   if (expected.tree !== expected.committedTree) {
     log("Commit the final source changes before qualification. Evidence files may remain uncommitted.");

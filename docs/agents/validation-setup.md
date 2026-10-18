@@ -121,6 +121,21 @@ failure or source change. Docker Desktop must be running with Linux containers.
 Keep the source tree unchanged during the run; generated evidence is excluded
 from its fingerprint and can be committed afterward.
 
+Qualification first checks that Docker is on PATH, its Linux engine is reachable,
+and Compose is installed. Missing Docker, denied engine access, a stopped engine,
+Windows containers or missing Compose stop the command before source inspection
+or any evidence-producing gate. The existing evidence remains untouched. On
+Windows, start Docker Desktop with Linux containers and allow the runner access.
+A Node-only Codex Cloud environment cannot perform this qualification; run the
+same committed branch on a Docker-capable local or CI host. Installing only the
+Docker client does not provide an engine. Never replace this requirement with
+skips or fabricated passing evidence.
+
+The media hard-limit probe checks safe rejection on hosts without Docker. The
+Docker validation `checks` mode explicitly requires the pinned processor image
+and an observed output file within the kernel-enforced size cap; unavailable
+processing cannot pass that real-container assertion.
+
 `npm run phase8:prerequisites` only evaluates existing reports. A
 `source-tree-mismatch` means those reports describe different source, even if
 their original tests passed. Refresh them with `phase8:qualify`; do not edit

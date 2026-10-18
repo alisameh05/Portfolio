@@ -87,13 +87,14 @@ npm run validation:ready
 
 if [ "${1:-phase6}" = checks ]; then
   # The hard-file-limit test must use the actual pinned processor image.
-  docker pull "$(node --input-type=module -e 'import {PHASE6_TOOL_DEFINITIONS as tools} from "./scripts/phase6-verification-support.mjs"; console.log(tools.pdfProcessor)')"
+  pdf_image="$(node --input-type=module -e 'import {PHASE6_TOOL_DEFINITIONS as tools} from "./scripts/phase6-verification-support.mjs"; console.log(tools.pdfProcessor)')"
+  docker pull "$pdf_image"
   npm run test:setup
   npm run test:phase6:verification
   npm run typecheck
   npm run test:arch
   npm run lint
-  ./node_modules/.bin/vitest run tests/runtime/media-processing-tools.test.ts tests/modules/media-processing.test.ts tests/modules/cv-portfolio.test.ts
+  PHASE6_PDF_PROCESSOR_IMAGE="$pdf_image" ./node_modules/.bin/vitest run tests/runtime/media-processing-tools.test.ts tests/modules/media-processing.test.ts tests/modules/cv-portfolio.test.ts
 elif [ "${1:-phase6}" = gate ]; then
   npm run phase6:gate
 elif [ "${1:-phase6}" = media-cv-integration ]; then
