@@ -13,7 +13,13 @@ test("the real CLI with no Docker exits before changing any prerequisite report"
   const root = new URL("../../", import.meta.url);
   const reports = ["phase-3-gate-report.json", "phase-4-gate-report.json", "phase-5-gate-report.json",
     "phase6-gate-report.json", "phase7-gate-report.json", "phase8-prerequisite-qualification.json"];
-  const before = reports.map((name) => readFileSync(new URL(`evidence/${name}`, root)));
+  // A running gate removes its previous report. Missing evidence must stay
+  // missing, just as existing evidence must remain byte-identical.
+  const readReport = (name) => {
+    try { return readFileSync(new URL(`evidence/${name}`, root)); }
+    catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  };
+  const before = reports.map(readReport);
   // Empty PATH means current-directory lookup on POSIX, where docker/ is a
   // directory. Use an actual empty search directory to model a missing binary.
   const emptyPath = mkdtempSync(join(tmpdir(), "phase8-no-docker-"));
@@ -24,7 +30,7 @@ test("the real CLI with no Docker exits before changing any prerequisite report"
     assert.equal(result.status, 1);
     assert.match(result.stdout, /PHASE8_DOCKER_MISSING/u);
     assert.doesNotMatch(result.stdout, /Qualifying Phases|Running Phase/u);
-    reports.forEach((name, index) => assert.deepEqual(readFileSync(new URL(`evidence/${name}`, root)), before[index]));
+    reports.forEach((name, index) => assert.deepEqual(readReport(name), before[index]));
   } finally { rmSync(emptyPath, { recursive: true, force: true }); }
 });
 test("Docker preflight distinguishes missing executable, access, timeout, engine OS and Compose", () => {
