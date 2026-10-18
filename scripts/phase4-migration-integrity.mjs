@@ -50,6 +50,22 @@ export const PHASE5_MIGRATION_COMPATIBILITY = Object.freeze({
   "20261009090000_record_taxonomy_evolution_actor_reason.sql": { stage: "lockstep", priorWriterCompatible: false, boundary: "The new history check requires Owner actor IDs for rename, retire, and merge writes. Deploy the actor-aware #120 writer with this migration and do not keep older actor-less writers online." },
   "20261009100000_index_project_discovery_reads.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds two indexes only; no application contract changes." },
 });
+const PHASE5_MIGRATION_FIRST = "20261005001318_create_content_authoring.sql";
+const PHASE5_MIGRATION_LAST = "20261009100000_index_project_discovery_reads.sql";
+
+export function phase4ReleaseMigrationFiles(files) {
+  return [...files].filter((file) => file.localeCompare(PHASE5_MIGRATION_FIRST) < 0);
+}
+
+export function migrationsAfterPhase5(files) {
+  return [...files].filter((file) => file.localeCompare(PHASE5_MIGRATION_LAST) > 0);
+}
+
+export function roleMembershipContract(rows) {
+  return [...rows]
+    .map(({ role, member, adminOption }) => JSON.stringify([role, member, adminOption]))
+    .sort();
+}
 
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
@@ -79,7 +95,8 @@ export function validatePhase3MigrationSnapshot(snapshot, phase3Files, contentsB
 }
 
 export function assertPhase5MigrationSafety(files, contentsByName, compatibility = PHASE5_MIGRATION_COMPATIBILITY) {
-  const phase5Files = [...files].filter((file) => file.localeCompare("20261005001318_create_content_authoring.sql") >= 0);
+  const phase5Files = [...files].filter((file) =>
+    file.localeCompare(PHASE5_MIGRATION_FIRST) >= 0 && file.localeCompare(PHASE5_MIGRATION_LAST) <= 0);
   if (phase5Files.length === 0) throw new Error("PHASE5_MIGRATIONS_MISSING");
   for (const file of phase5Files) {
     if (!/^\d{14}_[a-z0-9_]+\.sql$/.test(file)) throw new Error("PHASE5_MIGRATION_NAME_INVALID");
@@ -111,7 +128,21 @@ export function assertPhase4SnapshotsEquivalent(clean, upgrade) {
   if (JSON.stringify(stableClean) === JSON.stringify(stableUpgrade)) return;
   const fields = [...new Set([...Object.keys(stableClean), ...Object.keys(stableUpgrade)])]
     .filter((key) => JSON.stringify(stableClean[key]) !== JSON.stringify(stableUpgrade[key]));
-  throw new Error(`PORTFOLIO_SETTINGS_DATABASE_STATE_DIFFER:${fields.join(",")}`);
+  const details = fields
+    .filter((key) => ["grants", "policies", "roleMemberships"].includes(key))
+    .map((key) => {
+      const identity = (row) => key === "grants"
+        ? `${row.schema}.${row.object}:${row.grantee}:${row.privilege}`
+        : key === "policies"
+          ? `${row.schema}.${row.tableName}:${row.name}:${row.roles}:${row.command}`
+          : `${row.role}:${row.member}:${row.adminOption}`;
+      const cleanRows = new Set((stableClean[key] ?? []).map(identity));
+      const upgradeRows = new Set((stableUpgrade[key] ?? []).map(identity));
+      const onlyClean = [...cleanRows].filter((value) => !upgradeRows.has(value)).sort();
+      const onlyUpgrade = [...upgradeRows].filter((value) => !cleanRows.has(value)).sort();
+      return `${key}[clean-only:${onlyClean.join("|")};upgrade-only:${onlyUpgrade.join("|")}]`;
+    });
+  throw new Error(`PORTFOLIO_SETTINGS_DATABASE_STATE_DIFFER:${fields.join(",")}${details.length ? `:${details.join(";")}` : ""}`);
 }
 
 export function assertPhase4ApplicationRls(snapshot) {
@@ -158,7 +189,25 @@ export function assertPhase4ApplicationRls(snapshot) {
     !(grant.schema === "identity_access" && grant.object === "owner_links" && grant.privilege === "SELECT") &&
     !(grant.objectType === "n" && grant.schema === "operations" && grant.privilege === "USAGE") &&
     !(grant.schema === "operations" &&
-      ["idempotency_records", "outbox_events", "jobs"].includes(grant.object) && grant.privilege === "SELECT"),
+      ["idempotency_records", "outbox_events", "jobs"].includes(grant.object) && grant.privilege === "SELECT") &&
+    !(grant.schema === "media" && grant.objectType === "r" && grant.privilege === "SELECT" && new Set([
+      "acceptance_commands",
+      "assets",
+      "decision_history",
+      "processed_objects",
+      "processing_attempt_outputs",
+      "processing_attempt_variants",
+      "processing_attempts",
+      "processing_claims",
+      "processing_commands",
+      "processing_orphans",
+      "processing_states",
+      "rejection_history",
+    ]).has(grant.object)) &&
+    !(grant.schema === "measurement" && grant.objectType === "r" && grant.privilege === "SELECT" && new Set([
+      "daily_aggregates",
+      "daily_aggregate_checkpoints",
+    ]).has(grant.object)),
   );
   if (unauthorizedBackupGrants.length > 0) throw new Error("PHASE4_BACKUP_CONFIGURATION_GRANT");
   const unsafeDefaults = snapshot.defaultPrivileges.filter((grant) =>
@@ -173,6 +222,7 @@ export async function snapshotPhase4Database(connectionString) {
   await client.connect();
   let stage = "schemas";
   try {
+    const serverVersion = await client.query("select version() as version");
     const schemas = await client.query(
       `select n.nspname as name, pg_get_userbyid(n.nspowner) as owner,
               coalesce(n.nspacl::text, '') as acl
@@ -339,6 +389,7 @@ export async function snapshotPhase4Database(connectionString) {
       [CAPABILITY_ROLES],
     );
     const result = {
+      postgresVersion: serverVersion.rows[0]?.version ?? null,
       schemas: schemas.rows,
       roles: roles.rows,
       roleMemberships: roleMemberships.rows,
@@ -379,13 +430,33 @@ export function phase3OperationsContract(snapshot) {
     objects: snapshot.objects.filter((object) => object.schema === "operations"),
     columns: snapshot.columns.filter((column) => column.schema === "operations"),
     constraints: snapshot.constraints.filter((constraint) => constraint.schema === "operations"),
-    policies: snapshot.policies.filter((policy) => policy.schema === "operations"),
-    grants: snapshot.grants.filter((grant) => grant.schema === "operations"),
+    policies: snapshot.policies.filter((policy) =>
+      policy.schema === "operations" &&
+      policy.name !== "measurement_event_jobs_application_insert",
+    ),
+    grants: snapshot.grants.filter((grant) =>
+      grant.schema === "operations" &&
+      !(grant.object === "jobs" && grant.grantee === "shipwithali_application" && grant.privilege === "INSERT"),
+    ),
     defaultPrivileges: snapshot.defaultPrivileges.filter((grant) => grant.schema === "operations"),
     indexes: snapshot.indexes.filter((index) => index.schema === "operations"),
     functions: snapshot.functions.filter((fn) => fn.schema === "operations"),
     triggers: snapshot.triggers.filter((trigger) => trigger.schema === "operations"),
     types: snapshot.types.filter((type) => type.schema === "operations"),
+  };
+}
+
+export function phase4ReleaseContract(snapshot) {
+  return {
+    ...snapshot,
+    roleMemberships: roleMembershipContract(snapshot.roleMemberships ?? []),
+    policies: snapshot.policies.filter((policy) =>
+      !(policy.schema === "operations" && policy.name === "measurement_event_jobs_application_insert"),
+    ),
+    grants: snapshot.grants.filter((grant) =>
+      !(grant.schema === "operations" && grant.object === "jobs" &&
+        grant.grantee === "shipwithali_application" && grant.privilege === "INSERT"),
+    ),
   };
 }
 

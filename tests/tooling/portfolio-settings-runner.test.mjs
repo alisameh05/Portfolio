@@ -1,11 +1,39 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { rmSync } from "node:fs";
+import { isLocalValidationProjectId } from "../../scripts/local-docker-loopback-adapter.mjs";
 import {
+  createProject,
   isolatedConfig,
   localEnvironment,
   requireExecutedTests,
   requirePredecessorTests,
 } from "../../scripts/portfolio-settings-integration.mjs";
+import { migrationsAfterPhase5, phase4ReleaseMigrationFiles } from "../../scripts/phase4-migration-integrity.mjs";
+
+test("settings project identities fit the CLI's 40-character container identity limit", () => {
+  for (const kind of ["clean", "upgrade"]) {
+    const project = createProject(`settings-${kind}`, 57320, []);
+    try {
+      assert.ok(project.projectId.length <= 40, `${kind} identity is truncated by the CLI`);
+      assert.ok(isLocalValidationProjectId(project.projectId));
+    } finally { rmSync(project.workdir, { recursive: true, force: true }); }
+  }
+});
+
+test("Phase 5 upgrade history applies Phase 4, Phase 5, then dependent later migrations", () => {
+  const files = [
+    "20260922170000_prepare_migration_capability.sql",
+    "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+    "20261005001318_create_content_authoring.sql",
+    "20261009100000_index_project_discovery_reads.sql",
+    "20261010100000_create_private_media_upload_intents.sql",
+    "20261012020000_index_current_visible_media_references.sql",
+  ];
+
+  assert.deepEqual(phase4ReleaseMigrationFiles(files), files.slice(0, 2));
+  assert.deepEqual(migrationsAfterPhase5(files), files.slice(4));
+});
 
 test("the settings runner isolates both Supabase projects to distinct loopback port ranges", () => {
   const source = 'project_id = "shipwithali-portfolio"\n[api]\nport = 54321\n[db]\nport = 54322\nshadow_port = 54320\n[studio]\nport = 54323\n[local_smtp]\nport = 54324\n[analytics]\nport = 54327\n[db.pooler]\nport = 54329\n';

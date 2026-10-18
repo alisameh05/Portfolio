@@ -96,6 +96,12 @@ describe("Phase 3 operations persistence migration (#50-#53)", () => {
     ).toEqual(["operations.report(text)"]);
     expect(
       findUnrevokedFunctions(
+        `create function measurement.checkpoint(target_portfolio uuid, target_day date) returns void language sql as 'select';
+         revoke all on function measurement.checkpoint(uuid, date) from public, anon, authenticated;`,
+      ),
+    ).toEqual([]);
+    expect(
+      findUnrevokedFunctions(
         `create function alpha.report() returns integer language sql immutable as 'select 1';
          create function beta.report() returns integer language sql immutable as 'select 1';
          revoke all on function alpha.report() from public, anon, authenticated;`,

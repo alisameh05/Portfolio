@@ -206,3 +206,18 @@ The wrapper removes remote credential variables before invoking the project-loca
 CLI. Successful commands emit fixed summaries rather than provider output. A
 failure reports a stable local diagnostic code while suppressing raw CLI output,
 which can contain generated database passwords and connection strings.
+## Completion-gate isolation
+
+`npm run phase3:gate` copies the full checked-in migration chain and non-secret
+seed into its own temporary Supabase project with a unique bounded identifier
+and loopback port range. Start, reset, status and stop target that project; the
+gate removes its owned services, volumes and temporary directory. The regular
+`db:*` commands continue to target the configured developer stack.
+
+The disposable migration bootstrap creates capability roles with the normal
+local administrator, then elevates only that administrator while applying the
+historical migration suffix requiring privileged ownership changes. It verifies
+the exact container/project identity and actual loopback-only published ports,
+and restores the original privilege even
+when migration application fails. This local fixture does not establish managed
+Supabase deployment compatibility.

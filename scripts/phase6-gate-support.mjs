@@ -287,9 +287,18 @@ export function evaluatePhase6Gate({ runId, startedAt, sourceRevision, sourceTre
       serviceEvidence?.testRun?.exitStatus !== 0 || serviceEvidence?.testRun?.failed !== 0 || serviceEvidence?.testRun?.skipped !== 0 || serviceEvidence?.testRun?.total < 1) {
     failures.push("integrated-scenario-execution-counts-invalid");
   }
-  if (services?.scanner?.version !== PHASE6_TOOL_DEFINITIONS.scanner ||
-      services?.processors?.pdf?.version !== PHASE6_TOOL_DEFINITIONS.pdfProcessor ||
-      services?.processors?.video?.version !== PHASE6_TOOL_DEFINITIONS.videoProcessor ||
+  const setupTools = artifactsById.get("setup")?.evidenceBinding;
+  const observedTools = serviceEvidence?.toolVersions;
+  const pinnedToolsMatch = Object.entries(PHASE6_TOOL_DEFINITIONS).every(([key, definition]) =>
+    setupTools?.toolDefinitions?.[key] === definition &&
+    typeof setupTools?.toolVersions?.[key] === "string" && setupTools.toolVersions[key].trim().length > 0 &&
+    setupTools.toolVersions[key] !== definition &&
+    observedTools?.[key] === setupTools.toolVersions[key]);
+  if (!pinnedToolsMatch ||
+      services?.scanner?.version !== observedTools?.scanner ||
+      services?.processors?.pdf?.version !== observedTools?.pdfProcessor ||
+      services?.processors?.video?.version !== observedTools?.videoProcessor ||
+      services?.processors?.image?.version !== observedTools?.sharp ||
       typeof services?.processors?.image?.version !== "string" || !services.processors.image.version.startsWith("sharp-") ||
       !String(serviceEvidence?.principalScope?.database ?? "").includes("shipwithali_application") ||
       !String(serviceEvidence?.principalScope?.auth ?? "").includes("loopback Supabase Auth") ||

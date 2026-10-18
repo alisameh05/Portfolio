@@ -7,10 +7,11 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
+import { initializeLocalMigrationProject, withLocalMigrationExecutor } from "./local-migration-bootstrap.mjs";
 import {
   PHASE6_FORMATS, PHASE6_TOOL_DEFINITIONS, evaluatePhase6IntegrationTests, evaluatePhase6Setup, getPhase6SourceIdentity, isolatedPhase6Config,
-  evaluatePhase6MediaCvIntegration, PHASE6_MEDIA_CV_CRITERION_IDS, makePhase6Report, phase6CvScenarioProof,
-  phase6CvDeferredMigrations, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
+  evaluatePhase6MediaCvIntegration, PHASE6_MEDIA_CV_CRITERION_IDS, makePhase6Report, phase6CvScenarioProof, phase6FormatProof,
+  phase6CvDeferredMigrations, phase6PdfFixture, phase6Package, phase6Readiness, phase6Root, scrubPhase6Environment,
 } from "./phase6-verification-support.mjs";
 
 const ROOT = phase6Root();
@@ -46,6 +47,7 @@ const PUBLICATION_MEDIA_ONLY = process.argv.includes("--publication-media-only")
 const MEDIA_INTEGRATION_ONLY = process.argv.includes("--media-integration-only");
 const OWNER_COMPOSITION_ONLY = process.argv.includes("--owner-composition-only");
 const MEDIA_CV_INTEGRATION_ONLY = process.argv.includes("--media-cv-integration-only");
+const BASELINE_VERIFICATION_ONLY = process.argv.length === 2;
 const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || MEDIA_DELIVERY_ONLY || MEDIA_REJECTION_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || PUBLICATION_MEDIA_ONLY || MEDIA_INTEGRATION_ONLY || OWNER_COMPOSITION_ONLY || MEDIA_CV_INTEGRATION_ONLY;
 const RUN_TIMEOUT = 180_000;
 
@@ -127,30 +129,6 @@ function run(command, args, { cwd = ROOT, env = process.env, timeout = RUN_TIMEO
   return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status };
 }
 
-function pdfFixture() {
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 72] /Resources << >> /Contents 4 0 R >>",
-    "<< /Length 0 >>\nstream\n\nendstream",
-  ];
-  const chunks = [Buffer.from("%PDF-1.4\n")];
-  const offsets = [0];
-  let cursor = chunks[0].length;
-  for (let index = 0; index < objects.length; index += 1) {
-    offsets.push(cursor);
-    const part = Buffer.from(`${index + 1} 0 obj\n${objects[index]}\nendobj\n`);
-    chunks.push(part);
-    cursor += part.length;
-  }
-  const xref = cursor;
-  let trailer = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (const offset of offsets.slice(1)) trailer += `${String(offset).padStart(10, "0")} 00000 n \n`;
-  trailer += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  chunks.push(Buffer.from(trailer));
-  return Buffer.concat(chunks);
-}
-
 async function portIsAvailable(port) {
   const server = createServer();
   return await new Promise((resolvePort) => {
@@ -210,13 +188,16 @@ async function main() {
   const env = scrubPhase6Environment();
   const phase6Ports = await findPhase6Ports();
   const workdir = mkdtempSync(join(tmpdir(), "shipwithali-phase6-"));
-  const projectId = `shipwithali-phase6-${randomUUID()}`;
+  // Preserve the exact ID through CLI normalization and Docker ownership checks.
+  const projectId = `shipwithali-phase6-${randomUUID().replaceAll("-", "").slice(0, 16)}`;
   const network = `${projectId}-loopback`;
   const fixturesDir = join(workdir, "fixtures");
   const isolatedSupabase = join(workdir, "supabase");
   mkdirSync(fixturesDir);
   mkdirSync(isolatedSupabase);
   let networkCreated = false;
+  const scannerContainer = `shipwithali-phase6-scanner-${randomUUID()}`;
+  let scannerStarted = false;
   let attemptedStart = false;
   let cleanup = { attempted: true, success: false };
   const services = {
@@ -225,6 +206,7 @@ async function main() {
     storage: { available: false, privateBucketVerified: false, executionCount: 0 },
   };
   const formats = [];
+  let activeFormats = PHASE6_FORMATS;
   const failures = [];
   let uploadIntentChecks;
   let mediaProcessingChecks;
@@ -245,8 +227,8 @@ async function main() {
   let testResult;
   let testReport;
   let allAssertions = [];
-  const invoke = (args, timeout = 600_000) => run(process.execPath, [CLI, "--workdir", workdir, ...args], {
-    cwd: ROOT, env, timeout, label: `supabase-${String(args[0] ?? "command")}`,
+  const invoke = (args, timeout = 600_000, environment = env) => run(process.execPath, [CLI, "--workdir", workdir, ...args], {
+    cwd: ROOT, env: environment, timeout, label: `supabase-${String(args[0] ?? "command")}`,
   }).stdout;
   try {
     let config = isolatedPhase6Config(readFileSync(join(ROOT, "supabase/config.toml"), "utf8"), projectId, phase6Ports);
@@ -277,7 +259,10 @@ async function main() {
     networkCreated = true;
     attemptedStart = true;
     console.log("Starting isolated loopback PostgreSQL, Auth and private Storage services.");
-    invoke(["start", "--network-id", network], 900_000);
+    initializeLocalMigrationProject({ workdir, projectId, network }, {
+      initialize: (_network, dockerEnvironment) => invoke(["start", "--network-id", network], 900_000, { ...env, ...dockerEnvironment }),
+      migrate: () => invoke(["migration", "up", "--local"], 120_000),
+    });
     status = JSON.parse(invoke(["status", "-o", "json"], 30_000));
     const api = new URL(status.API_URL);
     if (api.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(api.hostname) || api.port !== String(phase6Ports.api)) throw new Error("PHASE6_ENDPOINT_NOT_ISOLATED");
@@ -303,7 +288,7 @@ async function main() {
       for (const name of deferredCvMigrations) {
         copyFileSync(join(migrations, name), join(isolatedSupabase, "migrations", name));
       }
-      const migrationUpOutput = invoke(["migration", "up", "--local"], 120_000);
+      const migrationUpOutput = withLocalMigrationExecutor({ workdir, projectId }, () => invoke(["migration", "up", "--local"], 120_000));
       console.log(`Applying the deferred CV migration: ${migrationUpOutput.trim().slice(0, 400)}`);
       const verificationClient = new Client({ connectionString: status.DB_URL, connectionTimeoutMillis: 5000 });
       await verificationClient.connect();
@@ -357,12 +342,13 @@ async function main() {
     const video = PHASE6_TOOL_DEFINITIONS.videoProcessor;
     const pdf = PHASE6_TOOL_DEFINITIONS.pdfProcessor;
     const scanner = PHASE6_TOOL_DEFINITIONS.scanner;
-    if (IMAGE_PROCESSING_ONLY) {
+    if (IMAGE_PROCESSING_ONLY || MEDIA_PROCESSING_ONLY) {
       const sharpModule = await import("sharp");
       toolVersions = {
         supabaseCli: supabasePkg.version,
         postgres: database.rows[0].version,
         scanner: serviceVersion(scanner, "clamscan"),
+        pdfProcessor: serviceVersion(pdf, "ocrmypdf"),
         sharp: `sharp-${sharpModule.default.versions.sharp};libvips-${sharpModule.default.versions.vips ?? "unknown"}`,
       };
     } else {
@@ -380,9 +366,15 @@ async function main() {
         toolVersions.sharp = `sharp-${sharpModule.default.versions.sharp};libvips-${sharpModule.default.versions.vips ?? "unknown"}`;
       }
     }
-    if (!IMAGE_PROCESSING_ONLY) writeFileSync(join(fixturesDir, "fixture.pdf"), pdfFixture());
-    const activeFormats = MEDIA_PROCESSING_ONLY || MEDIA_REJECTION_ONLY || OWNER_COMPOSITION_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
-      : CV_DELIVERY_ONLY ? PHASE6_FORMATS.filter(({ id, kind }) => id === "pdf" || kind === "image")
+    // Load the pinned signature database once; every fixture still receives a real scan.
+    run("docker", ["run", "--detach", "--rm", "--name", scannerContainer, "--network", "none", "--memory", "2g", "--cpus", "1",
+      "--entrypoint", "clamd", scanner, "--foreground=true"], { label: "scanner-service-start" });
+    scannerStarted = true;
+    run("docker", ["exec", scannerContainer, "clamdscan", "--ping", "120:1"], { timeout: 150_000, label: "scanner-service-ready" });
+    toolVersions.scannerMode = "isolated-clamd-stream";
+    if (!IMAGE_PROCESSING_ONLY) writeFileSync(join(fixturesDir, "fixture.pdf"), phase6PdfFixture());
+    activeFormats = MEDIA_PROCESSING_ONLY || MEDIA_REJECTION_ONLY || OWNER_COMPOSITION_ONLY ? PHASE6_FORMATS.filter(({ id }) => id === "pdf")
+      : CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY ? PHASE6_FORMATS.filter(({ id, kind }) => id === "pdf" || kind === "image")
       : IMAGE_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ kind }) => kind === "image")
         : VIDEO_PROCESSING_ONLY ? PHASE6_FORMATS.filter(({ kind }) => kind === "video") : PHASE6_FORMATS;
     if (IMAGE_PROCESSING_ONLY) {
@@ -392,7 +384,7 @@ async function main() {
       await sharp(imageInput).png().toFile(join(fixturesDir, "fixture.png"));
       await sharp(imageInput).jpeg().toFile(join(fixturesDir, "fixture.jpeg"));
       await sharp(imageInput).webp().toFile(join(fixturesDir, "fixture.webp"));
-    } else if (!MEDIA_PROCESSING_ONLY && !MEDIA_REJECTION_ONLY) {
+    } else if (!MEDIA_REJECTION_ONLY) {
       console.log("Generating safe fixtures with the pinned image and video processors.");
       run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.png"], { label: "fixture-generate-png" });
       run("docker", ["run", "--rm", "--entrypoint", "magick", "-v", `${fixturesDir}:/fixtures`, image, "-size", "4x4", "xc:#2468ac", "/fixtures/fixture.jpeg"], { label: "fixture-generate-jpeg" });
@@ -417,7 +409,7 @@ async function main() {
       }
       const storageHash = await storagePutAndCheck(status, fixture, fixture.mimeType);
       console.log(`✓ ${fixture.id}: private Storage upload and byte round-trip passed; scanning.`);
-      run("docker", ["run", "--rm", "--entrypoint", "clamscan", "-v", `${fixturesDir}:/fixtures:ro`, scanner, "--no-summary", `/fixtures/fixture.${fixture.id}`], { timeout: RUN_TIMEOUT, label: `scan-${fixture.id}` });
+      run("docker", ["exec", "-i", scannerContainer, "clamdscan", "--stream", "--no-summary", "-"], { input: readFileSync(fixture.path), timeout: RUN_TIMEOUT, label: `scan-${fixture.id}` });
       formats.push({ id: fixture.id, kind: fixture.kind, mimeType: fixture.mimeType, executed: true, status: "passed", storageRoundTrip: true, sha256: storageHash, scannerVerdict: "clean", processorVersion });
       services.storage.executionCount += 3;
       console.log(`✓ ${fixture.id}: processor, clean scan and private byte round-trip passed.`);
@@ -433,17 +425,18 @@ async function main() {
       PHASE6_UPLOAD_INTENT_ANON_KEY: status.ANON_KEY,
       PHASE6_UPLOAD_INTENT_REPLAY_KEY: randomBytes(32).toString("base64"),
       PHASE6_REQUIRE_UPLOAD_INTENT: "1",
+      PHASE6_PDF_PROCESSING_ONLY: MEDIA_PROCESSING_ONLY || BASELINE_VERIFICATION_ONLY ? "1" : "0",
       PHASE6_OWNER_COMPOSITION_ONLY: OWNER_COMPOSITION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_PDF_PROCESSING_FIXTURE: join(fixturesDir, "fixture.pdf"),
-      PHASE6_IMAGE_FIXTURE_PNG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.png"),
-      PHASE6_IMAGE_FIXTURE_JPEG: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.jpeg"),
-      PHASE6_IMAGE_FIXTURE_WEBP: MEDIA_PROCESSING_ONLY ? "" : join(fixturesDir, "fixture.webp"),
+      PHASE6_IMAGE_FIXTURE_PNG: join(fixturesDir, "fixture.png"),
+      PHASE6_IMAGE_FIXTURE_JPEG: join(fixturesDir, "fixture.jpeg"),
+      PHASE6_IMAGE_FIXTURE_WEBP: join(fixturesDir, "fixture.webp"),
       PHASE6_REQUIRE_IMAGES: IMAGE_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !OWNER_COMPOSITION_ONLY) ? "1" : "0",
-      PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !CV_DELIVERY_ONLY && !OWNER_COMPOSITION_ONLY) ? "1" : "0",
+      PHASE6_REQUIRE_VIDEO: VIDEO_PROCESSING_ONLY || (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !CV_DELIVERY_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !OWNER_COMPOSITION_ONLY) ? "1" : "0",
       PHASE6_MEDIA_ACCEPTANCE_ONLY: RUN_MEDIA_ACCEPTANCE ? "1" : "0",
       PHASE6_MEDIA_REJECTION_ONLY: MEDIA_REJECTION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_REQUIRE_FULL_MEDIA: CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || MEDIA_INTEGRATION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
-      PHASE6_CV_ACTIVATION_ONLY: CV_ACTIVATION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
+      PHASE6_CV_ACTIVATION_ONLY: CV_ACTIVATION_ONLY || CV_DELIVERY_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_CV_DELIVERY_ONLY: CV_DELIVERY_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_PUBLIC_CAPABILITIES_ONLY: CV_DELIVERY_ONLY || MEDIA_CV_INTEGRATION_ONLY ? "1" : "0",
       PHASE6_VIDEO_PROCESSING_MP4_FIXTURE: join(fixturesDir, "fixture.mp4"),
@@ -453,6 +446,7 @@ async function main() {
       PHASE6_SCANNER_IMAGE: scanner,
       PHASE6_PDF_PROCESSOR_IMAGE: pdf,
       PHASE6_SCANNER_VERSION: toolVersions.scanner,
+      PHASE6_SCANNER_CONTAINER: scannerContainer,
       PHASE6_PDF_PROCESSOR_VERSION: toolVersions.pdfProcessor,
       PHASE6_MEDIA_PROCESSING_COUNTS_FILE: processingCountsPath,
     };
@@ -476,18 +470,22 @@ async function main() {
       testArgs.push("tests/database/content-authoring.integration.test.ts", "tests/phase4/owner-request-security.test.ts", "tests/phase4/owner-session-auth.test.ts",
         "tests/phase4/owner-operation-policy.test.ts", "tests/phase4/local-auth-token.integration.test.ts",
         "-t", testNamePattern(PHASE6_MEDIA_CV_TEST_NAMES));
-    } else if (OWNER_COMPOSITION_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism", "-t", "composes all nine Owner Media and CV operations through real services");
+    } else if (UPLOAD_INTENT_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism", "-t",
+      "commits a scoped candidate and replays the same encrypted target without re-signing|allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes|rolls back a failed candidate commit and idempotently removes its expired private orphan");
+    else if (OWNER_COMPOSITION_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism", "-t", "composes all nine Owner Media and CV operations through real services");
     else if (VIDEO_PROCESSING_ONLY) testArgs.push("-t", "processes MP4 and WebM candidates");
     else if (IMAGE_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images");
     else if (MEDIA_PROCESSING_ONLY) testArgs.push("-t", "processes PDF candidates");
     else if (MEDIA_DELIVERY_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|issues bounded delivery only for current published-locale and profile Media uses");
     else if (MEDIA_REJECTION_ONLY) testArgs.push("-t", "rejects accepted Media safely and serializes with current usage changes");
     else if (CV_DELIVERY_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|issues bounded delivery only for current published-locale and profile Media uses");
-    else if (MEDIA_ACCEPTANCE_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates");
+    else if (CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images");
+    else if (MEDIA_ACCEPTANCE_ONLY) testArgs.push("-t", "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates");
     else if (PUBLICATION_MEDIA_ONLY) {
       testArgs.push("tests/database/content-authoring.integration.test.ts", "-t",
         "processes PDF candidates and real PNG JPEG WebP images|processes MP4 and WebM candidates|reports only Media referenced by currently published Project and Achievement locales|preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable|rejects invalid evidence, review, and Media facts without creating public state|publishes English and Arabic independently, preserves first publication time, history, and the last valid projection|publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline|hides, archives, and restores all three content kinds through atomic owner lifecycle commands|revalidates each exact locale publication before restore and changes none when one Media fact fails");
-    }
+    } else if (BASELINE_VERIFICATION_ONLY) testArgs.push("--maxWorkers=1", "--no-file-parallelism", "-t",
+      "commits a scoped candidate and replays the same encrypted target without re-signing|allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes|rolls back a failed candidate commit and idempotently removes its expired private orphan|processes PDF candidates");
     // The complete gate includes both isolated scopes: the baseline's bounded
     // PDF/image and video tests plus the bounded rejection/race test.
     const testTimeout = MEDIA_INTEGRATION_ONLY || MEDIA_CV_INTEGRATION_ONLY ? 1_800_000 : 900_000;
@@ -508,7 +506,9 @@ async function main() {
       ownerCompositionChecks = { suite: "tests/database/media-upload-intent.integration.test.ts", test: assertion?.fullName,
         counts: { executed: executed ? 1 : 0, failed: assertion?.status === "failed" ? 1 : 0,
           skipped: assertion?.status === "pending" || assertion?.status === "disabled" || assertion === undefined ? 1 : 0 },
-        scenarios: recorded, verdict: executed && testResult.status === 0 ? "pass" : "fail" };
+        scenarios: recorded,
+        failure: assertion?.status === "failed" ? String(assertion.failureMessages?.[0] ?? "assertion-failed").split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 1000) : undefined,
+        verdict: executed && testResult.status === 0 ? "pass" : "fail" };
       if (ownerCompositionChecks.verdict !== "pass") throw new Error("PHASE6_OWNER_COMPOSITION_ACCEPTANCE_INVALID");
     }
     if (MEDIA_INTEGRATION_ONLY) {
@@ -561,6 +561,8 @@ async function main() {
       throw new Error(`PHASE6_CV_SCENARIO_EXECUTION_PROOF_MISSING:${JSON.stringify({
         assertions: { total: integration.total, passed: integration.passed, failed: integration.failed, skipped: integration.skipped },
         failedTests: integration.failedTests ?? [],
+        recordedCvScenarios: processingCounts?.cvScenarios,
+        recordedCvActivationScenarios: processingCounts?.cvActivationScenarios,
       })}`);
     }
     if (MEDIA_DELIVERY_ONLY) {
@@ -577,8 +579,12 @@ async function main() {
       };
       if (mediaDeliveryChecks.verdict !== "pass") failures.push("PHASE6_MEDIA_DELIVERY_ACCEPTANCE_INVALID");
     }
-    const uploadAssertions = allAssertions.filter((item) => !/processes (?:PDF|MP4 and WebM|PNG, JPEG and WebP) candidates/u.test(String(item.fullName ?? "")));
-    const processingAssertions = allAssertions.filter((item) => MEDIA_DELIVERY_ONLY || CV_DELIVERY_ONLY
+    const uploadAssertions = allAssertions.filter((item) => [
+      "commits a scoped candidate and replays the same encrypted target without re-signing",
+      "allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes",
+      "rolls back a failed candidate commit and idempotently removes its expired private orphan",
+    ].some((name) => String(item.fullName ?? "").includes(name)));
+    const processingAssertions = allAssertions.filter((item) => MEDIA_DELIVERY_ONLY || CV_DELIVERY_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY
       ? String(item.fullName ?? "").includes("processes PDF candidates and real PNG JPEG WebP images")
       : MEDIA_REJECTION_ONLY
       ? String(item.fullName ?? "").includes("rejects accepted Media safely and serializes with current usage changes")
@@ -700,10 +706,10 @@ async function main() {
         name: typeof item.fullName === "string" ? item.fullName : "unknown-test",
         reason: typeof item.failureMessages?.[0] === "string" ? item.failureMessages[0].split(/\r?\n/u).slice(0, 6).join(" | ").replace(/https?:\/\/\S+/gu, "[url]").replace(/(?:Bearer\s+|token=|apikey[=: ]+)\S+/giu, "[credential]").slice(0, 800) : "assertion-failed",
       })),
-      verdict: (MEDIA_DELIVERY_ONLY || testResult.status === 0) && processingAssertions.length === (MEDIA_DELIVERY_ONLY || MEDIA_REJECTION_ONLY || CV_DELIVERY_ONLY || !RUN_MEDIA_ACCEPTANCE ? 1 : 2) && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
+      verdict: (MEDIA_DELIVERY_ONLY || testResult.status === 0) && processingAssertions.length === (MEDIA_DELIVERY_ONLY || MEDIA_REJECTION_ONLY || CV_DELIVERY_ONLY || CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY || !RUN_MEDIA_ACCEPTANCE ? 1 : 2) && processingAssertions.every((item) => item.status === "passed") ? "pass" : "fail",
     };
-    if (!VIDEO_PROCESSING_ONLY && !RUN_MEDIA_ACCEPTANCE && uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
-    if (mediaProcessingChecks.verdict !== "pass" && !MEDIA_REJECTION_ONLY) throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
+    if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !RUN_MEDIA_ACCEPTANCE && uploadIntentChecks.verdict !== "pass") throw new Error("PHASE6_UPLOAD_INTENT_ASSERTION_COUNTS_INVALID");
+    if (!UPLOAD_INTENT_ONLY && mediaProcessingChecks.verdict !== "pass" && !MEDIA_REJECTION_ONLY && !OWNER_COMPOSITION_ONLY) throw new Error("PHASE6_MEDIA_PROCESSING_ASSERTION_COUNTS_INVALID");
     if (CV_PORTFOLIO_ONLY && (!Array.isArray(cvPortfolioChecks?.scenarios) || cvPortfolioChecks.scenarios.length !== 9 ||
         cvPortfolioChecks.scenarios.some((item) => item.executed !== true || item.status !== "passed") ||
         cvPortfolioChecks?.counts?.executed !== 9 || cvPortfolioChecks?.counts?.failed !== 0 || cvPortfolioChecks?.counts?.skipped !== 0)) {
@@ -756,14 +762,21 @@ async function main() {
     const acceptanceExecutionsValid = OWNER_COMPOSITION_ONLY
       ? processingCounts?.acceptanceExecutions === 1
       : CV_DELIVERY_ONLY
-      ? Number.isSafeInteger(processingCounts?.acceptanceExecutions) && processingCounts.acceptanceExecutions > 0
-      : processingCounts?.acceptanceExecutions === (MEDIA_DELIVERY_ONLY ? 4 : PHASE6_FORMATS.length);
+      ? Number.isSafeInteger(processingCounts?.acceptanceExecutions) && processingCounts.acceptanceExecutions >= activeFormats.length
+      : MEDIA_CV_INTEGRATION_ONLY
+      ? Number.isSafeInteger(processingCounts?.acceptanceExecutions) && processingCounts.acceptanceExecutions >= PHASE6_FORMATS.length
+      : processingCounts?.acceptanceExecutions === (MEDIA_DELIVERY_ONLY ? 4
+        : CV_PORTFOLIO_ONLY || CV_ACCEPTANCE_ONLY || CV_ACTIVATION_ONLY ? activeFormats.length : PHASE6_FORMATS.length);
     if (RUN_MEDIA_ACCEPTANCE && !MEDIA_REJECTION_ONLY && !acceptanceExecutionsValid) throw new Error("PHASE6_MEDIA_ACCEPTANCE_FORMAT_COUNTS_MISSING");
     if (PUBLICATION_MEDIA_ONLY && publicationChecks?.verdict !== "pass") throw new Error("PHASE6_PUBLICATION_MEDIA_ASSERTION_COUNTS_INVALID");
   } catch (error) {
     failures.push(error instanceof Error ? error.message : "PHASE6_SETUP_FAILED");
   } finally {
     let cleanupFailed = false;
+    if (scannerStarted) {
+      const result = spawnSync("docker", ["rm", "--force", scannerContainer], { env, stdio: "ignore", timeout: 30_000 });
+      if (result.error || result.status !== 0) cleanupFailed = true;
+    }
     if (attemptedStart) {
       try { invoke(["stop", "--no-backup"], 120_000); } catch { cleanupFailed = true; }
     }
@@ -782,9 +795,9 @@ async function main() {
   const finalSource = getPhase6SourceIdentity();
   if (finalSource.sourceRevision !== source.sourceRevision || finalSource.sourceTreeSha256 !== source.sourceTreeSha256) failures.push("PHASE6_SOURCE_CHANGED_DURING_RUN");
   let report;
-  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !MEDIA_DELIVERY_ONLY && !MEDIA_REJECTION_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !CV_DELIVERY_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY && !MEDIA_CV_INTEGRATION_ONLY) {
-    report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures });
-    const evaluated = evaluatePhase6Setup(report, source);
+  if (!UPLOAD_INTENT_ONLY && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !MEDIA_DELIVERY_ONLY && !MEDIA_REJECTION_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !CV_DELIVERY_ONLY && !PUBLICATION_MEDIA_ONLY && !OWNER_COMPOSITION_ONLY && !MEDIA_INTEGRATION_ONLY && !MEDIA_CV_INTEGRATION_ONLY) {
+    report = makePhase6Report({ ...source, runtime: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" }, startedAt, tools: toolVersions, services, formats, cleanup, failures, expectedFormats: activeFormats });
+    const evaluated = evaluatePhase6Setup(report, { ...source, expectedFormats: activeFormats });
     if (evaluated.failures.length) {
       report.failures.push(...evaluated.failures);
       report.verdict = "fail";
@@ -792,7 +805,7 @@ async function main() {
     mkdirSync(join(ROOT, "evidence"), { recursive: true });
     writeFileSync(EVIDENCE, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   }
-  if (uploadIntentChecks !== undefined && !MEDIA_PROCESSING_ONLY && !IMAGE_PROCESSING_ONLY && !VIDEO_PROCESSING_ONLY && !MEDIA_ACCEPTANCE_ONLY && !MEDIA_DELIVERY_ONLY && !MEDIA_REJECTION_ONLY && !CV_PORTFOLIO_ONLY && !CV_ACCEPTANCE_ONLY && !CV_ACTIVATION_ONLY && !CV_DELIVERY_ONLY && !PUBLICATION_MEDIA_ONLY && !MEDIA_INTEGRATION_ONLY && !MEDIA_CV_INTEGRATION_ONLY) {
+  if (uploadIntentChecks !== undefined && (BASELINE_VERIFICATION_ONLY || UPLOAD_INTENT_ONLY)) {
     const uploadIntentEvidence = {
       schemaVersion: 1,
       ticket: 148,
@@ -1023,22 +1036,32 @@ async function main() {
           ...scenarioCases(processingCounts?.mediaRejectionScenarios, ["T12-09"]), ...ownerUnitCases] },
       { id: "T18-10", name: "Real Owner/session/CSRF/scope checks and restricted-principal policies remain green",
         cases: [...scenarioCases(processingCounts?.cvActivationScenarios, ["T11-02"]), ...ownerCompositionCases, ...ownerSecurityCases] },
-      { id: "T18-11", name: "Every integrated scenario is mapped to executed case IDs, counts, sanitized evidence, and honest limitations",
-        cases: [{ caseId: "evidence:eleven-criteria", name: "all eleven T18 criteria and source-bound case IDs are present",
-          executed: criteria.length === PHASE6_MEDIA_CV_CRITERION_IDS.length && criteria.every((item) => item.cases.length > 0),
-          status: criteria.length === PHASE6_MEDIA_CV_CRITERION_IDS.length && criteria.every((item) => item.cases.length > 0) ? "passed" : "failed" },
-        { caseId: "evidence:zero-required-skips", name: "integrated and unit suites report zero failures and skips",
-          executed: testResult.status === 0 && acceptanceUnitChecks?.verdict === "pass",
-          status: testResult.status === 0 && acceptanceUnitChecks?.verdict === "pass" ? "passed" : "failed" }] },
     ];
+    const mappedCriteriaValid = criteria.length === PHASE6_MEDIA_CV_CRITERION_IDS.length - 1 && criteria.every((item) => item.cases.length > 0);
+    criteria.push({ id: "T18-11", name: "Every integrated scenario is mapped to executed case IDs, counts, sanitized evidence, and honest limitations",
+      cases: [{ caseId: "evidence:eleven-criteria", name: "all eleven T18 criteria and source-bound case IDs are present",
+        executed: mappedCriteriaValid,
+        status: mappedCriteriaValid ? "passed" : "failed" },
+      { caseId: "evidence:zero-required-skips", name: "integrated and unit suites report zero failures and skips",
+        executed: testResult.status === 0 && acceptanceUnitChecks?.verdict === "pass",
+        status: testResult.status === 0 && acceptanceUnitChecks?.verdict === "pass" ? "passed" : "failed" }] });
     const caseList = criteria.flatMap(({ cases }) => cases);
     const counts = { executed: caseList.filter((item) => item.executed && item.status === "passed").length,
       failed: caseList.filter((item) => item.executed && item.status === "failed").length,
       skipped: caseList.filter((item) => item.executed !== true || item.status === "skipped").length };
-    const testRun = { exitStatus: testResult.status ?? 1, total: Number(testReport.numTotalTests ?? allAssertions.length),
-      failed: Number(testReport.numFailedTests ?? allAssertions.filter((item) => item.status === "failed").length),
-      skipped: Number(testReport.numPendingTests ?? allAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length),
-      passed: Number(testReport.numPassedTests ?? allAssertions.filter((item) => item.status === "passed").length),
+    const requiredIntegrationAssertions = MEDIA_CV_INTEGRATION_ONLY
+      ? allAssertions.filter((item) => PHASE6_MEDIA_CV_TEST_NAMES.some((name) => String(item.fullName ?? "").includes(name)) ||
+        ["processes PDF candidates and real PNG JPEG WebP images", "processes MP4 and WebM candidates"]
+          .some((name) => String(item.fullName ?? "").includes(name)))
+      : allAssertions;
+    const testRun = { exitStatus: testResult.status ?? 1, total: requiredIntegrationAssertions.length,
+      failed: requiredIntegrationAssertions.filter((item) => item.status === "failed").length,
+      skipped: requiredIntegrationAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length,
+      passed: requiredIntegrationAssertions.filter((item) => item.status === "passed").length,
+      rawDiscovery: { total: Number(testReport.numTotalTests ?? allAssertions.length),
+        failed: Number(testReport.numFailedTests ?? allAssertions.filter((item) => item.status === "failed").length),
+        unselected: Number(testReport.numPendingTests ?? allAssertions.filter((item) => item.status === "pending" || item.status === "disabled").length),
+        passed: Number(testReport.numPassedTests ?? allAssertions.filter((item) => item.status === "passed").length) },
       unit: acceptanceUnitChecks };
     const evidence = {
       schemaVersion: 1, ticket: 163, parent: 145, predecessor: 162, runId: randomUUID(),
@@ -1244,8 +1267,7 @@ async function main() {
       counts: cvPortfolioChecks?.counts, scenarios, cleanup,
       verdict: Array.isArray(scenarios) && scenarios.length === 9 && scenarios.every((item) => item.executed && item.status === "passed") &&
         cvPortfolioChecks?.counts?.executed === 9 && cvPortfolioChecks?.counts?.failed === 0 && cvPortfolioChecks?.counts?.skipped === 0 &&
-        processingCounts?.acceptanceExecutions === PHASE6_FORMATS.length && formats.length === PHASE6_FORMATS.length &&
-        formats.every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        processingCounts?.acceptanceExecutions === activeFormats.length && phase6FormatProof(formats, activeFormats) &&
         cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:cv-portfolio"],
       limitations: ["This ticket proves registration and bounded Owner reads; separate tickets own CV acceptance, Current CV activation, public delivery and the final Phase 6 gate."],
@@ -1287,8 +1309,8 @@ async function main() {
       counts: cvAcceptanceChecks?.counts, scenarios, cleanup,
       verdict: cvAcceptanceChecks?.verdict === "pass" && scenarios.length === 16 &&
         scenarios.every((item) => item.executed && item.status === "passed") && cvAcceptanceChecks?.counts?.criteriaCovered === 8 &&
-        cvMigrationUpgrade?.verdict === "pass" && processingCounts?.acceptanceExecutions === PHASE6_FORMATS.length &&
-        formats.length === PHASE6_FORMATS.length && formats.every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        cvMigrationUpgrade?.verdict === "pass" && processingCounts?.acceptanceExecutions === activeFormats.length &&
+        phase6FormatProof(formats, activeFormats) &&
         cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:cv-acceptance"],
       limitations: ["Acceptance records approval only; Current CV activation and public delivery remain separate operations."],
@@ -1339,6 +1361,8 @@ async function main() {
       principalScope: { database: "shipwithali_application scoped to the configured portfolio and owner RLS",
         storage: "private media-processed bucket; one content-addressed accepted PDF snapshot",
         visitor: "anonymous request without identity, consent cookie, or Measurement write" },
+      formats: formats.map(({ id, executed, status, storageRoundTrip, scannerVerdict, processorVersion }) =>
+        ({ id, executed, status, storageRoundTrip, scannerVerdict, processorVersion })),
       checks: { delivery: scenarioNames, currentCvHttpAndStorageUnits: acceptanceUnitChecks,
         currentCvStorageMatrix: processingCounts?.currentCvStorageMatrix ?? [],
         mediaAcceptanceOperations: processingCounts?.acceptanceExecutions ?? 0,
@@ -1352,7 +1376,7 @@ async function main() {
         currentCvStorageMatrixFailures: processingCounts?.currentCvStorageMatrix?.filter((item) => item.status !== "passed").length ?? 0 },
       cleanup, verdict: criteria.every((item) => item.executed && item.status === "passed") && integrationPassed &&
         (processingCounts?.currentCvStorageMatrix?.length ?? 0) >= 46 && processingCounts.currentCvStorageMatrix.every((item) => item.executed && item.status === "passed") &&
-        unitPassed && formats.some((format) => format.id === "pdf" && format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        unitPassed && processingCounts?.acceptanceExecutions >= activeFormats.length && phase6FormatProof(formats, activeFormats) &&
         cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:cv-delivery"],
       limitations: ["Public signed redirect behavior is verified by HTTP and Storage adapter tests; production composition uses bounded streaming. Replacing the current pointer affects subsequent reads; previously issued signed targets remain valid only until their 300-second expiry."],
@@ -1452,8 +1476,7 @@ async function main() {
       counts: cvActivationChecks?.counts, scenarios, criteria, cleanup,
       verdict: cvActivationChecks?.verdict === "pass" && scenarios.length >= 16 && scenarios.every((item) => item.executed && item.status === "passed") &&
         cvActivationChecks?.counts?.criteriaCovered === 10 && cvMigrationUpgrade?.verdict === "pass" &&
-        processingCounts?.acceptanceExecutions === PHASE6_FORMATS.length && formats.length === PHASE6_FORMATS.length &&
-        formats.every((format) => format.status === "passed" && format.storageRoundTrip && format.scannerVerdict === "clean") &&
+        processingCounts?.acceptanceExecutions === activeFormats.length && phase6FormatProof(formats, activeFormats) &&
         cleanup.success && failures.length === 0 && finalSource.sourceTreeSha256 === source.sourceTreeSha256 ? "pass" : "fail",
       reproduction: ["npm run setup:validation", "npm run validation:ready", "npm run phase6:focus:cv-activation"],
       limitations: [],

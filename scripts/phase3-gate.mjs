@@ -1,14 +1,38 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Client } from "pg";
+import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
+import { createPhase3GateProject, removePhase3GateProject, skippedTestCount } from "./phase3-gate-support.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const REPORT = join(ROOT, "evidence", "phase-3-gate-report.json");
 const CLI = join(ROOT, "node_modules", "supabase", "dist", "supabase.js");
 const startedAt = Date.now();
+const runId = randomUUID();
+const sourceRevision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
+const sourceTreeSha256 = workingTreeSourceSha256();
+let postgresVersion = null;
+const PHASE3_DATABASE_TESTS = Object.freeze([
+  "tests/database/idempotency.test.ts",
+  "tests/database/leased-jobs.test.ts",
+  "tests/database/migration-security-baseline.test.ts",
+  "tests/database/operations-migration.test.ts",
+  "tests/database/optimistic-concurrency.test.ts",
+  "tests/database/outbox.test.ts",
+  "tests/database/persistence-contracts.test.ts",
+  "tests/database/phase3-database-tests-command.test.ts",
+  "tests/database/phase4-migration-integrity.test.ts",
+  "tests/database/postgres-integration.test.ts",
+  "tests/database/postgres-runtime.test.ts",
+  "tests/database/postgres-transaction-runner.test.ts",
+  "tests/database/role-rls-matrix.test.ts",
+  "tests/database/toolchain-workflow.test.ts",
+]);
 
 function sanitize(value) {
   return value
@@ -47,25 +71,24 @@ function run(name, entry, args, { env = {}, evidence, failOnSkipped = false } = 
         mkdirSync(dirname(path), { recursive: true });
         writeFileSync(path, output, "utf8");
       }
-      const skipped =
-        failOnSkipped &&
-        /[1-9]\d*\s+skipped/i.test(output.replaceAll(/\u001B\[[0-9;]*m/g, ""));
-      if (skipped) {
+      const skippedCount = failOnSkipped ? skippedTestCount(output) : 0;
+      if (skippedCount > 0) {
         console.error(`✗ ${name}: skipped database suites are a failing verdict, never success`);
       }
       resolve({
         name,
-        passed: code === 0 && spawnError === undefined && !skipped,
-        exitCode: skipped ? 1 : (code ?? 1),
+        passed: code === 0 && spawnError === undefined && skippedCount === 0,
+        exitCode: skippedCount > 0 ? 1 : (code ?? 1),
+        skipped: skippedCount,
         evidence,
       });
     });
   });
 }
 
-async function readLocalDatabaseUrl() {
+async function readLocalDatabaseUrl(workdir) {
   const chunks = [];
-  const child = spawn(process.execPath, [CLI, "status", "--output", "json"], {
+  const child = spawn(process.execPath, [CLI, "--workdir", workdir, "status", "--output", "json"], {
     cwd: ROOT,
     env: { ...process.env, CI: "1" },
     stdio: ["ignore", "pipe", "pipe"],
@@ -98,6 +121,10 @@ function fresh(path) {
   return existsSync(full) && statSync(full).mtimeMs >= startedAt - 1_000;
 }
 
+function readJsonEvidence(path) {
+  try { return JSON.parse(readFileSync(join(ROOT, path), "utf8")); } catch { return {}; }
+}
+
 function phase2ReportMatchesRuntime() {
   try {
     const report = JSON.parse(readFileSync(join(ROOT, "evidence", "phase-2-gate-report.json"), "utf8"));
@@ -113,6 +140,7 @@ console.log("══════════════════════�
 
 const results = [];
 let databaseStarted = false;
+let databaseProject;
 try {
   results.push(
     await run("phase2-gate", "scripts/phase2-gate.mjs", [], {
@@ -140,7 +168,10 @@ try {
     }),
   );
 
+  databaseProject = createPhase3GateProject(ROOT);
+  const databaseEnvironment = { SHIPWITHALI_LOCAL_VALIDATION_WORKDIR: databaseProject.workdir };
   const start = await run("local-database-start", "scripts/local-database.mjs", ["start"], {
+    env: databaseEnvironment,
     evidence: "evidence/phase-3-local-start.log",
   });
   results.push(start);
@@ -148,6 +179,7 @@ try {
   if (databaseStarted) {
     results.push(
       await run("local-database-reset", "scripts/local-database.mjs", ["reset"], {
+        env: databaseEnvironment,
         evidence: "evidence/phase-3-local-reset.log",
       }),
     );
@@ -157,14 +189,21 @@ try {
     throw new Error("PHASE3_PREREQUISITE_FAILED");
   }
 
-  const databaseUrl = await readLocalDatabaseUrl();
+  const databaseUrl = await readLocalDatabaseUrl(databaseProject.workdir);
+  const versionClient = new Client({ connectionString: databaseUrl });
+  await versionClient.connect();
+  try {
+    postgresVersion = (await versionClient.query("select version() as version")).rows[0]?.version ?? null;
+  } finally {
+    await versionClient.end();
+  }
   const databaseEnv = {
     PHASE3_DATABASE_URL: databaseUrl,
     PHASE3_REQUIRE_DATABASE: "1",
   };
   const checks = [
-    ["phase3-focused-tests", "node_modules/vitest/vitest.mjs", ["run", "tests/database"], databaseEnv, "evidence/phase-3-focused-tests.log"],
     ["role-rls-types-plans", "scripts/check-phase3-database.mjs", [], databaseEnv, "evidence/phase-3-security-types-plans.log"],
+    ["phase3-focused-tests", "node_modules/vitest/vitest.mjs", ["run", ...PHASE3_DATABASE_TESTS], databaseEnv, "evidence/phase-3-focused-tests.log"],
     ["strict-typecheck", "node_modules/typescript/bin/tsc", ["--noEmit"], {}, "evidence/phase-3-typecheck.log"],
     ["deterministic-lint", "node_modules/eslint/bin/eslint.js", ["."], {}, "evidence/phase-3-lint.log"],
     ["architecture", "scripts/architecture-check.mjs", [], {}, "evidence/phase-3-architecture.log"],
@@ -178,12 +217,13 @@ try {
     : "PHASE3_GATE_FAILED";
   console.error(`✗ ${code}`);
 } finally {
-  if (databaseStarted) {
-    results.push(
-      await run("local-database-stop", "scripts/local-database.mjs", ["stop"], {
+  if (databaseProject) {
+    const stopped = await run("local-database-stop", "scripts/local-database.mjs", ["stop"], {
+        env: { SHIPWITHALI_LOCAL_VALIDATION_WORKDIR: databaseProject.workdir },
         evidence: "evidence/phase-3-local-stop.log",
-      }),
-    );
+      });
+    results.push(stopped);
+    if (stopped.passed) removePhase3GateProject(databaseProject);
   }
 }
 
@@ -196,6 +236,16 @@ const requiredEvidence = [
 ];
 const evidence = requiredEvidence.map((file) => ({ file, fresh: fresh(file) }));
 const failed = results.filter((result) => !result.passed);
+const finalRevision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
+const finalSourceTreeSha256 = workingTreeSourceSha256();
+if (finalRevision !== sourceRevision || finalSourceTreeSha256 !== sourceTreeSha256) {
+  failed.push({ name: "source-identity-stable", passed: false });
+}
+const boundChecks = results.map((result) => ({ ...result, runId, sourceRevision, sourceTreeSha256, executed: true,
+  skipped: result.skipped ?? 0, startedAt: new Date(startedAt).toISOString(), completedAt: new Date().toISOString() }));
+const databaseBaseline = readJsonEvidence("evidence/phase-3-migration-baseline.json");
+const databaseVerification = readJsonEvidence("evidence/phase-3-database-verification.json");
+const postgresExecuted = results.some((result) => result.name === "phase3-focused-tests" && result.passed) && postgresVersion !== null;
 const verdict =
   results.length >= 9 && failed.length === 0 && evidence.every((item) => item.fresh)
     ? "pass"
@@ -209,14 +259,39 @@ writeFileSync(
       parent: 44,
       scope: "phase-3-postgresql-completion-gate",
       node: process.version,
+      runId,
+      sourceRevision,
+      sourceTreeSha256,
+      startedAt: new Date(startedAt).toISOString(),
+      completedAt: new Date().toISOString(),
+      toolVersions: { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? "unknown" },
+      required: { success: verdict === "pass", executed: boundChecks.length, failed: failed.length,
+        skipped: boundChecks.reduce((total, check) => total + check.skipped, 0) },
+      counts: { total: boundChecks.length },
       verdict,
-      checks: results,
+      checks: boundChecks,
+      migrations: databaseVerification.migrations,
+      cleanup: { attempted: results.some((result) => result.name === "local-database-stop"),
+        success: results.some((result) => result.name === "local-database-stop" && result.passed) },
+      realServiceScope: {
+        runId, gateRunId: runId, sourceRevision, sourceTreeSha256,
+        startedAt: new Date(startedAt).toISOString(), completedAt: new Date().toISOString(),
+        postgresVersion, isolation: "isolated-loopback",
+        required: { success: postgresExecuted && databaseBaseline.cleanUpgradeEquivalent === true },
+        cleanUpgrade: { equivalent: databaseBaseline.cleanUpgradeEquivalent === true },
+        services: { postgres: { available: postgresExecuted, executionCount: postgresExecuted ? 1 : 0 } },
+        checks: boundChecks.filter((item) => ["migration-clean-upgrade-equivalence", "phase3-focused-tests", "role-rls-types-plans"]
+          .includes(item.name)).map((item) => ({ name: item.name, executed: item.executed, passed: item.passed })),
+        cleanup: results.some((result) => result.name === "local-database-stop" && result.passed),
+      },
       evidence,
       guarantees: {
         predecessor: "complete Phase 2 gate runs first",
         database: "disposable loopback Supabase/PostgreSQL only",
         remoteCredentialsRequired: false,
         secretValuesRecorded: false,
+        sourceBound: verdict === "pass",
+        successfulCleanup: results.some((result) => result.name === "local-database-stop" && result.passed),
       },
     },
     null,
