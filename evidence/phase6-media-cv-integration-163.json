@@ -1,0 +1,3318 @@
+{
+  "schemaVersion": 1,
+  "ticket": 163,
+  "parent": 145,
+  "predecessor": 162,
+  "runId": "1b943fa0-ee87-425a-a8c3-7ef8a9e6e1f6",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "startedAt": "2026-10-17T23:44:14.885Z",
+  "completedAt": "2026-10-17T23:47:54.500Z",
+  "scope": "integrated-real-service-media-cv-races-publication-delivery-privacy-and-authorization",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1",
+    "sharp": "sharp-0.35.4;libvips-8.18.6",
+    "scannerMode": "isolated-clamd-stream"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "executionCount": 3,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 20
+    },
+    "scanner": {
+      "available": true,
+      "version": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+      "executions": 43
+    },
+    "processors": {
+      "pdf": {
+        "available": true,
+        "version": "17.12.1",
+        "executions": 11
+      },
+      "image": {
+        "available": true,
+        "version": "sharp-0.35.4;libvips-8.18.6",
+        "executions": 5
+      },
+      "video": {
+        "available": true,
+        "version": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+        "executions": 5
+      }
+    }
+  },
+  "policyIds": {
+    "mediaObjectPolicies": [
+      "media_candidates_private",
+      "media_processed_private_immutable"
+    ],
+    "cvMigrations": [
+      "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "20261012040000_accept_registered_cv_versions.sql",
+      "20261012050000_activate_current_cv_atomically.sql"
+    ],
+    "transactionLockOrder": [
+      "media-shared-locks",
+      "content-lifecycle-write"
+    ],
+    "deliveryMaxAgeSeconds": 300
+  },
+  "principalScope": {
+    "database": "shipwithali_application with scoped Owner/Portfolio policies and independent PostgreSQL connections",
+    "auth": "disposable loopback Supabase Auth including real issued Owner session claims",
+    "storage": "private local Storage; anonymous and non-Owner access denied; sealed objects read by exact identity"
+  },
+  "formats": [
+    {
+      "id": "pdf",
+      "kind": "document",
+      "mimeType": "application/pdf",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "17.12.1"
+    },
+    {
+      "id": "png",
+      "kind": "image",
+      "mimeType": "image/png",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "jpeg",
+      "kind": "image",
+      "mimeType": "image/jpeg",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "webp",
+      "kind": "image",
+      "mimeType": "image/webp",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "mp4",
+      "kind": "video",
+      "mimeType": "video/mp4",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    },
+    {
+      "id": "webm",
+      "kind": "video",
+      "mimeType": "video/webm",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "T18-01",
+      "name": "Current CV A-to-B activation, retained history, competing activation, no-op, reactivation, and atomic rollback",
+      "cases": [
+        {
+          "caseId": "T11-01-1",
+          "name": "T11-01 an unactivated portfolio has zero current flags; the first activation creates one coherent accepted English current version {\"viewCurrentVersionId\":null,\"databaseCurrentVersionId\":null,\"everActivated\":false,\"currentFlags\":0,\"projectedCurrentFlags\":0}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-03-1",
+          "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"expectedVersionId\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"5e0d7ffadc2b7cf365d27f1e67d46e29eff30f2c78f98e41e33987bba39bd3f7\",\"version_id\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-17T23:45:40.898Z\",\"newCurrentCvId\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-04-1",
+          "name": "T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins {\"waitingForMediaLock\":2,\"statuses\":[200,412],\"bodies\":[{\"aggregateId\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\",\"aggregateVersion\":113,\"outcome\":\"current-cv-activated\"},{\"type\":\"urn:shipwithali:problem:precondition-failed\",\"title\":\"Precondition Failed\",\"status\":412,\"detail\":\"An optimistic-concurrency precondition for this operation failed.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-c3e2-770c-94a6-1f03dbe79ad9/commands/activate\",\"code\":\"failed_precondition\",\"traceId\":\"01a14c41-c44b-72a5-9724-1aeca70f5960\"}],\"currentVersionId\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\",\"projectedCurrentFlags\":1}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-1",
+          "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\",\"afterCurrentFlags\":1}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-2",
+          "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d295-7d6d-be6a-b9feb4f7b2f2\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-3",
+          "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d2c7-7b93-9b8d-b70e116e4b22\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-4",
+          "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d2f3-7ddf-84db-bd8712a5192b\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-5",
+          "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d320-7bff-9dfb-6a23066f4d1e\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-6",
+          "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d357-75b7-bc8c-17a11a2f3be2\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-7",
+          "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d38d-7a30-b9da-0e2795b20e26\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-06-1",
+          "name": "T11-06 exact replay returns the earlier receipt after replacement; changed-key intent and fresh stale versions conflict",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-07-1",
+          "name": "T11-07 activation of the already-current version records and replays a receipt without changing root version, history or events",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-08-1",
+          "name": "T11-08 an eligible retained prior CV version can be reactivated with a fresh key and root version",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:issues bounded delivery only for current published-locale and profile Media uses:1",
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage issues bounded delivery only for current published-locale and profile Media uses",
+          "executed": true,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "T18-02",
+      "name": "Safe accepted Media enables Project and Achievement publication; invalid or stale facts preserve last-valid state",
+      "cases": [
+        {
+          "caseId": "test:reports only Media referenced by currently published Project and Achievement locales:1",
+          "name": "Content authoring production PostgreSQL invariants reports only Media referenced by currently published Project and Achievement locales",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable:1",
+          "name": "Content authoring production PostgreSQL invariants preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:rejects invalid evidence, review, and Media facts without creating public state:1",
+          "name": "Content authoring production PostgreSQL invariants rejects invalid evidence, review, and Media facts without creating public state",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:publishes English and Arabic independently, preserves first publication time, history, and the last valid projection:1",
+          "name": "Content authoring production PostgreSQL invariants publishes English and Arabic independently, preserves first publication time, history, and the last valid projection",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline:1",
+          "name": "Content authoring production PostgreSQL invariants publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:hides, archives, and restores all three content kinds through atomic owner lifecycle commands:1",
+          "name": "Content authoring production PostgreSQL invariants hides, archives, and restores all three content kinds through atomic owner lifecycle commands",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:revalidates each exact locale publication before restore and changes none when one Media fact fails:1",
+          "name": "Content authoring production PostgreSQL invariants revalidates each exact locale publication before restore and changes none when one Media fact fails",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors:1",
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+          "executed": true,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "T18-03",
+      "name": "Arabic publication reuses accepted English Media without text fallback and withholds English-only CV/link capabilities",
+      "cases": [
+        {
+          "caseId": "T15-01-1",
+          "name": "T15-01 T15-02 committed Current CV is available only in English",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T15-01-2",
+          "name": "T15-01 T15-02 activation exposes only the committed English Current CV capability",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T15-02-1",
+          "name": "T15-01 T15-02 committed Current CV is available only in English",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T15-02-2",
+          "name": "T15-01 T15-02 activation exposes only the committed English Current CV capability",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T15-02-3",
+          "name": "T15-02 public Current CV transport continues to reject Arabic locale",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T15-03-1",
+          "name": "T15-03 reviewed Arabic content resolves shared accepted English Media while preserving Arabic-only case-study text",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T15-04-1",
+          "name": "T15-04 registration and separate acceptance do not replace the existing committed Current CV",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T15-08-1",
+          "name": "T15-08 public configuration contains stable settings and capability facts without Storage mappings or bearer URLs",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:publishes English and Arabic independently, preserves first publication time, history, and the last valid projection:1",
+          "name": "Content authoring production PostgreSQL invariants publishes English and Arabic independently, preserves first publication time, history, and the last valid projection",
+          "executed": true,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "T18-04",
+      "name": "Storage, scanner, processor, signing, delivery, encryption, and transaction faults preserve committed state",
+      "cases": [
+        {
+          "caseId": "T11-05-1",
+          "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\",\"afterCurrentFlags\":1}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-2",
+          "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d295-7d6d-be6a-b9feb4f7b2f2\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-3",
+          "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d2c7-7b93-9b8d-b70e116e4b22\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-4",
+          "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d2f3-7ddf-84db-bd8712a5192b\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-5",
+          "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d320-7bff-9dfb-6a23066f4d1e\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-6",
+          "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d357-75b7-bc8c-17a11a2f3be2\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-05-7",
+          "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d38d-7a30-b9da-0e2795b20e26\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-09-1",
+          "name": "T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event {\"status\":409,\"body\":{\"type\":\"urn:shipwithali:problem:conflict\",\"title\":\"Conflict\",\"status\":409,\"detail\":\"The request conflicts with the current state of the resource.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"conflict\",\"traceId\":\"01a14c41-c57e-7af7-a89e-1da16999f992\"},\"history\":105,\"expectedHistory\":105,\"receipts\":0,\"events\":4,\"expectedEvents\":4,\"before\":{\"version\":115,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"version\":115,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-09-2",
+          "name": "T11-09 unsafe processing evidence blocks activation without changing Current CV",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-09-3",
+          "name": "T11-09 inaccessible acceptance facts block activation without changing Current CV",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-09-4",
+          "name": "T11-09 a missing accepted PDF object blocks activation without changing pointer, flags, history, receipts or outbox",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-09-5",
+          "name": "T11-09 a Storage outage during the real accepted-Media activation path preserves Current CV state",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-09-6",
+          "name": "T11-09 inaccessible accepted Media blocks activation without changing the portfolio",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-09-7",
+          "name": "T11-09 an immutable object binding mismatch blocks activation without changing the portfolio",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-09-8",
+          "name": "T11-09 registered but unaccepted CV versions cannot become Current and do not mutate the portfolio",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-09-9",
+          "name": "T11-09 a valid accepted foreign Owner CV is not found and cannot mutate this Owner's pointer, flags, history, receipts or outbox",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "maps unexpected exceptions to generic 500 without leaking secrets:1",
+          "name": "GET Current CV adapter (#28) maps unexpected exceptions to generic 500 without leaking secrets",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "discards signed targets if the approved public use is withdrawn during signing:1",
+          "name": "Media delivery application service discards signed targets if the approved public use is withdrawn during signing",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "rejects mutations without a session cookie as 401 before dispatch:1",
+          "name": "Owner request security boundary (#81) rejects mutations without a session cookie as 401 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "keeps video candidates unaccepted when Storage, scanner, processor, or output sealing fails:1",
+          "name": "trusted media processing keeps video candidates unaccepted when Storage, scanner, processor, or output sealing fails",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "fails closed before reservation when the replay encryption key is unavailable:1",
+          "name": "Media upload-intent application seam fails closed before reservation when the replay encryption key is unavailable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "discards signed targets if the accepted Media snapshot changes during signing:1",
+          "name": "Media delivery application service discards signed targets if the accepted Media snapshot changes during signing",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "reports private Storage failure without exposing provider details:1",
+          "name": "Supabase Current CV private delivery reports private Storage failure without exposing provider details",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "returns a truthful 503 when Current CV delivery is unavailable:1",
+          "name": "GET Current CV adapter (#28) returns a truthful 503 when Current CV delivery is unavailable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "keeps the public settings read available when capability lookup fails:1",
+          "name": "Portfolio settings application service keeps the public settings read available when capability lookup fails",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "keeps core configuration readable when an optional delivery capability is unknown:1",
+          "name": "Portfolio settings application service keeps core configuration readable when an optional delivery capability is unknown",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "surfaces database loss and recovery through the safe readiness route:1",
+          "name": "PostgreSQL runtime composition (#47) surfaces database loss and recovery through the safe readiness route",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "reports bounded unready without throwing when PostgreSQL is unreachable:1",
+          "name": "PostgreSQL runtime composition (#47) reports bounded unready without throwing when PostgreSQL is unreachable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors:1",
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg:1",
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable:1",
+          "name": "Content authoring production PostgreSQL invariants preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:revalidates each exact locale publication before restore and changes none when one Media fact fails:1",
+          "name": "Content authoring production PostgreSQL invariants revalidates each exact locale publication before restore and changes none when one Media fact fails",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:rolls back route reservations, immutable history, projections, receipt, and event when outbox append fails:1",
+          "name": "Content authoring production PostgreSQL invariants rolls back route reservations, immutable history, projections, receipt, and event when outbox append fails",
+          "executed": true,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "T18-05",
+      "name": "Independent Content publish/restore and CV accept/activate races with Media rejection serialize safely",
+      "cases": [
+        {
+          "caseId": "T12-01-1",
+          "name": "Pending and accepted unused Media rejects; rejected state and history persist and future processing/acceptance fails.",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T12-02-1",
+          "name": "Visible Content locale and Current CV use return MEDIA_IN_USE with no rejection mutation.",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T12-03-1",
+          "name": "Hiding and archiving Content and activating a replacement Current CV remove the affected use.",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T12-04-1",
+          "name": "Draft, Hidden, and Archived references allow rejection; publish, restore, and CV approval revalidate rejected Media.",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T12-05-1",
+          "name": "Decision, version, receipt, and event commit atomically; injected failure rolls back and exact replay survives later version changes.",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T12-06-1",
+          "name": "Independent publication, restore, CV acceptance, and activation races with rejection serialize to valid outcomes.",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T12-07-1",
+          "name": "Accept/reject concurrency, changed-hash reuse, stale versions, and terminal transitions fail safely.",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T12-08-1",
+          "name": "Current authoritative usage reads protect writes; retained objects stay private and capability expiry is documented.",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T12-09-1",
+          "name": "Private rejection reason is absent from public event data and errors expose safe codes only.",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:rejects accepted Media safely and serializes with current usage changes:1",
+          "name": "Phase 6 #157 isolated Media rejection with real PostgreSQL and Storage rejects accepted Media safely and serializes with current usage changes",
+          "executed": true,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "T18-06",
+      "name": "Exact and changed-hash idempotency, replay, stale commands, rollback, and orphan handling across Media/CV commands",
+      "cases": [
+        {
+          "caseId": "T09-01-1",
+          "name": "T09-01 concurrent authenticated reads initialize one empty version-1 scoped root",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T09-02-1",
+          "name": "T09-02 concurrent authenticated Owner POSTs replay one shared receipt after both miss the initial lookup",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T09-03-1",
+          "name": "T09-03 and T09-05 accepted same-Owner PDF facts are snapshot-bound to a UUIDv7 English registered version",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T09-04-1",
+          "name": "T09-04 unprocessed raw PDF, accepted non-PDF image, missing, foreign Owner, and non-English intents reject without writes: {\"unprocessed\":true,\"wrongKind\":true,\"acceptedImage\":true,\"missing\":true,\"foreignOwner\":true,\"nonEnglish\":true,\"noWrites\":true}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T09-05-1",
+          "name": "T09-03 and T09-05 accepted same-Owner PDF facts are snapshot-bound to a UUIDv7 English registered version",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T09-06-1",
+          "name": "T09-06 registration increments the root and records one event without accepting or activating the CV",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T09-06-2",
+          "name": "T09-06 root, version, receipt and event roll back together when outbox insertion fails",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T09-07-1",
+          "name": "T09-07 exact replay preserves the original receipt; changed intent conflicts and a fresh stale root version fails",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T09-08-1",
+          "name": "T09-08 Owner projections return deterministic latest-100 version and activation views without deleting retained rows",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T09-09-1",
+          "name": "T09-09 same-scope foreign keys, English and snapshot constraints, forced RLS, default-deny roles and bounded indexes exist",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-01-1",
+          "name": "T10-01 only the configured Owner can accept a same-Portfolio registered English PDF; missing and foreign versions disclose no private facts",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-02-1",
+          "name": "T10-02 current accepted, safe, suitable and accessible Media facts retain the exact PDF object/hash/version under the shared Media lock",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-03-1",
+          "name": "T10-03 incomplete Media acceptance facts fail without changing CV approval state",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-03-2",
+          "name": "T10-03 duplicate Media acceptance facts fail without changing CV approval state",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-03-3",
+          "name": "T10-03 version-inconsistent Media acceptance facts fail without changing CV approval state",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-03-4",
+          "name": "T10-03 a rejected Media asset changed after registration cannot be accepted from stale snapshot facts",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-04-1",
+          "name": "T10-04 approval, history, root increment, exact receipt and minimal event commit together while Current CV remains empty",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-04-2",
+          "name": "T10-04 injected history failure rolls back CV state, root version, approval and success receipt",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-04-3",
+          "name": "T10-04 injected receipt failure rolls back CV state, root version, approval and success receipt",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-04-4",
+          "name": "T10-04 injected outbox failure rolls back CV state, approval history, root version and success receipt",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-05-1",
+          "name": "T10-05 accepting another registered version leaves an existing Current CV pointer and its event history unchanged",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-06-1",
+          "name": "T10-06 a new key cannot approve an already accepted CV version",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-06-2",
+          "name": "T10-06 a fresh stale shared-root If-Match fails without creating an approval",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-06-3",
+          "name": "T10-06 exact replay returns the original receipt before later root/Media checks; changed intent conflicts",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-07-1",
+          "name": "T10-07 accepted CV snapshot and approval remain private history and never change the empty Current CV pointer",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T10-08-1",
+          "name": "T10-08 strict response and Owner views expose no PDF content or Media snapshot; approval tables use scoped forced RLS and append-only access",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-06-1",
+          "name": "T11-06 exact replay returns the earlier receipt after replacement; changed-key intent and fresh stale versions conflict",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T16-01-1",
+          "name": "T16-01 through T16-05 all nine operations, real byte delivery, and bounded histories",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors:1",
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:composes all nine Owner Media and CV operations through real services:1",
+          "name": "Phase 6 #161 real production Owner Media and CV composition composes all nine Owner Media and CV operations through real services",
+          "executed": true,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "T18-07",
+      "name": "Missing, duplicate, foreign, stale, substituted, replacement, and overwrite facts cannot bypass eligibility or immutability",
+      "cases": [
+        {
+          "caseId": "format:pdf",
+          "name": "pdf real processor, scanner and private Storage round trip",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "format:png",
+          "name": "png real processor, scanner and private Storage round trip",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "format:jpeg",
+          "name": "jpeg real processor, scanner and private Storage round trip",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "format:webp",
+          "name": "webp real processor, scanner and private Storage round trip",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "format:mp4",
+          "name": "mp4 real processor, scanner and private Storage round trip",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "format:webm",
+          "name": "webm real processor, scanner and private Storage round trip",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T12-07-1",
+          "name": "Accept/reject concurrency, changed-hash reuse, stale versions, and terminal transitions fail safely.",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T12-08-1",
+          "name": "Current authoritative usage reads protect writes; retained objects stay private and capability expiry is documented.",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T16-01-1",
+          "name": "T16-01 through T16-05 all nine operations, real byte delivery, and bounded histories",
+          "executed": true,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "T18-08",
+      "name": "Public Media/CV delivery enforces bytes, origin, expiry, no-store, errors, rate limits, and no identity dependence",
+      "cases": [
+        {
+          "caseId": "T14-02-1",
+          "name": "T14-02 T14-03 T14-05 the real current pointer streams exact private accepted PDF bytes with matching immutable hash, no-store and sanitized inline filename",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T14-03-1",
+          "name": "T14-02 T14-03 T14-05 the real current pointer streams exact private accepted PDF bytes with matching immutable hash, no-store and sanitized inline filename",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T14-05-1",
+          "name": "T14-02 T14-03 T14-05 the real current pointer streams exact private accepted PDF bytes with matching immutable hash, no-store and sanitized inline filename",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T14-07-1",
+          "name": "T14-07 each new request after A-to-B replacement streams B from its new committed pointer while the old snapshot remains distinct",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T14-08-1",
+          "name": "T14-08 visitor delivery needs no account, identity or consent cookie and does not set one",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:issues bounded delivery only for current published-locale and profile Media uses:1",
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage issues bounded delivery only for current published-locale and profile Media uses",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "streams the declared PDF branch with no-store and safe disposition:1",
+          "name": "GET Current CV adapter (#28) streams the declared PDF branch with no-store and safe disposition",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "returns a short lived exact-origin signed URL with disposition encoded by Storage:1",
+          "name": "Supabase Current CV private delivery returns a short lived exact-origin signed URL with disposition encoded by Storage",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "limits repeated client requests before application dispatch and sends Retry-After:1",
+          "name": "GET Current CV adapter (#28) limits repeated client requests before application dispatch and sends Retry-After",
+          "executed": true,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "T18-09",
+      "name": "Logs, problems, public DTOs, receipts, outbox, and evidence exclude private capabilities and content",
+      "cases": [
+        {
+          "caseId": "T15-08-1",
+          "name": "T15-08 public configuration contains stable settings and capability facts without Storage mappings or bearer URLs",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T11-03-1",
+          "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"expectedVersionId\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"5e0d7ffadc2b7cf365d27f1e67d46e29eff30f2c78f98e41e33987bba39bd3f7\",\"version_id\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-17T23:45:40.898Z\",\"newCurrentCvId\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\"}}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "rejects a redirect with unlisted origin:1",
+          "name": "GET Current CV adapter (#28) rejects a redirect with unlisted origin",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "rejects a redirect with insecure URL:1",
+          "name": "GET Current CV adapter (#28) rejects a redirect with insecure URL",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "redacts private diagnostics before evidence export:1",
+          "name": "GET Current CV adapter (#28) redacts private diagnostics before evidence export",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T12-09-1",
+          "name": "Private rejection reason is absent from public event data and errors expose safe codes only.",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "maps unexpected exceptions to generic 500 without leaking secrets:1",
+          "name": "GET Current CV adapter (#28) maps unexpected exceptions to generic 500 without leaking secrets",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "discards signed targets if the approved public use is withdrawn during signing:1",
+          "name": "Media delivery application service discards signed targets if the approved public use is withdrawn during signing",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "rejects mutations without a session cookie as 401 before dispatch:1",
+          "name": "Owner request security boundary (#81) rejects mutations without a session cookie as 401 before dispatch",
+          "executed": true,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "T18-10",
+      "name": "Real Owner/session/CSRF/scope checks and restricted-principal policies remain green",
+      "cases": [
+        {
+          "caseId": "T11-02-1",
+          "name": "T11-02 constrained application-role SQL rejects clearing the active pointer, downgrading an accepted current CV, unknown references and cross-Owner scope changes",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "T16-01-1",
+          "name": "T16-01 through T16-05 all nine operations, real byte delivery, and bounded histories",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:resolves a verified Owner actor for mutations with valid session, origin, and CSRF proof:1",
+          "name": "Owner request security boundary (#81) resolves a verified Owner actor for mutations with valid session, origin, and CSRF proof",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:rejects mutations without a session cookie as 401 before dispatch:1",
+          "name": "Owner request security boundary (#81) rejects mutations without a session cookie as 401 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:requires owner-scoped access for every Owner entrypoint operation:1",
+          "name": "Owner operation policy (#81) requires owner-scoped access for every Owner entrypoint operation",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:resolves a valid Owner session to a stable provider-neutral actor:1",
+          "name": "verified GitHub Owner sessions (#80) resolves a valid Owner session to a stable provider-neutral actor",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:accepts emitted session claims, rejects tampering, removal and revocation:1",
+          "name": "real local Supabase access token accepts emitted session claims, rejects tampering, removal and revocation",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "test:allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes:1",
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes",
+          "executed": true,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "T18-11",
+      "name": "Every integrated scenario is mapped to executed case IDs, counts, sanitized evidence, and honest limitations",
+      "cases": [
+        {
+          "caseId": "evidence:eleven-criteria",
+          "name": "all eleven T18 criteria and source-bound case IDs are present",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "caseId": "evidence:zero-required-skips",
+          "name": "integrated and unit suites report zero failures and skips",
+          "executed": true,
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "executed": 141,
+    "failed": 0,
+    "skipped": 0,
+    "criteria": 11,
+    "suite": {
+      "exitStatus": 0,
+      "total": 19,
+      "failed": 0,
+      "skipped": 0,
+      "passed": 19,
+      "rawDiscovery": {
+        "total": 103,
+        "failed": 0,
+        "unselected": 84,
+        "passed": 19
+      },
+      "unit": {
+        "suites": [
+          "tests/modules/media-acceptance.test.ts",
+          "tests/modules/media-cv-contracts.test.ts",
+          "tests/modules/media-delivery.test.ts",
+          "tests/runtime/supabase-media-delivery-storage.test.ts",
+          "tests/modules/media-rejection.test.ts",
+          "tests/modules/cv-portfolio.test.ts",
+          "tests/runtime/current-cv.test.ts",
+          "tests/modules/current-cv-delivery.test.ts",
+          "tests/runtime/supabase-current-cv-delivery.test.ts",
+          "tests/modules/media-processing.test.ts",
+          "tests/modules/media-upload-intent.test.ts",
+          "tests/phase4/portfolio-settings-service.test.ts",
+          "tests/database/postgres-runtime.test.ts",
+          "tests/phase4/owner-session-auth.test.ts",
+          "tests/phase4/owner-request-security.test.ts",
+          "tests/phase4/owner-operation-policy.test.ts"
+        ],
+        "total": 174,
+        "passed": 174,
+        "failed": 0,
+        "skipped": 0,
+        "tests": [
+          {
+            "name": "PostgreSQL runtime composition (#47) requires DATABASE_URL without exposing it or a provider handle",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "PostgreSQL runtime composition (#47) waits for tracked work and closes the database resource exactly once",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "PostgreSQL runtime composition (#47) closes the database resource when the readiness check throws",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "PostgreSQL runtime composition (#47) keeps readiness false while a registered dependency is unavailable and recovers",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "PostgreSQL runtime composition (#47) keeps the migration credential out of runtime composition and redacts startup failures",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "PostgreSQL runtime composition (#47) surfaces database loss and recovery through the safe readiness route",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "PostgreSQL runtime composition (#47) reports bounded unready without throwing when PostgreSQL is unreachable",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Current CV application delivery resolves the committed current snapshot on every request and preserves disposition",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Current CV application delivery can use a signed redirect while retaining the requested disposition",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Current CV application delivery returns no-current and dependency failures without fabricating a file",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Current CV application delivery reports current CV capability from the committed snapshot and private delivery availability",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Current CV application delivery distinguishes an empty Current CV from an unavailable authoritative read",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) trims the label and delegates a portfolio-versioned, idempotent registration",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) rejects other Owners before either history reads or writes",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) accepts a 128-character visible ASCII idempotency key",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) returns the initially empty portfolio without changing its root version",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) authorizes and delegates a portfolio-versioned, idempotent acceptance",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) rejects foreign Owners and malformed acceptance intent before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) authorizes and delegates a portfolio-versioned, idempotent activation",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) rejects foreign Owners and malformed activation intent before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner CV registration application service (#154) delegates the scoped Current CV Media-use query in the caller transaction",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media acceptance application seam (#152) requires the authenticated same-Owner actor before persisting acceptance",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media acceptance application seam (#152) rejects missing approved descriptions before repository access",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media acceptance application seam (#152) normalizes approved metadata and keeps the command result safe",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media acceptance application seam (#152) returns one complete fact per distinct ID with a bounded sorted opaque token",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media acceptance application seam (#152) fails closed when a fact is missing, duplicated, foreign, or malformed",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media acceptance application seam (#152) rejects duplicate repository facts instead of selecting one arbitrarily",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media acceptance application seam (#152) rejects facts attributed to another Owner",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media and CV module contracts (#147) retains the five Media, four Owner CV, and purpose-aware read operations",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media and CV module contracts (#147) records the approved file policies and never widens adapter limits",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media delivery application service does not sign Media when its requested-locale public use is no longer visible",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media delivery application service returns stable accepted descriptors with only expiring delivery capabilities",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media delivery application service discards signed targets if the approved public use is withdrawn during signing",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media delivery application service discards signed targets if the accepted Media snapshot changes during signing",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media delivery application service does not return a capability when the visible use resolves to foreign or unaccepted Media",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing caps the PDF output scan by the remaining whole-attempt deadline",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing passes the remaining deadline to PDF work and rejects an over-budget result",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing binds real input facts, scans and processes both byte streams, then records immutable output evidence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing records mismatched caller verdicts as failed and never scans them",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing rejects a declared PDF when actual bytes are not PDF and persists a sanitized failure",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing rejects video kind, byte hash, byte size, and caller MIME mismatches before success",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing rejects a non-PDF original filename before reading or scanning bytes",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing returns a typed temporary failure and preserves a fresh-key retry path after scanner outage",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing discards and records an adapter-returned object when it violates the requested output ID",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing does not process terminal candidates or replay an exact successful key twice",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing records an over-budget processing attempt as a failure before PDF processing",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing keeps video candidates unaccepted when Storage, scanner, processor, or output sealing fails",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing bounds video processing time and discards a sealed output when the commit turns stale",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing bounds the video commit by the remaining processing budget and records elapsed time",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing passes the final scanner its remaining timeout and records timeout at the deadline",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing rejects malformed video variants and more than eight outputs",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing discards a sealed private output when the commit becomes stale",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "trusted media processing records private orphan metadata when cleanup fails and retries only the exact object",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media rejection application seam (#157) requires the authenticated same-Owner actor before querying usage or persisting",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media rejection application seam (#157) rejects invalid private reason \"\" before repository access",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media rejection application seam (#157) rejects invalid private reason \" \\n \" before repository access",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media rejection application seam (#157) rejects invalid private reason \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" before repository access",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media rejection application seam (#157) rejects invalid private reason \"unsafe\\u0000reason\" before repository access",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media rejection application seam (#157) normalizes the private reason and passes a same-transaction usage check into the repository",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media upload-intent application seam creates separate UUIDv7 identities and persists the hostile filename only as private metadata",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media upload-intent application seam replays the committed capability and receipt without preparing a second target",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media upload-intent application seam rejects wrong Owner before reservation or Storage",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media upload-intent application seam rejects unsupported kind and MIME before reservation or Storage",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media upload-intent application seam rejects zero bytes before reservation or Storage",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media upload-intent application seam rejects oversized image before reservation or Storage",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media upload-intent application seam rejects invalid digest before reservation or Storage",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media upload-intent application seam rejects NUL in filename before reservation or Storage",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Media upload-intent application seam fails closed before reservation when the replay encryption key is unavailable",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner operation policy (#81) requires owner-scoped access for every Owner entrypoint operation",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner operation policy (#81) authorizes the verified Owner for owner-scoped and public reads",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner operation policy (#81) never treats admin:all as a bypass for any actor",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner operation policy (#81) denies Visitor actors owner-scoped access",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner operation policy (#81) permits Visitor actors public reads only",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner operation policy (#81) keeps System job triggering unavailable for unsupported purposes",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner operation policy (#81) denies Owner actors job execution",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner operation policy (#81) ignores caller-forged privileged claims on any actor",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner operation policy (#81) resolves verified Owner identities to stable provider-neutral actors",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner operation policy (#81) propagates verification rejections without constructing an actor",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner operation policy (#81) keeps an explicitly injected stub crypto adapter fail closed",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) resolves a verified Owner actor for mutations with valid session, origin, and CSRF proof",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) rejects mutations without a session cookie as 401 before dispatch",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) maps verified non-Owner identities to 403",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) maps provider outage to 503 without leaking internals",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) rejects mutations with missing Origin as 403",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) rejects mutations with mismatched Origin as 403",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) rejects mutations with trailing-slash Origin as 403",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) rejects mutations with http Origin as 403",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) rejects mutations with absent proof as 403",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) rejects mutations with empty proof as 403",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) rejects mutations with short proof as 403",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) rejects mutations with session replayed as proof as 403",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) rejects forged forwarded-host information before authentication",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) authenticates reads without requiring origin or CSRF proof",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) rejects unauthenticated reads as 401",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) maps rate-limit denial to 429 with Retry-After and no dispatch",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) fails closed to 503 when the rate-limit check throws",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) builds a server-managed session cookie with safe attributes",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) omits Secure only for explicit loopback test contexts",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Owner request security boundary (#81) bounds session lifetime and rejects unsafe token material",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) resolves a valid Owner session to a stable provider-neutral actor",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) rejects forged signatures as unauthenticated",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) rejects disallowed algorithms and unknown keys as unauthenticated",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) rejects wrong issuer, audience, expired, and malformed sessions as unauthenticated",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) rejects non-object JWT segments without throwing",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) verifies ES256 and rejects public-key HMAC confusion and wrong curves",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) ignores spoofed username/email/metadata and caller Owner IDs",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) rejects non-GitHub identities and verified non-Owners as forbidden",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) denies continued access after allowlist removal",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) enforces revocation and expiry even for otherwise valid JWTs",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) maps provider outages safely without exposing provider errors or identity subjects",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) validates Owner auth configuration with redacted diagnostics",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "verified GitHub Owner sessions (#80) keeps raw session material and secrets out of rejection payloads",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service returns committed Owner state and version through the repository",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service exports the Owner settings query without exposing controlled provisioning",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service exposes only locale-eligible public fields and withholds English-only capabilities in Arabic",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service preserves channel order in each locale and reports only available English capabilities",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service keeps the public settings read available when capability lookup fails",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service keeps core configuration readable when an optional delivery capability is unknown",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service fails public configuration when its required settings repository is unavailable",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service treats capabilities as unavailable when no exported facts are implemented",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects visitor without reading settings",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects different Owner without reading settings",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects a request for a different Portfolio before reaching persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service provisions one version-one aggregate from explicit valid values",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service accepts an empty ordered channel list",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service accepts an maximum ordered channel list",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects blank profile during provisioning before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects oversized profile during provisioning before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects too many channels during provisioning before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects duplicate locale during provisioning before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects unsafe channel destination during provisioning before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects wrong channel host during provisioning before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects credential-bearing destination during provisioning before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects non-HTTPS CTA during provisioning before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects empty CTA fallback during provisioning before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Portfolio settings application service rejects executable CTA fallback during provisioning before persistence",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) redacts private diagnostics before evidence export",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) dispatches once and returns the declared 307 redirect without storage",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) binds the requested attachment disposition to the application query",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) streams the declared PDF branch with no-store and safe disposition",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) limits repeated client requests before application dispatch and sends Retry-After",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) fails closed when the hosting rate limiter is unavailable",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) returns a truthful 503 when Current CV delivery is unavailable",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) rejects missing locale as 400 before dispatch",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) rejects invalid locale as 400 before dispatch",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) rejects invalid disposition as 400 before dispatch",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) rejects unknown closed-shape property as 400 before dispatch",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) rejects duplicate query key as 400 before dispatch",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) translates declared not_found rejection to NaN",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) translates declared rate_limited rejection to NaN",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) translates declared temporarily_unavailable rejection to NaN",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) fails safely when fake output is contract-invalid",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) rejects a redirect with unlisted origin",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) rejects a redirect with insecure URL",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) uses a server-generated trace identifier shared by Problem Details and logs",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "GET Current CV adapter (#28) maps unexpected exceptions to generic 500 without leaking secrets",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Supabase Current CV private delivery checks object availability without creating a signed delivery capability",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Supabase Current CV private delivery reports private Storage failure without exposing provider details",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Supabase Current CV private delivery reads the exact private processed PDF, validates its hash, and uses bounded chunks",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Supabase Current CV private delivery returns a short lived exact-origin signed URL with disposition encoded by Storage",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Supabase Current CV private delivery fails closed on mismatched bytes and a signing URL from another origin",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Supabase Current CV private delivery rejects malformed snapshot path bindings and signed URLs for a different object",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Supabase Current CV private delivery rejects deployed loopback HTTP and refuses Storage redirects",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Supabase Media delivery Storage adapter signs exactly one hash-bound processed object for five minutes",
+            "executed": true,
+            "status": "passed"
+          },
+          {
+            "name": "Supabase Media delivery Storage adapter rejects insecure deployed origins, credentials, mismatched signing paths, and substituted bytes",
+            "executed": true,
+            "status": "passed"
+          }
+        ],
+        "verdict": "pass"
+      }
+    }
+  },
+  "testRun": {
+    "exitStatus": 0,
+    "total": 19,
+    "failed": 0,
+    "skipped": 0,
+    "passed": 19,
+    "rawDiscovery": {
+      "total": 103,
+      "failed": 0,
+      "unselected": 84,
+      "passed": 19
+    },
+    "unit": {
+      "suites": [
+        "tests/modules/media-acceptance.test.ts",
+        "tests/modules/media-cv-contracts.test.ts",
+        "tests/modules/media-delivery.test.ts",
+        "tests/runtime/supabase-media-delivery-storage.test.ts",
+        "tests/modules/media-rejection.test.ts",
+        "tests/modules/cv-portfolio.test.ts",
+        "tests/runtime/current-cv.test.ts",
+        "tests/modules/current-cv-delivery.test.ts",
+        "tests/runtime/supabase-current-cv-delivery.test.ts",
+        "tests/modules/media-processing.test.ts",
+        "tests/modules/media-upload-intent.test.ts",
+        "tests/phase4/portfolio-settings-service.test.ts",
+        "tests/database/postgres-runtime.test.ts",
+        "tests/phase4/owner-session-auth.test.ts",
+        "tests/phase4/owner-request-security.test.ts",
+        "tests/phase4/owner-operation-policy.test.ts"
+      ],
+      "total": 174,
+      "passed": 174,
+      "failed": 0,
+      "skipped": 0,
+      "tests": [
+        {
+          "name": "PostgreSQL runtime composition (#47) requires DATABASE_URL without exposing it or a provider handle",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "PostgreSQL runtime composition (#47) waits for tracked work and closes the database resource exactly once",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "PostgreSQL runtime composition (#47) closes the database resource when the readiness check throws",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "PostgreSQL runtime composition (#47) keeps readiness false while a registered dependency is unavailable and recovers",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "PostgreSQL runtime composition (#47) keeps the migration credential out of runtime composition and redacts startup failures",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "PostgreSQL runtime composition (#47) surfaces database loss and recovery through the safe readiness route",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "PostgreSQL runtime composition (#47) reports bounded unready without throwing when PostgreSQL is unreachable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Current CV application delivery resolves the committed current snapshot on every request and preserves disposition",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Current CV application delivery can use a signed redirect while retaining the requested disposition",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Current CV application delivery returns no-current and dependency failures without fabricating a file",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Current CV application delivery reports current CV capability from the committed snapshot and private delivery availability",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Current CV application delivery distinguishes an empty Current CV from an unavailable authoritative read",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) trims the label and delegates a portfolio-versioned, idempotent registration",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects other Owners before either history reads or writes",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) accepts a 128-character visible ASCII idempotency key",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) returns the initially empty portfolio without changing its root version",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) authorizes and delegates a portfolio-versioned, idempotent acceptance",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects foreign Owners and malformed acceptance intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) authorizes and delegates a portfolio-versioned, idempotent activation",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects foreign Owners and malformed activation intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) delegates the scoped Current CV Media-use query in the caller transaction",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) requires the authenticated same-Owner actor before persisting acceptance",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects missing approved descriptions before repository access",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) normalizes approved metadata and keeps the command result safe",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) returns one complete fact per distinct ID with a bounded sorted opaque token",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) fails closed when a fact is missing, duplicated, foreign, or malformed",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects duplicate repository facts instead of selecting one arbitrarily",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects facts attributed to another Owner",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media and CV module contracts (#147) retains the five Media, four Owner CV, and purpose-aware read operations",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media and CV module contracts (#147) records the approved file policies and never widens adapter limits",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media delivery application service does not sign Media when its requested-locale public use is no longer visible",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media delivery application service returns stable accepted descriptors with only expiring delivery capabilities",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media delivery application service discards signed targets if the approved public use is withdrawn during signing",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media delivery application service discards signed targets if the accepted Media snapshot changes during signing",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media delivery application service does not return a capability when the visible use resolves to foreign or unaccepted Media",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing caps the PDF output scan by the remaining whole-attempt deadline",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing passes the remaining deadline to PDF work and rejects an over-budget result",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing binds real input facts, scans and processes both byte streams, then records immutable output evidence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing records mismatched caller verdicts as failed and never scans them",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing rejects a declared PDF when actual bytes are not PDF and persists a sanitized failure",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing rejects video kind, byte hash, byte size, and caller MIME mismatches before success",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing rejects a non-PDF original filename before reading or scanning bytes",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing returns a typed temporary failure and preserves a fresh-key retry path after scanner outage",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing discards and records an adapter-returned object when it violates the requested output ID",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing does not process terminal candidates or replay an exact successful key twice",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing records an over-budget processing attempt as a failure before PDF processing",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing keeps video candidates unaccepted when Storage, scanner, processor, or output sealing fails",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing bounds video processing time and discards a sealed output when the commit turns stale",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing bounds the video commit by the remaining processing budget and records elapsed time",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing passes the final scanner its remaining timeout and records timeout at the deadline",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing rejects malformed video variants and more than eight outputs",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing discards a sealed private output when the commit becomes stale",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "trusted media processing records private orphan metadata when cleanup fails and retries only the exact object",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media rejection application seam (#157) requires the authenticated same-Owner actor before querying usage or persisting",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media rejection application seam (#157) rejects invalid private reason \"\" before repository access",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media rejection application seam (#157) rejects invalid private reason \" \\n \" before repository access",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media rejection application seam (#157) rejects invalid private reason \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" before repository access",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media rejection application seam (#157) rejects invalid private reason \"unsafe\\u0000reason\" before repository access",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media rejection application seam (#157) normalizes the private reason and passes a same-transaction usage check into the repository",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media upload-intent application seam creates separate UUIDv7 identities and persists the hostile filename only as private metadata",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media upload-intent application seam replays the committed capability and receipt without preparing a second target",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media upload-intent application seam rejects wrong Owner before reservation or Storage",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media upload-intent application seam rejects unsupported kind and MIME before reservation or Storage",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media upload-intent application seam rejects zero bytes before reservation or Storage",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media upload-intent application seam rejects oversized image before reservation or Storage",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media upload-intent application seam rejects invalid digest before reservation or Storage",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media upload-intent application seam rejects NUL in filename before reservation or Storage",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media upload-intent application seam fails closed before reservation when the replay encryption key is unavailable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner operation policy (#81) requires owner-scoped access for every Owner entrypoint operation",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner operation policy (#81) authorizes the verified Owner for owner-scoped and public reads",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner operation policy (#81) never treats admin:all as a bypass for any actor",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner operation policy (#81) denies Visitor actors owner-scoped access",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner operation policy (#81) permits Visitor actors public reads only",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner operation policy (#81) keeps System job triggering unavailable for unsupported purposes",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner operation policy (#81) denies Owner actors job execution",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner operation policy (#81) ignores caller-forged privileged claims on any actor",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner operation policy (#81) resolves verified Owner identities to stable provider-neutral actors",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner operation policy (#81) propagates verification rejections without constructing an actor",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner operation policy (#81) keeps an explicitly injected stub crypto adapter fail closed",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) resolves a verified Owner actor for mutations with valid session, origin, and CSRF proof",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) rejects mutations without a session cookie as 401 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) maps verified non-Owner identities to 403",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) maps provider outage to 503 without leaking internals",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) rejects mutations with missing Origin as 403",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) rejects mutations with mismatched Origin as 403",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) rejects mutations with trailing-slash Origin as 403",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) rejects mutations with http Origin as 403",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) rejects mutations with absent proof as 403",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) rejects mutations with empty proof as 403",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) rejects mutations with short proof as 403",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) rejects mutations with session replayed as proof as 403",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) rejects forged forwarded-host information before authentication",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) authenticates reads without requiring origin or CSRF proof",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) rejects unauthenticated reads as 401",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) maps rate-limit denial to 429 with Retry-After and no dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) fails closed to 503 when the rate-limit check throws",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) builds a server-managed session cookie with safe attributes",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) omits Secure only for explicit loopback test contexts",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner request security boundary (#81) bounds session lifetime and rejects unsafe token material",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) resolves a valid Owner session to a stable provider-neutral actor",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) rejects forged signatures as unauthenticated",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) rejects disallowed algorithms and unknown keys as unauthenticated",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) rejects wrong issuer, audience, expired, and malformed sessions as unauthenticated",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) rejects non-object JWT segments without throwing",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) verifies ES256 and rejects public-key HMAC confusion and wrong curves",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) ignores spoofed username/email/metadata and caller Owner IDs",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) rejects non-GitHub identities and verified non-Owners as forbidden",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) denies continued access after allowlist removal",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) enforces revocation and expiry even for otherwise valid JWTs",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) maps provider outages safely without exposing provider errors or identity subjects",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) validates Owner auth configuration with redacted diagnostics",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "verified GitHub Owner sessions (#80) keeps raw session material and secrets out of rejection payloads",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service returns committed Owner state and version through the repository",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service exports the Owner settings query without exposing controlled provisioning",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service exposes only locale-eligible public fields and withholds English-only capabilities in Arabic",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service preserves channel order in each locale and reports only available English capabilities",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service keeps the public settings read available when capability lookup fails",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service keeps core configuration readable when an optional delivery capability is unknown",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service fails public configuration when its required settings repository is unavailable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service treats capabilities as unavailable when no exported facts are implemented",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects visitor without reading settings",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects different Owner without reading settings",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects a request for a different Portfolio before reaching persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service provisions one version-one aggregate from explicit valid values",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service accepts an empty ordered channel list",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service accepts an maximum ordered channel list",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects blank profile during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects oversized profile during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects too many channels during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects duplicate locale during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects unsafe channel destination during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects wrong channel host during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects credential-bearing destination during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects non-HTTPS CTA during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects empty CTA fallback during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects executable CTA fallback during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) redacts private diagnostics before evidence export",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) dispatches once and returns the declared 307 redirect without storage",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) binds the requested attachment disposition to the application query",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) streams the declared PDF branch with no-store and safe disposition",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) limits repeated client requests before application dispatch and sends Retry-After",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) fails closed when the hosting rate limiter is unavailable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) returns a truthful 503 when Current CV delivery is unavailable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects missing locale as 400 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects invalid locale as 400 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects invalid disposition as 400 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects unknown closed-shape property as 400 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects duplicate query key as 400 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) translates declared not_found rejection to NaN",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) translates declared rate_limited rejection to NaN",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) translates declared temporarily_unavailable rejection to NaN",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) fails safely when fake output is contract-invalid",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects a redirect with unlisted origin",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects a redirect with insecure URL",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) uses a server-generated trace identifier shared by Problem Details and logs",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) maps unexpected exceptions to generic 500 without leaking secrets",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery checks object availability without creating a signed delivery capability",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery reports private Storage failure without exposing provider details",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery reads the exact private processed PDF, validates its hash, and uses bounded chunks",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery returns a short lived exact-origin signed URL with disposition encoded by Storage",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery fails closed on mismatched bytes and a signing URL from another origin",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery rejects malformed snapshot path bindings and signed URLs for a different object",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery rejects deployed loopback HTTP and refuses Storage redirects",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Media delivery Storage adapter signs exactly one hash-bound processed object for five minutes",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Media delivery Storage adapter rejects insecure deployed origins, credentials, mismatched signing paths, and substituted bytes",
+          "executed": true,
+          "status": "passed"
+        }
+      ],
+      "verdict": "pass"
+    }
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "checks": {
+    "mediaProcessing": {
+      "suite": "tests/database/media-upload-intent.integration.test.ts",
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "failedTests": [],
+      "verdict": "pass"
+    },
+    "cvRegistration": [
+      {
+        "name": "T09-01 concurrent authenticated reads initialize one empty version-1 scoped root",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T09-09 same-scope foreign keys, English and snapshot constraints, forced RLS, default-deny roles and bounded indexes exist",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T09-02 concurrent authenticated Owner POSTs replay one shared receipt after both miss the initial lookup",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T09-03 and T09-05 accepted same-Owner PDF facts are snapshot-bound to a UUIDv7 English registered version",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T09-06 registration increments the root and records one event without accepting or activating the CV",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T09-07 exact replay preserves the original receipt; changed intent conflicts and a fresh stale root version fails",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T09-04 unprocessed raw PDF, accepted non-PDF image, missing, foreign Owner, and non-English intents reject without writes: {\"unprocessed\":true,\"wrongKind\":true,\"acceptedImage\":true,\"missing\":true,\"foreignOwner\":true,\"nonEnglish\":true,\"noWrites\":true}",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T09-08 Owner projections return deterministic latest-100 version and activation views without deleting retained rows",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T09-06 root, version, receipt and event roll back together when outbox insertion fails",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "cvAcceptance": [
+      {
+        "name": "T10-01 only the configured Owner can accept a same-Portfolio registered English PDF; missing and foreign versions disclose no private facts",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-02 current accepted, safe, suitable and accessible Media facts retain the exact PDF object/hash/version under the shared Media lock",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-04 approval, history, root increment, exact receipt and minimal event commit together while Current CV remains empty",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-06 a new key cannot approve an already accepted CV version",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-03 incomplete Media acceptance facts fail without changing CV approval state",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-03 duplicate Media acceptance facts fail without changing CV approval state",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-03 version-inconsistent Media acceptance facts fail without changing CV approval state",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-04 injected history failure rolls back CV state, root version, approval and success receipt",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-04 injected receipt failure rolls back CV state, root version, approval and success receipt",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-04 injected outbox failure rolls back CV state, approval history, root version and success receipt",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-06 a fresh stale shared-root If-Match fails without creating an approval",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-03 a rejected Media asset changed after registration cannot be accepted from stale snapshot facts",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-06 exact replay returns the original receipt before later root/Media checks; changed intent conflicts",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-07 accepted CV snapshot and approval remain private history and never change the empty Current CV pointer",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-08 strict response and Owner views expose no PDF content or Media snapshot; approval tables use scoped forced RLS and append-only access",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T10-05 accepting another registered version leaves an existing Current CV pointer and its event history unchanged",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "cvActivation": [
+      {
+        "name": "T11-01 an unactivated portfolio has zero current flags; the first activation creates one coherent accepted English current version {\"viewCurrentVersionId\":null,\"databaseCurrentVersionId\":null,\"everActivated\":false,\"currentFlags\":0,\"projectedCurrentFlags\":0}",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"expectedVersionId\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"5e0d7ffadc2b7cf365d27f1e67d46e29eff30f2c78f98e41e33987bba39bd3f7\",\"version_id\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-17T23:45:40.898Z\",\"newCurrentCvId\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\"}}",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-02 constrained application-role SQL rejects clearing the active pointer, downgrading an accepted current CV, unknown references and cross-Owner scope changes",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins {\"waitingForMediaLock\":2,\"statuses\":[200,412],\"bodies\":[{\"aggregateId\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\",\"aggregateVersion\":113,\"outcome\":\"current-cv-activated\"},{\"type\":\"urn:shipwithali:problem:precondition-failed\",\"title\":\"Precondition Failed\",\"status\":412,\"detail\":\"An optimistic-concurrency precondition for this operation failed.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-c3e2-770c-94a6-1f03dbe79ad9/commands/activate\",\"code\":\"failed_precondition\",\"traceId\":\"01a14c41-c44b-72a5-9724-1aeca70f5960\"}],\"currentVersionId\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\",\"projectedCurrentFlags\":1}",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-06 exact replay returns the earlier receipt after replacement; changed-key intent and fresh stale versions conflict",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-07 activation of the already-current version records and replays a receipt without changing root version, history or events",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-08 an eligible retained prior CV version can be reactivated with a fresh key and root version",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14c41-bc07-772f-9ee6-c563a58a7d94\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\",\"afterCurrentFlags\":1}",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event {\"status\":409,\"body\":{\"type\":\"urn:shipwithali:problem:conflict\",\"title\":\"Conflict\",\"status\":409,\"detail\":\"The request conflicts with the current state of the resource.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"conflict\",\"traceId\":\"01a14c41-c57e-7af7-a89e-1da16999f992\"},\"history\":105,\"expectedHistory\":105,\"receipts\":0,\"events\":4,\"expectedEvents\":4,\"before\":{\"version\":115,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"version\":115,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-09 unsafe processing evidence blocks activation without changing Current CV",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-09 inaccessible acceptance facts block activation without changing Current CV",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-09 a missing accepted PDF object blocks activation without changing pointer, flags, history, receipts or outbox",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-09 a Storage outage during the real accepted-Media activation path preserves Current CV state",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-09 inaccessible accepted Media blocks activation without changing the portfolio",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-09 an immutable object binding mismatch blocks activation without changing the portfolio",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-09 registered but unaccepted CV versions cannot become Current and do not mutate the portfolio",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-09 a valid accepted foreign Owner CV is not found and cannot mutate this Owner's pointer, flags, history, receipts or outbox",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-10 the CV-owned current-Media use query returns an authoritative scoped result in the caller transaction",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d295-7d6d-be6a-b9feb4f7b2f2\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d2c7-7b93-9b8d-b70e116e4b22\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d2f3-7ddf-84db-bd8712a5192b\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d320-7bff-9dfb-6a23066f4d1e\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d357-75b7-bc8c-17a11a2f3be2\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c41-bc07-772f-9ee6-c563a58a7d94/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c41-d38d-7a30-b9da-0e2795b20e26\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c41-c3e2-770c-94a6-1f03dbe79ad9\"}}",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "cvDelivery": [
+      {
+        "name": "T14-02 T14-03 T14-05 the real current pointer streams exact private accepted PDF bytes with matching immutable hash, no-store and sanitized inline filename",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T14-07 each new request after A-to-B replacement streams B from its new committed pointer while the old snapshot remains distinct",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T14-08 visitor delivery needs no account, identity or consent cookie and does not set one",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "publicCapabilities": [
+      {
+        "name": "T15-03 reviewed Arabic content resolves shared accepted English Media while preserving Arabic-only case-study text",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T15-01 T15-02 committed Current CV is available only in English",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T15-01 T15-02 activation exposes only the committed English Current CV capability",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T15-08 public configuration contains stable settings and capability facts without Storage mappings or bearer URLs",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T15-02 public Current CV transport continues to reject Arabic locale",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T15-04 registration and separate acceptance do not replace the existing committed Current CV",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "T15-07 configured profile visibility cannot make private or rejected Media candidates deliverable",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "mediaRejection": [
+      {
+        "id": "T12-01",
+        "name": "Pending and accepted unused Media rejects; rejected state and history persist and future processing/acceptance fails.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-02",
+        "name": "Visible Content locale and Current CV use return MEDIA_IN_USE with no rejection mutation.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-03",
+        "name": "Hiding and archiving Content and activating a replacement Current CV remove the affected use.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-04",
+        "name": "Draft, Hidden, and Archived references allow rejection; publish, restore, and CV approval revalidate rejected Media.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-05",
+        "name": "Decision, version, receipt, and event commit atomically; injected failure rolls back and exact replay survives later version changes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-06",
+        "name": "Independent publication, restore, CV acceptance, and activation races with rejection serialize to valid outcomes.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-07",
+        "name": "Accept/reject concurrency, changed-hash reuse, stale versions, and terminal transitions fail safely.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-08",
+        "name": "Current authoritative usage reads protect writes; retained objects stay private and capability expiry is documented.",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "id": "T12-09",
+        "name": "Private rejection reason is absent from public event data and errors expose safe codes only.",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "ownerComposition": [
+      {
+        "name": "T16-01 through T16-05 all nine operations, real byte delivery, and bounded histories",
+        "executed": true,
+        "status": "passed",
+        "scannerVersion": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+        "processorVersion": "17.12.1;pikepdf-10.13.0.post1",
+        "mediaHistory": {
+          "processingReturned": 100,
+          "processingRetained": 102,
+          "processingTruncated": true,
+          "decisionsReturned": 100,
+          "decisionsRetained": 102,
+          "decisionsTruncated": true
+        },
+        "cvHistory": {
+          "versionsReturned": 100,
+          "versionsRetained": 102,
+          "versionsTruncated": true,
+          "activationsReturned": 100,
+          "activationsRetained": 102,
+          "activationsTruncated": true
+        }
+      }
+    ],
+    "contentAuthoringTests": [
+      "reports only Media referenced by currently published Project and Achievement locales",
+      "preserves an existing publication when replacement Media facts are missing, malformed, stale, or unsuitable",
+      "rejects invalid evidence, review, and Media facts without creating public state",
+      "publishes English and Arabic independently, preserves first publication time, history, and the last valid projection",
+      "publishes reviewed Achievements with internal or public evidence into a locale-specific ordered Timeline",
+      "hides, archives, and restores all three content kinds through atomic owner lifecycle commands",
+      "revalidates each exact locale publication before restore and changes none when one Media fact fails",
+      "rolls back route reservations, immutable history, projections, receipt, and event when outbox append fails"
+    ],
+    "ownerSecurityTests": [
+      "resolves a verified Owner actor for mutations with valid session, origin, and CSRF proof",
+      "rejects mutations without a session cookie as 401 before dispatch",
+      "requires owner-scoped access for every Owner entrypoint operation",
+      "resolves a valid Owner session to a stable provider-neutral actor",
+      "accepts emitted session claims, rejects tampering, removal and revocation",
+      "allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes"
+    ]
+  },
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run docker:phase6:media-cv-integration"
+  ],
+  "limitations": [
+    "The run validates application and local-service behavior; it does not certify deployment outage survival, release qualification, frontend behavior, Measurement interactions, or backup operations."
+  ],
+  "verdict": "pass",
+  "failures": []
+}

@@ -1,0 +1,165 @@
+
+> shipwithali-portfolio@0.0.0 prephase6:focus:media-image-processing
+> npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase6:focus:media-image-processing
+> node scripts/phase6-verification.mjs --image-processing-only
+
+Starting isolated loopback PostgreSQL, Auth and private Storage services.
+Scanning, processing and round-tripping png.
+✓ png: private Storage upload and byte round-trip passed; scanning.
+✓ png: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping jpeg.
+✓ jpeg: private Storage upload and byte round-trip passed; scanning.
+✓ jpeg: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping webp.
+✓ webp: private Storage upload and byte round-trip passed; scanning.
+✓ webp: processor, clean scan and private byte round-trip passed.
+Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.
+{
+  "ticket": 150,
+  "runId": "5719a994-646d-4e7c-b024-97451646726d",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "verdict": "pass",
+  "formatCounts": {
+    "total": 3,
+    "passed": 3
+  },
+  "mediaProcessingChecks": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "verdict": "pass"
+  },
+  "imageUnitChecks": {
+    "suites": [
+      "tests/runtime/media-image-processing.test.ts",
+      "tests/modules/media-image-processing.test.ts",
+      "tests/runtime/supabase-media-processing-storage.test.ts"
+    ],
+    "total": 20,
+    "passed": 20,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "scenarios": [
+      {
+        "name": "Media image processing application interface scans source and every output, seals both immutable variants and commits their byte-bound facts",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media image processing application interface does not let a caller's extension choose an image processor for mismatched bytes",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media image processing application interface retains no image object when any output is unsafe or the database commit becomes stale",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media image processing application interface bounds a database commit by the remaining attempt time and does not report success when that bound expires",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media image processing application interface surfaces orphan persistence failure with the exact private object facts after cleanup fails",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "bounded Media image processing fails closed when the shared attempt deadline leaves less than Sharp's one-second minimum",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "bounded Media image processing decodes png bytes and returns verified metadata-free WebP variants",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "bounded Media image processing decodes jpeg bytes and returns verified metadata-free WebP variants",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "bounded Media image processing decodes webp bytes and returns verified metadata-free WebP variants",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "bounded Media image processing rejects unsupported and truncated bytes without returning a variant",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "bounded Media image processing rejects decoded dimensions above the effective pixel limit before encoding",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "bounded Media image processing rejects an actual image whose decoded dimensions exceed the 40 megapixel policy",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "bounded Media image processing rejects actual input over 10 MiB before attempting to decode it",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "bounded Media image processing re-encodes away source EXIF metadata",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Supabase Media processing Storage adapter stops a streamed candidate read at the 20 MiB PDF bound",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Supabase Media processing Storage adapter enforces the actual 50 MiB video candidate limit before reading an oversized declared body",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Supabase Media processing Storage adapter aborts a candidate fetch when its remaining processing budget expires",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Supabase Media processing Storage adapter checks the exact accepted PDF path before CV activation",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Supabase Media processing Storage adapter rejects a missing immutable PDF object and fails closed on Storage outages",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Supabase Media processing Storage adapter seals a create-only private WebM with its verified digest and removes the exact variant on cleanup",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "verdict": "pass"
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "evidence": "evidence/phase6-image-processing-150.json"
+}

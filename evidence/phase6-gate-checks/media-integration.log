@@ -1,0 +1,51 @@
+
+> shipwithali-portfolio@0.0.0 prephase6:focus:media-integration
+> npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase6:focus:media-integration
+> node scripts/phase6-verification.mjs --media-integration-only
+
+Starting isolated loopback PostgreSQL, Auth and private Storage services.
+Probing pinned ClamAV, ImageMagick, FFmpeg and OCRmyPDF runtimes.
+Generating safe fixtures with the pinned image and video processors.
+Scanning, processing and round-tripping pdf.
+✓ pdf: private Storage upload and byte round-trip passed; scanning.
+✓ pdf: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping png.
+✓ png: private Storage upload and byte round-trip passed; scanning.
+✓ png: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping jpeg.
+✓ jpeg: private Storage upload and byte round-trip passed; scanning.
+✓ jpeg: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping webp.
+✓ webp: private Storage upload and byte round-trip passed; scanning.
+✓ webp: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping mp4.
+✓ mp4: private Storage upload and byte round-trip passed; scanning.
+✓ mp4: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping webm.
+✓ webm: private Storage upload and byte round-trip passed; scanning.
+✓ webm: processor, clean scan and private byte round-trip passed.
+Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.
+{
+  "verdict": "pass",
+  "checks": {
+    "total": 7,
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "verdict": "pass"
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "evidence": "evidence/phase6-media-integration.json"
+}

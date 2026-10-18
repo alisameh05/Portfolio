@@ -4,7 +4,7 @@
 
 
 ── Architecture check: src/ ──
-✔ no dependency violations found (166 modules, 525 dependencies cruised)
+✔ no dependency violations found (247 modules, 1044 dependencies cruised)
 ✓ Architecture check passed: no forbidden dependencies in src/
 
 ── Validating Invalid Architecture Fixtures ──
@@ -26,10 +26,10 @@
 ✓ Modules confine persistence/providers to adapters and contain no Route Handlers, UI, or Lab entry implementation
 
 ── Runtime architecture boundaries ──
-✓ runtime architecture: 160 source files preserve framework, environment, transport, provider, and Route Handler boundaries
+✓ runtime architecture: 234 source files preserve framework, environment, transport, provider, and Route Handler boundaries
 
 ═════════════════════════════════════════════════════════════════
-             ARCHITECTURE CONFORMANCE REPORT
+             ARCHITECTURE CONFORMANCE REPORT                    
 ═════════════════════════════════════════════════════════════════
 [✓ PASS] Clean dependency graph for src/        : src/ cruised with 0 violations
 [✓ PASS] Provider leakage fixture               : Correctly rejected with rule no-provider-in-domain
@@ -59,7 +59,7 @@ error no-deep-cross-module-import: tests/fixtures/invalid-deps/deep-cross-module
 
 
 x 1 dependency violations (1 errors, 0 warnings). 3 modules, 2 dependencies cruised.
-error no-cycles: tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts →
+error no-cycles: tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts → 
       tests/fixtures/invalid-deps/cycle/modules/cycle-b/index.ts →
       tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts
     Dependency cycles are forbidden in the modular monolith.

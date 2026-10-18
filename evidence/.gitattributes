@@ -1,0 +1,2 @@
+# Evidence artifacts are hashed as emitted; preserve their exact bytes across checkouts.
+* -text

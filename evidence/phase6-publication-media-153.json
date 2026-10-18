@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 153,
   "parent": 152,
-  "runId": "20a2da88-3e49-4a68-8ee6-e3b49082886b",
-  "sourceRevision": "b44bef4a3adb95bc0866bf10b0a338d29c79dc0c",
-  "sourceTreeSha256": "ad0b3f198ba9b074564b4d76d97e1c6d365c2fc5984733104f21559bf5f8b6b4",
-  "startedAt": "2026-10-11T19:20:53.123Z",
-  "completedAt": "2026-10-11T19:27:54.518Z",
+  "runId": "9d42e3f4-9f10-4068-ab6d-f341a04fd5fe",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "startedAt": "2026-10-17T23:25:47.021Z",
+  "completedAt": "2026-10-17T23:28:33.089Z",
   "scope": "real-Media-gated-Project-Achievement-publication-and-restoration",
   "runtime": {
     "node": "v24.21.0",
@@ -19,7 +19,8 @@
     "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
     "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
     "pdfProcessor": "17.12.1",
-    "sharp": "sharp-0.35.4;libvips-8.18.6"
+    "sharp": "sharp-0.35.4;libvips-8.18.6",
+    "scannerMode": "isolated-clamd-stream"
   },
   "services": {
     "postgres": {
@@ -143,6 +144,53 @@
       "passed": 9,
       "failed": 0,
       "skipped": 0,
+      "tests": [
+        {
+          "name": "Media acceptance application seam (#152) requires the authenticated same-Owner actor before persisting acceptance",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects missing approved descriptions before repository access",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) normalizes approved metadata and keeps the command result safe",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) returns one complete fact per distinct ID with a bounded sorted opaque token",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) fails closed when a fact is missing, duplicated, foreign, or malformed",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects duplicate repository facts instead of selecting one arbitrarily",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects facts attributed to another Owner",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media and CV module contracts (#147) retains the five Media, four Owner CV, and purpose-aware read operations",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media and CV module contracts (#147) records the approved file policies and never widens adapter limits",
+          "executed": true,
+          "status": "passed"
+        }
+      ],
       "verdict": "pass"
     },
     "acceptanceOperations": 6

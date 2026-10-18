@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 150,
   "parent": 145,
-  "runId": "a258d923-907d-4f98-bb64-2cc49a8a87a6",
-  "sourceRevision": "e34b169500a2ba13a8c2ef1ed612a2cf6039d335",
-  "sourceTreeSha256": "e6bc21db325aec19a17e9412b426ac41ca1a777cad6488b027e3032da97d8eba",
-  "startedAt": "2026-10-11T12:13:40.042Z",
-  "completedAt": "2026-10-11T12:17:29.353Z",
+  "runId": "5719a994-646d-4e7c-b024-97451646726d",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "startedAt": "2026-10-17T23:19:49.339Z",
+  "completedAt": "2026-10-17T23:20:40.352Z",
   "scope": "trusted-byte-bound-PNG-JPEG-WebP-variants-with-immutable-private-outputs",
   "runtime": {
     "node": "v24.21.0",
@@ -16,7 +16,9 @@
     "supabaseCli": "2.117.0",
     "postgres": "17.6",
     "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
-    "sharp": "sharp-0.35.4;libvips-8.18.6"
+    "pdfProcessor": "17.12.1",
+    "sharp": "sharp-0.35.4;libvips-8.18.6",
+    "scannerMode": "isolated-clamd-stream"
   },
   "policyIds": {
     "migration": "20261011230000_process_bounded_media_image_variants.sql",
@@ -121,8 +123,8 @@
         "tests/modules/media-image-processing.test.ts",
         "tests/runtime/supabase-media-processing-storage.test.ts"
       ],
-      "total": 17,
-      "passed": 17,
+      "total": 20,
+      "passed": 20,
       "failed": 0,
       "skipped": 0,
       "failedTests": [],
@@ -203,12 +205,27 @@
           "status": "passed"
         },
         {
-          "name": "Supabase Media processing Storage adapter rejects oversized declared bodies before reading their stream",
+          "name": "Supabase Media processing Storage adapter enforces the actual 50 MiB video candidate limit before reading an oversized declared body",
           "executed": true,
           "status": "passed"
         },
         {
-          "name": "Supabase Media processing Storage adapter seals WebP variants create-only and removes only the exact extension-bound output",
+          "name": "Supabase Media processing Storage adapter aborts a candidate fetch when its remaining processing budget expires",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Media processing Storage adapter checks the exact accepted PDF path before CV activation",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Media processing Storage adapter rejects a missing immutable PDF object and fails closed on Storage outages",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Media processing Storage adapter seals a create-only private WebM with its verified digest and removes the exact variant on cleanup",
           "executed": true,
           "status": "passed"
         }
@@ -317,12 +334,27 @@
       "status": "passed"
     },
     {
-      "name": "Supabase Media processing Storage adapter rejects oversized declared bodies before reading their stream",
+      "name": "Supabase Media processing Storage adapter enforces the actual 50 MiB video candidate limit before reading an oversized declared body",
       "executed": true,
       "status": "passed"
     },
     {
-      "name": "Supabase Media processing Storage adapter seals WebP variants create-only and removes only the exact extension-bound output",
+      "name": "Supabase Media processing Storage adapter aborts a candidate fetch when its remaining processing budget expires",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "Supabase Media processing Storage adapter checks the exact accepted PDF path before CV activation",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "Supabase Media processing Storage adapter rejects a missing immutable PDF object and fails closed on Storage outages",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "Supabase Media processing Storage adapter seals a create-only private WebM with its verified digest and removes the exact variant on cleanup",
       "executed": true,
       "status": "passed"
     }

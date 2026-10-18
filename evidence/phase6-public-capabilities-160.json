@@ -6,11 +6,11 @@
     158,
     159
   ],
-  "runId": "12abda82-0bad-4196-b29b-d3f492534713",
-  "sourceRevision": "04f318e3b94f2b3e39f75927f32a2729e25af0f5",
-  "sourceTreeSha256": "ec079a29506e141db3f0f52914777f1d964591426d4dc81d862b62abd29cce19",
-  "startedAt": "2026-10-13T20:16:16.886Z",
-  "completedAt": "2026-10-13T20:26:12.289Z",
+  "runId": "682ee927-902d-4b44-ba31-585f97b38964",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "startedAt": "2026-10-17T23:36:36.280Z",
+  "completedAt": "2026-10-17T23:38:33.732Z",
   "scope": "locale-aware-media-and-current-cv-capabilities",
   "runtime": {
     "node": "v24.21.0",
@@ -23,7 +23,8 @@
     "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
     "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
     "pdfProcessor": "17.12.1",
-    "sharp": "sharp-0.35.4;libvips-8.18.6"
+    "sharp": "sharp-0.35.4;libvips-8.18.6",
+    "scannerMode": "isolated-clamd-stream"
   },
   "services": {
     "postgres": {
@@ -45,14 +46,14 @@
     "scanner": {
       "available": true,
       "version": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
-      "executions": 34
+      "executions": 36
     },
     "processors": {
       "pdf": "17.12.1",
       "image": "sharp-0.35.4;libvips-8.18.6",
       "video": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
       "executions": {
-        "pdf": 10,
+        "pdf": 11,
         "image": 5,
         "video": 0
       }
@@ -66,7 +67,7 @@
         "status": "passed"
       },
       {
-        "name": "T15-01 T15-02 empty Current CV is unavailable in both locales",
+        "name": "T15-01 T15-02 committed Current CV is available only in English",
         "executed": true,
         "status": "passed"
       },
@@ -105,10 +106,342 @@
         "tests/runtime/supabase-current-cv-delivery.test.ts",
         "tests/phase4/portfolio-settings-service.test.ts"
       ],
-      "total": 64,
-      "passed": 64,
+      "total": 66,
+      "passed": 66,
       "failed": 0,
       "skipped": 0,
+      "tests": [
+        {
+          "name": "Current CV application delivery resolves the committed current snapshot on every request and preserves disposition",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Current CV application delivery can use a signed redirect while retaining the requested disposition",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Current CV application delivery returns no-current and dependency failures without fabricating a file",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Current CV application delivery reports current CV capability from the committed snapshot and private delivery availability",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Current CV application delivery distinguishes an empty Current CV from an unavailable authoritative read",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) requires the authenticated same-Owner actor before persisting acceptance",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects missing approved descriptions before repository access",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) normalizes approved metadata and keeps the command result safe",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) returns one complete fact per distinct ID with a bounded sorted opaque token",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) fails closed when a fact is missing, duplicated, foreign, or malformed",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects duplicate repository facts instead of selecting one arbitrarily",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects facts attributed to another Owner",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media and CV module contracts (#147) retains the five Media, four Owner CV, and purpose-aware read operations",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media and CV module contracts (#147) records the approved file policies and never widens adapter limits",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service returns committed Owner state and version through the repository",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service exports the Owner settings query without exposing controlled provisioning",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service exposes only locale-eligible public fields and withholds English-only capabilities in Arabic",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service preserves channel order in each locale and reports only available English capabilities",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service keeps the public settings read available when capability lookup fails",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service keeps core configuration readable when an optional delivery capability is unknown",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service fails public configuration when its required settings repository is unavailable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service treats capabilities as unavailable when no exported facts are implemented",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects visitor without reading settings",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects different Owner without reading settings",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects a request for a different Portfolio before reaching persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service provisions one version-one aggregate from explicit valid values",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service accepts an empty ordered channel list",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service accepts an maximum ordered channel list",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects blank profile during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects oversized profile during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects too many channels during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects duplicate locale during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects unsafe channel destination during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects wrong channel host during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects credential-bearing destination during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects non-HTTPS CTA during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects empty CTA fallback during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Portfolio settings application service rejects executable CTA fallback during provisioning before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) redacts private diagnostics before evidence export",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) dispatches once and returns the declared 307 redirect without storage",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) binds the requested attachment disposition to the application query",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) streams the declared PDF branch with no-store and safe disposition",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) limits repeated client requests before application dispatch and sends Retry-After",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) fails closed when the hosting rate limiter is unavailable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) returns a truthful 503 when Current CV delivery is unavailable",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects missing locale as 400 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects invalid locale as 400 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects invalid disposition as 400 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects unknown closed-shape property as 400 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects duplicate query key as 400 before dispatch",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) translates declared not_found rejection to NaN",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) translates declared rate_limited rejection to NaN",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) translates declared temporarily_unavailable rejection to NaN",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) fails safely when fake output is contract-invalid",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects a redirect with unlisted origin",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) rejects a redirect with insecure URL",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) production composition fails closed with 503 RUNTIME_NOT_IMPLEMENTED",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) uses a server-generated trace identifier shared by Problem Details and logs",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "GET Current CV adapter (#28) maps unexpected exceptions to generic 500 without leaking secrets",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery checks object availability without creating a signed delivery capability",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery reports private Storage failure without exposing provider details",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery reads the exact private processed PDF, validates its hash, and uses bounded chunks",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery returns a short lived exact-origin signed URL with disposition encoded by Storage",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery fails closed on mismatched bytes and a signing URL from another origin",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery rejects malformed snapshot path bindings and signed URLs for a different object",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Current CV private delivery rejects deployed loopback HTTP and refuses Storage redirects",
+          "executed": true,
+          "status": "passed"
+        }
+      ],
       "verdict": "pass"
     },
     "boundaryChecks": {
@@ -118,7 +451,7 @@
         "status": 0
       },
       "architecture": {
-        "stdout": "✓ runtime architecture: 187 source files preserve framework, environment, transport, provider, and Route Handler boundaries\n",
+        "stdout": "✓ runtime architecture: 234 source files preserve framework, environment, transport, provider, and Route Handler boundaries\n",
         "stderr": "",
         "status": 0
       }
@@ -198,7 +531,7 @@
     "integrationExecuted": 7,
     "integrationFailures": 0,
     "integrationSkips": 0,
-    "unitExecuted": 64,
+    "unitExecuted": 66,
     "unitFailures": 0,
     "unitSkips": 0
   },

@@ -2,8 +2,8 @@
 > shipwithali-portfolio@0.0.0 test:phase7:gate
 > node --test tests/tooling/phase7-gate.test.mjs
 
-✔ Phase 7 gate maps each parent criterion and required domain scenario to executed evidence (3.878ms)
-✔ gate rejects runtime mismatch, missing services, stale evidence, skips, failed aggregates, incomplete reports, and failed cleanup (2.0982ms)
+✔ Phase 7 gate maps each parent criterion and required domain scenario to executed evidence (3.5783ms)
+✔ gate rejects runtime mismatch, missing services, stale evidence, skips, failed aggregates, incomplete reports, and failed cleanup (1.8316ms)
 ℹ tests 2
 ℹ suites 0
 ℹ pass 2
@@ -11,4 +11,4 @@
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 107.764
+ℹ duration_ms 121.7472

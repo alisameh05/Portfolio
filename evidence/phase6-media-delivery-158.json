@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 158,
   "parent": 145,
-  "runId": "0dc56543-ba31-41e9-8536-f7fbc58f1361",
-  "sourceRevision": "bcc625c5270790383de5b56d03337ad3e02eb80d",
-  "sourceTreeSha256": "c9862ee7d505a8b0c6a2dc65ab7e5b1c7216ea8735da91f9e7f1ffdd0e60ff5b",
-  "startedAt": "2026-10-13T13:19:43.109Z",
-  "completedAt": "2026-10-13T13:25:05.601Z",
+  "runId": "085e88fd-a0df-4e8e-8709-86813f80a8db",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "startedAt": "2026-10-17T23:35:30.613Z",
+  "completedAt": "2026-10-17T23:36:35.921Z",
   "scope": "visibility-authorized-provider-neutral-project-and-profile-media-delivery",
   "runtime": {
     "node": "v24.21.0",
@@ -19,7 +19,8 @@
     "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
     "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
     "pdfProcessor": "17.12.1",
-    "sharp": "sharp-0.35.4;libvips-8.18.6"
+    "sharp": "sharp-0.35.4;libvips-8.18.6",
+    "scannerMode": "isolated-clamd-stream"
   },
   "services": {
     "postgres": {
@@ -85,6 +86,88 @@
       "passed": 16,
       "failed": 0,
       "skipped": 0,
+      "tests": [
+        {
+          "name": "Media acceptance application seam (#152) requires the authenticated same-Owner actor before persisting acceptance",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects missing approved descriptions before repository access",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) normalizes approved metadata and keeps the command result safe",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) returns one complete fact per distinct ID with a bounded sorted opaque token",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) fails closed when a fact is missing, duplicated, foreign, or malformed",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects duplicate repository facts instead of selecting one arbitrarily",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects facts attributed to another Owner",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media and CV module contracts (#147) retains the five Media, four Owner CV, and purpose-aware read operations",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media and CV module contracts (#147) records the approved file policies and never widens adapter limits",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media delivery application service does not sign Media when its requested-locale public use is no longer visible",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media delivery application service returns stable accepted descriptors with only expiring delivery capabilities",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media delivery application service discards signed targets if the approved public use is withdrawn during signing",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media delivery application service discards signed targets if the accepted Media snapshot changes during signing",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media delivery application service does not return a capability when the visible use resolves to foreign or unaccepted Media",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Media delivery Storage adapter signs exactly one hash-bound processed object for five minutes",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Supabase Media delivery Storage adapter rejects insecure deployed origins, credentials, mismatched signing paths, and substituted bytes",
+          "executed": true,
+          "status": "passed"
+        }
+      ],
       "verdict": "pass"
     },
     "formatAcceptanceExecutions": 4

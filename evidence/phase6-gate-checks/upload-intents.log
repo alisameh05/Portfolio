@@ -1,0 +1,63 @@
+
+> shipwithali-portfolio@0.0.0 prephase6:focus:upload-intents
+> npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase6:focus:upload-intents
+> node scripts/phase6-verification.mjs --upload-intents-only
+
+Starting isolated loopback PostgreSQL, Auth and private Storage services.
+Probing pinned ClamAV, ImageMagick, FFmpeg and OCRmyPDF runtimes.
+Generating safe fixtures with the pinned image and video processors.
+Scanning, processing and round-tripping pdf.
+✓ pdf: private Storage upload and byte round-trip passed; scanning.
+✓ pdf: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping png.
+✓ png: private Storage upload and byte round-trip passed; scanning.
+✓ png: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping jpeg.
+✓ jpeg: private Storage upload and byte round-trip passed; scanning.
+✓ jpeg: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping webp.
+✓ webp: private Storage upload and byte round-trip passed; scanning.
+✓ webp: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping mp4.
+✓ mp4: private Storage upload and byte round-trip passed; scanning.
+✓ mp4: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping webm.
+✓ webm: private Storage upload and byte round-trip passed; scanning.
+✓ webm: processor, clean scan and private byte round-trip passed.
+Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.
+{
+  "ticket": 148,
+  "runId": "459cef83-c8c6-4f13-9f12-92de7ec50bb4",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "verdict": "pass",
+  "formatCounts": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0
+  },
+  "uploadIntentChecks": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "verdict": "pass"
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "evidence": "evidence/phase6-upload-intent-148.json"
+}
