@@ -1,8 +1,8 @@
 {
   "ticket": 201,
-  "runId": "8f2879f6-0fcf-414d-9968-41cb7a4f5441",
-  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "runId": "88ebdd4c-4ac1-43cb-a1ce-80bf323b38c5",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "node": "v24.21.0",
   "npm": "11.19.0",
   "postgres": "postgres (PostgreSQL) 18.3",
@@ -20,11 +20,11 @@
   },
   "suites": [
     {
-      "name": "D:/Personal/Personal_Projects/phase8-qualify-234/tests/phase7/goal-conversions-postgres.test.ts",
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/prerequisite-readonly/tests/phase7/goal-conversions-postgres.test.ts",
       "passed": 7
     },
     {
-      "name": "D:/Personal/Personal_Projects/phase8-qualify-234/tests/phase7/goal-conversions.test.ts",
+      "name": "D:/Personal/Personal_Projects/Portfolio/.worktrees/prerequisite-readonly/tests/phase7/goal-conversions.test.ts",
       "passed": 8
     }
   ],
@@ -63,5 +63,5 @@
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:goal-conversions (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
   "scope": "Full repository migration chain in a loopback-only disposable native PostgreSQL cluster with a restricted non-superuser worker role. No production or development database was modified.",
   "cleanup": true,
-  "gateRunId": "4e9c9a1c-e303-4232-8d5f-4dc7000c2ae7"
+  "gateRunId": "3655a55d-8b45-4d2c-9ccf-fd1224618583"
 }

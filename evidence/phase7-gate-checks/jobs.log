@@ -11,5 +11,5 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
 > shipwithali-portfolio@0.0.0 phase7:focus:jobs
 > node scripts/phase7-jobs.mjs
 
-{"required":{"success":true,"passed":8,"failed":0,"skipped":0,"todo":0,"failedSuites":0},"runId":"071bf4bc-1d28-4a90-9e3f-d8c5df815b23","sourceTreeSha256":"ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6"}
-{"evidence":"D:\\Personal\\Personal_Projects\\phase8-qualify-234\\evidence\\phase7-due-work-206.json","cleanup":true}
+{"required":{"success":true,"passed":8,"failed":0,"skipped":0,"todo":0,"failedSuites":0},"runId":"a9a8f9ba-3478-402d-9be4-646e14d64016","sourceTreeSha256":"389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d"}
+{"evidence":"D:\\Personal\\Personal_Projects\\Portfolio\\.worktrees\\prerequisite-readonly\\evidence\\phase7-due-work-206.json","cleanup":true}

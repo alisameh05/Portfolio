@@ -1,0 +1,11 @@
+
+ RUN  v3.2.4 /workspace
+
+ ✓ tests/runtime/media-processing-tools.test.ts (14 tests | 13 skipped) 389ms
+   ✓ bounded PDF output reads > uses an inherited hard file-size limit or fails closed when the host lacks one  388ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 13 skipped (14)
+   Start at  16:10:24
+   Duration  859ms (transform 152ms, setup 0ms, collect 159ms, tests 389ms, environment 0ms, prepare 93ms)
+

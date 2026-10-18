@@ -5,84 +5,84 @@
 ✓ dependency/version manifest written to evidence\phase-1-versions.json
 ✓ public-v1: candidate is backward compatible with the committed master baseline
 ✓ owner-v1: candidate is backward compatible with the committed master baseline
-Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-NIOnJ7
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-WnOscy
 
  RUN  v3.2.4 <WORKSPACE>
 
 validating openapi\public-v1\openapi.yaml...
-openapi\public-v1\openapi.yaml: validated in 74ms
+openapi\public-v1\openapi.yaml: validated in 68ms
 
 Woohoo! Your API description is valid. 🎉
 
- ✓ tests/contracts/compatibility-gate.test.ts (11 tests) 823ms
- ✓ tests/contracts/contract-drift-gate.test.ts (4 tests) 401ms
- ✓ tests/contracts/owner-contract.test.ts (6 tests) 23ms
- ✓ tests/contracts/owner-issue-8-generated-validation.test.ts (7 tests) 8ms
- ✓ tests/contracts/public-contract.test.ts (6 tests) 5ms
+ ✓ tests/contracts/compatibility-gate.test.ts (11 tests) 948ms
+ ✓ tests/contracts/contract-drift-gate.test.ts (4 tests) 611ms
+ ✓ tests/contracts/owner-contract.test.ts (6 tests) 22ms
+ ✓ tests/contracts/owner-issue-8-generated-validation.test.ts (7 tests) 7ms
+ ✓ tests/contracts/public-contract.test.ts (6 tests) 4ms
  ✓ tests/contracts/owner-generated-validation.test.ts (7 tests) 3ms
- ✓ tests/contracts/owner-issue-7-generated-validation.test.ts (9 tests) 3ms
- ✓ tests/contracts/generated-validation.test.ts (6 tests) 2ms
+ ✓ tests/contracts/generated-validation.test.ts (6 tests) 3ms
+ ✓ tests/contracts/owner-issue-7-generated-validation.test.ts (9 tests) 2ms
  ✓ tests/contracts/public.test.ts (1 test) 1ms
 
  Test Files  9 passed (9)
       Tests  57 passed (57)
-   Start at  01:57:46
-   Duration  1.82s (transform 166ms, setup 0ms, collect 225ms, tests 1.27s, environment 0ms, prepare 118ms)
+   Start at  18:49:46
+   Duration  2.18s (transform 187ms, setup 0ms, collect 250ms, tests 1.60s, environment 0ms, prepare 118ms)
 
 bundling openapi\public-v1\openapi.yaml...
-📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-NIOnJ7\openapi\generated\public-v1.json 20ms.
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-WnOscy\openapi\generated\public-v1.json 22ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-NIOnJ7\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./..\Portfolio\.worktrees\prerequisite-runtime\temp\shipwithali-contract-a-NIOnJ7\src\contracts\http\v1\generated[39m [90m· 3 files · 104ms[39m
-Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-NIOnJ7
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-WnOscy\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-WnOscy\src\contracts\http\v1\generated[39m [90m· 3 files · 100ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-WnOscy
 validating openapi\owner-v1\openapi.yaml...
-openapi\owner-v1\openapi.yaml: validated in 143ms
+openapi\owner-v1\openapi.yaml: validated in 146ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\owner-v1\openapi.yaml...
-📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-NIOnJ7\openapi\generated\owner-v1.json 62ms.
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-WnOscy\openapi\generated\owner-v1.json 69ms.
 … Phase 2 gate: phase1-toolchain, phase1-contract-drift, phase1-contract-compatibility, phase1-contract-and-strict-validator-tests still running
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-NIOnJ7\openapi\generated\owner-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./..\Portfolio\.worktrees\prerequisite-runtime\temp\shipwithali-contract-a-NIOnJ7\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 283ms[39m
-Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-NIOnJ7\src\contracts\http\v1\generated\zod.gen.ts.
-Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-a-NIOnJ7\src\contracts\http\owner\v1\generated\zod.gen.ts.
-Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-NIOnJ7
-Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-2gpaHd
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-WnOscy\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-WnOscy\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 306ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-WnOscy\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-a-WnOscy\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-WnOscy
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-ynKW1C
 validating openapi\public-v1\openapi.yaml...
 openapi\public-v1\openapi.yaml: validated in 59ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\public-v1\openapi.yaml...
-📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-2gpaHd\openapi\generated\public-v1.json 20ms.
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-ynKW1C\openapi\generated\public-v1.json 23ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-2gpaHd\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./..\Portfolio\.worktrees\prerequisite-runtime\temp\shipwithali-contract-b-2gpaHd\src\contracts\http\v1\generated[39m [90m· 3 files · 96ms[39m
-Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-2gpaHd
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-ynKW1C\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-ynKW1C\src\contracts\http\v1\generated[39m [90m· 3 files · 99ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-ynKW1C
 validating openapi\owner-v1\openapi.yaml...
-openapi\owner-v1\openapi.yaml: validated in 173ms
+openapi\owner-v1\openapi.yaml: validated in 143ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\owner-v1\openapi.yaml...
-📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-2gpaHd\openapi\generated\owner-v1.json 66ms.
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-ynKW1C\openapi\generated\owner-v1.json 67ms.
 … Phase 2 gate: phase1-toolchain, phase1-contract-drift, phase1-contract-compatibility, phase1-contract-and-strict-validator-tests still running
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-2gpaHd\openapi\generated\owner-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./..\Portfolio\.worktrees\prerequisite-runtime\temp\shipwithali-contract-b-2gpaHd\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 288ms[39m
-Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-2gpaHd\src\contracts\http\v1\generated\zod.gen.ts.
-Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-b-2gpaHd\src\contracts\http\owner\v1\generated\zod.gen.ts.
-Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-2gpaHd
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-ynKW1C\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-ynKW1C\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 314ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-ynKW1C\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-b-ynKW1C\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-ynKW1C
 ✓ both clean generations are byte-for-byte deterministic
 ✓ committed bundles and generated transport artifacts contain no drift
 ✓ generated output is limited to transport types and validators; no server stubs exist
@@ -93,7 +93,7 @@ Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-2gpaH
    ▲ Next.js 15.5.25
 
    Creating an optimized production build ...
- ✓ Compiled successfully in 782ms
+ ✓ Compiled successfully in 853ms
    Linting and checking validity of types ...
 
  ⚠ The Next.js plugin was not detected in your ESLint configuration. See https://nextjs.org/docs/app/api-reference/config/eslint#migrating-existing-config
@@ -106,7 +106,6 @@ Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-2gpaH
  ✓ Generating static pages (4/4)
    Finalizing page optimization ...
    Collecting build traces ...
-… Phase 2 gate: production-build still running
 … Phase 2 gate: production-build still running
 
 Route (app)                                  Size  First Load JS
@@ -130,7 +129,7 @@ Route (pages)                                Size  First Load JS
 ✓ production-build — passed
 
 ── Architecture check: src/ ──
-✔ no dependency violations found (247 modules, 1044 dependencies cruised)
+✔ no dependency violations found (246 modules, 1043 dependencies cruised)
 ✓ Architecture check passed: no forbidden dependencies in src/
 
 ── Validating Invalid Architecture Fixtures ──
@@ -151,6 +150,14 @@ error no-generated-code-leakage: tests/fixtures/invalid-deps/generated-code-leak
 
 x 1 dependency violations (1 errors, 0 warnings). 2 modules, 1 dependencies cruised.
 ✓ Generated-code leakage fixture correctly rejected with rule: no-generated-code-leakage
+
+── Testing fixture rejection: Runtime HTTP leakage fixture ──
+error no-runtime-http-in-module-application: tests/fixtures/invalid-deps/module-http-leakage/modules/consumer/application/service.ts → src/runtime/http/owner-export.ts
+    Module application code must not depend on runtime HTTP adapters.
+
+
+x 1 dependency violations (1 errors, 0 warnings). 33 modules, 75 dependencies cruised.
+✓ Runtime HTTP leakage fixture correctly rejected with rule: no-runtime-http-in-module-application
 
 ── Testing fixture rejection: Deep cross-module import fixture ──
 error no-deep-cross-module-import: tests/fixtures/invalid-deps/deep-cross-module-import/modules/gamma/application/deep.ts → tests/fixtures/invalid-deps/deep-cross-module-import/modules/delta/domain/index.ts
@@ -176,7 +183,7 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 ✓ Modules confine persistence/providers to adapters and contain no Route Handlers, UI, or Lab entry implementation
 
 ── Runtime architecture boundaries ──
-✓ runtime architecture: 234 source files preserve framework, environment, transport, provider, and Route Handler boundaries
+✓ runtime architecture: 233 source files preserve framework, environment, transport, provider, and Route Handler boundaries
 
 ═════════════════════════════════════════════════════════════════
              ARCHITECTURE CONFORMANCE REPORT                    
@@ -184,6 +191,7 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 [✓ PASS] Clean dependency graph for src/        : src/ cruised with 0 violations
 [✓ PASS] Provider leakage fixture               : Correctly rejected with rule no-provider-in-domain
 [✓ PASS] Generated-code leakage fixture         : Correctly rejected with rule no-generated-code-leakage
+[✓ PASS] Runtime HTTP leakage fixture           : Correctly rejected with rule no-runtime-http-in-module-application
 [✓ PASS] Deep cross-module import fixture       : Correctly rejected with rule no-deep-cross-module-import
 [✓ PASS] Cycle fixture                          : Correctly rejected with rule no-cycles
 [✓ PASS] Nine module skeletons structure        : All 9 modules have domain/, application/, ports/, adapters/, and index.ts
@@ -218,75 +226,77 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
  RUN  v3.2.4 <WORKSPACE>
 
 
-
  RUN  v3.2.4 <WORKSPACE>
- RUN  v3.2.4 <WORKSPACE>
-
 
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/runtime/problem.test.ts (13 tests) 15ms
- ✓ tests/runtime/configuration.test.ts (17 tests) 10ms
+
+ RUN  v3.2.4 <WORKSPACE>
+
+ ✓ tests/runtime/problem.test.ts (13 tests) 14ms
 
  Test Files  1 passed (1)
       Tests  13 passed (13)
-   Start at  01:58:46
-   Duration  547ms (transform 129ms, setup 0ms, collect 166ms, tests 15ms, environment 0ms, prepare 122ms)
+   Start at  18:50:45
+   Duration  422ms (transform 118ms, setup 0ms, collect 153ms, tests 14ms, environment 0ms, prepare 102ms)
 
+ ✓ tests/runtime/configuration.test.ts (17 tests) 9ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 125ms
 
  Test Files  1 passed (1)
       Tests  17 passed (17)
-   Start at  01:58:46
-   Duration  562ms (transform 171ms, setup 0ms, collect 187ms, tests 10ms, environment 0ms, prepare 119ms)
+   Start at  18:50:45
+   Duration  463ms (transform 159ms, setup 0ms, collect 175ms, tests 9ms, environment 0ms, prepare 113ms)
 
- ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 144ms
  ✓ tests/runtime/livez.test.ts (4 tests) 2ms
 
  Test Files  2 passed (2)
       Tests  16 passed (16)
-   Start at  01:58:46
-   Duration  599ms (transform 196ms, setup 0ms, collect 87ms, tests 146ms, environment 0ms, prepare 123ms)
+   Start at  18:50:45
+   Duration  474ms (transform 167ms, setup 0ms, collect 83ms, tests 126ms, environment 0ms, prepare 103ms)
 
- ✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped) 5859ms
-   ✓ bounded PDF output reads > terminates a subprocess while its intermediate output crosses the cap  584ms
-   ✓ bounded PDF output reads > reserves the child shutdown window even when the external cleanup hook stalls  4403ms
-   ✓ bounded PDF output reads > uses an inherited hard file-size limit or fails closed when the host lacks one  747ms
- ✓ tests/runtime/media-image-processing.test.ts (9 tests) 431ms
- ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 65ms
- ✓ tests/runtime/owner-media.test.ts (68 tests) 45ms
- ✓ tests/runtime/owner-content-authoring.test.ts (29 tests) 33ms
- ✓ tests/runtime/owner-project.test.ts (37 tests) 19ms
- ✓ tests/runtime/owner-cv.test.ts (55 tests) 25ms
+… Phase 2 gate: configuration-negative-tests, http-adapter-tests, problem-details-tests, health-lifecycle-tests still running
+ ✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped) 15758ms
+   ✓ bounded PDF output reads > terminates a subprocess while its intermediate output crosses the cap  692ms
+   ✓ bounded PDF output reads > reserves the child shutdown window even when the external cleanup hook stalls  4580ms
+   ✓ bounded PDF output reads > uses an inherited hard file-size limit or fails closed when the host lacks one  10359ms
+ ✓ tests/runtime/media-image-processing.test.ts (9 tests) 505ms
+   ✓ bounded Media image processing > rejects an actual image whose decoded dimensions exceed the 40 megapixel policy  315ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 90ms
+ ✓ tests/runtime/owner-content-authoring.test.ts (29 tests) 34ms
+ ✓ tests/runtime/owner-publication.test.ts (36 tests) 32ms
+ ✓ tests/runtime/owner-media.test.ts (68 tests) 39ms
  ✓ tests/runtime/owner-moderation.test.ts (32 tests) 17ms
- ✓ tests/runtime/feedback.test.ts (20 tests) 17ms
- ✓ tests/runtime/owner-configuration.test.ts (31 tests) 15ms
- ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 14ms
- ✓ tests/runtime/owner-export.test.ts (35 tests) 14ms
- ✓ tests/runtime/owner-analytics.test.ts (32 tests) 12ms
- ✓ tests/runtime/owner-publication.test.ts (36 tests) 17ms
- ✓ tests/runtime/public-event.test.ts (23 tests) 15ms
- ✓ tests/runtime/current-cv.test.ts (21 tests) 12ms
- ✓ tests/runtime/supabase-media-processing-storage.test.ts (6 tests) 12ms
- ✓ tests/runtime/owner-content-http.test.ts (8 tests) 7ms
- ✓ tests/runtime/reaction.test.ts (19 tests) 8ms
- ✓ tests/runtime/phase7-contracts.test.ts (19 tests) 9ms
- ✓ tests/runtime/configuration.test.ts (17 tests) 4ms
+ ✓ tests/runtime/supabase-media-processing-storage.test.ts (6 tests) 29ms
+ ✓ tests/runtime/owner-cv.test.ts (55 tests) 21ms
+ ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 16ms
+ ✓ tests/runtime/owner-project.test.ts (37 tests) 17ms
+ ✓ tests/runtime/owner-export.test.ts (40 tests) 16ms
+ ✓ tests/runtime/owner-analytics.test.ts (32 tests) 14ms
+ ✓ tests/runtime/owner-configuration.test.ts (31 tests) 14ms
+ ✓ tests/runtime/phase7-contracts.test.ts (19 tests) 11ms
+ ✓ tests/runtime/public-event.test.ts (23 tests) 10ms
+ ✓ tests/runtime/owner-content-http.test.ts (8 tests) 8ms
+ ✓ tests/runtime/current-cv.test.ts (21 tests) 10ms
  ✓ tests/runtime/rating.test.ts (21 tests) 9ms
+ ✓ tests/runtime/feedback.test.ts (20 tests) 8ms
+ ✓ tests/runtime/reaction.test.ts (19 tests) 6ms
  ✓ tests/runtime/supabase-current-cv-delivery.test.ts (7 tests) 5ms
  ✓ tests/runtime/owner-project-status.test.ts (5 tests) 5ms
- ✓ tests/runtime/phase7-runtime-fail-closed.test.ts (3 tests) 3ms
+ ✓ tests/runtime/configuration.test.ts (17 tests) 5ms
  ✓ tests/runtime/runtime-ports.test.ts (6 tests) 2ms
- ✓ tests/runtime/livez.test.ts (4 tests) 2ms
  ✓ tests/runtime/problem.test.ts (13 tests) 3ms
- ✓ tests/runtime/supabase-media-upload-target.test.ts (4 tests) 3ms
- ✓ tests/runtime/supabase-media-delivery-storage.test.ts (2 tests) 2ms
+ ✓ tests/runtime/supabase-media-upload-target.test.ts (4 tests) 2ms
+ ✓ tests/runtime/phase7-runtime-fail-closed.test.ts (3 tests) 3ms
  ✓ tests/runtime/feedback-limits.test.ts (2 tests) 1ms
+ ✓ tests/runtime/livez.test.ts (4 tests) 1ms
+ ✓ tests/runtime/supabase-media-delivery-storage.test.ts (2 tests) 1ms
 
  Test Files  31 passed (31)
-      Tests  624 passed | 1 skipped (625)
-   Start at  01:58:46
-   Duration  8.36s (transform 788ms, setup 0ms, collect 1.24s, tests 6.69s, environment 0ms, prepare 122ms)
+      Tests  629 passed | 1 skipped (630)
+   Start at  18:50:45
+   Duration  18.40s (transform 855ms, setup 0ms, collect 1.37s, tests 16.69s, environment 0ms, prepare 110ms)
 
 ✓ configuration-negative-tests — passed
 ✓ http-adapter-tests — passed

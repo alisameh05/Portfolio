@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { migrationSha256 } from "../../scripts/migration-checksum.mjs";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -441,6 +442,19 @@ test("rejects a source-tree fingerprint that does not match the immutable source
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("stale source evidence requests requalification without inventing predecessor failures", () => {
+  const root = fixture({});
+  try {
+    const result = evaluate(root, { sourceTreeSha256: "f".repeat(64) });
+    for (const blocker of result.blockers) {
+      assert.deepEqual(blocker.reasons, ["source-tree-mismatch"]);
+      assert.deepEqual(blocker.failedChecks, []);
+      assert.match(blocker.nextAction, /npm run phase8:qualify/u);
+      assert.doesNotMatch(blocker.nextAction, /resolve.*failures/u);
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("rejects absent denominators, unnamed coverage, wrong tool pins, and incomplete migration checksums", () => {
   const root = fixture({
     3: valid(3, { counts: undefined, checks: undefined }),
@@ -585,7 +599,7 @@ test("reports malformed evidence collection shapes without throwing", () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("immutable migration inventory uses canonical checksums on Windows checkouts", () => {
+test("immutable metadata needs no worktree writes and uses historical checkout attributes", () => {
   const root = mkdtempSync(join(tmpdir(), "phase8-immutable-migrations-"));
   const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   try {
@@ -595,11 +609,36 @@ test("immutable migration inventory uses canonical checksums on Windows checkout
     git("config", "user.email", "fixture@example.invalid");
     mkdirSync(join(root, "supabase", "migrations"), { recursive: true });
     const sql = "set lock_timeout = '5s';\nselect 1;\n";
+    const attributes = ".gitattributes text eol=lf\n*.sql text eol=lf\n";
+    writeFileSync(join(root, ".gitattributes"), attributes);
     writeFileSync(join(root, "supabase", "migrations", "20261017000000_fixture.sql"), sql);
-    git("add", "supabase/migrations/20261017000000_fixture.sql");
+    const binary = Buffer.from([0, 10, 13, 255, 0]);
+    writeFileSync(join(root, "binary fixture.dat"), binary);
+    mkdirSync(join(root, "nested"));
+    const nestedSql = "select 2;\n";
+    writeFileSync(join(root, "nested", "test.sql"), nestedSql);
+    git("add", ".gitattributes", "binary fixture.dat", "nested/test.sql", "supabase/migrations/20261017000000_fixture.sql");
     git("commit", "-m", "Fixture migration");
+    // The previous implementation fails when it tries to create a worktree.
+    writeFileSync(join(root, ".git", "worktrees"), "Worktree creation is unavailable.\n");
+    writeFileSync(join(root, ".gitattributes"), "*.sql text eol=crlf\n");
+    writeFileSync(join(root, "nested", ".gitattributes"), "*.sql text eol=crlf\n");
+    git("add", "nested/.gitattributes");
+    const before = git("status", "--porcelain=v1");
+    const indexBefore = readFileSync(join(root, ".git", "index"));
+    const snapshotsBefore = readdirSync(tmpdir()).filter((name) => name.startsWith("phase8-attributes-")).sort();
     const metadata = sourceMetadataAtRevision(root, git("rev-parse", "HEAD"));
     assert.deepEqual(metadata.migrations, [{ name: "20261017000000_fixture.sql", sha256: migrationSha256(sql) }]);
     assert.notEqual(metadata.migrations[0].sha256, migrationSha256(sql.replace("select 1", "select 2")));
+    const digest = createHash("sha256").update("portfolio-source-files-v1\0");
+    for (const [name, content] of [[".gitattributes", attributes], ["binary fixture.dat", binary], ["nested/test.sql", nestedSql],
+      ["supabase/migrations/20261017000000_fixture.sql", sql]]) {
+      digest.update(JSON.stringify([name, "file", createHash("sha256").update(content).digest("hex")])).update("\0");
+    }
+    assert.equal(metadata.sourceTreeSha256, digest.digest("hex"));
+    assert.deepEqual(readFileSync(join(root, ".git", "index")), indexBefore);
+    assert.throws(() => sourceMetadataAtRevision(root, "0".repeat(40)));
+    assert.deepEqual(readdirSync(tmpdir()).filter((name) => name.startsWith("phase8-attributes-")).sort(), snapshotsBefore);
+    assert.equal(git("status", "--porcelain=v1"), before);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

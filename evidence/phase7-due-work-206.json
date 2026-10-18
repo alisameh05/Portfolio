@@ -1,8 +1,8 @@
 {
   "ticket": 206,
-  "runId": "071bf4bc-1d28-4a90-9e3f-d8c5df815b23",
-  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "runId": "a9a8f9ba-3478-402d-9be4-646e14d64016",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -272,5 +272,5 @@
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:jobs",
   "scope": "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, exact UTC retention, module-owned bounded commands, filtered leases, stale-token rejection, replay/reclaim and privacy-safe payloads.",
   "cleanup": true,
-  "gateRunId": "4e9c9a1c-e303-4232-8d5f-4dc7000c2ae7"
+  "gateRunId": "3655a55d-8b45-4d2c-9ccf-fd1224618583"
 }

@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "runId": "d4f2301a-4c14-4716-a5a5-f51e826c2328",
-  "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
-  "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+  "runId": "4c07627d-6a42-499d-98a8-dc15ec09f7fc",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "suite": "database",
-  "startedAt": "2026-10-10T16:02:27.018Z",
+  "startedAt": "2026-10-18T16:07:29.521Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,
   "counts": {
-    "executed": 53,
+    "executed": 56,
     "failed": 0,
     "skipped": 0,
-    "total": 53
+    "total": 56
   },
   "partial": false,
   "dependency": {
@@ -28,14 +28,14 @@
     "npm run phase5:focus:database-rls-migrations-concurrency"
   ],
   "details": {
-    "migrationCount": 20,
+    "migrationCount": 50,
     "phase5MigrationCount": 12,
     "retainedReleaseRecords": {
-      "configuredPortfolios": 21,
-      "contactChannels": 42,
+      "configuredPortfolios": 1,
+      "contactChannels": 1,
       "ownerLinks": 1,
-      "idempotencyRecords": 22,
-      "outboxEvents": 14,
+      "idempotencyRecords": 1,
+      "outboxEvents": 1,
       "jobs": 3
     },
     "zeroSkips": true

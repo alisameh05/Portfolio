@@ -68,9 +68,9 @@ Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage a
 }
 {
   "ticket": 159,
-  "runId": "682ee927-902d-4b44-ba31-585f97b38964",
-  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "runId": "1206c979-1027-4e9d-8001-bf828d67138d",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "verdict": "pass",
   "criteria": [
     {
@@ -143,9 +143,9 @@ Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage a
 }
 {
   "ticket": 160,
-  "runId": "682ee927-902d-4b44-ba31-585f97b38964",
-  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "runId": "1206c979-1027-4e9d-8001-bf828d67138d",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "verdict": "pass",
   "criteria": [
     {

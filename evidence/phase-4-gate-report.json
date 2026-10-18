@@ -2,10 +2,10 @@
   "ticket": 90,
   "parent": 77,
   "scope": "phase-4-completion-gate-and-reproducible-evidence",
-  "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-  "generatedAt": "2026-10-17T23:08:54.179Z",
-  "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+  "generatedAt": "2026-10-18T16:01:51.861Z",
+  "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "toolVersions": {
     "node": "v24.21.0",
     "npm": "11.19.0",
@@ -160,185 +160,185 @@
   "evidence": [
     {
       "file": "evidence/phase-4-validation-ready.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "11bcbfa02fbc4ba366502e7f459df05afe2ab78087d5ca7783693169eb7c37bb"
     },
     {
       "file": "evidence/phase-4-predecessor-phase1.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "07846ee34e2c18fbf3f6ad45e76bfb2ee67877f40be129870582cb657847d59d"
     },
     {
       "file": "evidence/phase-4-predecessor-phase2.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
-      "sha256": "97f3665ca6725a0c41ca92543f9271be454d5ba26d9e1b1a51277ff7fbc36fe5"
+      "sha256": "c74005cc5209c2a7f4a1ff13c9f8c73bdef0a2f77eaccbfba5446d8526942938"
     },
     {
       "file": "evidence/phase-4-predecessor-phase3-source.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "241ffbb66d1f7d6a04737e2f11953aa2269681a5a8993e598dba0cf40b9c1ca1"
     },
     {
       "file": "evidence/phase-4-exact-toolchain.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "36bf37c8b60b333ff0ec3b925164e2671d357d430fa7c0a8d1ba4067b679c527"
     },
     {
       "file": "evidence/phase-4-contract-verification.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
-      "sha256": "1d9d54bc28f7c3a760dac3b0b35dab5aca95165cf10a4b3b031bd52f4c986ea7"
+      "sha256": "c0e43ee6a27b90a4175a3666c61b02e463269d9a5a42031b026c6c37e822264e"
     },
     {
       "file": "evidence/phase-4-tooling-tests.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
-      "sha256": "d47a6f2ce9da4d4b98c6d669ed1e5db93d2cc19fff9011d1c54bc8d58779685a"
+      "sha256": "bfcb865eccbf84c6981a8b888e42ac22727101c20f70980c68621cc86614e9b5"
     },
     {
       "file": "evidence/phase-4-typecheck.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
     },
     {
       "file": "evidence/phase-4-lint.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
     },
     {
       "file": "evidence/phase-4-production-build.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
-      "sha256": "b0e31f85b7e791531af2f07fcb9c9081377c40d5ac0a86f02ef408f97af8b2c4"
+      "sha256": "952846ac35ca9059e200590bd4cd3fa55df63ad0f8c23f7ab5bd8c356403f63b"
     },
     {
       "file": "evidence/phase-4-architecture.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
-      "sha256": "52c6afa4a448c3b20b4666a9dbcacfc2053704fbc6017e8240fe7f3577ea7bfe"
+      "sha256": "82f0e2937b511610269d37d87b4a41e6d1e36b9681218548a985c4c13f094d6a"
     },
     {
       "file": "evidence/phase-4-route-inventory.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "117a39159e92836d232d09871b671a8a20154e5f145887e055c0884ad30de306"
     },
     {
       "file": "evidence/phase-4-runtime-boundary.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "97c5fa5542810e2fbb3881067535fae53c8badaf2ed0ef1df9534191dccaaed3"
     },
     {
       "file": "evidence/phase-4-runtime-architecture.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
-      "sha256": "129685897ae50047384fe2bad2791f3b64ab9864921b7bd0cdb27fe7e88cb730"
+      "sha256": "48f42013620808e9dbc62c9dcb69c11b797de9089b07a72369f5fc395f1f7031"
     },
     {
       "file": "evidence/phase-4-phase4-context.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "996b22f4ff57c4536bca1f80d81ac8cb1bee5250587244f3b3e3a4d3f40ffcac"
     },
     {
       "file": "evidence/phase-4-phase4-focused-tests.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
-      "sha256": "fdb05f8863eeecf7e0e32465bd3356e4d0c2eb0bd5d0168b5c445650ffc91357"
+      "sha256": "8c181f696dbada06a668bef619b4fe4d0e38aef0b1fd3bb3b7915f6baead0e49"
     },
     {
       "file": "evidence/phase-4-phase4-migration-integrity-tests.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
-      "sha256": "f2983b9f96dfe50f421cdbd6d211ecc3e3620caff60a3b028f9a554e44cafc6a"
+      "sha256": "b6499db884ba6781d28ec57153614fa9aaa8cc42dba93be40a230b331345d678"
     },
     {
       "file": "evidence/phase-4-phase4-local-auth-real-token.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "65626d1e687057452e3c12a1a31757f8521e5f5b97cb34d697478909a851895e"
     },
     {
       "file": "evidence/phase-4-phase4-database-integrity.log",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "1a8560a718852a545930800109fd61d7f33269fb78623ad6cc8a8cc100daefbd"
     },
     {
       "file": "evidence/phase-1-gate-report.json",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "087fa88616605710170fc14d5401416c8fa2381d1239d71b4bf170a98b7953c1"
     },
     {
       "file": "evidence/phase-2-gate-report.json",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
-      "sha256": "84cbb812be46bed0366b6da1027ab2eead06fd2206fef114b4f11a88081baacd"
+      "sha256": "66e8e2642212b391e1d6e84d1626b6c3edb7343c3cb9ebf47a8a206cb27b4bd1"
     },
     {
       "file": "evidence/phase-4-context.json",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "47fca185cb0948bca9ad61622a9bf73760e1f52dd568f1514f4d455b656f4cd5"
     },
     {
       "file": "evidence/phase-4-database-integrity.json",
-      "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-      "revision": "123724dff205e58f562082c80ec0dddb186c22ce",
-      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+      "revision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "fresh": true,
       "sha256": "19ec0c7d95f989869bbc96a0db62c755189e86078c26ef25e7b716faaae53f70"
     }
@@ -1567,12 +1567,12 @@
     }
   },
   "realServiceScope": {
-    "runId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-    "gateRunId": "1ad9326b-53aa-4635-956a-32e9be05c8ba",
-    "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-    "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
-    "startedAt": "2026-10-17T23:02:02.626Z",
-    "completedAt": "2026-10-17T23:08:54.182Z",
+    "runId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+    "gateRunId": "a192c4fc-1e2c-466a-97f7-bcfdbe7df64b",
+    "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+    "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+    "startedAt": "2026-10-18T15:54:31.395Z",
+    "completedAt": "2026-10-18T16:01:51.863Z",
     "postgresVersion": "PostgreSQL 17.6 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
     "isolation": "isolated-loopback",
     "required": {

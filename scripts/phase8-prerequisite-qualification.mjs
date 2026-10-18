@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -37,31 +37,51 @@ const parseJson = (path) => { try { return JSON.parse(readFileSync(path, "utf8")
 const positive = (value) => Number.isFinite(Number(value)) && Number(value) > 0;
 
 export function sourceMetadataAtRevision(root, revision) {
+  if (!validSha(revision, 40)) throw new TypeError("Expected an immutable Git commit SHA.");
   const cacheKey = `${root}\0${revision}`;
   if (sourceMetadataCache.has(cacheKey)) return sourceMetadataCache.get(cacheKey);
-  const checkout = mkdtempSync(join(tmpdir(), "phase8-source-"));
+  // Git 2.39's cat-file filters need attribute files in their working directory.
+  // Materialize only the revision's attributes outside .git, never a checkout
+  // or registered worktree. An absent isolated index excludes caller changes.
+  const env = { ...process.env };
+  for (const name of ["GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_ATTR_SOURCE"]) delete env[name];
+  const options = { cwd: root, stdio: ["pipe", "pipe", "pipe"], maxBuffer: 256 * 1024 * 1024, env };
+  const gitDirectory = execFileSync("git", ["rev-parse", "--absolute-git-dir"], { ...options, encoding: "utf8" }).trim();
+  const snapshot = mkdtempSync(join(resolve(tmpdir()), "phase8-attributes-"));
+  if (dirname(snapshot) !== resolve(tmpdir())) throw new Error("Invalid temporary attribute snapshot.");
   try {
-    execFileSync("git", ["worktree", "add", "--detach", checkout, revision], { cwd: root, stdio: "ignore" });
-    const paths = [...new Set(execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-      { cwd: checkout, encoding: "utf8" }).split("\0").filter((path) => path !== "" && !path.startsWith("evidence/")))].sort();
+    const workDirectory = join(snapshot, "worktree");
+    mkdirSync(workDirectory);
+    const snapshotOptions = { ...options, cwd: workDirectory, env: { ...env, GIT_DIR: gitDirectory,
+      GIT_WORK_TREE: workDirectory, GIT_INDEX_FILE: join(snapshot, "index") } };
+    const entries = execFileSync("git", ["ls-tree", "-r", "-z", "--full-tree", revision, "--"],
+      { ...snapshotOptions, encoding: "utf8" }).split("\0").filter(Boolean).map((entry) => {
+      const match = /^(\d+) (\w+) ([a-f0-9]{40})\t([\s\S]+)$/u.exec(entry);
+      if (!match || match[2] !== "blob") throw new Error("Unsupported immutable source entry.");
+      return { mode: match[1], oid: match[3], path: match[4] };
+    }).filter(({ path }) => !path.startsWith("evidence/")).sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+    for (const { path, mode, oid } of entries) {
+      if (mode === "120000" || !(path === ".gitattributes" || path.endsWith("/.gitattributes"))) continue;
+      const attributePath = resolve(workDirectory, path);
+      if (!attributePath.startsWith(workDirectory + sep)) throw new Error("Invalid historical attribute path.");
+      mkdirSync(dirname(attributePath), { recursive: true });
+      writeFileSync(attributePath, execFileSync("git", ["cat-file", "blob", oid], snapshotOptions));
+    }
     const digest = createHash("sha256").update("portfolio-source-files-v1\0");
     const migrations = [];
-    for (const path of paths) {
-      const absolute = join(checkout, path);
-      if (!existsSync(absolute)) continue;
-      const stat = lstatSync(absolute);
-      const content = stat.isSymbolicLink() ? Buffer.from(readlinkSync(absolute)) : readFileSync(absolute);
+    for (const { path, mode, oid } of entries) {
+      // Batch headers report the unfiltered size, which cannot delimit binary
+      // filtered content safely. Read each blob as an opaque byte buffer.
+      const content = execFileSync("git", mode === "120000"
+        ? ["cat-file", "blob", oid] : ["cat-file", "--filters", `--path=${path}`, oid], snapshotOptions);
       const sha256 = createHash("sha256").update(content).digest("hex");
-      digest.update(JSON.stringify([path, stat.isSymbolicLink() ? "symlink" : "file", sha256])).update("\0");
+      digest.update(JSON.stringify([path, mode === "120000" ? "symlink" : "file", sha256])).update("\0");
       if (/^supabase\/migrations\/[^/]+\.sql$/iu.test(path)) migrations.push({ name: path.slice("supabase/migrations/".length), sha256: migrationSha256(content.toString("utf8")) });
     }
     const metadata = Object.freeze({ sourceTreeSha256: digest.digest("hex"), migrations: Object.freeze(migrations) });
     sourceMetadataCache.set(cacheKey, metadata);
     return metadata;
-  } finally {
-    try { execFileSync("git", ["worktree", "remove", "--force", checkout], { cwd: root, stdio: "ignore" }); }
-    finally { rmSync(checkout, { recursive: true, force: true }); }
-  }
+  } finally { rmSync(snapshot, { recursive: true, force: true }); }
 }
 
 function versionsMatch(tools) {
@@ -328,7 +348,11 @@ function failedCheckNames(report) {
     .filter((name) => typeof name === "string" && /^[a-z0-9][a-z0-9._-]{0,79}$/iu.test(name)))].sort();
 }
 
-function predecessorAction(phase) {
+function predecessorAction(phase, reasons) {
+  if (reasons.every((reason) => ["source-tree-mismatch", "evidence-stale"].includes(reason))) {
+    const ticket = PHASE8_PREREQUISITES.find((item) => item.phase === phase).ticket;
+    return `Phase ${phase} (#${ticket}) evidence needs refreshing. Commit the final source, then run npm run phase8:qualify to regenerate Phases 3–7 evidence and evaluate the same source tree.`;
+  }
   const actions = {
     3: "In predecessor #55, resolve the Phase 3 migration and isolated database failures, then rerun npm run phase3:gate and publish complete source-bound evidence with successful cleanup.",
     4: "In predecessor #90, resolve the named Phase 4 and prerequisite gate failures, restore isolated PostgreSQL/Auth execution, then rerun npm run phase4:gate and publish complete source-bound evidence with successful cleanup.",
@@ -397,7 +421,7 @@ export function evaluatePhase8Prerequisites({ root, sourceRevision, sourceTreeSh
     return Object.freeze({ phase, ticket, path, sha256, evidencePresent: Boolean(report), sourceTreeVerified,
       aggregateSuccess: details.aggregateSuccess, sourceRevision: details.sourceRevision,
       sourceTreeSha256: details.sourceTreeSha256, runId: details.runId, generatedAt: details.generatedAt,
-      required: details.required, failedChecks, nextAction: reasons.length ? predecessorAction(phase) : null,
+      required: details.required, failedChecks, nextAction: reasons.length ? predecessorAction(phase, reasons) : null,
       migrations: details.migrations.map((migration) => ({
         name: migration?.name ?? migration?.file ?? null, sha256: migration?.sha256 ?? null,
       })), toolVersions: details.tools, realServiceScope: serviceScope, sourceBinding: binding,

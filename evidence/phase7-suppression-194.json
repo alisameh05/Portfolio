@@ -1,7 +1,7 @@
 {
-  "runId": "e345e901-45d4-4f36-9b9d-9cebf01f85d3",
-  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "runId": "c896420c-c6cd-4c3b-ae52-548ae630cc50",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015010000_retain_feedback_moderation.sql",
   "migrationQualification": {
@@ -505,118 +505,6 @@
       "status": "passed"
     },
     {
-      "title": "T06-01 authorized inspection is private versioned/ordered; missing, non-Owner and foreign scope deny",
-      "status": "passed"
-    },
-    {
-      "title": "T06-01 actual signed Owner Auth rejects missing/tampered/expired/nonallowlisted/revoked before inspection or replay",
-      "status": "passed"
-    },
-    {
-      "title": "T06-02 approval appends stable ordered Owner decision, advances once and displays only approved submitted locale",
-      "status": "passed"
-    },
-    {
-      "title": "T06-03 rejection retains private reason/history and never enters approved query/count",
-      "status": "passed"
-    },
-    {
-      "title": "T06-04 Hidden/Archived moderation succeeds privately and changes no Content fact; restored approval remains exact locale",
-      "status": "passed"
-    },
-    {
-      "title": "T06-05 exact replay survives later version; changed payload/terminal new key conflict and stale HTTP is 412",
-      "status": "passed"
-    },
-    {
-      "title": "invalid private reasons/version/key reject without partial history or leaked payload",
-      "status": "passed"
-    },
-    {
-      "title": "T06-06 independent pools serialize approve/reject and exact-retry races to one decision/state/fact",
-      "status": "passed"
-    },
-    {
-      "title": "inspection waits for a concurrent decision and cannot combine old state with new history",
-      "status": "passed"
-    },
-    {
-      "title": "T06-07 decision/projection/outbox/ledger/receipt failures fully roll back eligibility, state, history and version",
-      "status": "passed"
-    },
-    {
-      "title": "T06-08 logs/outbox/ledger/ordinary receipt exclude private name/text/reason and raw session/subject; public query includes only approved display fields",
-      "status": "passed"
-    },
-    {
-      "title": "existing HTTP enforces origin/CSRF/abuse/quoted positive precondition and sanitized error responses",
-      "status": "passed"
-    },
-    {
-      "title": "restricted RLS denies anonymous/worker/non-Owner/foreign scope and public pending/history; history cannot be edited; pool scope resets",
-      "status": "passed"
-    },
-    {
-      "title": "standard runtime assembles real moderation and approved query; closed DB fails safely without optional Measurement",
-      "status": "passed"
-    },
-    {
-      "title": "T06-01 rejects a Visitor before persistence, even with an Owner-like property",
-      "status": "passed"
-    },
-    {
-      "title": "T07-01/T07-08 suppression removes public eligibility/count immediately without workers and retains private history/cleanup anchor",
-      "status": "passed"
-    },
-    {
-      "title": "T07-02 exact retry appends no decision/fact, changed payload and terminal new keys conflict, stale HTTP is 412",
-      "status": "passed"
-    },
-    {
-      "title": "T07-07 real signed Owner auth, application scope and current replay authorization deny without effects",
-      "status": "passed"
-    },
-    {
-      "title": "T07-07 suppression preserves origin/CSRF/abuse controls and private reason validation",
-      "status": "passed"
-    },
-    {
-      "title": "T07-03 independent connections observe committed public read during suppression and empty read/count after commit",
-      "status": "passed"
-    },
-    {
-      "title": "T07-03 concurrent suppress/retry serializes to one state, two ordered decisions and one suppression fact",
-      "status": "passed"
-    },
-    {
-      "title": "T07-03 state/history/outbox/ledger/receipt injected failures roll back suppression and public eligibility completely",
-      "status": "passed"
-    },
-    {
-      "title": "T07-04/T07-05 exact-locale pages expose only approved safe DTOs; private states and withdrawn locales are absent",
-      "status": "passed"
-    },
-    {
-      "title": "T07-06 default/max pages and tied times paginate by stable descending IDs without duplicates",
-      "status": "passed"
-    },
-    {
-      "title": "T07-06 invalid cursor rejects and timestamp ordering preserves database microseconds",
-      "status": "passed"
-    },
-    {
-      "title": "T07-05 safe suppression receipts/logs/facts omit all text/reasons/subjects and public RLS denies suppressed history",
-      "status": "passed"
-    },
-    {
-      "title": "T07-06 representative restricted keyset plan uses bounded partial index",
-      "status": "passed"
-    },
-    {
-      "title": "standard runtime existing HTTP suppression and in-process pages use real persistence with Measurement/worker absent",
-      "status": "passed"
-    },
-    {
       "title": "retrieves the moderation view once and returns the declared view",
       "status": "passed"
     },
@@ -743,6 +631,118 @@
     {
       "title": "maps unexpected exceptions to generic 500 without leaking secrets",
       "status": "passed"
+    },
+    {
+      "title": "T06-01 authorized inspection is private versioned/ordered; missing, non-Owner and foreign scope deny",
+      "status": "passed"
+    },
+    {
+      "title": "T06-01 actual signed Owner Auth rejects missing/tampered/expired/nonallowlisted/revoked before inspection or replay",
+      "status": "passed"
+    },
+    {
+      "title": "T06-02 approval appends stable ordered Owner decision, advances once and displays only approved submitted locale",
+      "status": "passed"
+    },
+    {
+      "title": "T06-03 rejection retains private reason/history and never enters approved query/count",
+      "status": "passed"
+    },
+    {
+      "title": "T06-04 Hidden/Archived moderation succeeds privately and changes no Content fact; restored approval remains exact locale",
+      "status": "passed"
+    },
+    {
+      "title": "T06-05 exact replay survives later version; changed payload/terminal new key conflict and stale HTTP is 412",
+      "status": "passed"
+    },
+    {
+      "title": "invalid private reasons/version/key reject without partial history or leaked payload",
+      "status": "passed"
+    },
+    {
+      "title": "T06-06 independent pools serialize approve/reject and exact-retry races to one decision/state/fact",
+      "status": "passed"
+    },
+    {
+      "title": "inspection waits for a concurrent decision and cannot combine old state with new history",
+      "status": "passed"
+    },
+    {
+      "title": "T06-07 decision/projection/outbox/ledger/receipt failures fully roll back eligibility, state, history and version",
+      "status": "passed"
+    },
+    {
+      "title": "T06-08 logs/outbox/ledger/ordinary receipt exclude private name/text/reason and raw session/subject; public query includes only approved display fields",
+      "status": "passed"
+    },
+    {
+      "title": "existing HTTP enforces origin/CSRF/abuse/quoted positive precondition and sanitized error responses",
+      "status": "passed"
+    },
+    {
+      "title": "restricted RLS denies anonymous/worker/non-Owner/foreign scope and public pending/history; history cannot be edited; pool scope resets",
+      "status": "passed"
+    },
+    {
+      "title": "standard runtime assembles real moderation and approved query; closed DB fails safely without optional Measurement",
+      "status": "passed"
+    },
+    {
+      "title": "T06-01 rejects a Visitor before persistence, even with an Owner-like property",
+      "status": "passed"
+    },
+    {
+      "title": "T07-01/T07-08 suppression removes public eligibility/count immediately without workers and retains private history/cleanup anchor",
+      "status": "passed"
+    },
+    {
+      "title": "T07-02 exact retry appends no decision/fact, changed payload and terminal new keys conflict, stale HTTP is 412",
+      "status": "passed"
+    },
+    {
+      "title": "T07-07 real signed Owner auth, application scope and current replay authorization deny without effects",
+      "status": "passed"
+    },
+    {
+      "title": "T07-07 suppression preserves origin/CSRF/abuse controls and private reason validation",
+      "status": "passed"
+    },
+    {
+      "title": "T07-03 independent connections observe committed public read during suppression and empty read/count after commit",
+      "status": "passed"
+    },
+    {
+      "title": "T07-03 concurrent suppress/retry serializes to one state, two ordered decisions and one suppression fact",
+      "status": "passed"
+    },
+    {
+      "title": "T07-03 state/history/outbox/ledger/receipt injected failures roll back suppression and public eligibility completely",
+      "status": "passed"
+    },
+    {
+      "title": "T07-04/T07-05 exact-locale pages expose only approved safe DTOs; private states and withdrawn locales are absent",
+      "status": "passed"
+    },
+    {
+      "title": "T07-06 default/max pages and tied times paginate by stable descending IDs without duplicates",
+      "status": "passed"
+    },
+    {
+      "title": "T07-06 invalid cursor rejects and timestamp ordering preserves database microseconds",
+      "status": "passed"
+    },
+    {
+      "title": "T07-05 safe suppression receipts/logs/facts omit all text/reasons/subjects and public RLS denies suppressed history",
+      "status": "passed"
+    },
+    {
+      "title": "T07-06 representative restricted keyset plan uses bounded partial index",
+      "status": "passed"
+    },
+    {
+      "title": "standard runtime existing HTTP suppression and in-process pages use real persistence with Measurement/worker absent",
+      "status": "passed"
     }
   ],
   "required": {
@@ -863,5 +863,5 @@
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:suppression (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
   "scope": "Native disposable PostgreSQL cluster; all current repository migrations with focused clean/upgrade/replay qualification. Full integrated Phase 3-6 qualification belongs to #208.",
   "cleanup": true,
-  "gateRunId": "4e9c9a1c-e303-4232-8d5f-4dc7000c2ae7"
+  "gateRunId": "3655a55d-8b45-4d2c-9ccf-fd1224618583"
 }

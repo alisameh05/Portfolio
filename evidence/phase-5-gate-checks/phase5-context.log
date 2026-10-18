@@ -1,2 +1,2 @@
 ✓ Phase 5 verification context: 5 public + 48 Owner operations, runtime seams preserved
-{"runId":"df3a8e0a-6c9a-4ee5-827e-3231c1959c3d","sourceRevision":"123724dff205e58f562082c80ec0dddb186c22ce","evidence":"evidence/phase-5-context.json","scenarioAcceptance":false}
+{"runId":"db762766-d4c2-4571-ab69-8c060d60eb8d","sourceRevision":"4f671370a6edc1ee827d369b20dec15cb160f7c1","evidence":"evidence/phase-5-context.json","scenarioAcceptance":false}

@@ -1,6 +1,6 @@
 
 ── Architecture check: src/ ──
-✔ no dependency violations found (247 modules, 1044 dependencies cruised)
+✔ no dependency violations found (246 modules, 1043 dependencies cruised)
 ✓ Architecture check passed: no forbidden dependencies in src/
 
 ── Validating Invalid Architecture Fixtures ──
@@ -21,6 +21,14 @@ error no-generated-code-leakage: tests/fixtures/invalid-deps/generated-code-leak
 
 x 1 dependency violations (1 errors, 0 warnings). 2 modules, 1 dependencies cruised.
 ✓ Generated-code leakage fixture correctly rejected with rule: no-generated-code-leakage
+
+── Testing fixture rejection: Runtime HTTP leakage fixture ──
+error no-runtime-http-in-module-application: tests/fixtures/invalid-deps/module-http-leakage/modules/consumer/application/service.ts → src/runtime/http/owner-export.ts
+    Module application code must not depend on runtime HTTP adapters.
+
+
+x 1 dependency violations (1 errors, 0 warnings). 33 modules, 75 dependencies cruised.
+✓ Runtime HTTP leakage fixture correctly rejected with rule: no-runtime-http-in-module-application
 
 ── Testing fixture rejection: Deep cross-module import fixture ──
 error no-deep-cross-module-import: tests/fixtures/invalid-deps/deep-cross-module-import/modules/gamma/application/deep.ts → tests/fixtures/invalid-deps/deep-cross-module-import/modules/delta/domain/index.ts
@@ -46,7 +54,7 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 ✓ Modules confine persistence/providers to adapters and contain no Route Handlers, UI, or Lab entry implementation
 
 ── Runtime architecture boundaries ──
-✓ runtime architecture: 234 source files preserve framework, environment, transport, provider, and Route Handler boundaries
+✓ runtime architecture: 233 source files preserve framework, environment, transport, provider, and Route Handler boundaries
 
 ═════════════════════════════════════════════════════════════════
              ARCHITECTURE CONFORMANCE REPORT
@@ -54,6 +62,7 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 [✓ PASS] Clean dependency graph for src/        : src/ cruised with 0 violations
 [✓ PASS] Provider leakage fixture               : Correctly rejected with rule no-provider-in-domain
 [✓ PASS] Generated-code leakage fixture         : Correctly rejected with rule no-generated-code-leakage
+[✓ PASS] Runtime HTTP leakage fixture           : Correctly rejected with rule no-runtime-http-in-module-application
 [✓ PASS] Deep cross-module import fixture       : Correctly rejected with rule no-deep-cross-module-import
 [✓ PASS] Cycle fixture                          : Correctly rejected with rule no-cycles
 [✓ PASS] Nine module skeletons structure        : All 9 modules have domain/, application/, ports/, adapters/, and index.ts

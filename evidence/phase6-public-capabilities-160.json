@@ -6,11 +6,11 @@
     158,
     159
   ],
-  "runId": "682ee927-902d-4b44-ba31-585f97b38964",
-  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
-  "startedAt": "2026-10-17T23:36:36.280Z",
-  "completedAt": "2026-10-17T23:38:33.732Z",
+  "runId": "1206c979-1027-4e9d-8001-bf828d67138d",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+  "startedAt": "2026-10-18T16:34:17.859Z",
+  "completedAt": "2026-10-18T16:36:37.827Z",
   "scope": "locale-aware-media-and-current-cv-capabilities",
   "runtime": {
     "node": "v24.21.0",
@@ -451,7 +451,7 @@
         "status": 0
       },
       "architecture": {
-        "stdout": "✓ runtime architecture: 234 source files preserve framework, environment, transport, provider, and Route Handler boundaries\n",
+        "stdout": "✓ runtime architecture: 233 source files preserve framework, environment, transport, provider, and Route Handler boundaries\n",
         "stderr": "",
         "status": 0
       }

@@ -35,9 +35,9 @@ Scanning, processing and round-tripping webm.
 Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.
 {
   "ticket": 152,
-  "runId": "0116aad4-a7d6-46b0-a2eb-f400df00a69d",
-  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "runId": "acebd9ef-c0b2-4163-b76c-c1676ac7d36a",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "verdict": "pass",
   "acceptanceOperations": 6,
   "formats": [

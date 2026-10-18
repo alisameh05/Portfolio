@@ -13,9 +13,9 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
 
 {
   "ticket": 162,
-  "runId": "12f133d2-81fd-4ca1-96ea-e689ec8eb149",
-  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "runId": "36551160-ad48-4ab6-904e-f006c2bb8f4a",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "verdict": "pass",
   "executionCounts": {
     "criteriaExecuted": 10,
@@ -32,5 +32,5 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
   },
   "evidence": "evidence/phase6-migration-access-162.json"
 }
-(node:133619) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(node:137498) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)
