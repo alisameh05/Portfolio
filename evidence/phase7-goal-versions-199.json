@@ -1,7 +1,7 @@
 {
-  "runId": "d1927d1c-a2fc-4948-b90a-28da05acabff",
-  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
-  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+  "runId": "49311afc-5bb7-4c4e-b4e9-8c376b2ac715",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "tools": {
     "node": "v24.21.0",
     "npm": "11.19.0",
@@ -77,5 +77,5 @@
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:goal-versions (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
   "scope": "Full repository migration chain in a loopback-only disposable native PostgreSQL cluster, restricted non-superuser application role, real Owner application and HTTP adapters; no production or development database was modified.",
   "cleanup": true,
-  "gateRunId": "e2aa471e-ee4d-45aa-ac5f-7596e9137d1c"
+  "gateRunId": "3655a55d-8b45-4d2c-9ccf-fd1224618583"
 }

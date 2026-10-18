@@ -1,27 +1,27 @@
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/database/toolchain-workflow.test.ts (7 tests) 1263ms
-   ✓ Phase 3 local PostgreSQL toolchain (#45) > plans only local Supabase operations through the pinned project dependency  397ms
-   ✓ Phase 3 local PostgreSQL toolchain (#45) > passes the focused offline toolchain verification without exposing credentials  857ms
- ✓ tests/database/phase3-database-tests-command.test.ts (2 tests) 1197ms
-   ✓ Phase 3 focused database test command > fails the command when Vitest reports a skipped database suite  1118ms
- ✓ tests/database/migration-security-baseline.test.ts (16 tests) 291ms
- ✓ tests/database/postgres-runtime.test.ts (7 tests) 20ms
- ✓ tests/database/optimistic-concurrency.test.ts (8 tests) 80ms
- ✓ tests/database/idempotency.test.ts (11 tests) 16ms
- ✓ tests/database/phase4-migration-integrity.test.ts (10 tests) 14ms
- ✓ tests/database/outbox.test.ts (10 tests) 6ms
- ✓ tests/database/leased-jobs.test.ts (10 tests) 5ms
- ✓ tests/database/operations-migration.test.ts (7 tests) 4ms
+ ✓ tests/database/role-rls-matrix.test.ts (54 tests) 2751ms
+   ✓ Phase 3 role, grant, and RLS matrix (#53) > denies schema usage to public clients and confines capabilities to operations  309ms
+   ✓ Phase 3 role, grant, and RLS matrix (#53) > grants new objects no access to public, anonymous, authenticated, application, worker, or backup  593ms
+ ✓ tests/database/toolchain-workflow.test.ts (7 tests) 1349ms
+   ✓ Phase 3 local PostgreSQL toolchain (#45) > plans only local Supabase operations through the pinned project dependency  426ms
+   ✓ Phase 3 local PostgreSQL toolchain (#45) > passes the focused offline toolchain verification without exposing credentials  911ms
+ ✓ tests/database/phase3-database-tests-command.test.ts (2 tests) 1229ms
+   ✓ Phase 3 focused database test command > fails the command when Vitest reports a skipped database suite  1145ms
+ ✓ tests/database/postgres-integration.test.ts (8 tests) 336ms
+ ✓ tests/database/migration-security-baseline.test.ts (16 tests) 293ms
+ ✓ tests/database/optimistic-concurrency.test.ts (8 tests) 85ms
+ ✓ tests/database/phase4-migration-integrity.test.ts (10 tests) 15ms
+ ✓ tests/database/postgres-runtime.test.ts (7 tests) 15ms
+ ✓ tests/database/idempotency.test.ts (11 tests) 11ms
+ ✓ tests/database/outbox.test.ts (10 tests) 8ms
+ ✓ tests/database/leased-jobs.test.ts (10 tests) 6ms
+ ✓ tests/database/operations-migration.test.ts (7 tests) 7ms
  ✓ tests/database/postgres-transaction-runner.test.ts (6 tests) 3ms
- ✓ tests/database/persistence-contracts.test.ts (4 tests) 1ms
- ✓ tests/database/postgres-integration.test.ts (8 tests) 320ms
- ✓ tests/database/role-rls-matrix.test.ts (54 tests) 2694ms
-   ✓ Phase 3 role, grant, and RLS matrix (#53) > denies schema usage to public clients and confines capabilities to operations  311ms
-   ✓ Phase 3 role, grant, and RLS matrix (#53) > grants new objects no access to public, anonymous, authenticated, application, worker, or backup  584ms
+ ✓ tests/database/persistence-contracts.test.ts (4 tests) 2ms
 
  Test Files  14 passed (14)
       Tests  160 passed (160)
-   Start at  16:46:27
-   Duration  6.81s (transform 292ms, setup 0ms, collect 638ms, tests 5.91s, environment 0ms, prepare 91ms)
+   Start at  18:54:01
+   Duration  7.10s (transform 303ms, setup 0ms, collect 654ms, tests 6.11s, environment 0ms, prepare 117ms)

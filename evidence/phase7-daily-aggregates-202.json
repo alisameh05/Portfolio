@@ -1,8 +1,8 @@
 {
   "ticket": 202,
-  "runId": "27ba0ed7-4d07-4f5e-9597-619c13a2dfb3",
-  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
-  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+  "runId": "5ccc1d6b-c621-4341-9506-6c0e15c6eceb",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015190000_persist_reproducible_daily_aggregates.sql",
   "migrationSha256": "13e96f0d18983edec6091983ab1cf0529eb06c9aaf1b4c942c81ca3532547b1c",
@@ -324,5 +324,5 @@
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:daily-aggregates (use --refresh-types only when regenerating database.generated.ts)",
   "scope": "All committed repository migrations on a disposable native PostgreSQL cluster; source-bound unit and real-PostgreSQL acceptance.",
   "cleanup": true,
-  "gateRunId": "e2aa471e-ee4d-45aa-ac5f-7596e9137d1c"
+  "gateRunId": "3655a55d-8b45-4d2c-9ccf-fd1224618583"
 }

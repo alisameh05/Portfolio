@@ -2,7 +2,7 @@
 > shipwithali-portfolio@0.0.0 phase8:qualify
 > node scripts/phase8-qualify.mjs
 
-Qualifying Phases 3–7 at c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e; source 36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223.
+Qualifying Phases 3–7 at 4f671370a6edc1ee827d369b20dec15cb160f7c1; source 389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d.
 Running validation environment.
 Validation environment ready: exact Node/npm and locked dependencies verified.
 Running Phase 3.
@@ -16,90 +16,86 @@ Running Phase 3.
 ✓ dependency/version manifest written to evidence\phase-1-versions.json
 ✓ public-v1: candidate is backward compatible with the committed master baseline
 ✓ owner-v1: candidate is backward compatible with the committed master baseline
-Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-atnT4p
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-WnOscy
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/contracts/compatibility-gate.test.ts (11 tests) 914ms
- ✓ tests/contracts/contract-drift-gate.test.ts (4 tests) 537ms
- ✓ tests/contracts/owner-contract.test.ts (6 tests) 21ms
+validating openapi\public-v1\openapi.yaml...
+openapi\public-v1\openapi.yaml: validated in 68ms
+
+Woohoo! Your API description is valid. 🎉
+
+ ✓ tests/contracts/compatibility-gate.test.ts (11 tests) 948ms
+ ✓ tests/contracts/contract-drift-gate.test.ts (4 tests) 611ms
+ ✓ tests/contracts/owner-contract.test.ts (6 tests) 22ms
+ ✓ tests/contracts/owner-issue-8-generated-validation.test.ts (7 tests) 7ms
  ✓ tests/contracts/public-contract.test.ts (6 tests) 4ms
- ✓ tests/contracts/owner-generated-validation.test.ts (7 tests) 6ms
- ✓ tests/contracts/owner-issue-8-generated-validation.test.ts (7 tests) 4ms
- ✓ tests/contracts/generated-validation.test.ts (6 tests) 2ms
+ ✓ tests/contracts/owner-generated-validation.test.ts (7 tests) 3ms
+ ✓ tests/contracts/generated-validation.test.ts (6 tests) 3ms
  ✓ tests/contracts/owner-issue-7-generated-validation.test.ts (9 tests) 2ms
  ✓ tests/contracts/public.test.ts (1 test) 1ms
 
  Test Files  9 passed (9)
       Tests  57 passed (57)
-   Start at  16:41:31
-   Duration  1.96s (transform 154ms, setup 0ms, collect 207ms, tests 1.49s, environment 0ms, prepare 110ms)
+   Start at  18:49:46
+   Duration  2.18s (transform 187ms, setup 0ms, collect 250ms, tests 1.60s, environment 0ms, prepare 118ms)
 
-… phase2-gate still running
-… Phase 2 gate: phase1-toolchain, phase1-contract-drift, phase1-contract-compatibility, phase1-contract-and-strict-validator-tests still running
-validating openapi\public-v1\openapi.yaml...
-openapi\public-v1\openapi.yaml: validated in 62ms
-
-Woohoo! Your API description is valid. 🎉
-
-… phase2-gate still running
-… Phase 2 gate: phase1-toolchain, phase1-contract-drift, phase1-contract-compatibility, phase1-contract-and-strict-validator-tests still running
 bundling openapi\public-v1\openapi.yaml...
-📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-atnT4p\openapi\generated\public-v1.json 21ms.
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-WnOscy\openapi\generated\public-v1.json 22ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-atnT4p\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-atnT4p\src\contracts\http\v1\generated[39m [90m· 3 files · 99ms[39m
-Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-atnT4p
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-WnOscy\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-WnOscy\src\contracts\http\v1\generated[39m [90m· 3 files · 100ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-WnOscy
 validating openapi\owner-v1\openapi.yaml...
-openapi\owner-v1\openapi.yaml: validated in 142ms
+openapi\owner-v1\openapi.yaml: validated in 146ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\owner-v1\openapi.yaml...
-📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-atnT4p\openapi\generated\owner-v1.json 70ms.
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-WnOscy\openapi\generated\owner-v1.json 69ms.
+… phase2-gate still running
+… Phase 2 gate: phase1-toolchain, phase1-contract-drift, phase1-contract-compatibility, phase1-contract-and-strict-validator-tests still running
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-atnT4p\openapi\generated\owner-v1.json
-… phase2-gate still running
-… Phase 2 gate: phase1-toolchain, phase1-contract-drift, phase1-contract-compatibility, phase1-contract-and-strict-validator-tests still running
-[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-atnT4p\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 285ms[39m
-Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-atnT4p\src\contracts\http\v1\generated\zod.gen.ts.
-Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-a-atnT4p\src\contracts\http\owner\v1\generated\zod.gen.ts.
-Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-atnT4p
-Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-YlUbLM
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-WnOscy\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-WnOscy\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 306ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-WnOscy\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-a-WnOscy\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-WnOscy
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-ynKW1C
 validating openapi\public-v1\openapi.yaml...
 openapi\public-v1\openapi.yaml: validated in 59ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\public-v1\openapi.yaml...
-📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-YlUbLM\openapi\generated\public-v1.json 22ms.
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-ynKW1C\openapi\generated\public-v1.json 23ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-YlUbLM\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-YlUbLM\src\contracts\http\v1\generated[39m [90m· 3 files · 96ms[39m
-Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-YlUbLM
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-ynKW1C\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-ynKW1C\src\contracts\http\v1\generated[39m [90m· 3 files · 99ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-ynKW1C
 validating openapi\owner-v1\openapi.yaml...
-openapi\owner-v1\openapi.yaml: validated in 157ms
+openapi\owner-v1\openapi.yaml: validated in 143ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\owner-v1\openapi.yaml...
-📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-YlUbLM\openapi\generated\owner-v1.json 68ms.
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-ynKW1C\openapi\generated\owner-v1.json 67ms.
+… phase2-gate still running
+… Phase 2 gate: phase1-toolchain, phase1-contract-drift, phase1-contract-compatibility, phase1-contract-and-strict-validator-tests still running
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-YlUbLM\openapi\generated\owner-v1.json
-… phase2-gate still running
-[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-YlUbLM\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 286ms[39m
-… Phase 2 gate: phase1-toolchain, phase1-contract-drift, phase1-contract-compatibility, phase1-contract-and-strict-validator-tests still running
-Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-YlUbLM\src\contracts\http\v1\generated\zod.gen.ts.
-Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-b-YlUbLM\src\contracts\http\owner\v1\generated\zod.gen.ts.
-Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-YlUbLM
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-ynKW1C\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-ynKW1C\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 314ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-ynKW1C\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-b-ynKW1C\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-ynKW1C
 ✓ both clean generations are byte-for-byte deterministic
 ✓ committed bundles and generated transport artifacts contain no drift
 ✓ generated output is limited to transport types and validators; no server stubs exist
@@ -107,15 +103,11 @@ Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-YlUbL
 ✓ phase1-contract-drift — passed
 ✓ phase1-contract-compatibility — passed
 ✓ phase1-contract-and-strict-validator-tests — passed
-… phase2-gate still running
-… Phase 2 gate: production-build still running
    ▲ Next.js 15.5.25
 
    Creating an optimized production build ...
-… phase2-gate still running
- ✓ Compiled successfully in 2.1s
+ ✓ Compiled successfully in 853ms
    Linting and checking validity of types ...
-… Phase 2 gate: production-build still running
 
  ⚠ The Next.js plugin was not detected in your ESLint configuration. See https://nextjs.org/docs/app/api-reference/config/eslint#migrating-existing-config
 … phase2-gate still running
@@ -131,7 +123,6 @@ Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-YlUbL
 … phase2-gate still running
 … Phase 2 gate: production-build still running
 … phase2-gate still running
-… Phase 2 gate: production-build still running
 
 Route (app)                                  Size  First Load JS
 ┌ ƒ /livez                                  126 B         102 kB
@@ -185,15 +176,15 @@ x 1 dependency violations (1 errors, 0 warnings). 33 modules, 75 dependencies cr
 ✓ Runtime HTTP leakage fixture correctly rejected with rule: no-runtime-http-in-module-application
 
 ── Testing fixture rejection: Deep cross-module import fixture ──
+✓ Deep cross-module import fixture correctly rejected with rule: no-deep-cross-module-import
+
+── Testing fixture rejection: Cycle fixture ──
 error no-deep-cross-module-import: tests/fixtures/invalid-deps/deep-cross-module-import/modules/gamma/application/deep.ts → tests/fixtures/invalid-deps/deep-cross-module-import/modules/delta/domain/index.ts
     Cross-module imports must go through the module barrel (index.ts), not into
     sub-folders.
 
 
 x 1 dependency violations (1 errors, 0 warnings). 3 modules, 2 dependencies cruised.
-✓ Deep cross-module import fixture correctly rejected with rule: no-deep-cross-module-import
-
-── Testing fixture rejection: Cycle fixture ──
 error no-cycles: tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts → 
       tests/fixtures/invalid-deps/cycle/modules/cycle-b/index.ts →
       tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts
@@ -228,7 +219,6 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 ✓ strict-typecheck — passed
 ✓ deterministic-lint — passed
 ✓ architecture — passed
-… phase2-gate still running
 ✓ public-exactly-five-operations: 5/5 public operations reconciled
 ✓ public-no-forbidden-surface: no owner CRUD, broad reads, Lab, or provider surface
 ✓ owner-exact-surface: 48/48 owner operations reconciled
@@ -248,6 +238,7 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 ✓ runtime boundary: 5 public + 48 active Owner operations resolve exactly once; 0 Phase 5 contracts fail closed
 ✓ route-inventory — passed
 ✓ contract-to-adapter-matrix — passed
+… phase2-gate still running
 
  RUN  v3.2.4 <WORKSPACE>
 
@@ -260,68 +251,70 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/runtime/problem.test.ts (13 tests) 15ms
+ ✓ tests/runtime/problem.test.ts (13 tests) 14ms
 
  Test Files  1 passed (1)
       Tests  13 passed (13)
-   Start at  16:43:13
-   Duration  413ms (transform 113ms, setup 0ms, collect 147ms, tests 15ms, environment 0ms, prepare 96ms)
+   Start at  18:50:45
+   Duration  422ms (transform 118ms, setup 0ms, collect 153ms, tests 14ms, environment 0ms, prepare 102ms)
 
- ✓ tests/runtime/configuration.test.ts (17 tests) 10ms
+ ✓ tests/runtime/configuration.test.ts (17 tests) 9ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 125ms
 
  Test Files  1 passed (1)
       Tests  17 passed (17)
-   Start at  16:43:13
-   Duration  440ms (transform 156ms, setup 0ms, collect 173ms, tests 10ms, environment 0ms, prepare 100ms)
+   Start at  18:50:45
+   Duration  463ms (transform 159ms, setup 0ms, collect 175ms, tests 9ms, environment 0ms, prepare 113ms)
 
- ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 126ms
  ✓ tests/runtime/livez.test.ts (4 tests) 2ms
 
  Test Files  2 passed (2)
       Tests  16 passed (16)
-   Start at  16:43:13
-   Duration  459ms (transform 165ms, setup 0ms, collect 82ms, tests 127ms, environment 0ms, prepare 97ms)
+   Start at  18:50:45
+   Duration  474ms (transform 167ms, setup 0ms, collect 83ms, tests 126ms, environment 0ms, prepare 103ms)
 
- ✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped) 6359ms
-   ✓ bounded PDF output reads > terminates a subprocess while its intermediate output crosses the cap  693ms
-   ✓ bounded PDF output reads > reserves the child shutdown window even when the external cleanup hook stalls  4573ms
-   ✓ bounded PDF output reads > uses an inherited hard file-size limit or fails closed when the host lacks one  961ms
- ✓ tests/runtime/media-image-processing.test.ts (9 tests) 418ms
+… Phase 2 gate: configuration-negative-tests, http-adapter-tests, problem-details-tests, health-lifecycle-tests still running
 … phase2-gate still running
- ✓ tests/runtime/owner-media.test.ts (68 tests) 54ms
- ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 58ms
- ✓ tests/runtime/owner-publication.test.ts (36 tests) 19ms
- ✓ tests/runtime/owner-content-authoring.test.ts (29 tests) 29ms
- ✓ tests/runtime/owner-cv.test.ts (55 tests) 23ms
- ✓ tests/runtime/owner-project.test.ts (37 tests) 18ms
- ✓ tests/runtime/owner-moderation.test.ts (32 tests) 16ms
+ ✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped) 15758ms
+   ✓ bounded PDF output reads > terminates a subprocess while its intermediate output crosses the cap  692ms
+   ✓ bounded PDF output reads > reserves the child shutdown window even when the external cleanup hook stalls  4580ms
+   ✓ bounded PDF output reads > uses an inherited hard file-size limit or fails closed when the host lacks one  10359ms
+ ✓ tests/runtime/media-image-processing.test.ts (9 tests) 505ms
+   ✓ bounded Media image processing > rejects an actual image whose decoded dimensions exceed the 40 megapixel policy  315ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 90ms
+ ✓ tests/runtime/owner-content-authoring.test.ts (29 tests) 34ms
+ ✓ tests/runtime/owner-publication.test.ts (36 tests) 32ms
+ ✓ tests/runtime/owner-media.test.ts (68 tests) 39ms
+ ✓ tests/runtime/owner-moderation.test.ts (32 tests) 17ms
+ ✓ tests/runtime/supabase-media-processing-storage.test.ts (6 tests) 29ms
+ ✓ tests/runtime/owner-cv.test.ts (55 tests) 21ms
  ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 16ms
- ✓ tests/runtime/owner-export.test.ts (40 tests) 17ms
- ✓ tests/runtime/owner-configuration.test.ts (31 tests) 12ms
- ✓ tests/runtime/owner-analytics.test.ts (32 tests) 16ms
- ✓ tests/runtime/supabase-media-processing-storage.test.ts (6 tests) 31ms
- ✓ tests/runtime/public-event.test.ts (23 tests) 14ms
- ✓ tests/runtime/phase7-contracts.test.ts (19 tests) 10ms
- ✓ tests/runtime/current-cv.test.ts (21 tests) 13ms
- ✓ tests/runtime/owner-content-http.test.ts (8 tests) 7ms
- ✓ tests/runtime/feedback.test.ts (20 tests) 7ms
- ✓ tests/runtime/reaction.test.ts (19 tests) 7ms
- ✓ tests/runtime/rating.test.ts (21 tests) 7ms
- ✓ tests/runtime/configuration.test.ts (17 tests) 5ms
- ✓ tests/runtime/runtime-ports.test.ts (6 tests) 2ms
+ ✓ tests/runtime/owner-project.test.ts (37 tests) 17ms
+ ✓ tests/runtime/owner-export.test.ts (40 tests) 16ms
+ ✓ tests/runtime/owner-analytics.test.ts (32 tests) 14ms
+ ✓ tests/runtime/owner-configuration.test.ts (31 tests) 14ms
+ ✓ tests/runtime/phase7-contracts.test.ts (19 tests) 11ms
+ ✓ tests/runtime/public-event.test.ts (23 tests) 10ms
+ ✓ tests/runtime/owner-content-http.test.ts (8 tests) 8ms
+ ✓ tests/runtime/current-cv.test.ts (21 tests) 10ms
+ ✓ tests/runtime/rating.test.ts (21 tests) 9ms
+ ✓ tests/runtime/feedback.test.ts (20 tests) 8ms
+ ✓ tests/runtime/reaction.test.ts (19 tests) 6ms
  ✓ tests/runtime/supabase-current-cv-delivery.test.ts (7 tests) 5ms
  ✓ tests/runtime/owner-project-status.test.ts (5 tests) 5ms
+ ✓ tests/runtime/configuration.test.ts (17 tests) 5ms
+ ✓ tests/runtime/runtime-ports.test.ts (6 tests) 2ms
  ✓ tests/runtime/problem.test.ts (13 tests) 3ms
+ ✓ tests/runtime/supabase-media-upload-target.test.ts (4 tests) 2ms
  ✓ tests/runtime/phase7-runtime-fail-closed.test.ts (3 tests) 3ms
- ✓ tests/runtime/supabase-media-upload-target.test.ts (4 tests) 3ms
- ✓ tests/runtime/livez.test.ts (4 tests) 1ms
- ✓ tests/runtime/supabase-media-delivery-storage.test.ts (2 tests) 2ms
  ✓ tests/runtime/feedback-limits.test.ts (2 tests) 1ms
+ ✓ tests/runtime/livez.test.ts (4 tests) 1ms
+ ✓ tests/runtime/supabase-media-delivery-storage.test.ts (2 tests) 1ms
 
  Test Files  31 passed (31)
       Tests  629 passed | 1 skipped (630)
-   Start at  16:43:13
-   Duration  8.83s (transform 846ms, setup 0ms, collect 1.34s, tests 7.18s, environment 0ms, prepare 96ms)
+   Start at  18:50:45
+   Duration  18.40s (transform 855ms, setup 0ms, collect 1.37s, tests 16.69s, environment 0ms, prepare 110ms)
 
 ✓ configuration-negative-tests — passed
 ✓ http-adapter-tests — passed
@@ -360,30 +353,30 @@ We recommend updating regularly for new features and bug fixes: https://supabase
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/database/toolchain-workflow.test.ts (7 tests) 1263ms
-   ✓ Phase 3 local PostgreSQL toolchain (#45) > plans only local Supabase operations through the pinned project dependency  397ms
-   ✓ Phase 3 local PostgreSQL toolchain (#45) > passes the focused offline toolchain verification without exposing credentials  857ms
- ✓ tests/database/phase3-database-tests-command.test.ts (2 tests) 1197ms
-   ✓ Phase 3 focused database test command > fails the command when Vitest reports a skipped database suite  1118ms
- ✓ tests/database/migration-security-baseline.test.ts (16 tests) 291ms
- ✓ tests/database/postgres-runtime.test.ts (7 tests) 20ms
- ✓ tests/database/optimistic-concurrency.test.ts (8 tests) 80ms
- ✓ tests/database/idempotency.test.ts (11 tests) 16ms
- ✓ tests/database/phase4-migration-integrity.test.ts (10 tests) 14ms
- ✓ tests/database/outbox.test.ts (10 tests) 6ms
- ✓ tests/database/leased-jobs.test.ts (10 tests) 5ms
- ✓ tests/database/operations-migration.test.ts (7 tests) 4ms
+ ✓ tests/database/role-rls-matrix.test.ts (54 tests) 2751ms
+   ✓ Phase 3 role, grant, and RLS matrix (#53) > denies schema usage to public clients and confines capabilities to operations  309ms
+   ✓ Phase 3 role, grant, and RLS matrix (#53) > grants new objects no access to public, anonymous, authenticated, application, worker, or backup  593ms
+ ✓ tests/database/toolchain-workflow.test.ts (7 tests) 1349ms
+   ✓ Phase 3 local PostgreSQL toolchain (#45) > plans only local Supabase operations through the pinned project dependency  426ms
+   ✓ Phase 3 local PostgreSQL toolchain (#45) > passes the focused offline toolchain verification without exposing credentials  911ms
+ ✓ tests/database/phase3-database-tests-command.test.ts (2 tests) 1229ms
+   ✓ Phase 3 focused database test command > fails the command when Vitest reports a skipped database suite  1145ms
+ ✓ tests/database/postgres-integration.test.ts (8 tests) 336ms
+ ✓ tests/database/migration-security-baseline.test.ts (16 tests) 293ms
+ ✓ tests/database/optimistic-concurrency.test.ts (8 tests) 85ms
+ ✓ tests/database/phase4-migration-integrity.test.ts (10 tests) 15ms
+ ✓ tests/database/postgres-runtime.test.ts (7 tests) 15ms
+ ✓ tests/database/idempotency.test.ts (11 tests) 11ms
+ ✓ tests/database/outbox.test.ts (10 tests) 8ms
+ ✓ tests/database/leased-jobs.test.ts (10 tests) 6ms
+ ✓ tests/database/operations-migration.test.ts (7 tests) 7ms
  ✓ tests/database/postgres-transaction-runner.test.ts (6 tests) 3ms
- ✓ tests/database/persistence-contracts.test.ts (4 tests) 1ms
- ✓ tests/database/postgres-integration.test.ts (8 tests) 320ms
- ✓ tests/database/role-rls-matrix.test.ts (54 tests) 2694ms
-   ✓ Phase 3 role, grant, and RLS matrix (#53) > denies schema usage to public clients and confines capabilities to operations  311ms
-   ✓ Phase 3 role, grant, and RLS matrix (#53) > grants new objects no access to public, anonymous, authenticated, application, worker, or backup  584ms
+ ✓ tests/database/persistence-contracts.test.ts (4 tests) 2ms
 
  Test Files  14 passed (14)
       Tests  160 passed (160)
-   Start at  16:46:27
-   Duration  6.81s (transform 292ms, setup 0ms, collect 638ms, tests 5.91s, environment 0ms, prepare 91ms)
+   Start at  18:54:01
+   Duration  7.10s (transform 303ms, setup 0ms, collect 654ms, tests 6.11s, environment 0ms, prepare 117ms)
 
 
 ── Architecture check: src/ ──
@@ -427,9 +420,6 @@ x 1 dependency violations (1 errors, 0 warnings). 3 modules, 2 dependencies crui
 ✓ Deep cross-module import fixture correctly rejected with rule: no-deep-cross-module-import
 
 ── Testing fixture rejection: Cycle fixture ──
-✓ Cycle fixture correctly rejected with rule: no-cycles
-
-── Validating Module Skeletons and Invariants ──
 error no-cycles: tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts → 
       tests/fixtures/invalid-deps/cycle/modules/cycle-b/index.ts →
       tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts
@@ -437,6 +427,9 @@ error no-cycles: tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts →
 
 
 x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies cruised.
+✓ Cycle fixture correctly rejected with rule: no-cycles
+
+── Validating Module Skeletons and Invariants ──
 ✓ All nine module skeletons exist with required subdirectories and index.ts barrels
 ✓ Modules confine persistence/providers to adapters and contain no Route Handlers, UI, or Lab entry implementation
 
@@ -464,7 +457,7 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 Running Phase 4.
 ═══════════════════════════════════════════════
   Phase 4 Completion Gate (#90)
-  Run b22a62bb-aea5-488b-b34c-23958aabced8 · c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e
+  Run a192c4fc-1e2c-466a-97f7-bcfdbe7df64b · 4f671370a6edc1ee827d369b20dec15cb160f7c1
 ═══════════════════════════════════════════════
 
 > shipwithali-portfolio@0.0.0 validation:ready
@@ -516,83 +509,83 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
 ✓ dependency/version manifest written to evidence\phase-1-versions.json
 ✓ public-v1: candidate is backward compatible with the committed master baseline
 ✓ owner-v1: candidate is backward compatible with the committed master baseline
-Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-HiYIvQ
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-q7QTIc
 
  RUN  v3.2.4 <WORKSPACE>
 
 validating openapi\public-v1\openapi.yaml...
-openapi\public-v1\openapi.yaml: validated in 59ms
+openapi\public-v1\openapi.yaml: validated in 65ms
 
 Woohoo! Your API description is valid. 🎉
 
- ✓ tests/contracts/compatibility-gate.test.ts (11 tests) 868ms
- ✓ tests/contracts/contract-drift-gate.test.ts (4 tests) 564ms
+ ✓ tests/contracts/compatibility-gate.test.ts (11 tests) 918ms
+ ✓ tests/contracts/contract-drift-gate.test.ts (4 tests) 571ms
  ✓ tests/contracts/owner-contract.test.ts (6 tests) 18ms
  ✓ tests/contracts/public-contract.test.ts (6 tests) 4ms
- ✓ tests/contracts/owner-generated-validation.test.ts (7 tests) 7ms
- ✓ tests/contracts/owner-issue-8-generated-validation.test.ts (7 tests) 3ms
+ ✓ tests/contracts/owner-generated-validation.test.ts (7 tests) 8ms
+ ✓ tests/contracts/owner-issue-8-generated-validation.test.ts (7 tests) 4ms
  ✓ tests/contracts/generated-validation.test.ts (6 tests) 3ms
  ✓ tests/contracts/owner-issue-7-generated-validation.test.ts (9 tests) 2ms
  ✓ tests/contracts/public.test.ts (1 test) 1ms
 
  Test Files  9 passed (9)
       Tests  57 passed (57)
-   Start at  16:48:17
-   Duration  1.91s (transform 138ms, setup 0ms, collect 195ms, tests 1.47s, environment 0ms, prepare 95ms)
+   Start at  18:55:54
+   Duration  2.03s (transform 151ms, setup 0ms, collect 219ms, tests 1.53s, environment 0ms, prepare 105ms)
 
 bundling openapi\public-v1\openapi.yaml...
-📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-HiYIvQ\openapi\generated\public-v1.json 20ms.
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-q7QTIc\openapi\generated\public-v1.json 21ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-HiYIvQ\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-HiYIvQ\src\contracts\http\v1\generated[39m [90m· 3 files · 100ms[39m
-Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-HiYIvQ
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-q7QTIc\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-q7QTIc\src\contracts\http\v1\generated[39m [90m· 3 files · 101ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-q7QTIc
 validating openapi\owner-v1\openapi.yaml...
-openapi\owner-v1\openapi.yaml: validated in 144ms
+openapi\owner-v1\openapi.yaml: validated in 150ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\owner-v1\openapi.yaml...
-📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-HiYIvQ\openapi\generated\owner-v1.json 65ms.
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-q7QTIc\openapi\generated\owner-v1.json 64ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-HiYIvQ\openapi\generated\owner-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-HiYIvQ\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 287ms[39m
-Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-HiYIvQ\src\contracts\http\v1\generated\zod.gen.ts.
-Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-a-HiYIvQ\src\contracts\http\owner\v1\generated\zod.gen.ts.
-Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-HiYIvQ
-Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-qb5ypW
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-q7QTIc\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-q7QTIc\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 294ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-q7QTIc\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-a-q7QTIc\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-q7QTIc
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-lx1tu3
 … Phase 2 gate: phase1-toolchain, phase1-contract-drift, phase1-contract-compatibility, phase1-contract-and-strict-validator-tests still running
 validating openapi\public-v1\openapi.yaml...
-openapi\public-v1\openapi.yaml: validated in 62ms
+openapi\public-v1\openapi.yaml: validated in 65ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\public-v1\openapi.yaml...
-📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-qb5ypW\openapi\generated\public-v1.json 21ms.
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-lx1tu3\openapi\generated\public-v1.json 20ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-qb5ypW\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-qb5ypW\src\contracts\http\v1\generated[39m [90m· 3 files · 102ms[39m
-Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-qb5ypW
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-lx1tu3\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-lx1tu3\src\contracts\http\v1\generated[39m [90m· 3 files · 99ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-lx1tu3
 validating openapi\owner-v1\openapi.yaml...
-openapi\owner-v1\openapi.yaml: validated in 143ms
+openapi\owner-v1\openapi.yaml: validated in 149ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\owner-v1\openapi.yaml...
-📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-qb5ypW\openapi\generated\owner-v1.json 63ms.
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-lx1tu3\openapi\generated\owner-v1.json 65ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-qb5ypW\openapi\generated\owner-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-qb5ypW\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 290ms[39m
-Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-qb5ypW\src\contracts\http\v1\generated\zod.gen.ts.
-Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-b-qb5ypW\src\contracts\http\owner\v1\generated\zod.gen.ts.
-Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-qb5ypW
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-lx1tu3\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-lx1tu3\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 299ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-lx1tu3\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-b-lx1tu3\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-lx1tu3
 ✓ both clean generations are byte-for-byte deterministic
 ✓ committed bundles and generated transport artifacts contain no drift
 ✓ generated output is limited to transport types and validators; no server stubs exist
@@ -603,7 +596,7 @@ Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-qb5yp
    ▲ Next.js 15.5.25
 
    Creating an optimized production build ...
- ✓ Compiled successfully in 863ms
+ ✓ Compiled successfully in 812ms
    Linting and checking validity of types ...
 
  ⚠ The Next.js plugin was not detected in your ESLint configuration. See https://nextjs.org/docs/app/api-reference/config/eslint#migrating-existing-config
@@ -745,66 +738,66 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
  RUN  v3.2.4 <WORKSPACE>
 
  ✓ tests/runtime/problem.test.ts (13 tests) 15ms
+ ✓ tests/runtime/configuration.test.ts (17 tests) 9ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 120ms
 
+ Test Files  1 passed (1)
+
+      Tests  17 passed (17)
+   Start at  18:56:53
  Test Files  1 passed (1)
       Tests  13 passed (13)
-   Start at  16:49:13
-   Duration  423ms (transform 112ms, setup 0ms, collect 141ms, tests 15ms, environment 0ms, prepare 102ms)
+   Duration  456ms (transform 162ms, setup 0ms, collect 175ms, tests 9ms, environment 0ms, prepare 114ms)
+   Start at  18:56:53
 
- ✓ tests/runtime/configuration.test.ts (17 tests) 9ms
+   Duration  457ms (transform 126ms, setup 0ms, collect 160ms, tests 15ms, environment 0ms, prepare 115ms)
 
- Test Files  1 passed (1)
-      Tests  17 passed (17)
-   Start at  16:49:13
-   Duration  461ms (transform 167ms, setup 0ms, collect 185ms, tests 9ms, environment 0ms, prepare 100ms)
-
- ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 130ms
  ✓ tests/runtime/livez.test.ts (4 tests) 2ms
 
  Test Files  2 passed (2)
       Tests  16 passed (16)
-   Start at  16:49:13
-   Duration  482ms (transform 169ms, setup 0ms, collect 85ms, tests 132ms, environment 0ms, prepare 99ms)
+   Start at  18:56:53
+   Duration  490ms (transform 164ms, setup 0ms, collect 82ms, tests 121ms, environment 0ms, prepare 116ms)
 
- ✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped) 6162ms
-   ✓ bounded PDF output reads > terminates a subprocess while its intermediate output crosses the cap  691ms
-   ✓ bounded PDF output reads > reserves the child shutdown window even when the external cleanup hook stalls  4562ms
-   ✓ bounded PDF output reads > uses an inherited hard file-size limit or fails closed when the host lacks one  781ms
- ✓ tests/runtime/media-image-processing.test.ts (9 tests) 384ms
- ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 71ms
- ✓ tests/runtime/owner-media.test.ts (68 tests) 41ms
- ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 15ms
- ✓ tests/runtime/owner-cv.test.ts (55 tests) 24ms
- ✓ tests/runtime/owner-content-authoring.test.ts (29 tests) 27ms
- ✓ tests/runtime/supabase-media-processing-storage.test.ts (6 tests) 15ms
- ✓ tests/runtime/owner-moderation.test.ts (32 tests) 19ms
- ✓ tests/runtime/owner-publication.test.ts (36 tests) 15ms
- ✓ tests/runtime/owner-export.test.ts (40 tests) 17ms
+ ✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped) 6300ms
+   ✓ bounded PDF output reads > terminates a subprocess while its intermediate output crosses the cap  687ms
+   ✓ bounded PDF output reads > reserves the child shutdown window even when the external cleanup hook stalls  4578ms
+   ✓ bounded PDF output reads > uses an inherited hard file-size limit or fails closed when the host lacks one  911ms
+ ✓ tests/runtime/media-image-processing.test.ts (9 tests) 422ms
+ ✓ tests/runtime/owner-media.test.ts (68 tests) 44ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 59ms
+ ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 17ms
+ ✓ tests/runtime/owner-analytics.test.ts (32 tests) 18ms
+ ✓ tests/runtime/owner-content-authoring.test.ts (29 tests) 28ms
+ ✓ tests/runtime/owner-cv.test.ts (55 tests) 20ms
+ ✓ tests/runtime/owner-moderation.test.ts (32 tests) 15ms
+ ✓ tests/runtime/owner-publication.test.ts (36 tests) 16ms
  ✓ tests/runtime/owner-project.test.ts (37 tests) 16ms
- ✓ tests/runtime/owner-analytics.test.ts (32 tests) 26ms
- ✓ tests/runtime/owner-configuration.test.ts (31 tests) 15ms
- ✓ tests/runtime/public-event.test.ts (23 tests) 15ms
- ✓ tests/runtime/phase7-contracts.test.ts (19 tests) 13ms
- ✓ tests/runtime/current-cv.test.ts (21 tests) 9ms
- ✓ tests/runtime/reaction.test.ts (19 tests) 7ms
- ✓ tests/runtime/rating.test.ts (21 tests) 7ms
+ ✓ tests/runtime/phase7-contracts.test.ts (19 tests) 15ms
+ ✓ tests/runtime/owner-export.test.ts (40 tests) 17ms
+ ✓ tests/runtime/owner-configuration.test.ts (31 tests) 12ms
+ ✓ tests/runtime/supabase-media-processing-storage.test.ts (6 tests) 23ms
+ ✓ tests/runtime/public-event.test.ts (23 tests) 18ms
+ ✓ tests/runtime/current-cv.test.ts (21 tests) 11ms
+ ✓ tests/runtime/rating.test.ts (21 tests) 8ms
  ✓ tests/runtime/owner-content-http.test.ts (8 tests) 7ms
  ✓ tests/runtime/feedback.test.ts (20 tests) 7ms
- ✓ tests/runtime/configuration.test.ts (17 tests) 4ms
- ✓ tests/runtime/supabase-current-cv-delivery.test.ts (7 tests) 5ms
- ✓ tests/runtime/owner-project-status.test.ts (5 tests) 5ms
- ✓ tests/runtime/phase7-runtime-fail-closed.test.ts (3 tests) 3ms
+ ✓ tests/runtime/reaction.test.ts (19 tests) 7ms
+ ✓ tests/runtime/supabase-current-cv-delivery.test.ts (7 tests) 6ms
+ ✓ tests/runtime/owner-project-status.test.ts (5 tests) 6ms
+ ✓ tests/runtime/configuration.test.ts (17 tests) 5ms
  ✓ tests/runtime/problem.test.ts (13 tests) 3ms
+ ✓ tests/runtime/phase7-runtime-fail-closed.test.ts (3 tests) 3ms
  ✓ tests/runtime/supabase-media-upload-target.test.ts (4 tests) 2ms
  ✓ tests/runtime/runtime-ports.test.ts (6 tests) 2ms
- ✓ tests/runtime/livez.test.ts (4 tests) 1ms
- ✓ tests/runtime/supabase-media-delivery-storage.test.ts (2 tests) 1ms
  ✓ tests/runtime/feedback-limits.test.ts (2 tests) 1ms
+ ✓ tests/runtime/supabase-media-delivery-storage.test.ts (2 tests) 2ms
+ ✓ tests/runtime/livez.test.ts (4 tests) 1ms
 
  Test Files  31 passed (31)
       Tests  629 passed | 1 skipped (630)
-   Start at  16:49:13
-   Duration  8.58s (transform 832ms, setup 0ms, collect 1.31s, tests 6.94s, environment 0ms, prepare 99ms)
+   Start at  18:56:53
+   Duration  8.64s (transform 753ms, setup 0ms, collect 1.21s, tests 7.11s, environment 0ms, prepare 111ms)
 
 ✓ configuration-negative-tests — passed
 ✓ http-adapter-tests — passed
@@ -831,16 +824,16 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 
 ✅  Your config is valid.
 validating openapi\public-v1\openapi.yaml...
-openapi\public-v1\openapi.yaml: validated in 60ms
+openapi\public-v1\openapi.yaml: validated in 72ms
 
 validating openapi\owner-v1\openapi.yaml...
-openapi\owner-v1\openapi.yaml: validated in 118ms
+openapi\owner-v1\openapi.yaml: validated in 120ms
 
 Woohoo! Your API descriptions are valid. 🎉
 
 Building public-v1 artifacts in <WORKSPACE>
 validating openapi\public-v1\openapi.yaml...
-openapi\public-v1\openapi.yaml: validated in 59ms
+openapi\public-v1\openapi.yaml: validated in 65ms
 
 Woohoo! Your API description is valid. 🎉
 
@@ -850,20 +843,20 @@ bundling openapi\public-v1\openapi.yaml...
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
 [90m[Job 1] [39m[36m  [1] [39m<WORKSPACE>\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./src\contracts\http\v1\generated[39m [90m· 3 files · 98ms[39m
+[90m[Job 1] [39m[32m✓[39m [96m./src\contracts\http\v1\generated[39m [90m· 3 files · 102ms[39m
 Building owner-v1 artifacts in <WORKSPACE>
 validating openapi\owner-v1\openapi.yaml...
-openapi\owner-v1\openapi.yaml: validated in 150ms
+openapi\owner-v1\openapi.yaml: validated in 145ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\owner-v1\openapi.yaml...
-📦 Created a bundle for openapi\owner-v1\openapi.yaml at <WORKSPACE>\openapi\generated\owner-v1.json 65ms.
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <WORKSPACE>\openapi\generated\owner-v1.json 63ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
 [90m[Job 1] [39m[36m  [1] [39m<WORKSPACE>\openapi\generated\owner-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./src\contracts\http\owner\v1\generated[39m [90m· 3 files · 331ms[39m
+[90m[Job 1] [39m[32m✓[39m [96m./src\contracts\http\owner\v1\generated[39m [90m· 3 files · 296ms[39m
 Strictified 27 generated Zod object schemas in <WORKSPACE>\src\contracts\http\v1\generated\zod.gen.ts.
 Strictified 192 generated Zod object schemas in <WORKSPACE>\src\contracts\http\owner\v1\generated\zod.gen.ts.
 Contract artifacts generated successfully in <WORKSPACE>
@@ -871,64 +864,64 @@ Contract artifacts generated successfully in <WORKSPACE>
 > shipwithali-portfolio@0.0.0 contract:drift
 > node scripts/check-contract-drift.mjs
 
-Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-1lLsDI
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-a-pZA5aA
 validating openapi\public-v1\openapi.yaml...
-openapi\public-v1\openapi.yaml: validated in 48ms
+openapi\public-v1\openapi.yaml: validated in 62ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\public-v1\openapi.yaml...
-📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-1lLsDI\openapi\generated\public-v1.json 15ms.
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-pZA5aA\openapi\generated\public-v1.json 21ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-1lLsDI\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-1lLsDI\src\contracts\http\v1\generated[39m [90m· 3 files · 103ms[39m
-Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-1lLsDI
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-pZA5aA\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-pZA5aA\src\contracts\http\v1\generated[39m [90m· 3 files · 107ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-a-pZA5aA
 validating openapi\owner-v1\openapi.yaml...
-openapi\owner-v1\openapi.yaml: validated in 151ms
+openapi\owner-v1\openapi.yaml: validated in 144ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\owner-v1\openapi.yaml...
-📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-1lLsDI\openapi\generated\owner-v1.json 69ms.
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-a-pZA5aA\openapi\generated\owner-v1.json 62ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-1lLsDI\openapi\generated\owner-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-1lLsDI\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 300ms[39m
-Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-1lLsDI\src\contracts\http\v1\generated\zod.gen.ts.
-Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-a-1lLsDI\src\contracts\http\owner\v1\generated\zod.gen.ts.
-Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-1lLsDI
-Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-QbRRzt
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-a-pZA5aA\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-a-pZA5aA\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 290ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-a-pZA5aA\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-a-pZA5aA\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-a-pZA5aA
+Building public-v1 artifacts in <TEMP>\shipwithali-contract-b-pPK76R
 validating openapi\public-v1\openapi.yaml...
 openapi\public-v1\openapi.yaml: validated in 58ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\public-v1\openapi.yaml...
-📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-QbRRzt\openapi\generated\public-v1.json 27ms.
+📦 Created a bundle for openapi\public-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-pPK76R\openapi\generated\public-v1.json 22ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-QbRRzt\openapi\generated\public-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-QbRRzt\src\contracts\http\v1\generated[39m [90m· 3 files · 107ms[39m
-Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-QbRRzt
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-pPK76R\openapi\generated\public-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-pPK76R\src\contracts\http\v1\generated[39m [90m· 3 files · 101ms[39m
+Building owner-v1 artifacts in <TEMP>\shipwithali-contract-b-pPK76R
 validating openapi\owner-v1\openapi.yaml...
-openapi\owner-v1\openapi.yaml: validated in 151ms
+openapi\owner-v1\openapi.yaml: validated in 147ms
 
 Woohoo! Your API description is valid. 🎉
 
 bundling openapi\owner-v1\openapi.yaml...
-📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-QbRRzt\openapi\generated\owner-v1.json 66ms.
+📦 Created a bundle for openapi\owner-v1\openapi.yaml at <TEMP>\shipwithali-contract-b-pPK76R\openapi\generated\owner-v1.json 81ms.
 [90m@hey-api/openapi-ts v0.99.0[39m
 
 [90m[Job 1] [39m[90m~[39m [36mGenerating...[39m
-[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-QbRRzt\openapi\generated\owner-v1.json
-[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-QbRRzt\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 313ms[39m
-Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-QbRRzt\src\contracts\http\v1\generated\zod.gen.ts.
-Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-b-QbRRzt\src\contracts\http\owner\v1\generated\zod.gen.ts.
-Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-QbRRzt
+[90m[Job 1] [39m[36m  [1] [39m<TEMP>\shipwithali-contract-b-pPK76R\openapi\generated\owner-v1.json
+[90m[Job 1] [39m[32m✓[39m [96m./<TEMP>\shipwithali-contract-b-pPK76R\src\contracts\http\owner\v1\generated[39m [90m· 3 files · 286ms[39m
+Strictified 27 generated Zod object schemas in <TEMP>\shipwithali-contract-b-pPK76R\src\contracts\http\v1\generated\zod.gen.ts.
+Strictified 192 generated Zod object schemas in <TEMP>\shipwithali-contract-b-pPK76R\src\contracts\http\owner\v1\generated\zod.gen.ts.
+Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-pPK76R
 ✓ both clean generations are byte-for-byte deterministic
 ✓ committed bundles and generated transport artifacts contain no drift
 ✓ generated output is limited to transport types and validators; no server stubs exist
@@ -938,174 +931,174 @@ Contract artifacts generated successfully in <TEMP>\shipwithali-contract-b-QbRRz
 
 ✓ public-v1: candidate is backward compatible with the committed master baseline
 ✓ owner-v1: candidate is backward compatible with the committed master baseline
-… tooling-tests still running
 
 > shipwithali-portfolio@0.0.0 test:setup
 > node --test --test-isolation=none tests/tooling/*.test.mjs
 
-✔ rejects Node 22 even though it shares the major version accepted by the old gate (25.0003ms)
-✔ rejects another Node 24 patch instead of treating any Node 24 as pinned (1.4855ms)
-✔ rejects a different npm patch instead of recording it as accepted (2.0924ms)
-✔ missing Docker and inaccessible daemon fail with safe actionable diagnostics (1.3579ms)
-✔ a skipped or empty integration suite cannot count as passing (0.257ms)
-✔ isolated Auth config preserves signup restrictions and leaves source untouched (0.75ms)
-✔ remote provider credentials never reach isolated CLI or tests (0.9045ms)
-✔ settings identities use bounded suffixes and reject CLI-truncated upgrade names (0.2848ms)
-✔ local Auth fixture identities remain bounded and share the scoped adapter (0.5674ms)
-✔ local Docker adapter explicitly binds only named and labeled fixture publishes (1.6519ms)
-✔ local Docker adapter denies wildcard publish-all, foreign identities and unsupported bindings (0.4476ms)
-✔ local Docker adapter preserves non-publishing commands and private arguments (0.1445ms)
-✔ Phase 3 gate copies the complete immutable chain into an owned disposable project (91.6337ms)
-✔ Phase 3 gate cleanup rejects a persistent checkout (0.4354ms)
-✔ Phase 3 refreshes migration proof before focused suites consume its checksums (0.3138ms)
-✔ Phase 3 gate skip reporting counts tests without counting skipped test files twice (0.5736ms)
-✔ Phase 3 gate skip reporting handles alternate Vitest summaries and ANSI color (0.3585ms)
-✔ the required checklist includes every predecessor and Phase 4 acceptance runner (0.0909ms)
-✔ a passing constituent passes only when it exits cleanly (0.3459ms)
-✔ a required local service cannot pass when unavailable even with exit code zero (0.2374ms)
-✔ skipped and partial required results fail (0.243ms)
-✔ Phase 2's single known Windows helper-process skip is the only tolerated skip (0.4613ms)
-✔ evidence redacts database credentials, bearer [redacted], and private payload fields (0.5975ms)
-✔ malformed database evidence is reported without crashing the gate (0.2861ms)
-✔ a successful gate requires every named constituent exactly once (0.2352ms)
-✔ missing, stale, or duplicate evidence and failed constituents fail the verdict (0.1077ms)
-✔ counts skipped cases from zero-exit Vitest and Node test summaries (0.3643ms)
-✔ accepts a complete fresh Phase 5 run with real database and deferred-work evidence (1.7403ms)
-✔ fails closed when required Docker/PostgreSQL evidence is missing (0.3628ms)
-✔ rejects partial suites, zero executions, and required skips (0.4697ms)
-✔ rejects stale or malformed source and run identities (0.4263ms)
-✔ rejects failed constituents, missing suites, and unit-only database substitutes (0.4836ms)
-✔ source identity works without remotes and detects source changes independently of staging (2910.403ms)
-✔ gate startup clears stale reports and logs before checks run (21.7375ms)
-✔ Phase 6 gate traceability covers all parent criteria, stories and mandatory matrices (5.9574ms)
-✔ runtime pin comparison accepts Node versions with or without the version prefix (2.2654ms)
-✔ observed tool versions bind to pinned definitions without equating versions to image references (0.8749ms)
-✔ scanner requires the pinned definition and matching independently observed versions (2.997ms)
-✔ imageProcessor requires the pinned definition and matching independently observed versions (3.4003ms)
-✔ videoProcessor requires the pinned definition and matching independently observed versions (1.8776ms)
-✔ pdfProcessor requires the pinned definition and matching independently observed versions (2.0013ms)
-✔ absent required service is rejected (0.7383ms)
-✔ stale source evidence is rejected (0.6693ms)
-✔ failed constituent is rejected (0.8787ms)
-✔ missing matrix or scenario is rejected (0.5644ms)
-✔ scenario-9-atomic-cv-replacement rejects missing scenario evidence (1.8454ms)
-✔ scenario-12-media-acceptance rejects missing scenario evidence (0.6728ms)
-✔ scenario-12-publication-gates rejects missing scenario evidence (1.4903ms)
-✔ scenario-12-integrated-publication rejects missing scenario evidence (0.5318ms)
-✔ scenario-13-arabic-boundary rejects missing scenario evidence (0.4551ms)
-✔ scenario-15-phase6-degraded-dependencies rejects missing scenario evidence (1.825ms)
-✔ zero real execution is rejected (1.1055ms)
-✔ fake-only evidence is rejected (0.5878ms)
-✔ required skip is rejected (0.5859ms)
-✔ timeout is rejected (2.8014ms)
-✔ failed cleanup is rejected (2.4875ms)
-✔ gate dependencies are produced before migration access consumes them (0.4689ms)
-✔ released Phase 7 migrations retain the checksums published at d652fd4 (1.5374ms)
-✔ historical migration bootstrap rejects targets outside its disposable fixture scope (0.8302ms)
-✔ privileged local migration bootstrap requires actual loopback-only published ports (0.4982ms)
-✔ Phase 6 migration-access gate has one runnable focused entrypoint and follows real Storage evidence (0.7059ms)
-✔ Phase 6 migration-access evidence rejects stale generated types, missing indexes, and incomplete upgrade snapshots (0.4614ms)
-✔ Phase 6 baseline comparison canonicalizes line endings and still rejects SQL drift (0.421ms)
-✔ Phase 6 successful migration verification stops each owned project once (0.4059ms)
-✔ Phase 6 migration evidence retains the validated Storage integration summary (0.2392ms)
-✔ Phase 6 baseline preserves Git's existing trailing-whitespace comparison (0.3138ms)
-✔ migration failures expose only a safe stage and SQLSTATE (1.1916ms)
-✔ portable PDF fixtures are deterministic documents with an exact cross-reference offset (0.6031ms)
-✔ bounded Media batch proof accepts its primary or scoped covering index only (0.9426ms)
-✔ isolated project IDs remain exact within the CLI name limit (12.726ms)
-✔ catalog proof permits only the reviewed Phase 7 Worker retention definers (0.7454ms)
-✔ catalog proof permits documented Worker schemas and forbids domain access or DDL (0.4495ms)
-✔ Media and CV UPDATE privileges stay on their exact approved columns (27.107ms)
-✔ project cleanup rejects paths outside its owned temporary scope before invoking Docker (0.9887ms)
-✔ private Storage catalogs require RLS and the reviewed default-deny policy mode (0.5226ms)
-✔ integrated Media/CV evidence requires all T18 cases and fresh real-service proof (3.065ms)
-✔ CV upgrade defers every migration from CV initialization onward, including later domain migrations (0.5516ms)
-✔ CV evidence requires recorded execution of every T09 criterion (0.8053ms)
-✔ the complete real integration gate rejects skipped, missing, failed, and partial test reports (3.3103ms)
-✔ integration diagnostics retain source locations without arbitrary Auth or database payloads (0.6776ms)
-✔ integration diagnostics retain only known Media codes and CV criterion IDs (0.501ms)
-✔ loads predecessor contexts from an explicit evidence root (22.7659ms)
-✔ isolated configuration enables local Auth signups and private Storage on reserved ports (1.2044ms)
-✔ local runner removes inherited provider credentials (0.5643ms)
-✔ source-bound service evidence with all six real format probes passes (0.5723ms)
-✔ missing services, tool definitions, format executions, skipped cases, stale evidence and cleanup failures fail closed (0.6242ms)
-✔ zero execution, missing reports, malformed times and fake-only scanner verdicts cannot pass (0.6637ms)
-✔ Docker absence, service startup timeout, and processor failures cannot certify setup (0.4995ms)
-✔ a single PostgreSQL connection cannot certify race-test setup (0.4681ms)
-✔ predecessor assertions require source-bound Phase 4 and current Phase 5 run evidence (0.5683ms)
-✔ Phase 6 rejects stale or detached Phase 5 context evidence (1.0341ms)
-✔ future acceptance tests have deterministic time and UUIDv7 identity factories (1.6353ms)
-✔ race scenarios can wait on independent test actors at a deterministic barrier (0.5597ms)
-✔ Storage integration artifact requires complete fresh source/run-bound proof (1.1103ms)
-✔ focused CV format proof uses every selected format exactly once (1.1077ms)
-✔ Phase 7 gate maps each parent criterion and required domain scenario to executed evidence (4.1404ms)
-✔ gate rejects runtime mismatch, missing services, stale evidence, skips, failed aggregates, incomplete reports, and failed cleanup (5.0551ms)
-✔ integrated PostgreSQL evidence identifies only a temporary loopback cluster (0.7807ms)
-✔ integrated migration comparison rejects catalog drift (0.4406ms)
-✔ restricted access assertion rejects schema or table privileges in either sensitive schema (0.8099ms)
-✔ query plan index collector reports nested index usage (0.3424ms)
-✔ Phase 7 aggregate migration inventory records canonical SQL checksums (0.7944ms)
-✔ accepts only complete source-bound successful artifacts with cleanup (64.6467ms)
-✔ qualifies the actual Phase 6 aggregate producer's migration and service evidence shape (46.74ms)
-✔ actual Phase 6 aggregate evidence rejects missing or contradictory migrations, services and execution (1408.9793ms)
-✔ malformed Phase 6 aggregate check rows block qualification without throwing (27.7654ms)
-✔ rejects absent or partial Phase 6 and Phase 7 coverage despite passing command inventories (1541.7822ms)
-✔ requires each Phase 6 and Phase 7 mapped component's actual source, run and cleanup provenance (552.1888ms)
-✔ component execution counts override accepted and successful aggregate flags (488.3638ms)
-✔ Phase 7 preserves the producer's explicit null for its optional failed-suite counter (34.5431ms)
-✔ command execution totals equal complete prerequisite inventories (151.3058ms)
-✔ rejects a truncated named checklist despite unchanged successful aggregate totals (82.8485ms)
-✔ rejects duplicate check names that conceal a missing required command (17.4592ms)
-✔ a failed or skipped named command overrides passing aggregate claims (80.2632ms)
-✔ Phase 5 keeps assertion totals separate from its complete command inventory (39.4924ms)
-✔ reports precise safe blockers for missing, stale, mismatched, partial, skipped and failed evidence (21.2351ms)
-✔ rejects evidence whose source is outside the evaluated history (23.3012ms)
-✔ accepts ancestor evidence when its source tree matches the evaluated tree (19.9226ms)
-✔ rejects a source-tree fingerprint that does not match the immutable source revision (26.2559ms)
-✔ stale source evidence requests requalification without inventing predecessor failures (24.7806ms)
-✔ rejects absent denominators, unnamed coverage, wrong tool pins, and incomplete migration checksums (17.3782ms)
-✔ uses a complete named gate checklist as the denominator when aggregate counts are absent (37.7042ms)
-✔ component cleanup failures cannot be overridden by aggregate cleanup claims (46.1906ms)
-✔ reports sanitized failed check names and the owning predecessor action (42.4434ms)
-✔ rejects incomplete migration inventories and malformed real-service scope (39.5149ms)
-✔ rejects restricted-access matrices with empty schema privileges or malformed table grants (35.792ms)
-✔ requires unique Phase 7 restricted-access principals including service_role (70.5611ms)
-✔ Phase 4 requires real Auth evidence and Phase 6 requires real Auth and private Storage evidence (40.0455ms)
-✔ rejects Phase 7 public-role grants to sensitive schemas (45.7961ms)
-✔ reports malformed evidence collection shapes without throwing (34.7647ms)
-✔ immutable metadata needs no worktree writes and uses historical checkout attributes (2366.5741ms)
-✔ qualification runs every gate in order before evaluating evidence (0.8266ms)
-✔ a failed or interrupted gate never reaches the evaluator or reports success (1.0717ms)
-✔ uncommitted source and source edits during any gate require a fresh run (1.218ms)
-✔ settings project identities fit the CLI's 40-character container identity limit (20.6075ms)
-✔ Phase 5 upgrade history applies Phase 4, Phase 5, then dependent later migrations (0.5075ms)
-✔ the settings runner isolates both Supabase projects to distinct loopback port ranges (0.6052ms)
-✔ the settings runner removes inherited provider credentials (0.4435ms)
-✔ the settings runner rejects missing, partial, failed, or skipped database evidence (0.683ms)
-✔ Phase 3 predecessor evidence requires every historical suite to pass without skips (0.5492ms)
-✔ rejects Node 20 and mismatched npm before installation (28.1663ms)
-✔ runtime-only preflight works before dependencies exist (10.6991ms)
-✔ reads exact npm from lifecycle metadata without spawning another process (0.6029ms)
-✔ rejects missing development dependencies even with an installation stamp (36.1694ms)
-✔ rejects cached dependencies after lockfile changes (24.6029ms)
-✔ requires successful setup and exact installed versions (29.6827ms)
-✔ a registry install failure cannot leave a previously ready environment (254.9037ms)
-ℹ tests 147
+✔ rejects Node 22 even though it shares the major version accepted by the old gate (4.038ms)
+✔ rejects another Node 24 patch instead of treating any Node 24 as pinned (1.3743ms)
+✔ rejects a different npm patch instead of recording it as accepted (1.153ms)
+✔ missing Docker and inaccessible daemon fail with safe actionable diagnostics (0.5142ms)
+✔ a skipped or empty integration suite cannot count as passing (0.2341ms)
+✔ isolated Auth config preserves signup restrictions and leaves source untouched (1.5066ms)
+✔ remote provider credentials never reach isolated CLI or tests (0.8789ms)
+✔ settings identities use bounded suffixes and reject CLI-truncated upgrade names (0.2324ms)
+✔ local Auth fixture identities remain bounded and share the scoped adapter (0.4606ms)
+✔ local Docker adapter explicitly binds only named and labeled fixture publishes (0.298ms)
+✔ local Docker adapter denies wildcard publish-all, foreign identities and unsupported bindings (0.2866ms)
+✔ local Docker adapter preserves non-publishing commands and private arguments (0.1262ms)
+✔ Phase 3 gate copies the complete immutable chain into an owned disposable project (48.6123ms)
+✔ Phase 3 gate cleanup rejects a persistent checkout (0.3427ms)
+✔ Phase 3 refreshes migration proof before focused suites consume its checksums (0.3177ms)
+✔ Phase 3 gate skip reporting counts tests without counting skipped test files twice (0.5391ms)
+✔ Phase 3 gate skip reporting handles alternate Vitest summaries and ANSI color (0.3401ms)
+✔ the required checklist includes every predecessor and Phase 4 acceptance runner (0.0908ms)
+✔ a passing constituent passes only when it exits cleanly (0.3521ms)
+✔ a required local service cannot pass when unavailable even with exit code zero (0.2504ms)
+✔ skipped and partial required results fail (0.2221ms)
+✔ Phase 2's single known Windows helper-process skip is the only tolerated skip (0.4249ms)
+✔ evidence redacts database credentials, bearer [redacted], and private payload fields (0.5681ms)
+✔ malformed database evidence is reported without crashing the gate (0.2027ms)
+✔ a successful gate requires every named constituent exactly once (0.2124ms)
+✔ missing, stale, or duplicate evidence and failed constituents fail the verdict (0.1044ms)
+✔ counts skipped cases from zero-exit Vitest and Node test summaries (0.3324ms)
+✔ accepts a complete fresh Phase 5 run with real database and deferred-work evidence (1.6856ms)
+✔ fails closed when required Docker/PostgreSQL evidence is missing (0.4556ms)
+✔ rejects partial suites, zero executions, and required skips (0.523ms)
+✔ rejects stale or malformed source and run identities (0.4539ms)
+✔ rejects failed constituents, missing suites, and unit-only database substitutes (0.4756ms)
+✔ source identity works without remotes and detects source changes independently of staging (2927.5108ms)
+✔ gate startup clears stale reports and logs before checks run (8.186ms)
+✔ Phase 6 gate traceability covers all parent criteria, stories and mandatory matrices (2.6729ms)
+✔ runtime pin comparison accepts Node versions with or without the version prefix (0.6389ms)
+✔ observed tool versions bind to pinned definitions without equating versions to image references (0.3436ms)
+✔ scanner requires the pinned definition and matching independently observed versions (1.0266ms)
+✔ imageProcessor requires the pinned definition and matching independently observed versions (0.8055ms)
+✔ videoProcessor requires the pinned definition and matching independently observed versions (0.6483ms)
+✔ pdfProcessor requires the pinned definition and matching independently observed versions (0.5897ms)
+✔ absent required service is rejected (0.2426ms)
+✔ stale source evidence is rejected (0.2236ms)
+✔ failed constituent is rejected (0.2221ms)
+✔ missing matrix or scenario is rejected (0.2208ms)
+✔ scenario-9-atomic-cv-replacement rejects missing scenario evidence (0.3282ms)
+✔ scenario-12-media-acceptance rejects missing scenario evidence (0.6711ms)
+✔ scenario-12-publication-gates rejects missing scenario evidence (0.2205ms)
+✔ scenario-12-integrated-publication rejects missing scenario evidence (0.2064ms)
+✔ scenario-13-arabic-boundary rejects missing scenario evidence (0.1701ms)
+✔ scenario-15-phase6-degraded-dependencies rejects missing scenario evidence (0.1532ms)
+✔ zero real execution is rejected (0.2254ms)
+✔ fake-only evidence is rejected (0.2168ms)
+✔ required skip is rejected (0.1977ms)
+✔ timeout is rejected (0.271ms)
+✔ failed cleanup is rejected (0.2299ms)
+✔ gate dependencies are produced before migration access consumes them (0.1088ms)
+✔ released Phase 7 migrations retain the checksums published at d652fd4 (0.5203ms)
+✔ historical migration bootstrap rejects targets outside its disposable fixture scope (0.3241ms)
+✔ privileged local migration bootstrap requires actual loopback-only published ports (0.1638ms)
+✔ Phase 6 migration-access gate has one runnable focused entrypoint and follows real Storage evidence (0.3282ms)
+✔ Phase 6 migration-access evidence rejects stale generated types, missing indexes, and incomplete upgrade snapshots (0.1641ms)
+✔ Phase 6 baseline comparison canonicalizes line endings and still rejects SQL drift (0.1539ms)
+✔ Phase 6 successful migration verification stops each owned project once (0.1274ms)
+✔ Phase 6 migration evidence retains the validated Storage integration summary (0.0668ms)
+✔ Phase 6 baseline preserves Git's existing trailing-whitespace comparison (0.0773ms)
+✔ migration failures expose only a safe stage and SQLSTATE (0.2714ms)
+✔ portable PDF fixtures are deterministic documents with an exact cross-reference offset (0.2051ms)
+✔ bounded Media batch proof accepts its primary or scoped covering index only (0.2136ms)
+✔ isolated project IDs remain exact within the CLI name limit (4.7659ms)
+✔ catalog proof permits only the reviewed Phase 7 Worker retention definers (0.3055ms)
+✔ catalog proof permits documented Worker schemas and forbids domain access or DDL (0.1713ms)
+✔ Media and CV UPDATE privileges stay on their exact approved columns (9.4928ms)
+✔ project cleanup rejects paths outside its owned temporary scope before invoking Docker (0.4398ms)
+✔ private Storage catalogs require RLS and the reviewed default-deny policy mode (0.238ms)
+✔ integrated Media/CV evidence requires all T18 cases and fresh real-service proof (1.3919ms)
+✔ CV upgrade defers every migration from CV initialization onward, including later domain migrations (0.2307ms)
+✔ CV evidence requires recorded execution of every T09 criterion (0.3528ms)
+✔ the complete real integration gate rejects skipped, missing, failed, and partial test reports (1.3869ms)
+✔ integration diagnostics retain source locations without arbitrary Auth or database payloads (0.3101ms)
+✔ integration diagnostics retain only known Media codes and CV criterion IDs (0.1928ms)
+✔ loads predecessor contexts from an explicit evidence root (13.0508ms)
+✔ isolated configuration enables local Auth signups and private Storage on reserved ports (0.538ms)
+✔ local runner removes inherited provider credentials (0.2386ms)
+✔ source-bound service evidence with all six real format probes passes (0.2356ms)
+✔ missing services, tool definitions, format executions, skipped cases, stale evidence and cleanup failures fail closed (0.3365ms)
+✔ zero execution, missing reports, malformed times and fake-only scanner verdicts cannot pass (0.3706ms)
+✔ Docker absence, service startup timeout, and processor failures cannot certify setup (0.3311ms)
+✔ a single PostgreSQL connection cannot certify race-test setup (0.3482ms)
+✔ predecessor assertions require source-bound Phase 4 and current Phase 5 run evidence (0.3401ms)
+✔ Phase 6 rejects stale or detached Phase 5 context evidence (1.0074ms)
+✔ future acceptance tests have deterministic time and UUIDv7 identity factories (1.0776ms)
+✔ race scenarios can wait on independent test actors at a deterministic barrier (0.341ms)
+✔ Storage integration artifact requires complete fresh source/run-bound proof (0.3643ms)
+✔ focused CV format proof uses every selected format exactly once (0.431ms)
+✔ Phase 7 gate maps each parent criterion and required domain scenario to executed evidence (1.4735ms)
+✔ gate rejects runtime mismatch, missing services, stale evidence, skips, failed aggregates, incomplete reports, and failed cleanup (1.6019ms)
+✔ integrated PostgreSQL evidence identifies only a temporary loopback cluster (0.2991ms)
+✔ integrated migration comparison rejects catalog drift (0.138ms)
+✔ restricted access assertion rejects schema or table privileges in either sensitive schema (0.2992ms)
+✔ query plan index collector reports nested index usage (0.1267ms)
+✔ Phase 7 aggregate migration inventory records canonical SQL checksums (0.3463ms)
+✔ accepts only complete source-bound successful artifacts with cleanup (33.8234ms)
+✔ qualifies the actual Phase 6 aggregate producer's migration and service evidence shape (24.0955ms)
+✔ actual Phase 6 aggregate evidence rejects missing or contradictory migrations, services and execution (834.1604ms)
+✔ malformed Phase 6 aggregate check rows block qualification without throwing (12.6383ms)
+✔ rejects absent or partial Phase 6 and Phase 7 coverage despite passing command inventories (671.6199ms)
+✔ requires each Phase 6 and Phase 7 mapped component's actual source, run and cleanup provenance (351.9732ms)
+✔ component execution counts override accepted and successful aggregate flags (212.6327ms)
+✔ Phase 7 preserves the producer's explicit null for its optional failed-suite counter (13.8479ms)
+✔ command execution totals equal complete prerequisite inventories (89.728ms)
+✔ rejects a truncated named checklist despite unchanged successful aggregate totals (65.9895ms)
+✔ rejects duplicate check names that conceal a missing required command (15.7373ms)
+✔ a failed or skipped named command overrides passing aggregate claims (56.3506ms)
+✔ Phase 5 keeps assertion totals separate from its complete command inventory (15.8678ms)
+✔ reports precise safe blockers for missing, stale, mismatched, partial, skipped and failed evidence (16.5721ms)
+✔ rejects evidence whose source is outside the evaluated history (13.1004ms)
+✔ accepts ancestor evidence when its source tree matches the evaluated tree (18.0379ms)
+✔ rejects a source-tree fingerprint that does not match the immutable source revision (23.3201ms)
+✔ stale source evidence requests requalification without inventing predecessor failures (21.7326ms)
+✔ rejects absent denominators, unnamed coverage, wrong tool pins, and incomplete migration checksums (20.5961ms)
+✔ uses a complete named gate checklist as the denominator when aggregate counts are absent (18.8902ms)
+✔ component cleanup failures cannot be overridden by aggregate cleanup claims (18.4689ms)
+✔ reports sanitized failed check names and the owning predecessor action (22.6611ms)
+✔ rejects incomplete migration inventories and malformed real-service scope (26.4966ms)
+✔ rejects restricted-access matrices with empty schema privileges or malformed table grants (14.6059ms)
+✔ requires unique Phase 7 restricted-access principals including service_role (32.2469ms)
+✔ Phase 4 requires real Auth evidence and Phase 6 requires real Auth and private Storage evidence (23.8959ms)
+✔ rejects Phase 7 public-role grants to sensitive schemas (18.3376ms)
+✔ reports malformed evidence collection shapes without throwing (20.6399ms)
+✔ immutable metadata needs no worktree writes and uses historical checkout attributes (1805.1393ms)
+✔ the real CLI with no Docker exits before changing any prerequisite report (136.053ms)
+✔ Docker preflight distinguishes missing executable, access, timeout, engine OS and Compose (0.4958ms)
+✔ Docker preflight failure leaves source inspection and every evidence producer untouched (0.3218ms)
+✔ qualification runs every gate in order before evaluating evidence (0.1729ms)
+✔ a failed or interrupted gate never reaches the evaluator or reports success (0.2425ms)
+✔ uncommitted source and source edits during any gate require a fresh run (0.3775ms)
+✔ settings project identities fit the CLI's 40-character container identity limit (6.705ms)
+✔ Phase 5 upgrade history applies Phase 4, Phase 5, then dependent later migrations (0.2205ms)
+✔ the settings runner isolates both Supabase projects to distinct loopback port ranges (0.1978ms)
+✔ the settings runner removes inherited provider credentials (0.1732ms)
+✔ the settings runner rejects missing, partial, failed, or skipped database evidence (0.2865ms)
+✔ Phase 3 predecessor evidence requires every historical suite to pass without skips (0.1942ms)
+✔ rejects Node 20 and mismatched npm before installation (10.7444ms)
+✔ runtime-only preflight works before dependencies exist (3.512ms)
+✔ reads exact npm from lifecycle metadata without spawning another process (0.244ms)
+✔ rejects missing development dependencies even with an installation stamp (6.9171ms)
+✔ rejects cached dependencies after lockfile changes (7.4901ms)
+✔ requires successful setup and exact installed versions (10.3134ms)
+✔ a registry install failure cannot leave a previously ready environment (179.8562ms)
+ℹ tests 150
 ℹ suites 0
-ℹ pass 147
+ℹ pass 150
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 11793.0073
-… lint still running
-… production-build still running
+ℹ duration_ms 8543.5291
 … production-build still running
 … production-build still running
    ▲ Next.js 15.5.25
 
    Creating an optimized production build ...
- ✓ Compiled successfully in 853ms
+ ✓ Compiled successfully in 783ms
    Linting and checking validity of types ...
 
  ⚠ The Next.js plugin was not detected in your ESLint configuration. See https://nextjs.org/docs/app/api-reference/config/eslint#migrating-existing-config
@@ -1232,27 +1225,27 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/phase4/phase-context.test.ts (8 tests) 2768ms
-   ✓ Phase 4 completion gate (#90) > preserves provider seams and runtime boundaries  1962ms
-   ✓ Phase 4 completion gate (#90) > rejects Phase 4 negative fixtures for leakage, routes, writes, frontend, and later-phase activation  311ms
-   ✓ Phase 4 completion gate (#90) > confines placeholder privileged actors to explicit production files, never via fixture exceptions  331ms
- ✓ tests/phase4/phase5-scenario-coverage.test.ts (3 tests) 339ms
- ✓ tests/phase4/identity-configuration-contracts.test.ts (11 tests) 164ms
- ✓ tests/phase4/phase5-verification.test.ts (6 tests) 133ms
- ✓ tests/phase4/owner-session-auth.test.ts (13 tests) 24ms
+ ✓ tests/phase4/phase-context.test.ts (8 tests) 2810ms
+   ✓ Phase 4 completion gate (#90) > preserves provider seams and runtime boundaries  1969ms
+   ✓ Phase 4 completion gate (#90) > rejects Phase 4 negative fixtures for leakage, routes, writes, frontend, and later-phase activation  325ms
+   ✓ Phase 4 completion gate (#90) > confines placeholder privileged actors to explicit production files, never via fixture exceptions  339ms
+ ✓ tests/phase4/phase5-scenario-coverage.test.ts (3 tests) 340ms
+ ✓ tests/phase4/identity-configuration-contracts.test.ts (11 tests) 151ms
+ ✓ tests/phase4/phase5-verification.test.ts (6 tests) 134ms
  ✓ tests/phase4/pseudonymous-identity.test.ts (8 tests) 9ms
- ✓ tests/phase4/portfolio-settings-service.test.ts (24 tests) 10ms
+ ✓ tests/phase4/owner-session-auth.test.ts (13 tests) 15ms
+ ✓ tests/phase4/portfolio-settings-service.test.ts (24 tests) 9ms
  ✓ tests/phase4/portfolio-contact-channels-command.test.ts (21 tests) 6ms
- ✓ tests/phase4/portfolio-cta-command.test.ts (14 tests) 4ms
  ✓ tests/phase4/owner-request-security.test.ts (20 tests) 7ms
- ✓ tests/phase4/portfolio-profile-command.test.ts (6 tests) 3ms
- ✓ tests/phase4/owner-operation-policy.test.ts (11 tests) 2ms
+ ✓ tests/phase4/portfolio-cta-command.test.ts (14 tests) 4ms
+ ✓ tests/phase4/portfolio-profile-command.test.ts (6 tests) 4ms
+ ✓ tests/phase4/owner-operation-policy.test.ts (11 tests) 1ms
  ✓ tests/phase4/functional-identity-orchestration.test.ts (3 tests) 1ms
 
  Test Files  13 passed (13)
       Tests  148 passed (148)
-   Start at  16:51:19
-   Duration  4.20s (transform 355ms, setup 0ms, collect 424ms, tests 3.47s, environment 0ms, prepare 112ms)
+   Start at  18:58:40
+   Duration  4.21s (transform 362ms, setup 0ms, collect 433ms, tests 3.49s, environment 0ms, prepare 114ms)
 
  RUN  v3.2.4 <WORKSPACE>
 
@@ -1260,15 +1253,14 @@ x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies crui
 
  Test Files  1 passed (1)
       Tests  10 passed (10)
-   Start at  16:51:24
-   Duration  366ms (transform 53ms, setup 0ms, collect 81ms, tests 19ms, environment 0ms, prepare 95ms)
+   Start at  18:58:45
+   Duration  330ms (transform 52ms, setup 0ms, collect 82ms, tests 19ms, environment 0ms, prepare 88ms)
 … phase4-local-auth-real-token still running
 … phase4-local-auth-real-token still running
 … phase4-local-auth-real-token still running
 … phase4-local-auth-real-token still running
 Starting isolated loopback Supabase Auth; first run may download container images.
 Local Auth real-token integration: 1 passed, 0 skipped.
-… phase4-database-integrity still running
 … phase4-database-integrity still running
 … phase4-database-integrity still running
 … phase4-database-integrity still running
@@ -1297,9 +1289,9 @@ Portfolio settings real PostgreSQL integration: 24 passed, 0 skipped.
 Running Phase 5.
 {
   "ticket": 125,
-  "runId": "1f874c7e-6a1a-45d9-9728-dc95cb6164a1",
-  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
-  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+  "runId": "69fcd894-40a3-486e-addc-6173bc947902",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "verdict": "pass",
   "counts": {
     "executed": 147,
@@ -1341,50 +1333,51 @@ Running Phase 6.
 #2 transferring dockerfile: 969B 0.0s done
 #2 DONE 0.0s
 
-#3 [internal] load metadata for docker.io/library/docker@sha256:3ef33f2e220b79ed3ef3b99d81746f06f306cd6340e2cb7331d17ae996e74cb6
+#3 [internal] load metadata for docker.io/library/node@sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0
 #3 ...
 
-#4 [auth] library/node:pull token for registry-1.docker.io
+#4 [auth] library/docker:pull token for registry-1.docker.io
 #4 DONE 0.0s
 
-#5 [auth] library/docker:pull token for registry-1.docker.io
+#5 [auth] library/node:pull token for registry-1.docker.io
 #5 DONE 0.0s
 
-#6 [internal] load metadata for docker.io/library/node@sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0
-#6 ...
-
-#3 [internal] load metadata for docker.io/library/docker@sha256:3ef33f2e220b79ed3ef3b99d81746f06f306cd6340e2cb7331d17ae996e74cb6
-#3 DONE 1.4s
-
-#6 [internal] load metadata for docker.io/library/node@sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0
+#6 [internal] load metadata for docker.io/library/docker@sha256:3ef33f2e220b79ed3ef3b99d81746f06f306cd6340e2cb7331d17ae996e74cb6
 #6 DONE 1.4s
 
-#7 [internal] load .dockerignore
-#7 transferring context: 72B done
-#7 DONE 0.0s
+#3 [internal] load metadata for docker.io/library/node@sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0
+#3 DONE 1.4s
 
-#8 [engine 1/1] FROM docker.io/library/docker@sha256:3ef33f2e220b79ed3ef3b99d81746f06f306cd6340e2cb7331d17ae996e74cb6
-#8 resolve docker.io/library/docker@sha256:3ef33f2e220b79ed3ef3b99d81746f06f306cd6340e2cb7331d17ae996e74cb6 0.0s done
+#7 [internal] load .dockerignore
+#7 transferring context: 72B 0.0s done
+#7 DONE 0.1s
+
+#8 [internal] load build context
 #8 DONE 0.0s
 
 #9 [stage-1 1/6] FROM docker.io/library/node@sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0
+#9 resolve docker.io/library/node@sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0
 #9 resolve docker.io/library/node@sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0 0.0s done
 #9 DONE 0.0s
 
-#10 [internal] load build context
-#10 transferring context: 35B done
+#10 [engine 1/1] FROM docker.io/library/docker@sha256:3ef33f2e220b79ed3ef3b99d81746f06f306cd6340e2cb7331d17ae996e74cb6
+#10 resolve docker.io/library/docker@sha256:3ef33f2e220b79ed3ef3b99d81746f06f306cd6340e2cb7331d17ae996e74cb6 0.0s done
 #10 DONE 0.0s
 
-#11 [stage-1 4/6] COPY entrypoint.sh /usr/local/bin/portfolio-validation
+#8 [internal] load build context
+#8 transferring context: 35B done
+#8 DONE 0.0s
+
+#11 [stage-1 3/6] COPY --from=engine /usr/local/bin/docker /usr/local/bin/dockerd /usr/local/bin/containerd /usr/local/bin/containerd-shim-runc-v2 /usr/local/bin/ctr /usr/local/bin/runc /usr/local/bin/docker-proxy /usr/local/bin/docker-init /usr/local/bin/dind /usr/local/bin/
 #11 CACHED
 
-#12 [stage-1 5/6] RUN chmod 755 /usr/local/bin/portfolio-validation
+#12 [stage-1 4/6] COPY entrypoint.sh /usr/local/bin/portfolio-validation
 #12 CACHED
 
-#13 [stage-1 2/6] RUN apt-get update     && apt-get install -y --no-install-recommends ca-certificates git iptables iproute2 xz-utils     && rm -rf /var/lib/apt/lists/*     && npm install --global npm@11.19.0 --no-audit --no-fund
+#13 [stage-1 5/6] RUN chmod 755 /usr/local/bin/portfolio-validation
 #13 CACHED
 
-#14 [stage-1 3/6] COPY --from=engine /usr/local/bin/docker /usr/local/bin/dockerd /usr/local/bin/containerd /usr/local/bin/containerd-shim-runc-v2 /usr/local/bin/ctr /usr/local/bin/runc /usr/local/bin/docker-proxy /usr/local/bin/docker-init /usr/local/bin/dind /usr/local/bin/
+#14 [stage-1 2/6] RUN apt-get update     && apt-get install -y --no-install-recommends ca-certificates git iptables iproute2 xz-utils     && rm -rf /var/lib/apt/lists/*     && npm install --global npm@11.19.0 --no-audit --no-fund
 #14 CACHED
 
 #15 [stage-1 6/6] WORKDIR /workspace
@@ -1392,13 +1385,13 @@ Running Phase 6.
 
 #16 exporting to image
 #16 exporting layers done
-#16 exporting manifest sha256:535de234fb61f7dac6277be78f418e5647e4698f95659772b5d9718f95b3251d done
-#16 exporting config sha256:47d1f1e3bae2060fcd0ce8816bed0fb7f5cd3c8180d6308f0ffddce4819b96b0 done
-#16 exporting attestation manifest sha256:3aac81894f9fe8d6735b1d51b9e4a9abdc57feea77d1b291e232adb5579173a5 0.0s done
-#16 exporting manifest list sha256:c5ff8bf143af69defa0df27f3d8938f97135fff5f8aceb5e6697e3e9acedceed done
+#16 exporting manifest sha256:a8bb8923cd9dcae044a4aa449aa60823f21b4e3be9b9d5c1ef52262b5881ebd4 done
+#16 exporting config sha256:6ae1b8b2af335cb8528ba224dfb29db5da02a6fa5699a9bbe67daf3d1bb6297b done
+#16 exporting attestation manifest sha256:cefc20a676e8eb69601e5c05610a3b675cb4bc0284392ece2abcc8f6d173b2e8 0.0s done
+#16 exporting manifest list sha256:a3678b5066d2fc6e858490116bafb6f10b07ff00b7b4d101fd598a094743ad2e 0.0s done
 #16 naming to docker.io/library/portfolio-validation-validation:latest done
 #16 unpacking to docker.io/library/portfolio-validation-validation:latest 0.0s done
-#16 DONE 0.1s
+#16 DONE 0.2s
 
 #17 resolving provenance for metadata file
 #17 DONE 0.0s
@@ -1459,9 +1452,9 @@ PASS typecheck
 PASS production-build
 {
   "ticket": 164,
-  "runId": "901fdccc-53d2-4888-8a39-2afc1d737c69",
-  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
-  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+  "runId": "522b847a-2a3f-45b7-a6b2-c106ae865bde",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "verdict": "pass",
   "counts": {
     "checks": 29,
@@ -1508,9 +1501,9 @@ PASS typecheck
 PASS production-build
 {
   "ticket": 209,
-  "runId": "e2aa471e-ee4d-45aa-ac5f-7596e9137d1c",
-  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
-  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+  "runId": "3655a55d-8b45-4d2c-9ccf-fd1224618583",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "verdict": "pass",
   "required": {
     "success": true,

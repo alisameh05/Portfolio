@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 151,
   "parent": 145,
-  "runId": "57278529-0494-4055-b21c-e1757d9779cb",
-  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
-  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
-  "startedAt": "2026-10-18T14:08:12.949Z",
-  "completedAt": "2026-10-18T14:10:41.690Z",
+  "runId": "f576802d-b75c-4c6c-8b2a-34b038c3269e",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+  "startedAt": "2026-10-18T16:14:36.825Z",
+  "completedAt": "2026-10-18T16:17:30.880Z",
   "scope": "bounded-mp4-webm-processing-with-sealed-private-variants",
   "runtime": {
     "node": "v24.21.0",
@@ -102,7 +102,7 @@
       "executed": true,
       "status": "passed",
       "storageRoundTrip": true,
-      "sha256": "8d22d65f96331b12bf5eb15a1fc380742efc4cacfe4149ad7d931f633e56deae",
+      "sha256": "7b4e2f1dbcf4d2ab89d5bedfc5058e0a24810e32811253d6ead18fcc0fe60a8b",
       "scannerVerdict": "clean",
       "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
     }

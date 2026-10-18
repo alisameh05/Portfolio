@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "runId": "6f59c7fd-30fb-4ba4-9c85-f792e202240d",
-  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
-  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
-  "startedAt": "2026-10-18T14:29:44.055Z",
-  "completedAt": "2026-10-18T14:32:40.749Z",
+  "runId": "d14cf317-e361-4e19-8a27-8c164667d50b",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+  "startedAt": "2026-10-18T16:38:24.750Z",
+  "completedAt": "2026-10-18T16:41:58.697Z",
   "scope": "all-seven-real-media-postgres-storage-integration-tests",
   "toolVersions": {
     "supabaseCli": "2.117.0",
@@ -53,7 +53,7 @@
       "executed": true,
       "status": "passed",
       "storageRoundTrip": true,
-      "sha256": "90e4d1f0ac59f111abcae9caa0d9dd45c6e5adc13ace70257a374f2930ca07f0",
+      "sha256": "41ca593fd6f0221346cb0e0831fef8cc64048edb00ef6d97dca7484dc216ef93",
       "scannerVerdict": "clean",
       "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
     },
@@ -97,7 +97,7 @@
       "executed": true,
       "status": "passed",
       "storageRoundTrip": true,
-      "sha256": "49fa5be6cea2591ddb6fcf2f6688e6a19ea49d84c6e29a495a702315f9c678cc",
+      "sha256": "25a8fa2970239af64663d2e03898d414793adcc03265d8b5d05639aa93e73eea",
       "scannerVerdict": "clean",
       "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
     }

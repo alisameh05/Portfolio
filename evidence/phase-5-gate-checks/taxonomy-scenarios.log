@@ -11,15 +11,15 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
 > shipwithali-portfolio@0.0.0 phase5:focus:taxonomy-status-relationships-discovery
 > node scripts/phase5-verification.mjs --suite taxonomy
 
-JSON report written to <TEMP>/shipwithali-phase5-taxonomy-5296-e8ceddcc-f33b-42e3-bcc6-f0c90f7a3a66.json
+JSON report written to <TEMP>/shipwithali-phase5-taxonomy-28736-e02e8344-801d-43e9-9d1a-87a82e0ea12e.json
 
 {
   "schemaVersion": 1,
-  "runId": "8ed4252c-0cdc-45bb-8959-7b902d011d47",
-  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
-  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+  "runId": "025a9ba6-dfb5-4b03-ba29-d9a975648a73",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "suite": "taxonomy",
-  "startedAt": "2026-10-18T13:54:43.755Z",
+  "startedAt": "2026-10-18T16:02:02.791Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,

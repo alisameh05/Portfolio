@@ -3,11 +3,11 @@
   "ticket": 156,
   "parent": 145,
   "predecessor": 155,
-  "runId": "2846b497-5e62-401f-bc8f-c04aa8d23c00",
-  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
-  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
-  "startedAt": "2026-10-18T14:20:05.498Z",
-  "completedAt": "2026-10-18T14:22:04.717Z",
+  "runId": "ee1eb298-b34b-4f2c-882a-0f88291f1107",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+  "startedAt": "2026-10-18T16:28:19.178Z",
+  "completedAt": "2026-10-18T16:30:43.476Z",
   "scope": "atomic-current-cv-activation-with-replay-rollback-and-authoritative-media-use",
   "runtime": {
     "node": "v24.21.0",
@@ -172,7 +172,7 @@
           ]
         },
         {
-          "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"expectedVersionId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"19f85531a5ad290e2f8e9a1a642996463edfbd942930814acc7f2d8976d56984\",\"version_id\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-18T14:21:28.863Z\",\"newCurrentCvId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\"}}",
+          "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\",\"expectedVersionId\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"a22624d9df0bf64c745b48ff76e53e1b36474259e92e8436afe1d88c660b6464\",\"version_id\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-18T16:30:09.950Z\",\"newCurrentCvId\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -188,7 +188,7 @@
           ]
         },
         {
-          "name": "T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins {\"waitingForMediaLock\":2,\"statuses\":[200,412],\"bodies\":[{\"aggregateId\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\",\"aggregateVersion\":113,\"outcome\":\"current-cv-activated\"},{\"type\":\"urn:shipwithali:problem:precondition-failed\",\"title\":\"Precondition Failed\",\"status\":412,\"detail\":\"An optimistic-concurrency precondition for this operation failed.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-953b-7b9f-b050-3ce3a05f8557/commands/activate\",\"code\":\"failed_precondition\",\"traceId\":\"01a14f63-95d7-7fed-9289-d8fd009d4d93\"}],\"currentVersionId\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\",\"projectedCurrentFlags\":1}",
+          "name": "T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins {\"waitingForMediaLock\":2,\"statuses\":[200,412],\"bodies\":[{\"aggregateId\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\",\"aggregateVersion\":113,\"outcome\":\"current-cv-activated\"},{\"type\":\"urn:shipwithali:problem:precondition-failed\",\"title\":\"Precondition Failed\",\"status\":412,\"detail\":\"An optimistic-concurrency precondition for this operation failed.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-658c-7ce5-b11b-be06c0831af1/commands/activate\",\"code\":\"failed_precondition\",\"traceId\":\"01a14fd9-6655-7701-9706-44b41f05972b\"}],\"currentVersionId\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\",\"projectedCurrentFlags\":1}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -220,7 +220,7 @@
           ]
         },
         {
-          "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\",\"afterCurrentFlags\":1}",
+          "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\",\"afterCurrentFlags\":1}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -228,7 +228,7 @@
           ]
         },
         {
-          "name": "T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event {\"status\":409,\"body\":{\"type\":\"urn:shipwithali:problem:conflict\",\"title\":\"Conflict\",\"status\":409,\"detail\":\"The request conflicts with the current state of the resource.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"conflict\",\"traceId\":\"01a14f63-9758-75f9-bd65-9547de407d32\"},\"history\":105,\"expectedHistory\":105,\"receipts\":0,\"events\":4,\"expectedEvents\":4,\"before\":{\"version\":115,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"version\":115,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+          "name": "T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event {\"status\":409,\"body\":{\"type\":\"urn:shipwithali:problem:conflict\",\"title\":\"Conflict\",\"status\":409,\"detail\":\"The request conflicts with the current state of the resource.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"conflict\",\"traceId\":\"01a14fd9-67ce-7b2e-a69f-3344ab8fe546\"},\"history\":105,\"expectedHistory\":105,\"receipts\":0,\"events\":4,\"expectedEvents\":4,\"before\":{\"version\":115,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"version\":115,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -308,7 +308,7 @@
           ]
         },
         {
-          "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-a9f9-7752-a275-1015e26d512e\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+          "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14fd9-76cc-7303-aadf-b5970e7bc03b\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -316,7 +316,7 @@
           ]
         },
         {
-          "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-aa3c-70b7-a9d2-bd7da0abea17\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+          "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14fd9-7706-7acd-b0aa-b821987c9659\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -324,7 +324,7 @@
           ]
         },
         {
-          "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-aa83-7699-9acc-858a9a6a1bb0\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+          "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14fd9-773f-707f-ac23-fcb0d890debb\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -332,7 +332,7 @@
           ]
         },
         {
-          "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-aacf-7fcf-8cfc-e7ea12094c57\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+          "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14fd9-777d-73fb-b67d-c79490054b14\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -340,7 +340,7 @@
           ]
         },
         {
-          "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-ab0b-7a9b-b940-c68671eef98f\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+          "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14fd9-77cb-7dad-bcf4-4642961d88e4\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -348,7 +348,7 @@
           ]
         },
         {
-          "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-ab4d-73b7-9da6-d633609a4a04\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+          "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14fd9-7806-7fdc-a468-fae4cf0aeb07\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -654,7 +654,7 @@
       ]
     },
     {
-      "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"expectedVersionId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"19f85531a5ad290e2f8e9a1a642996463edfbd942930814acc7f2d8976d56984\",\"version_id\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-18T14:21:28.863Z\",\"newCurrentCvId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\"}}",
+      "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\",\"expectedVersionId\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"a22624d9df0bf64c745b48ff76e53e1b36474259e92e8436afe1d88c660b6464\",\"version_id\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-18T16:30:09.950Z\",\"newCurrentCvId\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -670,7 +670,7 @@
       ]
     },
     {
-      "name": "T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins {\"waitingForMediaLock\":2,\"statuses\":[200,412],\"bodies\":[{\"aggregateId\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\",\"aggregateVersion\":113,\"outcome\":\"current-cv-activated\"},{\"type\":\"urn:shipwithali:problem:precondition-failed\",\"title\":\"Precondition Failed\",\"status\":412,\"detail\":\"An optimistic-concurrency precondition for this operation failed.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-953b-7b9f-b050-3ce3a05f8557/commands/activate\",\"code\":\"failed_precondition\",\"traceId\":\"01a14f63-95d7-7fed-9289-d8fd009d4d93\"}],\"currentVersionId\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\",\"projectedCurrentFlags\":1}",
+      "name": "T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins {\"waitingForMediaLock\":2,\"statuses\":[200,412],\"bodies\":[{\"aggregateId\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\",\"aggregateVersion\":113,\"outcome\":\"current-cv-activated\"},{\"type\":\"urn:shipwithali:problem:precondition-failed\",\"title\":\"Precondition Failed\",\"status\":412,\"detail\":\"An optimistic-concurrency precondition for this operation failed.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-658c-7ce5-b11b-be06c0831af1/commands/activate\",\"code\":\"failed_precondition\",\"traceId\":\"01a14fd9-6655-7701-9706-44b41f05972b\"}],\"currentVersionId\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\",\"projectedCurrentFlags\":1}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -702,7 +702,7 @@
       ]
     },
     {
-      "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\",\"afterCurrentFlags\":1}",
+      "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14fd9-5a43-7de3-b86c-d32f8b1b8e52\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\",\"afterCurrentFlags\":1}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -710,7 +710,7 @@
       ]
     },
     {
-      "name": "T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event {\"status\":409,\"body\":{\"type\":\"urn:shipwithali:problem:conflict\",\"title\":\"Conflict\",\"status\":409,\"detail\":\"The request conflicts with the current state of the resource.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"conflict\",\"traceId\":\"01a14f63-9758-75f9-bd65-9547de407d32\"},\"history\":105,\"expectedHistory\":105,\"receipts\":0,\"events\":4,\"expectedEvents\":4,\"before\":{\"version\":115,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"version\":115,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+      "name": "T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event {\"status\":409,\"body\":{\"type\":\"urn:shipwithali:problem:conflict\",\"title\":\"Conflict\",\"status\":409,\"detail\":\"The request conflicts with the current state of the resource.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"conflict\",\"traceId\":\"01a14fd9-67ce-7b2e-a69f-3344ab8fe546\"},\"history\":105,\"expectedHistory\":105,\"receipts\":0,\"events\":4,\"expectedEvents\":4,\"before\":{\"version\":115,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"version\":115,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -790,7 +790,7 @@
       ]
     },
     {
-      "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-a9f9-7752-a275-1015e26d512e\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+      "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14fd9-76cc-7303-aadf-b5970e7bc03b\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -798,7 +798,7 @@
       ]
     },
     {
-      "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-aa3c-70b7-a9d2-bd7da0abea17\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+      "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14fd9-7706-7acd-b0aa-b821987c9659\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -806,7 +806,7 @@
       ]
     },
     {
-      "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-aa83-7699-9acc-858a9a6a1bb0\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+      "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14fd9-773f-707f-ac23-fcb0d890debb\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -814,7 +814,7 @@
       ]
     },
     {
-      "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-aacf-7fcf-8cfc-e7ea12094c57\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+      "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14fd9-777d-73fb-b67d-c79490054b14\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -822,7 +822,7 @@
       ]
     },
     {
-      "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-ab0b-7a9b-b940-c68671eef98f\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+      "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14fd9-77cb-7dad-bcf4-4642961d88e4\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -830,7 +830,7 @@
       ]
     },
     {
-      "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-ab4d-73b7-9da6-d633609a4a04\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
+      "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14fd9-5a43-7de3-b86c-d32f8b1b8e52/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14fd9-7806-7fdc-a468-fae4cf0aeb07\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14fd9-658c-7ce5-b11b-be06c0831af1\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [

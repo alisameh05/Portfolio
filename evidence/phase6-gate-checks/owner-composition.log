@@ -20,9 +20,9 @@ Scanning, processing and round-tripping pdf.
 Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.
 {
   "ticket": 161,
-  "runId": "caa54fd1-dd13-4ef0-9586-01da5613f598",
-  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
-  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+  "runId": "52c1e09b-7381-4603-9d2c-8ec70c6fe523",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "verdict": "pass",
   "checks": {
     "suite": "tests/database/media-upload-intent.integration.test.ts",

@@ -1,10 +1,10 @@
 {
   "ticket": 208,
-  "runId": "251c6f32-3bbc-4f8e-acfd-faa1ce512ae9",
-  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
-  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
-  "startedAt": "2026-10-18T14:46:44.459Z",
-  "completedAt": "2026-10-18T14:49:28.543Z",
+  "runId": "a65555b2-13c3-44df-a5ac-c0fd3490a241",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+  "startedAt": "2026-10-18T16:57:04.260Z",
+  "completedAt": "2026-10-18T16:58:59.128Z",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "scope": "disposable-loopback",
   "tools": {
@@ -286,8 +286,8 @@
         "indexes": [
           "reactions_pkey"
         ],
-        "planningMs": 0.049,
-        "executionMs": 0.247,
+        "planningMs": 0.071,
+        "executionMs": 0.602,
         "actualRows": 0
       },
       {
@@ -296,8 +296,8 @@
         "indexes": [
           "feedback_project_locale"
         ],
-        "planningMs": 6.886,
-        "executionMs": 0.09,
+        "planningMs": 3.054,
+        "executionMs": 0.043,
         "actualRows": 51
       },
       {
@@ -306,7 +306,7 @@
         "indexes": [
           "daily_aggregates_pkey"
         ],
-        "planningMs": 2.405,
+        "planningMs": 1.769,
         "executionMs": 0.022,
         "actualRows": 1
       },
@@ -317,7 +317,7 @@
           "consents_expiry"
         ],
         "planningMs": 0.305,
-        "executionMs": 2.199,
+        "executionMs": 2.376,
         "actualRows": 0,
         "candidateRows": 100,
         "deletedRows": 50
@@ -328,8 +328,8 @@
         "indexes": [
           "jobs_due_idx"
         ],
-        "planningMs": 1.939,
-        "executionMs": 0.054,
+        "planningMs": 1.917,
+        "executionMs": 0.058,
         "actualRows": 50
       }
     ]
@@ -409,10 +409,10 @@
   "evidenceInputs": [
     {
       "path": "evidence/phase7-consent-189.json",
-      "runId": "4a2da04e-0688-4352-929f-5a5038598230",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "a780ed0a-f41f-4a4b-a9ac-933289442315",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 16,
       "failed": 0,
       "skipped": 0,
@@ -420,10 +420,10 @@
     },
     {
       "path": "evidence/phase7-reactions-190.json",
-      "runId": "8069bb2a-ace3-40db-a608-d1c507bc98e4",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "29aaab79-060b-4468-bedb-c35564ad4a7b",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 16,
       "failed": 0,
       "skipped": 0,
@@ -431,10 +431,10 @@
     },
     {
       "path": "evidence/phase7-ratings-191.json",
-      "runId": "23cba13f-e1dc-4bef-aee2-d2c05df2630f",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "e7a23e36-997f-4fda-aac6-90dbc51f7eb6",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 33,
       "failed": 0,
       "skipped": 0,
@@ -442,10 +442,10 @@
     },
     {
       "path": "evidence/phase7-feedback-192.json",
-      "runId": "29e27009-7ef7-47cb-8495-bb79ba8512ba",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "1d10f860-b6c8-436f-b8c0-460b768267f3",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 57,
       "failed": 0,
       "skipped": 0,
@@ -453,10 +453,10 @@
     },
     {
       "path": "evidence/phase7-moderation-193.json",
-      "runId": "265e0164-9b56-4c0f-a610-88676f9609f5",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "5d9e1146-caaf-43b2-b8a8-72d5e469c2b5",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 80,
       "failed": 0,
       "skipped": 0,
@@ -464,10 +464,10 @@
     },
     {
       "path": "evidence/phase7-suppression-194.json",
-      "runId": "72b9d94a-4c77-4f65-85b0-7efc766aeea8",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "c896420c-c6cd-4c3b-ae52-548ae630cc50",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 93,
       "failed": 0,
       "skipped": 0,
@@ -475,10 +475,10 @@
     },
     {
       "path": "evidence/phase7-summaries-195.json",
-      "runId": "1f4d6ff9-2b00-46d8-85a6-277bf65b12ca",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "bb21eb07-6422-4a00-897a-bc8842a40c76",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 132,
       "failed": 0,
       "skipped": 0,
@@ -486,10 +486,10 @@
     },
     {
       "path": "evidence/phase7-events-196.json",
-      "runId": "d1882659-c06c-4024-8e24-2cbda719afc9",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "52646a32-5681-4daa-93bb-2a0cde24b668",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 72,
       "failed": 0,
       "skipped": 0,
@@ -497,10 +497,10 @@
     },
     {
       "path": "evidence/phase7-event-facts-197.json",
-      "runId": "caede8da-c478-4527-a9a1-ee6f718bf4e3",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "eff2a4df-2dc4-46a8-878a-f03a6ee4e8c5",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 72,
       "failed": 0,
       "skipped": 0,
@@ -508,10 +508,10 @@
     },
     {
       "path": "evidence/phase7-event-capabilities-198.json",
-      "runId": "f4e39b42-0866-45a6-8f47-fe29036bea10",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "b2163cd3-2f06-420e-bd0b-899f1d4d1e0d",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 72,
       "failed": 0,
       "skipped": 0,
@@ -519,10 +519,10 @@
     },
     {
       "path": "evidence/phase7-goal-versions-199.json",
-      "runId": "d1927d1c-a2fc-4948-b90a-28da05acabff",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "49311afc-5bb7-4c4e-b4e9-8c376b2ac715",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 77,
       "failed": 0,
       "skipped": 0,
@@ -530,10 +530,10 @@
     },
     {
       "path": "evidence/phase7-goal-activation-200.json",
-      "runId": "d1927d1c-a2fc-4948-b90a-28da05acabff",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "49311afc-5bb7-4c4e-b4e9-8c376b2ac715",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 77,
       "failed": 0,
       "skipped": 0,
@@ -541,10 +541,10 @@
     },
     {
       "path": "evidence/phase7-goal-conversions-201.json",
-      "runId": "0c1b50f9-5d71-4a9d-afb6-1108fd82d7ba",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "88ebdd4c-4ac1-43cb-a1ce-80bf323b38c5",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 15,
       "failed": 0,
       "skipped": 0,
@@ -552,10 +552,10 @@
     },
     {
       "path": "evidence/phase7-daily-aggregates-202.json",
-      "runId": "27ba0ed7-4d07-4f5e-9597-619c13a2dfb3",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "5ccc1d6b-c621-4341-9506-6c0e15c6eceb",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 23,
       "failed": 0,
       "skipped": 0,
@@ -563,10 +563,10 @@
     },
     {
       "path": "evidence/phase7-aggregate-privacy-203.json",
-      "runId": "706aa34c-03e1-4f4c-8b39-fcb3ffbf9a4c",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "103e2317-ceb8-4ea9-9ca0-d305cbd44801",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 23,
       "failed": 0,
       "skipped": 0,
@@ -574,10 +574,10 @@
     },
     {
       "path": "evidence/phase7-retention-204.json",
-      "runId": "59452826-330c-4b19-b762-122078d8af03",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "10078966-c4dc-49fa-85e1-7ce2d83edcdf",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 14,
       "failed": 0,
       "skipped": 0,
@@ -585,10 +585,10 @@
     },
     {
       "path": "evidence/phase7-feedback-retention-205.json",
-      "runId": "8f1f2843-3b57-401a-857a-9224256b1213",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "31561e0f-8dd5-4e2d-9c29-b607c251b252",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 12,
       "failed": 0,
       "skipped": 0,
@@ -596,10 +596,10 @@
     },
     {
       "path": "evidence/phase7-due-work-206.json",
-      "runId": "48828644-80e9-43ab-8cb8-e8949936b5a1",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "a9a8f9ba-3478-402d-9be4-646e14d64016",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": null,
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 8,
       "failed": 0,
       "skipped": 0,
@@ -607,10 +607,10 @@
     },
     {
       "path": "evidence/phase7-http-assembly-207.json",
-      "runId": "47fe0a9f-c554-4471-9846-22f7daef5712",
-      "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+      "runId": "975daf89-1682-4d56-bad8-86e3e2c2c4cb",
+      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
       "baseCommit": "60bfaac7824753648dca692c5af594c5a445587b",
-      "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
       "passed": 171,
       "failed": 0,
       "skipped": 0,
@@ -676,5 +676,5 @@
   },
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:integrated",
   "cleanup": true,
-  "gateRunId": "e2aa471e-ee4d-45aa-ac5f-7596e9137d1c"
+  "gateRunId": "3655a55d-8b45-4d2c-9ccf-fd1224618583"
 }

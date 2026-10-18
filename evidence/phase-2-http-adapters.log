@@ -1,42 +1,42 @@
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped) 6162ms
-   ✓ bounded PDF output reads > terminates a subprocess while its intermediate output crosses the cap  691ms
-   ✓ bounded PDF output reads > reserves the child shutdown window even when the external cleanup hook stalls  4562ms
-   ✓ bounded PDF output reads > uses an inherited hard file-size limit or fails closed when the host lacks one  781ms
- ✓ tests/runtime/media-image-processing.test.ts (9 tests) 384ms
- ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 71ms
- ✓ tests/runtime/owner-media.test.ts (68 tests) 41ms
- ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 15ms
- ✓ tests/runtime/owner-cv.test.ts (55 tests) 24ms
- ✓ tests/runtime/owner-content-authoring.test.ts (29 tests) 27ms
- ✓ tests/runtime/supabase-media-processing-storage.test.ts (6 tests) 15ms
- ✓ tests/runtime/owner-moderation.test.ts (32 tests) 19ms
- ✓ tests/runtime/owner-publication.test.ts (36 tests) 15ms
- ✓ tests/runtime/owner-export.test.ts (40 tests) 17ms
+ ✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped) 6300ms
+   ✓ bounded PDF output reads > terminates a subprocess while its intermediate output crosses the cap  687ms
+   ✓ bounded PDF output reads > reserves the child shutdown window even when the external cleanup hook stalls  4578ms
+   ✓ bounded PDF output reads > uses an inherited hard file-size limit or fails closed when the host lacks one  911ms
+ ✓ tests/runtime/media-image-processing.test.ts (9 tests) 422ms
+ ✓ tests/runtime/owner-media.test.ts (68 tests) 44ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 59ms
+ ✓ tests/runtime/owner-taxonomy.test.ts (35 tests) 17ms
+ ✓ tests/runtime/owner-analytics.test.ts (32 tests) 18ms
+ ✓ tests/runtime/owner-content-authoring.test.ts (29 tests) 28ms
+ ✓ tests/runtime/owner-cv.test.ts (55 tests) 20ms
+ ✓ tests/runtime/owner-moderation.test.ts (32 tests) 15ms
+ ✓ tests/runtime/owner-publication.test.ts (36 tests) 16ms
  ✓ tests/runtime/owner-project.test.ts (37 tests) 16ms
- ✓ tests/runtime/owner-analytics.test.ts (32 tests) 26ms
- ✓ tests/runtime/owner-configuration.test.ts (31 tests) 15ms
- ✓ tests/runtime/public-event.test.ts (23 tests) 15ms
- ✓ tests/runtime/phase7-contracts.test.ts (19 tests) 13ms
- ✓ tests/runtime/current-cv.test.ts (21 tests) 9ms
- ✓ tests/runtime/reaction.test.ts (19 tests) 7ms
- ✓ tests/runtime/rating.test.ts (21 tests) 7ms
+ ✓ tests/runtime/phase7-contracts.test.ts (19 tests) 15ms
+ ✓ tests/runtime/owner-export.test.ts (40 tests) 17ms
+ ✓ tests/runtime/owner-configuration.test.ts (31 tests) 12ms
+ ✓ tests/runtime/supabase-media-processing-storage.test.ts (6 tests) 23ms
+ ✓ tests/runtime/public-event.test.ts (23 tests) 18ms
+ ✓ tests/runtime/current-cv.test.ts (21 tests) 11ms
+ ✓ tests/runtime/rating.test.ts (21 tests) 8ms
  ✓ tests/runtime/owner-content-http.test.ts (8 tests) 7ms
  ✓ tests/runtime/feedback.test.ts (20 tests) 7ms
- ✓ tests/runtime/configuration.test.ts (17 tests) 4ms
- ✓ tests/runtime/supabase-current-cv-delivery.test.ts (7 tests) 5ms
- ✓ tests/runtime/owner-project-status.test.ts (5 tests) 5ms
- ✓ tests/runtime/phase7-runtime-fail-closed.test.ts (3 tests) 3ms
+ ✓ tests/runtime/reaction.test.ts (19 tests) 7ms
+ ✓ tests/runtime/supabase-current-cv-delivery.test.ts (7 tests) 6ms
+ ✓ tests/runtime/owner-project-status.test.ts (5 tests) 6ms
+ ✓ tests/runtime/configuration.test.ts (17 tests) 5ms
  ✓ tests/runtime/problem.test.ts (13 tests) 3ms
+ ✓ tests/runtime/phase7-runtime-fail-closed.test.ts (3 tests) 3ms
  ✓ tests/runtime/supabase-media-upload-target.test.ts (4 tests) 2ms
  ✓ tests/runtime/runtime-ports.test.ts (6 tests) 2ms
- ✓ tests/runtime/livez.test.ts (4 tests) 1ms
- ✓ tests/runtime/supabase-media-delivery-storage.test.ts (2 tests) 1ms
  ✓ tests/runtime/feedback-limits.test.ts (2 tests) 1ms
+ ✓ tests/runtime/supabase-media-delivery-storage.test.ts (2 tests) 2ms
+ ✓ tests/runtime/livez.test.ts (4 tests) 1ms
 
  Test Files  31 passed (31)
       Tests  629 passed | 1 skipped (630)
-   Start at  16:49:13
-   Duration  8.58s (transform 832ms, setup 0ms, collect 1.31s, tests 6.94s, environment 0ms, prepare 99ms)
+   Start at  18:56:53
+   Duration  8.64s (transform 753ms, setup 0ms, collect 1.21s, tests 7.11s, environment 0ms, prepare 111ms)

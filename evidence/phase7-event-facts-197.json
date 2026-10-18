@@ -1,7 +1,7 @@
 {
-  "runId": "caede8da-c478-4527-a9a1-ee6f718bf4e3",
-  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
-  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
+  "runId": "eff2a4df-2dc4-46a8-878a-f03a6ee4e8c5",
+  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015120000_persist_consented_public_events.sql",
   "migrationSha256": "ab5445a8b8a3e5527c9844742e62bcba37b68066cecb30e6e191d05eb8d441d6",
@@ -80,5 +80,5 @@
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:events -- --ticket-197; PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries",
   "scope": "Disposable native PostgreSQL cluster; full repository migration chain, restricted application role, HTTP/application/consent integration. No production database was modified.",
   "cleanup": true,
-  "gateRunId": "e2aa471e-ee4d-45aa-ac5f-7596e9137d1c"
+  "gateRunId": "3655a55d-8b45-4d2c-9ccf-fd1224618583"
 }
