@@ -2,4 +2,4 @@
 > shipwithali-portfolio@0.0.0 runtime:architecture
 > node scripts/check-runtime-architecture.mjs
 
-✓ runtime architecture: 234 source files preserve framework, environment, transport, provider, and Route Handler boundaries
+✓ runtime architecture: 233 source files preserve framework, environment, transport, provider, and Route Handler boundaries

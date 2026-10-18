@@ -1,10 +1,10 @@
 
  RUN  v3.2.4 <WORKSPACE>
 
- ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 136ms
+ ✓ tests/runtime/readiness-lifecycle.test.ts (12 tests) 130ms
  ✓ tests/runtime/livez.test.ts (4 tests) 2ms
 
  Test Files  2 passed (2)
       Tests  16 passed (16)
-   Start at  02:04:14
-   Duration  473ms (transform 168ms, setup 0ms, collect 85ms, tests 138ms, environment 0ms, prepare 93ms)
+   Start at  16:49:13
+   Duration  482ms (transform 169ms, setup 0ms, collect 85ms, tests 132ms, environment 0ms, prepare 99ms)

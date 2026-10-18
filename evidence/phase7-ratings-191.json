@@ -1,7 +1,7 @@
 {
-  "runId": "9d19d07f-a259-43de-89af-a2930bc78d3b",
-  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "runId": "23cba13f-e1dc-4bef-aee2-d2c05df2630f",
+  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261014211320_persist_project_ratings.sql",
   "migrationSha256": "027e9b6f1bc024b6d646e2a0da431f58bec9e9280a0548705cf3d5940055baff",
@@ -363,5 +363,5 @@
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:ratings (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
   "scope": "Native disposable PostgreSQL cluster; all repository migrations through #191. Full Phase 3-6 upgrade qualification belongs to #208.",
   "cleanup": true,
-  "gateRunId": "4e9c9a1c-e303-4232-8d5f-4dc7000c2ae7"
+  "gateRunId": "e2aa471e-ee4d-45aa-ac5f-7596e9137d1c"
 }

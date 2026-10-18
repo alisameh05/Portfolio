@@ -1,6 +1,6 @@
 
 ── Architecture check: src/ ──
-✔ no dependency violations found (247 modules, 1044 dependencies cruised)
+✔ no dependency violations found (246 modules, 1043 dependencies cruised)
 ✓ Architecture check passed: no forbidden dependencies in src/
 
 ── Validating Invalid Architecture Fixtures ──
@@ -10,6 +10,9 @@
 
 ── Testing fixture rejection: Generated-code leakage fixture ──
 ✓ Generated-code leakage fixture correctly rejected with rule: no-generated-code-leakage
+
+── Testing fixture rejection: Runtime HTTP leakage fixture ──
+✓ Runtime HTTP leakage fixture correctly rejected with rule: no-runtime-http-in-module-application
 
 ── Testing fixture rejection: Deep cross-module import fixture ──
 ✓ Deep cross-module import fixture correctly rejected with rule: no-deep-cross-module-import
@@ -22,7 +25,7 @@
 ✓ Modules confine persistence/providers to adapters and contain no Route Handlers, UI, or Lab entry implementation
 
 ── Runtime architecture boundaries ──
-✓ runtime architecture: 234 source files preserve framework, environment, transport, provider, and Route Handler boundaries
+✓ runtime architecture: 233 source files preserve framework, environment, transport, provider, and Route Handler boundaries
 
 ═════════════════════════════════════════════════════════════════
              ARCHITECTURE CONFORMANCE REPORT                    
@@ -30,6 +33,7 @@
 [✓ PASS] Clean dependency graph for src/        : src/ cruised with 0 violations
 [✓ PASS] Provider leakage fixture               : Correctly rejected with rule no-provider-in-domain
 [✓ PASS] Generated-code leakage fixture         : Correctly rejected with rule no-generated-code-leakage
+[✓ PASS] Runtime HTTP leakage fixture           : Correctly rejected with rule no-runtime-http-in-module-application
 [✓ PASS] Deep cross-module import fixture       : Correctly rejected with rule no-deep-cross-module-import
 [✓ PASS] Cycle fixture                          : Correctly rejected with rule no-cycles
 [✓ PASS] Nine module skeletons structure        : All 9 modules have domain/, application/, ports/, adapters/, and index.ts

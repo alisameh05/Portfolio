@@ -2,7 +2,7 @@
   "ticket": 33,
   "parent": 24,
   "scope": "phase-2-runtime-architecture",
-  "filesInspected": 234,
+  "filesInspected": 233,
   "verdict": "pass",
   "findings": []
 }

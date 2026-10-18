@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "ticket": 162,
   "parent": 145,
-  "runId": "12f133d2-81fd-4ca1-96ea-e689ec8eb149",
-  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "runId": "d94e5c50-caaa-4107-a507-4f1e263a455b",
+  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
   "baselineCommit": "26d6efb3d9e281265cc9c099195492b5dcbec79d",
-  "startedAt": "2026-10-17T23:42:40.536Z",
-  "completedAt": "2026-10-17T23:44:14.522Z",
+  "startedAt": "2026-10-18T14:32:43.426Z",
+  "completedAt": "2026-10-18T14:34:19.365Z",
   "scope": "phase6-migration-equivalence-storage-rbac-and-bounded-query-evidence",
   "runtime": {
     "node": "v24.21.0",
@@ -234,7 +234,7 @@
           "updated_at"
         ],
         "count": 2,
-        "digest": "39a5d0c512383393a96ca9f5c74fb86f499f3ce28bcd43ed6b36e072f7e3fd99"
+        "digest": "1fcef6176e3476eaa488bbfc6483fc9b7e9394943a3dc515b7946b9b50d25a60"
       },
       "content.items": {
         "columns": [
@@ -251,7 +251,7 @@
           "featured"
         ],
         "count": 1,
-        "digest": "033c6ac2ca824f658a91bd5cc09f50ced578894454631ac465f74f07513b9984"
+        "digest": "4003c69c3475b283cea628f71122093b83e6dde04b89640c066fb790d1090725"
       },
       "content.revisions": {
         "columns": [
@@ -270,7 +270,7 @@
           "saved_at"
         ],
         "count": 1,
-        "digest": "46843168dbab985430ace428ea7b8979ce94afa4a7423ceea2bbce375ba47864"
+        "digest": "a54b1753650c66e3d27d0e5d744ca2474d86d9e0d10701e4963c564d151706ad"
       },
       "content.lifecycle_history": {
         "columns": [
@@ -285,7 +285,7 @@
           "changed_at"
         ],
         "count": 1,
-        "digest": "7ea7e5c9cb2717614ad6497a73d8277e357428d2c781fe9cdc6f1a05ff53404d"
+        "digest": "5a8a545d2dfb66f519ddc494e4d9bca245c9e3b2955d552f1565422caa07eade"
       },
       "content.public_routes": {
         "columns": [
@@ -298,7 +298,7 @@
           "created_at"
         ],
         "count": 1,
-        "digest": "b73aeeed147ee99609fb38082c8a7d033d8a51c8ca16e3b7c8a897540d2f8219"
+        "digest": "aa40f676e9383aaae14ce1ca018f3935026119c8cff4ca628a14d51597bd3e59"
       },
       "content.public_route_reservations": {
         "columns": [
@@ -311,7 +311,7 @@
           "reserved_at"
         ],
         "count": 1,
-        "digest": "79fe22b7abdca3a6442c2c5b20499fa30d97d6a8ad7bb4573cfbba01e0f88ad8"
+        "digest": "ff17b122d7d6db063e0905ffe6bab3f1d3afc4939756534c018d68c4cd831534"
       },
       "taxonomy.roots": {
         "columns": [
@@ -323,7 +323,7 @@
           "updated_at"
         ],
         "count": 8,
-        "digest": "dfc576997b2462da677a77143fc713ff3f0d340c977cd1f5d262a3614cc96b12"
+        "digest": "5e6d98f05c6a20b2561acf7c11043763a60a15e71ce1f24e08ef8e6087747c5e"
       },
       "taxonomy.taxonomy_values": {
         "columns": [
@@ -339,7 +339,7 @@
           "updated_at"
         ],
         "count": 1,
-        "digest": "2b40bcf12b5e116b07878b680ea1cc3a9a257e03d996be959cf2ef1e77a73770"
+        "digest": "ce3061f07bfab44ff3872704b1a90bf2ba3ac965e75e5698549865d7ccff0a03"
       },
       "taxonomy.value_history": {
         "columns": [
@@ -357,7 +357,7 @@
           "reason"
         ],
         "count": 1,
-        "digest": "e00f39c0f6185fc01c9e96c3e48d672bef1c7eb2fe7166b83414d2de4c0068a1"
+        "digest": "1ac6c4c1c610b6adf82736ca6f543233721053cc9bf0a25d31447efe0e2cddc0"
       },
       "content.project_taxonomy_assignments": {
         "columns": [
@@ -369,7 +369,7 @@
           "assigned_at"
         ],
         "count": 1,
-        "digest": "275c77413801c37c4943b150806073d7bfc6c432101b95b6076a3cbf97042508"
+        "digest": "ccc70dbac276437e62f79ddb8c1f916e86c300ddf8126669c3503005c5ddbaf7"
       },
       "operations.idempotency_records": {
         "columns": [
@@ -384,7 +384,7 @@
           "expires_at"
         ],
         "count": 1,
-        "digest": "f95e1147888ae7505305ea2381c9c7c6e8026a9f24d3485afc87a8b581e496ea"
+        "digest": "5e4420cd580bbef77b19ca51e64fc2f83e3b84e06ad498486667a95c3b82e610"
       },
       "operations.outbox_events": {
         "columns": [
@@ -406,7 +406,7 @@
           "last_error_code"
         ],
         "count": 1,
-        "digest": "04329116ec87d291806e5ab936029019b3635ea2b3405aad2fe6ac00815c89e9"
+        "digest": "015293b6b1569d810f2159711f8fafe459c484f103fabc519b5239b990b462e5"
       }
     },
     "after": {
@@ -425,7 +425,7 @@
           "updated_at"
         ],
         "count": 2,
-        "digest": "39a5d0c512383393a96ca9f5c74fb86f499f3ce28bcd43ed6b36e072f7e3fd99"
+        "digest": "1fcef6176e3476eaa488bbfc6483fc9b7e9394943a3dc515b7946b9b50d25a60"
       },
       "content.items": {
         "columns": [
@@ -442,7 +442,7 @@
           "featured"
         ],
         "count": 1,
-        "digest": "033c6ac2ca824f658a91bd5cc09f50ced578894454631ac465f74f07513b9984"
+        "digest": "4003c69c3475b283cea628f71122093b83e6dde04b89640c066fb790d1090725"
       },
       "content.revisions": {
         "columns": [
@@ -461,7 +461,7 @@
           "saved_at"
         ],
         "count": 1,
-        "digest": "46843168dbab985430ace428ea7b8979ce94afa4a7423ceea2bbce375ba47864"
+        "digest": "a54b1753650c66e3d27d0e5d744ca2474d86d9e0d10701e4963c564d151706ad"
       },
       "content.lifecycle_history": {
         "columns": [
@@ -476,7 +476,7 @@
           "changed_at"
         ],
         "count": 1,
-        "digest": "7ea7e5c9cb2717614ad6497a73d8277e357428d2c781fe9cdc6f1a05ff53404d"
+        "digest": "5a8a545d2dfb66f519ddc494e4d9bca245c9e3b2955d552f1565422caa07eade"
       },
       "content.public_routes": {
         "columns": [
@@ -489,7 +489,7 @@
           "created_at"
         ],
         "count": 1,
-        "digest": "b73aeeed147ee99609fb38082c8a7d033d8a51c8ca16e3b7c8a897540d2f8219"
+        "digest": "aa40f676e9383aaae14ce1ca018f3935026119c8cff4ca628a14d51597bd3e59"
       },
       "content.public_route_reservations": {
         "columns": [
@@ -502,7 +502,7 @@
           "reserved_at"
         ],
         "count": 1,
-        "digest": "79fe22b7abdca3a6442c2c5b20499fa30d97d6a8ad7bb4573cfbba01e0f88ad8"
+        "digest": "ff17b122d7d6db063e0905ffe6bab3f1d3afc4939756534c018d68c4cd831534"
       },
       "taxonomy.roots": {
         "columns": [
@@ -514,7 +514,7 @@
           "updated_at"
         ],
         "count": 8,
-        "digest": "dfc576997b2462da677a77143fc713ff3f0d340c977cd1f5d262a3614cc96b12"
+        "digest": "5e6d98f05c6a20b2561acf7c11043763a60a15e71ce1f24e08ef8e6087747c5e"
       },
       "taxonomy.taxonomy_values": {
         "columns": [
@@ -530,7 +530,7 @@
           "updated_at"
         ],
         "count": 1,
-        "digest": "2b40bcf12b5e116b07878b680ea1cc3a9a257e03d996be959cf2ef1e77a73770"
+        "digest": "ce3061f07bfab44ff3872704b1a90bf2ba3ac965e75e5698549865d7ccff0a03"
       },
       "taxonomy.value_history": {
         "columns": [
@@ -548,7 +548,7 @@
           "reason"
         ],
         "count": 1,
-        "digest": "e00f39c0f6185fc01c9e96c3e48d672bef1c7eb2fe7166b83414d2de4c0068a1"
+        "digest": "1ac6c4c1c610b6adf82736ca6f543233721053cc9bf0a25d31447efe0e2cddc0"
       },
       "content.project_taxonomy_assignments": {
         "columns": [
@@ -560,7 +560,7 @@
           "assigned_at"
         ],
         "count": 1,
-        "digest": "275c77413801c37c4943b150806073d7bfc6c432101b95b6076a3cbf97042508"
+        "digest": "ccc70dbac276437e62f79ddb8c1f916e86c300ddf8126669c3503005c5ddbaf7"
       },
       "operations.idempotency_records": {
         "columns": [
@@ -575,7 +575,7 @@
           "expires_at"
         ],
         "count": 1,
-        "digest": "f95e1147888ae7505305ea2381c9c7c6e8026a9f24d3485afc87a8b581e496ea"
+        "digest": "5e4420cd580bbef77b19ca51e64fc2f83e3b84e06ad498486667a95c3b82e610"
       },
       "operations.outbox_events": {
         "columns": [
@@ -597,7 +597,7 @@
           "last_error_code"
         ],
         "count": 1,
-        "digest": "04329116ec87d291806e5ab936029019b3635ea2b3405aad2fe6ac00815c89e9"
+        "digest": "015293b6b1569d810f2159711f8fafe459c484f103fabc519b5239b990b462e5"
       }
     }
   },
@@ -616,7 +616,7 @@
     "verdict": "pass",
     "databasePolicyMode": "RLS default deny; bounded signed capabilities verified through the Storage API",
     "evidenceSource": "evidence/phase6-media-integration.json",
-    "runId": "df21c9d1-2cf2-4062-9e31-b20475e62f9b",
+    "runId": "6f59c7fd-30fb-4ba4-9c85-f792e202240d",
     "integration": {
       "total": 7,
       "passed": 7,
@@ -864,7 +864,7 @@
     ],
     "currentAndOldCvEvidence": {
       "evidenceSource": "evidence/phase6-cv-delivery-159.json",
-      "runId": "682ee927-902d-4b44-ba31-585f97b38964",
+      "runId": "a92c1db1-61a6-4959-a2e3-78508442f487",
       "counts": {
         "integrationExecuted": 3,
         "integrationFailures": 0,
@@ -879,7 +879,7 @@
     "credentials": "service-role is used only for server adapter setup and cleanup; privileged success is not used as Storage access-control evidence",
     "ownerCompositionEvidence": {
       "evidenceSource": "evidence/phase6-owner-composition-161.json",
-      "runId": "ab271e72-7edf-4258-a03a-0c309d2cff33",
+      "runId": "caa54fd1-dd13-4ef0-9586-01da5613f598",
       "checks": {
         "suite": "tests/database/media-upload-intent.integration.test.ts",
         "test": "Phase 6 #161 real production Owner Media and CV composition composes all nine Owner Media and CV operations through real services",
@@ -941,7 +941,7 @@
     },
     "currentCvConstraintEvidence": {
       "evidenceSource": "evidence/phase6-cv-activation-156.json",
-      "runId": "f5186e5a-d794-4394-81b2-050aa45d7612",
+      "runId": "2846b497-5e62-401f-bc8f-c04aa8d23c00",
       "counts": {
         "executed": 24,
         "failed": 0,
@@ -958,7 +958,7 @@
           ]
         },
         {
-          "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"expectedVersionId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"88c83632653a7208465c937ba985e2f60f51009c8438d0ae8ffdcaa8d1afafbc\",\"version_id\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-17T23:33:20.146Z\",\"newCurrentCvId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\"}}",
+          "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"expectedVersionId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"19f85531a5ad290e2f8e9a1a642996463edfbd942930814acc7f2d8976d56984\",\"version_id\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-18T14:21:28.863Z\",\"newCurrentCvId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -974,7 +974,7 @@
           ]
         },
         {
-          "name": "T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins {\"waitingForMediaLock\":2,\"statuses\":[412,200],\"bodies\":[{\"type\":\"urn:shipwithali:problem:precondition-failed\",\"title\":\"Precondition Failed\",\"status\":412,\"detail\":\"An optimistic-concurrency precondition for this operation failed.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-7651-7fa1-ae1b-e2e8d30c46ab/commands/activate\",\"code\":\"failed_precondition\",\"traceId\":\"01a14c36-76c4-7980-ae63-52dd9886ef60\"},{\"aggregateId\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\",\"aggregateVersion\":113,\"outcome\":\"current-cv-activated\"}],\"currentVersionId\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\",\"projectedCurrentFlags\":1}",
+          "name": "T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins {\"waitingForMediaLock\":2,\"statuses\":[200,412],\"bodies\":[{\"aggregateId\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\",\"aggregateVersion\":113,\"outcome\":\"current-cv-activated\"},{\"type\":\"urn:shipwithali:problem:precondition-failed\",\"title\":\"Precondition Failed\",\"status\":412,\"detail\":\"An optimistic-concurrency precondition for this operation failed.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-953b-7b9f-b050-3ce3a05f8557/commands/activate\",\"code\":\"failed_precondition\",\"traceId\":\"01a14f63-95d7-7fed-9289-d8fd009d4d93\"}],\"currentVersionId\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\",\"projectedCurrentFlags\":1}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -1006,7 +1006,7 @@
           ]
         },
         {
-          "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\",\"afterCurrentFlags\":1}",
+          "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\",\"afterCurrentFlags\":1}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -1014,7 +1014,7 @@
           ]
         },
         {
-          "name": "T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event {\"status\":409,\"body\":{\"type\":\"urn:shipwithali:problem:conflict\",\"title\":\"Conflict\",\"status\":409,\"detail\":\"The request conflicts with the current state of the resource.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"conflict\",\"traceId\":\"01a14c36-77d1-7ea2-b20b-4ea15ef8c2d1\"},\"history\":105,\"expectedHistory\":105,\"receipts\":0,\"events\":4,\"expectedEvents\":4,\"before\":{\"version\":115,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"version\":115,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "name": "T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event {\"status\":409,\"body\":{\"type\":\"urn:shipwithali:problem:conflict\",\"title\":\"Conflict\",\"status\":409,\"detail\":\"The request conflicts with the current state of the resource.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"conflict\",\"traceId\":\"01a14f63-9758-75f9-bd65-9547de407d32\"},\"history\":105,\"expectedHistory\":105,\"receipts\":0,\"events\":4,\"expectedEvents\":4,\"before\":{\"version\":115,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"version\":115,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -1094,7 +1094,7 @@
           ]
         },
         {
-          "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-8468-7da5-aa24-a53bba625597\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-a9f9-7752-a275-1015e26d512e\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -1102,7 +1102,7 @@
           ]
         },
         {
-          "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-849a-7b50-ad4e-f5344e737587\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-aa3c-70b7-a9d2-bd7da0abea17\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -1110,7 +1110,7 @@
           ]
         },
         {
-          "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-84ce-78db-881b-30c0ec7c657b\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-aa83-7699-9acc-858a9a6a1bb0\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -1118,7 +1118,7 @@
           ]
         },
         {
-          "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-8501-7e23-ae4c-b071ebd017b5\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-aacf-7fcf-8cfc-e7ea12094c57\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -1126,7 +1126,7 @@
           ]
         },
         {
-          "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-8535-7c7b-b5fd-881677de9764\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-ab0b-7a9b-b940-c68671eef98f\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -1134,7 +1134,7 @@
           ]
         },
         {
-          "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-856b-7b9e-bdf5-6f76ae552438\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-ab4d-73b7-9da6-d633609a4a04\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
           "executed": true,
           "status": "passed",
           "criteria": [
@@ -1241,71 +1241,71 @@
       "tables": {
         "portfolio_config.settings": {
           "rows": 2,
-          "sha256": "fe7b4f0ce758dd18883cc797226b35a512c799c24ac55d1c04f4a86815478588"
+          "sha256": "315d856a9357b427c0f0bb4d20ed5ea71aa474b8501d9156105565737ed019bd"
         },
         "media.assets": {
           "rows": 5001,
-          "sha256": "5133144dfa6303474df78a7f691c81071c0217cbf51436901514ecd03f055cbd"
+          "sha256": "1b3279a926c61e1a083147c36db97b62ce297a3acb08e568867116d4516cfc87"
         },
         "media.upload_intents": {
           "rows": 5000,
-          "sha256": "41da2973c0672c7e5c4a69fa38be2c4d98cf0aa7437875151b9c11daeda06407"
+          "sha256": "52d60feae41ff82ccc664501dba4ce61ea4bebaf0e1f831d5f97b9e967af18df"
         },
         "media.processed_objects": {
           "rows": 1,
-          "sha256": "fcbc1b7d16c2a2ad2cb1492ee6d3cab7264b48f9953fec0721d412963183ccf7"
+          "sha256": "b8b03ca961f1303cc8002d8c05627d25870f7a5bee90ce8c0059e2b864aaba8d"
         },
         "media.processing_attempts": {
           "rows": 5000,
-          "sha256": "0e724cda0274c19b9e4c4ebd3b31c3d31f1e3195baaa2526ecf29e5476371598"
+          "sha256": "b0d4b440d892c3a1dbbd72eaa115a3652eda91bf8f5bfcc567d02e1c44a8fa6b"
         },
         "media.decision_history": {
           "rows": 1,
-          "sha256": "7af8052687a1c42a07ed6ae140b3a484d46967a3e6a995b1bce1b531148e9170"
+          "sha256": "a57ae1db3dec313e9aee8b7e02eb43e987fba3d0244fd405161ccd3653e39117"
         },
         "media.rejection_history": {
           "rows": 1,
-          "sha256": "fc771928987a6571c3403cd72249088864b01f01029623b4dcde1bc967a13615"
+          "sha256": "eabc71076d9921ba0006dbfcf1199c7050f0f619cdccbfca7704622103a529a6"
         },
         "cv_portfolio.portfolios": {
           "rows": 2,
-          "sha256": "4850f2917a45ba8765cfbd05d3f2beb9416dc18f535d6cee4b7a02c3514da326"
+          "sha256": "b8d0082f8b455efd0d1de1554625e81efb41a5eea4916b6168301d0ff641e1a3"
         },
         "cv_portfolio.versions": {
           "rows": 5000,
-          "sha256": "71eac90eba57611dfda0cebc71129a24084af6d5ec959428f2c8906f4a8c2b2b"
+          "sha256": "3ec9b835628ba456ce31e8e748cd65a1cd5b2086fff48ba5dd66efa0dafc97d4"
         },
         "cv_portfolio.acceptance_history": {
           "rows": 5000,
-          "sha256": "52dd68c76752448402d8b2726367ecf7c2abcc80495c15c8b6f2db1639c8a2d2"
+          "sha256": "e696c3e39dbc485f3b0ee78d214ebcce26cb751fc69271e20f88062423ac8cf3"
         },
         "cv_portfolio.activation_history": {
           "rows": 1,
-          "sha256": "6177349f13a25c1f671c41495a579f0953e7f1b6191e2a0bb1693bbfe3fd407e"
+          "sha256": "91af18058df3183e5182e91be5471b97597b5433b277ed50c361ce2eb90398d5"
         },
         "content.items": {
           "rows": 5001,
-          "sha256": "2930015e5be563c7ad1139125c16877c5d4ba0961f748ddd6faf606fb2bf4d4c"
+          "sha256": "9ba1bb3c4e966e04fb32447d9dc57dd7ba7b7237c4db68867635a6745d067a3d"
         },
         "content.revisions": {
           "rows": 5001,
-          "sha256": "a336a6111dc6a2fde08b793b25e92f189df11380429620bf3d2adc93683034dd"
+          "sha256": "cec20df1aa094b58f95589a7e7419e0e8ae4e8ff4d23a7b1372bfe7eaac4ac3a"
         },
         "content.lifecycle_history": {
           "rows": 1,
-          "sha256": "9e9841d0dabd471deaddd8ee159766995f647353d2320a369706330c5ac31273"
+          "sha256": "3ae2da167f97e0028362fa6995792341ca373dcd09f7e9546f730e36e753bd67"
         },
         "content.public_routes": {
           "rows": 5001,
-          "sha256": "041c91fd2f5e5c336fe02dc2338029638165e171e06bd315bce0bc896e98978c"
+          "sha256": "1c2f0c93869e31db13ea50308b0899e21c6f180d5cfbe0b019128a546b5f4368"
         },
         "content.public_route_reservations": {
           "rows": 1,
-          "sha256": "f712492c67da7c055371245fb1086fdbbad6ba432af09b137a7754441e19c5bc"
+          "sha256": "69bd0404f83588dbde16e5495b17e2a6dc06ec0cade8aada513b9a48e75745c4"
         },
         "content.public_project_locales": {
           "rows": 5000,
-          "sha256": "af191f693716d099823931a54f327416f069393bf54ed2f4ba380f47587a95fd"
+          "sha256": "d186b7455f68b55aabab4ec4509c361aa587f17cccfbde44da0864a1374fb2d9"
         }
       },
       "rowsTransferred": 45014

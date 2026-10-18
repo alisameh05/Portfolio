@@ -2,30 +2,30 @@
 > shipwithali-portfolio@0.0.0 test:phase6:gate
 > node --test tests/tooling/phase6-gate.test.mjs
 
-✔ gate startup clears stale reports and logs before checks run (7.478972ms)
-✔ Phase 6 gate traceability covers all parent criteria, stories and mandatory matrices (2.126141ms)
-✔ runtime pin comparison accepts Node versions with or without the version prefix (0.813038ms)
-✔ observed tool versions bind to pinned definitions without equating versions to image references (0.614408ms)
-✔ scanner requires the pinned definition and matching independently observed versions (1.312344ms)
-✔ imageProcessor requires the pinned definition and matching independently observed versions (1.67073ms)
-✔ videoProcessor requires the pinned definition and matching independently observed versions (0.803112ms)
-✔ pdfProcessor requires the pinned definition and matching independently observed versions (0.703539ms)
-✔ absent required service is rejected (0.549124ms)
-✔ stale source evidence is rejected (0.570599ms)
-✔ failed constituent is rejected (0.42568ms)
-✔ missing matrix or scenario is rejected (0.36665ms)
-✔ scenario-9-atomic-cv-replacement rejects missing scenario evidence (0.593136ms)
-✔ scenario-12-media-acceptance rejects missing scenario evidence (0.27271ms)
-✔ scenario-12-publication-gates rejects missing scenario evidence (0.247358ms)
-✔ scenario-12-integrated-publication rejects missing scenario evidence (0.295247ms)
-✔ scenario-13-arabic-boundary rejects missing scenario evidence (0.632571ms)
-✔ scenario-15-phase6-degraded-dependencies rejects missing scenario evidence (0.166073ms)
-✔ zero real execution is rejected (0.285584ms)
-✔ fake-only evidence is rejected (0.251089ms)
-✔ required skip is rejected (0.298414ms)
-✔ timeout is rejected (0.327745ms)
-✔ failed cleanup is rejected (0.295111ms)
-✔ gate dependencies are produced before migration access consumes them (0.105895ms)
+✔ gate startup clears stale reports and logs before checks run (7.227302ms)
+✔ Phase 6 gate traceability covers all parent criteria, stories and mandatory matrices (2.527755ms)
+✔ runtime pin comparison accepts Node versions with or without the version prefix (0.740544ms)
+✔ observed tool versions bind to pinned definitions without equating versions to image references (0.600035ms)
+✔ scanner requires the pinned definition and matching independently observed versions (1.510762ms)
+✔ imageProcessor requires the pinned definition and matching independently observed versions (2.278166ms)
+✔ videoProcessor requires the pinned definition and matching independently observed versions (0.864928ms)
+✔ pdfProcessor requires the pinned definition and matching independently observed versions (0.743732ms)
+✔ absent required service is rejected (0.450057ms)
+✔ stale source evidence is rejected (0.502721ms)
+✔ failed constituent is rejected (0.412403ms)
+✔ missing matrix or scenario is rejected (0.298491ms)
+✔ scenario-9-atomic-cv-replacement rejects missing scenario evidence (0.48328ms)
+✔ scenario-12-media-acceptance rejects missing scenario evidence (0.250794ms)
+✔ scenario-12-publication-gates rejects missing scenario evidence (0.234592ms)
+✔ scenario-12-integrated-publication rejects missing scenario evidence (0.302487ms)
+✔ scenario-13-arabic-boundary rejects missing scenario evidence (0.23455ms)
+✔ scenario-15-phase6-degraded-dependencies rejects missing scenario evidence (0.965148ms)
+✔ zero real execution is rejected (0.267572ms)
+✔ fake-only evidence is rejected (0.244145ms)
+✔ required skip is rejected (0.298371ms)
+✔ timeout is rejected (0.302952ms)
+✔ failed cleanup is rejected (0.23457ms)
+✔ gate dependencies are produced before migration access consumes them (0.106209ms)
 ℹ tests 24
 ℹ suites 0
 ℹ pass 24
@@ -33,4 +33,4 @@
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 92.823025
+ℹ duration_ms 89.080965

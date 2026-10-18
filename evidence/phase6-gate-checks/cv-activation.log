@@ -30,9 +30,9 @@ Scanning, processing and round-tripping webp.
 Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.
 {
   "ticket": 156,
-  "runId": "f5186e5a-d794-4394-81b2-050aa45d7612",
-  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "runId": "2846b497-5e62-401f-bc8f-c04aa8d23c00",
+  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
   "verdict": "pass",
   "scenarios": [
     {
@@ -44,7 +44,7 @@ Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage a
       ]
     },
     {
-      "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"expectedVersionId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"88c83632653a7208465c937ba985e2f60f51009c8438d0ae8ffdcaa8d1afafbc\",\"version_id\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-17T23:33:20.146Z\",\"newCurrentCvId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\"}}",
+      "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"expectedVersionId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"19f85531a5ad290e2f8e9a1a642996463edfbd942930814acc7f2d8976d56984\",\"version_id\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-18T14:21:28.863Z\",\"newCurrentCvId\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -60,7 +60,7 @@ Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage a
       ]
     },
     {
-      "name": "T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins {\"waitingForMediaLock\":2,\"statuses\":[412,200],\"bodies\":[{\"type\":\"urn:shipwithali:problem:precondition-failed\",\"title\":\"Precondition Failed\",\"status\":412,\"detail\":\"An optimistic-concurrency precondition for this operation failed.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-7651-7fa1-ae1b-e2e8d30c46ab/commands/activate\",\"code\":\"failed_precondition\",\"traceId\":\"01a14c36-76c4-7980-ae63-52dd9886ef60\"},{\"aggregateId\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\",\"aggregateVersion\":113,\"outcome\":\"current-cv-activated\"}],\"currentVersionId\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\",\"projectedCurrentFlags\":1}",
+      "name": "T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins {\"waitingForMediaLock\":2,\"statuses\":[200,412],\"bodies\":[{\"aggregateId\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\",\"aggregateVersion\":113,\"outcome\":\"current-cv-activated\"},{\"type\":\"urn:shipwithali:problem:precondition-failed\",\"title\":\"Precondition Failed\",\"status\":412,\"detail\":\"An optimistic-concurrency precondition for this operation failed.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-953b-7b9f-b050-3ce3a05f8557/commands/activate\",\"code\":\"failed_precondition\",\"traceId\":\"01a14f63-95d7-7fed-9289-d8fd009d4d93\"}],\"currentVersionId\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\",\"projectedCurrentFlags\":1}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -92,7 +92,7 @@ Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage a
       ]
     },
     {
-      "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\",\"afterCurrentFlags\":1}",
+      "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14f63-8a1e-7eac-9b98-0270d71d916d\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\",\"afterCurrentFlags\":1}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -100,7 +100,7 @@ Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage a
       ]
     },
     {
-      "name": "T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event {\"status\":409,\"body\":{\"type\":\"urn:shipwithali:problem:conflict\",\"title\":\"Conflict\",\"status\":409,\"detail\":\"The request conflicts with the current state of the resource.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"conflict\",\"traceId\":\"01a14c36-77d1-7ea2-b20b-4ea15ef8c2d1\"},\"history\":105,\"expectedHistory\":105,\"receipts\":0,\"events\":4,\"expectedEvents\":4,\"before\":{\"version\":115,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"version\":115,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "name": "T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event {\"status\":409,\"body\":{\"type\":\"urn:shipwithali:problem:conflict\",\"title\":\"Conflict\",\"status\":409,\"detail\":\"The request conflicts with the current state of the resource.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"conflict\",\"traceId\":\"01a14f63-9758-75f9-bd65-9547de407d32\"},\"history\":105,\"expectedHistory\":105,\"receipts\":0,\"events\":4,\"expectedEvents\":4,\"before\":{\"version\":115,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"version\":115,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -180,7 +180,7 @@ Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage a
       ]
     },
     {
-      "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-8468-7da5-aa24-a53bba625597\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-a9f9-7752-a275-1015e26d512e\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -188,7 +188,7 @@ Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage a
       ]
     },
     {
-      "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-849a-7b50-ad4e-f5344e737587\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-aa3c-70b7-a9d2-bd7da0abea17\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -196,7 +196,7 @@ Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage a
       ]
     },
     {
-      "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-84ce-78db-881b-30c0ec7c657b\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-aa83-7699-9acc-858a9a6a1bb0\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -204,7 +204,7 @@ Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage a
       ]
     },
     {
-      "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-8501-7e23-ae4c-b071ebd017b5\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-aacf-7fcf-8cfc-e7ea12094c57\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -212,7 +212,7 @@ Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage a
       ]
     },
     {
-      "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-8535-7c7b-b5fd-881677de9764\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-ab0b-7a9b-b940-c68671eef98f\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [
@@ -220,7 +220,7 @@ Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage a
       ]
     },
     {
-      "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-856b-7b9e-bdf5-6f76ae552438\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14f63-8a1e-7eac-9b98-0270d71d916d/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14f63-ab4d-73b7-9da6-d633609a4a04\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14f63-953b-7b9f-b050-3ce3a05f8557\"}}",
       "executed": true,
       "status": "passed",
       "criteria": [

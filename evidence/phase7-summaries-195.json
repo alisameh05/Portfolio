@@ -1,7 +1,7 @@
 {
-  "runId": "a116bf40-2af0-4586-a6d4-8f1e9aba6e25",
-  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
-  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "runId": "1f4d6ff9-2b00-46d8-85a6-277bf65b12ca",
+  "sourceRevision": "c65d7f37dda2a3b2a53ba97ccbaf50bc17399f9e",
+  "sourceTreeSha256": "36ec45cb0a903672bbc4fca6172004a11f5960b251fc2dd61fb5b69732566223",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015093040_query_current_interaction_summaries.sql",
   "migrationQualification": {
@@ -1212,5 +1212,5 @@
   },
   "scope": "Native disposable PostgreSQL cluster; all current repository migrations with focused clean/upgrade/replay qualification. Full integrated Phase 3-6 qualification belongs to #208.",
   "cleanup": true,
-  "gateRunId": "4e9c9a1c-e303-4232-8d5f-4dc7000c2ae7"
+  "gateRunId": "e2aa471e-ee4d-45aa-ac5f-7596e9137d1c"
 }
