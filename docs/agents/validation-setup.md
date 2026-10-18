@@ -106,3 +106,24 @@ uploaded evidence describes that release, not current Phase 6 acceptance.
 Current-source architecture, contracts, and typechecks remain in the validation
 job; current media acceptance requires the focused gates documented in
 `docs/phase6-verification-setup.md`.
+
+## Refresh Phase 8 prerequisite evidence
+
+After substantive source changes, commit the finished source and run:
+
+```text
+npm run phase8:qualify
+```
+
+This runs the validation environment check, all five Phase 3–7 gates (including
+the Docker Phase 6 gate), then the prerequisite evaluator. It stops on the first
+failure or source change. Docker Desktop must be running with Linux containers.
+Keep the source tree unchanged during the run; generated evidence is excluded
+from its fingerprint and can be committed afterward.
+
+`npm run phase8:prerequisites` only evaluates existing reports. A
+`source-tree-mismatch` means those reports describe different source, even if
+their original tests passed. Refresh them with `phase8:qualify`; do not edit
+their source hashes or relax qualification. Historical fingerprint and migration
+verification reads Git objects without creating temporary worktrees or requiring
+write access to the repository's Git metadata.
