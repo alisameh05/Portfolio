@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { isDeepStrictEqual } from "node:util";
@@ -39,31 +40,48 @@ export function sourceMetadataAtRevision(root, revision) {
   if (!validSha(revision, 40)) throw new TypeError("Expected an immutable Git commit SHA.");
   const cacheKey = `${root}\0${revision}`;
   if (sourceMetadataCache.has(cacheKey)) return sourceMetadataCache.get(cacheKey);
-  // Inspect immutable objects without creating a checkout or writing .git.
-  // --filters plus GIT_ATTR_SOURCE reproduces the revision's checkout bytes,
-  // including historical attributes and Windows CRLF rules, for v1 hashes.
-  const options = { cwd: root, stdio: ["pipe", "pipe", "pipe"], maxBuffer: 256 * 1024 * 1024,
-    env: { ...process.env, GIT_ATTR_SOURCE: revision } };
-  const entries = execFileSync("git", ["ls-tree", "-r", "-z", "--full-tree", revision, "--"],
-    { ...options, encoding: "utf8" }).split("\0").filter(Boolean).map((entry) => {
-    const match = /^(\d+) (\w+) ([a-f0-9]{40})\t([\s\S]+)$/u.exec(entry);
-    if (!match || match[2] !== "blob") throw new Error("Unsupported immutable source entry.");
-    return { mode: match[1], oid: match[3], path: match[4] };
-  }).filter(({ path }) => !path.startsWith("evidence/")).sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
-  const digest = createHash("sha256").update("portfolio-source-files-v1\0");
-  const migrations = [];
-  for (const { path, mode, oid } of entries) {
-    // Batch headers report the unfiltered size, which cannot delimit binary
-    // filtered content safely. Read each blob as an opaque byte buffer.
-    const content = execFileSync("git", mode === "120000"
-      ? ["cat-file", "blob", oid] : ["cat-file", "--filters", `--path=${path}`, oid], options);
-    const sha256 = createHash("sha256").update(content).digest("hex");
-    digest.update(JSON.stringify([path, mode === "120000" ? "symlink" : "file", sha256])).update("\0");
-    if (/^supabase\/migrations\/[^/]+\.sql$/iu.test(path)) migrations.push({ name: path.slice("supabase/migrations/".length), sha256: migrationSha256(content.toString("utf8")) });
-  }
-  const metadata = Object.freeze({ sourceTreeSha256: digest.digest("hex"), migrations: Object.freeze(migrations) });
-  sourceMetadataCache.set(cacheKey, metadata);
-  return metadata;
+  // Git 2.39's cat-file filters need attribute files in their working directory.
+  // Materialize only the revision's attributes outside .git, never a checkout
+  // or registered worktree. An absent isolated index excludes caller changes.
+  const env = { ...process.env };
+  for (const name of ["GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_ATTR_SOURCE"]) delete env[name];
+  const options = { cwd: root, stdio: ["pipe", "pipe", "pipe"], maxBuffer: 256 * 1024 * 1024, env };
+  const gitDirectory = execFileSync("git", ["rev-parse", "--absolute-git-dir"], { ...options, encoding: "utf8" }).trim();
+  const snapshot = mkdtempSync(join(resolve(tmpdir()), "phase8-attributes-"));
+  if (dirname(snapshot) !== resolve(tmpdir())) throw new Error("Invalid temporary attribute snapshot.");
+  try {
+    const workDirectory = join(snapshot, "worktree");
+    mkdirSync(workDirectory);
+    const snapshotOptions = { ...options, cwd: workDirectory, env: { ...env, GIT_DIR: gitDirectory,
+      GIT_WORK_TREE: workDirectory, GIT_INDEX_FILE: join(snapshot, "index") } };
+    const entries = execFileSync("git", ["ls-tree", "-r", "-z", "--full-tree", revision, "--"],
+      { ...snapshotOptions, encoding: "utf8" }).split("\0").filter(Boolean).map((entry) => {
+      const match = /^(\d+) (\w+) ([a-f0-9]{40})\t([\s\S]+)$/u.exec(entry);
+      if (!match || match[2] !== "blob") throw new Error("Unsupported immutable source entry.");
+      return { mode: match[1], oid: match[3], path: match[4] };
+    }).filter(({ path }) => !path.startsWith("evidence/")).sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+    for (const { path, mode, oid } of entries) {
+      if (mode === "120000" || !(path === ".gitattributes" || path.endsWith("/.gitattributes"))) continue;
+      const attributePath = resolve(workDirectory, path);
+      if (!attributePath.startsWith(workDirectory + sep)) throw new Error("Invalid historical attribute path.");
+      mkdirSync(dirname(attributePath), { recursive: true });
+      writeFileSync(attributePath, execFileSync("git", ["cat-file", "blob", oid], snapshotOptions));
+    }
+    const digest = createHash("sha256").update("portfolio-source-files-v1\0");
+    const migrations = [];
+    for (const { path, mode, oid } of entries) {
+      // Batch headers report the unfiltered size, which cannot delimit binary
+      // filtered content safely. Read each blob as an opaque byte buffer.
+      const content = execFileSync("git", mode === "120000"
+        ? ["cat-file", "blob", oid] : ["cat-file", "--filters", `--path=${path}`, oid], snapshotOptions);
+      const sha256 = createHash("sha256").update(content).digest("hex");
+      digest.update(JSON.stringify([path, mode === "120000" ? "symlink" : "file", sha256])).update("\0");
+      if (/^supabase\/migrations\/[^/]+\.sql$/iu.test(path)) migrations.push({ name: path.slice("supabase/migrations/".length), sha256: migrationSha256(content.toString("utf8")) });
+    }
+    const metadata = Object.freeze({ sourceTreeSha256: digest.digest("hex"), migrations: Object.freeze(migrations) });
+    sourceMetadataCache.set(cacheKey, metadata);
+    return metadata;
+  } finally { rmSync(snapshot, { recursive: true, force: true }); }
 }
 
 function versionsMatch(tools) {

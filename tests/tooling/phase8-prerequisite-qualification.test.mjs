@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { migrationSha256 } from "../../scripts/migration-checksum.mjs";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -614,21 +614,31 @@ test("immutable metadata needs no worktree writes and uses historical checkout a
     writeFileSync(join(root, "supabase", "migrations", "20261017000000_fixture.sql"), sql);
     const binary = Buffer.from([0, 10, 13, 255, 0]);
     writeFileSync(join(root, "binary fixture.dat"), binary);
-    git("add", ".gitattributes", "binary fixture.dat", "supabase/migrations/20261017000000_fixture.sql");
+    mkdirSync(join(root, "nested"));
+    const nestedSql = "select 2;\n";
+    writeFileSync(join(root, "nested", "test.sql"), nestedSql);
+    git("add", ".gitattributes", "binary fixture.dat", "nested/test.sql", "supabase/migrations/20261017000000_fixture.sql");
     git("commit", "-m", "Fixture migration");
     // The previous implementation fails when it tries to create a worktree.
     writeFileSync(join(root, ".git", "worktrees"), "Worktree creation is unavailable.\n");
     writeFileSync(join(root, ".gitattributes"), "*.sql text eol=crlf\n");
+    writeFileSync(join(root, "nested", ".gitattributes"), "*.sql text eol=crlf\n");
+    git("add", "nested/.gitattributes");
     const before = git("status", "--porcelain=v1");
+    const indexBefore = readFileSync(join(root, ".git", "index"));
+    const snapshotsBefore = readdirSync(tmpdir()).filter((name) => name.startsWith("phase8-attributes-")).sort();
     const metadata = sourceMetadataAtRevision(root, git("rev-parse", "HEAD"));
     assert.deepEqual(metadata.migrations, [{ name: "20261017000000_fixture.sql", sha256: migrationSha256(sql) }]);
     assert.notEqual(metadata.migrations[0].sha256, migrationSha256(sql.replace("select 1", "select 2")));
     const digest = createHash("sha256").update("portfolio-source-files-v1\0");
-    for (const [name, content] of [[".gitattributes", attributes], ["binary fixture.dat", binary],
+    for (const [name, content] of [[".gitattributes", attributes], ["binary fixture.dat", binary], ["nested/test.sql", nestedSql],
       ["supabase/migrations/20261017000000_fixture.sql", sql]]) {
       digest.update(JSON.stringify([name, "file", createHash("sha256").update(content).digest("hex")])).update("\0");
     }
     assert.equal(metadata.sourceTreeSha256, digest.digest("hex"));
+    assert.deepEqual(readFileSync(join(root, ".git", "index")), indexBefore);
+    assert.throws(() => sourceMetadataAtRevision(root, "0".repeat(40)));
+    assert.deepEqual(readdirSync(tmpdir()).filter((name) => name.startsWith("phase8-attributes-")).sort(), snapshotsBefore);
     assert.equal(git("status", "--porcelain=v1"), before);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

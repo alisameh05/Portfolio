@@ -127,3 +127,6 @@ their original tests passed. Refresh them with `phase8:qualify`; do not edit
 their source hashes or relax qualification. Historical fingerprint and migration
 verification reads Git objects without creating temporary worktrees or requiring
 write access to the repository's Git metadata.
+Historical attribute files are reconstructed in an isolated temporary directory,
+which is removed on success or failure. The caller's index and working files
+are preserved, including on the validation image's Git 2.39.
