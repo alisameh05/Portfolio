@@ -1,60 +1,60 @@
-import type { StableId, DomainEvent } from "@shared/domain";
+import type { DomainEvent, StableId } from "@shared/domain";
 
-export type ExportScope = "full" | "content_only" | "settings_only";
+export const OWNER_EXPORT_SCOPES = [
+  "portfolio-content",
+  "taxonomy",
+  "media-metadata",
+  "cv-metadata",
+  "moderation-history",
+  "analytics-reports",
+  "portfolio-configuration",
+] as const;
 
-export type ExportStatus = "requested" | "processing" | "completed" | "failed";
+export type ExportScope = (typeof OWNER_EXPORT_SCOPES)[number];
+
+export type ExportStatus = "requested" | "building" | "ready" | "failed" | "expired";
 
 export interface IntegrityManifest {
-  readonly schemaVersion: number;
+  readonly schemaVersion: string;
   readonly exportId: StableId<"OwnerExport">;
   readonly checksumSha256: string;
-  readonly recordCounts: Readonly<Record<string, number>>;
+  readonly recordCounts: Readonly<Partial<Record<ExportScope, number>>>;
 }
 
+/** Provider-neutral identity and lifecycle facts for one Owner export. */
 export interface OwnerExport {
   readonly id: StableId<"OwnerExport">;
-  readonly scope: ExportScope;
+  readonly portfolioId: StableId<"Portfolio">;
+  readonly ownerId: StableId<"Owner">;
+  readonly includedScopes: readonly ExportScope[];
   readonly status: ExportStatus;
-  readonly createdAt: string;
+  readonly schemaVersion: string;
+  readonly requestedAt: string;
   readonly completedAt?: string;
+  readonly failedAt?: string;
+  readonly expiredAt?: string;
+  readonly failureCode?: string;
   readonly manifest?: IntegrityManifest;
-  readonly storagePath?: string;
+  readonly artifactId?: StableId<"OwnerExportArtifact">;
 }
 
-export interface OutboxRecord {
-  readonly id: StableId<"Outbox">;
-  readonly eventType: string;
-  readonly payload: string;
-  readonly createdAt: string;
-  readonly attempts: number;
-  readonly dispatchedAt?: string;
-}
+export type JobStatus = "available" | "leased" | "completed" | "failed" | "dead";
 
-export type JobStatus = "available" | "leased" | "completed" | "failed";
+/** Purpose namespaces accepted by the operations worker boundary. */
+export type ScopedWorkerPurpose =
+  | `operations.${string}`
+  | `content.${string}`
+  | `taxonomy.${string}`
+  | `media.${string}`
+  | `cv.${string}`
+  | `interaction.${string}`
+  | `measurement.${string}`
+  | `feedback.${string}`;
 
-export interface LeasedJob {
-  readonly id: StableId<"Job">;
-  readonly jobType: string;
-  readonly payload: string;
-  readonly status: JobStatus;
-  readonly leaseExpiresAt?: string;
-}
-
-export type AlertSeverity = "info" | "warning" | "critical";
-
-export interface OperationalAlert {
-  readonly id: StableId<"Alert">;
-  readonly severity: AlertSeverity;
-  readonly title: string;
-  readonly details: string;
-  readonly raisedAt: string;
-}
-
-// Domain events
-export type OwnerExportProducedEvent = DomainEvent<
+export interface OwnerExportProducedEvent extends DomainEvent<
   "portability.export_produced.v1",
   {
     readonly exportId: StableId<"OwnerExport">;
     readonly manifest: IntegrityManifest;
   }
->;
+> {}

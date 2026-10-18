@@ -29,6 +29,7 @@ import {
   zRequestOwnerExportResponse,
 } from "../../src/contracts/http/owner/v1/generated/zod.gen.js";
 import { createTestLogger } from "../../src/runtime/ports.js";
+import { unsafeStableId } from "../../src/shared/domain/index.js";
 import {
   createOwnerExportTestFake,
   createProductionOwnerExportService,
@@ -41,11 +42,46 @@ import {
   handleGetOwnerExport,
   handleRequestOwnerExport,
   OWNER_EXPORT_MEDIA_TYPE,
+  type OwnerExportAdapterDeps,
 } from "../../src/runtime/http/owner-export.js";
+import type { OwnerExportPackageManifest, OwnerExportView } from "../../src/modules/portability-operations/index.js";
 import { ownerTestSecurity, withOwnerTestAuth } from "./owner-test-auth.js";
 
 const EXPORT_ID = OWNER_EXPORT_ID;
 const IDEMPOTENCY_KEY = "test-key-123";
+const PORTFOLIO_ID = unsafeStableId<"Portfolio">("0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ee1");
+
+const exportManifest: OwnerExportPackageManifest = {
+  packageFormat: "shipwithali-owner-export",
+  schemaVersion: "1.0",
+  createdAt: "2026-10-18T00:00:00.000Z",
+  algorithm: "sha-256",
+  digest: "a".repeat(64),
+  includedScopes: ["portfolio-content"],
+  publicEventDataCoverage: { mode: "excluded" },
+  entries: [{
+    path: "portfolio-content/projects.ndjson",
+    scope: "portfolio-content",
+    mediaType: "application/x-ndjson",
+    recordSchema: "urn:shipwithali:owner-export-schema:portfolio-content:1.0",
+    schemaPath: "schemas/portfolio-content.schema.json",
+    schemaVersion: "1.0",
+    digest: "b".repeat(64),
+    recordCount: 1,
+  }],
+};
+
+function ownerExportDeps(
+  service: OwnerExportAdapterDeps["service"],
+  logger = createTestLogger(),
+): OwnerExportAdapterDeps {
+  return { service, security: ownerTestSecurity(), portfolioId: PORTFOLIO_ID, logger };
+}
+
+function ownerExportServiceForView(view: OwnerExportView): OwnerExportAdapterDeps["service"] {
+  const fake = createOwnerExportTestFake({ type: "success" });
+  return { ...fake, async getOwnerExport() { return { ok: true as const, value: view }; } };
+}
 
 function requestExportRequest(
   options?: {
@@ -101,7 +137,7 @@ describe("Owner export request (#32)", () => {
     const logger = createTestLogger();
     const response = await handleRequestOwnerExport(
       requestExportRequest({ body: requestBody }),
-      { service: fake, security: ownerTestSecurity(), logger },
+      ownerExportDeps(fake, logger),
     );
     expect(response.status).toBe(202);
     expect(fake.calls.requestOwnerExport).toHaveLength(1);
@@ -109,9 +145,13 @@ describe("Owner export request (#32)", () => {
     const command = fake.calls.requestOwnerExport[0] as unknown as {
       includedScopes: string[];
       idempotencyKey: string;
+      portfolioId: string;
+      actor: { kind: string };
     };
     expect(command.includedScopes).toEqual(["portfolio-content", "taxonomy"]);
     expect(command.idempotencyKey).toBe(IDEMPOTENCY_KEY);
+    expect(command.portfolioId).toBe(PORTFOLIO_ID);
+    expect(command.actor.kind).toBe("owner");
     const body = (await response.json()) as unknown;
     expect(zRequestOwnerExportResponse.safeParse(body).success).toBe(true);
     expect(body).toEqual({
@@ -132,7 +172,7 @@ describe("Owner export request (#32)", () => {
     const fake = createOwnerExportTestFake({ type: "success" });
     const response = await handleRequestOwnerExport(
       requestExportRequest(options as { body?: unknown; rawBody?: string }),
-      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
+      ownerExportDeps(fake),
     );
     expect(response.status).toBe(400);
     expect(fake.calls.requestOwnerExport).toHaveLength(0);
@@ -161,7 +201,7 @@ describe("Owner export request (#32)", () => {
       const fake = createOwnerExportTestFake({ type: "rejection", rejection });
       const response = await handleRequestOwnerExport(
         requestExportRequest({ body: requestBody }),
-        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
+        ownerExportDeps(fake),
       );
       expect(response.status).toBe(status);
       expect(fake.calls.requestOwnerExport).toHaveLength(1);
@@ -178,7 +218,7 @@ describe("Owner export request (#32)", () => {
     const fake = createOwnerExportTestFake({ type: "invalid-success" });
     const response = await handleRequestOwnerExport(
       requestExportRequest({ body: requestBody }),
-      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
+      ownerExportDeps(fake),
     );
     expect(response.status).toBe(500);
   });
@@ -191,12 +231,13 @@ describe("Owner export status retrieval (#32)", () => {
     const response = await handleGetOwnerExport(
       getRequest(),
       { exportId: EXPORT_ID },
-      { service: fake, security: ownerTestSecurity(), logger },
+      ownerExportDeps(fake, logger),
     );
     expect(response.status).toBe(200);
     expect(fake.calls.getOwnerExport).toHaveLength(1);
-    const query = fake.calls.getOwnerExport[0] as { exportId: string };
+    const query = fake.calls.getOwnerExport[0] as { exportId: string; portfolioId: string };
     expect(query.exportId).toBe(EXPORT_ID);
+    expect(query.portfolioId).toBe(PORTFOLIO_ID);
     const body = (await response.json()) as unknown;
     expect(zGetOwnerExportResponse.safeParse(body).success).toBe(true);
     expect(body).toEqual({
@@ -210,12 +251,39 @@ describe("Owner export status retrieval (#32)", () => {
     });
   });
 
+  const baseView = {
+    exportId: EXPORT_ID as unknown as OwnerExportView["exportId"],
+    schemaVersion: OWNER_EXPORT_SCHEMA_VERSION,
+    requestedAt: "2026-09-22T00:00:00.000Z",
+    includedScopes: ["portfolio-content"] as const,
+    publicEventDataCoverage: { mode: "excluded" as const },
+  };
+  const lifecycleViews: readonly OwnerExportView[] = [
+    { ...baseView, state: "requested", downloadAvailable: false },
+    { ...baseView, state: "building", downloadAvailable: false },
+    { ...baseView, state: "ready", completedAt: "2026-10-18T00:01:00.000Z", integrityManifest: exportManifest, downloadAvailable: true },
+    { ...baseView, state: "failed", failedAt: "2026-10-18T00:01:00.000Z", failureCode: "assembly_failed", downloadAvailable: false },
+    { ...baseView, state: "expired", completedAt: "2026-10-18T00:01:00.000Z", expiredAt: "2026-10-19T00:01:00.000Z", integrityManifest: exportManifest, downloadAvailable: false },
+  ];
+
+  it.each(lifecycleViews)("preserves the accepted $state status view", async (view) => {
+    const response = await handleGetOwnerExport(
+      getRequest(),
+      { exportId: EXPORT_ID },
+      ownerExportDeps(ownerExportServiceForView(view)),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(zGetOwnerExportResponse.safeParse(body).success).toBe(true);
+    expect(body).toEqual(view);
+  });
+
   it("rejects an invalid exportId as 400 before dispatch", async () => {
     const fake = createOwnerExportTestFake({ type: "success" });
     const response = await handleGetOwnerExport(
       getRequest("not-a-uuid"),
       { exportId: "not-a-uuid" },
-      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
+      ownerExportDeps(fake),
     );
     expect(response.status).toBe(400);
     expect(fake.calls.getOwnerExport).toHaveLength(0);
@@ -244,7 +312,7 @@ describe("Owner export status retrieval (#32)", () => {
       const response = await handleGetOwnerExport(
         getRequest(),
         { exportId: EXPORT_ID },
-        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
+        ownerExportDeps(fake),
       );
       expect(response.status).toBe(status);
       const body = (await response.json()) as Record<string, unknown>;
@@ -260,7 +328,7 @@ describe("Owner export status retrieval (#32)", () => {
     const response = await handleGetOwnerExport(
       getRequest(),
       { exportId: EXPORT_ID },
-      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
+      ownerExportDeps(fake),
     );
     expect(response.status).toBe(500);
   });
@@ -274,7 +342,7 @@ describe("Owner export status retrieval (#32)", () => {
     const first = await handleGetOwnerExport(
       getRequest(EXPORT_ID, "inbound-attacker-value"),
       { exportId: EXPORT_ID },
-      { service: fake, security: ownerTestSecurity(), logger },
+      ownerExportDeps(fake, logger),
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
@@ -290,12 +358,13 @@ describe("Owner export download (#32)", () => {
     const response = await handleDownloadOwnerExport(
       downloadRequest(),
       { exportId: EXPORT_ID },
-      { service: fake, security: ownerTestSecurity(), logger },
+      ownerExportDeps(fake, logger),
     );
     expect(response.status).toBe(200);
     expect(fake.calls.downloadOwnerExport).toHaveLength(1);
-    const query = fake.calls.downloadOwnerExport[0] as { exportId: string };
+    const query = fake.calls.downloadOwnerExport[0] as { exportId: string; portfolioId: string };
     expect(query.exportId).toBe(EXPORT_ID);
+    expect(query.portfolioId).toBe(PORTFOLIO_ID);
     expect(response.headers.get("content-type")).toBe(OWNER_EXPORT_MEDIA_TYPE);
     expect(response.headers.get("content-disposition")).toBe(
       `attachment; filename="${OWNER_EXPORT_FILENAME}"`,
@@ -316,7 +385,7 @@ describe("Owner export download (#32)", () => {
     const response = await handleDownloadOwnerExport(
       downloadRequest("not-a-uuid"),
       { exportId: "not-a-uuid" },
-      { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
+      ownerExportDeps(fake),
     );
     expect(response.status).toBe(400);
     expect(fake.calls.downloadOwnerExport).toHaveLength(0);
@@ -346,7 +415,7 @@ describe("Owner export download (#32)", () => {
       const response = await handleDownloadOwnerExport(
         downloadRequest(),
         { exportId: EXPORT_ID },
-        { service: fake, security: ownerTestSecurity(), logger: createTestLogger() },
+        ownerExportDeps(fake),
       );
       expect(response.status).toBe(status);
       const body = (await response.json()) as Record<string, unknown>;
@@ -364,7 +433,7 @@ describe("Owner export download (#32)", () => {
     const response = await handleDownloadOwnerExport(
       downloadRequest(),
       { exportId: EXPORT_ID },
-      { service: fake, security: ownerTestSecurity(), logger },
+      ownerExportDeps(fake, logger),
     );
     expect(response.status).toBe(500);
     const body = (await response.json()) as Record<string, unknown>;
@@ -381,7 +450,7 @@ describe("Owner export download (#32)", () => {
     const denied = await handleDownloadOwnerExport(
       downloadRequest(),
       { exportId: EXPORT_ID },
-      { service: unauthenticated, security: ownerTestSecurity(), logger: createTestLogger() },
+      ownerExportDeps(unauthenticated),
     );
     expect(denied.status).toBe(401);
 
@@ -393,7 +462,7 @@ describe("Owner export download (#32)", () => {
     const blocked = await handleDownloadOwnerExport(
       downloadRequest(),
       { exportId: EXPORT_ID },
-      { service: forbidden, security: ownerTestSecurity(), logger },
+      ownerExportDeps(forbidden, logger),
     );
     expect(blocked.status).toBe(403);
     expect(JSON.stringify(logger.records)).not.toContain("signed");
@@ -405,13 +474,13 @@ describe("Owner export download (#32)", () => {
     const responses = [
       await handleRequestOwnerExport(
         requestExportRequest({ body: requestBody }),
-        { service, security: ownerTestSecurity(), logger },
+        ownerExportDeps(service, logger),
       ),
-      await handleGetOwnerExport(getRequest(), { exportId: EXPORT_ID }, { service, security: ownerTestSecurity(), logger }),
+      await handleGetOwnerExport(getRequest(), { exportId: EXPORT_ID }, ownerExportDeps(service, logger)),
       await handleDownloadOwnerExport(
         downloadRequest(),
         { exportId: EXPORT_ID },
-        { service, security: ownerTestSecurity(), logger },
+        ownerExportDeps(service, logger),
       ),
     ];
     expect(responses).toHaveLength(3);
@@ -425,11 +494,12 @@ describe("Owner export download (#32)", () => {
     const directCalls = [
       service.requestOwnerExport({
         actor: owner as never,
+        portfolioId: PORTFOLIO_ID,
         idempotencyKey: IDEMPOTENCY_KEY as never,
         includedScopes: ["taxonomy"] as never,
       }),
-      service.getOwnerExport({ actor: owner as never, exportId: EXPORT_ID as never }),
-      service.downloadOwnerExport({ actor: owner as never, exportId: EXPORT_ID as never }),
+      service.getOwnerExport({ actor: owner as never, portfolioId: PORTFOLIO_ID, exportId: EXPORT_ID as never }),
+      service.downloadOwnerExport({ actor: owner as never, portfolioId: PORTFOLIO_ID, exportId: EXPORT_ID as never }),
     ];
     for (const direct of await Promise.all(directCalls)) {
       expect(direct.ok).toBe(false);
@@ -455,7 +525,7 @@ describe("Owner export download (#32)", () => {
     };
     const response = await handleRequestOwnerExport(
       requestExportRequest({ body: requestBody }),
-      { service: throwing, security: ownerTestSecurity(), logger },
+      ownerExportDeps(throwing, logger),
     );
     expect(response.status).toBe(500);
     const serialized = JSON.stringify(await response.json());

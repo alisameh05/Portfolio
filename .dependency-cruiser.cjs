@@ -80,6 +80,26 @@ module.exports = {
     },
 
     /**
+     * Rule: no-runtime-http-in-module-application
+     *
+     * Application interfaces are transport-neutral and cannot depend on
+     * handwritten HTTP adapters, just as they cannot depend on generated
+     * transport contracts.
+     */
+    {
+      name: "no-runtime-http-in-module-application",
+      severity: "error",
+      comment:
+        "Module application code must not depend on runtime HTTP adapters.",
+      from: {
+        path: "(?:^src/modules/|^tests/fixtures/invalid-deps/[^/]+/modules/)([^/]+)/application/",
+      },
+      to: {
+        path: "^src/runtime/http/",
+      },
+    },
+
+    /**
      * Rule: no-database-type-leakage
      *
      * Committed Kysely database types are a persistence-adapter concern.
