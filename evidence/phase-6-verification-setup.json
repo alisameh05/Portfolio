@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 146,
   "parent": 145,
-  "runId": "009737b9-086a-4af4-b044-0e2dd60d0f4b",
-  "sourceRevision": "ce9df577692cbb09e65f55a17556b061136604a6",
-  "sourceTreeSha256": "bfb2ed7aa92b52cb843d5c01beb99e8ec2a1c8883d44a7371586321cafa081cb",
-  "startedAt": "2026-10-10T17:55:50.266Z",
-  "completedAt": "2026-10-10T17:58:27.155Z",
+  "runId": "c1ccf994-bfff-4584-b0b9-4947e035bb8c",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "startedAt": "2026-10-17T23:16:13.356Z",
+  "completedAt": "2026-10-17T23:17:36.911Z",
   "scope": "phase6-reproducible-service-and-processor-context",
   "suite": "phase6-setup-context",
   "toolVersions": {
@@ -17,13 +17,14 @@
     "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
     "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
     "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
-    "pdfProcessor": "17.12.1"
+    "pdfProcessor": "17.12.1",
+    "scannerMode": "isolated-clamd-stream"
   },
   "toolDefinitions": {
-    "scanner": "clamav/clamav:1.4.3",
+    "scanner": "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4",
     "imageProcessor": "dpokidov/imagemagick:7.1.1-47",
     "videoProcessor": "jrottenberg/ffmpeg:7.1-ubuntu2404",
-    "pdfProcessor": "jbarlow83/ocrmypdf-alpine:v17.12.1"
+    "pdfProcessor": "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c"
   },
   "predecessorContexts": {
     "phase4": {
@@ -98,11 +99,26 @@
       "issue": 125,
       "pullRequest": 144,
       "mergeCommit": "26d6efb3d9e281265cc9c099195492b5dcbec79d",
-      "evidence": "evidence/phase-5-context.json",
-      "contextRunId": "0a9b0dda-83c3-495a-bf45-f0c6f4180991",
-      "sourceRevision": "ce9df577692cbb09e65f55a17556b061136604a6",
-      "sourceTreeSha256": "bfb2ed7aa92b52cb843d5c01beb99e8ec2a1c8883d44a7371586321cafa081cb",
+      "evidence": "evidence/phase-5-gate-report.json",
+      "contextEvidence": "evidence/phase-5-context.json",
+      "contextRunId": "cd43de24-8834-4dda-8720-089f613b8616",
+      "gateTicket": 125,
+      "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
       "contextVerdict": "pass",
+      "contextTicket": 107,
+      "contextPhase": "phase5",
+      "contextEvidenceRunId": "df3a8e0a-6c9a-4ee5-827e-3231c1959c3d",
+      "contextSourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+      "contextSourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "contextArtifactRunId": "df3a8e0a-6c9a-4ee5-827e-3231c1959c3d",
+      "contextArtifactSourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+      "contextArtifactSourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+      "contextGateRunId": "cd43de24-8834-4dda-8720-089f613b8616",
+      "contextRequiredRunId": "cd43de24-8834-4dda-8720-089f613b8616",
+      "contextArtifactFresh": true,
+      "contextArtifactSha256": "a406ca7155d0b784fc946b5e65e4769770d5cf6bd131444fea0676870c8fd6cd",
+      "contextEvidenceSha256": "a406ca7155d0b784fc946b5e65e4769770d5cf6bd131444fea0676870c8fd6cd",
       "operations": {
         "public": 5,
         "owner": 48,
@@ -168,7 +184,7 @@
       "executed": true,
       "status": "passed",
       "storageRoundTrip": true,
-      "sha256": "cad3099f3f4da15146d56889dce523543f4fbd2f534fe32774bf98e97ea0badb",
+      "sha256": "982023ee5e833a032371d88a2c1d1497b7aac4ced9d7bbbfd728129f87941a67",
       "scannerVerdict": "clean",
       "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
     },
@@ -212,7 +228,7 @@
       "executed": true,
       "status": "passed",
       "storageRoundTrip": true,
-      "sha256": "1ade25e0f4981614c131aa56828379d25eeaa4a994dcc3845f745cf74913e6af",
+      "sha256": "2037e71a3baa02aa5d84197aa259b64d06d7aea8c8e786b1ecf38ba8731117ce",
       "scannerVerdict": "clean",
       "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
     }

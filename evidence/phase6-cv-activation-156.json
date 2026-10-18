@@ -1,0 +1,904 @@
+{
+  "schemaVersion": 1,
+  "ticket": 156,
+  "parent": 145,
+  "predecessor": 155,
+  "runId": "f5186e5a-d794-4394-81b2-050aa45d7612",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "startedAt": "2026-10-17T23:32:03.127Z",
+  "completedAt": "2026-10-17T23:33:49.199Z",
+  "scope": "atomic-current-cv-activation-with-replay-rollback-and-authoritative-media-use",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1",
+    "sharp": "sharp-0.35.4;libvips-8.18.6",
+    "scannerMode": "isolated-clamd-stream"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 14
+    },
+    "scanner": {
+      "available": true,
+      "version": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+      "executions": 34
+    },
+    "processors": {
+      "pdf": "17.12.1",
+      "image": "sharp-0.35.4;libvips-8.18.6",
+      "video": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+      "executions": {
+        "pdf": 10,
+        "image": 5,
+        "video": 0
+      }
+    }
+  },
+  "migrationUpgrade": {
+    "migration": "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+    "preexistingConfiguredOwners": 1,
+    "migrations": [
+      "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "20261012040000_accept_registered_cv_versions.sql",
+      "20261012050000_activate_current_cv_atomically.sql"
+    ],
+    "deferredMigrations": [
+      "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "20261012040000_accept_registered_cv_versions.sql",
+      "20261012050000_activate_current_cv_atomically.sql",
+      "20261012060000_reject_media_with_usage_guard.sql",
+      "20261013100000_configure_public_profile_media.sql",
+      "20261014194925_measurement_consent.sql",
+      "20261014210000_persist_project_reactions.sql",
+      "20261014211320_persist_project_ratings.sql",
+      "20261015003000_persist_private_feedback.sql",
+      "20261015010000_retain_feedback_moderation.sql",
+      "20261015093040_query_current_interaction_summaries.sql",
+      "20261015120000_persist_consented_public_events.sql",
+      "20261015130000_enable_public_interaction_event_facts.sql",
+      "20261015150000_enable_configuration_interaction_event_facts.sql",
+      "20261015160000_persist_immutable_analytics_goal_versions.sql",
+      "20261015170000_activate_analytics_goal_versions.sql",
+      "20261015180000_match_analytics_goal_conversions.sql",
+      "20261015190000_persist_reproducible_daily_aggregates.sql",
+      "20261015200000_enable_fixed_aggregate_dimensions.sql",
+      "20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
+      "20261015203000_retain_feedback_privacy.sql",
+      "20261017142000_revoke_public_aggregate_guard_execution.sql"
+    ],
+    "migrationLedgerContainsDeferred": true,
+    "migrationLedgerContainsTarget": true,
+    "backfilledRoots": 1,
+    "aggregateVersion": 1,
+    "verdict": "pass"
+  },
+  "policyIds": {
+    "migrations": [
+      "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "20261012040000_accept_registered_cv_versions.sql",
+      "20261012050000_activate_current_cv_atomically.sql"
+    ],
+    "RLS": [
+      "cv_portfolios_owner_scope",
+      "cv_versions_owner_scope",
+      "cv_activation_history_owner_scope",
+      "cv_activation_commands_owner_scope"
+    ],
+    "limits": {
+      "sharedMediaLockTimeoutMs": 3000,
+      "statementTimeoutMs": 5000,
+      "transactionTimeoutMs": 8000
+    }
+  },
+  "principalScope": {
+    "database": "shipwithali_application constrained by portfolio_id and owner_id RLS",
+    "media": "real accepted English PDF revalidated against immutable Media decision and object snapshot",
+    "environment": "disposable loopback PostgreSQL, Auth and private Storage"
+  },
+  "formats": [
+    {
+      "id": "pdf",
+      "kind": "document",
+      "mimeType": "application/pdf",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "17.12.1"
+    },
+    {
+      "id": "png",
+      "kind": "image",
+      "mimeType": "image/png",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "jpeg",
+      "kind": "image",
+      "mimeType": "image/jpeg",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    },
+    {
+      "id": "webp",
+      "kind": "image",
+      "mimeType": "image/webp",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
+    }
+  ],
+  "checks": {
+    "activation": {
+      "suite": "tests/database/media-upload-intent.integration.test.ts",
+      "test": "Phase 6 #148 private upload intent with real PostgreSQL and Storage processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+      "scenarios": [
+        {
+          "name": "T11-01 an unactivated portfolio has zero current flags; the first activation creates one coherent accepted English current version {\"viewCurrentVersionId\":null,\"databaseCurrentVersionId\":null,\"everActivated\":false,\"currentFlags\":0,\"projectedCurrentFlags\":0}",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-01"
+          ]
+        },
+        {
+          "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"expectedVersionId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"88c83632653a7208465c937ba985e2f60f51009c8438d0ae8ffdcaa8d1afafbc\",\"version_id\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-17T23:33:20.146Z\",\"newCurrentCvId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\"}}",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-03"
+          ]
+        },
+        {
+          "name": "T11-02 constrained application-role SQL rejects clearing the active pointer, downgrading an accepted current CV, unknown references and cross-Owner scope changes",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-02"
+          ]
+        },
+        {
+          "name": "T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins {\"waitingForMediaLock\":2,\"statuses\":[412,200],\"bodies\":[{\"type\":\"urn:shipwithali:problem:precondition-failed\",\"title\":\"Precondition Failed\",\"status\":412,\"detail\":\"An optimistic-concurrency precondition for this operation failed.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-7651-7fa1-ae1b-e2e8d30c46ab/commands/activate\",\"code\":\"failed_precondition\",\"traceId\":\"01a14c36-76c4-7980-ae63-52dd9886ef60\"},{\"aggregateId\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\",\"aggregateVersion\":113,\"outcome\":\"current-cv-activated\"}],\"currentVersionId\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\",\"projectedCurrentFlags\":1}",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-04"
+          ]
+        },
+        {
+          "name": "T11-06 exact replay returns the earlier receipt after replacement; changed-key intent and fresh stale versions conflict",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-06"
+          ]
+        },
+        {
+          "name": "T11-07 activation of the already-current version records and replays a receipt without changing root version, history or events",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-07"
+          ]
+        },
+        {
+          "name": "T11-08 an eligible retained prior CV version can be reactivated with a fresh key and root version",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-08"
+          ]
+        },
+        {
+          "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\",\"afterCurrentFlags\":1}",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-05"
+          ]
+        },
+        {
+          "name": "T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event {\"status\":409,\"body\":{\"type\":\"urn:shipwithali:problem:conflict\",\"title\":\"Conflict\",\"status\":409,\"detail\":\"The request conflicts with the current state of the resource.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"conflict\",\"traceId\":\"01a14c36-77d1-7ea2-b20b-4ea15ef8c2d1\"},\"history\":105,\"expectedHistory\":105,\"receipts\":0,\"events\":4,\"expectedEvents\":4,\"before\":{\"version\":115,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"version\":115,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-09"
+          ]
+        },
+        {
+          "name": "T11-09 unsafe processing evidence blocks activation without changing Current CV",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-09"
+          ]
+        },
+        {
+          "name": "T11-09 inaccessible acceptance facts block activation without changing Current CV",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-09"
+          ]
+        },
+        {
+          "name": "T11-09 a missing accepted PDF object blocks activation without changing pointer, flags, history, receipts or outbox",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-09"
+          ]
+        },
+        {
+          "name": "T11-09 a Storage outage during the real accepted-Media activation path preserves Current CV state",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-09"
+          ]
+        },
+        {
+          "name": "T11-09 inaccessible accepted Media blocks activation without changing the portfolio",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-09"
+          ]
+        },
+        {
+          "name": "T11-09 an immutable object binding mismatch blocks activation without changing the portfolio",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-09"
+          ]
+        },
+        {
+          "name": "T11-09 registered but unaccepted CV versions cannot become Current and do not mutate the portfolio",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-09"
+          ]
+        },
+        {
+          "name": "T11-09 a valid accepted foreign Owner CV is not found and cannot mutate this Owner's pointer, flags, history, receipts or outbox",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-09"
+          ]
+        },
+        {
+          "name": "T11-10 the CV-owned current-Media use query returns an authoritative scoped result in the caller transaction",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-10"
+          ]
+        },
+        {
+          "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-8468-7da5-aa24-a53bba625597\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-05"
+          ]
+        },
+        {
+          "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-849a-7b50-ad4e-f5344e737587\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-05"
+          ]
+        },
+        {
+          "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-84ce-78db-881b-30c0ec7c657b\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-05"
+          ]
+        },
+        {
+          "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-8501-7e23-ae4c-b071ebd017b5\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-05"
+          ]
+        },
+        {
+          "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-8535-7c7b-b5fd-881677de9764\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-05"
+          ]
+        },
+        {
+          "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-856b-7b9e-bdf5-6f76ae552438\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+          "executed": true,
+          "status": "passed",
+          "criteria": [
+            "T11-05"
+          ]
+        }
+      ],
+      "counts": {
+        "executed": 24,
+        "failed": 0,
+        "skipped": 0,
+        "criteriaCovered": 10
+      },
+      "verdict": "pass"
+    },
+    "predecessorPortfolio": {
+      "suite": "tests/database/media-upload-intent.integration.test.ts",
+      "test": "Phase 6 #148 private upload intent with real PostgreSQL and Storage processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+      "recordedAssertions": [
+        {
+          "name": "T09-01 concurrent authenticated reads initialize one empty version-1 scoped root",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-09 same-scope foreign keys, English and snapshot constraints, forced RLS, default-deny roles and bounded indexes exist",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-02 concurrent authenticated Owner POSTs replay one shared receipt after both miss the initial lookup",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-03 and T09-05 accepted same-Owner PDF facts are snapshot-bound to a UUIDv7 English registered version",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-06 registration increments the root and records one event without accepting or activating the CV",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-07 exact replay preserves the original receipt; changed intent conflicts and a fresh stale root version fails",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-04 unprocessed raw PDF, accepted non-PDF image, missing, foreign Owner, and non-English intents reject without writes: {\"unprocessed\":true,\"wrongKind\":true,\"acceptedImage\":true,\"missing\":true,\"foreignOwner\":true,\"nonEnglish\":true,\"noWrites\":true}",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-08 Owner projections return deterministic latest-100 version and activation views without deleting retained rows",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "T09-06 root, version, receipt and event roll back together when outbox insertion fails",
+          "executed": true,
+          "status": "passed"
+        }
+      ],
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "scenarios": [
+        {
+          "id": "T09-01",
+          "name": "concurrent empty-root initialization and authenticated empty Owner view",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-02",
+          "name": "If-Match and idempotency on registration",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-03",
+          "name": "same-Owner accepted accessible PDF snapshot",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-04",
+          "name": "strict English PDF and scope eligibility",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-05",
+          "name": "UUIDv7 retained registration identity and numbering",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-06",
+          "name": "atomic root, version, receipt and event with rollback",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-07",
+          "name": "exact replay, changed intent and stale version",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-08",
+          "name": "derived current flags and bounded retained histories",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "id": "T09-09",
+          "name": "scope constraints, forced RLS, indexes and preexisting-owner migration backfill",
+          "executed": true,
+          "status": "passed"
+        }
+      ],
+      "counts": {
+        "executed": 9,
+        "failed": 0,
+        "skipped": 0,
+        "insertedVersions": 102,
+        "retainedAfterProjection": 100
+      },
+      "verdict": "pass"
+    },
+    "mediaAcceptance": {
+      "suite": "tests/database/media-upload-intent.integration.test.ts",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "failedTests": [],
+      "verdict": "pass"
+    },
+    "application": {
+      "suites": [
+        "tests/modules/media-acceptance.test.ts",
+        "tests/modules/media-cv-contracts.test.ts",
+        "tests/modules/cv-portfolio.test.ts"
+      ],
+      "total": 26,
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0,
+      "tests": [
+        {
+          "name": "Owner CV registration application service (#154) trims the label and delegates a portfolio-versioned, idempotent registration",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects other Owners before either history reads or writes",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) accepts a 128-character visible ASCII idempotency key",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) returns the initially empty portfolio without changing its root version",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) authorizes and delegates a portfolio-versioned, idempotent acceptance",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects foreign Owners and malformed acceptance intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) authorizes and delegates a portfolio-versioned, idempotent activation",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects foreign Owners and malformed activation intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) delegates the scoped Current CV Media-use query in the caller transaction",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) requires the authenticated same-Owner actor before persisting acceptance",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects missing approved descriptions before repository access",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) normalizes approved metadata and keeps the command result safe",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) returns one complete fact per distinct ID with a bounded sorted opaque token",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) fails closed when a fact is missing, duplicated, foreign, or malformed",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects duplicate repository facts instead of selecting one arbitrarily",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects facts attributed to another Owner",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media and CV module contracts (#147) retains the five Media, four Owner CV, and purpose-aware read operations",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media and CV module contracts (#147) records the approved file policies and never widens adapter limits",
+          "executed": true,
+          "status": "passed"
+        }
+      ],
+      "verdict": "pass"
+    },
+    "acceptanceOperations": 4
+  },
+  "counts": {
+    "executed": 24,
+    "failed": 0,
+    "skipped": 0,
+    "criteriaCovered": 10
+  },
+  "scenarios": [
+    {
+      "name": "T11-01 an unactivated portfolio has zero current flags; the first activation creates one coherent accepted English current version {\"viewCurrentVersionId\":null,\"databaseCurrentVersionId\":null,\"everActivated\":false,\"currentFlags\":0,\"projectedCurrentFlags\":0}",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-01"
+      ]
+    },
+    {
+      "name": "T11-03 first activation atomically persists the pointer, current flag, retained history, safe receipt and minimal event {\"status\":200,\"body\":{\"aggregateId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"aggregateVersion\":112,\"outcome\":\"current-cv-activated\"},\"viewCurrentVersionId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"expectedVersionId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"databaseState\":{\"aggregate_version\":112,\"current_version_id\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"ever_activated\":true,\"is_current\":true,\"histories\":102,\"events\":1},\"historyRows\":102,\"historyRowsBefore\":101,\"receiptRows\":1,\"receipt\":{\"idempotency_key_hash\":\"d20f64c57e6717f672ba69a58377bc73c261292e6ee8592a08950243dff08eef\",\"request_hash\":\"88c83632653a7208465c937ba985e2f60f51009c8438d0ae8ffdcaa8d1afafbc\",\"version_id\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"aggregate_version\":112},\"eventPayload\":{\"activatedAt\":\"2026-10-17T23:33:20.146Z\",\"newCurrentCvId\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\"}}",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-03"
+      ]
+    },
+    {
+      "name": "T11-02 constrained application-role SQL rejects clearing the active pointer, downgrading an accepted current CV, unknown references and cross-Owner scope changes",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-02"
+      ]
+    },
+    {
+      "name": "T11-04 independent same-version activations serialize on the shared Media lock and one fresh root version wins {\"waitingForMediaLock\":2,\"statuses\":[412,200],\"bodies\":[{\"type\":\"urn:shipwithali:problem:precondition-failed\",\"title\":\"Precondition Failed\",\"status\":412,\"detail\":\"An optimistic-concurrency precondition for this operation failed.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-7651-7fa1-ae1b-e2e8d30c46ab/commands/activate\",\"code\":\"failed_precondition\",\"traceId\":\"01a14c36-76c4-7980-ae63-52dd9886ef60\"},{\"aggregateId\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\",\"aggregateVersion\":113,\"outcome\":\"current-cv-activated\"}],\"currentVersionId\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\",\"projectedCurrentFlags\":1}",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-04"
+      ]
+    },
+    {
+      "name": "T11-06 exact replay returns the earlier receipt after replacement; changed-key intent and fresh stale versions conflict",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-06"
+      ]
+    },
+    {
+      "name": "T11-07 activation of the already-current version records and replays a receipt without changing root version, history or events",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-07"
+      ]
+    },
+    {
+      "name": "T11-08 an eligible retained prior CV version can be reactivated with a fresh key and root version",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-08"
+      ]
+    },
+    {
+      "name": "T11-05 an independent committed observer sees the old current CV during an uncommitted replacement and the new one after commit {\"reachedBarrier\":true,\"duringReplacement\":{\"current_version_id\":\"01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09\",\"current_flags\":1},\"activationStatus\":200,\"afterCurrentVersionId\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\",\"afterCurrentFlags\":1}",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-05"
+      ]
+    },
+    {
+      "name": "T11-09 rejected current Media facts block activation and preserve the current pointer, history, receipt and event {\"status\":409,\"body\":{\"type\":\"urn:shipwithali:problem:conflict\",\"title\":\"Conflict\",\"status\":409,\"detail\":\"The request conflicts with the current state of the resource.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"conflict\",\"traceId\":\"01a14c36-77d1-7ea2-b20b-4ea15ef8c2d1\"},\"history\":105,\"expectedHistory\":105,\"receipts\":0,\"events\":4,\"expectedEvents\":4,\"before\":{\"version\":115,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"version\":115,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-09"
+      ]
+    },
+    {
+      "name": "T11-09 unsafe processing evidence blocks activation without changing Current CV",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-09"
+      ]
+    },
+    {
+      "name": "T11-09 inaccessible acceptance facts block activation without changing Current CV",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-09"
+      ]
+    },
+    {
+      "name": "T11-09 a missing accepted PDF object blocks activation without changing pointer, flags, history, receipts or outbox",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-09"
+      ]
+    },
+    {
+      "name": "T11-09 a Storage outage during the real accepted-Media activation path preserves Current CV state",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-09"
+      ]
+    },
+    {
+      "name": "T11-09 inaccessible accepted Media blocks activation without changing the portfolio",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-09"
+      ]
+    },
+    {
+      "name": "T11-09 an immutable object binding mismatch blocks activation without changing the portfolio",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-09"
+      ]
+    },
+    {
+      "name": "T11-09 registered but unaccepted CV versions cannot become Current and do not mutate the portfolio",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-09"
+      ]
+    },
+    {
+      "name": "T11-09 a valid accepted foreign Owner CV is not found and cannot mutate this Owner's pointer, flags, history, receipts or outbox",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-09"
+      ]
+    },
+    {
+      "name": "T11-10 the CV-owned current-Media use query returns an authoritative scoped result in the caller transaction",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-10"
+      ]
+    },
+    {
+      "name": "T11-05 old current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-8468-7da5-aa24-a53bba625597\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-05"
+      ]
+    },
+    {
+      "name": "T11-05 new current flag failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-849a-7b50-ad4e-f5344e737587\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-05"
+      ]
+    },
+    {
+      "name": "T11-05 authoritative pointer failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-84ce-78db-881b-30c0ec7c657b\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-05"
+      ]
+    },
+    {
+      "name": "T11-05 activation history failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-8501-7e23-ae4c-b071ebd017b5\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-05"
+      ]
+    },
+    {
+      "name": "T11-05 activation receipt failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-8535-7c7b-b5fd-881677de9764\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-05"
+      ]
+    },
+    {
+      "name": "T11-05 outbox event failure rolls back root, current flags, history, receipt and event {\"status\":503,\"body\":{\"type\":\"urn:shipwithali:problem:temporarily-unavailable\",\"title\":\"Service Unavailable\",\"status\":503,\"detail\":\"A required dependency is temporarily unavailable. Retry later.\",\"instance\":\"/api/owner/v1/cv/versions/01a14c36-6e3d-75a8-98ef-e2e8d9ca6a09/commands/activate\",\"code\":\"temporarily_unavailable\",\"traceId\":\"01a14c36-856b-7b9e-bdf5-6f76ae552438\"},\"before\":{\"histories\":105,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"after\":{\"histories\":105,\"receipts\":0,\"events\":4,\"current_flags\":1,\"current_version_id\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewBefore\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"},\"viewAfter\":{\"version\":116,\"current\":\"01a14c36-7651-7fa1-ae1b-e2e8d30c46ab\"}}",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T11-05"
+      ]
+    }
+  ],
+  "criteria": [
+    {
+      "name": "T11-01 first activation establishes one coherent current English accepted CV; before first activation the count is zero",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T11-02 direct SQL mutations cannot violate current pointer, accepted English version or scope constraints",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T11-03 replacement atomically changes current designation, retained history, receipt and minimal CurrentCvChanged event",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T11-04 independent activations serialize and a stale waiter fails its root-version precondition",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T11-05 root, designation, history, receipt and outbox failures roll the complete activation back",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T11-06 exact replay is stable after later state; changed intent and stale preconditions conflict",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T11-07 activating the already-current version creates a replayable version-preserving no-op without history or event",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T11-08 an eligible retained CV version can be reactivated with a fresh key and current Media check",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T11-09 rejected or unavailable accepted-Media checks preserve current state",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T11-10 a narrow CV-owned query reports authoritative current-Media usage in the caller transaction",
+      "executed": true,
+      "status": "passed"
+    }
+  ],
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:cv-activation"
+  ],
+  "limitations": []
+}

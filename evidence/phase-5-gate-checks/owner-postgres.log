@@ -22,4 +22,4 @@ Verified Phase 3 operations grants, policies, and schema objects were preserved.
 Clean and upgraded normalized schemas, grants, constraints, and policies match.
 Generated database types match the clean PostgreSQL schema.
 Owner production PostgreSQL workflow: 1 passed, 0 skipped.
-Injected adapter and contract suites: 186 passed, 0 skipped.
+Injected adapter and contract suites: 187 passed, 0 skipped.

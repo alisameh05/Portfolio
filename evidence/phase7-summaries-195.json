@@ -1,7 +1,7 @@
 {
-  "runId": "867ab116-7564-4142-9fb5-1d5aee36ee52",
-  "sourceRevision": "6972af55047e2ed37d265da79cc4e9eebbae4f44",
-  "sourceTreeSha256": "20a39f370f68e10d1efe9c4ce3b600d9cb4cad47a9b7538946243e331f5b8846",
+  "runId": "a116bf40-2af0-4586-a6d4-8f1e9aba6e25",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015093040_query_current_interaction_summaries.sql",
   "migrationQualification": {
@@ -156,6 +156,9 @@
       },
       {
         "version": "20261015203000"
+      },
+      {
+        "version": "20261017142000"
       }
     ],
     "schemaSha256": "c1cee61589c718539a0271c6bce29e8b6675046101d33464168134da639442f3",
@@ -358,6 +361,10 @@
     {
       "name": "20261015203000_retain_feedback_privacy.sql",
       "sha256": "fe0d3e9dd6644b6d7ba4480562b5e36d9043635bdad4f5f6e4472611d0318a1e"
+    },
+    {
+      "name": "20261017142000_revoke_public_aggregate_guard_execution.sql",
+      "sha256": "ea8838c639bee61a484742d41ea4496584e74f590ac87de7f0ae93bfde5b5199"
     }
   ],
   "tools": {
@@ -1205,5 +1212,5 @@
   },
   "scope": "Native disposable PostgreSQL cluster; all current repository migrations with focused clean/upgrade/replay qualification. Full integrated Phase 3-6 qualification belongs to #208.",
   "cleanup": true,
-  "gateRunId": "a6180c7c-d93a-4dea-9eab-f805f24440f3"
+  "gateRunId": "4e9c9a1c-e303-4232-8d5f-4dc7000c2ae7"
 }

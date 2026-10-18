@@ -14,7 +14,7 @@
 ✓ architecture (dependency rules + fixtures) — valid skeletons pass; 4 invalid fixtures rejected with stable rules
 ✓ review policy (Codex sole AI reviewer) — 11 concerns present; CodeRabbit prohibited
 ✓ coderabbit inventory (no repo-controlled surface) — no workflows/secrets/config; evidence retained
-✓ route + source inventory (declared vs runtime) — 5 public, 39 owner, 0 runtime routes
+✓ route + source inventory (declared vs runtime) — 5 public, 48 owner, 0 runtime routes
 ✓ frontend + lab exclusion scan — no JSX/TSX, React, browser state, Lab entry, or server stubs
 ✓ dependency/version manifest — docs + evidence manifests present
 

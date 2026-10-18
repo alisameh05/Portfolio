@@ -1,8 +1,9 @@
 ✓ public-operation-count: exactly five public operations
-✓ owner-operation-count: exactly thirty-nine Owner operations
-✓ unique-operation-identifiers: 44 unique operation identifiers
-✓ one-adapter-per-operation: 44/44 resolved exactly once
-✓ no-undeclared-product-adapters: 44 adapter exports declared by a contract
-✓ only-callable-runtime-adapters: 44/44 handler exports are callable runtime values
+✓ owner-operation-count: 48 active Owner operations and 0 explicitly fail-closed Phase 5 contracts
+✓ unique-operation-identifiers: 53 unique operation identifiers
+✓ one-adapter-per-operation: 53/53 active operations resolve once; deferred operations have no adapter
+✓ unfinished-owner-operations-fail-closed: 0 declared Phase 5 operations have no runtime adapter
+✓ no-undeclared-product-adapters: 53 adapter exports declared by a contract
+✓ only-callable-runtime-adapters: 53/53 handler exports are callable runtime values
 ✓ only-operational-routes: /livez and /readyz are the only Route Handlers
-✓ runtime boundary: 5 public + 39 Owner operations resolve exactly once
+✓ runtime boundary: 5 public + 48 active Owner operations resolve exactly once; 0 Phase 5 contracts fail closed

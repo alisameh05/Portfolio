@@ -1,0 +1,40 @@
+
+> shipwithali-portfolio@0.0.0 test:phase8:prerequisites
+> node --test tests/tooling/phase8-prerequisite-qualification.test.mjs
+
+✔ accepts only complete source-bound successful artifacts with cleanup (43.3452ms)
+✔ qualifies the actual Phase 6 aggregate producer's migration and service evidence shape (17.945ms)
+✔ actual Phase 6 aggregate evidence rejects missing or contradictory migrations, services and execution (667.6796ms)
+✔ malformed Phase 6 aggregate check rows block qualification without throwing (13.2764ms)
+✔ rejects absent or partial Phase 6 and Phase 7 coverage despite passing command inventories (537.5193ms)
+✔ requires each Phase 6 and Phase 7 mapped component's actual source, run and cleanup provenance (245.3895ms)
+✔ component execution counts override accepted and successful aggregate flags (192.8554ms)
+✔ Phase 7 preserves the producer's explicit null for its optional failed-suite counter (13.571ms)
+✔ command execution totals equal complete prerequisite inventories (89.003ms)
+✔ rejects a truncated named checklist despite unchanged successful aggregate totals (62.7302ms)
+✔ rejects duplicate check names that conceal a missing required command (12.2734ms)
+✔ a failed or skipped named command overrides passing aggregate claims (38.5212ms)
+✔ Phase 5 keeps assertion totals separate from its complete command inventory (12.2094ms)
+✔ reports precise safe blockers for missing, stale, mismatched, partial, skipped and failed evidence (12.2701ms)
+✔ rejects evidence whose source is outside the evaluated history (13.059ms)
+✔ accepts ancestor evidence when its source tree matches the evaluated tree (13.6212ms)
+✔ rejects a source-tree fingerprint that does not match the immutable source revision (15.2181ms)
+✔ rejects absent denominators, unnamed coverage, wrong tool pins, and incomplete migration checksums (13.4234ms)
+✔ uses a complete named gate checklist as the denominator when aggregate counts are absent (14.7798ms)
+✔ component cleanup failures cannot be overridden by aggregate cleanup claims (12.6827ms)
+✔ reports sanitized failed check names and the owning predecessor action (14.2125ms)
+✔ rejects incomplete migration inventories and malformed real-service scope (12.9412ms)
+✔ rejects restricted-access matrices with empty schema privileges or malformed table grants (13.4451ms)
+✔ requires unique Phase 7 restricted-access principals including service_role (30.0749ms)
+✔ Phase 4 requires real Auth evidence and Phase 6 requires real Auth and private Storage evidence (12.103ms)
+✔ rejects Phase 7 public-role grants to sensitive schemas (14.2205ms)
+✔ reports malformed evidence collection shapes without throwing (11.7593ms)
+✔ immutable migration inventory uses canonical checksums on Windows checkouts (907.0193ms)
+ℹ tests 28
+ℹ suites 0
+ℹ pass 28
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3192.8371

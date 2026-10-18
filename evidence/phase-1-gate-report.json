@@ -72,7 +72,7 @@
     {
       "name": "route + source inventory (declared vs runtime)",
       "ok": true,
-      "detail": "5 public, 39 owner, 0 runtime routes"
+      "detail": "5 public, 48 owner, 0 runtime routes"
     },
     {
       "name": "frontend + lab exclusion scan",

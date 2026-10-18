@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "ticket": 161,
+  "parent": 145,
+  "runId": "ab271e72-7edf-4258-a03a-0c309d2cff33",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "startedAt": "2026-10-17T23:38:34.082Z",
+  "completedAt": "2026-10-17T23:39:59.122Z",
+  "scope": "real-owner-media-cv-production-composition",
+  "runtime": {
+    "node": "v24.21.0",
+    "npm": "11.19.0"
+  },
+  "toolVersions": {
+    "supabaseCli": "2.117.0",
+    "postgres": "17.6",
+    "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
+    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
+    "pdfProcessor": "17.12.1",
+    "sharp": "sharp-0.35.4;libvips-8.18.6",
+    "scannerMode": "isolated-clamd-stream"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "executionCount": 3,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 5
+    },
+    "scanner": {
+      "version": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+      "executions": 0
+    },
+    "processor": {
+      "version": "17.12.1",
+      "executions": 0
+    }
+  },
+  "formats": [
+    {
+      "id": "pdf",
+      "executed": true,
+      "status": "passed",
+      "storageRoundTrip": true,
+      "scannerVerdict": "clean",
+      "processorVersion": "17.12.1"
+    }
+  ],
+  "acceptanceOperations": 1,
+  "checks": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "test": "Phase 6 #161 real production Owner Media and CV composition composes all nine Owner Media and CV operations through real services",
+    "counts": {
+      "executed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "scenarios": [
+      {
+        "name": "T16-01 through T16-05 all nine operations, real byte delivery, and bounded histories",
+        "executed": true,
+        "status": "passed",
+        "scannerVersion": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+        "processorVersion": "17.12.1;pikepdf-10.13.0.post1",
+        "mediaHistory": {
+          "processingReturned": 100,
+          "processingRetained": 102,
+          "processingTruncated": true,
+          "decisionsReturned": 100,
+          "decisionsRetained": 102,
+          "decisionsTruncated": true
+        },
+        "cvHistory": {
+          "versionsReturned": 100,
+          "versionsRetained": 102,
+          "versionsTruncated": true,
+          "activationsReturned": 100,
+          "activationsRetained": 102,
+          "activationsTruncated": true
+        }
+      }
+    ],
+    "verdict": "pass"
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "verdict": "pass",
+  "reproduction": [
+    "npm run setup:validation",
+    "npm run validation:ready",
+    "npm run phase6:focus:owner-composition"
+  ],
+  "limitations": [
+    "Owner HTTP security matrix is covered separately by tests/phase4/owner-request-security.test.ts; contract and architecture checks are separate repository commands and are not included in this real-service run."
+  ]
+}

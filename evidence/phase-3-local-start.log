@@ -1,4 +1,2 @@
 … start: running supabase@2.117.0 from this repository
-… start: waiting for the local Supabase command to finish
-… start: waiting for the local Supabase command to finish
 ✓ Local Supabase stack started; repository migrations and seed were applied.

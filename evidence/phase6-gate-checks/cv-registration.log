@@ -1,0 +1,259 @@
+
+> shipwithali-portfolio@0.0.0 prephase6:focus:cv-portfolio
+> npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase6:focus:cv-portfolio
+> node scripts/phase6-verification.mjs --cv-portfolio-only
+
+Starting isolated loopback PostgreSQL, Auth and private Storage services.
+Applying the deferred CV migration: Local database is up to date.
+Probing pinned ClamAV, ImageMagick, FFmpeg and OCRmyPDF runtimes.
+Generating safe fixtures with the pinned image and video processors.
+Scanning, processing and round-tripping pdf.
+✓ pdf: private Storage upload and byte round-trip passed; scanning.
+✓ pdf: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping png.
+✓ png: private Storage upload and byte round-trip passed; scanning.
+✓ png: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping jpeg.
+✓ jpeg: private Storage upload and byte round-trip passed; scanning.
+✓ jpeg: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping webp.
+✓ webp: private Storage upload and byte round-trip passed; scanning.
+✓ webp: processor, clean scan and private byte round-trip passed.
+Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.
+{
+  "ticket": 154,
+  "runId": "74d9a21b-dfc1-470f-a3e2-4e4305fb5926",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "verdict": "pass",
+  "scenarios": [
+    {
+      "id": "T09-01",
+      "name": "concurrent empty-root initialization and authenticated empty Owner view",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T09-02",
+      "name": "If-Match and idempotency on registration",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T09-03",
+      "name": "same-Owner accepted accessible PDF snapshot",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T09-04",
+      "name": "strict English PDF and scope eligibility",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T09-05",
+      "name": "UUIDv7 retained registration identity and numbering",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T09-06",
+      "name": "atomic root, version, receipt and event with rollback",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T09-07",
+      "name": "exact replay, changed intent and stale version",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T09-08",
+      "name": "derived current flags and bounded retained histories",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T09-09",
+      "name": "scope constraints, forced RLS, indexes and preexisting-owner migration backfill",
+      "executed": true,
+      "status": "passed"
+    }
+  ],
+  "counts": {
+    "executed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "insertedVersions": 102,
+    "retainedAfterProjection": 100
+  },
+  "mediaAcceptance": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "verdict": "pass"
+  },
+  "application": {
+    "suites": [
+      "tests/modules/media-acceptance.test.ts",
+      "tests/modules/media-cv-contracts.test.ts",
+      "tests/modules/cv-portfolio.test.ts"
+    ],
+    "total": 26,
+    "passed": 26,
+    "failed": 0,
+    "skipped": 0,
+    "tests": [
+      {
+        "name": "Owner CV registration application service (#154) trims the label and delegates a portfolio-versioned, idempotent registration",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects other Owners before either history reads or writes",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) accepts a 128-character visible ASCII idempotency key",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) returns the initially empty portfolio without changing its root version",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) authorizes and delegates a portfolio-versioned, idempotent acceptance",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects foreign Owners and malformed acceptance intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) authorizes and delegates a portfolio-versioned, idempotent activation",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects foreign Owners and malformed activation intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) delegates the scoped Current CV Media-use query in the caller transaction",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) requires the authenticated same-Owner actor before persisting acceptance",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) rejects missing approved descriptions before repository access",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) normalizes approved metadata and keeps the command result safe",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) returns one complete fact per distinct ID with a bounded sorted opaque token",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) fails closed when a fact is missing, duplicated, foreign, or malformed",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) rejects duplicate repository facts instead of selecting one arbitrarily",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) rejects facts attributed to another Owner",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media and CV module contracts (#147) retains the five Media, four Owner CV, and purpose-aware read operations",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media and CV module contracts (#147) records the approved file policies and never widens adapter limits",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "verdict": "pass"
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "evidence": "evidence/phase6-cv-portfolio-154.json"
+}

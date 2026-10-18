@@ -1,0 +1,24 @@
+runId=105712f4-b39f-41f4-9736-a5100cbc4b53 startedAt=2026-10-17T22:54:27.1001379Z
+{
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "migrations": 50
+}
+(node:40256) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✔ migration fixtures preserve valid accepted-PDF history, scoped access and portable references (150212.3572ms)
+✔ predecessor preservation accepts additive columns and detects changed or deleted original data (44192.6676ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 195270.3016
+{
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "migrations": 50
+}
+completedAt=2026-10-17T22:57:45.0008215Z

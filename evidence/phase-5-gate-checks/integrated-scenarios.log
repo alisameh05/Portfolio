@@ -14,37 +14,37 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
 {
   "verdict": "pass",
   "counts": {
-    "executed": 124,
+    "executed": 128,
     "failed": 0,
     "skipped": 0,
-    "total": 124
+    "total": 128
   },
   "constituents": [
     {
       "name": "authoring",
       "ticket": null,
       "suite": "authoring",
-      "runId": "a9b0cfdc-ff06-4d91-98e1-c1706069e421",
-      "startedAt": "2026-10-10T15:57:39.462Z",
-      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
-      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "runId": "fdbd27fe-6426-4b60-bb87-cc008536f0b8",
+      "startedAt": "2026-10-17T23:09:00.207Z",
+      "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
       "verdict": "pass",
       "issues": [],
       "counts": {
-        "executed": 36,
+        "executed": 37,
         "failed": 0,
         "skipped": 0,
-        "total": 36
+        "total": 37
       }
     },
     {
       "name": "taxonomy",
       "ticket": null,
       "suite": "taxonomy",
-      "runId": "09ac7e3c-402b-48b3-9833-9f48f9ecbee0",
-      "startedAt": "2026-10-10T15:57:42.504Z",
-      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
-      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "runId": "82d57584-2290-4746-a749-a176559a6748",
+      "startedAt": "2026-10-17T23:09:02.824Z",
+      "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -58,10 +58,10 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
       "name": "traceability",
       "ticket": null,
       "suite": "traceability",
-      "runId": "48f0f7cf-df2d-4d1a-8d08-fe8988cb4ade",
-      "startedAt": "2026-10-10T15:57:58.790Z",
-      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
-      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "runId": "771360e5-1645-4f26-9bcd-a1f9fb565f6c",
+      "startedAt": "2026-10-17T23:09:18.549Z",
+      "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -75,10 +75,10 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
       "name": "owner",
       "ticket": 122,
       "suite": null,
-      "runId": "c74e4016-f74b-4130-930c-b993a5cab402",
-      "startedAt": "2026-10-10T15:59:57.602Z",
-      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
-      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "runId": "ec0f3afd-abd7-42ed-adf0-84c129e3f4e0",
+      "startedAt": "2026-10-17T23:11:27.218Z",
+      "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
       "verdict": "pass",
       "issues": [],
       "counts": {
@@ -92,17 +92,17 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
       "name": "database",
       "ticket": 123,
       "suite": null,
-      "runId": "9bd38f1d-5ba1-43d4-8750-0b4d886f76d6",
-      "startedAt": "2026-10-10T16:02:17.513Z",
-      "sourceRevision": "73b691e9c406bbd0434a9014d716c8bb0aa20ca6",
-      "sourceTreeSha256": "144faf2dd5558675af785e7160e419a71cebbf4daaa52413f2a7067bfc068abc",
+      "runId": "fcf95d9a-3bbf-4215-8109-5402cc4726f5",
+      "startedAt": "2026-10-17T23:14:06.329Z",
+      "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+      "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
       "verdict": "pass",
       "issues": [],
       "counts": {
-        "executed": 53,
+        "executed": 56,
         "failed": 0,
         "skipped": 0,
-        "total": 53
+        "total": 56
       }
     }
   ],

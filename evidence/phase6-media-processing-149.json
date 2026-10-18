@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 149,
   "parent": 145,
-  "runId": "6cba16d6-cb48-4c0c-840c-6cba24f1374c",
-  "sourceRevision": "7b0600a183636687b8f0d02fc76975f3999c6373",
-  "sourceTreeSha256": "16dbf15466f4792153ea2c514aa1e0a126c968f3edaf6f0e634fcdb6cb2d8cef",
-  "startedAt": "2026-10-10T23:58:34.337Z",
-  "completedAt": "2026-10-11T00:04:00.535Z",
+  "runId": "11c9441f-8577-46d2-bb20-2e4f846b0f88",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "startedAt": "2026-10-17T23:18:34.133Z",
+  "completedAt": "2026-10-17T23:19:48.888Z",
   "scope": "trusted-byte-bound-PDF-processing-with-immutable-private-output",
   "runtime": {
     "node": "v24.21.0",
@@ -16,9 +16,9 @@
     "supabaseCli": "2.117.0",
     "postgres": "17.6",
     "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
-    "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
-    "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
-    "pdfProcessor": "17.12.1"
+    "pdfProcessor": "17.12.1",
+    "sharp": "sharp-0.35.4;libvips-8.18.6",
+    "scannerMode": "isolated-clamd-stream"
   },
   "policyIds": {
     "migrations": [
@@ -56,12 +56,12 @@
     "scanner": {
       "available": true,
       "image": "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4",
-      "executionCount": 16
+      "executionCount": 1
     },
     "pdfProcessor": {
       "available": true,
       "image": "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c",
-      "executionCount": 9
+      "executionCount": 1
     }
   },
   "principalScope": {
