@@ -1,8 +1,8 @@
 {
   "ticket": 237,
-  "runId": "1dfd0f8a-04c8-4e6d-ba73-4de1a1ea1773",
-  "sourceRevision": "d13e7aaaafa1a0f3af31d76ed9d37f2d6ae28de2",
-  "sourceTreeSha256": "e6af8291552d55aea38d8801fd65e25b9f53d70db66c5f020219586c1d38f334",
+  "runId": "ccd36576-65a4-4641-82b4-42d070c7475d",
+  "sourceRevision": "ec9fda729b18bc08f25bd8f50551468b25463b21",
+  "sourceTreeSha256": "b9727f4a2481dbf02af546b6699ea384e72dfa3a4335f992178d0291cc7df861",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -207,7 +207,7 @@
     },
     {
       "name": "20261018172500_bound_job_retries_and_incidents.sql",
-      "sha256": "c63d813d82f4fab902fcfbfde78c667b95618b450e438f58d88aad103fe78b1e"
+      "sha256": "1013632440801e92b8213d4ac8db45abd395b5f48b79baaeca2f49a2b583a900"
     }
   ],
   "tools": {
