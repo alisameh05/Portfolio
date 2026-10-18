@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { qualifyPrerequisites, QUALIFICATION_STEPS, requireQualificationDocker } from "../../scripts/phase8-qualify.mjs";
 
@@ -12,13 +14,18 @@ test("the real CLI with no Docker exits before changing any prerequisite report"
   const reports = ["phase-3-gate-report.json", "phase-4-gate-report.json", "phase-5-gate-report.json",
     "phase6-gate-report.json", "phase7-gate-report.json", "phase8-prerequisite-qualification.json"];
   const before = reports.map((name) => readFileSync(new URL(`evidence/${name}`, root)));
-  const result = spawnSync(process.execPath, [fileURLToPath(new URL("scripts/phase8-qualify.mjs", root))], {
-    env: { ...process.env, PATH: "", Path: "" }, encoding: "utf8", timeout: 10_000, windowsHide: true,
-  });
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /PHASE8_DOCKER_MISSING/u);
-  assert.doesNotMatch(result.stdout, /Qualifying Phases|Running Phase/u);
-  reports.forEach((name, index) => assert.deepEqual(readFileSync(new URL(`evidence/${name}`, root)), before[index]));
+  // Empty PATH means current-directory lookup on POSIX, where docker/ is a
+  // directory. Use an actual empty search directory to model a missing binary.
+  const emptyPath = mkdtempSync(join(tmpdir(), "phase8-no-docker-"));
+  try {
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL("scripts/phase8-qualify.mjs", root))], {
+      env: { ...process.env, PATH: emptyPath, Path: emptyPath }, encoding: "utf8", timeout: 10_000, windowsHide: true,
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /PHASE8_DOCKER_MISSING/u);
+    assert.doesNotMatch(result.stdout, /Qualifying Phases|Running Phase/u);
+    reports.forEach((name, index) => assert.deepEqual(readFileSync(new URL(`evidence/${name}`, root)), before[index]));
+  } finally { rmSync(emptyPath, { recursive: true, force: true }); }
 });
 test("Docker preflight distinguishes missing executable, access, timeout, engine OS and Compose", () => {
   const linux = { status: 0, stdout: "linux\n" };
