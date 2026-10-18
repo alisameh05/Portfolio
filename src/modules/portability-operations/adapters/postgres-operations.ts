@@ -13,6 +13,7 @@ import {
   createPostgresTransactionRunner,
   PostgresInfrastructureError,
   resolvePostgresTransaction,
+  type PostgresExecutor,
 } from "../../../shared/adapters/postgres/runtime.js";
 import {
   parseSafeErrorCode,
@@ -21,6 +22,7 @@ import {
   type IdempotentExecutionInput,
   type IdempotentExecutionResult,
   type JobInput,
+  type JobRedriveAuditInput,
   type LeaseClaimInput,
   type LeasedJobRecord,
   type LeasedJobStorePort,
@@ -28,9 +30,12 @@ import {
   type OperationsPersistencePorts,
   type OutboxEventInput,
   type OutboxPersistencePort,
+  type SafeErrorCode,
+  type RedrivenJobRecord,
   type SafeResultEnvelope,
   type VersionedPayload,
 } from "../application/persistence.js";
+import { JOB_MAX_ATTEMPTS } from "../application/retry-policy.js";
 
 interface IdempotencyRow {
   request_hash: string;
@@ -135,8 +140,10 @@ function validateLeaseInput(input: LeaseClaimInput): void {
   }
 }
 
-function leaseExpiry(now: string, seconds: number): string {
-  return new Date(Date.parse(now) + seconds * 1_000).toISOString();
+function databaseInstant(value: Date | string | undefined): string {
+  const instant = value instanceof Date ? value : typeof value === "string" ? new Date(value) : undefined;
+  if (!instant || !Number.isFinite(instant.getTime())) throw new PostgresInfrastructureError();
+  return instant.toISOString();
 }
 
 function safePayload(row: {
@@ -298,27 +305,40 @@ export function createPostgresOperationsPersistence(
     validateLeaseInput(input);
     return transactions.run(async (context) => {
       const executor = resolvePostgresTransaction(context);
+      const exhausted = await sql<{ event_id: string; last_error_code: string | null }>`
+        update operations.outbox_events
+           set dead_at = clock_timestamp(), last_error_code = coalesce(last_error_code, 'OUTBOX_ATTEMPTS_EXHAUSTED'),
+               lease_owner = null, lease_token = null, lease_expires_at = null
+         where completed_at is null and dead_at is null and attempt_count >= ${JOB_MAX_ATTEMPTS}
+           and ((lease_token is null and available_at <= clock_timestamp())
+             or (lease_token is not null and lease_expires_at <= clock_timestamp()))
+         returning event_id::text, last_error_code
+      `.execute(executor);
+      for (const row of exhausted.rows) await recordOperationalIncident(executor, "outbox", row.event_id, row.last_error_code ?? "OUTBOX_ATTEMPTS_EXHAUSTED");
       const due = await sql<OutboxLeaseRow>`
         select event_id::text, event_type, schema_version, payload, attempt_count
           from operations.outbox_events
          where completed_at is null
-           and available_at <= ${input.now}::timestamptz
-           and (lease_expires_at is null or lease_expires_at <= ${input.now}::timestamptz)
+           and dead_at is null
+           and attempt_count < ${JOB_MAX_ATTEMPTS}
+           and available_at <= clock_timestamp()
+           and (lease_expires_at is null or lease_expires_at <= clock_timestamp())
          order by available_at, event_id
          for update skip locked
          limit ${input.limit}
       `.execute(executor);
-      const expiry = leaseExpiry(input.now, input.leaseDurationSeconds);
       const leased: LeasedOutboxEvent[] = [];
       for (const row of due.rows) {
         const leaseToken = tokens.generate();
-        await sql`
+        const updated = await sql<{ lease_expires_at: Date | string }>`
           update operations.outbox_events
              set lease_owner = ${input.workerId}, lease_token = ${leaseToken},
-                 lease_expires_at = ${expiry}::timestamptz,
+                 lease_expires_at = clock_timestamp() + (${input.leaseDurationSeconds} * interval '1 second'),
                  attempt_count = attempt_count + 1
            where event_id = ${row.event_id}::uuid
+         returning lease_expires_at
         `.execute(executor);
+        const expiry = databaseInstant(updated.rows[0]?.lease_expires_at);
         leased.push({
           eventId: row.event_id,
           payload: safePayload(row),
@@ -340,29 +360,42 @@ export function createPostgresOperationsPersistence(
     }
     return transactions.run(async (context) => {
       const executor = resolvePostgresTransaction(context);
+      const exhausted = await sql<{ job_id: string; last_error_code: string | null }>`
+        update operations.jobs
+           set status = 'dead', last_error_code = coalesce(last_error_code, 'JOB_ATTEMPTS_EXHAUSTED'),
+               lease_owner = null, lease_token = null, lease_expires_at = null
+         where status in ('available', 'leased') and attempt_count >= ${JOB_MAX_ATTEMPTS}
+           and ((status = 'available' and available_at <= clock_timestamp())
+             or (status = 'leased' and lease_expires_at <= clock_timestamp()))
+         returning job_id::text, last_error_code
+      `.execute(executor);
+      for (const row of exhausted.rows) await recordOperationalIncident(executor, "job", row.job_id, row.last_error_code ?? "JOB_ATTEMPTS_EXHAUSTED");
       const jobTypeFilter = input.jobTypes === undefined ? sql`` : sql`and job_type = any(${input.jobTypes}::text[])`;
       const due = await sql<JobLeaseRow>`
         select job_id::text, job_type, payload_version, payload, attempt_count
           from operations.jobs
          where completed_at is null
-           and available_at <= ${input.now}::timestamptz
-           and (status = 'available' or lease_expires_at <= ${input.now}::timestamptz)
+           and available_at <= clock_timestamp()
+           and attempt_count < ${JOB_MAX_ATTEMPTS}
+           and (status = 'available' or (status = 'leased' and lease_expires_at <= clock_timestamp()))
            ${jobTypeFilter}
          order by available_at, job_id
          for update skip locked
          limit ${input.limit}
       `.execute(executor);
-      const expiry = leaseExpiry(input.now, input.leaseDurationSeconds);
       const leased: LeasedJobRecord[] = [];
       for (const row of due.rows) {
         const leaseToken = tokens.generate();
-        await sql`
+        const updated = await sql<{ lease_expires_at: Date | string }>`
           update operations.jobs
              set status = 'leased', lease_owner = ${input.workerId},
-                 lease_token = ${leaseToken}, lease_expires_at = ${expiry}::timestamptz,
+                 lease_token = ${leaseToken},
+                 lease_expires_at = clock_timestamp() + (${input.leaseDurationSeconds} * interval '1 second'),
                  attempt_count = attempt_count + 1
            where job_id = ${row.job_id}::uuid
+         returning lease_expires_at
         `.execute(executor);
+        const expiry = databaseInstant(updated.rows[0]?.lease_expires_at);
         leased.push({
           jobId: row.job_id,
           payload: safePayload(row),
@@ -400,6 +433,7 @@ export function createPostgresOperationsPersistence(
       const result = await sql<{ changed: boolean }>`
         update ${tableRef} set ${assignment}
          where ${idRef} = ${id}::uuid and lease_token = ${leaseToken}
+           and lease_expires_at > clock_timestamp()
          returning true as changed
       `.execute(database);
       return result.rows.length === 1;
@@ -408,11 +442,93 @@ export function createPostgresOperationsPersistence(
     }
   }
 
+  async function recordOperationalIncident(executor: PostgresExecutor, category: "job" | "outbox", sourceId: string, code: string): Promise<void> {
+    await sql`
+      insert into operations.incidents (
+        incident_key, category, source_id, safe_error_code, severity
+      ) values (
+        ${`${category}:${sourceId}`}, ${category}, ${sourceId}::uuid, ${parseSafeErrorCode(code)}, 'critical'
+      )
+      on conflict (incident_key) do update
+        set safe_error_code = excluded.safe_error_code,
+            last_observed_at = transaction_timestamp(),
+            occurrences = operations.incidents.occurrences + 1,
+            resolved_at = null
+    `.execute(executor);
+  }
+
+  async function transitionJobFailure(
+    id: string,
+    leaseToken: string,
+    safeErrorCode: SafeErrorCode,
+    delayMilliseconds: number | null,
+  ): Promise<boolean> {
+    if (!parseStableId("Job", id).ok) throw new TypeError("Job identity is invalid.");
+    parseSafeErrorCode(safeErrorCode);
+    if (delayMilliseconds !== null && (!Number.isSafeInteger(delayMilliseconds) || delayMilliseconds < 0 || delayMilliseconds > 1_125_000)) {
+      throw new TypeError("Retry delay is outside the allowed policy range.");
+    }
+    return transactions.run(async (context) => {
+      const executor = resolvePostgresTransaction(context);
+      const changed = await sql<{ job_id: string; status: "available" | "dead" }>`
+        update operations.jobs
+           set status = case when ${delayMilliseconds === null} or attempt_count >= ${JOB_MAX_ATTEMPTS} then 'dead' else 'available' end,
+               available_at = case when ${delayMilliseconds === null} or attempt_count >= ${JOB_MAX_ATTEMPTS}
+                 then available_at
+                 else clock_timestamp() + (${delayMilliseconds ?? 0} * interval '1 millisecond') end,
+               last_error_code = ${safeErrorCode},
+               lease_owner = null, lease_token = null, lease_expires_at = null
+         where job_id = ${id}::uuid and status = 'leased' and lease_token = ${leaseToken}
+           and lease_expires_at > clock_timestamp()
+         returning job_id::text, status
+      `.execute(executor);
+      const row = changed.rows[0];
+      if (!row) return false;
+      if (row.status === "dead") await recordOperationalIncident(executor, "job", row.job_id, safeErrorCode);
+      return true;
+    });
+  }
+
+  async function transitionOutboxFailure(
+    id: string,
+    leaseToken: string,
+    safeErrorCode: SafeErrorCode,
+    delayMilliseconds: number | null,
+  ): Promise<boolean> {
+    if (!parseStableId("DomainEvent", id).ok && !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id)) {
+      throw new TypeError("Outbox event identity is invalid.");
+    }
+    parseSafeErrorCode(safeErrorCode);
+    if (delayMilliseconds !== null && (!Number.isSafeInteger(delayMilliseconds) || delayMilliseconds < 0 || delayMilliseconds > 1_125_000)) {
+      throw new TypeError("Retry delay is outside the allowed policy range.");
+    }
+    return transactions.run(async (context) => {
+      const executor = resolvePostgresTransaction(context);
+      const changed = await sql<{ event_id: string; dead_at: Date | string | null }>`
+        update operations.outbox_events
+           set dead_at = case when ${delayMilliseconds === null} or attempt_count >= ${JOB_MAX_ATTEMPTS}
+                 then clock_timestamp() else null end,
+               available_at = case when ${delayMilliseconds === null} or attempt_count >= ${JOB_MAX_ATTEMPTS}
+                 then available_at else clock_timestamp() + (${delayMilliseconds ?? 0} * interval '1 millisecond') end,
+               last_error_code = ${safeErrorCode},
+               lease_owner = null, lease_token = null, lease_expires_at = null
+         where event_id = ${id}::uuid and completed_at is null and dead_at is null
+           and lease_token = ${leaseToken} and lease_expires_at > clock_timestamp()
+         returning event_id::text, dead_at
+      `.execute(executor);
+      const row = changed.rows[0];
+      if (!row) return false;
+      if (row.dead_at !== null) await recordOperationalIncident(executor, "outbox", row.event_id, safeErrorCode);
+      return true;
+    });
+  }
+
   const outbox: OutboxPersistencePort = {
     append: appendOutbox,
     claimDue: claimOutbox,
     complete: (id, token, at) => guardedTransition("outbox_events", "event_id", id, token, "complete", at),
-    fail: (id, token, code) => guardedTransition("outbox_events", "event_id", id, token, "fail", code),
+    fail: (id, token, code) => transitionOutboxFailure(id, token, code, null),
+    scheduleRetry: (id, token, code, delay) => transitionOutboxFailure(id, token, code, delay),
     release: (id, token) => guardedTransition("outbox_events", "event_id", id, token, "release"),
   };
 
@@ -436,7 +552,53 @@ export function createPostgresOperationsPersistence(
     },
     claimDue: claimJobs,
     complete: (id, token, at) => guardedTransition("jobs", "job_id", id, token, "complete", at),
-    fail: (id, token, code) => guardedTransition("jobs", "job_id", id, token, "fail", code),
+    fail: (id, token, code) => transitionJobFailure(id, token, code, null),
+    scheduleRetry: (id, token, code, delay) => transitionJobFailure(id, token, code, delay),
+    async getDeadForRedrive(id: string) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+        throw new TypeError("Job identity is invalid.");
+      }
+      const result = await sql<{ job_id: string; job_type: string; payload_version: number; payload: Readonly<Record<string, never>>; attempt_count: number; last_error_code: string | null }>`
+        select job_id::text, job_type, payload_version, payload, attempt_count, last_error_code
+          from operations.jobs where job_id = ${id}::uuid and status = 'dead'
+      `.execute(database);
+      const row = result.rows[0];
+      if (!row || !row.last_error_code) return null;
+      return { jobId: row.job_id, payload: validateVersionedPayload({ type: row.job_type, version: row.payload_version, value: row.payload }),
+        attemptCount: row.attempt_count, safeErrorCode: parseSafeErrorCode(row.last_error_code) };
+    },
+    async redriveDead(input: JobRedriveAuditInput): Promise<RedrivenJobRecord | null> {
+      if (![input.originalJobId, input.replacementJobId].every((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) ||
+          input.originalJobId === input.replacementJobId || !/^[0-9a-f]{64}$/i.test(input.operatorScopeHash) ||
+          !/^[a-z][a-z0-9-]{0,63}$/.test(input.policyVersion) || !/^[0-9a-f]{64}$/i.test(input.payloadSha256)) {
+        throw new TypeError("Job re-drive audit input is invalid.");
+      }
+      return transactions.run(async (context) => {
+        const executor = resolvePostgresTransaction(context);
+        const found = await sql<{ job_id: string; job_type: string; payload_version: number; payload: Readonly<Record<string, never>> }>`
+          select j.job_id::text, j.job_type, j.payload_version, j.payload from operations.jobs j
+           where j.job_id = ${input.originalJobId}::uuid and j.status = 'dead'
+             and not exists (select 1 from operations.job_redrive_audit a where a.original_job_id = j.job_id)
+           for update of j
+        `.execute(executor);
+        const original = found.rows[0];
+        if (!original) return null;
+        const payload = validateVersionedPayload({ type: original.job_type, version: original.payload_version, value: original.payload });
+        const actualPayloadHash = createHash("sha256")
+          .update(JSON.stringify({ type: payload.type, version: payload.version, value: payload.value }))
+          .digest("hex");
+        if (actualPayloadHash !== input.payloadSha256) return null;
+        await sql`
+          insert into operations.jobs(job_id, job_type, payload_version, payload, available_at)
+          values (${input.replacementJobId}::uuid, ${payload.type}, ${payload.version}, ${JSON.stringify(payload.value)}::jsonb, clock_timestamp())
+        `.execute(executor);
+        await sql`
+          insert into operations.job_redrive_audit(original_job_id, replacement_job_id, operator_scope_hash, policy_version, payload_sha256)
+          values (${input.originalJobId}::uuid, ${input.replacementJobId}::uuid, ${input.operatorScopeHash}, ${input.policyVersion}, ${input.payloadSha256})
+        `.execute(executor);
+        return { jobId: input.replacementJobId, payload };
+      });
+    },
     release: (id, token) => guardedTransition("jobs", "job_id", id, token, "release"),
   };
 

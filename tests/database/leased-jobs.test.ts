@@ -139,6 +139,7 @@ describe("leased-job store adapter (#52)", () => {
     const stub = stubOperationsDatabase([
       { rows: [] },
       { rows: [] },
+      { rows: [] },
       {
         rows: [
           {
@@ -157,8 +158,8 @@ describe("leased-job store adapter (#52)", () => {
           },
         ],
       },
-      { rows: [] },
-      { rows: [] },
+      { rows: [{ lease_expires_at: EXPIRY }] },
+      { rows: [{ lease_expires_at: EXPIRY }] },
     ]);
     const store = createPostgresOperationsPersistence(stub.database, {
       leaseTokens: { generate: () => `job-token-${++tokens}` },
@@ -189,7 +190,7 @@ describe("leased-job store adapter (#52)", () => {
     await expect(
       createPostgresOperationsPersistence(empty.database).jobs.complete(JOB_A, "stale-token", NOW),
     ).resolves.toBe(false);
-    const emptyFail = stubOperationsDatabase([{ rows: [] }]);
+    const emptyFail = stubOperationsDatabase([{ rows: [] }, { rows: [] }, { rows: [] }]);
     await expect(
       createPostgresOperationsPersistence(emptyFail.database).jobs.fail(
         JOB_A,
@@ -206,14 +207,14 @@ describe("leased-job store adapter (#52)", () => {
     await expect(
       createPostgresOperationsPersistence(completed.database).jobs.complete(JOB_A, "token-1", NOW),
     ).resolves.toBe(true);
-    const failed = stubOperationsDatabase([{ rows: [{ changed: true }] }]);
+    const failed = stubOperationsDatabase([{ rows: [] }, { rows: [] }, { rows: [] }]);
     await expect(
       createPostgresOperationsPersistence(failed.database).jobs.fail(
         JOB_A,
         "token-1",
         parseSafeErrorCode("HANDLER_TIMEOUT"),
       ),
-    ).resolves.toBe(true);
+    ).resolves.toBe(false);
     const released = stubOperationsDatabase([{ rows: [{ changed: true }] }]);
     await expect(
       createPostgresOperationsPersistence(released.database).jobs.release(JOB_A, "token-1"),
@@ -231,15 +232,17 @@ describe("leased-job store adapter (#52)", () => {
     const firstStub = stubOperationsDatabase([
       { rows: [] },
       { rows: [] },
-      { rows: [dueRow(JOB_A)] },
       { rows: [] },
+      { rows: [dueRow(JOB_A)] },
+      { rows: [{ lease_expires_at: EXPIRY }] },
     ]);
     const firstStore = createPostgresOperationsPersistence(firstStub.database);
     const secondStub = stubOperationsDatabase([
       { rows: [] },
       { rows: [] },
-      { rows: [dueRow(JOB_B)] },
       { rows: [] },
+      { rows: [dueRow(JOB_B)] },
+      { rows: [{ lease_expires_at: EXPIRY }] },
     ]);
     const secondStore = createPostgresOperationsPersistence(secondStub.database);
     const claim = { workerId: "worker-one", now: NOW, leaseDurationSeconds: 30, limit: 1 };
@@ -294,9 +297,34 @@ describe("leased-job store adapter (#52)", () => {
     const stub = stubOperationsDatabase([{ rows: [] }, { rows: [] }, { rows: [] }]);
     const store = createPostgresOperationsPersistence(stub.database);
     expect(Object.keys(store.jobs).sort()).toEqual(
-      ["claimDue", "complete", "enqueue", "fail", "release"].sort(),
+      ["claimDue", "complete", "enqueue", "fail", "release", "scheduleRetry"].sort(),
     );
     const source = JSON.stringify(Object.keys(store.jobs));
-    expect(source).not.toMatch(/schedule|handle|backoff|alert|dashboard/i);
+    expect(source).not.toMatch(/"schedule"|handle|backoff|alert|dashboard/i);
+  });
+
+  it("schedules transient retry from database time under the current unexpired token", async () => {
+    const stub = stubOperationsDatabase([
+      { rows: [] },
+      { rows: [] },
+      { rows: [{ job_id: JOB_A, status: "available" }] },
+    ]);
+    const store = createPostgresOperationsPersistence(stub.database);
+    await expect(store.jobs.scheduleRetry(JOB_A, "current-token", parseSafeErrorCode("HANDLER_TIMEOUT"), 45_000))
+      .resolves.toBe(true);
+    expect(stub.queryCount()).toBe(3);
+  });
+
+  it("terminalizes a permanent failure and writes one safe incident atomically", async () => {
+    const stub = stubOperationsDatabase([
+      { rows: [] },
+      { rows: [] },
+      { rows: [{ job_id: JOB_A, status: "dead" }] },
+      { rows: [] },
+    ]);
+    const store = createPostgresOperationsPersistence(stub.database);
+    await expect(store.jobs.fail(JOB_A, "current-token", parseSafeErrorCode("JOB_INVALID")))
+      .resolves.toBe(true);
+    expect(stub.queryCount()).toBe(4);
   });
 });
