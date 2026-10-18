@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 151,
   "parent": 145,
-  "runId": "9cdbd49f-9e08-47e2-ad14-b08481b8a6ff",
-  "sourceRevision": "9e21ea508b7f9da26e2334c1b360c0cc5260b633",
-  "sourceTreeSha256": "2a557f88b57b6272ac37d91ef29ead78008491ecc5a3ff289aee41fca562ec79",
-  "startedAt": "2026-10-11T16:24:38.504Z",
-  "completedAt": "2026-10-11T16:27:38.240Z",
+  "runId": "3c3a656c-fb29-4df0-9748-c7e17baa8dad",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "startedAt": "2026-10-17T23:20:40.739Z",
+  "completedAt": "2026-10-17T23:23:10.271Z",
   "scope": "bounded-mp4-webm-processing-with-sealed-private-variants",
   "runtime": {
     "node": "v24.21.0",
@@ -18,7 +18,8 @@
     "scanner": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
     "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
     "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
-    "pdfProcessor": "17.12.1"
+    "pdfProcessor": "17.12.1",
+    "scannerMode": "isolated-clamd-stream"
   },
   "policyIds": {
     "migrations": [
@@ -101,7 +102,7 @@
       "executed": true,
       "status": "passed",
       "storageRoundTrip": true,
-      "sha256": "ee34d8959856d5349fc7ad4a2e1754cd83dec800dfd8eb34e568409eacf63cff",
+      "sha256": "6b95be5b133cec49a103a76701b86ea812f891304d224e37e1834daa3d23a608",
       "scannerVerdict": "clean",
       "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
     }

@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "ticket": 155,
   "parent": 145,
-  "runId": "45702b24-fd3a-44eb-8ec5-6b8176314f6a",
-  "sourceRevision": "dff94c42085aad89bcdba5ef1a340c69a893eb61",
-  "sourceTreeSha256": "9f36fa4abe725a56004debbd5cccc5a3eecc78735fc04e51f8c6811086c37d0c",
-  "startedAt": "2026-10-12T13:20:10.248Z",
-  "completedAt": "2026-10-12T13:31:09.040Z",
+  "runId": "251adb10-eea2-4c1c-8f04-f7c0ccb9ccd2",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "startedAt": "2026-10-17T23:30:17.486Z",
+  "completedAt": "2026-10-17T23:32:02.761Z",
   "scope": "explicit-CV-approval-with-current-Media-revalidation-and-atomic-safe-replay",
   "runtime": {
     "node": "v24.21.0",
@@ -19,7 +19,8 @@
     "imageProcessor": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org",
     "videoProcessor": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers",
     "pdfProcessor": "17.12.1",
-    "sharp": "sharp-0.35.4;libvips-8.18.6"
+    "sharp": "sharp-0.35.4;libvips-8.18.6",
+    "scannerMode": "isolated-clamd-stream"
   },
   "services": {
     "postgres": {
@@ -35,12 +36,12 @@
     "storage": {
       "available": true,
       "privateBucketVerified": true,
-      "executionCount": 20
+      "executionCount": 14
     },
     "scanner": {
       "available": true,
       "version": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
-      "executions": 39
+      "executions": 32
     },
     "processors": {
       "pdf": "17.12.1",
@@ -49,7 +50,7 @@
       "executions": {
         "pdf": 9,
         "image": 5,
-        "video": 5
+        "video": 0
       }
     }
   },
@@ -58,8 +59,34 @@
     "preexistingConfiguredOwners": 1,
     "migrations": [
       "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
-      "20261012040000_accept_registered_cv_versions.sql"
+      "20261012040000_accept_registered_cv_versions.sql",
+      "20261012050000_activate_current_cv_atomically.sql"
     ],
+    "deferredMigrations": [
+      "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "20261012040000_accept_registered_cv_versions.sql",
+      "20261012050000_activate_current_cv_atomically.sql",
+      "20261012060000_reject_media_with_usage_guard.sql",
+      "20261013100000_configure_public_profile_media.sql",
+      "20261014194925_measurement_consent.sql",
+      "20261014210000_persist_project_reactions.sql",
+      "20261014211320_persist_project_ratings.sql",
+      "20261015003000_persist_private_feedback.sql",
+      "20261015010000_retain_feedback_moderation.sql",
+      "20261015093040_query_current_interaction_summaries.sql",
+      "20261015120000_persist_consented_public_events.sql",
+      "20261015130000_enable_public_interaction_event_facts.sql",
+      "20261015150000_enable_configuration_interaction_event_facts.sql",
+      "20261015160000_persist_immutable_analytics_goal_versions.sql",
+      "20261015170000_activate_analytics_goal_versions.sql",
+      "20261015180000_match_analytics_goal_conversions.sql",
+      "20261015190000_persist_reproducible_daily_aggregates.sql",
+      "20261015200000_enable_fixed_aggregate_dimensions.sql",
+      "20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
+      "20261015203000_retain_feedback_privacy.sql",
+      "20261017142000_revoke_public_aggregate_guard_execution.sql"
+    ],
+    "migrationLedgerContainsDeferred": true,
     "migrationLedgerContainsTarget": true,
     "backfilledRoots": 1,
     "aggregateVersion": 1,
@@ -125,26 +152,6 @@
       "storageRoundTrip": true,
       "scannerVerdict": "clean",
       "processorVersion": "Version: ImageMagick 7.1.1-47 Q16-HDRI x86_64 c8f4e8cb7:20250329 https://imagemagick.org"
-    },
-    {
-      "id": "mp4",
-      "kind": "video",
-      "mimeType": "video/mp4",
-      "executed": true,
-      "status": "passed",
-      "storageRoundTrip": true,
-      "scannerVerdict": "clean",
-      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
-    },
-    {
-      "id": "webm",
-      "kind": "video",
-      "mimeType": "video/webm",
-      "executed": true,
-      "status": "passed",
-      "storageRoundTrip": true,
-      "scannerVerdict": "clean",
-      "processorVersion": "ffprobe version 7.1 Copyright (c) 2007-2024 the FFmpeg developers"
     }
   ],
   "checks": {
@@ -324,7 +331,7 @@
           "status": "passed"
         },
         {
-          "name": "T09-04 unprocessed raw PDF, accepted non-PDF image, missing, foreign Owner, and non-English intents reject without writes",
+          "name": "T09-04 unprocessed raw PDF, accepted non-PDF image, missing, foreign Owner, and non-English intents reject without writes: {\"unprocessed\":true,\"wrongKind\":true,\"acceptedImage\":true,\"missing\":true,\"foreignOwner\":true,\"nonEnglish\":true,\"noWrites\":true}",
           "executed": true,
           "status": "passed"
         },
@@ -410,8 +417,8 @@
     },
     "mediaAcceptance": {
       "suite": "tests/database/media-upload-intent.integration.test.ts",
-      "total": 2,
-      "passed": 2,
+      "total": 1,
+      "passed": 1,
       "failed": 0,
       "skipped": 0,
       "failedTests": [],
@@ -423,13 +430,145 @@
         "tests/modules/media-cv-contracts.test.ts",
         "tests/modules/cv-portfolio.test.ts"
       ],
-      "total": 23,
-      "passed": 23,
+      "total": 26,
+      "passed": 26,
       "failed": 0,
       "skipped": 0,
+      "tests": [
+        {
+          "name": "Owner CV registration application service (#154) trims the label and delegates a portfolio-versioned, idempotent registration",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects other Owners before either history reads or writes",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) accepts a 128-character visible ASCII idempotency key",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) returns the initially empty portfolio without changing its root version",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) authorizes and delegates a portfolio-versioned, idempotent acceptance",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects foreign Owners and malformed acceptance intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) authorizes and delegates a portfolio-versioned, idempotent activation",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) rejects foreign Owners and malformed activation intent before persistence",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Owner CV registration application service (#154) delegates the scoped Current CV Media-use query in the caller transaction",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) requires the authenticated same-Owner actor before persisting acceptance",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects missing approved descriptions before repository access",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) normalizes approved metadata and keeps the command result safe",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) returns one complete fact per distinct ID with a bounded sorted opaque token",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) fails closed when a fact is missing, duplicated, foreign, or malformed",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects duplicate repository facts instead of selecting one arbitrarily",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media acceptance application seam (#152) rejects facts attributed to another Owner",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media and CV module contracts (#147) retains the five Media, four Owner CV, and purpose-aware read operations",
+          "executed": true,
+          "status": "passed"
+        },
+        {
+          "name": "Media and CV module contracts (#147) records the approved file policies and never widens adapter limits",
+          "executed": true,
+          "status": "passed"
+        }
+      ],
       "verdict": "pass"
     },
-    "acceptanceOperations": 6
+    "acceptanceOperations": 4
   },
   "counts": {
     "executed": 16,

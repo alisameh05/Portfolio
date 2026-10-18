@@ -1,6 +1,6 @@
 
 ── Architecture check: src/ ──
-✔ no dependency violations found (151 modules, 409 dependencies cruised)
+✔ no dependency violations found (247 modules, 1044 dependencies cruised)
 ✓ Architecture check passed: no forbidden dependencies in src/
 
 ── Validating Invalid Architecture Fixtures ──
@@ -22,7 +22,7 @@
 ✓ Modules confine persistence/providers to adapters and contain no Route Handlers, UI, or Lab entry implementation
 
 ── Runtime architecture boundaries ──
-✓ runtime architecture: 145 source files preserve framework, environment, transport, provider, and Route Handler boundaries
+✓ runtime architecture: 234 source files preserve framework, environment, transport, provider, and Route Handler boundaries
 
 ═════════════════════════════════════════════════════════════════
              ARCHITECTURE CONFORMANCE REPORT                    

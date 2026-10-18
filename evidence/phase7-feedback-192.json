@@ -1,7 +1,7 @@
 {
-  "runId": "e93f35f5-b98c-47cf-893d-c42519df254a",
-  "sourceRevision": "6972af55047e2ed37d265da79cc4e9eebbae4f44",
-  "sourceTreeSha256": "20a39f370f68e10d1efe9c4ce3b600d9cb4cad47a9b7538946243e331f5b8846",
+  "runId": "fc187e2c-5440-467a-b81d-ba5ef2adbf4d",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015003000_persist_private_feedback.sql",
   "migrationQualification": {
@@ -155,6 +155,9 @@
       },
       {
         "version": "20261015203000"
+      },
+      {
+        "version": "20261017142000"
       }
     ],
     "schemaSha256": "bce67038124e5867a0faa4903e1c8e685d628881f8e35038fda8347e2abc8ce8",
@@ -357,6 +360,10 @@
     {
       "name": "20261015203000_retain_feedback_privacy.sql",
       "sha256": "fe0d3e9dd6644b6d7ba4480562b5e36d9043635bdad4f5f6e4472611d0318a1e"
+    },
+    {
+      "name": "20261017142000_revoke_public_aggregate_guard_execution.sql",
+      "sha256": "ea8838c639bee61a484742d41ea4496584e74f590ac87de7f0ae93bfde5b5199"
     }
   ],
   "tools": {
@@ -611,5 +618,5 @@
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:feedback (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
   "scope": "Native disposable PostgreSQL cluster; all repository migrations through #192. Full Phase 3-6 upgrade qualification belongs to #208.",
   "cleanup": true,
-  "gateRunId": "a6180c7c-d93a-4dea-9eab-f805f24440f3"
+  "gateRunId": "4e9c9a1c-e303-4232-8d5f-4dc7000c2ae7"
 }

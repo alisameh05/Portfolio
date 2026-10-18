@@ -1,0 +1,229 @@
+
+> shipwithali-portfolio@0.0.0 prephase6:focus:cv-delivery
+> npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase6:focus:cv-delivery
+> node scripts/phase6-verification.mjs --cv-delivery-only
+
+Starting isolated loopback PostgreSQL, Auth and private Storage services.
+Applying the deferred CV migration: Local database is up to date.
+Probing pinned ClamAV, ImageMagick, FFmpeg and OCRmyPDF runtimes.
+Generating safe fixtures with the pinned image and video processors.
+Scanning, processing and round-tripping pdf.
+✓ pdf: private Storage upload and byte round-trip passed; scanning.
+✓ pdf: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping png.
+✓ png: private Storage upload and byte round-trip passed; scanning.
+✓ png: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping jpeg.
+✓ jpeg: private Storage upload and byte round-trip passed; scanning.
+✓ jpeg: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping webp.
+✓ webp: private Storage upload and byte round-trip passed; scanning.
+✓ webp: processor, clean scan and private byte round-trip passed.
+Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.
+{
+  "cvDeliveryIntegrationTests": [
+    {
+      "name": "<WORKSPACE>/tests/database/media-upload-intent.integration.test.ts",
+      "status": "passed",
+      "assertions": [
+        {
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage commits a scoped candidate and replays the same encrypted target without re-signing",
+          "status": "skipped"
+        },
+        {
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes",
+          "status": "skipped"
+        },
+        {
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage rolls back a failed candidate commit and idempotently removes its expired private orphan",
+          "status": "skipped"
+        },
+        {
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage issues bounded delivery only for current published-locale and profile Media uses",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 6 #148 private upload intent with real PostgreSQL and Storage processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg",
+          "status": "skipped"
+        },
+        {
+          "name": "Phase 6 #157 isolated Media rejection with real PostgreSQL and Storage rejects accepted Media safely and serializes with current usage changes",
+          "status": "skipped"
+        }
+      ]
+    }
+  ]
+}
+{
+  "ticket": 159,
+  "runId": "682ee927-902d-4b44-ba31-585f97b38964",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "verdict": "pass",
+  "criteria": [
+    {
+      "name": "T14-01 strict locale/disposition and closed query shape reject missing, unsupported, duplicate and unknown fields before dispatch",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-02 each read resolves only the committed accepted English Current CV and never falls back to another version",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-03 the stream returns real PDF bytes with bounded size, no-store and a sanitized filename",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-04 signed redirects are short-lived, origin-allowlisted and honor inline or attachment intent",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-05 the production stream reads real private Storage bytes whose SHA-256 matches the immutable CV snapshot",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-06 no-current, Storage/signing failure, unexpected exceptions and abuse map to safe 404/503/500/429 responses",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-07 every request after replacement resolves the new pointer while older issued targets remain bounded",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-08 Visitor access requires and sets no account, identity or consent cookie and does not depend on Measurement",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-09 foreign/insecure targets, malformed bindings and mismatched stored bytes fail safely without metadata leakage",
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "name": "T14-10 public operation inventory remains five and no history or extra public API is added",
+      "executed": true,
+      "status": "passed"
+    }
+  ],
+  "counts": {
+    "integrationExecuted": 3,
+    "integrationFailures": 0,
+    "integrationSkips": 0,
+    "unitExecuted": 66,
+    "unitFailures": 0,
+    "unitSkips": 0,
+    "currentCvStorageMatrixExecuted": 46,
+    "currentCvStorageMatrixFailures": 0
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "evidence": "evidence/phase6-cv-delivery-159.json"
+}
+{
+  "ticket": 160,
+  "runId": "682ee927-902d-4b44-ba31-585f97b38964",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "verdict": "pass",
+  "criteria": [
+    {
+      "id": "T15-01",
+      "name": "Empty portfolio has no Current CV capability; successful activation exposes the committed eligible English Current CV",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-02",
+      "name": "Arabic Current CV and English-only link capability remain withheld; public CV locale=ar remains rejected",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-03",
+      "name": "Reviewed Arabic content uses accepted English Media without English case-study text fallback",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-04",
+      "name": "Registration and separate acceptance do not replace or publish a Current CV",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-05",
+      "name": "Storage delivery failure fails the capability closed while preserving the durable Current CV snapshot",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-06",
+      "name": "Optional capability failures leave core configuration readable while required database failure remains an error",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-07",
+      "name": "Profile Media delivery requires the configured visibility use and rejects private or rejected candidates",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-08",
+      "name": "Public configuration separates stable identity and transient capability without signed URLs, provider mappings, or private filenames",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    },
+    {
+      "id": "T15-09",
+      "name": "Only completed Phase 6 behavior is composed; later-phase placeholders remain fail closed and public operation count is unchanged",
+      "passed": true,
+      "executed": true,
+      "status": "passed"
+    }
+  ],
+  "counts": {
+    "integrationExecuted": 7,
+    "integrationFailures": 0,
+    "integrationSkips": 0,
+    "unitExecuted": 66,
+    "unitFailures": 0,
+    "unitSkips": 0
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "evidence": "evidence/phase6-public-capabilities-160.json"
+}

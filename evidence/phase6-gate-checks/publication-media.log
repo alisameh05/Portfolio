@@ -1,0 +1,151 @@
+
+> shipwithali-portfolio@0.0.0 prephase6:focus:publication-media
+> npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase6:focus:publication-media
+> node scripts/phase6-verification.mjs --publication-media-only
+
+Starting isolated loopback PostgreSQL, Auth and private Storage services.
+Probing pinned ClamAV, ImageMagick, FFmpeg and OCRmyPDF runtimes.
+Generating safe fixtures with the pinned image and video processors.
+Scanning, processing and round-tripping pdf.
+✓ pdf: private Storage upload and byte round-trip passed; scanning.
+✓ pdf: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping png.
+✓ png: private Storage upload and byte round-trip passed; scanning.
+✓ png: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping jpeg.
+✓ jpeg: private Storage upload and byte round-trip passed; scanning.
+✓ jpeg: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping webp.
+✓ webp: private Storage upload and byte round-trip passed; scanning.
+✓ webp: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping mp4.
+✓ mp4: private Storage upload and byte round-trip passed; scanning.
+✓ mp4: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping webm.
+✓ webm: private Storage upload and byte round-trip passed; scanning.
+✓ webm: processor, clean scan and private byte round-trip passed.
+Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.
+{
+  "ticket": 153,
+  "runId": "9d42e3f4-9f10-4068-ab6d-f341a04fd5fe",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "verdict": "pass",
+  "acceptanceOperations": 6,
+  "formats": [
+    {
+      "id": "pdf",
+      "status": "passed"
+    },
+    {
+      "id": "png",
+      "status": "passed"
+    },
+    {
+      "id": "jpeg",
+      "status": "passed"
+    },
+    {
+      "id": "webp",
+      "status": "passed"
+    },
+    {
+      "id": "mp4",
+      "status": "passed"
+    },
+    {
+      "id": "webm",
+      "status": "passed"
+    }
+  ],
+  "integration": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "verdict": "pass"
+  },
+  "contentAuthoring": {
+    "suite": "tests/database/content-authoring.integration.test.ts",
+    "total": 7,
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "verdict": "pass"
+  },
+  "application": {
+    "suites": [
+      "tests/modules/media-acceptance.test.ts",
+      "tests/modules/media-cv-contracts.test.ts"
+    ],
+    "total": 9,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "tests": [
+      {
+        "name": "Media acceptance application seam (#152) requires the authenticated same-Owner actor before persisting acceptance",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) rejects missing approved descriptions before repository access",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) normalizes approved metadata and keeps the command result safe",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) returns one complete fact per distinct ID with a bounded sorted opaque token",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) fails closed when a fact is missing, duplicated, foreign, or malformed",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) rejects duplicate repository facts instead of selecting one arbitrarily",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) rejects facts attributed to another Owner",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media and CV module contracts (#147) retains the five Media, four Owner CV, and purpose-aware read operations",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media and CV module contracts (#147) records the approved file policies and never widens adapter limits",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "verdict": "pass"
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "evidence": "evidence/phase6-publication-media-153.json"
+}

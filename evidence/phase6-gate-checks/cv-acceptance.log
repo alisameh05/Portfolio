@@ -1,0 +1,473 @@
+
+> shipwithali-portfolio@0.0.0 prephase6:focus:cv-acceptance
+> npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase6:focus:cv-acceptance
+> node scripts/phase6-verification.mjs --cv-acceptance-only
+
+Starting isolated loopback PostgreSQL, Auth and private Storage services.
+Applying the deferred CV migration: Local database is up to date.
+Probing pinned ClamAV, ImageMagick, FFmpeg and OCRmyPDF runtimes.
+Generating safe fixtures with the pinned image and video processors.
+Scanning, processing and round-tripping pdf.
+✓ pdf: private Storage upload and byte round-trip passed; scanning.
+✓ pdf: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping png.
+✓ png: private Storage upload and byte round-trip passed; scanning.
+✓ png: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping jpeg.
+✓ jpeg: private Storage upload and byte round-trip passed; scanning.
+✓ jpeg: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping webp.
+✓ webp: private Storage upload and byte round-trip passed; scanning.
+✓ webp: processor, clean scan and private byte round-trip passed.
+Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.
+{
+  "ticket": 155,
+  "runId": "251adb10-eea2-4c1c-8f04-f7c0ccb9ccd2",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "verdict": "pass",
+  "scenarios": [
+    {
+      "name": "T10-01 only the configured Owner can accept a same-Portfolio registered English PDF; missing and foreign versions disclose no private facts",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-01"
+      ]
+    },
+    {
+      "name": "T10-02 current accepted, safe, suitable and accessible Media facts retain the exact PDF object/hash/version under the shared Media lock",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-02"
+      ]
+    },
+    {
+      "name": "T10-04 approval, history, root increment, exact receipt and minimal event commit together while Current CV remains empty",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-04"
+      ]
+    },
+    {
+      "name": "T10-06 a new key cannot approve an already accepted CV version",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-06"
+      ]
+    },
+    {
+      "name": "T10-03 incomplete Media acceptance facts fail without changing CV approval state",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-03"
+      ]
+    },
+    {
+      "name": "T10-03 duplicate Media acceptance facts fail without changing CV approval state",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-03"
+      ]
+    },
+    {
+      "name": "T10-03 version-inconsistent Media acceptance facts fail without changing CV approval state",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-03"
+      ]
+    },
+    {
+      "name": "T10-04 injected history failure rolls back CV state, root version, approval and success receipt",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-04"
+      ]
+    },
+    {
+      "name": "T10-04 injected receipt failure rolls back CV state, root version, approval and success receipt",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-04"
+      ]
+    },
+    {
+      "name": "T10-04 injected outbox failure rolls back CV state, approval history, root version and success receipt",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-04"
+      ]
+    },
+    {
+      "name": "T10-06 a fresh stale shared-root If-Match fails without creating an approval",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-06"
+      ]
+    },
+    {
+      "name": "T10-03 a rejected Media asset changed after registration cannot be accepted from stale snapshot facts",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-03"
+      ]
+    },
+    {
+      "name": "T10-06 exact replay returns the original receipt before later root/Media checks; changed intent conflicts",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-06"
+      ]
+    },
+    {
+      "name": "T10-07 accepted CV snapshot and approval remain private history and never change the empty Current CV pointer",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-07"
+      ]
+    },
+    {
+      "name": "T10-08 strict response and Owner views expose no PDF content or Media snapshot; approval tables use scoped forced RLS and append-only access",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-08"
+      ]
+    },
+    {
+      "name": "T10-05 accepting another registered version leaves an existing Current CV pointer and its event history unchanged",
+      "executed": true,
+      "status": "passed",
+      "criteria": [
+        "T10-05"
+      ]
+    }
+  ],
+  "counts": {
+    "executed": 16,
+    "failed": 0,
+    "skipped": 0,
+    "criteriaCovered": 8
+  },
+  "integration": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "test": "Phase 6 #148 private upload intent with real PostgreSQL and Storage processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+    "scenarios": [
+      {
+        "name": "T10-01 only the configured Owner can accept a same-Portfolio registered English PDF; missing and foreign versions disclose no private facts",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-01"
+        ]
+      },
+      {
+        "name": "T10-02 current accepted, safe, suitable and accessible Media facts retain the exact PDF object/hash/version under the shared Media lock",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-02"
+        ]
+      },
+      {
+        "name": "T10-04 approval, history, root increment, exact receipt and minimal event commit together while Current CV remains empty",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-04"
+        ]
+      },
+      {
+        "name": "T10-06 a new key cannot approve an already accepted CV version",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-06"
+        ]
+      },
+      {
+        "name": "T10-03 incomplete Media acceptance facts fail without changing CV approval state",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-03"
+        ]
+      },
+      {
+        "name": "T10-03 duplicate Media acceptance facts fail without changing CV approval state",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-03"
+        ]
+      },
+      {
+        "name": "T10-03 version-inconsistent Media acceptance facts fail without changing CV approval state",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-03"
+        ]
+      },
+      {
+        "name": "T10-04 injected history failure rolls back CV state, root version, approval and success receipt",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-04"
+        ]
+      },
+      {
+        "name": "T10-04 injected receipt failure rolls back CV state, root version, approval and success receipt",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-04"
+        ]
+      },
+      {
+        "name": "T10-04 injected outbox failure rolls back CV state, approval history, root version and success receipt",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-04"
+        ]
+      },
+      {
+        "name": "T10-06 a fresh stale shared-root If-Match fails without creating an approval",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-06"
+        ]
+      },
+      {
+        "name": "T10-03 a rejected Media asset changed after registration cannot be accepted from stale snapshot facts",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-03"
+        ]
+      },
+      {
+        "name": "T10-06 exact replay returns the original receipt before later root/Media checks; changed intent conflicts",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-06"
+        ]
+      },
+      {
+        "name": "T10-07 accepted CV snapshot and approval remain private history and never change the empty Current CV pointer",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-07"
+        ]
+      },
+      {
+        "name": "T10-08 strict response and Owner views expose no PDF content or Media snapshot; approval tables use scoped forced RLS and append-only access",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-08"
+        ]
+      },
+      {
+        "name": "T10-05 accepting another registered version leaves an existing Current CV pointer and its event history unchanged",
+        "executed": true,
+        "status": "passed",
+        "criteria": [
+          "T10-05"
+        ]
+      }
+    ],
+    "counts": {
+      "executed": 16,
+      "failed": 0,
+      "skipped": 0,
+      "criteriaCovered": 8
+    },
+    "verdict": "pass"
+  },
+  "mediaAcceptance": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "verdict": "pass"
+  },
+  "application": {
+    "suites": [
+      "tests/modules/media-acceptance.test.ts",
+      "tests/modules/media-cv-contracts.test.ts",
+      "tests/modules/cv-portfolio.test.ts"
+    ],
+    "total": 26,
+    "passed": 26,
+    "failed": 0,
+    "skipped": 0,
+    "tests": [
+      {
+        "name": "Owner CV registration application service (#154) trims the label and delegates a portfolio-versioned, idempotent registration",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects other Owners before either history reads or writes",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects malformed registration intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) accepts a 128-character visible ASCII idempotency key",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) returns the initially empty portfolio without changing its root version",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) authorizes and delegates a portfolio-versioned, idempotent acceptance",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects foreign Owners and malformed acceptance intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) authorizes and delegates a portfolio-versioned, idempotent activation",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) rejects foreign Owners and malformed activation intent before persistence",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Owner CV registration application service (#154) delegates the scoped Current CV Media-use query in the caller transaction",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) requires the authenticated same-Owner actor before persisting acceptance",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) rejects missing approved descriptions before repository access",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) normalizes approved metadata and keeps the command result safe",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) returns one complete fact per distinct ID with a bounded sorted opaque token",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) fails closed when a fact is missing, duplicated, foreign, or malformed",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) rejects duplicate repository facts instead of selecting one arbitrarily",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media acceptance application seam (#152) rejects facts attributed to another Owner",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media and CV module contracts (#147) retains the five Media, four Owner CV, and purpose-aware read operations",
+        "executed": true,
+        "status": "passed"
+      },
+      {
+        "name": "Media and CV module contracts (#147) records the approved file policies and never widens adapter limits",
+        "executed": true,
+        "status": "passed"
+      }
+    ],
+    "verdict": "pass"
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "evidence": "evidence/phase6-cv-acceptance-155.json"
+}

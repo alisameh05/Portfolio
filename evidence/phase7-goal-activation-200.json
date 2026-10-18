@@ -1,7 +1,7 @@
 {
-  "runId": "0daaa22b-7b4f-4c6e-83d9-d79e606fe5e4",
-  "sourceRevision": "6972af55047e2ed37d265da79cc4e9eebbae4f44",
-  "sourceTreeSha256": "20a39f370f68e10d1efe9c4ce3b600d9cb4cad47a9b7538946243e331f5b8846",
+  "runId": "e4892aea-8b1b-4d71-a066-e0e29ebd0507",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
   "tools": {
     "node": "v24.21.0",
     "npm": "11.19.0",
@@ -46,19 +46,19 @@
   },
   "suites": [
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase8-ticket-234/Portfolio/tests/phase4/owner-request-security.test.ts",
+      "name": "D:/Personal/Personal_Projects/phase8-qualify-234/tests/phase4/owner-request-security.test.ts",
       "passed": 20
     },
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase8-ticket-234/Portfolio/tests/phase7/goal-versions-postgres.test.ts",
+      "name": "D:/Personal/Personal_Projects/phase8-qualify-234/tests/phase7/goal-versions-postgres.test.ts",
       "passed": 13
     },
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase8-ticket-234/Portfolio/tests/phase7/goal-versions.test.ts",
+      "name": "D:/Personal/Personal_Projects/phase8-qualify-234/tests/phase7/goal-versions.test.ts",
       "passed": 12
     },
     {
-      "name": "C:/Users/alisa/.codex/worktrees/phase8-ticket-234/Portfolio/tests/runtime/owner-analytics.test.ts",
+      "name": "D:/Personal/Personal_Projects/phase8-qualify-234/tests/runtime/owner-analytics.test.ts",
       "passed": 32
     }
   ],
@@ -71,5 +71,5 @@
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:goal-versions (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
   "scope": "Full repository migration chain in a loopback-only disposable native PostgreSQL cluster, restricted non-superuser application role, real Owner application and HTTP adapters; no production or development database was modified.",
   "cleanup": true,
-  "gateRunId": "a6180c7c-d93a-4dea-9eab-f805f24440f3"
+  "gateRunId": "4e9c9a1c-e303-4232-8d5f-4dc7000c2ae7"
 }

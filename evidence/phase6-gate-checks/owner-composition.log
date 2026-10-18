@@ -1,0 +1,94 @@
+
+> shipwithali-portfolio@0.0.0 prephase6:focus:owner-composition
+> npm run validation:ready
+
+
+> shipwithali-portfolio@0.0.0 validation:ready
+> node scripts/validation-environment.mjs
+
+Validation environment ready: exact Node/npm and locked dependencies verified.
+
+> shipwithali-portfolio@0.0.0 phase6:focus:owner-composition
+> node scripts/phase6-verification.mjs --owner-composition-only
+
+Starting isolated loopback PostgreSQL, Auth and private Storage services.
+Probing pinned ClamAV, ImageMagick, FFmpeg and OCRmyPDF runtimes.
+Generating safe fixtures with the pinned image and video processors.
+Scanning, processing and round-tripping pdf.
+✓ pdf: private Storage upload and byte round-trip passed; scanning.
+✓ pdf: processor, clean scan and private byte round-trip passed.
+Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.
+{
+  "ticket": 161,
+  "runId": "ab271e72-7edf-4258-a03a-0c309d2cff33",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "verdict": "pass",
+  "checks": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "test": "Phase 6 #161 real production Owner Media and CV composition composes all nine Owner Media and CV operations through real services",
+    "counts": {
+      "executed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "scenarios": [
+      {
+        "name": "T16-01 through T16-05 all nine operations, real byte delivery, and bounded histories",
+        "executed": true,
+        "status": "passed",
+        "scannerVersion": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+        "processorVersion": "17.12.1;pikepdf-10.13.0.post1",
+        "mediaHistory": {
+          "processingReturned": 100,
+          "processingRetained": 102,
+          "processingTruncated": true,
+          "decisionsReturned": 100,
+          "decisionsRetained": 102,
+          "decisionsTruncated": true
+        },
+        "cvHistory": {
+          "versionsReturned": 100,
+          "versionsRetained": 102,
+          "versionsTruncated": true,
+          "activationsReturned": 100,
+          "activationsRetained": 102,
+          "activationsTruncated": true
+        }
+      }
+    ],
+    "verdict": "pass"
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "executionCount": 3,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 5
+    },
+    "scanner": {
+      "version": "ClamAV 1.4.3/27927/Sun Mar  1 07:24:39 2026",
+      "executions": 0
+    },
+    "processor": {
+      "version": "17.12.1",
+      "executions": 0
+    }
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "evidence": "evidence/phase6-owner-composition-161.json"
+}

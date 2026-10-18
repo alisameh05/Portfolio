@@ -1,0 +1,73 @@
+
+> shipwithali-portfolio@0.0.0 phase6:focus:verification
+> node scripts/phase6-verification.mjs
+
+Starting isolated loopback PostgreSQL, Auth and private Storage services.
+Probing pinned ClamAV, ImageMagick, FFmpeg and OCRmyPDF runtimes.
+Generating safe fixtures with the pinned image and video processors.
+Scanning, processing and round-tripping pdf.
+✓ pdf: private Storage upload and byte round-trip passed; scanning.
+✓ pdf: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping png.
+✓ png: private Storage upload and byte round-trip passed; scanning.
+✓ png: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping jpeg.
+✓ jpeg: private Storage upload and byte round-trip passed; scanning.
+✓ jpeg: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping webp.
+✓ webp: private Storage upload and byte round-trip passed; scanning.
+✓ webp: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping mp4.
+✓ mp4: private Storage upload and byte round-trip passed; scanning.
+✓ mp4: processor, clean scan and private byte round-trip passed.
+Scanning, processing and round-tripping webm.
+✓ webm: private Storage upload and byte round-trip passed; scanning.
+✓ webm: processor, clean scan and private byte round-trip passed.
+Running #148 Owner upload-intent, encrypted replay, PostgreSQL RLS and Storage authorization checks.
+{
+  "ticket": 146,
+  "runId": "c1ccf994-bfff-4584-b0b9-4947e035bb8c",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
+  "verdict": "pass",
+  "counts": {
+    "expectedFormats": 6,
+    "executedFormats": 6,
+    "failedFormats": 0,
+    "skippedFormats": 0
+  },
+  "services": {
+    "postgres": {
+      "available": true,
+      "executionCount": 3,
+      "majorVersion": 17,
+      "independentConnections": 2
+    },
+    "auth": {
+      "available": true,
+      "executionCount": 1,
+      "status": 200
+    },
+    "storage": {
+      "available": true,
+      "privateBucketVerified": true,
+      "executionCount": 20
+    }
+  },
+  "cleanup": {
+    "attempted": true,
+    "success": true
+  },
+  "failures": [],
+  "uploadIntentChecks": {
+    "suite": "tests/database/media-upload-intent.integration.test.ts",
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "failedTests": [],
+    "verdict": "pass"
+  },
+  "evidence": "evidence/phase-6-verification-setup.json",
+  "uploadIntentEvidence": "evidence/phase6-upload-intent-148.json"
+}

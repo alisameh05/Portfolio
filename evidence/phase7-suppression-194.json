@@ -1,7 +1,7 @@
 {
-  "runId": "360a9361-1b62-4686-ae2e-b6bd4399b830",
-  "sourceRevision": "6972af55047e2ed37d265da79cc4e9eebbae4f44",
-  "sourceTreeSha256": "20a39f370f68e10d1efe9c4ce3b600d9cb4cad47a9b7538946243e331f5b8846",
+  "runId": "e345e901-45d4-4f36-9b9d-9cebf01f85d3",
+  "sourceRevision": "123724dff205e58f562082c80ec0dddb186c22ce",
+  "sourceTreeSha256": "ce9743e916e1aba77891f6517aacf78d17064c7333739c351700c33c9048dbb6",
   "version": "postgres (PostgreSQL) 18.3",
   "migration": "supabase/migrations/20261015010000_retain_feedback_moderation.sql",
   "migrationQualification": {
@@ -156,6 +156,9 @@
       },
       {
         "version": "20261015203000"
+      },
+      {
+        "version": "20261017142000"
       }
     ],
     "schemaSha256": "c1cee61589c718539a0271c6bce29e8b6675046101d33464168134da639442f3",
@@ -358,6 +361,10 @@
     {
       "name": "20261015203000_retain_feedback_privacy.sql",
       "sha256": "fe0d3e9dd6644b6d7ba4480562b5e36d9043635bdad4f5f6e4472611d0318a1e"
+    },
+    {
+      "name": "20261017142000_revoke_public_aggregate_guard_execution.sql",
+      "sha256": "ea8838c639bee61a484742d41ea4496584e74f590ac87de7f0ae93bfde5b5199"
     }
   ],
   "tools": {
@@ -365,6 +372,138 @@
     "npm": "11.19.0"
   },
   "assertions": [
+    {
+      "title": "resolves a verified Owner actor for mutations with valid session, origin, and CSRF proof",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations without a session cookie as 401 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "maps verified non-Owner identities to 403",
+      "status": "passed"
+    },
+    {
+      "title": "maps provider outage to 503 without leaking internals",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with missing Origin as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with mismatched Origin as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with trailing-slash Origin as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with http Origin as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with absent proof as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with empty proof as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with short proof as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects mutations with session replayed as proof as 403",
+      "status": "passed"
+    },
+    {
+      "title": "rejects forged forwarded-host information before authentication",
+      "status": "passed"
+    },
+    {
+      "title": "authenticates reads without requiring origin or CSRF proof",
+      "status": "passed"
+    },
+    {
+      "title": "rejects unauthenticated reads as 401",
+      "status": "passed"
+    },
+    {
+      "title": "maps rate-limit denial to 429 with Retry-After and no dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "fails closed to 503 when the rate-limit check throws",
+      "status": "passed"
+    },
+    {
+      "title": "builds a server-managed session cookie with safe attributes",
+      "status": "passed"
+    },
+    {
+      "title": "omits Secure only for explicit loopback test contexts",
+      "status": "passed"
+    },
+    {
+      "title": "bounds session lifetime and rejects unsafe token material",
+      "status": "passed"
+    },
+    {
+      "title": "resolves a valid Owner session to a stable provider-neutral actor",
+      "status": "passed"
+    },
+    {
+      "title": "rejects forged signatures as unauthenticated",
+      "status": "passed"
+    },
+    {
+      "title": "rejects disallowed algorithms and unknown keys as unauthenticated",
+      "status": "passed"
+    },
+    {
+      "title": "rejects wrong issuer, audience, expired, and malformed sessions as unauthenticated",
+      "status": "passed"
+    },
+    {
+      "title": "rejects non-object JWT segments without throwing",
+      "status": "passed"
+    },
+    {
+      "title": "verifies ES256 and rejects public-key HMAC confusion and wrong curves",
+      "status": "passed"
+    },
+    {
+      "title": "ignores spoofed username/email/metadata and caller Owner IDs",
+      "status": "passed"
+    },
+    {
+      "title": "rejects non-GitHub identities and verified non-Owners as forbidden",
+      "status": "passed"
+    },
+    {
+      "title": "denies continued access after allowlist removal",
+      "status": "passed"
+    },
+    {
+      "title": "enforces revocation and expiry even for otherwise valid JWTs",
+      "status": "passed"
+    },
+    {
+      "title": "maps provider outages safely without exposing provider errors or identity subjects",
+      "status": "passed"
+    },
+    {
+      "title": "validates Owner auth configuration with redacted diagnostics",
+      "status": "passed"
+    },
+    {
+      "title": "keeps raw session material and secrets out of rejection payloads",
+      "status": "passed"
+    },
     {
       "title": "T06-01 authorized inspection is private versioned/ordered; missing, non-Owner and foreign scope deny",
       "status": "passed"
@@ -604,138 +743,6 @@
     {
       "title": "maps unexpected exceptions to generic 500 without leaking secrets",
       "status": "passed"
-    },
-    {
-      "title": "resolves a verified Owner actor for mutations with valid session, origin, and CSRF proof",
-      "status": "passed"
-    },
-    {
-      "title": "rejects mutations without a session cookie as 401 before dispatch",
-      "status": "passed"
-    },
-    {
-      "title": "maps verified non-Owner identities to 403",
-      "status": "passed"
-    },
-    {
-      "title": "maps provider outage to 503 without leaking internals",
-      "status": "passed"
-    },
-    {
-      "title": "rejects mutations with missing Origin as 403",
-      "status": "passed"
-    },
-    {
-      "title": "rejects mutations with mismatched Origin as 403",
-      "status": "passed"
-    },
-    {
-      "title": "rejects mutations with trailing-slash Origin as 403",
-      "status": "passed"
-    },
-    {
-      "title": "rejects mutations with http Origin as 403",
-      "status": "passed"
-    },
-    {
-      "title": "rejects mutations with absent proof as 403",
-      "status": "passed"
-    },
-    {
-      "title": "rejects mutations with empty proof as 403",
-      "status": "passed"
-    },
-    {
-      "title": "rejects mutations with short proof as 403",
-      "status": "passed"
-    },
-    {
-      "title": "rejects mutations with session replayed as proof as 403",
-      "status": "passed"
-    },
-    {
-      "title": "rejects forged forwarded-host information before authentication",
-      "status": "passed"
-    },
-    {
-      "title": "authenticates reads without requiring origin or CSRF proof",
-      "status": "passed"
-    },
-    {
-      "title": "rejects unauthenticated reads as 401",
-      "status": "passed"
-    },
-    {
-      "title": "maps rate-limit denial to 429 with Retry-After and no dispatch",
-      "status": "passed"
-    },
-    {
-      "title": "fails closed to 503 when the rate-limit check throws",
-      "status": "passed"
-    },
-    {
-      "title": "builds a server-managed session cookie with safe attributes",
-      "status": "passed"
-    },
-    {
-      "title": "omits Secure only for explicit loopback test contexts",
-      "status": "passed"
-    },
-    {
-      "title": "bounds session lifetime and rejects unsafe token material",
-      "status": "passed"
-    },
-    {
-      "title": "resolves a valid Owner session to a stable provider-neutral actor",
-      "status": "passed"
-    },
-    {
-      "title": "rejects forged signatures as unauthenticated",
-      "status": "passed"
-    },
-    {
-      "title": "rejects disallowed algorithms and unknown keys as unauthenticated",
-      "status": "passed"
-    },
-    {
-      "title": "rejects wrong issuer, audience, expired, and malformed sessions as unauthenticated",
-      "status": "passed"
-    },
-    {
-      "title": "rejects non-object JWT segments without throwing",
-      "status": "passed"
-    },
-    {
-      "title": "verifies ES256 and rejects public-key HMAC confusion and wrong curves",
-      "status": "passed"
-    },
-    {
-      "title": "ignores spoofed username/email/metadata and caller Owner IDs",
-      "status": "passed"
-    },
-    {
-      "title": "rejects non-GitHub identities and verified non-Owners as forbidden",
-      "status": "passed"
-    },
-    {
-      "title": "denies continued access after allowlist removal",
-      "status": "passed"
-    },
-    {
-      "title": "enforces revocation and expiry even for otherwise valid JWTs",
-      "status": "passed"
-    },
-    {
-      "title": "maps provider outages safely without exposing provider errors or identity subjects",
-      "status": "passed"
-    },
-    {
-      "title": "validates Owner auth configuration with redacted diagnostics",
-      "status": "passed"
-    },
-    {
-      "title": "keeps raw session material and secrets out of rejection payloads",
-      "status": "passed"
     }
   ],
   "required": {
@@ -856,5 +863,5 @@
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:suppression (PHASE7_POSTGRES_BIN selects installed PostgreSQL binaries)",
   "scope": "Native disposable PostgreSQL cluster; all current repository migrations with focused clean/upgrade/replay qualification. Full integrated Phase 3-6 qualification belongs to #208.",
   "cleanup": true,
-  "gateRunId": "a6180c7c-d93a-4dea-9eab-f805f24440f3"
+  "gateRunId": "4e9c9a1c-e303-4232-8d5f-4dc7000c2ae7"
 }
