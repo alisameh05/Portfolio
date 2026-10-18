@@ -12,6 +12,76 @@ if (process.env["PHASE3_REQUIRE_DATABASE"] === "1" && !DATABASE_URL) {
 const describeDatabase = DATABASE_URL === undefined ? describe.skip : describe;
 const ROOT = process.cwd();
 
+const RETRY_RECOVERY_TABLES = Object.freeze(["incidents", "job_redrive_audit"]);
+
+const REDRIVE_AUDIT_INSERT = `with original as (
+  insert into operations.jobs (job_id, job_type, payload_version, payload, available_at)
+  values ('018f4f7d-5000-7000-8000-000000000004', 'phase3.role.probe', 1, '{}'::jsonb, transaction_timestamp()) returning job_id
+), replacement as (
+  insert into operations.jobs (job_id, job_type, payload_version, payload, available_at)
+  values ('018f4f7d-5000-7000-8000-000000000005', 'phase3.role.probe', 1, '{}'::jsonb, transaction_timestamp()) returning job_id
+)
+insert into operations.job_redrive_audit (original_job_id,replacement_job_id,operator_scope_hash,policy_version,payload_sha256)
+select original.job_id, replacement.job_id, repeat('a',64), 'phase7-handlers-v1', repeat('b',64) from original, replacement`;
+
+const RETRY_RECOVERY_MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+  ["anon", "select incidents", "select count(*) from operations.incidents", false],
+  ["anon", "select redrive audit", "select count(*) from operations.job_redrive_audit", false],
+  ["authenticated", "select incidents", "select count(*) from operations.incidents", false],
+  ["authenticated", "select redrive audit", "select count(*) from operations.job_redrive_audit", false],
+  ["shipwithali_application", "select incidents", "select count(*) from operations.incidents", false],
+  ["shipwithali_application", "select redrive audit", "select count(*) from operations.job_redrive_audit", false],
+  ["shipwithali_worker", "select incidents", "select count(*) from operations.incidents", true],
+  ["shipwithali_worker", "select redrive audit", "select count(*) from operations.job_redrive_audit", true],
+  ["shipwithali_worker", "insert redrive audit", REDRIVE_AUDIT_INSERT, true],
+  ["shipwithali_worker", "insert incidents", "insert into operations.incidents (incident_key,category,safe_error_code,severity) values ('probe:1','job','PROBE_FAILURE','critical')", true],
+  ["shipwithali_worker", "update incident counters", "update operations.incidents set occurrences = occurrences where false", true],
+  ["shipwithali_worker", "rewrite incident identity", "update operations.incidents set category = category where false", false],
+  ["shipwithali_backup", "select incidents", "select count(*) from operations.incidents", true],
+  ["shipwithali_backup", "select redrive audit", "select count(*) from operations.job_redrive_audit", true],
+];
+
+const RETRY_RECOVERY_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
+  ["incidents", "incidents_worker_insert_policy", "INSERT", "{shipwithali_worker}"],
+  ["incidents", "incidents_worker_select_policy", "SELECT", "{shipwithali_worker}"],
+  ["incidents", "incidents_worker_update_policy", "UPDATE", "{shipwithali_worker}"],
+  ["incidents", "operations_backup_policy_incidents", "SELECT", "{shipwithali_backup}"],
+  ["job_redrive_audit", "job_redrive_audit_worker_insert_policy", "INSERT", "{shipwithali_worker}"],
+  ["job_redrive_audit", "job_redrive_audit_worker_select_policy", "SELECT", "{shipwithali_worker}"],
+  ["job_redrive_audit", "operations_backup_policy_job_redrive_audit", "SELECT", "{shipwithali_backup}"],
+];
+
+/**
+ * The bounded-retry tables ship in one migration, so a connection whose
+ * migration ledger stopped at the Phase 3 release legitimately lacks them.
+ * A connection that carries exactly one of the two objects instead of both is
+ * treated as corruption and fails the matrix in every context.
+ */
+let retryRecoverySchema = false;
+if (DATABASE_URL !== undefined) {
+  const era = adminClient();
+  await era.connect();
+  try {
+    const result = await era.query(
+      `select to_regclass('operations.incidents') is not null as has_incidents,
+              to_regclass('operations.job_redrive_audit') is not null as has_redrive,
+              exists (
+                select 1 from information_schema.columns
+                 where table_schema = 'operations'
+                   and table_name = 'outbox_events'
+                   and column_name = 'dead_at'
+              ) as has_dead_at`,
+    );
+    const row: Record<string, unknown> = result.rows[0] ?? {};
+    if (row["has_incidents"] !== row["has_redrive"] || (row["has_incidents"] === false && row["has_dead_at"] === true)) {
+      throw new Error("ROLE_MATRIX_SCHEMA_RECOVERY_INCOMPLETE");
+    }
+    retryRecoverySchema = row["has_incidents"] === true && row["has_dead_at"] === true;
+  } finally {
+    await era.end();
+  }
+}
+
 const KNOWN_ROLES = Object.freeze([
   "anon",
   "authenticated",
@@ -44,34 +114,20 @@ const JOB_INSERT = `insert into operations.jobs (
   '{}'::jsonb, transaction_timestamp()
 )`;
 
-const REDRIVE_AUDIT_INSERT = `with original as (
-  insert into operations.jobs (job_id, job_type, payload_version, payload, available_at)
-  values ('018f4f7d-5000-7000-8000-000000000004', 'phase3.role.probe', 1, '{}'::jsonb, transaction_timestamp()) returning job_id
-), replacement as (
-  insert into operations.jobs (job_id, job_type, payload_version, payload, available_at)
-  values ('018f4f7d-5000-7000-8000-000000000005', 'phase3.role.probe', 1, '{}'::jsonb, transaction_timestamp()) returning job_id
-)
-insert into operations.job_redrive_audit (original_job_id,replacement_job_id,operator_scope_hash,policy_version,payload_sha256)
-select original.job_id, replacement.job_id, repeat('a',64), 'phase7-handlers-v1', repeat('b',64) from original, replacement`;
-
 const OUTBOX_CLAIM = `select event_id from operations.outbox_events
    where completed_at is null
    order by available_at, event_id limit 1 for update skip locked`;
 
 /** Every matrix row: the connected role, the attempted statement, and whether it must succeed. */
-const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+const BASE_MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
   ["anon", "select idempotency", "select count(*) from operations.idempotency_records", false],
   ["anon", "select outbox", "select count(*) from operations.outbox_events", false],
   ["anon", "select jobs", "select count(*) from operations.jobs", false],
-  ["anon", "select incidents", "select count(*) from operations.incidents", false],
-  ["anon", "select redrive audit", "select count(*) from operations.job_redrive_audit", false],
   ["anon", "insert outbox", OUTBOX_INSERT, false],
   ["anon", "read public projection", "select count(*) from public_read.__phase3_role_probe_view", false],
   ["authenticated", "select idempotency", "select count(*) from operations.idempotency_records", false],
   ["authenticated", "select outbox", "select count(*) from operations.outbox_events", false],
   ["authenticated", "select jobs", "select count(*) from operations.jobs", false],
-  ["authenticated", "select incidents", "select count(*) from operations.incidents", false],
-  ["authenticated", "select redrive audit", "select count(*) from operations.job_redrive_audit", false],
   ["authenticated", "insert outbox", OUTBOX_INSERT, false],
   ["authenticated", "read public projection", "select count(*) from public_read.__phase3_role_probe_view", false],
   ["shipwithali_application", "select idempotency", "select count(*) from operations.idempotency_records", true],
@@ -97,8 +153,6 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
     false,
   ],
   ["shipwithali_application", "select jobs", "select count(*) from operations.jobs", false],
-  ["shipwithali_application", "select incidents", "select count(*) from operations.incidents", false],
-  ["shipwithali_application", "select redrive audit", "select count(*) from operations.job_redrive_audit", false],
   ["shipwithali_application", "insert jobs", JOB_INSERT, false],
   [
     "shipwithali_application",
@@ -125,12 +179,6 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
     false,
   ],
   ["shipwithali_worker", "select jobs", "select count(*) from operations.jobs", true],
-  ["shipwithali_worker", "select incidents", "select count(*) from operations.incidents", true],
-  ["shipwithali_worker", "select redrive audit", "select count(*) from operations.job_redrive_audit", true],
-  ["shipwithali_worker", "insert redrive audit", REDRIVE_AUDIT_INSERT, true],
-  ["shipwithali_worker", "insert incidents", "insert into operations.incidents (incident_key,category,safe_error_code,severity) values ('probe:1','job','PROBE_FAILURE','critical')", true],
-  ["shipwithali_worker", "update incident counters", "update operations.incidents set occurrences = occurrences where false", true],
-  ["shipwithali_worker", "rewrite incident identity", "update operations.incidents set category = category where false", false],
   ["shipwithali_worker", "insert jobs", JOB_INSERT, true],
   [
     "shipwithali_worker",
@@ -172,8 +220,6 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
   ["shipwithali_backup", "select idempotency", "select count(*) from operations.idempotency_records", true],
   ["shipwithali_backup", "select outbox", "select count(*) from operations.outbox_events", true],
   ["shipwithali_backup", "select jobs", "select count(*) from operations.jobs", true],
-  ["shipwithali_backup", "select incidents", "select count(*) from operations.incidents", true],
-  ["shipwithali_backup", "select redrive audit", "select count(*) from operations.job_redrive_audit", true],
   ["shipwithali_backup", "insert outbox", OUTBOX_INSERT, false],
   [
     "shipwithali_backup",
@@ -194,6 +240,11 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
     "create table operations.__phase3_role_probe_ddl (id integer)",
     true,
   ],
+];
+
+const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+  ...BASE_MATRIX,
+  ...(retryRecoverySchema ? RETRY_RECOVERY_MATRIX : []),
 ];
 
 interface RoleAttempt {
@@ -466,11 +517,10 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
       );
       expect(tables.rows.map((row) => row["relname"])).toEqual([
         "idempotency_records",
-        "incidents",
-        "job_redrive_audit",
         "jobs",
         "outbox_events",
-      ]);
+        ...(retryRecoverySchema ? RETRY_RECOVERY_TABLES : []),
+      ].sort());
       for (const row of tables.rows) {
         expect(row["relrowsecurity"], String(row["relname"])).toBe(true);
         expect(row["relforcerowsecurity"], String(row["relname"])).toBe(true);
@@ -503,13 +553,7 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
         ["idempotency_records", "idempotency_application_select_policy", "SELECT", "{shipwithali_application}"],
         ["idempotency_records", "idempotency_application_update_policy", "UPDATE", "{shipwithali_application}"],
         ["idempotency_records", "operations_backup_policy_idempotency", "SELECT", "{shipwithali_backup}"],
-        ["incidents", "incidents_worker_insert_policy", "INSERT", "{shipwithali_worker}"],
-        ["incidents", "incidents_worker_select_policy", "SELECT", "{shipwithali_worker}"],
-        ["incidents", "incidents_worker_update_policy", "UPDATE", "{shipwithali_worker}"],
-        ["incidents", "operations_backup_policy_incidents", "SELECT", "{shipwithali_backup}"],
-        ["job_redrive_audit", "job_redrive_audit_worker_insert_policy", "INSERT", "{shipwithali_worker}"],
-        ["job_redrive_audit", "job_redrive_audit_worker_select_policy", "SELECT", "{shipwithali_worker}"],
-        ["job_redrive_audit", "operations_backup_policy_job_redrive_audit", "SELECT", "{shipwithali_backup}"],
+        ...(retryRecoverySchema ? RETRY_RECOVERY_POLICIES : []),
         ["jobs", "jobs_worker_insert_policy", "INSERT", "{shipwithali_worker}"],
         ["jobs", "jobs_worker_select_policy", "SELECT", "{shipwithali_worker}"],
         ["jobs", "jobs_worker_update_policy", "UPDATE", "{shipwithali_worker}"],

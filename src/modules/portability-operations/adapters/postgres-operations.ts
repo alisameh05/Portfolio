@@ -60,6 +60,39 @@ interface JobLeaseRow {
   attempt_count: number;
 }
 
+interface BoundedRetryProbeRow {
+  bounded: boolean;
+}
+
+// Databases upgraded through the Phase 3 release still run the unbounded-retry
+// schema; claim and failure paths must therefore stay executable on it while
+// the bounded retry surface remains active on the full current schema.
+const boundedRetrySchemas = new WeakMap<Kysely<DB>, Promise<boolean>>();
+
+function boundedRetrySchema(database: Kysely<DB>): Promise<boolean> {
+  const cached = boundedRetrySchemas.get(database);
+  if (cached !== undefined) return cached;
+  const probe = (async () => {
+    try {
+      const result = await sql<BoundedRetryProbeRow>`
+        select to_regclass('operations.incidents') is not null
+               and exists (
+                 select 1 from information_schema.columns
+                  where table_schema = 'operations'
+                    and table_name = 'outbox_events'
+                    and column_name = 'dead_at'
+               ) as bounded
+      `.execute(database);
+      if (result.rows[0] === undefined) throw new Error("bounded retry schema probe returned no rows");
+      return result.rows[0].bounded;
+    } catch {
+      throw new PostgresInfrastructureError();
+    }
+  })();
+  boundedRetrySchemas.set(database, probe);
+  return probe;
+}
+
 export interface LeaseTokenGenerator {
   generate(): string;
 }
@@ -303,9 +336,11 @@ export function createPostgresOperationsPersistence(
 
   async function claimOutbox(input: LeaseClaimInput): Promise<readonly LeasedOutboxEvent[]> {
     validateLeaseInput(input);
+    const bounded = await boundedRetrySchema(database);
     return transactions.run(async (context) => {
       const executor = resolvePostgresTransaction(context);
-      const exhausted = await sql<{ event_id: string; last_error_code: string | null }>`
+      const exhausted = bounded
+        ? await sql<{ event_id: string; last_error_code: string | null }>`
         update operations.outbox_events
            set dead_at = clock_timestamp(), last_error_code = coalesce(last_error_code, 'OUTBOX_ATTEMPTS_EXHAUSTED'),
                lease_owner = null, lease_token = null, lease_expires_at = null
@@ -313,14 +348,14 @@ export function createPostgresOperationsPersistence(
            and ((lease_token is null and available_at <= clock_timestamp())
              or (lease_token is not null and lease_expires_at <= clock_timestamp()))
          returning event_id::text, last_error_code
-      `.execute(executor);
+      `.execute(executor)
+        : { rows: [] as Array<{ event_id: string; last_error_code: string | null }> };
       for (const row of exhausted.rows) await recordOperationalIncident(executor, "outbox", row.event_id, row.last_error_code ?? "OUTBOX_ATTEMPTS_EXHAUSTED");
       const due = await sql<OutboxLeaseRow>`
         select event_id::text, event_type, schema_version, payload, attempt_count
           from operations.outbox_events
          where completed_at is null
-           and dead_at is null
-           and attempt_count < ${JOB_MAX_ATTEMPTS}
+           ${bounded ? sql`and dead_at is null and attempt_count < ${JOB_MAX_ATTEMPTS}` : sql``}
            and available_at <= clock_timestamp()
            and (lease_expires_at is null or lease_expires_at <= clock_timestamp())
          order by available_at, event_id
@@ -360,7 +395,9 @@ export function createPostgresOperationsPersistence(
     }
     return transactions.run(async (context) => {
       const executor = resolvePostgresTransaction(context);
-      const exhausted = await sql<{ job_id: string; last_error_code: string | null }>`
+      const bounded = await boundedRetrySchema(database);
+      const exhausted = bounded
+        ? await sql<{ job_id: string; last_error_code: string | null }>`
         update operations.jobs
            set status = 'dead', last_error_code = coalesce(last_error_code, 'JOB_ATTEMPTS_EXHAUSTED'),
                lease_owner = null, lease_token = null, lease_expires_at = null
@@ -368,7 +405,8 @@ export function createPostgresOperationsPersistence(
            and ((status = 'available' and available_at <= clock_timestamp())
              or (status = 'leased' and lease_expires_at <= clock_timestamp()))
          returning job_id::text, last_error_code
-      `.execute(executor);
+      `.execute(executor)
+        : { rows: [] as Array<{ job_id: string; last_error_code: string | null }> };
       for (const row of exhausted.rows) await recordOperationalIncident(executor, "job", row.job_id, row.last_error_code ?? "JOB_ATTEMPTS_EXHAUSTED");
       const jobTypeFilter = input.jobTypes === undefined ? sql`` : sql`and job_type = any(${input.jobTypes}::text[])`;
       const due = await sql<JobLeaseRow>`
@@ -376,7 +414,7 @@ export function createPostgresOperationsPersistence(
           from operations.jobs
          where completed_at is null
            and available_at <= clock_timestamp()
-           and attempt_count < ${JOB_MAX_ATTEMPTS}
+           ${bounded ? sql`and attempt_count < ${JOB_MAX_ATTEMPTS}` : sql``}
            and (status = 'available' or (status = 'leased' and lease_expires_at <= clock_timestamp()))
            ${jobTypeFilter}
          order by available_at, job_id
@@ -501,6 +539,9 @@ export function createPostgresOperationsPersistence(
     parseSafeErrorCode(safeErrorCode);
     if (delayMilliseconds !== null && (!Number.isSafeInteger(delayMilliseconds) || delayMilliseconds < 0 || delayMilliseconds > 1_125_000)) {
       throw new TypeError("Retry delay is outside the allowed policy range.");
+    }
+    if (!(await boundedRetrySchema(database))) {
+      return guardedTransition("outbox_events", "event_id", id, leaseToken, "fail", safeErrorCode);
     }
     return transactions.run(async (context) => {
       const executor = resolvePostgresTransaction(context);

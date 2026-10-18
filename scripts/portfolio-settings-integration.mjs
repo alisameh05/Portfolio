@@ -306,12 +306,29 @@ async function phase3OperationsRows(client) {
   return { idempotency: idempotency.rows, outbox: outbox.rows, jobs: jobs.rows };
 }
 
+// Era-compatible preservation: a later migration may append columns (the Phase 8
+// bounded-retry migration appends outbox_events.dead_at). A Phase 3 row survives
+// when every previously captured value is unchanged and every newly introduced
+// column is null on that row.
+function phase3RowPreserved(expectedRow, actualRow) {
+  if (expectedRow === undefined || actualRow === undefined) return false;
+  if (Object.entries(expectedRow).some(([key, value]) => JSON.stringify(actualRow[key]) !== JSON.stringify(value))) return false;
+  return Object.keys(actualRow).every((key) => key in expectedRow || actualRow[key] === null);
+}
+
 async function assertPhase3OperationsPreserved(connectionString, expected) {
   const client = new Client({ connectionString });
   await client.connect();
   try {
     const actual = await phase3OperationsRows(client);
-    if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error("PORTFOLIO_SETTINGS_PHASE3_OPERATIONS_NOT_PRESERVED");
+    const preserved =
+      expected.idempotency.length === actual.idempotency.length &&
+      expected.outbox.length === actual.outbox.length &&
+      expected.jobs.length === actual.jobs.length &&
+      expected.idempotency.every((entry, index) => phase3RowPreserved(entry.row, actual.idempotency[index]?.row)) &&
+      expected.outbox.every((entry, index) => phase3RowPreserved(entry.row, actual.outbox[index]?.row)) &&
+      expected.jobs.every((entry, index) => phase3RowPreserved(entry.row, actual.jobs[index]?.row));
+    if (!preserved) throw new Error("PORTFOLIO_SETTINGS_PHASE3_OPERATIONS_NOT_PRESERVED");
     return actual;
   } finally {
     await client.end();

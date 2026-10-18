@@ -29,11 +29,20 @@ function stubOperationsDatabase(queue: QueueEntry[]) {
       transformQuery(node: unknown) {
         return node;
       },
-      compileQuery(node: { sql?: unknown }) {
-        const sqlText = typeof node?.sql === "string" ? node.sql : `stub statement ${calls}`;
+      compileQuery(node: { sql?: string } | unknown) {
+        const graphic = node as { sql?: string } | undefined;
+        const rendered = JSON.stringify(node) ?? "";
+        const sqlText =
+          typeof graphic?.sql === "string" ? graphic.sql :
+          rendered.includes("to_regclass('operations.incidents')") ? rendered :
+          `stub statement ${calls}`;
         return { sql: sqlText, parameters: [] as never[] };
       },
       async executeQuery(compiled: { sql: string }) {
+        // The schema-era probe is infrastructure plumbing, not a scripted step.
+        if (compiled.sql.includes("to_regclass('operations.incidents')")) {
+          return { rows: [{ bounded: true }] };
+        }
         const entry = queue[calls];
         calls += 1;
         statements.push(compiled.sql);
