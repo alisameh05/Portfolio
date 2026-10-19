@@ -59,11 +59,18 @@ fi
 # This also avoids Windows worktree-specific config changing Linux ref lookup.
 mkdir /workspace/.git
 cp /git/worktree/HEAD /git/worktree/index /workspace/.git/
-ln -s /git/common/objects /workspace/.git/objects
-ln -s /git/common/refs /workspace/.git/refs
 for metadata in packed-refs shallow; do
   if [ -f "/git/common/$metadata" ]; then cp "/git/common/$metadata" /workspace/.git/; fi
 done
+# Copy this checkout's own objects so the view can own its alternates file, and
+# translate the borrowed object store to its container mount. Host-specific
+# alternate paths cannot be normalized by container git.
+mkdir /workspace/.git/objects
+cp -a /git/common/objects/. /workspace/.git/objects/
+ln -s /git/common/refs /workspace/.git/refs
+if [ "${PORTFOLIO_USE_MAIN_OBJECTS:-0}" = "1" ] && [ -d /git/main-objects ]; then
+  printf '/git/main-objects\n' > /workspace/.git/objects/info/alternates
+fi
 unset GIT_COMMON_DIR GIT_DIR GIT_WORK_TREE
 git rev-parse --verify HEAD >/dev/null
 
