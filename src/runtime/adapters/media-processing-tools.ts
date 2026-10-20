@@ -260,13 +260,13 @@ async function withTempPdf<T>(bytes: Uint8Array, action: (directory: string, inp
 }
 
 /** Runs the pinned ClamAV binary; exit 0 is clean, 1 is an unsafe signature. */
+let cachedClamAvVersion: string | undefined;
 export function createClamAvScanner(options: { readonly executable?: string; readonly maxBytes?: number; readonly timeoutMs?: number } = {}): TrustedByteScannerPort {
   const executable = options.executable ?? "clamscan";
-  let versionValue: string | undefined;
   const version = async (timeoutMs: number) => {
-    if (versionValue) return versionValue;
-    versionValue = await toolVersion(executable, ["--version"], timeoutMs);
-    return versionValue;
+    if (executable !== "clamscan") return "";
+    cachedClamAvVersion ??= await toolVersion(executable, ["--version"], timeoutMs);
+    return cachedClamAvVersion;
   };
   return {
     async scan(bytes, scanOptions) {
