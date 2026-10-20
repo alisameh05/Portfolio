@@ -275,8 +275,10 @@ export function createClamAvScanner(options: { readonly executable?: string; rea
       try {
         if (executable !== "clamscan") return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         // Include Docker Desktop/container startup and cleanup in this stage.
-        // This still consumes the scanner's shared deadline.
-        const versionTimeoutMs = Math.min(5_000, remainingMs());
+        // This still consumes the scanner's shared deadline. The probe keeps a
+        // wider slice than a local binary because it starts a nested container,
+        // which can take >10s without contention on Docker-in-Docker hosts.
+        const versionTimeoutMs = Math.min(15_000, remainingMs());
         if (!versionTimeoutMs) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         const scannerVersion = await version(versionTimeoutMs);
         if (!isPinnedClamAvVersion(scannerVersion)) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
