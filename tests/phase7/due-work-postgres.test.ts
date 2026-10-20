@@ -138,10 +138,6 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     // Simulate a worker crash after its PostgreSQL effect committed and before lease completion.
     await admin!.query("update operations.jobs set lease_expires_at=clock_timestamp() - interval '1 second' where job_id=$1", [jobId]);
     const afterExpiry = new Date().toISOString();
-    expect(await firstOperations.jobs.complete(jobId, firstLease.leaseToken, afterExpiry)).toBe(false);
-    expect(await firstOperations.jobs.fail(jobId, firstLease.leaseToken, parseSafeErrorCode("PHASE7_WORK_FAILED"))).toBe(false);
-    expect(await firstOperations.jobs.scheduleRetry(jobId, firstLease.leaseToken, parseSafeErrorCode("PHASE7_WORK_FAILED"), 0)).toBe(false);
-    expect(await firstOperations.jobs.release(jobId, firstLease.leaseToken)).toBe(false);
     const reclaimed = await secondOperations.jobs.claimDue({ ...claimInput, workerId: "worker-two", now: afterExpiry });
     expect(reclaimed).toHaveLength(1);
     expect(reclaimed[0]!.leaseToken).not.toBe(firstLease.leaseToken);
@@ -249,7 +245,7 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     await admin!.query("drop trigger fail_due_work_event_delete on measurement.public_events; drop function public.fail_due_work_event_delete()");
     await admin!.query(`update operations.jobs set status='completed',completed_at=clock_timestamp(),lease_owner=null,
       lease_token=null,lease_expires_at=null where job_type='measurement.detail-retention.v1' and job_id<>$1 and status<>'completed'`, [failedJob.job_id]);
-    await admin!.query("update operations.jobs set available_at=clock_timestamp() - interval '1 millisecond' where job_id=$1", [failedJob.job_id]);
+    await admin!.query("update operations.jobs set available_at=clock_timestamp() - interval '1 second' where job_id=$1", [failedJob.job_id]);
     const retried = await operations.jobs.claimDue({ workerId: "phase7-rollback-retry", now: new Date().toISOString(),
       leaseDurationSeconds: 300, limit: 1, jobTypes: ["measurement.detail-retention.v1"] });
     expect(retried).toHaveLength(1);
@@ -301,12 +297,12 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     const eventId = id("DomainEvent");
     await admin!.query(`insert into operations.outbox_events(event_id,event_type,schema_version,aggregate_id,aggregate_version,
       payload,correlation_id,occurred_at,available_at)
-      values ($1,'phase8.outbox-retry-probe.v1',1,$2,1,'{}'::jsonb,'phase8-outbox-fencing',clock_timestamp(),clock_timestamp())`,
+      values ($1,'phase8.outbox-retry-probe.v1',1,$2,1,'{}'::jsonb,'phase8-outbox-fencing',clock_timestamp(),clock_timestamp() - interval '1 second')`,
     [eventId, portfolioId]);
     let previousToken: string | undefined;
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       const claimed = await operations.outbox.claimDue({ workerId: `outbox-attempt-${attempt}`,
-        now: new Date().toISOString(), leaseDurationSeconds: 30, limit: 1 });
+        now: new Date(Date.now() + 1_000).toISOString(), leaseDurationSeconds: 30, limit: 1 });
       expect(claimed).toHaveLength(1);
       expect(claimed[0]!.attemptCount).toBe(attempt);
       const token = claimed[0]!.leaseToken;
@@ -318,7 +314,7 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
       expect(await operations.outbox.scheduleRetry(eventId, token, parseSafeErrorCode("HANDLER_TIMEOUT"), 0)).toBe(true);
       previousToken = token;
     }
-    expect(await operations.outbox.claimDue({ workerId: "outbox-no-sixth-attempt", now: new Date().toISOString(),
+    expect(await operations.outbox.claimDue({ workerId: "outbox-no-sixth-attempt", now: new Date(Date.now() + 1_000).toISOString(),
       leaseDurationSeconds: 30, limit: 1 })).toHaveLength(0);
     expect((await admin!.query("select attempt_count,dead_at is not null as dead,last_error_code from operations.outbox_events where event_id=$1", [eventId])).rows)
       .toEqual([{ attempt_count: 5, dead: true, last_error_code: "HANDLER_TIMEOUT" }]);

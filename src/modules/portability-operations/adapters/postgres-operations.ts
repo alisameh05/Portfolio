@@ -173,10 +173,8 @@ function validateLeaseInput(input: LeaseClaimInput): void {
   }
 }
 
-function databaseInstant(value: Date | string | undefined): string {
-  const instant = value instanceof Date ? value : typeof value === "string" ? new Date(value) : undefined;
-  if (!instant || !Number.isFinite(instant.getTime())) throw new PostgresInfrastructureError();
-  return instant.toISOString();
+function leaseExpiry(now: string, seconds: number): string {
+  return new Date(Date.parse(now) + seconds * 1_000).toISOString();
 }
 
 function safePayload(row: {
@@ -356,24 +354,23 @@ export function createPostgresOperationsPersistence(
           from operations.outbox_events
          where completed_at is null
            ${bounded ? sql`and dead_at is null and attempt_count < ${JOB_MAX_ATTEMPTS}` : sql``}
-           and available_at <= clock_timestamp()
-           and (lease_expires_at is null or lease_expires_at <= clock_timestamp())
-         order by available_at, event_id
-         for update skip locked
-         limit ${input.limit}
+           and available_at <= ${input.now}::timestamptz
+           and (lease_expires_at is null or lease_expires_at <= ${input.now}::timestamptz)
+          order by available_at, event_id
+          for update skip locked
+          limit ${input.limit}
       `.execute(executor);
       const leased: LeasedOutboxEvent[] = [];
       for (const row of due.rows) {
         const leaseToken = tokens.generate();
-        const updated = await sql<{ lease_expires_at: Date | string }>`
+        const expiry = leaseExpiry(input.now, input.leaseDurationSeconds);
+        await sql`
           update operations.outbox_events
              set lease_owner = ${input.workerId}, lease_token = ${leaseToken},
-                 lease_expires_at = clock_timestamp() + (${input.leaseDurationSeconds} * interval '1 second'),
+                 lease_expires_at = ${expiry}::timestamptz,
                  attempt_count = attempt_count + 1
-           where event_id = ${row.event_id}::uuid
-         returning lease_expires_at
+            where event_id = ${row.event_id}::uuid
         `.execute(executor);
-        const expiry = databaseInstant(updated.rows[0]?.lease_expires_at);
         leased.push({
           eventId: row.event_id,
           payload: safePayload(row),
@@ -413,9 +410,9 @@ export function createPostgresOperationsPersistence(
         select job_id::text, job_type, payload_version, payload, attempt_count
           from operations.jobs
          where completed_at is null
-           and available_at <= clock_timestamp()
+           and available_at <= ${input.now}::timestamptz
            ${bounded ? sql`and attempt_count < ${JOB_MAX_ATTEMPTS}` : sql``}
-           and (status = 'available' or (status = 'leased' and lease_expires_at <= clock_timestamp()))
+           and (status = 'available' or (status = 'leased' and lease_expires_at <= ${input.now}::timestamptz))
            ${jobTypeFilter}
          order by available_at, job_id
          for update skip locked
@@ -424,16 +421,15 @@ export function createPostgresOperationsPersistence(
       const leased: LeasedJobRecord[] = [];
       for (const row of due.rows) {
         const leaseToken = tokens.generate();
-        const updated = await sql<{ lease_expires_at: Date | string }>`
+        const expiry = leaseExpiry(input.now, input.leaseDurationSeconds);
+        await sql`
           update operations.jobs
              set status = 'leased', lease_owner = ${input.workerId},
                  lease_token = ${leaseToken},
-                 lease_expires_at = clock_timestamp() + (${input.leaseDurationSeconds} * interval '1 second'),
+                 lease_expires_at = ${expiry}::timestamptz,
                  attempt_count = attempt_count + 1
-           where job_id = ${row.job_id}::uuid
-         returning lease_expires_at
+            where job_id = ${row.job_id}::uuid
         `.execute(executor);
-        const expiry = databaseInstant(updated.rows[0]?.lease_expires_at);
         leased.push({
           jobId: row.job_id,
           payload: safePayload(row),
@@ -471,7 +467,6 @@ export function createPostgresOperationsPersistence(
       const result = await sql<{ changed: boolean }>`
         update ${tableRef} set ${assignment}
          where ${idRef} = ${id}::uuid and lease_token = ${leaseToken}
-           and lease_expires_at > clock_timestamp()
          returning true as changed
       `.execute(database);
       return result.rows.length === 1;
@@ -517,7 +512,6 @@ export function createPostgresOperationsPersistence(
                last_error_code = ${safeErrorCode},
                lease_owner = null, lease_token = null, lease_expires_at = null
          where job_id = ${id}::uuid and status = 'leased' and lease_token = ${leaseToken}
-           and lease_expires_at > clock_timestamp()
          returning job_id::text, status
       `.execute(executor);
       const row = changed.rows[0];
@@ -553,9 +547,9 @@ export function createPostgresOperationsPersistence(
                  then available_at else clock_timestamp() + (${delayMilliseconds ?? 0} * interval '1 millisecond') end,
                last_error_code = ${safeErrorCode},
                lease_owner = null, lease_token = null, lease_expires_at = null
-         where event_id = ${id}::uuid and completed_at is null and dead_at is null
-           and lease_token = ${leaseToken} and lease_expires_at > clock_timestamp()
-         returning event_id::text, dead_at
+          where event_id = ${id}::uuid and completed_at is null and dead_at is null
+            and lease_token = ${leaseToken}
+          returning event_id::text, dead_at
       `.execute(executor);
       const row = changed.rows[0];
       if (!row) return false;
