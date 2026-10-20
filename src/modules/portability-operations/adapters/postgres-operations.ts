@@ -354,8 +354,8 @@ export function createPostgresOperationsPersistence(
           from operations.outbox_events
          where completed_at is null
            ${bounded ? sql`and dead_at is null and attempt_count < ${JOB_MAX_ATTEMPTS}` : sql``}
-           and available_at <= ${input.now}::timestamptz
-           and (lease_expires_at is null or lease_expires_at <= ${input.now}::timestamptz)
+           and available_at <= greatest(${input.now}::timestamptz, clock_timestamp())
+           and (lease_expires_at is null or lease_expires_at <= greatest(${input.now}::timestamptz, clock_timestamp()))
           order by available_at, event_id
           for update skip locked
           limit ${input.limit}
@@ -410,9 +410,9 @@ export function createPostgresOperationsPersistence(
         select job_id::text, job_type, payload_version, payload, attempt_count
           from operations.jobs
          where completed_at is null
-           and available_at <= ${input.now}::timestamptz
+           and available_at <= greatest(${input.now}::timestamptz, clock_timestamp())
            ${bounded ? sql`and attempt_count < ${JOB_MAX_ATTEMPTS}` : sql``}
-           and (status = 'available' or (status = 'leased' and lease_expires_at <= ${input.now}::timestamptz))
+           and (status = 'available' or (status = 'leased' and lease_expires_at <= greatest(${input.now}::timestamptz, clock_timestamp())))
            ${jobTypeFilter}
          order by available_at, job_id
          for update skip locked
