@@ -31,7 +31,8 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
   readonly elapsedDuringScanMs?: number; readonly fileName?: string; readonly scannerUnavailable?: boolean; readonly sealedObjectId?: StableId<"MediaObject">;
   readonly mediaCandidate?: MediaProcessingCandidate; readonly videoProcessorUnavailable?: boolean; readonly videoSealUnavailable?: boolean; readonly candidateUnavailable?: boolean;
   readonly videoVariantCount?: number; readonly malformedVideoOutput?: boolean; readonly elapsedDuringVideoSealMs?: number;
-  readonly elapsedDuringVideoProcessMs?: number; readonly elapsedDuringVideoOutputScanMs?: number; readonly elapsedDuringPdfProcessMs?: number } = {}) {
+  readonly elapsedDuringVideoProcessMs?: number; readonly elapsedDuringVideoOutputScanMs?: number; readonly elapsedDuringPdfProcessMs?: number;
+  readonly pdfProcessorTransientFailures?: number; readonly pdfProcessorPolicyRejected?: boolean } = {}) {
   const target = options.mediaCandidate ?? candidate;
   const commits: Parameters<MediaProcessingRepositoryPort["commitAttempt"]>[0][] = [];
   const orphanCalls: Parameters<MediaProcessingRepositoryPort["recordOrphan"]>[0][] = [];
@@ -47,7 +48,11 @@ function harness(options: { readonly state?: MediaProcessingCandidate["state"]; 
     nowMs += scanCount === 1 ? options.elapsedDuringScanMs ?? 0 : options.elapsedDuringVideoOutputScanMs ?? 0;
     return { ok: true as const, value: { verdict: "clean" as const, version: "ClamAV pinned" } };
   });
+  let processCalls = 0;
   const process = vi.fn(async () => {
+    processCalls += 1;
+    if (options.pdfProcessorPolicyRejected) return { ok: false as const, error: { kind: "validation" as const, code: "MEDIA_PDF_POLICY_REJECTED" } };
+    if (processCalls <= (options.pdfProcessorTransientFailures ?? 0)) return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_PROCESSOR_UNAVAILABLE" } };
     nowMs += options.elapsedDuringPdfProcessMs ?? 0;
     return { ok: true as const, value: { bytes: output, version: "OCRmyPDF pinned", policyVersion: "pdf-policy-1" } };
   });
@@ -110,6 +115,24 @@ describe("trusted media processing", () => {
     expect(h.process).toHaveBeenCalledWith(pdf, { timeoutMs: 1_000 });
     expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", findings: ["MEDIA_PROCESSING_TIMEOUT"] });
     expect(h.commits[0]?.attempt.outputObjectId).toBeUndefined();
+  });
+  it("retries the PDF processor once within the attempt budget after a transient unavailability", async () => {
+    const h = harness({ pdfProcessorTransientFailures: 1 });
+    expect(await h.service.record(command)).toMatchObject({ ok: true, value: { outcome: "media-processing-recorded" } });
+    expect(h.process).toHaveBeenCalledTimes(2);
+    expect(h.commits[0]?.attempt).toMatchObject({ result: "passed", processorVersion: "OCRmyPDF pinned" });
+  });
+  it("stops after one PDF processor retry and records the transient failure when unavailability persists", async () => {
+    const h = harness({ pdfProcessorTransientFailures: 2 });
+    expect(await h.service.record(command)).toMatchObject({ ok: false, error: { code: "MEDIA_PROCESSOR_UNAVAILABLE" } });
+    expect(h.process).toHaveBeenCalledTimes(2);
+    expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", temporaryFailure: true, findings: ["MEDIA_PROCESSOR_UNAVAILABLE"] });
+  });
+  it("does not retry the PDF processor for deterministic policy rejections", async () => {
+    const h = harness({ pdfProcessorPolicyRejected: true });
+    expect(await h.service.record(command)).toMatchObject({ ok: true, value: { outcome: "media-processing-recorded" } });
+    expect(h.process).toHaveBeenCalledTimes(1);
+    expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", temporaryFailure: false, findings: ["MEDIA_PDF_POLICY_REJECTED"] });
   });
   it("binds real input facts, scans and processes both byte streams, then records immutable output evidence", async () => {
     const h = harness();

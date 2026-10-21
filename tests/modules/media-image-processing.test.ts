@@ -19,11 +19,12 @@ const candidate: MediaProcessingCandidate = {
 const command = { actor: { kind: "owner" as const, ownerId, sessionId: "opaque" }, idempotencyKey: "image-key-0001" as never,
   expectedVersion: 1, mediaId, result: "passed" as const, detectedMediaType: "image/png", detectedByteLength: png.byteLength, sha256: sha(png) };
 
-function harness(options: { readonly replay?: boolean; readonly unsafeOutput?: boolean; readonly commitError?: string; readonly fileName?: string; readonly commitDelayMs?: number; readonly advanceBeforeCommitMs?: number; readonly discardError?: boolean; readonly orphanError?: string } = {}) {
+function harness(options: { readonly replay?: boolean; readonly unsafeOutput?: boolean; readonly commitError?: string; readonly fileName?: string; readonly commitDelayMs?: number; readonly advanceBeforeCommitMs?: number; readonly discardError?: boolean; readonly orphanError?: string; readonly imageProcessorTransientFailures?: number; readonly imageProcessorPolicyRejected?: boolean } = {}) {
   const commits: Parameters<MediaProcessingRepositoryPort["commitAttempt"]>[0][] = [];
   const sealed: Parameters<NonNullable<MediaProcessingRepositoryPort["recordOrphan"]>>[0][] = [];
   const discarded: unknown[] = [];
   let objectSequence = 110;
+  let imageProcessorCalls = 0;
   const repository: MediaProcessingRepositoryPort = {
     async getCandidate() { return { ok: true, value: { ...candidate, originalFileName: options.fileName ?? candidate.originalFileName } }; },
     async getReplay() { return options.replay ? { ok: true, value: { kind: "replay", version: 2, outcome: "media-processing-recorded" } } : { ok: true, value: { kind: "missing" } }; },
@@ -47,6 +48,16 @@ function harness(options: { readonly replay?: boolean; readonly unsafeOutput?: b
   const sealProcessedObject = vi.fn(async (input: { readonly outputObjectId: StableId<string>; readonly sha256: string }) => {
     return { ok: true as const, value: { objectId: input.outputObjectId, sha256: input.sha256 } };
   });
+  const imageProcessor = vi.fn(async () => {
+    imageProcessorCalls += 1;
+    if (options.imageProcessorPolicyRejected) return { ok: false as const, error: { kind: "validation" as const, code: "MEDIA_IMAGE_OUTPUT_INVALID" } };
+    if (imageProcessorCalls <= (options.imageProcessorTransientFailures ?? 0)) return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "MEDIA_PROCESSOR_UNAVAILABLE" } };
+    if (options.advanceBeforeCommitMs) vi.setSystemTime(Date.now() + options.advanceBeforeCommitMs);
+    return { ok: true as const, value: { version: "sharp-0.35.4;libvips-8.17.3", policyVersion: "image-webp-variants-v1", variants: [
+      { name: "display" as const, bytes: display, mimeType: "image/webp" as const, width: 16, height: 8 },
+      { name: "thumbnail" as const, bytes: thumbnail, mimeType: "image/webp" as const, width: 16, height: 8 },
+    ] } };
+  });
   const service = createMediaProcessingApplicationService({
     scope: { ownerId }, repository,
     storage: {
@@ -56,17 +67,12 @@ function harness(options: { readonly replay?: boolean; readonly unsafeOutput?: b
     },
     scanner: { scan },
     processor: { async process() { throw new Error("PDF processor must not run for an image candidate"); } },
-    imageProcessor: { async process() {
-      if (options.advanceBeforeCommitMs) vi.setSystemTime(Date.now() + options.advanceBeforeCommitMs);
-      return { ok: true as const, value: { version: "sharp-0.35.4;libvips-8.17.3", policyVersion: "image-webp-variants-v1", variants: [
-      { name: "display" as const, bytes: display, mimeType: "image/webp" as const, width: 16, height: 8 },
-      { name: "thumbnail" as const, bytes: thumbnail, mimeType: "image/webp" as const, width: 16, height: 8 },
-    ] } }; } },
+    imageProcessor: { process: imageProcessor },
     digest: { sha256: sha },
     ids: { generate(kind) { if (kind === "MediaProcessingAttempt") return "00000000-0000-7000-8000-000000000109"; if (kind === "MediaProcessingClaim") return "00000000-0000-7000-8000-000000000108"; objectSequence += 1; return `00000000-0000-7000-8000-0000000001${objectSequence}`; } },
     clock: { now: () => "2026-10-11T00:00:00.000Z" },
   });
-  return { service, commits, sealed, discarded, scan, sealProcessedObject };
+  return { service, commits, sealed, discarded, scan, sealProcessedObject, imageProcessor };
 }
 
 describe("Media image processing application interface", () => {
@@ -93,6 +99,27 @@ describe("Media image processing application interface", () => {
     expect(h.scan).not.toHaveBeenCalled();
     expect(h.sealProcessedObject).not.toHaveBeenCalled();
     expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", findings: ["MEDIA_EXTENSION_MISMATCH"] });
+  });
+
+  it("retries the image processor once within the attempt budget after a transient unavailability", async () => {
+    const h = harness({ imageProcessorTransientFailures: 1 });
+    expect(await h.service.record(command)).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+    expect(h.imageProcessor).toHaveBeenCalledTimes(2);
+    expect(h.commits[0]?.attempt).toMatchObject({ result: "passed", processorVersion: "sharp-0.35.4;libvips-8.17.3" });
+  });
+
+  it("stops after one image processor retry and records the transient failure when unavailability persists", async () => {
+    const h = harness({ imageProcessorTransientFailures: 2 });
+    expect(await h.service.record(command)).toMatchObject({ ok: true, value: { outcome: "media-processing-recorded" } });
+    expect(h.imageProcessor).toHaveBeenCalledTimes(2);
+    expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", temporaryFailure: true, findings: ["MEDIA_PROCESSOR_UNAVAILABLE"] });
+  });
+
+  it("does not retry the image processor for deterministic policy rejections", async () => {
+    const h = harness({ imageProcessorPolicyRejected: true });
+    expect(await h.service.record(command)).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+    expect(h.imageProcessor).toHaveBeenCalledTimes(1);
+    expect(h.commits[0]?.attempt).toMatchObject({ result: "failed", temporaryFailure: false, findings: ["MEDIA_IMAGE_OUTPUT_INVALID"] });
   });
 
   it("retains no image object when any output is unsafe or the database commit becomes stale", async () => {
