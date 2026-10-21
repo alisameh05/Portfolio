@@ -356,8 +356,7 @@ with opened as pdf:
 export function createOcrMyPdfProcessor(options: { readonly python?: string; readonly ocrmypdf?: string } = {}): PdfProcessorPort {
   const python = options.python ?? "python3";
   const ocrmypdf = options.ocrmypdf ?? "ocrmypdf";
-  return {
-    async process(bytes, processOptions) {
+  const attempt = async (bytes: Uint8Array, processOptions?: { readonly timeoutMs?: number }): Promise<Result<{ readonly bytes: Uint8Array; readonly version: string; readonly policyVersion: string }, Rejection>> => {
       if ((processOptions?.timeoutMs ?? PDF_TOTAL_TIMEOUT_MS) <= 0) return safeFailure("MEDIA_PROCESSING_TIMEOUT");
       const deadline = Date.now() + Math.min(PDF_TOTAL_TIMEOUT_MS, processOptions?.timeoutMs ?? PDF_TOTAL_TIMEOUT_MS);
       const remaining = (cap: number) => {
@@ -402,6 +401,23 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
         if (message === "MEDIA_PDF_OUTPUT_INVALID") return err({ kind: "validation", code: message });
         return safeFailure("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
       }
+  };
+  return {
+    async process(bytes, processOptions) {
+      const startedAtMs = Date.now();
+      let result = await attempt(bytes, processOptions);
+      // One bounded retry for a fast transient unavailability (nested Docker
+      // startup races on gate hosts): only when the first attempt failed well
+      // inside half of the requested budget, so slow stalls still report
+      // timeout instead of doubling the latency.
+      if (!result.ok && result.error.kind === "temporarily_unavailable" && result.error.code === "MEDIA_PDF_PROCESSOR_UNAVAILABLE") {
+        const budgetMs = Math.min(PDF_TOTAL_TIMEOUT_MS, processOptions?.timeoutMs ?? PDF_TOTAL_TIMEOUT_MS);
+        if (Date.now() - startedAtMs < budgetMs / 2) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          result = await attempt(bytes, processOptions);
+        }
+      }
+      return result;
     },
   };
 }
