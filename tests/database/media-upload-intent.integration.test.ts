@@ -8,6 +8,7 @@ import { Client } from "pg";
 import { sql } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dockerBindMountUserArgs } from "../../src/runtime/adapters/media-processing-tools.js";
+import { configureMediaToolDiagnostics } from "../../src/runtime/adapters/media-processing-tools.js";
 import { handleCreateOwnerMediaUploadIntent } from "../../src/runtime/http/owner-media.js";
 import { handleGetCurrentCv } from "../../src/runtime/http/current-cv.js";
 import { handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-media.js";
@@ -71,6 +72,7 @@ const IMAGE_FIXTURES = {
 } as const;
 const REQUIRE_IMAGES = process.env["PHASE6_REQUIRE_IMAGES"] === "1";
 const REQUIRE_VIDEO = process.env["PHASE6_REQUIRE_VIDEO"] === "1";
+configureMediaToolDiagnostics(process.env["MEDIA_TOOL_DIAGNOSTICS_FILE"]);
 const PROCESSING_COUNTS_FILE = process.env["PHASE6_MEDIA_PROCESSING_COUNTS_FILE"];
 const REQUIRE_REAL = process.env["PHASE6_REQUIRE_UPLOAD_INTENT"] === "1";
 const REQUIRE_PDF_PROCESSING_ONLY = process.env["PHASE6_PDF_PROCESSING_ONLY"] === "1";

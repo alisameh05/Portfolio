@@ -12,13 +12,20 @@ const execFile = promisify(nodeExecFile);
 const MAX_BYTES = 20 * 1024 * 1024;
 const versionCache = new Map<string, string>();
 
+// Diagnostics sink is inert by default; gate scripts inject a file path so
+// failing bounded tool runs leave evidence without relying on worker stdout.
+let diagnosticsFileName: string | undefined;
+
+export function configureMediaToolDiagnostics(fileName: string | undefined): void {
+  diagnosticsFileName = fileName;
+}
+
 function recordToolDiagnostics(detail: Record<string, unknown>): void {
   try {
     console.error("[media-tool-diagnostics]", JSON.stringify(detail));
-    const fileName = process.env["MEDIA_TOOL_DIAGNOSTICS_FILE"];
-    if (!fileName) return;
-    try { mkdirSync(dirname(fileName), { recursive: true }); } catch { /* diagnostics best effort */ }
-    appendFileSync(fileName, `${JSON.stringify(detail)}\n`, { flag: "a" });
+    if (!diagnosticsFileName) return;
+    try { mkdirSync(dirname(diagnosticsFileName), { recursive: true }); } catch { /* diagnostics best effort */ }
+    appendFileSync(diagnosticsFileName, `${JSON.stringify(detail)}\n`, { flag: "a" });
   } catch { /* diagnostics never break processing */ }
 }
 // Stage caps include cleanup and share the application's 60s deadline.
