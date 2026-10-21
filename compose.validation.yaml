@@ -17,6 +17,7 @@ services:
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: /workspace
       SUPABASE_TELEMETRY_DISABLED: "1"
+      MEDIA_TOOL_DIAGNOSTICS_FILE: /workspace/evidence/phase6-gate-checks/media-tool-diagnostics.log
     volumes:
       - type: bind
         source: .

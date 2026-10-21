@@ -1,6 +1,7 @@
 import { execFile as nodeExecFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
+import { appendFileSync, mkdirSync } from "node:fs";
 import { open, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -10,6 +11,16 @@ import type { PdfProcessorPort, TrustedByteScannerPort, VideoProcessorPort } fro
 const execFile = promisify(nodeExecFile);
 const MAX_BYTES = 20 * 1024 * 1024;
 const versionCache = new Map<string, string>();
+
+function recordToolDiagnostics(detail: Record<string, unknown>): void {
+  try {
+    console.error("[media-tool-diagnostics]", JSON.stringify(detail));
+    const fileName = process.env["MEDIA_TOOL_DIAGNOSTICS_FILE"];
+    if (!fileName) return;
+    try { mkdirSync(dirname(fileName), { recursive: true }); } catch { /* diagnostics best effort */ }
+    appendFileSync(fileName, `${JSON.stringify(detail)}\n`, { flag: "a" });
+  } catch { /* diagnostics never break processing */ }
+}
 // Stage caps include cleanup and share the application's 60s deadline.
 // Docker startup, the pinned definition load and cleanup share this cap.
 const SCAN_TIMEOUT_MS = 60_000;
@@ -151,19 +162,19 @@ export function monitorBoundedChildOutput(executable: string, args: readonly str
           if (info.size > limits.maxBytes) failure = new Error("MEDIA_PDF_OUTPUT_INVALID");
         } catch { /* The caller validates expected output existence. */ }
         if (failure) {
-          console.error("[media-bounded-output]", JSON.stringify({
-            executable, exitCode: code ?? null, signal: signal ?? null,
-            stderr: stderrTail.replace(/\s+/gu, " ").slice(0, 500),
-          }));
+          recordToolDiagnostics({
+            kind: "bounded-output", executable, exitCode: code ?? null, signal: signal ?? null,
+            cause: failure.message.slice(0, 100), stderr: stderrTail.replace(/\s+/gu, " ").slice(0, 500),
+          });
           await stopTree();
           reject(failure);
         }
         else if (code === 0) resolve();
         else {
-          console.error("[media-bounded-output]", JSON.stringify({
-            executable, exitCode: code ?? null, signal: signal ?? null,
+          recordToolDiagnostics({
+            kind: "bounded-output", executable, exitCode: code ?? null, signal: signal ?? null,
             stderr: stderrTail.replace(/\s+/gu, " ").slice(0, 500),
-          }));
+          });
           reject(Object.assign(new Error("MEDIA_PDF_PROCESSOR_UNAVAILABLE"), { code: code ?? signal }));
         }
       })();
@@ -261,17 +272,17 @@ async function toolVersion(executable: string, args: readonly string[], timeoutM
       "--ulimit=fsize=4096:4096", "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--entrypoint", entrypoint, image, ...args],
     { encoding: "utf8", timeout: executionTimeoutMs, maxBuffer: 4 * 1024, windowsHide: true });
   } catch (cause) {
-    console.error("[media-tool-version]", JSON.stringify({
-      executable, args: args.join(" "),
+    recordToolDiagnostics({
+      kind: "tool-version", executable, args: args.join(" ").slice(0, 200),
       stderr: `${cause instanceof Error && "stderr" in cause ? String((cause as { stderr?: unknown }).stderr ?? "") : ""} ${cause instanceof Error ? cause.message : ""}`
         .replace(/\s+/gu, " ").slice(0, 500),
-    }));
+    });
     if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 5_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
     throw cause;
   }
   const version = `${result.stdout.toString().trim()} ${result.stderr.toString().trim()}`.trim().replace(/[^A-Za-z0-9./_: -]/gu, "").slice(0, 150);
   if (version.length < 3) {
-    console.error("[media-tool-version]", JSON.stringify({ executable, stdout: result.stdout.toString().slice(0, 200), stderr: result.stderr.toString().slice(0, 200) }));
+    recordToolDiagnostics({ kind: "tool-version-empty", executable, stdout: result.stdout.toString().slice(0, 200), stderr: result.stderr.toString().slice(0, 200) });
     throw new Error("MEDIA_TOOL_VERSION_UNAVAILABLE");
   }
   versionCache.set(cacheKey, version);
@@ -422,6 +433,7 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
         if (message === "MEDIA_PROCESSING_TIMEOUT") return safeFailure(message);
         if (message === "MEDIA_BYTES_OUT_OF_BOUNDS") return err({ kind: "validation", code: message });
         if (message === "MEDIA_PDF_OUTPUT_INVALID") return err({ kind: "validation", code: message });
+        recordToolDiagnostics({ kind: "pdf-processor-caught", message: message.slice(0, 200) });
         return safeFailure("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
       }
   };
