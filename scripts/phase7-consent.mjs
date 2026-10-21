@@ -42,7 +42,11 @@ try {
   stage = "cluster";
   run(exe("initdb"), ["-D", data, "--no-locale", "-A", "trust", "-U", "postgres"]);
   started = true;
-  run(exe("pg_ctl"), ["-D", data, "-l", join(temp, "server.log"), "-o", `-h 127.0.0.1 -p ${port} -F`, "-w", "start"]);
+  // Hosted Linux runners cannot write the default /var/run/postgresql socket
+  // directory, so point unix_socket_directories at an owned temp directory.
+  const socketDir = join(temp, "socket");
+  mkdirSync(socketDir, { recursive: true });
+  run(exe("pg_ctl"), ["-D", data, "-l", join(temp, "server.log"), "-o", `-h 127.0.0.1 -p ${port} -F -k ${socketDir}`, "-w", "start"]);
   await client.connect(); connected = true;
   stage = "baseline";
   await client.query("create role anon nologin; create role authenticated nologin; create role shipwithali_migration nologin nosuperuser nobypassrls; grant create on database postgres to shipwithali_migration");
