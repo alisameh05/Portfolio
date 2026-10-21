@@ -168,6 +168,8 @@ jobs:
       - name: Build the portable Linux Docker validation runner
         run: docker compose -p portfolio-validation -f compose.validation.yaml build validation
       - name: Require the complete fail-closed Phase 6 gate
+        env:
+          MEDIA_TOOL_DIAGNOSTICS_FILE: evidence/phase6-gate-checks/media-tool-diagnostics.log
         run: npm run phase6:gate
       - name: Publish sanitized Phase 6 gate and component evidence
         if: always()
