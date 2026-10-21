@@ -8,3 +8,7 @@ src/contracts/http/**/generated/*.ts text eol=lf
 # Kysely database types are regenerated from the migrated database and drift-checked byte-for-byte.
 src/shared/adapters/postgres/database.generated.ts text eol=lf
 src/modules/*/adapters/database.generated.ts text eol=lf
+# Normalize every tracked text file to LF in the repository and on every checkout,
+# so working-tree byte fingerprints match CI regardless of core.autocrlf on worktrees.
+# The evidence/ directory keeps `* -text` to preserve artifacts byte-for-byte.
+* text=auto eol=lf
