@@ -11,15 +11,15 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
 > shipwithali-portfolio@0.0.0 phase5:focus:authoring-review-publication-routes
 > node scripts/phase5-verification.mjs --suite authoring
 
-JSON report written to <TEMP>/shipwithali-phase5-authoring-31616-92d9746e-8cda-40e9-a970-21fdfe850ab5.json
+JSON report written to <TEMP>/shipwithali-phase5-authoring-29908-ca1fa2e8-e744-408f-9c8c-0cd28fd16a8c.json
 
 {
   "schemaVersion": 1,
-  "runId": "aca6fe25-5a99-42ac-82d0-a3c667a7d51a",
-  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+  "runId": "913c4130-2a18-4a57-92d9-b953703cefb5",
+  "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+  "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
   "suite": "authoring",
-  "startedAt": "2026-10-18T16:01:59.375Z",
+  "startedAt": "2026-10-21T22:16:11.192Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,

@@ -44,10 +44,12 @@ function operationsFake() {
       append: async (_context, event) => { events.push(event); },
       claimDue: async () => [], complete: async () => false,
       fail: async () => false, release: async () => false,
+      scheduleRetry: async () => false,
     },
     jobs: {
       enqueue: async () => undefined, claimDue: async () => [], complete: async () => false,
-      fail: async () => false, release: async () => false,
+      fail: async () => false, scheduleRetry: async () => false, getDeadForRedrive: async () => null,
+      redriveDead: async () => null, release: async () => false,
     },
   };
   return { operations, events, get executions() { return executions; } };

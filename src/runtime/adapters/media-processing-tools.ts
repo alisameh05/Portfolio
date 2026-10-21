@@ -1,6 +1,7 @@
 import { execFile as nodeExecFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
+import { appendFileSync, mkdirSync } from "node:fs";
 import { open, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -9,13 +10,35 @@ import type { PdfProcessorPort, TrustedByteScannerPort, VideoProcessorPort } fro
 
 const execFile = promisify(nodeExecFile);
 const MAX_BYTES = 20 * 1024 * 1024;
-// Stage caps include cleanup and share the application's 60s deadline.
+const versionCache = new Map<string, string>();
+
+// Diagnostics sink is inert by default; gate scripts inject a file path so
+// failing bounded tool runs leave evidence without relying on worker stdout.
+let diagnosticsFileName: string | undefined;
+
+export function configureMediaToolDiagnostics(fileName: string | undefined): void {
+  diagnosticsFileName = fileName;
+  if (!fileName) return;
+  recordToolDiagnostics({ kind: "sink-configured", pid: process.pid, cwd: process.cwd() });
+}
+
+function recordToolDiagnostics(detail: Record<string, unknown>): void {
+  try {
+    console.error("[media-tool-diagnostics]", JSON.stringify(detail));
+    if (!diagnosticsFileName) return;
+    try { mkdirSync(dirname(diagnosticsFileName), { recursive: true }); } catch { /* diagnostics best effort */ }
+    appendFileSync(diagnosticsFileName, `${JSON.stringify(detail)}\n`, { flag: "a" });
+  } catch { /* diagnostics never break processing */ }
+}
+// Stage caps include a 12s stop-tree cleanup reserve and share the
+// application's 60s deadline. Every bounded stage budget must exceed the
+// cleanup reserve, or the reserve guard rejects the stage before it starts.
 // Docker startup, the pinned definition load and cleanup share this cap.
-const SCAN_TIMEOUT_MS = 24_000;
-const PROCESS_TIMEOUT_MS = 8_000;
-// Docker Desktop startup is part of the 5s execution window; cleanup reserves 3s.
-const PDF_PREFLIGHT_TIMEOUT_MS = 8_000;
-const PDF_TOTAL_TIMEOUT_MS = 24_000;
+const SCAN_TIMEOUT_MS = 60_000;
+const PROCESS_TIMEOUT_MS = 16_000;
+// Docker startup is part of the 5s execution window.
+const PDF_PREFLIGHT_TIMEOUT_MS = 25_000;
+const PDF_TOTAL_TIMEOUT_MS = 60_000;
 const POLICY_VERSION = "pdf-active-content-deny-1";
 const BOUNDED_PDF_IMAGE = "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c";
 const BOUNDED_SCANNER_IMAGE = "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4";
@@ -86,17 +109,25 @@ export function stopActionWithinDeadline(stop: () => Promise<void>, timeoutMs: n
 
 export function monitorBoundedChildOutput(executable: string, args: readonly string[], outputPath: string,
   limits: { readonly maxBytes: number; readonly timeoutMs: number; readonly timeoutCode?: string }, stopExternal?: () => Promise<void>): Promise<void> {
-  const cleanupReserveMs = stopExternal ? 3_000 : process.platform === "win32" ? 750 : 0;
+  const cleanupReserveMs = stopExternal ? 12_000 : process.platform === "win32" ? 750 : 0;
   const timeoutCode = limits.timeoutCode ?? "MEDIA_PDF_PROCESSOR_UNAVAILABLE";
-  if (limits.timeoutMs <= cleanupReserveMs) return Promise.reject(new Error(timeoutCode));
+  if (limits.timeoutMs <= cleanupReserveMs) {
+    recordToolDiagnostics({ kind: "bounded-reject-reserve", executable, timeoutMs: limits.timeoutMs, cleanupReserveMs });
+    return Promise.reject(new Error(timeoutCode));
+  }
   return new Promise((resolve, reject) => {
     const windows = process.platform === "win32";
-    const child = spawn(executable, [...args], { stdio: "ignore", windowsHide: true, detached: !windows });
+    let stderrTail = "";
+    const child = spawn(executable, [...args], { stdio: ["ignore", "ignore", "pipe"], windowsHide: true, detached: !windows });
+    child.stderr?.on("data", (chunk) => {
+      stderrTail = `${stderrTail}${String(chunk)}`;
+      if (stderrTail.length > 8_192) stderrTail = stderrTail.slice(-8_192);
+    });
     let failure: Error | undefined;
     let checking = false;
     let stopPromise: Promise<void> | undefined;
     const stopTree = (): Promise<void> => stopPromise ??= new Promise((finish) => {
-      const stopExternalBounded = async (): Promise<boolean> => stopExternal === undefined || await stopActionWithinDeadline(stopExternal, 1_000);
+      const stopExternalBounded = async (): Promise<boolean> => stopExternal === undefined || await stopActionWithinDeadline(stopExternal, 5_000);
       const stopChild = (): Promise<void> => new Promise((done) => {
       if (windows) {
         if (child.pid === undefined) return done();
@@ -145,11 +176,21 @@ export function monitorBoundedChildOutput(executable: string, args: readonly str
           if (info.size > limits.maxBytes) failure = new Error("MEDIA_PDF_OUTPUT_INVALID");
         } catch { /* The caller validates expected output existence. */ }
         if (failure) {
+          recordToolDiagnostics({
+            kind: "bounded-output", executable, exitCode: code ?? null, signal: signal ?? null,
+            cause: failure.message.slice(0, 100), stderr: stderrTail.replace(/\s+/gu, " ").slice(0, 500),
+          });
           await stopTree();
           reject(failure);
         }
         else if (code === 0) resolve();
-        else reject(Object.assign(new Error("MEDIA_PDF_PROCESSOR_UNAVAILABLE"), { code: code ?? signal }));
+        else {
+          recordToolDiagnostics({
+            kind: "bounded-output", executable, exitCode: code ?? null, signal: signal ?? null,
+            stderr: stderrTail.replace(/\s+/gu, " ").slice(0, 500),
+          });
+          reject(Object.assign(new Error("MEDIA_PDF_PROCESSOR_UNAVAILABLE"), { code: code ?? signal }));
+        }
       })();
     });
   });
@@ -173,13 +214,13 @@ async function stopDockerContainer(containerName: string): Promise<void> {
           setTimeout(() => killer.kill(), 200);
         }
         finish(null);
-      }, 300);
+      }, 1_500);
       remover.once("error", () => finish(null));
       remover.once("close", (code) => finish(code));
     });
     if (result === 0) return;
     try {
-      await execFile("docker", ["container", "inspect", containerName], { timeout: 500, maxBuffer: 1024, windowsHide: true });
+      await execFile("docker", ["container", "inspect", containerName], { timeout: 1_500, maxBuffer: 1024, windowsHide: true });
     } catch (cause) {
       const stderr = typeof cause === "object" && cause !== null && "stderr" in cause ? String((cause as { stderr: unknown }).stderr) : "";
       if (/no such (?:object|container)/iu.test(stderr)) return;
@@ -230,6 +271,12 @@ async function toolVersion(executable: string, args: readonly string[], timeoutM
   const scanner = executable === "clamscan";
   const image = scanner ? BOUNDED_SCANNER_IMAGE : BOUNDED_PDF_IMAGE;
   const entrypoint = scanner ? "clamscan" : executable;
+  // Versions come from pinned immutable images and start a nested container,
+  // so share one probe per pinned tool across every adapter instance in the
+  // process instead of paying a fresh container start per attempt.
+  const cacheKey = `${executable}:${args.join(" ")}`;
+  const cached = versionCache.get(cacheKey);
+  if (cached !== undefined) return cached;
   const containerName = `portfolio-version-${randomUUID()}`;
   const executionTimeoutMs = timeoutMs - 1_000;
   if (executionTimeoutMs < 1) throw new Error("MEDIA_PROCESSING_TIMEOUT");
@@ -239,11 +286,20 @@ async function toolVersion(executable: string, args: readonly string[], timeoutM
       "--ulimit=fsize=4096:4096", "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--entrypoint", entrypoint, image, ...args],
     { encoding: "utf8", timeout: executionTimeoutMs, maxBuffer: 4 * 1024, windowsHide: true });
   } catch (cause) {
-    if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 1_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
+    recordToolDiagnostics({
+      kind: "tool-version", executable, args: args.join(" ").slice(0, 200),
+      stderr: `${cause instanceof Error && "stderr" in cause ? String((cause as { stderr?: unknown }).stderr ?? "") : ""} ${cause instanceof Error ? cause.message : ""}`
+        .replace(/\s+/gu, " ").slice(0, 500),
+    });
+    if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 5_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
     throw cause;
   }
   const version = `${result.stdout.toString().trim()} ${result.stderr.toString().trim()}`.trim().replace(/[^A-Za-z0-9./_: -]/gu, "").slice(0, 150);
-  if (version.length < 3) throw new Error("MEDIA_TOOL_VERSION_UNAVAILABLE");
+  if (version.length < 3) {
+    recordToolDiagnostics({ kind: "tool-version-empty", executable, stdout: result.stdout.toString().slice(0, 200), stderr: result.stderr.toString().slice(0, 200) });
+    throw new Error("MEDIA_TOOL_VERSION_UNAVAILABLE");
+  }
+  versionCache.set(cacheKey, version);
   return version;
 }
 
@@ -262,11 +318,9 @@ async function withTempPdf<T>(bytes: Uint8Array, action: (directory: string, inp
 /** Runs the pinned ClamAV binary; exit 0 is clean, 1 is an unsafe signature. */
 export function createClamAvScanner(options: { readonly executable?: string; readonly maxBytes?: number; readonly timeoutMs?: number } = {}): TrustedByteScannerPort {
   const executable = options.executable ?? "clamscan";
-  let versionValue: string | undefined;
   const version = async (timeoutMs: number) => {
-    if (versionValue) return versionValue;
-    versionValue = await toolVersion(executable, ["--version"], timeoutMs);
-    return versionValue;
+    if (executable !== "clamscan") return "";
+    return await toolVersion(executable, ["--version"], timeoutMs);
   };
   return {
     async scan(bytes, scanOptions) {
@@ -275,8 +329,10 @@ export function createClamAvScanner(options: { readonly executable?: string; rea
       try {
         if (executable !== "clamscan") return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         // Include Docker Desktop/container startup and cleanup in this stage.
-        // This still consumes the scanner's shared deadline.
-        const versionTimeoutMs = Math.min(5_000, remainingMs());
+        // This still consumes the scanner's shared deadline. The probe keeps a
+        // wider slice than a local binary because it starts a nested container,
+        // which can take >10s without contention on Docker-in-Docker hosts.
+        const versionTimeoutMs = Math.min(15_000, remainingMs());
         if (!versionTimeoutMs) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
         const scannerVersion = await version(versionTimeoutMs);
         if (!isPinnedClamAvVersion(scannerVersion)) return safeFailure("MEDIA_SCANNER_UNAVAILABLE");
@@ -348,8 +404,8 @@ with opened as pdf:
 export function createOcrMyPdfProcessor(options: { readonly python?: string; readonly ocrmypdf?: string } = {}): PdfProcessorPort {
   const python = options.python ?? "python3";
   const ocrmypdf = options.ocrmypdf ?? "ocrmypdf";
-  return {
-    async process(bytes, processOptions) {
+  const attempt = async (bytes: Uint8Array, processOptions?: { readonly timeoutMs?: number }): Promise<Result<{ readonly bytes: Uint8Array; readonly version: string; readonly policyVersion: string }, Rejection>> => {
+      if (diagnosticsFileName) recordToolDiagnostics({ kind: "pdf-attempt-start", pid: process.pid, byteLength: bytes.byteLength, configuredTimeoutMs: processOptions?.timeoutMs ?? null });
       if ((processOptions?.timeoutMs ?? PDF_TOTAL_TIMEOUT_MS) <= 0) return safeFailure("MEDIA_PROCESSING_TIMEOUT");
       const deadline = Date.now() + Math.min(PDF_TOTAL_TIMEOUT_MS, processOptions?.timeoutMs ?? PDF_TOTAL_TIMEOUT_MS);
       const remaining = (cap: number) => {
@@ -359,8 +415,11 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
       };
       try {
         if (python !== "python3" || ocrmypdf !== "ocrmypdf") return safeFailure("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
-        const version = await toolVersion(ocrmypdf, ["--version"], remaining(5_000));
-        const pikepdfVersion = await toolVersion(python, ["-c", "import pikepdf; print(pikepdf.__version__)"], remaining(5_000));
+        // Version probes start nested containers, which can take >10s without
+        // contention on Docker-in-Docker hosts, so give each probe a wider
+        // slice of the shared deadline instead of the local-binary timeout.
+        const version = await toolVersion(ocrmypdf, ["--version"], remaining(15_000));
+        const pikepdfVersion = await toolVersion(python, ["-c", "import pikepdf; print(pikepdf.__version__)"], remaining(15_000));
         const processed = await withTempPdf(bytes, async (directory, input) => {
           const checked = join(directory, "checked.pdf");
           const output = join(directory, "processed.pdf");
@@ -389,8 +448,26 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
         if (message === "MEDIA_PROCESSING_TIMEOUT") return safeFailure(message);
         if (message === "MEDIA_BYTES_OUT_OF_BOUNDS") return err({ kind: "validation", code: message });
         if (message === "MEDIA_PDF_OUTPUT_INVALID") return err({ kind: "validation", code: message });
+        recordToolDiagnostics({ kind: "pdf-processor-caught", message: message.slice(0, 200) });
         return safeFailure("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
       }
+  };
+  return {
+    async process(bytes, processOptions) {
+      const startedAtMs = Date.now();
+      let result = await attempt(bytes, processOptions);
+      // One bounded retry for a fast transient unavailability (nested Docker
+      // startup races on gate hosts): only when the first attempt failed well
+      // inside half of the requested budget, so slow stalls still report
+      // timeout instead of doubling the latency.
+      if (!result.ok && result.error.kind === "temporarily_unavailable" && result.error.code === "MEDIA_PDF_PROCESSOR_UNAVAILABLE") {
+        const budgetMs = Math.min(PDF_TOTAL_TIMEOUT_MS, processOptions?.timeoutMs ?? PDF_TOTAL_TIMEOUT_MS);
+        if (Date.now() - startedAtMs < budgetMs / 2) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          result = await attempt(bytes, processOptions);
+        }
+      }
+      return result;
     },
   };
 }
@@ -482,7 +559,7 @@ async function runVideoTool(executable: string, args: readonly string[], directo
     { encoding: "utf8", timeout: Math.min(timeoutMs, executionTimeoutMs), maxBuffer: 128 * 1024, windowsHide: true });
     return result.stdout.toString();
   } catch (cause) {
-    if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 1_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
+    if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 5_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
     const code = typeof cause === "object" && cause !== null && "code" in cause ? String((cause as { code: unknown }).code) : "";
     if (code === "ETIMEDOUT") throw new Error("MEDIA_VIDEO_PROCESSOR_TIMEOUT");
     throw new Error("MEDIA_VIDEO_PROCESSOR_UNAVAILABLE");
@@ -522,7 +599,10 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
         : isMp4Container(bytes) ? "video/mp4" : undefined;
       if (!detectedMimeType) return err({ kind: "validation", code: "MEDIA_VIDEO_INPUT_INVALID" });
       try {
-        const processorVersion = await version(remaining(5_000));
+        // The version probe starts a nested container, which can take >10s
+        // without contention on Docker-in-Docker hosts, so give it a wider
+        // slice of the shared deadline instead of the local-binary timeout.
+        const processorVersion = await version(remaining(15_000));
         const directory = await mkdtemp(join(tmpdir(), "portfolio-video-"));
         const input = join(directory, detectedMimeType === "video/mp4" ? "candidate.mp4" : "candidate.webm");
         const output = join(directory, detectedMimeType === "video/mp4" ? "normalized.mp4" : "normalized.webm");

@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "ticket": 125,
   "parent": 106,
-  "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-  "startedAt": "2026-10-18T16:01:52.543Z",
+  "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+  "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+  "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+  "startedAt": "2026-10-21T22:16:02.506Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "toolVersions": {
@@ -15,11 +15,11 @@
   "checks": [
     {
       "name": "validation-ready",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:01:52.868Z",
-      "completedAt": "2026-10-18T16:01:52.870Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:16:03.215Z",
+      "completedAt": "2026-10-21T22:16:03.217Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -32,11 +32,11 @@
     },
     {
       "name": "exact-toolchain",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:01:52.872Z",
-      "completedAt": "2026-10-18T16:01:52.957Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:16:03.219Z",
+      "completedAt": "2026-10-21T22:16:03.312Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -49,11 +49,11 @@
     },
     {
       "name": "phase5-context",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:01:52.958Z",
-      "completedAt": "2026-10-18T16:01:55.794Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:16:03.313Z",
+      "completedAt": "2026-10-21T22:16:06.838Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -61,16 +61,16 @@
       "failure": null,
       "evidence": {
         "path": "evidence/phase-5-gate-checks/phase5-context.log",
-        "sha256": "8c6983ceeecd8abc98045cc281d0904658ef315c93469e7a4163596fcbd6e987"
+        "sha256": "1ba29f6bf3f37ee81155e2b6832e491423a941883d7d152e63a39f6bc6dcdae2"
       }
     },
     {
       "name": "authoring-scenarios",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:01:55.797Z",
-      "completedAt": "2026-10-18T16:01:59.404Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:16:06.840Z",
+      "completedAt": "2026-10-21T22:16:11.222Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -78,16 +78,16 @@
       "failure": null,
       "evidence": {
         "path": "evidence/phase-5-gate-checks/authoring-scenarios.log",
-        "sha256": "d318ab4d0bf9934134c67abdc8cf8b085bd40b5951d6d9ac54e7d62697b74e45"
+        "sha256": "1bd942522c2e326329ebaa984ebf67a7f0eb161b11ef56666b389d33e16c6930"
       }
     },
     {
       "name": "taxonomy-scenarios",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:01:59.405Z",
-      "completedAt": "2026-10-18T16:02:02.829Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:16:11.223Z",
+      "completedAt": "2026-10-21T22:16:14.625Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -95,16 +95,16 @@
       "failure": null,
       "evidence": {
         "path": "evidence/phase-5-gate-checks/taxonomy-scenarios.log",
-        "sha256": "c27993a2c47db8d0f40f6a09e06ae90042d94ae3253e80b9724defae36a9c041"
+        "sha256": "5d91f32de0b2d1c2d44a437963804b61666564b0904813aa44ec82499367ea76"
       }
     },
     {
       "name": "traceability-scenarios",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:02:02.830Z",
-      "completedAt": "2026-10-18T16:02:23.821Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:16:14.626Z",
+      "completedAt": "2026-10-21T22:16:45.435Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -112,16 +112,16 @@
       "failure": null,
       "evidence": {
         "path": "evidence/phase-5-gate-checks/traceability-scenarios.log",
-        "sha256": "086d74d18b70559200eeca6945e2ed5bf1aa561fd51b81a204cc252288078992"
+        "sha256": "37a22734c522c87d9787c390c11411165432b04a121fbbdce72adc8d647764c6"
       }
     },
     {
       "name": "owner-postgres",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:02:23.822Z",
-      "completedAt": "2026-10-18T16:04:45.479Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:16:45.438Z",
+      "completedAt": "2026-10-21T22:19:45.890Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -129,16 +129,16 @@
       "failure": null,
       "evidence": {
         "path": "evidence/phase-5-gate-checks/owner-postgres.log",
-        "sha256": "85cbb433e4b6e156bf2292d7a5fe50be7aee0ca619edfc5a573bd1cb76fc8732"
+        "sha256": "a183a07114a3c9fd802be424eac796ef684995e9c6823661379cae2338e87e35"
       }
     },
     {
       "name": "database-rls-postgres",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:04:45.480Z",
-      "completedAt": "2026-10-18T16:07:29.551Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:19:45.891Z",
+      "completedAt": "2026-10-21T22:22:58.032Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -146,16 +146,16 @@
       "failure": null,
       "evidence": {
         "path": "evidence/phase-5-gate-checks/database-rls-postgres.log",
-        "sha256": "ff072be7fc31cf0b16e5470c30c4dc3e68f0cce226e158362eecc4144e3e078f"
+        "sha256": "2bbb35be8880823e96eafe99a1219c9f207e0158e5e2557fe029763bd6dbd55a"
       }
     },
     {
       "name": "integrated-scenarios",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:07:29.552Z",
-      "completedAt": "2026-10-18T16:07:31.448Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:22:58.034Z",
+      "completedAt": "2026-10-21T22:23:00.926Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -163,16 +163,16 @@
       "failure": null,
       "evidence": {
         "path": "evidence/phase-5-gate-checks/integrated-scenarios.log",
-        "sha256": "7d28bc5a9a1c3a385ef585fde54b502d2806252c152d2a094e7875f2b64cd39b"
+        "sha256": "4c63d55bee2573d56bb80b932fc2968476471fbee829a4815e13646254a9381e"
       }
     },
     {
       "name": "contract-verification",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:07:31.450Z",
-      "completedAt": "2026-10-18T16:08:08.261Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:23:00.929Z",
+      "completedAt": "2026-10-21T22:24:01.972Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -180,16 +180,16 @@
       "failure": null,
       "evidence": {
         "path": "evidence/phase-5-gate-checks/contract-verification.log",
-        "sha256": "df8acc80fd44cc535d8b80e8846b14e26eadf08db261c3714fc2c177084634a7"
+        "sha256": "70864d48dd1504951bef7855b368e66b22a50bf8f260aa1dd51c37a8117d6f06"
       }
     },
     {
       "name": "tooling-tests",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:08:08.262Z",
-      "completedAt": "2026-10-18T16:08:17.431Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:24:01.973Z",
+      "completedAt": "2026-10-21T22:24:11.815Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -197,16 +197,16 @@
       "failure": null,
       "evidence": {
         "path": "evidence/phase-5-gate-checks/tooling-tests.log",
-        "sha256": "1e35fcdf2f2d134586274f360c579632e0beba530846693a8fc21b462b06b947"
+        "sha256": "bc45d0f5d25299e5bb823c74f48a4c39d1a53044e4691d85611f03b50cb3c22c"
       }
     },
     {
       "name": "architecture",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:08:17.432Z",
-      "completedAt": "2026-10-18T16:08:24.646Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:24:11.817Z",
+      "completedAt": "2026-10-21T22:24:19.867Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -214,16 +214,16 @@
       "failure": null,
       "evidence": {
         "path": "evidence/phase-5-gate-checks/architecture.log",
-        "sha256": "8c80575a5c1568606fd0fec9fe305b33b32b1b83c90db5d078fdc4ca96ede3b1"
+        "sha256": "70007b61fa4a31af72afd170b85c9015a5278c7f2b0c2e34f3abd7630fd46e7b"
       }
     },
     {
       "name": "route-inventory",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:08:24.647Z",
-      "completedAt": "2026-10-18T16:08:25.226Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:24:19.869Z",
+      "completedAt": "2026-10-21T22:24:20.656Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -236,11 +236,11 @@
     },
     {
       "name": "runtime-boundary",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:08:25.228Z",
-      "completedAt": "2026-10-18T16:08:27.793Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:24:20.657Z",
+      "completedAt": "2026-10-21T22:24:23.574Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -253,11 +253,11 @@
     },
     {
       "name": "runtime-architecture",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:08:27.795Z",
-      "completedAt": "2026-10-18T16:08:28.332Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:24:23.575Z",
+      "completedAt": "2026-10-21T22:24:24.316Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -265,16 +265,16 @@
       "failure": null,
       "evidence": {
         "path": "evidence/phase-5-gate-checks/runtime-architecture.log",
-        "sha256": "b3c56920db54efe68645a6559feb8340c7b4cddd0dde13a356414885c3c125e6"
+        "sha256": "6e166c4243aa5063dd360927d90979f89033f6766cd1bab0908ae212662d3280"
       }
     },
     {
       "name": "lint",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:08:28.334Z",
-      "completedAt": "2026-10-18T16:08:34.976Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:24:24.317Z",
+      "completedAt": "2026-10-21T22:24:54.586Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -287,11 +287,11 @@
     },
     {
       "name": "typecheck",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:08:34.977Z",
-      "completedAt": "2026-10-18T16:08:39.264Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:24:54.587Z",
+      "completedAt": "2026-10-21T22:25:01.205Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -304,11 +304,11 @@
     },
     {
       "name": "production-build",
-      "runId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:08:39.266Z",
-      "completedAt": "2026-10-18T16:09:08.065Z",
+      "runId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:25:01.206Z",
+      "completedAt": "2026-10-21T22:25:58.014Z",
       "executed": true,
       "passed": true,
       "exitCode": 0,
@@ -316,7 +316,7 @@
       "failure": null,
       "evidence": {
         "path": "evidence/phase-5-gate-checks/production-build.log",
-        "sha256": "c5fb327f7082660c05c974b82fb506e70c7706b182f399ba0d6929a8c66fa2ad"
+        "sha256": "074b7d5d5109d2638c096460a0f8fa0d39b685051db80773e264a0f9273f962a"
       }
     }
   ],
@@ -331,7 +331,7 @@
     "scenarios": 12
   },
   "databaseProof": {
-    "migrationCount": 50,
+    "migrationCount": 51,
     "restrictedPrincipalCount": 6,
     "postgresAssertions": 56,
     "queryPlanAssertion": "queries only current published locale projections with stable tied-time cursors and controlled facets",
@@ -364,11 +364,11 @@
     "success": true
   },
   "realServiceScope": {
-    "runId": "1b0e0e88-dcfe-4b5d-aba4-c1fea8fcbae3",
-    "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-    "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-    "startedAt": "2026-10-18T16:07:22.391Z",
-    "completedAt": "2026-10-18T16:09:08.325Z",
+    "runId": "5b261dcc-dccd-4be1-a9dc-f54b00142ba6",
+    "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+    "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+    "startedAt": "2026-10-21T22:22:50.217Z",
+    "completedAt": "2026-10-21T22:25:58.696Z",
     "postgresVersion": "PostgreSQL 17.6 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
     "isolation": "isolated-loopback",
     "required": {
@@ -405,64 +405,64 @@
     {
       "name": "phase5-context",
       "path": "evidence/phase-5-context.json",
-      "runId": "db762766-d4c2-4571-ab69-8c060d60eb8d",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:01:55.436Z",
+      "runId": "cf5b6776-88ac-4484-af3d-8110461c6f82",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:16:06.144Z",
       "fresh": true,
-      "sha256": "e709a4d82a7df38a6cddb81486daa7ac595fcdc87db2b4c9a10bdf020f13f569",
-      "gateRunId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "gateSourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "gateSourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "requiredRunId": "69fcd894-40a3-486e-addc-6173bc947902"
+      "sha256": "2cb916c9617444345a6105149ab7b2ce3e35903496e10949a676568dffb28c69",
+      "gateRunId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "gateSourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "gateSourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "requiredRunId": "27cc5083-8098-4386-8e54-6babd5cc399a"
     },
     {
       "name": "integrated-scenarios",
       "path": "evidence/phase-5-integrated-scenarios.json",
-      "runId": "4fa86a2e-23d1-4b41-bd11-8a39f72f3c04",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:07:31.383Z",
+      "runId": "26db0684-1492-4a9f-a9b0-c44e6b032294",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:23:00.739Z",
       "fresh": true,
-      "sha256": "a38b28aed57ccf02d4d81c09813326c8a92d933cbed7541b86570c0a5ca159ef",
-      "gateRunId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "gateSourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "gateSourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "requiredRunId": "69fcd894-40a3-486e-addc-6173bc947902"
+      "sha256": "0f06abeddebd05082948604472905b8b595fb302286cc21360911e01d3a8ee94",
+      "gateRunId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "gateSourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "gateSourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "requiredRunId": "27cc5083-8098-4386-8e54-6babd5cc399a"
     },
     {
       "name": "database-security",
       "path": "evidence/phase-5-security-migrations-postgres.json",
-      "runId": "1b0e0e88-dcfe-4b5d-aba4-c1fea8fcbae3",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:07:22.391Z",
+      "runId": "5b261dcc-dccd-4be1-a9dc-f54b00142ba6",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:22:50.217Z",
       "fresh": true,
-      "sha256": "034de1f60d71e7fe6d73b412c8deac4dc621b45e2fb286b9a700a4b78300ea5b",
-      "gateRunId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "gateSourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "gateSourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "requiredRunId": "69fcd894-40a3-486e-addc-6173bc947902"
+      "sha256": "72d8f9c51e33003f1fa5336dd457faf64b26badec734c4272e72520eda54e6e7",
+      "gateRunId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "gateSourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "gateSourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "requiredRunId": "27cc5083-8098-4386-8e54-6babd5cc399a"
     },
     {
       "name": "owner-composition",
       "path": "evidence/phase-5-owner-composition-postgres.json",
-      "runId": "fff5a89e-1e46-4b43-9a29-24022f555317",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "startedAt": "2026-10-18T16:04:38.468Z",
+      "runId": "3e0d2cc3-6e3e-4220-8fd3-82bdedd53fe6",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "startedAt": "2026-10-21T22:19:38.225Z",
       "fresh": true,
-      "sha256": "31b223d9db8e83787a992eba829214c36fd1501893a0c13c8944876e34281b46",
-      "gateRunId": "69fcd894-40a3-486e-addc-6173bc947902",
-      "gateSourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "gateSourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-      "requiredRunId": "69fcd894-40a3-486e-addc-6173bc947902"
+      "sha256": "8ba2977a714da7a506f39102a1fa3e77ccb6515816bcc01e4bcde0fcc6f0d64e",
+      "gateRunId": "27cc5083-8098-4386-8e54-6babd5cc399a",
+      "gateSourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "gateSourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+      "requiredRunId": "27cc5083-8098-4386-8e54-6babd5cc399a"
     }
   ],
   "evidenceSummary": {
     "context": {
-      "runId": "db762766-d4c2-4571-ab69-8c060d60eb8d",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
+      "runId": "cf5b6776-88ac-4484-af3d-8110461c6f82",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
       "phase": "phase5",
       "verdict": "pass",
       "operations": {
@@ -473,9 +473,9 @@
       "failures": []
     },
     "integrated": {
-      "runId": "4fa86a2e-23d1-4b41-bd11-8a39f72f3c04",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+      "runId": "26db0684-1492-4a9f-a9b0-c44e6b032294",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
       "verdict": "pass",
       "counts": {
         "executed": 129,
@@ -488,10 +488,10 @@
           "name": "authoring",
           "ticket": null,
           "suite": "authoring",
-          "runId": "aca6fe25-5a99-42ac-82d0-a3c667a7d51a",
-          "startedAt": "2026-10-18T16:01:59.375Z",
-          "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-          "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+          "runId": "913c4130-2a18-4a57-92d9-b953703cefb5",
+          "startedAt": "2026-10-21T22:16:11.192Z",
+          "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+          "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
           "verdict": "pass",
           "issues": [],
           "counts": {
@@ -505,10 +505,10 @@
           "name": "taxonomy",
           "ticket": null,
           "suite": "taxonomy",
-          "runId": "025a9ba6-dfb5-4b03-ba29-d9a975648a73",
-          "startedAt": "2026-10-18T16:02:02.791Z",
-          "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-          "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+          "runId": "3e201556-0f0e-4f16-8dca-83da40a53964",
+          "startedAt": "2026-10-21T22:16:14.595Z",
+          "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+          "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
           "verdict": "pass",
           "issues": [],
           "counts": {
@@ -522,10 +522,10 @@
           "name": "traceability",
           "ticket": null,
           "suite": "traceability",
-          "runId": "61c0e1a2-ec67-4c4f-81ea-816aa879ab72",
-          "startedAt": "2026-10-18T16:02:23.793Z",
-          "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-          "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+          "runId": "a5dd5495-4a2f-4209-acfc-e0d751430dd4",
+          "startedAt": "2026-10-21T22:16:45.382Z",
+          "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+          "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
           "verdict": "pass",
           "issues": [],
           "counts": {
@@ -539,10 +539,10 @@
           "name": "owner",
           "ticket": 122,
           "suite": null,
-          "runId": "fff5a89e-1e46-4b43-9a29-24022f555317",
-          "startedAt": "2026-10-18T16:04:38.468Z",
-          "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-          "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+          "runId": "3e0d2cc3-6e3e-4220-8fd3-82bdedd53fe6",
+          "startedAt": "2026-10-21T22:19:38.225Z",
+          "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+          "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
           "verdict": "pass",
           "issues": [],
           "counts": {
@@ -556,10 +556,10 @@
           "name": "database",
           "ticket": 123,
           "suite": null,
-          "runId": "1b0e0e88-dcfe-4b5d-aba4-c1fea8fcbae3",
-          "startedAt": "2026-10-18T16:07:22.391Z",
-          "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-          "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+          "runId": "5b261dcc-dccd-4be1-a9dc-f54b00142ba6",
+          "startedAt": "2026-10-21T22:22:50.217Z",
+          "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+          "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
           "verdict": "pass",
           "issues": [],
           "counts": {
@@ -1318,14 +1318,14 @@
       "cleanup": "Each PostgreSQL constituent creates isolated loopback projects and scoped roles, then verifies cleanup."
     },
     "database": {
-      "runId": "1b0e0e88-dcfe-4b5d-aba4-c1fea8fcbae3",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+      "runId": "5b261dcc-dccd-4be1-a9dc-f54b00142ba6",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
       "toolVersions": {
         "node": "24.21.0",
         "npm": "11.19.0",
         "supabaseCli": "2.117.0",
-        "postgresServer": "29.7.2"
+        "postgresServer": "29.9.1"
       },
       "migrationChecksums": [
         {
@@ -1527,6 +1527,10 @@
         {
           "file": "20261017142000_revoke_public_aggregate_guard_execution.sql",
           "sha256": "7b385899021083dca28b10d34d175b14c6daa443e98a846953f3ff16212d1a91"
+        },
+        {
+          "file": "20261018172500_bound_job_retries_and_incidents.sql",
+          "sha256": "c63d813d82f4fab902fcfbfde78c667b95618b450e438f58d88aad103fe78b1e"
         }
       ],
       "migrationLedger": [
@@ -1729,6 +1733,10 @@
         {
           "version": "20261017142000",
           "name": "revoke_public_aggregate_guard_execution"
+        },
+        {
+          "version": "20261018172500",
+          "name": "bound_job_retries_and_incidents"
         }
       ],
       "phase4ReleaseUpgrade": {
@@ -2043,18 +2051,6 @@
       "diagnosticsPrivacy": {
         "auditSuites": [
           {
-            "file": "tests/phase4/owner-session-auth.test.ts",
-            "passed": 13,
-            "failed": 0,
-            "skipped": 0
-          },
-          {
-            "file": "tests/runtime/runtime-ports.test.ts",
-            "passed": 6,
-            "failed": 0,
-            "skipped": 0
-          },
-          {
             "file": "tests/database/postgres-runtime.test.ts",
             "passed": 7,
             "failed": 0,
@@ -2062,6 +2058,18 @@
           },
           {
             "file": "tests/database/postgres-transaction-runner.test.ts",
+            "passed": 6,
+            "failed": 0,
+            "skipped": 0
+          },
+          {
+            "file": "tests/phase4/owner-session-auth.test.ts",
+            "passed": 13,
+            "failed": 0,
+            "skipped": 0
+          },
+          {
+            "file": "tests/runtime/runtime-ports.test.ts",
             "passed": 6,
             "failed": 0,
             "skipped": 0
@@ -2139,9 +2147,9 @@
       }
     },
     "owner": {
-      "runId": "fff5a89e-1e46-4b43-9a29-24022f555317",
-      "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-      "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+      "runId": "3e0d2cc3-6e3e-4220-8fd3-82bdedd53fe6",
+      "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+      "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
       "injectedAdapterAndContractTestsPassed": 187,
       "databaseIntegrationTestsPassed": 1,
       "skippedCases": 0,

@@ -3,7 +3,7 @@ import { hashCanonicalRequest } from "../../../shared/application/idempotency.js
 import type { Clock } from "../../../runtime/ports.js";
 import { MEDIA_PROCESSING_POLICY } from "../domain/policy.js";
 
-const VIDEO_SCAN_TIMEOUT_MS = 25_000;
+const VIDEO_SCAN_TIMEOUT_MS = 60_000;
 
 export interface MediaProcessingCandidate {
   readonly mediaId: StableId<string>;
@@ -226,21 +226,34 @@ async function recordImageProcessing(input: {
     return failedAttempt("MEDIA_CALLER_FACTS_MISMATCH", { bytes, mime, hash: sha256 });
   }
   let scanned: Awaited<ReturnType<TrustedByteScannerPort["scan"]>>;
-  const sourceScanTimeoutMs = remainingMs(24_000);
+  const sourceScanTimeoutMs = remainingMs(60_000);
   if (sourceScanTimeoutMs < 1_000) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
   try { scanned = await deps.scanner.scan(bytes, { timeoutMs: sourceScanTimeoutMs }); } catch { return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256 }); }
   if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
   if (!scanned.ok) return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256 });
   if (scanned.value.verdict !== "clean") return failedAttempt(scanned.value.verdict === "unsafe" ? "MEDIA_UNSAFE_CONTENT" : "MEDIA_SCAN_INCONCLUSIVE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
 
-  let processed: Awaited<ReturnType<MediaImageProcessorPort["process"]>>;
+  let processed: Awaited<ReturnType<MediaImageProcessorPort["process"]>> =
+    err({ kind: "temporarily_unavailable" as const, code: "MEDIA_PROCESSOR_UNAVAILABLE" });
+  const imageProcessorFacts = { bytes, mime, hash: sha256, scannerVersion: scanned.value.version };
+  const runImageProcessor = (timeoutMs: number) => deps.imageProcessor.process(bytes, mime, { timeoutMs });
+  const retryImageProcessor = async (): Promise<boolean> => {
+    if (!attemptWithinBudget()) return false;
+    const retryTimeoutMs = remainingMs(15_000);
+    if (retryTimeoutMs < 5_000) return false;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    try { processed = await runImageProcessor(retryTimeoutMs); } catch { return false; }
+    return attemptWithinBudget();
+  };
   const imageTimeoutMs = remainingMs(15_000);
-  if (imageTimeoutMs < 1_000) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
-  try { processed = await deps.imageProcessor.process(bytes, mime, { timeoutMs: imageTimeoutMs }); }
-  catch { return failedAttempt("MEDIA_PROCESSOR_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version }); }
-  if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
+  if (imageTimeoutMs < 1_000) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", imageProcessorFacts);
+  try { processed = await runImageProcessor(imageTimeoutMs); }
+  catch { if (!(await retryImageProcessor())) return failedAttempt("MEDIA_PROCESSOR_UNAVAILABLE", imageProcessorFacts); }
+  if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", imageProcessorFacts);
+  if (!processed.ok && processed.error.kind !== "validation") await retryImageProcessor();
+  if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", imageProcessorFacts);
   if (!processed.ok) return failedAttempt(processed.error.kind === "validation" ? processed.error.code : processed.error.code || "MEDIA_PROCESSOR_UNAVAILABLE",
-    { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
+    imageProcessorFacts);
   const variants = processed.value.variants;
   const variantNames = variants.map((variant) => variant.name);
   if (variants.length !== 2 || variants.length > MEDIA_PROCESSING_POLICY.maxVariants || new Set(variantNames).size !== variants.length ||
@@ -253,7 +266,7 @@ async function recordImageProcessing(input: {
   }
   const outputHashes = variants.map((variant) => deps.digest.sha256(variant.bytes));
   let outputScans: Awaited<ReturnType<TrustedByteScannerPort["scan"]>>[];
-  const outputScanTimeoutMs = remainingMs(24_000);
+  const outputScanTimeoutMs = remainingMs(60_000);
   if (outputScanTimeoutMs < 1_000) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version,
     processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });
   if (deps.scanner.scanMany) {
@@ -487,7 +500,7 @@ export function createMediaProcessingApplicationService(deps: {
         return failedAttempt("MEDIA_CALLER_FACTS_MISMATCH", { bytes, mime, hash: sha256 });
       }
       let scanned: Awaited<ReturnType<TrustedByteScannerPort["scan"]>>;
-      const sourceScanTimeoutMs = Math.min(candidate.kind === "video" ? VIDEO_SCAN_TIMEOUT_MS : 24_000, remainingBudgetMs());
+      const sourceScanTimeoutMs = Math.min(candidate.kind === "video" ? VIDEO_SCAN_TIMEOUT_MS : 60_000, remainingBudgetMs());
       if (!sourceScanTimeoutMs) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
       try { scanned = await deps.scanner.scan(bytes, { timeoutMs: sourceScanTimeoutMs }); } catch { return failedAttempt(attemptWithinBudget() ? "MEDIA_SCANNER_UNAVAILABLE" : "MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 }); }
       if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256 });
@@ -570,15 +583,27 @@ export function createMediaProcessingApplicationService(deps: {
         if (!committed.ok) { await cleanupVideoOutputs(); return err(committed.error); }
         return ok({ aggregateId: candidate.mediaId, aggregateVersion: committed.value.version, outcome: committed.value.outcome });
       }
-      let processed: Awaited<ReturnType<PdfProcessorPort["process"]>>;
-      try { processed = await deps.processor.process(bytes, { timeoutMs: remainingBudgetMs() }); } catch { return failedAttempt("MEDIA_PROCESSOR_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version }); }
-      if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.ok ? scanned.value.version : "unavailable" });
-      if (!processed.ok) return failedAttempt(processed.error.kind === "validation" ? processed.error.code : "MEDIA_PROCESSOR_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version });
+      let processed: Awaited<ReturnType<PdfProcessorPort["process"]>> =
+        err({ kind: "temporarily_unavailable" as const, code: "MEDIA_PROCESSOR_UNAVAILABLE" });
+      const pdfProcessorFacts = { bytes, mime, hash: sha256, scannerVersion: scanned.value.version };
+      const runPdfProcessor = () => deps.processor.process(bytes, { timeoutMs: remainingBudgetMs() });
+      const retryPdfProcessor = async (): Promise<boolean> => {
+        if (!attemptWithinBudget() || remainingBudgetMs() < 5_000) return false;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        try { processed = await runPdfProcessor(); } catch { return false; }
+        return attemptWithinBudget();
+      };
+      try { processed = await runPdfProcessor(); }
+      catch { if (!(await retryPdfProcessor())) return failedAttempt("MEDIA_PROCESSOR_UNAVAILABLE", pdfProcessorFacts); }
+      if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { ...pdfProcessorFacts });
+      if (!processed.ok && processed.error.kind !== "validation") await retryPdfProcessor();
+      if (!attemptWithinBudget()) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { ...pdfProcessorFacts });
+      if (!processed.ok) return failedAttempt(processed.error.kind === "validation" ? processed.error.code : "MEDIA_PROCESSOR_UNAVAILABLE", pdfProcessorFacts);
       if (processed.value.bytes.byteLength < 1 || processed.value.bytes.byteLength > MEDIA_PROCESSING_POLICY.maxBytesByKind.document ||
           new TextDecoder("ascii").decode(processed.value.bytes.subarray(0, 5)) !== "%PDF-") return failedAttempt("MEDIA_PDF_OUTPUT_INVALID", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });
       const outputHash = deps.digest.sha256(processed.value.bytes);
       let outputScan: Awaited<ReturnType<TrustedByteScannerPort["scan"]>>;
-      const outputScanTimeoutMs = Math.min(24_000, remainingBudgetMs());
+      const outputScanTimeoutMs = Math.min(60_000, remainingBudgetMs());
       if (!outputScanTimeoutMs) return failedAttempt("MEDIA_PROCESSING_TIMEOUT", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion });
       try { outputScan = await deps.scanner.scan(processed.value.bytes, { timeoutMs: outputScanTimeoutMs }); }
       catch { return failedAttempt("MEDIA_SCANNER_UNAVAILABLE", { bytes, mime, hash: sha256, scannerVersion: scanned.value.version, processorVersion: processed.value.version, policyVersion: processed.value.policyVersion }); }

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -23,6 +24,16 @@ try {
     PORTFOLIO_GIT_DIR: capture("git", ["rev-parse", "--absolute-git-dir"], "Run this command from a Git checkout."),
     PORTFOLIO_GIT_COMMON_DIR: capture("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], "Cannot locate Git common directory."),
   };
+  const alternatesFile = join(env.PORTFOLIO_GIT_COMMON_DIR, "objects", "info", "alternates");
+  const alternates = readFileSync(alternatesFile, "utf8")
+    .split(/\r?\n/u).map((entry) => entry.trim()).filter(Boolean)[0] ?? "";
+  if (alternates) {
+    env.PORTFOLIO_MAIN_OBJECTS = resolve(root, alternates.replaceAll("\\", "/"));
+    env.PORTFOLIO_USE_MAIN_OBJECTS = "1";
+  } else {
+    env.PORTFOLIO_MAIN_OBJECTS = env.PORTFOLIO_GIT_COMMON_DIR;
+    env.PORTFOLIO_USE_MAIN_OBJECTS = "0";
+  }
   mkdirSync(new URL("../evidence/", import.meta.url), { recursive: true });
   const prefix = ["compose", "--project-name", "portfolio-validation", "--file", "compose.validation.yaml"];
   // The fixed project name prevents two runs from sharing the cache daemon.

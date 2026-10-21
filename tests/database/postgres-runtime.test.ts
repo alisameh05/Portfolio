@@ -28,6 +28,7 @@ function createOperationsFake(): OperationsPersistencePorts {
       claimDue: async () => [],
       complete: async () => false,
       fail: async () => false,
+      scheduleRetry: async () => false,
       release: async () => false,
     },
     jobs: {
@@ -35,6 +36,9 @@ function createOperationsFake(): OperationsPersistencePorts {
       claimDue: async () => [],
       complete: async () => false,
       fail: async () => false,
+      scheduleRetry: async () => false,
+      getDeadForRedrive: async () => null,
+      redriveDead: async () => null,
       release: async () => false,
     },
   };

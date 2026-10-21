@@ -150,6 +150,9 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          # The migration-access check resolves pinned predecessor merge commits
+          # via `git ls-tree`, so the Phase 6 gate needs the full history.
+          fetch-depth: 0
       - name: Remove stale Phase 6 evidence before setup
         run: >-
           node --input-type=module -e 'import { rmSync } from "node:fs";
@@ -168,6 +171,8 @@ jobs:
       - name: Build the portable Linux Docker validation runner
         run: docker compose -p portfolio-validation -f compose.validation.yaml build validation
       - name: Require the complete fail-closed Phase 6 gate
+        env:
+          MEDIA_TOOL_DIAGNOSTICS_FILE: evidence/phase6-gate-checks/media-tool-diagnostics.log
         run: npm run phase6:gate
       - name: Publish sanitized Phase 6 gate and component evidence
         if: always()

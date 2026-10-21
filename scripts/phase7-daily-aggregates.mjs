@@ -54,7 +54,8 @@ try {
   stage = "cluster";
   run(exe("initdb"), ["-D", data, "--no-locale", "-A", "trust", "-U", "postgres"]);
   started = true;
-  run(exe("pg_ctl"), ["-D", data, "-l", join(temp, "server.log"), "-o", `-h 127.0.0.1 -p ${port} -F`, "-w", "start"]);
+  mkdirSync(join(temp, "socket"), { recursive: true });
+  run(exe("pg_ctl"), ["-D", data, "-l", join(temp, "server.log"), "-o", `-h 127.0.0.1 -p ${port} -F -k ${join(temp, "socket")}`, "-w", "start"]);
   await admin.connect();
   connected = true;
   stage = "baseline";

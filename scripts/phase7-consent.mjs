@@ -15,7 +15,13 @@ const exe = name => bin ? join(bin, name + (process.platform === "win32" ? ".exe
 function run(command, args, env = process.env) {
   const r = spawnSync(command, args, { cwd: root, env, encoding: "utf8", windowsHide: true,
     ...(command === exe("pg_ctl") ? { stdio: "ignore" } : {}), timeout: 180_000 });
-  if (r.error || r.status !== 0) throw new Error(`CONSENT_COMMAND_FAILED:${args[0] ?? command}:${r.status ?? "unavailable"}`);
+  if (r.error || r.status !== 0) {
+    if (r.stderr?.trim()) console.error(r.stderr.trim());
+    if (command === exe("pg_ctl") && typeof args[3] === "string") {
+      try { const serverLog = readFileSync(args[3], "utf8").trim(); if (serverLog) console.error(serverLog); } catch { /* log file not written yet */ }
+    }
+    throw new Error(`CONSENT_COMMAND_FAILED:${args[0] ?? command}:${r.status ?? "unavailable"}`);
+  }
   return r.stdout;
 }
 const temp = mkdtempSync(join(tmpdir(), "portfolio-consent-189-"));
@@ -36,7 +42,11 @@ try {
   stage = "cluster";
   run(exe("initdb"), ["-D", data, "--no-locale", "-A", "trust", "-U", "postgres"]);
   started = true;
-  run(exe("pg_ctl"), ["-D", data, "-l", join(temp, "server.log"), "-o", `-h 127.0.0.1 -p ${port} -F`, "-w", "start"]);
+  // Hosted Linux runners cannot write the default /var/run/postgresql socket
+  // directory, so point unix_socket_directories at an owned temp directory.
+  const socketDir = join(temp, "socket");
+  mkdirSync(socketDir, { recursive: true });
+  run(exe("pg_ctl"), ["-D", data, "-l", join(temp, "server.log"), "-o", `-h 127.0.0.1 -p ${port} -F -k ${socketDir}`, "-w", "start"]);
   await client.connect(); connected = true;
   stage = "baseline";
   await client.query("create role anon nologin; create role authenticated nologin; create role shipwithali_migration nologin nosuperuser nobypassrls; grant create on database postgres to shipwithali_migration");

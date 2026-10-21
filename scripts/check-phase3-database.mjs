@@ -209,6 +209,13 @@ async function localVerification(connectionString) {
       ["jobs", "jobs_worker_update_policy", "UPDATE", "shipwithali_worker"],
       ["jobs", "measurement_event_jobs_application_insert", "INSERT", "shipwithali_application"],
       ["jobs", "operations_backup_policy_jobs", "SELECT", "shipwithali_backup"],
+      ["incidents", "incidents_worker_insert_policy", "INSERT", "shipwithali_worker"],
+      ["incidents", "incidents_worker_select_policy", "SELECT", "shipwithali_worker"],
+      ["incidents", "incidents_worker_update_policy", "UPDATE", "shipwithali_worker"],
+      ["incidents", "operations_backup_policy_incidents", "SELECT", "shipwithali_backup"],
+      ["job_redrive_audit", "job_redrive_audit_worker_insert_policy", "INSERT", "shipwithali_worker"],
+      ["job_redrive_audit", "job_redrive_audit_worker_select_policy", "SELECT", "shipwithali_worker"],
+      ["job_redrive_audit", "operations_backup_policy_job_redrive_audit", "SELECT", "shipwithali_backup"],
       ["outbox_events", "operations_backup_policy_outbox", "SELECT", "shipwithali_backup"],
       ["outbox_events", "outbox_application_insert_policy", "INSERT", "shipwithali_application"],
       ["outbox_events", "outbox_worker_select_policy", "SELECT", "shipwithali_worker"],
@@ -569,6 +576,8 @@ async function localVerification(connectionString) {
       explain (format json)
       select event_id from operations.outbox_events
        where completed_at is null
+         and dead_at is null
+         and attempt_count < 5
          and available_at <= '2026-09-22T12:00:03Z'::timestamptz
          and (lease_expires_at is null or lease_expires_at <= '2026-09-22T12:00:03Z'::timestamptz)
        order by available_at, event_id limit 25

@@ -51,6 +51,9 @@ export {
   type SnapshotCursor,
   type SnapshotPageLimit,
 } from "./application/index.js";
+export { calculateJobRetryDelayMilliseconds, JOB_MAX_ATTEMPTS } from "./application/index.js";
+export { JOB_REDRIVE_POLICY_VERSION, parsePhase7WorkPayload, redriveDeadJob,
+  type Phase7WorkPayload, type RedriveDeadJobCommand, type RedriveDeadJobDependencies } from "./application/index.js";
 
 export {
   parseSafeErrorCode,
@@ -59,6 +62,9 @@ export {
   type IdempotentExecutionInput,
   type IdempotentExecutionResult,
   type JobInput,
+  type DeadJobRecord,
+  type RedrivenJobRecord,
+  type JobRedriveAuditInput,
   type LeaseClaimInput,
   type LeasedJobRecord,
   type LeasedJobStorePort,

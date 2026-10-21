@@ -13,7 +13,7 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
 
 Starting isolated loopback PostgreSQL clean and merged Phase 4 release upgrade projects.
 Isolated PostgreSQL projects are healthy; clean install and Phase 4 release schemas are applied.
-Phase 3 historical database invariants: 107 passed, 0 skipped on the merged Phase 4 release schema.
+Phase 3 historical database invariants: 109 passed, 0 skipped on the merged Phase 4 release schema.
 Captured the Phase 3 operations contract and seeded rows through restricted capability roles.
 Applied the merged Phase 4 release migrations.
 Captured the clean-install normalized database state.
@@ -26,11 +26,11 @@ Database, auth-provider, and structured-log diagnostics audit: 32 passed, 0 skip
 
 {
   "schemaVersion": 1,
-  "runId": "4c07627d-6a42-499d-98a8-dc15ec09f7fc",
-  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+  "runId": "4d46b53c-2970-4070-b3ed-e4c77a83c1cd",
+  "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
+  "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
   "suite": "database",
-  "startedAt": "2026-10-18T16:07:29.521Z",
+  "startedAt": "2026-10-21T22:22:57.991Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,
@@ -54,7 +54,7 @@ Database, auth-provider, and structured-log diagnostics audit: 32 passed, 0 skip
     "npm run phase5:focus:database-rls-migrations-concurrency"
   ],
   "details": {
-    "migrationCount": 50,
+    "migrationCount": 51,
     "phase5MigrationCount": 12,
     "retainedReleaseRecords": {
       "configuredPortfolios": 1,

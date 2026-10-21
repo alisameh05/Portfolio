@@ -1,6 +1,13 @@
 import { err, parseStableId, type Rejection, type Result, type StableId } from "@shared/domain";
 import type { BoundedWorkResult } from "@shared/application";
-import { parseSafeErrorCode, type OperationsPersistencePorts, type VersionedPayload } from "../modules/portability-operations/index.js";
+import {
+  calculateJobRetryDelayMilliseconds,
+  JOB_MAX_ATTEMPTS,
+  parsePhase7WorkPayload,
+  parseSafeErrorCode,
+  type OperationsPersistencePorts,
+  type VersionedPayload,
+} from "../modules/portability-operations/index.js";
 import type { MeasurementWorkService } from "../modules/measurement/index.js";
 import type { FeedbackWorkService } from "../modules/interaction-moderation/index.js";
 import type { Clock, StableIdGenerator } from "./ports.js";
@@ -18,12 +25,11 @@ const MAX_CLAIMS_PER_PHASE = 1_000;
 const SAFE_FAILURE = parseSafeErrorCode("PHASE7_WORK_FAILED");
 const SAFE_INVALID = parseSafeErrorCode("PHASE7_JOB_INVALID");
 
-type WorkKind = "aggregate" | "detail-retention" | "aggregate-retention" | "withdrawal-cleanup" | "feedback-retention";
-
 export interface Phase7DueWorkDependencies {
   readonly portfolioId: StableId<"Portfolio">;
   readonly clock: Clock;
   readonly ids: StableIdGenerator;
+  readonly random?: () => number;
   readonly operations: Pick<OperationsPersistencePorts, "transactions" | "jobs">;
   readonly measurement: Pick<MeasurementWorkService, "aggregateDay" | "expireDetail" | "expireAggregates" | "cleanWithdrawnConsent">;
   readonly interaction: Pick<FeedbackWorkService, "expireFeedback">;
@@ -58,27 +64,6 @@ function utcDayAtOffset(now: string, offset: number): string {
 
 function jobPayload(type: string, value: Readonly<Record<string, string>> = {}): VersionedPayload {
   return { type, version: 1, value };
-}
-
-function payloadKind(payload: VersionedPayload): { readonly kind: WorkKind; readonly utcDay?: string } | null {
-  const keys = Object.keys(payload.value);
-  if (payload.version !== 1) return null;
-  if (payload.type === AGGREGATE && keys.length === 1 && keys[0] === "utcDay") {
-    const utcDay = payload.value["utcDay"];
-    if (typeof utcDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(utcDay)) {
-      const parsed = Date.parse(`${utcDay}T00:00:00.000Z`);
-      if (Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === utcDay) return { kind: "aggregate", utcDay };
-    }
-    return null;
-  }
-  if (keys.length !== 0) return null;
-  switch (payload.type) {
-    case DETAIL_RETENTION: return { kind: "detail-retention" };
-    case AGGREGATE_RETENTION: return { kind: "aggregate-retention" };
-    case WITHDRAWAL_CLEANUP: return { kind: "withdrawal-cleanup" };
-    case FEEDBACK_RETENTION: return { kind: "feedback-retention" };
-    default: return null;
-  }
 }
 
 export function createPhase7DueWorkService(deps: Phase7DueWorkDependencies) {
@@ -117,7 +102,7 @@ export function createPhase7DueWorkService(deps: Phase7DueWorkDependencies) {
       if (!job) return totals;
       totals.claimed += 1;
       const parsedJobId = parseStableId("Job", job.jobId);
-      const parsed = payloadKind(job.payload);
+      const parsed = parsePhase7WorkPayload(job.payload);
       if (!parsedJobId.ok || !parsed) {
         const transitioned = await deps.operations.jobs.fail(job.jobId, job.leaseToken, SAFE_INVALID);
         if (transitioned) totals.failed += 1; else totals.staleLeases += 1;
@@ -148,8 +133,15 @@ export function createPhase7DueWorkService(deps: Phase7DueWorkDependencies) {
         outcome = err({ kind: "temporarily_unavailable", code: "PHASE7_WORK_FAILED" });
       }
       if (!outcome.ok) {
-        const transitioned = await deps.operations.jobs.fail(job.jobId, job.leaseToken, SAFE_FAILURE);
-        if (transitioned) totals.failed += 1; else totals.staleLeases += 1;
+        const transient = outcome.error.kind === "temporarily_unavailable";
+        const transitioned = transient
+          ? await deps.operations.jobs.scheduleRetry(job.jobId, job.leaseToken, SAFE_FAILURE,
+              calculateJobRetryDelayMilliseconds(job.attemptCount, deps.random ?? Math.random))
+          : await deps.operations.jobs.fail(job.jobId, job.leaseToken, SAFE_FAILURE);
+        if (transitioned) {
+          if (transient && job.attemptCount < JOB_MAX_ATTEMPTS) totals.released += 1;
+          else totals.failed += 1;
+        } else totals.staleLeases += 1;
         totals.incomplete = true;
         totals.halted = true;
         return totals;

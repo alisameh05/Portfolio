@@ -8,6 +8,7 @@ import { Client } from "pg";
 import { sql } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dockerBindMountUserArgs } from "../../src/runtime/adapters/media-processing-tools.js";
+import { configureMediaToolDiagnostics } from "../../src/runtime/adapters/media-processing-tools.js";
 import { handleCreateOwnerMediaUploadIntent } from "../../src/runtime/http/owner-media.js";
 import { handleGetCurrentCv } from "../../src/runtime/http/current-cv.js";
 import { handleRecordOwnerMediaProcessing } from "../../src/runtime/http/owner-media.js";
@@ -71,6 +72,7 @@ const IMAGE_FIXTURES = {
 } as const;
 const REQUIRE_IMAGES = process.env["PHASE6_REQUIRE_IMAGES"] === "1";
 const REQUIRE_VIDEO = process.env["PHASE6_REQUIRE_VIDEO"] === "1";
+configureMediaToolDiagnostics(process.env["MEDIA_TOOL_DIAGNOSTICS_FILE"]);
 const PROCESSING_COUNTS_FILE = process.env["PHASE6_MEDIA_PROCESSING_COUNTS_FILE"];
 const REQUIRE_REAL = process.env["PHASE6_REQUIRE_UPLOAD_INTENT"] === "1";
 const REQUIRE_PDF_PROCESSING_ONLY = process.env["PHASE6_PDF_PROCESSING_ONLY"] === "1";
@@ -148,7 +150,7 @@ function dockerResult(args: readonly string[], input?: Uint8Array, timeoutMs = 3
   return { status: result.status, stdout: result.stdout };
 }
 
-function dockerScanner(bytes: Uint8Array, timeoutMs = 24_000) {
+function dockerScanner(bytes: Uint8Array, timeoutMs = 60_000) {
   if (SCANNER_CONTAINER) {
     const result = dockerResult(["exec", "-i", SCANNER_CONTAINER, "clamdscan", "--stream", "--no-summary", "-"], bytes, timeoutMs);
     if (result.status === 0) return { ok: true as const, value: { verdict: "clean" as const, version: SCANNER_VERSION! } };
@@ -165,7 +167,7 @@ function dockerScanner(bytes: Uint8Array, timeoutMs = 24_000) {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }
 
-function dockerScannerMany(files: readonly Uint8Array[], timeoutMs = 24_000) {
+function dockerScannerMany(files: readonly Uint8Array[], timeoutMs = 60_000) {
   if (SCANNER_CONTAINER) {
     const deadline = performance.now() + timeoutMs;
     for (const bytes of files) {
@@ -4105,8 +4107,8 @@ describeReal(group === "baseline"
     const acceptedCountBeforeVideos = acceptedMediaIds.length;
     const { createClamAvScanner, createFfmpegVideoProcessor } = await import("../../src/runtime/adapters/media-processing-tools.js");
     const realScanner: TrustedByteScannerPort = REQUIRE_FULL_MEDIA && SCANNER_CONTAINER
-      ? { async scan(input, options) { return dockerScanner(input, Math.min(options?.timeoutMs ?? 25_000, 25_000)); } }
-      : createClamAvScanner({ maxBytes: 50 * 1024 * 1024, timeoutMs: 25_000 });
+      ? { async scan(input, options) { return dockerScanner(input, Math.min(options?.timeoutMs ?? 60_000, 60_000)); } }
+      : createClamAvScanner({ maxBytes: 50 * 1024 * 1024, timeoutMs: 60_000 });
     const realVideoProcessor = createFfmpegVideoProcessor();
     let videoProcessorExecutions = 0;
     let scannerExecutions = 0;

@@ -13,7 +13,7 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
 
 Starting isolated loopback PostgreSQL clean and Phase 3 upgrade projects.
 Isolated PostgreSQL projects are healthy; clean and Phase 3 upgrade migrations are applied.
-Phase 3 historical database invariants: 107 passed, 0 skipped before Phase 4 migrations.
+Phase 3 historical database invariants: 109 passed, 0 skipped before Phase 4 migrations.
 Captured the Phase 3 operations contract and seeded rows through restricted capability roles.
 Applied Phase 4 migrations to the Phase 3 upgrade database.
 Captured the clean-install normalized database state.

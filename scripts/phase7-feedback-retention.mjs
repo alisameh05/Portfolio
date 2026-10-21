@@ -46,7 +46,8 @@ try {
   stage = "cluster";
   run(exe("initdb"), ["-D", data, "--no-locale", "-A", "trust", "-U", "postgres"]);
   started = true;
-  run(exe("pg_ctl"), ["-D", data, "-l", join(temp, "server.log"), "-o", `-h 127.0.0.1 -p ${port} -F`, "-w", "start"]);
+  mkdirSync(join(temp, "socket"), { recursive: true });
+  run(exe("pg_ctl"), ["-D", data, "-l", join(temp, "server.log"), "-o", `-h 127.0.0.1 -p ${port} -F -k ${join(temp, "socket")}`, "-w", "start"]);
   await admin.connect(); connected = true;
   stage = "migrations";
   await admin.query("create role anon nologin; create role authenticated nologin; create role shipwithali_migration nologin nosuperuser nobypassrls; grant create on database postgres to shipwithali_migration");

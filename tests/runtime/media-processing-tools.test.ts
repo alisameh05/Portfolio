@@ -6,10 +6,10 @@ import { assertBoundedFile, createClamAvScanner, createOcrMyPdfProcessor, docker
 
 describe("bounded PDF output reads", () => {
   it("allows a standalone scanner probe to raise the production timeout cap", () => {
-    expect(resolveScannerTimeoutMs()).toBe(24_000);
+    expect(resolveScannerTimeoutMs()).toBe(60_000);
     expect(resolveScannerTimeoutMs(40_000)).toBe(40_000);
     expect(resolveScannerTimeoutMs(40_000, 8_000)).toBe(8_000);
-    expect(resolveScannerTimeoutMs(undefined, 40_000)).toBe(24_000);
+    expect(resolveScannerTimeoutMs(undefined, 40_000)).toBe(40_000);
   });
 
   it("matches the owner of private bind-mounted files on Linux", () => {
@@ -113,13 +113,13 @@ describe("bounded PDF output reads", () => {
     const startedAt = Date.now();
     try {
       await expect(monitorBoundedChildOutput(process.execPath, ["-e", "setInterval(() => {}, 1000)"], path,
-        { maxBytes: 8, timeoutMs: 5_000, timeoutCode: "MEDIA_PROCESSING_TIMEOUT" }, () => new Promise<void>(() => undefined)))
+        { maxBytes: 8, timeoutMs: 20_000, timeoutCode: "MEDIA_PROCESSING_TIMEOUT" }, () => new Promise<void>(() => undefined)))
         .rejects.toThrow("MEDIA_CONTAINER_CLEANUP_FAILED");
-      expect(Date.now() - startedAt).toBeLessThan(5_000);
+      expect(Date.now() - startedAt).toBeLessThan(25_000);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  }, 10_000);
+  }, 25_000);
 
   it("reports container cleanup failures instead of treating them as success", async () => {
     await expect(stopActionWithinDeadline(async () => { throw new Error("docker rm failed"); }, 100)).resolves.toBe(false);

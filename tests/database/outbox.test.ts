@@ -30,11 +30,20 @@ function stubOperationsDatabase(queue: QueueEntry[]) {
       transformQuery(node: unknown) {
         return node;
       },
-      compileQuery(node: { sql?: unknown }) {
-        const sqlText = typeof node?.sql === "string" ? node.sql : `stub statement ${calls}`;
+      compileQuery(node: { sql?: string } | unknown) {
+        const graphic = node as { sql?: string } | undefined;
+        const rendered = JSON.stringify(node) ?? "";
+        const sqlText =
+          typeof graphic?.sql === "string" ? graphic.sql :
+          rendered.includes("to_regclass('operations.incidents')") ? rendered :
+          `stub statement ${calls}`;
         return { sql: sqlText, parameters: [] as never[] };
       },
       async executeQuery(compiled: { sql: string }) {
+        // The schema-era probe is infrastructure plumbing, not a scripted step.
+        if (compiled.sql.includes("to_regclass('operations.incidents')")) {
+          return { rows: [{ bounded: true }] };
+        }
         const entry = queue[calls];
         calls += 1;
         statements.push(compiled.sql);
@@ -146,6 +155,7 @@ describe("transactional outbox adapter (#50)", () => {
     const stub = stubOperationsDatabase([
       { rows: [] },
       { rows: [] },
+      { rows: [] },
       {
         rows: [
           {
@@ -164,8 +174,8 @@ describe("transactional outbox adapter (#50)", () => {
           },
         ],
       },
-      { rows: [] },
-      { rows: [] },
+      { rows: [{ lease_expires_at: EXPIRY }] },
+      { rows: [{ lease_expires_at: EXPIRY }] },
     ]);
     const store = createPostgresOperationsPersistence(stub.database, {
       leaseTokens: { generate: () => `token-${++tokens}` },
@@ -251,7 +261,7 @@ describe("transactional outbox adapter (#50)", () => {
     const empty = stubOperationsDatabase([{ rows: [] }]);
     const emptyStore = createPostgresOperationsPersistence(empty.database);
     await expect(emptyStore.outbox.complete(EVENT_A, "stale-token", NOW)).resolves.toBe(false);
-    const emptyFail = stubOperationsDatabase([{ rows: [] }]);
+    const emptyFail = stubOperationsDatabase([{ rows: [] }, { rows: [] }, { rows: [] }]);
     await expect(
       createPostgresOperationsPersistence(emptyFail.database).outbox.fail(
         EVENT_A,
@@ -268,7 +278,9 @@ describe("transactional outbox adapter (#50)", () => {
     await expect(
       createPostgresOperationsPersistence(completed.database).outbox.complete(EVENT_A, "token-1", NOW),
     ).resolves.toBe(true);
-    const failed = stubOperationsDatabase([{ rows: [{ changed: true }] }]);
+    const failed = stubOperationsDatabase([
+      { rows: [] }, { rows: [] }, { rows: [{ event_id: EVENT_A, dead_at: NOW }] }, { rows: [] },
+    ]);
     await expect(
       createPostgresOperationsPersistence(failed.database).outbox.fail(
         EVENT_A,
@@ -291,17 +303,11 @@ describe("transactional outbox adapter (#50)", () => {
       attempt_count: 0,
     });
     const firstStub = stubOperationsDatabase([
-      { rows: [] },
-      { rows: [] },
-      { rows: [dueRow(EVENT_A)] },
-      { rows: [] },
+      { rows: [] }, { rows: [] }, { rows: [] }, { rows: [dueRow(EVENT_A)] }, { rows: [{ lease_expires_at: EXPIRY }] },
     ]);
     const firstStore = createPostgresOperationsPersistence(firstStub.database);
     const secondStub = stubOperationsDatabase([
-      { rows: [] },
-      { rows: [] },
-      { rows: [dueRow(EVENT_B)] },
-      { rows: [] },
+      { rows: [] }, { rows: [] }, { rows: [] }, { rows: [dueRow(EVENT_B)] }, { rows: [{ lease_expires_at: EXPIRY }] },
     ]);
     const secondStore = createPostgresOperationsPersistence(secondStub.database);
     const claim = { workerId: "worker-one", now: NOW, leaseDurationSeconds: 30, limit: 1 };

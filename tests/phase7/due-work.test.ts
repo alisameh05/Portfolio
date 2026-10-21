@@ -22,6 +22,7 @@ const jobs = {
   }),
   complete: vi.fn(async () => true),
   fail: vi.fn(async () => true),
+  scheduleRetry: vi.fn(async () => true),
   release: vi.fn(async (jobId: string) => {
     const job = enqueued.find(entry => entry.jobId === jobId);
     if (job) queue.push({ jobId, payload: job.payload, leaseToken: `lease-${jobId}-again`, leaseExpiresAt: now, attemptCount: 2 });
@@ -57,7 +58,7 @@ function setup() {
     calls.push({ kind: "feedback-retention", command });
     return { ok: true as const, value: { processedCount: 3, nextCursor: null, incomplete: false } };
   }) };
-  const service = createPhase7DueWorkService({ portfolioId, clock: { now: () => now },
+  const service = createPhase7DueWorkService({ portfolioId, clock: { now: () => now }, random: () => 0.5,
     ids: { generate: (() => { let count = 1; return () => `0196a1b2-7c3d-7e11-9f22-${(count++).toString(16).padStart(12, "0")}`; })() },
     operations: { transactions: transactions as never, jobs: jobs as never }, measurement, interaction });
   return { service, measurement, interaction };
@@ -93,8 +94,8 @@ describe("Phase 7 due-work orchestration", () => {
 
     const result = await service.runDueWork({ workerId: "phase7-local" });
 
-    expect(result).toMatchObject({ ok: true, value: { scheduled: 4, claimed: 1, failed: 1, incomplete: true } });
-    expect(jobs.fail).toHaveBeenCalledWith(expect.any(String), expect.any(String), "PHASE7_WORK_FAILED");
+    expect(result).toMatchObject({ ok: true, value: { scheduled: 4, claimed: 1, released: 1, failed: 0, incomplete: true } });
+    expect(jobs.scheduleRetry).toHaveBeenCalledWith(expect.any(String), expect.any(String), "PHASE7_WORK_FAILED", 33_750);
     expect(measurement.aggregateDay).not.toHaveBeenCalled();
     expect(enqueued.some(job => job.payload.type === "measurement.daily-aggregate.v1")).toBe(false);
   });

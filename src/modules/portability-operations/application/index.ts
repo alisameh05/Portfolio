@@ -38,6 +38,8 @@ export {
   type SnapshotCursor,
   type SnapshotPageLimit,
 } from "./service.js";
+export { redriveDeadJob, type RedriveDeadJobCommand, type RedriveDeadJobDependencies } from "./redrive-service.js";
+export { JOB_REDRIVE_POLICY_VERSION, parsePhase7WorkPayload, type Phase7WorkPayload } from "./redrive-policy.js";
 
 export {
   parseSafeErrorCode,
@@ -46,6 +48,9 @@ export {
   type IdempotentExecutionInput,
   type IdempotentExecutionResult,
   type JobInput,
+  type DeadJobRecord,
+  type RedrivenJobRecord,
+  type JobRedriveAuditInput,
   type LeaseClaimInput,
   type LeasedJobRecord,
   type LeasedJobStorePort,
@@ -57,3 +62,4 @@ export {
   type SafeErrorCode,
   type VersionedPayload,
 } from "./persistence.js";
+export { calculateJobRetryDelayMilliseconds, JOB_MAX_ATTEMPTS } from "./retry-policy.js";

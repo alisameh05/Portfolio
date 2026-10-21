@@ -189,7 +189,8 @@ export function assertPhase4ApplicationRls(snapshot) {
     !(grant.schema === "identity_access" && grant.object === "owner_links" && grant.privilege === "SELECT") &&
     !(grant.objectType === "n" && grant.schema === "operations" && grant.privilege === "USAGE") &&
     !(grant.schema === "operations" &&
-      ["idempotency_records", "outbox_events", "jobs"].includes(grant.object) && grant.privilege === "SELECT") &&
+      ["idempotency_records", "outbox_events", "jobs", "incidents", "job_redrive_audit"].includes(grant.object) &&
+      grant.privilege === "SELECT") &&
     !(grant.schema === "media" && grant.objectType === "r" && grant.privilege === "SELECT" && new Set([
       "acceptance_commands",
       "assets",
@@ -460,8 +461,108 @@ export function phase4ReleaseContract(snapshot) {
   };
 }
 
+// The Phase 8 bounded-retry migration (bound_job_retries_and_incidents) is the
+// one sanctioned transformation of the Phase 3 operations contract: it adds the
+// incidents and job_redrive_audit surfaces, extends outbox_events with dead_at,
+// and replaces the jobs lifecycle/status checks and the outbox due-work index.
+// Every other Phase 3 operations row must survive the upgrade unchanged, and
+// additions are only accepted inside the declared new tables (plus dead_at and
+// the new terminal-state check).
+const PHASE8_OPERATIONS_BOUNDARY = Object.freeze({
+  newTables: Object.freeze(["incidents", "job_redrive_audit"]),
+  constraintsReplaced: Object.freeze({ jobs_check: "jobs_lifecycle_check" }),
+  constraintsRedefined: Object.freeze(["jobs_status_check"]),
+  newConstraints: Object.freeze(["outbox_events_terminal_state_check"]),
+  indexesRedefined: Object.freeze(["outbox_events_due_idx"]),
+  newColumn: "dead_at",
+});
+
+function additionsWithSurvivors(label, beforeRows, afterRows, key) {
+  const afterKeys = new Set(afterRows.map(key));
+  const beforeKeys = new Set(beforeRows.map(key));
+  const missing = beforeRows.filter((row) => !afterKeys.has(key(row)));
+  if (missing.length > 0) {
+    throw new Error(`PHASE3_OPERATIONS_CONTRACT_LOST:${label}:${missing.map(key).join("|")}`);
+  }
+  return afterRows.filter((row) => !beforeKeys.has(key(row)));
+}
+
 export function assertPhase3OperationsContractPreserved(phase3, upgraded) {
-  assertPhase4SnapshotsEquivalent(phase3OperationsContract(phase3), phase3OperationsContract(upgraded));
+  const before = phase3OperationsContract(phase3);
+  const after = phase3OperationsContract(upgraded);
+  for (const label of ["schemas", "functions", "triggers", "types", "defaultPrivileges"]) {
+    if (JSON.stringify(before[label]) !== JSON.stringify(after[label])) {
+      throw new Error(`PHASE3_OPERATIONS_CONTRACT_ALTERED:${label}`);
+    }
+  }
+  const newTableName = (value) => PHASE8_OPERATIONS_BOUNDARY.newTables.includes(String(value ?? "").split(".")[0]);
+
+  const objectAdditions = additionsWithSurvivors("objects", before.objects, after.objects, (row) => row.name);
+  const acceptedObjects = objectAdditions.filter((row) => newTableName(row.name));
+  if (acceptedObjects.length !== objectAdditions.length) {
+    throw new Error(`PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION:objects:${objectAdditions.filter((row) => !acceptedObjects.includes(row)).map((row) => row.name).join("|")}`);
+  }
+
+  const columnAdditions = additionsWithSurvivors(
+    "columns", before.columns, after.columns, (row) => `${row.tableName}.${row.name}`);
+  const acceptedColumns = columnAdditions.filter(
+    (row) => newTableName(row.tableName) || row.tableName === "outbox_events" && row.name === PHASE8_OPERATIONS_BOUNDARY.newColumn,
+  );
+  if (acceptedColumns.length !== columnAdditions.length) {
+    throw new Error(`PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION:columns:${columnAdditions.filter((row) => !acceptedColumns.includes(row)).map((row) => `${row.tableName}.${row.name}`).join("|")}`);
+  }
+
+  const constraintsAfter = new Set(after.constraints.map((row) => row.name));
+  for (const replacement of Object.values(PHASE8_OPERATIONS_BOUNDARY.constraintsReplaced)) {
+    if (!constraintsAfter.has(replacement)) {
+      throw new Error(`PHASE3_OPERATIONS_CONTRACT_REPLACEMENT_MISSING:constraints:${replacement}`);
+    }
+  }
+  for (const name of [...PHASE8_OPERATIONS_BOUNDARY.constraintsRedefined, ...PHASE8_OPERATIONS_BOUNDARY.newConstraints]) {
+    if (!constraintsAfter.has(name)) {
+      throw new Error(`PHASE3_OPERATIONS_CONTRACT_REPLACEMENT_MISSING:constraints:${name}`);
+    }
+  }
+  const constraintLost = before.constraints.filter((row) =>
+    !constraintsAfter.has(row.name) &&
+    !Object.hasOwn(PHASE8_OPERATIONS_BOUNDARY.constraintsReplaced, row.name) &&
+    !PHASE8_OPERATIONS_BOUNDARY.constraintsRedefined.includes(row.name),
+  );
+  if (constraintLost.length > 0) {
+    throw new Error(`PHASE3_OPERATIONS_CONTRACT_LOST:constraints:${constraintLost.map((row) => `${row.tableName}.${row.name}`).join("|")}`);
+  }
+  const constraintAdditions = after.constraints.filter((row) =>
+    !before.constraints.some((beforeRow) => beforeRow.name === row.name) &&
+    !newTableName(row.tableName) &&
+    !PHASE8_OPERATIONS_BOUNDARY.newConstraints.includes(row.name) &&
+    !Object.values(PHASE8_OPERATIONS_BOUNDARY.constraintsReplaced).includes(row.name),
+  );
+  if (constraintAdditions.length > 0) {
+    throw new Error(`PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION:constraints:${constraintAdditions.map((row) => `${row.tableName}.${row.name}`).join("|")}`);
+  }
+
+  const indexAdditions = additionsWithSurvivors(
+    "indexes", before.indexes, after.indexes, (row) => `${row.table}.${row.name}`);
+  const acceptedIndexes = indexAdditions.filter(
+    (row) => newTableName(row.table) || PHASE8_OPERATIONS_BOUNDARY.indexesRedefined.includes(row.name),
+  );
+  if (acceptedIndexes.length !== indexAdditions.length) {
+    throw new Error(`PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION:indexes:${indexAdditions.filter((row) => !acceptedIndexes.includes(row)).map((row) => `${row.table}.${row.name}`).join("|")}`);
+  }
+
+  const policyAdditions = additionsWithSurvivors(
+    "policies", before.policies, after.policies, (row) => `${row.tableName}.${row.name}.${row.roles}.${row.command}`);
+  const acceptedPolicies = policyAdditions.filter((row) => newTableName(row.tableName));
+  if (acceptedPolicies.length !== policyAdditions.length) {
+    throw new Error(`PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION:policies:${policyAdditions.filter((row) => !acceptedPolicies.includes(row)).map((row) => `${row.tableName}.${row.name}`).join("|")}`);
+  }
+
+  const grantAdditions = additionsWithSurvivors(
+    "grants", before.grants, after.grants, (row) => `${row.object}.${row.grantee}:${row.privilege}`);
+  const acceptedGrants = grantAdditions.filter((row) => newTableName(row.object));
+  if (acceptedGrants.length !== grantAdditions.length) {
+    throw new Error(`PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION:grants:${grantAdditions.filter((row) => !acceptedGrants.includes(row)).map((row) => `${row.object}.${row.grantee}:${row.privilege}`).join("|")}`);
+  }
 }
 
 export function assertPhase3OperationsRls(snapshot) {

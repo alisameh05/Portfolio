@@ -70,6 +70,7 @@ export interface OutboxPersistencePort {
   claimDue(input: LeaseClaimInput): Promise<readonly LeasedOutboxEvent[]>;
   complete(id: string, leaseToken: string, completedAt: string): Promise<boolean>;
   fail(id: string, leaseToken: string, safeErrorCode: SafeErrorCode): Promise<boolean>;
+  scheduleRetry(id: string, leaseToken: string, safeErrorCode: SafeErrorCode, delayMilliseconds: number): Promise<boolean>;
   release(id: string, leaseToken: string): Promise<boolean>;
 }
 
@@ -87,6 +88,26 @@ export interface LeasedJobRecord {
   readonly attemptCount: number;
 }
 
+export interface DeadJobRecord {
+  readonly jobId: string;
+  readonly payload: VersionedPayload;
+  readonly attemptCount: number;
+  readonly safeErrorCode: SafeErrorCode;
+}
+
+export interface JobRedriveAuditInput {
+  readonly originalJobId: string;
+  readonly replacementJobId: string;
+  readonly operatorScopeHash: string;
+  readonly policyVersion: string;
+  readonly payloadSha256: string;
+}
+
+export interface RedrivenJobRecord {
+  readonly jobId: string;
+  readonly payload: VersionedPayload;
+}
+
 export interface LeaseClaimInput {
   readonly workerId: string;
   readonly now: string;
@@ -101,6 +122,10 @@ export interface LeasedJobStorePort {
   claimDue(input: LeaseClaimInput): Promise<readonly LeasedJobRecord[]>;
   complete(id: string, leaseToken: string, completedAt: string): Promise<boolean>;
   fail(id: string, leaseToken: string, safeErrorCode: SafeErrorCode): Promise<boolean>;
+  /** Schedules a transient retry from database time, or terminalizes attempt five. */
+  scheduleRetry(id: string, leaseToken: string, safeErrorCode: SafeErrorCode, delayMilliseconds: number): Promise<boolean>;
+  getDeadForRedrive(id: string): Promise<DeadJobRecord | null>;
+  redriveDead(input: JobRedriveAuditInput): Promise<RedrivenJobRecord | null>;
   release(id: string, leaseToken: string): Promise<boolean>;
 }
 

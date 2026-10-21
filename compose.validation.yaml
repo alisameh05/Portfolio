@@ -11,10 +11,13 @@ services:
       GIT_DIR: /git/worktree
       GIT_COMMON_DIR: /git/common
       GIT_WORK_TREE: /workspace
+      PORTFOLIO_MAIN_OBJECTS: ${PORTFOLIO_MAIN_OBJECTS:-./.git}
+      PORTFOLIO_USE_MAIN_OBJECTS: ${PORTFOLIO_USE_MAIN_OBJECTS:-0}
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: /workspace
       SUPABASE_TELEMETRY_DISABLED: "1"
+      MEDIA_TOOL_DIAGNOSTICS_FILE: /workspace/evidence/phase6-gate-checks/media-tool-diagnostics.log
     volumes:
       - type: bind
         source: .
@@ -27,6 +30,10 @@ services:
       - type: bind
         source: ${PORTFOLIO_GIT_COMMON_DIR:-./.git}
         target: /git/common
+        read_only: true
+      - type: bind
+        source: ${PORTFOLIO_MAIN_OBJECTS:-./.git}
+        target: /git/main-objects
         read_only: true
       - type: bind
         source: ./evidence
