@@ -4,7 +4,7 @@
 
 
 ── Architecture check: src/ ──
-[32m✔[39m no dependency violations found (250 modules, 1054 dependencies cruised)
+✔ no dependency violations found (250 modules, 1054 dependencies cruised)
 ✓ Architecture check passed: no forbidden dependencies in src/
 
 ── Validating Invalid Architecture Fixtures ──
@@ -46,37 +46,32 @@
 ═════════════════════════════════════════════════════════════════
 
 ✓ architecture-check: ALL CHECKS PASSED
-[31merror[39m no-provider-in-domain: [1mtests/fixtures/invalid-deps/provider-leakage/modules/alpha/domain/leaky.ts[22m → [1m@supabase/supabase-js[22m
-[2m    Domain areas must not import provider, framework, or database packages.[22m
+error no-provider-in-domain: tests/fixtures/invalid-deps/provider-leakage/modules/alpha/domain/leaky.ts → @supabase/supabase-js
+    Domain areas must not import provider, framework, or database packages.
 
-[31m
+
 x 1 dependency violations (1 errors, 0 warnings). 2 modules, 1 dependencies cruised.
-[39m
-[31merror[39m no-generated-code-leakage: [1mtests/fixtures/invalid-deps/generated-code-leakage/modules/beta/domain/leaky.ts[22m → [1m@redocly/cli[22m
-[2m    Generated transport types and tooling must not leak into domain or
-    application layers.[22m
+error no-generated-code-leakage: tests/fixtures/invalid-deps/generated-code-leakage/modules/beta/domain/leaky.ts → @redocly/cli
+    Generated transport types and tooling must not leak into domain or
+    application layers.
 
-[31m
+
 x 1 dependency violations (1 errors, 0 warnings). 2 modules, 1 dependencies cruised.
-[39m
-[31merror[39m no-runtime-http-in-module-application: [1mtests/fixtures/invalid-deps/module-http-leakage/modules/consumer/application/service.ts[22m → [1msrc/runtime/http/owner-export.ts[22m
-[2m    Module application code must not depend on runtime HTTP adapters.[22m
+error no-runtime-http-in-module-application: tests/fixtures/invalid-deps/module-http-leakage/modules/consumer/application/service.ts → src/runtime/http/owner-export.ts
+    Module application code must not depend on runtime HTTP adapters.
 
-[31m
+
 x 1 dependency violations (1 errors, 0 warnings). 37 modules, 84 dependencies cruised.
-[39m
-[31merror[39m no-deep-cross-module-import: [1mtests/fixtures/invalid-deps/deep-cross-module-import/modules/gamma/application/deep.ts[22m → [1mtests/fixtures/invalid-deps/deep-cross-module-import/modules/delta/domain/index.ts[22m
-[2m    Cross-module imports must go through the module barrel (index.ts), not into
-    sub-folders.[22m
+error no-deep-cross-module-import: tests/fixtures/invalid-deps/deep-cross-module-import/modules/gamma/application/deep.ts → tests/fixtures/invalid-deps/deep-cross-module-import/modules/delta/domain/index.ts
+    Cross-module imports must go through the module barrel (index.ts), not into
+    sub-folders.
 
-[31m
+
 x 1 dependency violations (1 errors, 0 warnings). 3 modules, 2 dependencies cruised.
-[39m
-[31merror[39m no-cycles: [1mtests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts[22m → 
+error no-cycles: tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts → 
       tests/fixtures/invalid-deps/cycle/modules/cycle-b/index.ts →
       tests/fixtures/invalid-deps/cycle/modules/cycle-a/index.ts
-[2m    Dependency cycles are forbidden in the modular monolith.[22m
+    Dependency cycles are forbidden in the modular monolith.
 
-[31m
+
 x 1 dependency violations (1 errors, 0 warnings). 2 modules, 2 dependencies cruised.
-[39m
