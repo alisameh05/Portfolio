@@ -159,7 +159,13 @@ export function monitorBoundedChildOutput(executable: string, args: readonly str
           reject(failure);
         }
         else if (code === 0) resolve();
-        else reject(Object.assign(new Error("MEDIA_PDF_PROCESSOR_UNAVAILABLE"), { code: code ?? signal }));
+        else {
+          console.error("[media-bounded-output]", JSON.stringify({
+            executable, exitCode: code ?? null, signal: signal ?? null,
+            stderr: stderrTail.replace(/\s+/gu, " ").slice(0, 500),
+          }));
+          reject(Object.assign(new Error("MEDIA_PDF_PROCESSOR_UNAVAILABLE"), { code: code ?? signal }));
+        }
       })();
     });
   });
@@ -264,7 +270,10 @@ async function toolVersion(executable: string, args: readonly string[], timeoutM
     throw cause;
   }
   const version = `${result.stdout.toString().trim()} ${result.stderr.toString().trim()}`.trim().replace(/[^A-Za-z0-9./_: -]/gu, "").slice(0, 150);
-  if (version.length < 3) throw new Error("MEDIA_TOOL_VERSION_UNAVAILABLE");
+  if (version.length < 3) {
+    console.error("[media-tool-version]", JSON.stringify({ executable, stdout: result.stdout.toString().slice(0, 200), stderr: result.stderr.toString().slice(0, 200) }));
+    throw new Error("MEDIA_TOOL_VERSION_UNAVAILABLE");
+  }
   versionCache.set(cacheKey, version);
   return version;
 }
