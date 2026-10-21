@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "runId": "4c07627d-6a42-499d-98a8-dc15ec09f7fc",
-  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+  "runId": "86dbc8f9-e8b7-4215-90d5-d8aef40b61a3",
+  "sourceRevision": "2f511591db4feebad32cda793e11b08af7feb38e",
+  "sourceTreeSha256": "888984adff55bf12e9ddd8e274b36dc2c0620b6f60a32d4fea3916857a753ef2",
   "suite": "database",
-  "startedAt": "2026-10-18T16:07:29.521Z",
+  "startedAt": "2026-10-21T16:20:53.535Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,
@@ -28,7 +28,7 @@
     "npm run phase5:focus:database-rls-migrations-concurrency"
   ],
   "details": {
-    "migrationCount": 50,
+    "migrationCount": 51,
     "phase5MigrationCount": 12,
     "retainedReleaseRecords": {
       "configuredPortfolios": 1,

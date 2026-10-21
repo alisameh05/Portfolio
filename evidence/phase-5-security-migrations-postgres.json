@@ -1,13 +1,13 @@
 {
-  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
-  "runId": "1b0e0e88-dcfe-4b5d-aba4-c1fea8fcbae3",
-  "startedAt": "2026-10-18T16:07:22.391Z",
+  "sourceRevision": "2f511591db4feebad32cda793e11b08af7feb38e",
+  "sourceTreeSha256": "888984adff55bf12e9ddd8e274b36dc2c0620b6f60a32d4fea3916857a753ef2",
+  "runId": "9941e5d8-d0f5-46a9-ae2e-104924b8c254",
+  "startedAt": "2026-10-21T16:20:42.038Z",
   "toolVersions": {
     "node": "24.21.0",
     "npm": "11.19.0",
     "supabaseCli": "2.117.0",
-    "postgresServer": "29.7.2"
+    "postgresServer": "29.9.1"
   },
   "ticket": 123,
   "parent": 106,
@@ -213,6 +213,10 @@
     {
       "file": "20261017142000_revoke_public_aggregate_guard_execution.sql",
       "sha256": "7b385899021083dca28b10d34d175b14c6daa443e98a846953f3ff16212d1a91"
+    },
+    {
+      "file": "20261018172500_bound_job_retries_and_incidents.sql",
+      "sha256": "c63d813d82f4fab902fcfbfde78c667b95618b450e438f58d88aad103fe78b1e"
     }
   ],
   "migrationLedger": [
@@ -415,6 +419,10 @@
     {
       "version": "20261017142000",
       "name": "revoke_public_aggregate_guard_execution"
+    },
+    {
+      "version": "20261018172500",
+      "name": "bound_job_retries_and_incidents"
     }
   ],
   "postgresVersion": "PostgreSQL 17.6 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
@@ -723,18 +731,6 @@
   "diagnosticsPrivacy": {
     "auditSuites": [
       {
-        "file": "tests/phase4/owner-session-auth.test.ts",
-        "passed": 13,
-        "failed": 0,
-        "skipped": 0
-      },
-      {
-        "file": "tests/runtime/runtime-ports.test.ts",
-        "passed": 6,
-        "failed": 0,
-        "skipped": 0
-      },
-      {
         "file": "tests/database/postgres-runtime.test.ts",
         "passed": 7,
         "failed": 0,
@@ -742,6 +738,18 @@
       },
       {
         "file": "tests/database/postgres-transaction-runner.test.ts",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/phase4/owner-session-auth.test.ts",
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/runtime-ports.test.ts",
         "passed": 6,
         "failed": 0,
         "skipped": 0
@@ -776,82 +784,6 @@
     "content.revisions"
   ],
   "databaseTestResults": [
-    {
-      "name": "verified GitHub Owner sessions (#80) > resolves a valid Owner session to a stable provider-neutral actor",
-      "status": "passed"
-    },
-    {
-      "name": "verified GitHub Owner sessions (#80) > rejects forged signatures as unauthenticated",
-      "status": "passed"
-    },
-    {
-      "name": "verified GitHub Owner sessions (#80) > rejects disallowed algorithms and unknown keys as unauthenticated",
-      "status": "passed"
-    },
-    {
-      "name": "verified GitHub Owner sessions (#80) > rejects wrong issuer, audience, expired, and malformed sessions as unauthenticated",
-      "status": "passed"
-    },
-    {
-      "name": "verified GitHub Owner sessions (#80) > rejects non-object JWT segments without throwing",
-      "status": "passed"
-    },
-    {
-      "name": "verified GitHub Owner sessions (#80) > verifies ES256 and rejects public-key HMAC confusion and wrong curves",
-      "status": "passed"
-    },
-    {
-      "name": "verified GitHub Owner sessions (#80) > ignores spoofed username/email/metadata and caller Owner IDs",
-      "status": "passed"
-    },
-    {
-      "name": "verified GitHub Owner sessions (#80) > rejects non-GitHub identities and verified non-Owners as forbidden",
-      "status": "passed"
-    },
-    {
-      "name": "verified GitHub Owner sessions (#80) > denies continued access after allowlist removal",
-      "status": "passed"
-    },
-    {
-      "name": "verified GitHub Owner sessions (#80) > enforces revocation and expiry even for otherwise valid JWTs",
-      "status": "passed"
-    },
-    {
-      "name": "verified GitHub Owner sessions (#80) > maps provider outages safely without exposing provider errors or identity subjects",
-      "status": "passed"
-    },
-    {
-      "name": "verified GitHub Owner sessions (#80) > validates Owner auth configuration with redacted diagnostics",
-      "status": "passed"
-    },
-    {
-      "name": "verified GitHub Owner sessions (#80) > keeps raw session material and secrets out of rejection payloads",
-      "status": "passed"
-    },
-    {
-      "name": "runtime ports (#26) > exposes provider-neutral ports without framework or provider types",
-      "status": "passed"
-    },
-    {
-      "name": "runtime ports (#26) > system clock returns RFC 3339 UTC instants",
-      "status": "passed"
-    },
-    {
-      "name": "runtime ports (#26) > system ID adapter produces UUIDv7 values behind stable-ID semantics",
-      "status": "passed"
-    },
-    {
-      "name": "runtime ports (#26) > Phase 2 transaction fake executes one callback without claiming atomicity",
-      "status": "passed"
-    },
-    {
-      "name": "runtime ports (#26) > structured logging uses stable event names and redacts sensitive values",
-      "status": "passed"
-    },
-    {
-      "name": "runtime ports (#26) > generates server-side correlation and never adopts an inbound identifier",
-      "status": "passed"
-    },
     {
       "name": "Content authoring production PostgreSQL invariants > creates all Draft kinds, saves both locales, and keeps typed snapshots private and unreviewed",
       "status": "passed"
@@ -1126,6 +1058,82 @@
     },
     {
       "name": "PostgreSQL transaction runner (#48) > rejects resolving a transaction outside the runner with a safe error",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > resolves a valid Owner session to a stable provider-neutral actor",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > rejects forged signatures as unauthenticated",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > rejects disallowed algorithms and unknown keys as unauthenticated",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > rejects wrong issuer, audience, expired, and malformed sessions as unauthenticated",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > rejects non-object JWT segments without throwing",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > verifies ES256 and rejects public-key HMAC confusion and wrong curves",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > ignores spoofed username/email/metadata and caller Owner IDs",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > rejects non-GitHub identities and verified non-Owners as forbidden",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > denies continued access after allowlist removal",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > enforces revocation and expiry even for otherwise valid JWTs",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > maps provider outages safely without exposing provider errors or identity subjects",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > validates Owner auth configuration with redacted diagnostics",
+      "status": "passed"
+    },
+    {
+      "name": "verified GitHub Owner sessions (#80) > keeps raw session material and secrets out of rejection payloads",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > exposes provider-neutral ports without framework or provider types",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > system clock returns RFC 3339 UTC instants",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > system ID adapter produces UUIDv7 values behind stable-ID semantics",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > Phase 2 transaction fake executes one callback without claiming atomicity",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > structured logging uses stable event names and redacts sensitive values",
+      "status": "passed"
+    },
+    {
+      "name": "runtime ports (#26) > generates server-side correlation and never adopts an inbound identifier",
       "status": "passed"
     }
   ],

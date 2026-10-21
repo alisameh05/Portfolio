@@ -11,15 +11,15 @@ Validation environment ready: exact Node/npm and locked dependencies verified.
 > shipwithali-portfolio@0.0.0 phase5:focus:scenario-traceability
 > node scripts/phase5-verification.mjs --suite traceability
 
-JSON report written to <TEMP>/shipwithali-phase5-traceability-39772-d7741a65-f778-437d-8a29-a5fab88a01ce.json
+JSON report written to <TEMP>/shipwithali-phase5-traceability-25528-d1cb1004-f548-4ec4-a580-1f0d07377c0c.json
 
 {
   "schemaVersion": 1,
-  "runId": "61c0e1a2-ec67-4c4f-81ea-816aa879ab72",
-  "sourceRevision": "4f671370a6edc1ee827d369b20dec15cb160f7c1",
-  "sourceTreeSha256": "389caef1831118defb9411675d93a75a208e326cc1ed2645cbb8cc18b8702b0d",
+  "runId": "44954218-6ec6-47a9-b0cd-accfd9bb7373",
+  "sourceRevision": "2f511591db4feebad32cda793e11b08af7feb38e",
+  "sourceTreeSha256": "888984adff55bf12e9ddd8e274b36dc2c0620b6f60a32d4fea3916857a753ef2",
   "suite": "traceability",
-  "startedAt": "2026-10-18T16:02:23.793Z",
+  "startedAt": "2026-10-21T16:15:18.809Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,
