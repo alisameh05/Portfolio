@@ -367,8 +367,11 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
       };
       try {
         if (python !== "python3" || ocrmypdf !== "ocrmypdf") return safeFailure("MEDIA_PDF_PROCESSOR_UNAVAILABLE");
-        const version = await toolVersion(ocrmypdf, ["--version"], remaining(5_000));
-        const pikepdfVersion = await toolVersion(python, ["-c", "import pikepdf; print(pikepdf.__version__)"], remaining(5_000));
+        // Version probes start nested containers, which can take >10s without
+        // contention on Docker-in-Docker hosts, so give each probe a wider
+        // slice of the shared deadline instead of the local-binary timeout.
+        const version = await toolVersion(ocrmypdf, ["--version"], remaining(15_000));
+        const pikepdfVersion = await toolVersion(python, ["-c", "import pikepdf; print(pikepdf.__version__)"], remaining(15_000));
         const processed = await withTempPdf(bytes, async (directory, input) => {
           const checked = join(directory, "checked.pdf");
           const output = join(directory, "processed.pdf");
@@ -530,7 +533,10 @@ export function createFfmpegVideoProcessor(): VideoProcessorPort {
         : isMp4Container(bytes) ? "video/mp4" : undefined;
       if (!detectedMimeType) return err({ kind: "validation", code: "MEDIA_VIDEO_INPUT_INVALID" });
       try {
-        const processorVersion = await version(remaining(5_000));
+        // The version probe starts a nested container, which can take >10s
+        // without contention on Docker-in-Docker hosts, so give it a wider
+        // slice of the shared deadline instead of the local-binary timeout.
+        const processorVersion = await version(remaining(15_000));
         const directory = await mkdtemp(join(tmpdir(), "portfolio-video-"));
         const input = join(directory, detectedMimeType === "video/mp4" ? "candidate.mp4" : "candidate.webm");
         const output = join(directory, detectedMimeType === "video/mp4" ? "normalized.mp4" : "normalized.webm");
