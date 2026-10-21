@@ -30,12 +30,14 @@ function recordToolDiagnostics(detail: Record<string, unknown>): void {
     appendFileSync(diagnosticsFileName, `${JSON.stringify(detail)}\n`, { flag: "a" });
   } catch { /* diagnostics never break processing */ }
 }
-// Stage caps include cleanup and share the application's 60s deadline.
+// Stage caps include a 12s stop-tree cleanup reserve and share the
+// application's 60s deadline. Every bounded stage budget must exceed the
+// cleanup reserve, or the reserve guard rejects the stage before it starts.
 // Docker startup, the pinned definition load and cleanup share this cap.
 const SCAN_TIMEOUT_MS = 60_000;
 const PROCESS_TIMEOUT_MS = 16_000;
-// Docker Desktop startup is part of the 5s execution window; cleanup reserves 3s.
-const PDF_PREFLIGHT_TIMEOUT_MS = 12_000;
+// Docker startup is part of the 5s execution window.
+const PDF_PREFLIGHT_TIMEOUT_MS = 25_000;
 const PDF_TOTAL_TIMEOUT_MS = 60_000;
 const POLICY_VERSION = "pdf-active-content-deny-1";
 const BOUNDED_PDF_IMAGE = "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c";
@@ -109,7 +111,10 @@ export function monitorBoundedChildOutput(executable: string, args: readonly str
   limits: { readonly maxBytes: number; readonly timeoutMs: number; readonly timeoutCode?: string }, stopExternal?: () => Promise<void>): Promise<void> {
   const cleanupReserveMs = stopExternal ? 12_000 : process.platform === "win32" ? 750 : 0;
   const timeoutCode = limits.timeoutCode ?? "MEDIA_PDF_PROCESSOR_UNAVAILABLE";
-  if (limits.timeoutMs <= cleanupReserveMs) return Promise.reject(new Error(timeoutCode));
+  if (limits.timeoutMs <= cleanupReserveMs) {
+    recordToolDiagnostics({ kind: "bounded-reject-reserve", executable, timeoutMs: limits.timeoutMs, cleanupReserveMs });
+    return Promise.reject(new Error(timeoutCode));
+  }
   return new Promise((resolve, reject) => {
     const windows = process.platform === "win32";
     let stderrTail = "";
