@@ -18,6 +18,8 @@ let diagnosticsFileName: string | undefined;
 
 export function configureMediaToolDiagnostics(fileName: string | undefined): void {
   diagnosticsFileName = fileName;
+  if (!fileName) return;
+  recordToolDiagnostics({ kind: "sink-configured", pid: process.pid, cwd: process.cwd() });
 }
 
 function recordToolDiagnostics(detail: Record<string, unknown>): void {
@@ -398,6 +400,7 @@ export function createOcrMyPdfProcessor(options: { readonly python?: string; rea
   const python = options.python ?? "python3";
   const ocrmypdf = options.ocrmypdf ?? "ocrmypdf";
   const attempt = async (bytes: Uint8Array, processOptions?: { readonly timeoutMs?: number }): Promise<Result<{ readonly bytes: Uint8Array; readonly version: string; readonly policyVersion: string }, Rejection>> => {
+      if (diagnosticsFileName) recordToolDiagnostics({ kind: "pdf-attempt-start", pid: process.pid, byteLength: bytes.byteLength, configuredTimeoutMs: processOptions?.timeoutMs ?? null });
       if ((processOptions?.timeoutMs ?? PDF_TOTAL_TIMEOUT_MS) <= 0) return safeFailure("MEDIA_PROCESSING_TIMEOUT");
       const deadline = Date.now() + Math.min(PDF_TOTAL_TIMEOUT_MS, processOptions?.timeoutMs ?? PDF_TOTAL_TIMEOUT_MS);
       const remaining = (cap: number) => {
