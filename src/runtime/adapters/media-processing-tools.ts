@@ -12,11 +12,11 @@ const MAX_BYTES = 20 * 1024 * 1024;
 const versionCache = new Map<string, string>();
 // Stage caps include cleanup and share the application's 60s deadline.
 // Docker startup, the pinned definition load and cleanup share this cap.
-const SCAN_TIMEOUT_MS = 24_000;
-const PROCESS_TIMEOUT_MS = 8_000;
+const SCAN_TIMEOUT_MS = 60_000;
+const PROCESS_TIMEOUT_MS = 16_000;
 // Docker Desktop startup is part of the 5s execution window; cleanup reserves 3s.
-const PDF_PREFLIGHT_TIMEOUT_MS = 8_000;
-const PDF_TOTAL_TIMEOUT_MS = 24_000;
+const PDF_PREFLIGHT_TIMEOUT_MS = 12_000;
+const PDF_TOTAL_TIMEOUT_MS = 60_000;
 const POLICY_VERSION = "pdf-active-content-deny-1";
 const BOUNDED_PDF_IMAGE = "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c";
 const BOUNDED_SCANNER_IMAGE = "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4";
@@ -87,7 +87,7 @@ export function stopActionWithinDeadline(stop: () => Promise<void>, timeoutMs: n
 
 export function monitorBoundedChildOutput(executable: string, args: readonly string[], outputPath: string,
   limits: { readonly maxBytes: number; readonly timeoutMs: number; readonly timeoutCode?: string }, stopExternal?: () => Promise<void>): Promise<void> {
-  const cleanupReserveMs = stopExternal ? 3_000 : process.platform === "win32" ? 750 : 0;
+  const cleanupReserveMs = stopExternal ? 12_000 : process.platform === "win32" ? 750 : 0;
   const timeoutCode = limits.timeoutCode ?? "MEDIA_PDF_PROCESSOR_UNAVAILABLE";
   if (limits.timeoutMs <= cleanupReserveMs) return Promise.reject(new Error(timeoutCode));
   return new Promise((resolve, reject) => {
@@ -97,7 +97,7 @@ export function monitorBoundedChildOutput(executable: string, args: readonly str
     let checking = false;
     let stopPromise: Promise<void> | undefined;
     const stopTree = (): Promise<void> => stopPromise ??= new Promise((finish) => {
-      const stopExternalBounded = async (): Promise<boolean> => stopExternal === undefined || await stopActionWithinDeadline(stopExternal, 1_000);
+      const stopExternalBounded = async (): Promise<boolean> => stopExternal === undefined || await stopActionWithinDeadline(stopExternal, 5_000);
       const stopChild = (): Promise<void> => new Promise((done) => {
       if (windows) {
         if (child.pid === undefined) return done();
@@ -174,13 +174,13 @@ async function stopDockerContainer(containerName: string): Promise<void> {
           setTimeout(() => killer.kill(), 200);
         }
         finish(null);
-      }, 300);
+      }, 1_500);
       remover.once("error", () => finish(null));
       remover.once("close", (code) => finish(code));
     });
     if (result === 0) return;
     try {
-      await execFile("docker", ["container", "inspect", containerName], { timeout: 500, maxBuffer: 1024, windowsHide: true });
+      await execFile("docker", ["container", "inspect", containerName], { timeout: 1_500, maxBuffer: 1024, windowsHide: true });
     } catch (cause) {
       const stderr = typeof cause === "object" && cause !== null && "stderr" in cause ? String((cause as { stderr: unknown }).stderr) : "";
       if (/no such (?:object|container)/iu.test(stderr)) return;
@@ -246,7 +246,7 @@ async function toolVersion(executable: string, args: readonly string[], timeoutM
       "--ulimit=fsize=4096:4096", "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--entrypoint", entrypoint, image, ...args],
     { encoding: "utf8", timeout: executionTimeoutMs, maxBuffer: 4 * 1024, windowsHide: true });
   } catch (cause) {
-    if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 1_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
+    if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 5_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
     throw cause;
   }
   const version = `${result.stdout.toString().trim()} ${result.stderr.toString().trim()}`.trim().replace(/[^A-Za-z0-9./_: -]/gu, "").slice(0, 150);
@@ -493,7 +493,7 @@ async function runVideoTool(executable: string, args: readonly string[], directo
     { encoding: "utf8", timeout: Math.min(timeoutMs, executionTimeoutMs), maxBuffer: 128 * 1024, windowsHide: true });
     return result.stdout.toString();
   } catch (cause) {
-    if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 1_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
+    if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 5_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
     const code = typeof cause === "object" && cause !== null && "code" in cause ? String((cause as { code: unknown }).code) : "";
     if (code === "ETIMEDOUT") throw new Error("MEDIA_VIDEO_PROCESSOR_TIMEOUT");
     throw new Error("MEDIA_VIDEO_PROCESSOR_UNAVAILABLE");
