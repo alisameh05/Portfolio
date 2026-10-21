@@ -9,6 +9,7 @@ import type { PdfProcessorPort, TrustedByteScannerPort, VideoProcessorPort } fro
 
 const execFile = promisify(nodeExecFile);
 const MAX_BYTES = 20 * 1024 * 1024;
+const versionCache = new Map<string, string>();
 // Stage caps include cleanup and share the application's 60s deadline.
 // Docker startup, the pinned definition load and cleanup share this cap.
 const SCAN_TIMEOUT_MS = 24_000;
@@ -230,6 +231,12 @@ async function toolVersion(executable: string, args: readonly string[], timeoutM
   const scanner = executable === "clamscan";
   const image = scanner ? BOUNDED_SCANNER_IMAGE : BOUNDED_PDF_IMAGE;
   const entrypoint = scanner ? "clamscan" : executable;
+  // Versions come from pinned immutable images and start a nested container,
+  // so share one probe per pinned tool across every adapter instance in the
+  // process instead of paying a fresh container start per attempt.
+  const cacheKey = `${executable}:${args.join(" ")}`;
+  const cached = versionCache.get(cacheKey);
+  if (cached !== undefined) return cached;
   const containerName = `portfolio-version-${randomUUID()}`;
   const executionTimeoutMs = timeoutMs - 1_000;
   if (executionTimeoutMs < 1) throw new Error("MEDIA_PROCESSING_TIMEOUT");
@@ -244,6 +251,7 @@ async function toolVersion(executable: string, args: readonly string[], timeoutM
   }
   const version = `${result.stdout.toString().trim()} ${result.stderr.toString().trim()}`.trim().replace(/[^A-Za-z0-9./_: -]/gu, "").slice(0, 150);
   if (version.length < 3) throw new Error("MEDIA_TOOL_VERSION_UNAVAILABLE");
+  versionCache.set(cacheKey, version);
   return version;
 }
 
@@ -260,13 +268,11 @@ async function withTempPdf<T>(bytes: Uint8Array, action: (directory: string, inp
 }
 
 /** Runs the pinned ClamAV binary; exit 0 is clean, 1 is an unsafe signature. */
-let cachedClamAvVersion: string | undefined;
 export function createClamAvScanner(options: { readonly executable?: string; readonly maxBytes?: number; readonly timeoutMs?: number } = {}): TrustedByteScannerPort {
   const executable = options.executable ?? "clamscan";
   const version = async (timeoutMs: number) => {
     if (executable !== "clamscan") return "";
-    cachedClamAvVersion ??= await toolVersion(executable, ["--version"], timeoutMs);
-    return cachedClamAvVersion;
+    return await toolVersion(executable, ["--version"], timeoutMs);
   };
   return {
     async scan(bytes, scanOptions) {
