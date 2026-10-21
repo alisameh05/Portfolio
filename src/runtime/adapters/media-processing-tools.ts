@@ -92,7 +92,12 @@ export function monitorBoundedChildOutput(executable: string, args: readonly str
   if (limits.timeoutMs <= cleanupReserveMs) return Promise.reject(new Error(timeoutCode));
   return new Promise((resolve, reject) => {
     const windows = process.platform === "win32";
-    const child = spawn(executable, [...args], { stdio: "ignore", windowsHide: true, detached: !windows });
+    let stderrTail = "";
+    const child = spawn(executable, [...args], { stdio: ["ignore", "ignore", "pipe"], windowsHide: true, detached: !windows });
+    child.stderr?.on("data", (chunk) => {
+      stderrTail = `${stderrTail}${String(chunk)}`;
+      if (stderrTail.length > 8_192) stderrTail = stderrTail.slice(-8_192);
+    });
     let failure: Error | undefined;
     let checking = false;
     let stopPromise: Promise<void> | undefined;
@@ -146,6 +151,10 @@ export function monitorBoundedChildOutput(executable: string, args: readonly str
           if (info.size > limits.maxBytes) failure = new Error("MEDIA_PDF_OUTPUT_INVALID");
         } catch { /* The caller validates expected output existence. */ }
         if (failure) {
+          console.error("[media-bounded-output]", JSON.stringify({
+            executable, exitCode: code ?? null, signal: signal ?? null,
+            stderr: stderrTail.replace(/\s+/gu, " ").slice(0, 500),
+          }));
           await stopTree();
           reject(failure);
         }
@@ -246,6 +255,11 @@ async function toolVersion(executable: string, args: readonly string[], timeoutM
       "--ulimit=fsize=4096:4096", "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--entrypoint", entrypoint, image, ...args],
     { encoding: "utf8", timeout: executionTimeoutMs, maxBuffer: 4 * 1024, windowsHide: true });
   } catch (cause) {
+    console.error("[media-tool-version]", JSON.stringify({
+      executable, args: args.join(" "),
+      stderr: `${cause instanceof Error && "stderr" in cause ? String((cause as { stderr?: unknown }).stderr ?? "") : ""} ${cause instanceof Error ? cause.message : ""}`
+        .replace(/\s+/gu, " ").slice(0, 500),
+    }));
     if (!await stopActionWithinDeadline(() => stopDockerContainer(containerName), 5_000)) throw new Error("MEDIA_CONTAINER_CLEANUP_FAILED");
     throw cause;
   }
