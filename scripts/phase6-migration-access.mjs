@@ -733,6 +733,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const message = error instanceof Error ? error.message : "PHASE6_MIGRATION_ACCESS_FAILED";
     const code = /^[A-Z0-9_:-]+$/u.test(message) ? message : "PHASE6_MIGRATION_ACCESS_FAILED";
     console.error(`PHASE6_MIGRATION_ACCESS_FAILED:${code}`);
+    console.error(`PHASE6_MIGRATION_ACCESS_DETAIL:${(error instanceof Error && error.cause instanceof Error ? `${error.message};${error.cause.message}` : message).replace(/\s+/gu, " ").slice(0, 400)}`);
     process.exitCode = 1;
   }
 }

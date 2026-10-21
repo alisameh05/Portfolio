@@ -26,11 +26,11 @@ Database, auth-provider, and structured-log diagnostics audit: 32 passed, 0 skip
 
 {
   "schemaVersion": 1,
-  "runId": "86dbc8f9-e8b7-4215-90d5-d8aef40b61a3",
-  "sourceRevision": "2f511591db4feebad32cda793e11b08af7feb38e",
-  "sourceTreeSha256": "888984adff55bf12e9ddd8e274b36dc2c0620b6f60a32d4fea3916857a753ef2",
+  "runId": "bcf1340e-ed94-4fed-a1f2-3d296d241e31",
+  "sourceRevision": "3d4517236f022fc7f8180830f178b670269b3ae7",
+  "sourceTreeSha256": "e87e9b39755defc35c702863e083342eb22bd73cfafcc7a33f4ac70bdf31e949",
   "suite": "database",
-  "startedAt": "2026-10-21T16:20:53.535Z",
+  "startedAt": "2026-10-21T17:21:56.928Z",
   "verdict": "pass",
   "scenarioAcceptance": true,
   "suiteAvailable": true,
