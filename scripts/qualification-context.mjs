@@ -185,7 +185,8 @@ export function writeQualificationRun(run, root, path = join(root, QUALIFICATION
   return serialized;
 }
 
-export function contextIdentityErrors(context, { revision, sourceTreeSha256, definitionHash, migrations, services }) {
+export function contextIdentityErrors(context, { revision, sourceTreeSha256, definitionHash, migrations, services,
+  runtime = currentRuntimeIdentity(), requireServiceImages = true }) {
   const errors = [];
   if (!context || context.algorithm !== QUALIFICATION_CONTEXT_ALGORITHM) errors.push("QUALIFICATION_CONTEXT_UNRECOGNIZED");
   if (typeof context?.runId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(context.runId)) {
@@ -195,14 +196,14 @@ export function contextIdentityErrors(context, { revision, sourceTreeSha256, def
   if (context?.identity?.revision !== revision || context?.identity?.sourceTreeSha256 !== sourceTreeSha256) {
     errors.push("QUALIFICATION_CONTEXT_SOURCE_CHANGED");
   }
-  if (JSON.stringify(context?.identity?.runtime ?? null) !== JSON.stringify(currentRuntimeIdentity())) errors.push("QUALIFICATION_CONTEXT_TOOL_IDENTITY_CHANGED");
+  if (JSON.stringify(context?.identity?.runtime ?? null) !== JSON.stringify(runtime)) errors.push("QUALIFICATION_CONTEXT_TOOL_IDENTITY_CHANGED");
   if (migrations !== undefined && JSON.stringify(context?.identity?.migrations ?? null) !== JSON.stringify(migrations)) {
     errors.push("QUALIFICATION_CONTEXT_MIGRATIONS_CHANGED");
   }
   if (services !== undefined && JSON.stringify(context?.identity?.services ?? null) !== JSON.stringify(services)) {
     errors.push("QUALIFICATION_CONTEXT_SERVICE_IDENTITY_CHANGED");
   }
-  if ((services ?? context?.identity?.services)?.unverifiedImages?.length > 0) errors.push("QUALIFICATION_CONTEXT_SERVICE_IMAGE_IDENTITY_UNVERIFIED");
+  if (requireServiceImages && (services ?? context?.identity?.services)?.unverifiedImages?.length > 0) errors.push("QUALIFICATION_CONTEXT_SERVICE_IMAGE_IDENTITY_UNVERIFIED");
   if (context?.status === "complete") {
     for (const [, node] of Object.entries(context?.nodes ?? {})) {
       if (node.exitCode !== 0 || node.completed !== true || node.status !== "succeeded" || node.cleanupSucceeded !== true) {
@@ -213,10 +214,10 @@ export function contextIdentityErrors(context, { revision, sourceTreeSha256, def
   return [...new Set(errors)];
 }
 
-export function currentRuntimeIdentity() {
-  return { node: process.version, npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? null,
+export function currentRuntimeIdentity(environment = process.env) {
+  return { node: process.version, npm: environment.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? null,
     platform: process.platform, architecture: process.arch,
-    environmentSha256: createHash("sha256").update(JSON.stringify(Object.entries(process.env)
+    environmentSha256: createHash("sha256").update(JSON.stringify(Object.entries(environment)
       .filter(([name]) => !/^(?:PHASE8_QUALIFICATION_CONTEXT|PHASE8_ACTIVE_RUN_ID|PHASE8_DEFINITION_HASH|SHIPWITHALI_PHASE|PHASE[34567]_GATE_RUN_ID)$/u.test(name))
       .sort(([a], [b]) => a.localeCompare(b)))).digest("hex") };
 }
@@ -371,13 +372,22 @@ export function verifyGatePredecessors({
       activeDefinitionHash !== definitionHash || activeDefinitionHash !== context?.definitionHash || context?.status !== "running") {
     return { usable: false, reason: "QUALIFICATION_CONTEXT_NOT_ACTIVE_RUN", reuse: new Map() };
   }
-  const identities = contextIdentityErrors(context, { revision, sourceTreeSha256, definitionHash });
+  // Phase 1/2 proofs execute no services. Missing images may be admitted later
+  // by service gates without invalidating these exact source/tool/artifact proofs.
+  const serviceFree = nodeIds.length > 0 && nodeIds.every((id) => ["phase1", "phase2"].includes(id));
+  const completed = nodeIds.filter((id) => context.nodes?.[id]?.completed === true);
+  const identities = contextIdentityErrors(context, { revision, sourceTreeSha256, definitionHash, requireServiceImages: !serviceFree });
   if (!(["complete", "running", "failed"].includes(context?.status))) identities.push("QUALIFICATION_CONTEXT_RUN_NOT_RESUMABLE");
-  if (identities.length > 0) return { usable: false, reason: identities[0], reuse: new Map() };
+  if (identities.length > 0) {
+    if (completed.length > 0) throw new Error(`QUALIFICATION_CONTEXT_PREDECESSOR_INVALID:${identities[0]}`);
+    return { usable: false, reason: identities[0], reuse: new Map() };
+  }
   const reuse = new Map();
   for (const id of reusableNodes(context, nodeIds, root, { allowIncomplete: true })) {
     const node = context.nodes[id];
     reuse.set(id, { file: node.report.file, sha256: node.report.sha256, completedAt: node.completedAt });
   }
+  const invalid = completed.filter((id) => !reuse.has(id));
+  if (invalid.length > 0) throw new Error(`QUALIFICATION_CONTEXT_PREDECESSOR_INVALID:${invalid.join(",")}`);
   return { usable: true, reason: null, reuse };
 }

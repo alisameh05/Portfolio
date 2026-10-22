@@ -122,7 +122,7 @@ function identity() {
   const revision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
   const metadata = sourceMetadataAtRevision(ROOT, revision);
   return { revision, tree: workingTreeSourceSha256(), committedTree: metadata.sourceTreeSha256, migrations: metadata.migrations,
-    runtime: currentRuntimeIdentity() };
+    runtime: currentRuntimeIdentity({ ...process.env, CI: "1" }) };
 }
 
 function execute(node, childEnv) {
@@ -171,6 +171,7 @@ export async function qualifyPrerequisites({
       const identityErrors = contextIdentityErrors(recorded, {
         revision: expected.revision, sourceTreeSha256: expected.tree, definitionHash, migrations: expected.migrations,
         services: expected.services,
+        runtime: expected.runtime,
       });
       if (identityErrors.length > 0) {
         shared = null;
@@ -187,7 +188,7 @@ export async function qualifyPrerequisites({
   }
   const contextPath = join(root, QUALIFICATION_RUN_FILE);
   let runRecord = shared ?? emptyQualificationRun({ definitionHash, identity: expected, startedAt: new Date().toISOString() });
-  const childEnv = { ...process.env, [QUALIFICATION_CONTEXT_VARIABLE]: contextPath,
+  const childEnv = { ...process.env, CI: "1", [QUALIFICATION_CONTEXT_VARIABLE]: contextPath,
     PHASE8_ACTIVE_RUN_ID: runRecord.runId, PHASE8_DEFINITION_HASH: definitionHash };
   runRecord.status = "running";
   writeQualificationRun(runRecord, root);
@@ -276,6 +277,22 @@ export async function qualifyPrerequisites({
     runRecord.status = "failed";
     writeQualificationRun(runRecord, root);
     log(`Qualification completed without immutable IDs for required service images: ${observedServices.unverifiedImages.join(", ")}.`);
+    return 1;
+  }
+  // Later gates may reference earlier reports transitively. Revalidate the
+  // entire recorded set before declaring completion, not just each new leaf.
+  const invalidNodes = QUALIFICATION_NODES.filter((node) => {
+    const record = runRecord.nodes[node.id];
+    if (record?.status !== "succeeded" || record.completed !== true || record.exitCode !== 0 || record.cleanupSucceeded !== true) return true;
+    if (node.report === null) return record.report !== null;
+    if (record.report?.file !== node.report || evidenceFileSha256(root, node.report) !== record.report.sha256) return true;
+    const proof = collectArtifacts(root, node.report, runRecord.identity);
+    return proof === null || JSON.stringify(proof.artifacts) !== JSON.stringify(record.report.artifacts ?? []);
+  }).map((node) => node.id);
+  if (invalidNodes.length > 0) {
+    runRecord.status = "failed";
+    writeQualificationRun(runRecord, root);
+    log(`Completed qualification evidence changed or became invalid: ${invalidNodes.join(", ")}.`);
     return 1;
   }
   runRecord.status = "complete";

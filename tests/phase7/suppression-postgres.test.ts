@@ -222,12 +222,24 @@ describe.runIf(Boolean(url))("real PostgreSQL suppression and keyset page accept
       expect((await client.query("select * from interaction.moderation_decisions where feedback_id=$1",[id])).rows).toEqual([]);
     }finally{await client.query("rollback");await client.end();}
   });
+  async function withPlanFeedback(project: StableId<"Project">, ids: readonly StableId<"Feedback">[], probe: () => Promise<void>) {
+    try {
+      await admin.query("insert into interaction.feedback(feedback_id,portfolio_id,project_id,locale,author_name,paragraph,moderation_state,aggregate_version,submitted_at,approved_at) select id,$2,$3,'en','Plan','Plan','approved',2,$4,$4 from unnest($1::uuid[]) id",[ids,portfolioId,project,now]);
+      await admin.query("analyze interaction.feedback");
+      await probe();
+    } finally {
+      // The suites share this disposable database and Vitest may run them in any order.
+      // Remove only this probe's rows and restore planner statistics, including on failure.
+      await admin.query("delete from interaction.feedback where feedback_id=any($1::uuid[])",[ids]);
+      await admin.query("analyze interaction.feedback");
+    }
+  }
   it("T07-06 representative restricted keyset plan uses bounded partial index", async () => {
-    const project=await seed();
+    const project=await seed(), retained=await submit(project);
     // Auxiliary plan fixtures model a mature approved stream without running workers.
     const ids=Array.from({length:5000},()=>createStableId("Feedback"));
-    await admin.query("insert into interaction.feedback(feedback_id,portfolio_id,project_id,locale,author_name,paragraph,moderation_state,aggregate_version,submitted_at,approved_at) select id,$2,$3,'en','Plan','Plan','approved',2,$4,$4 from unnest($1::uuid[]) id",[ids,portfolioId,project,now]);
-    await admin.query("analyze interaction.feedback");const client=new Client({connectionString:url});await client.connect();
+    await withPlanFeedback(project,ids,async () => {
+    const client=new Client({connectionString:url});await client.connect();
     try {await client.query("begin");await client.query("select set_config('shipwithali.portfolio_id',$1,true),set_config('shipwithali.owner_id',$2,true),set_config('shipwithali.feedback_access','public',true)",[portfolioId,ownerId]);
       const plan=(await client.query("explain (analyze,buffers,format json) select feedback_id,project_id,locale,author_name,paragraph,approved_at from interaction.feedback where portfolio_id=$1 and project_id=$2 and locale='en' and moderation_state='approved' and (approved_at,feedback_id)<($3::timestamptz,$4::uuid) order by approved_at desc,feedback_id desc limit 26",[portfolioId,project,now,"ffffffff-ffff-7fff-bfff-ffffffffffff"])).rows[0]["QUERY PLAN"][0];
       expect(JSON.stringify(plan)).toContain("feedback_approved_locale");expect(plan.Plan["Node Type"]).toBe("Limit");expect(plan.Plan["Actual Rows"]).toBe(26);
@@ -238,7 +250,13 @@ describe.runIf(Boolean(url))("real PostgreSQL suppression and keyset page accept
         ].includes(field)).concat([["children", (Array.isArray(node["Plans"]) ? node["Plans"] : []).map(safePlan)]]));
       }
       const {writeFileSync}=await import("node:fs");writeFileSync("artifacts/suppression-query-plan.json",JSON.stringify({boundedRows:plan.Plan["Actual Rows"],partialIndex:"feedback_approved_locale",restrictedRls:true,approvedPlanFixtures:5000,naturalPlanner:true,plan:safePlan(plan.Plan)},null,2));
-    }finally{await client.query("rollback");await client.end();}
+    }finally{try{await client.query("rollback");}finally{await client.end();}}
+    });
+    expect((await admin.query("select count(*)::int n from interaction.feedback where feedback_id=any($1::uuid[])",[ids])).rows[0].n).toBe(0);
+    const failedProbeIds=[createStableId("Feedback")], probeFailure=new Error("EXPECTED_PLAN_PROBE_FAILURE");
+    await expect(withPlanFeedback(project,failedProbeIds,async () => { throw probeFailure; })).rejects.toBe(probeFailure);
+    expect((await admin.query("select count(*)::int n from interaction.feedback where feedback_id=any($1::uuid[])",[failedProbeIds])).rows[0].n).toBe(0);
+    expect(await inspect(retained)).toMatchObject({ok:true,value:{state:"pending"}});
   });
   it("standard runtime existing HTTP suppression and in-process pages use real persistence with Measurement/worker absent", async () => {
     const project=await seed(),id=await submit(project);resetRuntimeForTests();await initializeDatabaseRuntime({NODE_ENV:"test",APP_BASE_URL:"https://example.com",DATABASE_URL:url!,PORTFOLIO_ID:portfolioId,OWNER_ID:ownerId},"application");

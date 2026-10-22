@@ -118,7 +118,7 @@ try {
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "tests/phase7/moderation.test.ts", "tests/phase7/moderation-postgres.test.ts", "tests/runtime/owner-moderation.test.ts", "tests/phase4/owner-request-security.test.ts", "tests/phase4/owner-session-auth.test.ts",
     ...(suppression ? ["tests/phase7/suppression-postgres.test.ts"] : []),
     ...(summaries ? ["tests/phase7/summaries-postgres.test.ts", "tests/phase7/reactions-postgres.test.ts", "tests/phase7/ratings-postgres.test.ts"] : []),
-    "--no-file-parallelism", "--reporter=json", "--outputFile=" + reportPath], env);
+    "--no-file-parallelism", "--reporter=./scripts/validation-json-reporter.mjs", "--outputFile=" + reportPath], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
   const assertions = tests.testResults.flatMap(s => s.assertionResults ?? []);
   if (!tests.success || tests.numFailedTestSuites || tests.numFailedTests || tests.numPendingTests || tests.numTodoTests ||

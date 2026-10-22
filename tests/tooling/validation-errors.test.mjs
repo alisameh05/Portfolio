@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { combineWithCleanupFailures, safeAssertionDiagnostic, ValidationFailure } from "../../scripts/validation-errors.mjs";
 import { serializePortfolioSettingsFailure } from "../../scripts/portfolio-settings-integration.mjs";
+import ValidationJsonReporter from "../../scripts/validation-json-reporter.mjs";
 
-test("structured failures sanitize metadata, paths, causes, and serialized output", () => {
+test("structured failures sanitize metadata, paths, causes, and serialized output", async () => {
   const failure = new ValidationFailure({
     code: "DATABASE_VALIDATION_FAILED",
     stage: "schema-stage password=hunter2",
@@ -71,6 +72,32 @@ test("structured failures sanitize metadata, paths, causes, and serialized outpu
   assert.deepEqual(safeAssertionDiagnostic({ failureMessages: ['Serialized Error: { "code": "23514", "detail": "fixture-private-payload" }'] }),
     { source: null, comparison: null, sqlState: "23514" });
   assert.deepEqual(safeAssertionDiagnostic(null), { source: null, comparison: null, sqlState: null });
+  assert.deepEqual(safeAssertionDiagnostic({ duration: 5000.4, failureMessages: ["Error: STACK_TRACE_ERROR"],
+    meta: { validationFailure: { errorCategory: "test-timeout" } } }),
+  { source: null, comparison: null, sqlState: null, errorCategory: "test-timeout", durationMs: 5000 });
+  for (const duration of [NaN, Infinity, -1, 86_400_001, "5000", { token: "fixture-private-duration" }]) {
+    const diagnostic = safeAssertionDiagnostic({ duration, meta: { validationFailure: { errorCategory: "fixture-private-category" } } });
+    assert.deepEqual(diagnostic, { source: null, comparison: null, sqlState: null });
+  }
+  const reporter = new ValidationJsonReporter();
+  reporter.onInit({ config: { passWithNoTests: false }, snapshot: { summary: {} }, logger: { warn() {} } });
+  let report;
+  reporter.writeReport = async (value) => { report = JSON.parse(value); };
+  const file = { type: "suite", name: "fixture", filepath: "tests/fixture.test.ts", mode: "run", result: { state: "fail" }, tasks: [] };
+  for (const [title, message, category] of [
+    ["test timeout", "Test timed out in 5000ms.\nfixture-private-timeout-payload", "test-timeout"],
+    ["hook timeout", "Hook timed out in 10000ms.\nfixture-private-hook-payload", "hook-timeout"],
+    ["private error", "fixture-private-error-message token=fixture-private-token", null],
+  ]) {
+    file.tasks = [{ type: "test", name: title, suite: file, mode: "run", meta: {}, result: { state: "fail", duration: 5000.4,
+      errors: [{ message, stack: `Error: STACK_TRACE_ERROR\n at tests/fixture.test.ts:2:3` }] } }];
+    await reporter.logTasks([file]);
+    const assertion = report.testResults[0].assertionResults[0];
+    assert.deepEqual(assertion.meta.validationFailure, { ...(category ? { errorCategory: category } : {}), durationMs: 5000 });
+    assert.deepEqual(safeAssertionDiagnostic(assertion), { source: "tests/fixture.test.ts:2:3", comparison: null, sqlState: null,
+      ...(category ? { errorCategory: category } : {}), durationMs: 5000 });
+    assert.doesNotMatch(JSON.stringify(report), /fixture-private-/u);
+  }
 });
 
 test("combined cleanup failures retain the primary cause and every cleanup cause safely", () => {

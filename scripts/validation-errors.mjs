@@ -55,7 +55,14 @@ export function safeAssertionDiagnostic(assertion) {
     }
   }
   const sqlState = messages.match(/\b(?:SQLSTATE|sqlState|code)["']?\s*[:=]\s*["']?([0-9A-Z]{5})["']?(?=\s|[,}.)]|$)/u)?.[1] ?? null;
-  return { source, comparison, sqlState };
+  const timeout = messages.match(/^(?:Error: )?(Test|Hook) timed out in [1-9]\d{0,8}ms\.(?=\n|$)/mu)?.[1];
+  const reportedCategory = assertion?.meta?.validationFailure?.errorCategory;
+  const errorCategory = timeout === "Test" ? "test-timeout" : timeout === "Hook" ? "hook-timeout" :
+    ["test-timeout", "hook-timeout"].includes(reportedCategory) ? reportedCategory : null;
+  const duration = assertion?.duration;
+  return { source, comparison, sqlState,
+    ...(errorCategory ? { errorCategory } : {}),
+    ...(typeof duration === "number" && Number.isFinite(duration) && duration >= 0 && duration <= 86_400_000 ? { durationMs: Math.round(duration) } : {}) };
 }
 
 /**

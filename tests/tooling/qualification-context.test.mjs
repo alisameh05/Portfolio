@@ -217,6 +217,30 @@ test("gate predecessor verification fails closed for missing or drifting context
   });
   assert.equal(runningContext.usable, true);
   assert.equal(runningContext.reuse.size, 0);
+  const root = mkdtempSync(join(tmpdir(), "qualification-cold-predecessor-"));
+  try {
+    mkdirSync(join(root, "evidence"), { recursive: true });
+    const report = freshPhase1Report();
+    report.evidence.push({ file: "evidence/retained-check.log" });
+    writeFileSync(join(root, "evidence/retained-check.log"), "passed\n");
+    writeFileSync(join(root, "evidence/phase-1-gate-report.json"), JSON.stringify(report));
+    const cold = draft();
+    cold.identity.services = { unverifiedImages: ["postgres", "gotrue"] };
+    recordQualificationNode(cold, { id: "validation-environment" });
+    recordQualificationNode(cold, { id: "phase1", report: { file: "evidence/phase-1-gate-report.json",
+      sha256: evidenceFileSha256(root, "evidence/phase-1-gate-report.json") },
+      artifacts: [{ file: "evidence/retained-check.log", sha256: evidenceFileSha256(root, "evidence/retained-check.log") }] });
+    const verify = () => verifyGatePredecessors({ context: cold, nodeIds: ["phase1"], root,
+      revision: identity.revision, sourceTreeSha256: identity.tree, definitionHash,
+      activeRunId: cold.runId, activeDefinitionHash: definitionHash });
+    assert.deepEqual([...verify().reuse.keys()], ["phase1"], "service-free evidence is reusable before service images are pulled");
+    assert.ok(contextIdentityErrors(cold, { revision: identity.revision, sourceTreeSha256: identity.tree, definitionHash })
+      .includes("QUALIFICATION_CONTEXT_SERVICE_IMAGE_IDENTITY_UNVERIFIED"), "general resume still requires verified images");
+    cold.identity.services.unverifiedImages = [];
+    assert.deepEqual([...verify().reuse.keys()], ["phase1"], "warming service images preserves the predecessor bytes");
+    writeFileSync(join(root, "evidence/retained-check.log"), "changed\n");
+    assert.throws(verify, /QUALIFICATION_CONTEXT_PREDECESSOR_INVALID/u, "a completed predecessor cannot silently rerun over its recorded evidence");
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("the run file round-trips through read/record/write with digest evidence", () => {

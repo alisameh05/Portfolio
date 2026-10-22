@@ -25,6 +25,7 @@ function simulatedGateRun(root, identity = stable) {
         required: { success: true, failed: 0, skipped: 0 }, cleanup: { success: true },
         realServiceScope: { isolation: "isolated", cleanup: { success: true }, checks: [{ name: "synthetic" }] },
         migrations: identity.migrations ?? [], startedAt: new Date().toISOString(), completedAt: new Date().toISOString() };
+      if (node.id === "phase2") Object.assign(report, { observedSkipped: 0, nonRequiredSkips: [] });
       const { writeFileSync, mkdirSync } = await import("node:fs");
       mkdirSync(join(root, "evidence"), { recursive: true });
       writeFileSync(join(root, node.report), `${JSON.stringify(report)}\n`);
@@ -241,6 +242,61 @@ test("qualification executes each node once in dependency order", async () => {
       assert.ok(strictManifest.artifacts.some((artifact) => artifact.file === phase1ReportPath));
     } finally { rmSync(artifactRoot, { recursive: true, force: true }); rmSync(outputDir, { recursive: true, force: true }); }
   } finally { rmSync(root, { recursive: true, force: true }); }
+  const nestedRoot = tempRoot("phase8-cold-nested-");
+  const priorCi = process.env.CI;
+  try {
+    process.env.CI = "true";
+    const normalized = { ...stable, runtime: currentRuntimeIdentity({ ...process.env, CI: "1" }) };
+    let warmed = false;
+    const retained = new Map();
+    assert.equal(await qualifySynthetic({ root: nestedRoot, getIdentity: () => normalized, log() {},
+      checkEnvironment: () => ({ ...checkEnvironment(), unverifiedImages: warmed ? [] : ["postgres", "gotrue"] }),
+      run: async (node, childEnv) => {
+        assert.equal(childEnv.CI, "1", "root and nested gates execute with the same explicit CI value");
+        assert.deepEqual(currentRuntimeIdentity(childEnv), normalized.runtime);
+        if (node.id === "phase3") {
+          const script = `import { readQualificationRun, verifyGatePredecessors } from ${JSON.stringify(new URL("../../scripts/qualification-context.mjs", import.meta.url).href)};
+            const root = ${JSON.stringify(nestedRoot)}, context = readQualificationRun(root);
+            const proof = verifyGatePredecessors({ context, root, nodeIds: ["phase1", "phase2"], revision: context.identity.revision,
+              sourceTreeSha256: context.identity.sourceTreeSha256, definitionHash: context.definitionHash });
+            console.log(JSON.stringify({ usable: proof.usable, reused: [...proof.reuse.keys()] }));`;
+          const child = spawnSync(process.execPath, ["--input-type=module", "-e", script], { env: childEnv, encoding: "utf8" });
+          assert.equal(child.status, 0, child.stderr);
+          assert.deepEqual(JSON.parse(child.stdout), { usable: true, reused: ["phase1", "phase2"] });
+          warmed = true;
+        }
+        for (const [file, bytes] of retained) assert.deepEqual(readFileSync(join(nestedRoot, file)), bytes);
+        const code = await simulatedGateRun(nestedRoot, normalized)(node);
+        if (["phase1", "phase2"].includes(node.id)) retained.set(node.report, readFileSync(join(nestedRoot, node.report)));
+        return code;
+      } }), 0);
+  } finally {
+    if (priorCi === undefined) delete process.env.CI; else process.env.CI = priorCi;
+    rmSync(nestedRoot, { recursive: true, force: true });
+  }
+  for (const target of ["report", "transitive-artifact"]) {
+    const staleRoot = tempRoot("phase8-final-stale-");
+    try {
+      const messages = [];
+      const code = await qualifySynthetic({ root: staleRoot, checkEnvironment, getIdentity: () => stable,
+        log: (message) => messages.push(message), run: async (node) => {
+          await simulatedGateRun(staleRoot)(node);
+          if (node.id === "phase1") {
+            writeFileSync(join(staleRoot, "evidence/retained-check.log"), "passed\n");
+            writeFileSync(join(staleRoot, "evidence/component.json"), JSON.stringify({ evidence: ["evidence/retained-check.log"] }));
+            const file = join(staleRoot, node.report), report = JSON.parse(readFileSync(file, "utf8"));
+            report.evidence = ["evidence/component.json"];
+            writeFileSync(file, JSON.stringify(report));
+          }
+          if (node.id === "evaluator") writeFileSync(join(staleRoot,
+            target === "report" ? "evidence/phase-1-gate-report.json" : "evidence/retained-check.log"), "overwritten\n");
+          return 0;
+        } });
+      assert.equal(code, 1, `final completion rejects a changed ${target} in an earlier successful node`);
+      assert.equal(JSON.parse(readFileSync(join(staleRoot, "evidence/phase8-qualification-run.json"), "utf8")).status, "failed");
+      assert.match(messages.join("\n"), /phase1/u);
+    } finally { rmSync(staleRoot, { recursive: true, force: true }); }
+  }
 });
 
 test("a failed later gate resumes after rechecking and retaining the clean successful prefix", async () => {
