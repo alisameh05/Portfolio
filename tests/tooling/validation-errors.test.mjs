@@ -18,6 +18,23 @@ test("structured failures sanitize metadata, paths, causes, and serialized outpu
     assert.equal(output.includes(secret), false);
   }
   assert.equal(failure.causeCode, "42501");
+  for (const code of ["42P01", "22P02", "3F000", "42501", "ECONNREFUSED"]) {
+    for (const cause of [{ code }, Object.assign(new Error("password=sqlstate-private-secret"), { code })]) {
+      const sqlFailure = new ValidationFailure({ code: "DATABASE_VALIDATION_FAILED", stage: "migration", cause });
+      assert.equal(sqlFailure.toSafeJson().causeCode, code);
+      const serialized = serializePortfolioSettingsFailure(sqlFailure);
+      assert.equal(JSON.parse(serialized).causeCode, code);
+      assert.doesNotMatch(serialized, /sqlstate-private-secret/u);
+      const cleanup = serializePortfolioSettingsFailure(combineWithCleanupFailures(failure, [sqlFailure]));
+      assert.equal(JSON.parse(cleanup).cleanupFailures[0].causeCode, code);
+      assert.doesNotMatch(cleanup, /sqlstate-private-secret/u);
+    }
+  }
+  for (const code of ["42P01-private-secret", "22P02 password=private-secret", "3F000\nprivate-secret", "42p01"]) {
+    const sqlFailure = new ValidationFailure({ code: "DATABASE_VALIDATION_FAILED", cause: { code } });
+    assert.equal(sqlFailure.toSafeJson().causeCode, null);
+    assert.doesNotMatch(serializePortfolioSettingsFailure(sqlFailure), /private-secret/u);
+  }
   assert.equal(failure.toSafeJson().paths.length, 1);
   const unsafeCause = new ValidationFailure({ code: "FIXTURE_FAILURE", stage: "test", cause: { code: "token=sentinel-secret" } });
   assert.equal(JSON.stringify(unsafeCause.toSafeJson()).includes("sentinel-secret"), false);

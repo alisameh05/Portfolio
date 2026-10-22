@@ -116,10 +116,10 @@ export class ValidationFailure extends Error {
 }
 
 function inputCauseCode(cause) {
-  if (cause && typeof cause === "object" && typeof cause.code === "string" && (/^[A-Z][A-Z0-9_]{0,79}$/.test(cause.code) || /^\d{5}$/.test(cause.code))) return cause.code;
+  if (cause && typeof cause === "object" && typeof cause.code === "string" && (/^[A-Z][A-Z0-9_]{0,79}$/.test(cause.code) || /^[A-Z0-9]{5}$/.test(cause.code))) return cause.code;
   const origin = cause instanceof Error ? cause : null;
   if (origin === null) return null;
-  if (typeof origin.code === "string" && (/^[A-Z][A-Z0-9_]{0,79}$/.test(origin.code) || /^\d{5}$/.test(origin.code))) return origin.code;
+  if (typeof origin.code === "string" && (/^[A-Z][A-Z0-9_]{0,79}$/.test(origin.code) || /^[A-Z0-9]{5}$/.test(origin.code))) return origin.code;
   if (origin instanceof ValidationFailure) return origin.code;
   return null;
 }
