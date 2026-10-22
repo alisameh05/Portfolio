@@ -168,7 +168,7 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL && APPLICATION_URL))("Phase 8 rol
     const committedAggregate = (await admin!.query(`select event_count,metric_key,dimensions from measurement.daily_aggregates
       where portfolio_id=$1 and utc_day=$2 and metric_kind='action' and dimensions='{}'::jsonb order by metric_key`, [portfolioId, utcDay])).rows;
     const committedSource = (await admin!.query("select event_id,accepted_at from measurement.public_events where event_id=$1", [committedEvent])).rows;
-    if (committedAggregate.length === 0) throw new Error("COMMITTED_STATE_MISSING");
+    if (committedAggregate.length === 0) throw new Error("PHASE8_ROLLBACK_RECOVERY_COMMITTED_STATE_MISSING");
 
     const exportAssemblyJobId = id("Job");
     const failedExportArtifactId = id("OwnerExport");
