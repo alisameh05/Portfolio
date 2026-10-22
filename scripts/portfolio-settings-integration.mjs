@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +12,6 @@ import { invalidateIntegratedEvidence } from "./phase5-scenario-coverage.mjs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import {
   assertPhase5MigrationSafety,
-  PHASE5_MIGRATION_COMPATIBILITY,
   assertPhase3OperationsContractPreserved,
   assertPhase3OperationsRls,
   phase4ReleaseContract,
@@ -23,6 +22,16 @@ import {
   snapshotPhase4Database,
   validatePhase3MigrationSnapshot,
 } from "./phase4-migration-integrity.mjs";
+import {
+  PHASE_DATABASE_CHECKPOINTS,
+  DECLARED_CAPABILITIES_VARIABLE,
+  PHASE_DATABASE_TRANSFORMATIONS,
+  declaredCapabilities,
+  capabilitiesForCheckpoint,
+  resolveMigrationClassifications,
+  validateCheckpointPairing,
+} from "./phase-contract-registry.mjs";
+import { ValidationFailure, combineWithCleanupFailures, failureCode, redactSafeDetail } from "./validation-errors.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = join(ROOT, "node_modules/supabase/dist/supabase.js");
@@ -46,7 +55,14 @@ function run(command, args, options = {}) {
       .replace(/\s+/g, " ")
       .trim()
       .slice(-1_500);
-    throw new Error(`${options.errorCode ?? "PORTFOLIO_SETTINGS_COMMAND_FAILED"}${diagnostic === "" ? "" : `:${diagnostic}`}`);
+    throw new ValidationFailure({
+      code: options.errorCode ?? "PORTFOLIO_SETTINGS_COMMAND_FAILED",
+      stage: options.stage ?? "service-command",
+      check: `${command}-${args[0] ?? "command"}`,
+      categories: result.error ? [result.error.code ?? "spawn-error"] : [`exit-${result.status ?? "unknown"}`],
+      detail: diagnostic || "command failed without diagnostic output",
+      cause: result.error ?? Object.assign(new Error("child process failed"), { code: `EXIT_${result.status ?? "UNKNOWN"}` }),
+    });
   }
   return result.stdout;
 }
@@ -59,9 +75,19 @@ export function localEnvironment(source = process.env) {
   return env;
 }
 
+export function serializePortfolioSettingsFailure(error) {
+  const failure = error instanceof ValidationFailure ? error : new ValidationFailure({
+    code: failureCode(error, "PORTFOLIO_SETTINGS_RUNNER_FAILED"), stage: "runner",
+    detail: error instanceof Error ? error.message : String(error), cause: error,
+  });
+  return JSON.stringify(failure.toSafeJson());
+}
+
 function requireDocker() {
   run("docker", ["info", "--format", "{{.ServerVersion}}"], {
     timeout: 20_000,
+    stage: "docker-engine-preflight",
+    check: "docker-engine-access",
     errorCode: "PORTFOLIO_SETTINGS_DOCKER_UNAVAILABLE",
   });
 }
@@ -84,10 +110,12 @@ export function isolatedConfig(source, projectId, basePort = 57320) {
   return config;
 }
 
-function readDatabaseUrl(workdir, expectedPort) {
+function readDatabaseUrl(workdir, expectedPort, stage = "service-command") {
   const output = run(process.execPath, [CLI, "--workdir", workdir, "status", "--output", "json"], {
     timeout: 30_000,
     errorCode: "PORTFOLIO_SETTINGS_STATUS_FAILED",
+    stage,
+    check: "supabase-status",
   });
   const start = output.indexOf("{");
   const end = output.lastIndexOf("}");
@@ -102,12 +130,40 @@ function readDatabaseUrl(workdir, expectedPort) {
   return connectionString;
 }
 
+export function requestedDatabaseTestFiles({ ticket123, ticket122, contentAuthoringTicket }) {
+  if (ticket123) return [
+    "tests/database/content-authoring.integration.test.ts", "tests/database/owner-composition.integration.test.ts",
+    "tests/database/phase5-security.integration.test.ts", "tests/database/postgres-transaction-runner.test.ts",
+    "tests/database/postgres-runtime.test.ts", "tests/phase4/owner-session-auth.test.ts", "tests/runtime/runtime-ports.test.ts",
+  ];
+  if (ticket122) return [
+    "tests/database/owner-composition.integration.test.ts", "tests/runtime/owner-content-authoring.test.ts",
+    "tests/runtime/owner-content-http.test.ts", "tests/runtime/owner-publication.test.ts", "tests/runtime/owner-project.test.ts",
+    "tests/runtime/owner-project-status.test.ts", "tests/runtime/owner-taxonomy.test.ts",
+    "tests/phase4/owner-request-security.test.ts", "tests/phase4/owner-operation-policy.test.ts", "tests/contracts/owner-contract.test.ts",
+  ];
+  return [contentAuthoringTicket ? "tests/database/content-authoring.integration.test.ts" : "tests/database/portfolio-settings.integration.test.ts"];
+}
+
+export function planCurrentCheckpointTests(currentCheckpointFiles, finalFiles) {
+  if (!Array.isArray(currentCheckpointFiles) || !Array.isArray(finalFiles) ||
+      new Set(currentCheckpointFiles).size !== currentCheckpointFiles.length || new Set(finalFiles).size !== finalFiles.length ||
+      finalFiles.some((file) => !currentCheckpointFiles.includes(file))) throw new Error("PORTFOLIO_SETTINGS_CURRENT_TEST_INVENTORY_PARTITION_INVALID");
+  const auditFiles = currentCheckpointFiles.filter((file) => !finalFiles.includes(file));
+  return { auditFiles, finalFiles: [...finalFiles], completeInventory: [...currentCheckpointFiles] };
+}
+
 export function requireExecutedTests(report, expectedSuiteCount = 1) {
-  if (
-    report.success !== true || report.numPassedTests < 1 || report.numFailedTests !== 0 ||
-    report.numPendingTests !== 0 || report.numTodoTests !== 0 ||
-    report.testResults?.length !== expectedSuiteCount || report.testResults.some((suite) => suite.status !== "passed")
-  ) throw new Error("PORTFOLIO_SETTINGS_TEST_FAILED: no missing or skipped database evidence is accepted.");
+  const suites = Array.isArray(report?.testResults) ? report.testResults : [];
+  const problems = [];
+  if (report?.success !== true) problems.push("report-not-successful");
+  if (!Number.isInteger(report?.numPassedTests) || report.numPassedTests < 1) problems.push("no-passing-assertions");
+  for (const key of ["numFailedTests", "numPendingTests", "numTodoTests"]) {
+    if (!Number.isInteger(report?.[key]) || report[key] !== 0) problems.push(`${key}=${Number.isInteger(report?.[key]) ? report[key] : "missing"}`);
+  }
+  if (suites.length !== expectedSuiteCount) problems.push(`suite-count-expected-${expectedSuiteCount}-actual-${suites.length}`);
+  suites.forEach((suite, index) => { if (suite?.status !== "passed") problems.push(`suite-${index + 1}-${suite?.status ?? "missing-status"}`); });
+  if (problems.length > 0) throw new Error(`PORTFOLIO_SETTINGS_TEST_FAILED:${problems.join(",")}`);
 }
 
 export function requirePredecessorTests(report, expectedFiles) {
@@ -152,7 +208,7 @@ export function createProject(name, basePort, migrations) {
   // The pinned CLI truncates project IDs to 40 characters for Docker names.
   const projectId = `shipwithali-${name}-${randomBytes(5).toString("hex")}`;
   const workdir = mkdtempSync(join(tmpdir(), `${projectId}-`));
-  const project = { projectId, workdir, network: `${projectId}-loopback`, basePort, networkCreated: false, attemptedStart: false };
+  const project = { projectId, workdir, network: `${projectId}-loopback`, basePort, networkCreated: false, networkAttempted: false, attemptedStart: false };
   try {
     const supabase = join(workdir, "supabase");
     mkdirSync(join(supabase, "migrations"), { recursive: true });
@@ -166,9 +222,11 @@ export function createProject(name, basePort, migrations) {
   }
 }
 
-function invokeProject(project, args, env) {
+function invokeProject(project, args, env, stage = "service-command") {
   return run(process.execPath, [CLI, "--workdir", project.workdir, ...args], {
     env,
+    stage,
+    check: `supabase-${args[0] ?? "command"}`,
     errorCode: args[0] === "start"
       ? "PORTFOLIO_SETTINGS_SUPABASE_START_FAILED"
       : args[0] === "db"
@@ -179,21 +237,22 @@ function invokeProject(project, args, env) {
   });
 }
 
-function startProject(project, env) {
+function startProject(project, env, stage = "project-health") {
+  project.networkAttempted = true;
   run("docker", ["network", "create", "-o", "com.docker.network.bridge.host_binding_ipv4=127.0.0.1", project.network], {
-    timeout: 20_000, env, errorCode: "PORTFOLIO_SETTINGS_NETWORK_CREATE_FAILED",
+    timeout: 20_000, env, errorCode: "PORTFOLIO_SETTINGS_NETWORK_CREATE_FAILED", stage, check: "isolated-loopback-network",
   });
   project.networkCreated = true;
   project.attemptedStart = true;
   initializeLocalMigrationProject(project, {
-    initialize: (_network, dockerEnvironment) => invokeProject(project, ["start", "--network-id", project.network], { ...env, ...dockerEnvironment }),
-    migrate: () => invokeProject(project, ["migration", "up", "--local"], env),
+    initialize: (_network, dockerEnvironment) => invokeProject(project, ["start", "--network-id", project.network], { ...env, ...dockerEnvironment }, stage),
+    migrate: () => invokeProject(project, ["migration", "up", "--local"], env, "phase3-historical-migrations"),
   });
   initializeLocalMigrationProject(project, {
-    initialize: (network, dockerEnvironment) => invokeProject(project, ["db", "reset", "--local", "--network-id", network], { ...env, ...dockerEnvironment }),
-    migrate: () => invokeProject(project, ["migration", "up", "--local"], env),
+    initialize: (network, dockerEnvironment) => invokeProject(project, ["db", "reset", "--local", "--network-id", network], { ...env, ...dockerEnvironment }, stage),
+    migrate: () => invokeProject(project, ["migration", "up", "--local"], env, "phase3-historical-migrations"),
   });
-  return readDatabaseUrl(project.workdir, project.basePort + 2);
+  return readDatabaseUrl(project.workdir, project.basePort + 2, stage);
 }
 
 async function seedAndCapturePhase3Operations(connectionString) {
@@ -389,6 +448,31 @@ export async function main() {
   const postPhase5Files = migrationsAfterPhase5(migrations.files);
   const upgradeBaselineFiles = ticket123 ? phase4ReleaseFiles : migrations.phase3Files;
   if (phase4Files.length === 0) throw new Error("PORTFOLIO_SETTINGS_PHASE4_MIGRATIONS_MISSING");
+  const predecessorTestFiles = [...new Set(PHASE_DATABASE_CHECKPOINTS
+    .find((checkpoint) => checkpoint.id === "phase3-baseline").suites.map((suite) => suite.file))];
+  const currentCheckpointTestFiles = [...new Set(PHASE_DATABASE_CHECKPOINTS
+    .find((checkpoint) => checkpoint.id === "current").suites.map((suite) => suite.file))];
+  const finalTestFiles = requestedDatabaseTestFiles({ ticket123, ticket122, contentAuthoringTicket });
+  const { auditFiles: currentCheckpointAuditTestFiles } = planCurrentCheckpointTests(currentCheckpointTestFiles, finalTestFiles);
+  const classifications = resolveMigrationClassifications(migrations.files, {
+    phase3Files: migrations.phase3Files,
+    migrationContents: migrations.contents,
+  });
+  validateCheckpointPairing({
+    classifications,
+    phase3Files: migrations.phase3Files,
+    existingFiles: new Set(PHASE_DATABASE_CHECKPOINTS.flatMap((checkpoint) => checkpoint.suites.map((suite) => suite.file))
+      .filter((file) => existsSync(join(ROOT, file)))),
+  });
+  const capabilitiesForFiles = (files) => declaredCapabilities().filter((capability) => {
+    const transformation = PHASE_DATABASE_TRANSFORMATIONS.find((entry) => entry.capability === capability);
+    return transformation !== undefined && files.includes(transformation.migration);
+  });
+  const upgradeCheckpointCapabilities = capabilitiesForFiles(upgradeBaselineFiles);
+  const currentCheckpointCapabilities = capabilitiesForFiles(migrations.files);
+  if (JSON.stringify(currentCheckpointCapabilities) !== JSON.stringify(declaredCapabilities())) {
+    throw new Error("PORTFOLIO_SETTINGS_DECLARED_CAPABILITIES_MISMATCH");
+  }
   requireDocker();
   const env = localEnvironment();
   const projects = [];
@@ -398,6 +482,7 @@ export async function main() {
   let failureStage = "initialization";
 
   try {
+    failureStage = "project-startup";
     cleanProject = createProject("settings-clean", 57320, migrations.files);
     projects.push(cleanProject);
     upgradeProject = createProject("settings-upgrade", 57340, upgradeBaselineFiles);
@@ -405,24 +490,18 @@ export async function main() {
     console.log(ticket123
       ? "Starting isolated loopback PostgreSQL clean and merged Phase 4 release upgrade projects."
       : "Starting isolated loopback PostgreSQL clean and Phase 3 upgrade projects.");
-    const cleanUrl = startProject(cleanProject, env);
-    const upgradeUrl = startProject(upgradeProject, env);
+    failureStage = "project-health";
+    const cleanUrl = startProject(cleanProject, env, "clean-project-health");
+    const upgradeUrl = startProject(upgradeProject, env, "upgrade-project-health");
     console.log(ticket123
       ? "Isolated PostgreSQL projects are healthy; clean install and Phase 4 release schemas are applied."
       : "Isolated PostgreSQL projects are healthy; clean and Phase 3 upgrade migrations are applied.");
 
+    failureStage = "phase3-schema-snapshot";
     const phase3Snapshot = await snapshotPhase4Database(upgradeUrl);
     assertPhase3OperationsRls(phase3Snapshot);
-    const predecessorTestFiles = [
-      "tests/database/postgres-transaction-runner.test.ts",
-      "tests/database/postgres-integration.test.ts",
-      "tests/database/optimistic-concurrency.test.ts",
-      "tests/database/idempotency.test.ts",
-      "tests/database/outbox.test.ts",
-      "tests/database/leased-jobs.test.ts",
-      "tests/database/role-rls-matrix.test.ts",
-    ];
     const predecessorReportPath = join(upgradeProject.workdir, "phase3-test-report.json");
+    failureStage = "phase3-historical-tests";
     const predecessorResult = spawnSync(process.execPath, [
       join(ROOT, "node_modules/vitest/vitest.mjs"),
       "run",
@@ -431,7 +510,12 @@ export async function main() {
       `--outputFile=${predecessorReportPath}`,
     ], {
       cwd: ROOT,
-      env: { ...env, PHASE3_DATABASE_URL: upgradeUrl, PHASE3_REQUIRE_DATABASE: "1" },
+      env: {
+        ...env,
+        PHASE3_DATABASE_URL: upgradeUrl,
+        PHASE3_REQUIRE_DATABASE: "1",
+        [DECLARED_CAPABILITIES_VARIABLE]: upgradeCheckpointCapabilities.join(","),
+      },
       encoding: "utf8",
       timeout: 180_000,
       stdio: ["ignore", "pipe", "pipe"],
@@ -445,22 +529,28 @@ export async function main() {
     if (predecessorResult.error || predecessorResult.status !== 0) {
       const failedAssertions = predecessorReport.testResults?.flatMap((suite) => suite.assertionResults
         ?.filter((test) => test.status === "failed")
-        .map((test) => [...(test.ancestorTitles ?? []), test.title].join(" > ")) ?? []) ?? [];
-      throw new Error("PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED:" + failedAssertions.join(" | "));
+        .map((test) => `${[...(test.ancestorTitles ?? []), test.title].join(" > ")}: ${(test.failureMessages ?? []).join(" ")}`) ?? []) ?? [];
+      throw new ValidationFailure({ code: "PORTFOLIO_SETTINGS_PHASE3_PREDECESSOR_TESTS_FAILED", stage: failureStage,
+        check: "phase3-historical-suites", categories: [`failed-${predecessorReport.numFailedTests ?? "unknown"}`,
+          `skipped-${(predecessorReport.numPendingTests ?? 0) + (predecessorReport.numTodoTests ?? 0)}`],
+        detail: failedAssertions.join(" | ") || "historical test suites did not complete successfully",
+        cause: predecessorResult.error ?? Object.assign(new Error("historical suites failed"), { code: `EXIT_${predecessorResult.status ?? "UNKNOWN"}` }) });
     }
     const predecessorTestCount = requirePredecessorTests(predecessorReport, predecessorTestFiles);
     console.log(ticket123
       ? `Phase 3 historical database invariants: ${predecessorTestCount} passed, 0 skipped on the merged Phase 4 release schema.`
       : `Phase 3 historical database invariants: ${predecessorTestCount} passed, 0 skipped before Phase 4 migrations.`);
+    failureStage = "phase3-operations-fixture";
     const phase3Rows = await seedAndCapturePhase3Operations(upgradeUrl);
     console.log("Captured the Phase 3 operations contract and seeded rows through restricted capability roles.");
     const phase4MigrationsToApply = ticket123
       ? phase4ReleaseFiles.filter((file) => !migrations.phase3Files.includes(file))
       : phase4Files;
+    failureStage = "phase4-migration-application";
     for (const file of phase4MigrationsToApply) {
       copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
     }
-    applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env));
+    applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env, failureStage));
     console.log(ticket123 ? "Applied the merged Phase 4 release migrations." : "Applied Phase 4 migrations to the Phase 3 upgrade database.");
     let phase4ReleaseRows;
     let phase4ReleaseLedger;
@@ -479,7 +569,7 @@ export async function main() {
         copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
       }
       failureStage = "phase5-release-migrations";
-      applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env));
+      applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env, failureStage));
       failureStage = "phase5-release-data-preservation";
       const afterPhase5Rows = await countRetainedReleaseRecords(upgradeUrl);
       if (JSON.stringify(afterPhase5Rows) !== JSON.stringify(phase4ReleaseRows)) {
@@ -489,7 +579,7 @@ export async function main() {
       for (const file of postPhase5Files) {
         copyFileSync(join(ROOT, "supabase/migrations", file), join(upgradeProject.workdir, "supabase/migrations", file));
       }
-      applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env));
+      applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env, failureStage));
     }
     if (ticket123) {
       failureStage = "current-settings-integration";
@@ -509,7 +599,13 @@ export async function main() {
       catch { throw new Error("PHASE5_CURRENT_SETTINGS_TEST_REPORT_MISSING"); }
       try { unlinkSync(phase4SettingsReportPath); } catch { /* isolated project cleanup removes it */ }
       if (phase4SettingsResult.error || phase4SettingsResult.status !== 0) {
-        throw new Error("PHASE5_CURRENT_SETTINGS_INTEGRATION_FAILED");
+        const failedAssertions = phase4SettingsReport.testResults?.flatMap((suite) => suite.assertionResults
+          ?.filter((test) => test.status === "failed")
+          .map((test) => `${[...(test.ancestorTitles ?? []), test.title].join(" > ")}: ${(test.failureMessages ?? []).join(" ")}`) ?? []) ?? [];
+        throw new ValidationFailure({ code: "PHASE5_CURRENT_SETTINGS_INTEGRATION_FAILED", stage: failureStage,
+          check: "phase4-settings-suite", categories: [`failed-${phase4SettingsReport.numFailedTests ?? "unknown"}`],
+          detail: failedAssertions.join(" | ") || "current settings test suite failed without assertion details",
+          cause: phase4SettingsResult.error ?? Object.assign(new Error("current settings integration failed"), { code: `EXIT_${phase4SettingsResult.status ?? "UNKNOWN"}` }) });
       }
       requireExecutedTests(phase4SettingsReport, 1);
     }
@@ -532,12 +628,64 @@ export async function main() {
     if (JSON.stringify(cleanSnapshot.migrationLedger) !== JSON.stringify(
       migrations.files.map((file) => ({ version: file.slice(0, 14), name: file.slice(15, -4) })),
     )) throw new Error("PORTFOLIO_SETTINGS_MIGRATION_LEDGER_MISMATCH");
-    invokeProject(cleanProject, ["migration", "up", "--local"], env);
-    applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env));
+    failureStage = "clean-current-migration-replay";
+    invokeProject(cleanProject, ["migration", "up", "--local"], env, failureStage);
+    applyLocalProjectMigrations(upgradeProject, () => invokeProject(upgradeProject, ["migration", "up", "--local"], env, "upgrade-current-migration-replay"));
     assertPhase4SnapshotsEquivalent(cleanSnapshot, await snapshotPhase4Database(cleanUrl));
     assertPhase4SnapshotsEquivalent(upgradeSnapshot, await snapshotPhase4Database(upgradeUrl));
     const preservedRows = await assertPhase3OperationsPreserved(upgradeUrl, phase3Rows);
 
+    failureStage = "current-checkpoint-tests";
+    const currentCheckpointReportPath = join(cleanProject.workdir, "current-checkpoint-test-report.json");
+    const currentCheckpointResult = spawnSync(process.execPath, [
+      join(ROOT, "node_modules/vitest/vitest.mjs"),
+      "run",
+      ...currentCheckpointAuditTestFiles,
+      "--reporter=json",
+      `--outputFile=${currentCheckpointReportPath}`,
+    ], {
+      cwd: ROOT,
+      env: {
+        ...env,
+        PHASE3_DATABASE_URL: cleanUrl,
+        PHASE3_REQUIRE_DATABASE: "1",
+        PHASE4_SETTINGS_DATABASE_URL: cleanUrl,
+        PHASE4_REQUIRE_SETTINGS: "1",
+        PHASE5_CONTENT_AUTHORING_DATABASE_URL: cleanUrl,
+        PHASE5_REQUIRE_CONTENT_AUTHORING: "1",
+        [DECLARED_CAPABILITIES_VARIABLE]: currentCheckpointCapabilities.join(","),
+      },
+      encoding: "utf8",
+      timeout: 180_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let currentCheckpointReport;
+    try {
+      currentCheckpointReport = JSON.parse(readFileSync(currentCheckpointReportPath, "utf8"));
+    } catch {
+      throw new Error("PORTFOLIO_SETTINGS_CURRENT_CHECKPOINT_REPORT_MISSING");
+    }
+    if (currentCheckpointResult.error || currentCheckpointResult.status !== 0) {
+      const failedAssertions = currentCheckpointReport.testResults?.flatMap((suite) => suite.assertionResults
+        ?.filter((test) => test.status === "failed")
+        .map((test) => `${[...(test.ancestorTitles ?? []), test.title].join(" > ")}: ${(test.failureMessages ?? []).join(" ")}`) ?? []) ?? [];
+      throw new ValidationFailure({ code: "PORTFOLIO_SETTINGS_CURRENT_CHECKPOINT_TESTS_FAILED", stage: failureStage,
+        check: "current-checkpoint-suites", categories: [`failed-${currentCheckpointReport.numFailedTests ?? "unknown"}`],
+        detail: failedAssertions.join(" | ") || "current checkpoint suites failed without assertion details",
+        cause: currentCheckpointResult.error ?? Object.assign(new Error("current checkpoint tests failed"), { code: `EXIT_${currentCheckpointResult.status ?? "UNKNOWN"}` }) });
+    }
+    try { requireExecutedTests(currentCheckpointReport, currentCheckpointAuditTestFiles.length); }
+    catch (error) {
+      throw new ValidationFailure({ code: "PORTFOLIO_SETTINGS_CURRENT_CHECKPOINT_TESTS_FAILED", stage: failureStage,
+        check: "current-checkpoint-suites", categories: ["incomplete-or-failed-test-evidence"],
+        detail: error instanceof Error ? error.message : String(error), cause: error });
+    }
+    console.log(
+      "Current checkpoint declared capability audit: " + currentCheckpointReport.numPassedTests +
+      " passed, 0 skipped (" + (currentCheckpointCapabilities.join("|") || "none") + ").",
+    );
+    try { unlinkSync(currentCheckpointReportPath); } catch { /* isolated project cleanup removes it */ }
+    failureStage = "database-type-codegen";
     const databaseEnv = { ...env, PHASE4_SETTINGS_DATABASE_URL: cleanUrl };
     const generationArgs = [
       CODEGEN,
@@ -552,6 +700,8 @@ export async function main() {
     if (!process.argv.includes("--refresh-types")) generationArgs.push("--verify");
     run(process.execPath, generationArgs, {
       env: databaseEnv,
+      stage: failureStage,
+      check: "kysely-codegen",
       errorCode: process.argv.includes("--refresh-types")
         ? "PORTFOLIO_SETTINGS_TYPE_GENERATION_FAILED"
         : "PORTFOLIO_SETTINGS_TYPE_DRIFT",
@@ -559,32 +709,7 @@ export async function main() {
     console.log(process.argv.includes("--refresh-types")
       ? "Generated database types from the clean PostgreSQL schema."
       : "Generated database types match the clean PostgreSQL schema.");
-    const testFiles = ticket123
-      ? [
-        "tests/database/content-authoring.integration.test.ts",
-        "tests/database/owner-composition.integration.test.ts",
-        "tests/database/phase5-security.integration.test.ts",
-        "tests/database/postgres-transaction-runner.test.ts",
-        "tests/database/postgres-runtime.test.ts",
-        "tests/phase4/owner-session-auth.test.ts",
-        "tests/runtime/runtime-ports.test.ts",
-      ]
-      : ticket122
-      ? [
-        "tests/database/owner-composition.integration.test.ts",
-        "tests/runtime/owner-content-authoring.test.ts",
-        "tests/runtime/owner-content-http.test.ts",
-        "tests/runtime/owner-publication.test.ts",
-        "tests/runtime/owner-project.test.ts",
-        "tests/runtime/owner-project-status.test.ts",
-        "tests/runtime/owner-taxonomy.test.ts",
-        "tests/phase4/owner-request-security.test.ts",
-        "tests/phase4/owner-operation-policy.test.ts",
-        "tests/contracts/owner-contract.test.ts",
-      ]
-      : [contentAuthoringTicket
-        ? "tests/database/content-authoring.integration.test.ts"
-        : "tests/database/portfolio-settings.integration.test.ts"];
+    const testFiles = finalTestFiles;
     const reportPath = join(cleanProject.workdir, contentAuthoringTicket ? "content-authoring-test-report.json" : "test-report.json");
     const result = spawnSync(process.execPath, [
       join(ROOT, "node_modules/vitest/vitest.mjs"),
@@ -638,7 +763,8 @@ export async function main() {
         ?.filter((test) => test.status === "failed")
         .map((test) => {
           const line = (test.failureMessages ?? []).join("\n").match(/tests[\\/]database[\\/][^:\r\n]+:(\d+):\d+/u)?.[1] ?? "unknown";
-          return `${[...(test.ancestorTitles ?? []), test.title].join(" > ")}@line-${line}`;
+          const detail = redactSafeDetail((test.failureMessages ?? []).join(" "));
+          return `${[...(test.ancestorTitles ?? []), test.title].join(" > ")}@line-${line}:${detail || "assertion-failed"}`;
         }) ?? []) ?? [];
       const failureSummary = failedTests.length > 0 ? failedTests : report.testResults
         ?.filter((suite) => suite.status !== "passed")
@@ -989,35 +1115,65 @@ export async function main() {
       } catch { /* report only that the membership payload was malformed */ }
       failure = new Error(`PHASE5_ROLE_MEMBERSHIP_DIFFER:${membershipDetail}`);
     }
-    const snapshotDifference = error instanceof Error
+    if (error instanceof ValidationFailure) {
+      failure = error;
+    }
+    const snapshotDifference = error instanceof Error && !(error instanceof ValidationFailure)
       ? error.message.match(/^PORTFOLIO_SETTINGS_DATABASE_STATE_DIFFER:([^:]+)/u)
       : null;
-    failure ??= snapshotDifference !== null
-      ? new Error(`PORTFOLIO_SETTINGS_DATABASE_STATE_DIFFER:${snapshotDifference[1]}`)
-      : error instanceof Error && /^[A-Z][A-Z0-9_]+(?::[A-Za-z0-9_.,\/-]+)*$/u.test(error.message)
-        ? error
-        : new Error(`PORTFOLIO_SETTINGS_DATABASE_FAILURE:${failureStage}:${typeof error?.code === "string" ? error.code : error?.name ?? "unknown"}`);
+    if (failure === undefined) {
+      const code = snapshotDifference !== null ? "PORTFOLIO_SETTINGS_DATABASE_STATE_DIFFER" : failureCode(error, "PORTFOLIO_SETTINGS_DATABASE_FAILURE");
+      failure = new ValidationFailure({
+        code,
+        stage: failureStage,
+        check: snapshotDifference === null ? "portfolio-settings-runner" : "clean-upgrade-snapshot-equivalence",
+        categories: snapshotDifference?.[1]?.split(",") ?? [],
+        paths: snapshotDifference?.[1]?.split(",").map((category) => `${category}:difference`) ?? [],
+        detail: error instanceof Error ? error.message : String(error),
+        cause: error,
+      });
+    }
   } finally {
-    let cleanupFailed = false;
+    const cleanupFailures = [];
     for (const project of [...projects].reverse()) {
       let projectCleanupFailed = false;
       if (project.attemptedStart) {
-        try { invokeProject(project, ["stop", "--no-backup"], env); } catch { projectCleanupFailed = true; }
+        try { invokeProject(project, ["stop", "--no-backup"], env, "cleanup"); }
+        catch (error) {
+          projectCleanupFailed = true;
+          cleanupFailures.push(new ValidationFailure({ code: failureCode(error, "PORTFOLIO_SETTINGS_PROJECT_STOP_FAILED"),
+            stage: "cleanup", check: "stop-project", paths: [project.projectId],
+            detail: error instanceof Error ? error.message : String(error), cause: error }));
+        }
       }
-      if (project.networkCreated) {
+      if (project.networkCreated || project.networkAttempted) {
         const result = spawnSync("docker", ["network", "rm", project.network], {
-          env, encoding: "utf8", timeout: 20_000, stdio: "ignore",
+          env, encoding: "utf8", timeout: 20_000, stdio: ["ignore", "pipe", "pipe"],
         });
-        if (result.error || result.status !== 0) projectCleanupFailed = true;
+        if (result.error || result.status !== 0) {
+          projectCleanupFailed = true;
+          const cause = result.error ?? Object.assign(new Error(result.stderr?.trim() || "docker network rm exited nonzero"), {
+            code: `EXIT_${result.status ?? "UNKNOWN"}`,
+          });
+          cleanupFailures.push(new ValidationFailure({ code: "PORTFOLIO_SETTINGS_NETWORK_REMOVAL_FAILED",
+            stage: "cleanup", check: "remove-isolated-network", paths: [project.projectId],
+            detail: result.stderr?.trim() || result.stdout?.trim() || "network removal failed", cause }));
+        }
       }
       const absoluteWorkdir = resolve(project.workdir);
       const tempRoot = resolve(tmpdir());
       if (!projectCleanupFailed && (absoluteWorkdir.startsWith(`${tempRoot}\\`) || absoluteWorkdir.startsWith(`${tempRoot}/`))) {
-        rmSync(absoluteWorkdir, { recursive: true, force: true });
+        try { rmSync(absoluteWorkdir, { recursive: true, force: true }); }
+        catch (error) {
+          projectCleanupFailed = true;
+          cleanupFailures.push(new ValidationFailure({ code: "PORTFOLIO_SETTINGS_WORKDIR_REMOVAL_FAILED",
+            stage: "cleanup", check: "remove-project-workdir", paths: [project.projectId],
+            detail: error instanceof Error ? error.message : String(error), cause: error }));
+        }
       }
-      cleanupFailed ||= projectCleanupFailed;
+      if (projectCleanupFailed) process.stderr.write(`⚠ cleanup incomplete for isolated project ${redactSafeDetail(project.projectId)}\n`);
     }
-    if (cleanupFailed) failure = new Error("PORTFOLIO_SETTINGS_CLEANUP_FAILED: isolated database resources need recovery.");
+    failure = combineWithCleanupFailures(failure, cleanupFailures);
   }
 
   if (failure) throw failure;
@@ -1027,9 +1183,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try {
     await main();
   } catch (error) {
-    console.error(error instanceof Error && /^[A-Z][A-Z0-9_]+(?::[A-Za-z0-9_.,\/-]+)*$/u.test(error.message)
-      ? error.message
-      : "PORTFOLIO_SETTINGS_RUNNER_FAILED: private diagnostics suppressed.");
+    console.error(serializePortfolioSettingsFailure(error));
     process.exitCode = 1;
   }
 }

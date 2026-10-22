@@ -10,6 +10,8 @@ import { classifyCheckResult, sanitizeEvidenceOutput } from "./phase4-gate-suppo
 import { observeRuntime, verifyEnvironment } from "./validation-environment.mjs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { countSkippedTests, REQUIRED_PHASE5_GATE_CHECKS, evaluatePhase5Gate } from "./phase5-gate-support.mjs";
+import { createQualificationPrerequisiteCache } from "./qualification-prerequisite-cache.mjs";
+import { normalizeQualificationCommandResult } from "./qualification-command.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE_DIR = join(ROOT, "evidence");
@@ -23,7 +25,7 @@ const MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
 const CHECK_TIMEOUT = 20 * 60 * 1000;
 
 const COMMANDS = Object.freeze([
-  { name: "exact-toolchain", script: null, entry: "scripts/check-toolchain.mjs" },
+  { name: "exact-toolchain", script: null, cacheKey: "direct:check-toolchain.mjs", entry: "scripts/check-toolchain.mjs" },
   { name: "phase5-context", script: null, entry: "scripts/check-phase5-context.mjs", env: { SHIPWITHALI_PHASE: "phase5" } },
   { name: "authoring-scenarios", script: "phase5:focus:authoring-review-publication-routes", requiresValidation: true, failOnSkipped: true },
   { name: "taxonomy-scenarios", script: "phase5:focus:taxonomy-status-relationships-discovery", requiresValidation: true, failOnSkipped: true },
@@ -65,13 +67,14 @@ function sanitize(value) {
   return sanitizeEvidenceOutput(String(value), { workspace: ROOT, temporary: process.env.TEMP ?? "", secrets });
 }
 
-function npmCommand(script) {
+function npmCommand(script, args = []) {
+  if (script === "contract:verify") return { entry: process.execPath, args: [join(ROOT, "scripts/qualification-contract-verification.mjs")] };
   if (process.env.npm_execpath) {
-    return { entry: process.execPath, args: [process.env.npm_execpath, "run", script] };
+    return { entry: process.execPath, args: [process.env.npm_execpath, "run", script, ...args] };
   }
   return {
     entry: process.platform === "win32" ? "npm.cmd" : "npm",
-    args: ["run", script],
+    args: ["run", script, ...args],
     shell: process.platform === "win32",
   };
 }
@@ -255,6 +258,8 @@ async function main() {
   let initialTree;
   try { initialTree = workingTreeSourceSha256(); } catch { initialTree = "unknown"; }
   const runtime = observeRuntime();
+  const prerequisiteCache = createQualificationPrerequisiteCache({ root: ROOT, sourceRevision, sourceTreeSha256: initialTree,
+    runtime: { ...runtime, platform: process.platform, architecture: process.arch } });
   const packageJson = readJson(join(ROOT, "package.json")) ?? {};
   const toolVersions = { node: runtime.node, npm: runtime.npm };
   const expectedVersions = { node: packageJson.engines?.node, npm: packageJson.engines?.npm };
@@ -275,16 +280,26 @@ async function main() {
     }
     const checkStartedAt = new Date().toISOString();
     const command = definition.script
-      ? npmCommand(definition.script)
+      ? npmCommand(definition.script, definition.args ?? [])
       : { entry: process.execPath, args: [join(ROOT, definition.entry)] };
-    const result = runProcess(command, {
-      PHASE5_GATE_RUN_ID: runId,
-      ...definition.env,
-    }, definition.timeout ?? 120_000);
+    const commandEnvironment = { ...process.env, CI: "1", SHIPWITHALI_PHASE: "phase5", PHASE5_GATE_RUN_ID: runId, ...definition.env };
+    const commandResult = prerequisiteCache.run({ script: definition.cacheKey ?? definition.script, args: definition.args ?? [],
+      entry: JSON.stringify({ entry: command.entry, args: command.args }), environment: commandEnvironment,
+      artifactPaths: definition.artifactPaths,
+      invoke: () => {
+        const outcome = runProcess(command, { PHASE5_GATE_RUN_ID: runId, ...definition.env }, definition.timeout ?? 120_000);
+        return normalizeQualificationCommandResult({ status: outcome.code, output: outcome.output, errorCode: outcome.error?.code ?? null,
+          skipped: countSkippedTests(outcome.output), timedOut: outcome.error?.code === "ETIMEDOUT" });
+      }, sanitizeOutput: sanitize });
     const check = writeCheck(definition.name, runId, sourceRevision, initialTree, checkStartedAt, {
-      ...result,
+      code: commandResult.status,
+      error: commandResult.errorCode ? { code: commandResult.errorCode } : null,
+      output: commandResult.output,
+      skipped: commandResult.skipped,
       failOnSkipped: definition.failOnSkipped ?? true,
     });
+    check.reused = commandResult.reused;
+    if (commandResult.reuseProof) check.reuseProof = commandResult.reuseProof;
     checks.push(check);
     if (definition.name === "phase5-context" && check.passed) {
       const report = readJson(CONTEXT_PATH);

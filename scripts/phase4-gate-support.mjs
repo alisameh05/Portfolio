@@ -1,3 +1,5 @@
+import { approvedWindowsPhase2Skip } from "./qualification-command.mjs";
+
 export const REQUIRED_PHASE4_CHECK_NAMES = Object.freeze([
   "predecessor-phase1",
   "predecessor-phase2",
@@ -75,10 +77,8 @@ export function classifyCheckResult({
     ...cleanOutput.matchAll(/\b(\d+)\s+skipped\b/gi),
     ...cleanOutput.matchAll(/\bskipped(?:\s+tests?)?\s*[:=]\s*(\d+)\b/gi),
   ].map((match) => Number(match[1]));
-  const knownWindowsPhase2Skip = allowWindowsPhase2HelperProcessSkip && platform === "win32" &&
-    skippedCounts.length === 2 && skippedCounts.every((count) => count === 1) &&
-    /(?:^|\n)\s*✓\s+tests\/runtime\/media-processing-tools\.test\.ts \([^\n]*\b1 skipped\)(?:\s+[^\r\n]+)?(?:\n|$)/u.test(cleanOutput) &&
-    /(?:^|\n)\s*Tests\s+\d+ passed \| 1 skipped \(\d+\)(?:\n|$)/u.test(cleanOutput);
+  const knownWindowsPhase2Skip = allowWindowsPhase2HelperProcessSkip &&
+    approvedWindowsPhase2Skip(cleanOutput, { platform, phase2RuntimeSuite: true });
   const skippedOrPartial = failOnSkipped &&
     ((skippedCounts.some((count) => count > 0) && !knownWindowsPhase2Skip) || /missing.*service/i.test(cleanOutput) ||
       /\bpartial\b/i.test(cleanOutput));
@@ -101,7 +101,7 @@ export function classifyCheckResult({
   };
 }
 
-export function evaluateGate({ checks, requiredCheckNames, evidence, runId, revision }) {
+export function evaluateGate({ checks, requiredCheckNames, evidence, runId, revision, reusableEvidence = [] }) {
   const checkNames = new Set(checks.map((check) => check.name));
   const missingChecks = requiredCheckNames.filter((name) => !checkNames.has(name));
   const duplicateChecks = checks
@@ -109,7 +109,13 @@ export function evaluateGate({ checks, requiredCheckNames, evidence, runId, revi
     .filter((name, index, names) => names.indexOf(name) !== index);
   const failedChecks = checks.filter((check) => !check.passed).map((check) => check.name);
   const staleEvidence = evidence
-    .filter((item) => item.runId !== runId || item.revision !== revision || item.fresh !== true)
+    .filter((item) => {
+      if (item.runId === runId && item.revision === revision && item.fresh === true) return false;
+      // Evidence verified against the shared qualification context: the verify
+      // caller confirmed the file's current digest equals the recorded digest
+      // of a predecessor that completed on this exact source and definition.
+      return !reusableEvidence.some((allowed) => allowed.file === item.file && allowed.sha256 === item.sha256);
+    })
     .map((item) => item.file);
   const passed =
     missingChecks.length === 0 &&

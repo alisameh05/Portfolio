@@ -8,6 +8,7 @@ import {
   REQUIRED_PHASE4_CHECK_NAMES,
   sanitizeEvidenceOutput,
 } from "../../scripts/phase4-gate-support.mjs";
+import { approvedWindowsPhase2Skip, WINDOWS_PHASE2_NONREQUIRED_SKIP } from "../../scripts/qualification-command.mjs";
 
 test("the required checklist includes every predecessor and Phase 4 acceptance runner", () => {
   assert.deepEqual(REQUIRED_PHASE4_CHECK_NAMES, [
@@ -69,7 +70,10 @@ test("skipped and partial required results fail", () => {
 });
 
 test("Phase 2's single known Windows helper-process skip is the only tolerated skip", () => {
-  const knownSkip = "✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped) 6357ms\nTests 624 passed | 1 skipped (625)";
+  const knownSkip = `↓ ${WINDOWS_PHASE2_NONREQUIRED_SKIP}\nTests 629 passed | 1 skipped (630)`;
+  assert.equal(approvedWindowsPhase2Skip(knownSkip, { platform: "win32", phase2RuntimeSuite: true }), true);
+  assert.equal(approvedWindowsPhase2Skip(`${knownSkip}\n↓ other.test.ts > skipped`, { platform: "win32", phase2RuntimeSuite: true }), false);
+  assert.equal(approvedWindowsPhase2Skip(knownSkip, { platform: "linux", phase2RuntimeSuite: true }), false);
   assert.deepEqual(classifyCheckResult({ code: 0, output: knownSkip, failOnSkipped: true,
     allowWindowsPhase2HelperProcessSkip: true, platform: "win32" }),
   { passed: true, exitCode: 0, failure: null });

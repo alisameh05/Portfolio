@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import { observeRuntime, verifyEnvironment } from "./validation-environment.mjs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { evaluatePhase7Gate, PHASE7_GATE_COMPONENTS, PHASE7_GATE_REQUIRED_CHECKS, readPhase7GateEvidence, sanitizePhase7Output } from "./phase7-gate-support.mjs";
+import { createQualificationPrerequisiteCache } from "./qualification-prerequisite-cache.mjs";
+import { normalizeQualificationCommandResult } from "./qualification-command.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE = join(ROOT, "evidence");
@@ -15,7 +17,7 @@ const REPORT = join(EVIDENCE, "phase7-gate-report.json");
 const DEFAULT_TIMEOUT = 30 * 60 * 1000;
 const LONG_TIMEOUT = 60 * 60 * 1000;
 const COMMANDS = Object.freeze([
-  { name: "toolchain", file: "scripts/check-toolchain.mjs", timeout: 120_000 },
+  { name: "toolchain", file: "scripts/check-toolchain.mjs", cacheKey: "direct:check-toolchain.mjs", timeout: 120_000 },
   { name: "consent", script: "phase7:focus:consent", timeout: LONG_TIMEOUT },
   { name: "reactions", script: "phase7:focus:reactions", timeout: LONG_TIMEOUT },
   { name: "ratings", script: "phase7:focus:ratings", timeout: LONG_TIMEOUT },
@@ -51,6 +53,7 @@ function json(path) { try { return JSON.parse(readFileSync(path, "utf8")); } cat
 function git(args) { return spawnSync("git", args, { cwd: ROOT, encoding: "utf8", windowsHide: true,
   stdio: ["ignore", "pipe", "ignore"] }).stdout.trim(); }
 function npmInvocation(script, args = []) {
+  if (script === "contract:verify") return { entry: process.execPath, args: [join(ROOT, "scripts/qualification-contract-verification.mjs")] };
   if (process.env.npm_execpath) return { entry: process.execPath, args: [process.env.npm_execpath, "run", script, ...args] };
   return { entry: process.platform === "win32" ? "npm.cmd" : "npm", args: ["run", script, ...args], shell: process.platform === "win32" };
 }
@@ -82,31 +85,36 @@ function bindFreshComponentEvidence(name, gateRunId, sourceRevision, sourceTreeS
   }
   return refreshed;
 }
-function countSkipped(output) {
-  const values = [...String(output).replaceAll(/\u001B\[[0-9;]*m/gu, "").matchAll(/\b(\d+)\s+skipped\b/giu)].map((match) => Number(match[1]));
-  return values.length ? Math.max(...values) : 0;
-}
 function execute(definition, context) {
   const began = new Date().toISOString();
   if (definition.requiresValidation && !context.validationReady) return { name: definition.name, ...context.binding,
     startedAt: began, completedAt: new Date().toISOString(), executed: false, passed: false, exitCode: 1,
     skipped: 0, timedOut: false, failure: "validation-ready-failed" };
   const invocation = definition.file ? { entry: process.execPath, args: [join(ROOT, definition.file)] } : npmInvocation(definition.script, definition.args);
-  const result = spawnSync(invocation.entry, invocation.args, { cwd: ROOT,
-    env: { ...process.env, CI: "1", SHIPWITHALI_PHASE: "phase7", PHASE7_GATE_RUN_ID: context.runId },
-    encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"], timeout: definition.timeout ?? DEFAULT_TIMEOUT,
-    maxBuffer: 32 * 1024 * 1024, shell: invocation.shell ?? false });
-  const output = sanitizePhase7Output(`${result.stdout ?? ""}${result.stderr ?? ""}`, { workspace: ROOT });
+  const commandEnvironment = { ...process.env, CI: "1", SHIPWITHALI_PHASE: "phase7", PHASE7_GATE_RUN_ID: context.runId };
+  const result = context.prerequisiteCache.run({ script: definition.cacheKey ?? definition.script, args: definition.args ?? [],
+    entry: JSON.stringify({ entry: invocation.entry, args: invocation.args }), environment: commandEnvironment,
+    artifactPaths: definition.artifactPaths,
+    invoke: () => {
+      const spawned = spawnSync(invocation.entry, invocation.args, { cwd: ROOT, env: commandEnvironment,
+        encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"], timeout: definition.timeout ?? DEFAULT_TIMEOUT,
+        maxBuffer: 32 * 1024 * 1024, shell: invocation.shell ?? false });
+      const rawOutput = `${spawned.stdout ?? ""}${spawned.stderr ?? ""}`;
+      return normalizeQualificationCommandResult({ status: Number.isInteger(spawned.status) ? spawned.status : 1, output: rawOutput,
+        errorCode: spawned.error?.code ?? null, signal: spawned.signal, timedOut: spawned.error?.code === "ETIMEDOUT" });
+    }, sanitizeOutput: (output) => sanitizePhase7Output(output, { workspace: ROOT }) });
+  const output = result.output;
   const logName = `${definition.name}.log`;
   const logPath = join(CHECKS, logName);
   writeFileSync(logPath, `${output.trimEnd()}${output.trimEnd() ? "\n" : ""}`, "utf8");
-  const skipped = countSkipped(output);
-  const timedOut = result.error?.code === "ETIMEDOUT";
-  const passed = result.status === 0 && !result.error && !timedOut && skipped === 0;
+  const skipped = result.skipped;
+  const timedOut = result.timedOut;
+  const passed = result.status === 0 && !result.errorCode && !timedOut && skipped === 0;
   return { name: definition.name, ...context.binding, startedAt: began, completedAt: new Date().toISOString(), executed: true,
-    passed, exitCode: passed ? 0 : (result.status ?? 1), skipped, timedOut,
+    reused: result.reused, ...(result.reuseProof ? { reuseProof: result.reuseProof } : {}),
+    passed, exitCode: passed ? 0 : result.status, skipped, timedOut,
     aggregateSuccess: definition.name === "integrated" ? json(join(EVIDENCE, "phase7-integrated-208.json"))?.required?.success === true : undefined,
-    failure: passed ? null : timedOut ? "timeout" : result.error?.code ?? (skipped ? "required-skip" : "check-failed"),
+    failure: passed ? null : timedOut ? "timeout" : result.errorCode ?? (skipped ? "required-skip" : "check-failed"),
     evidence: { path: `evidence/phase7-gate-checks/${logName}`, sha256: createHash("sha256").update(readFileSync(logPath)).digest("hex") } };
 }
 
@@ -122,6 +130,8 @@ async function main() {
   try { sourceTreeSha256 = workingTreeSourceSha256(); } catch { sourceTreeSha256 = "unknown"; }
   const binding = { runId, sourceRevision, sourceTreeSha256 };
   const runtime = observeRuntime();
+  const prerequisiteCache = createQualificationPrerequisiteCache({ root: ROOT, sourceRevision, sourceTreeSha256,
+    runtime: { ...runtime, platform: process.platform, architecture: process.arch } });
   const packageJson = json(join(ROOT, "package.json")) ?? {};
   const expectedRuntime = { node: packageJson.engines?.node, npm: packageJson.engines?.npm };
   const readinessErrors = verifyEnvironment(ROOT, runtime);
@@ -131,7 +141,7 @@ async function main() {
   const validationReady = readinessErrors.length === 0;
   for (const definition of COMMANDS) {
     const previousEvidence = captureComponentEvidence(definition.name);
-    const result = execute({ ...definition, requiresValidation: true }, { runId, binding, validationReady });
+    const result = execute({ ...definition, requiresValidation: true }, { runId, binding, validationReady, prerequisiteCache });
     if (!bindFreshComponentEvidence(definition.name, runId, sourceRevision, sourceTreeSha256, previousEvidence)) {
       result.passed = false;
       result.exitCode = 1;

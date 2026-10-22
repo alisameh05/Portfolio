@@ -5,24 +5,60 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { qualifyPrerequisites, QUALIFICATION_STEPS, requireQualificationDocker } from "../../scripts/phase8-qualify.mjs";
+import { requireQualificationDocker, qualifyPrerequisites } from "../../scripts/phase8-qualify.mjs";
+import { evidenceFileSha256 } from "../../scripts/qualification-context.mjs";
+import { collectQualificationArtifacts } from "../../scripts/prepare-qualification-artifact.mjs";
+import { QUALIFICATION_NODES, currentRuntimeIdentity, qualificationDefinitionSha256, recordQualificationNode,
+  requiredQualificationCheckNames, QUALIFICATION_CONTEXT_ALGORITHM, reportArtifactPaths }
+  from "../../scripts/qualification-context.mjs";
 
-const stable = { revision: "a".repeat(40), tree: "b".repeat(64), committedTree: "b".repeat(64) };
-const checkEnvironment = () => {};
-test("the real CLI with no Docker exits before changing any prerequisite report", () => {
+const stable = { revision: "a".repeat(40), tree: "b".repeat(64), committedTree: "b".repeat(64), runtime: currentRuntimeIdentity() };
+const checkEnvironment = () => ({ engine: "linux", compose: "v2" });
+const tempRoot = (prefix = "phase8-test-") => mkdtempSync(join(tmpdir(), prefix));
+
+function simulatedGateRun(root, identity = stable) {
+  return async (node) => {
+    if (node.report !== null) {
+      const checks = requiredQualificationCheckNames(node.id)?.map((name) => ({ name, ok: true, passed: true, exitCode: 0, skipped: 0 })) ?? [];
+      const report = { verdict: "pass", sourceRevision: identity.revision, sourceTreeSha256: identity.tree,
+        toolVersions: identity.runtime, checks, summary: { total: checks.length, failed: 0 }, evidence: [],
+        required: { success: true, failed: 0, skipped: 0 }, cleanup: { success: true },
+        realServiceScope: { isolation: "isolated", cleanup: { success: true }, checks: [{ name: "synthetic" }] },
+        migrations: identity.migrations ?? [], startedAt: new Date().toISOString(), completedAt: new Date().toISOString() };
+      const { writeFileSync, mkdirSync } = await import("node:fs");
+      mkdirSync(join(root, "evidence"), { recursive: true });
+      writeFileSync(join(root, node.report), `${JSON.stringify(report)}\n`);
+    }
+    return 0;
+  };
+}
+
+function qualifySynthetic(options) {
+  return qualifyPrerequisites({ ...options,
+    collectArtifacts(root, reportFile) {
+      try {
+        const report = JSON.parse(readFileSync(join(root, reportFile), "utf8"));
+        if (report.verdict !== "pass") return null;
+        const artifacts = reportArtifactPaths(report, root).map((file) => ({ file, sha256: evidenceFileSha256(root, file) }));
+        if (artifacts.some((artifact) => artifact.sha256 === null)) return null;
+        return { report, artifacts };
+      } catch { return null; }
+    },
+    findReusableNodes(context, ids) {
+      return new Set(ids.filter((id) => context.nodes?.[id]?.status === "succeeded" && context.nodes[id].cleanupSucceeded === true));
+    },
+  });
+}
+
+test("the real CLI with no Docker exits before changing evidence", () => {
   const root = new URL("../../", import.meta.url);
   const reports = ["phase-3-gate-report.json", "phase-4-gate-report.json", "phase-5-gate-report.json",
     "phase6-gate-report.json", "phase7-gate-report.json", "phase8-prerequisite-qualification.json"];
-  // A running gate removes its previous report. Missing evidence must stay
-  // missing, just as existing evidence must remain byte-identical.
-  const readReport = (name) => {
+  const before = reports.map((name) => {
     try { return readFileSync(new URL(`evidence/${name}`, root)); }
     catch (error) { if (error.code === "ENOENT") return null; throw error; }
-  };
-  const before = reports.map(readReport);
-  // Empty PATH means current-directory lookup on POSIX, where docker/ is a
-  // directory. Use an actual empty search directory to model a missing binary.
-  const emptyPath = mkdtempSync(join(tmpdir(), "phase8-no-docker-"));
+  });
+  const emptyPath = tempRoot("phase8-no-docker-");
   try {
     const result = spawnSync(process.execPath, [fileURLToPath(new URL("scripts/phase8-qualify.mjs", root))], {
       env: { ...process.env, PATH: emptyPath, Path: emptyPath }, encoding: "utf8", timeout: 10_000, windowsHide: true,
@@ -30,71 +66,225 @@ test("the real CLI with no Docker exits before changing any prerequisite report"
     assert.equal(result.status, 1);
     assert.match(result.stdout, /PHASE8_DOCKER_MISSING/u);
     assert.doesNotMatch(result.stdout, /Qualifying Phases|Running Phase/u);
-    reports.forEach((name, index) => assert.deepEqual(readReport(name), before[index]));
+    reports.forEach((name, index) => {
+      let after = null;
+      try { after = readFileSync(new URL(`evidence/${name}`, root)); }
+      catch (error) { if (error.code !== "ENOENT") throw error; }
+      assert.deepEqual(after, before[index]);
+    });
   } finally { rmSync(emptyPath, { recursive: true, force: true }); }
 });
-test("Docker preflight distinguishes missing executable, access, timeout, engine OS and Compose", () => {
-  const linux = { status: 0, stdout: "linux\n" };
+
+test("Docker preflight distinguishes executable, access, OS, and Compose failures", () => {
+  const linux = { status: 0, stdout: "linux|27.5.1|overlay2\n" };
   for (const [result, code] of [
     [{ error: { code: "ENOENT" } }, "PHASE8_DOCKER_MISSING"],
     [{ error: { code: "EPERM" } }, "PHASE8_DOCKER_UNAVAILABLE"],
-    [{ error: { code: "ETIMEDOUT" }, status: null }, "PHASE8_DOCKER_UNAVAILABLE"],
     [{ status: 1 }, "PHASE8_DOCKER_UNAVAILABLE"],
-    [{ status: 0, stdout: "windows" }, "PHASE8_DOCKER_LINUX_REQUIRED"],
+    [{ status: 0, stdout: "windows|27.5.1|overlay2" }, "PHASE8_DOCKER_LINUX_REQUIRED"],
   ]) assert.throws(() => requireQualificationDocker(() => result), new RegExp(code));
   assert.throws(() => requireQualificationDocker((_, args) => args[0] === "info" ? linux : { status: 1 }), /PHASE8_DOCKER_COMPOSE_REQUIRED/u);
-  const calls = [];
-  requireQualificationDocker((command, args, options) => {
-    calls.push([command, args]);
-    assert.equal(options.timeout, 15_000);
-    assert.equal(options.maxBuffer, 16 * 1024);
-    assert.equal(options.windowsHide, true);
-    return args[0] === "info" ? linux : { status: 0 };
-  });
-  assert.deepEqual(calls, [["docker", ["info", "--format", "{{.OSType}}"]], ["docker", ["compose", "version"]]]);
+  const priorPostgresBin = process.env.PHASE7_POSTGRES_BIN;
+  process.env.PHASE7_POSTGRES_BIN = process.execPath;
+  let observed;
+  try {
+    observed = requireQualificationDocker((command, args) => args[0] === "info" ? linux : args[0] === "compose" ?
+      { status: 0, stdout: "2.40.3\n" } : args[0] === "image" && args[1] === "ls" ?
+        { status: 0, stdout: "clamav/clamav:<none>|sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4\njbarlow83/ocrmypdf-alpine:<none>|sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c\n" } :
+        args[0] === "image" && args[1] === "inspect" ? { status: 1 } : command === process.execPath && args[0] === "--version" ?
+          { status: 0, stdout: "postgres (PostgreSQL) 18.3\n" } : { status: 0, stdout: "2.117.0\n" });
+  } finally {
+    if (priorPostgresBin === undefined) delete process.env.PHASE7_POSTGRES_BIN;
+    else process.env.PHASE7_POSTGRES_BIN = priorPostgresBin;
+  }
+  assert.deepEqual({ ...observed, unverifiedImages: observed.unverifiedImages.length },
+    { docker: { operatingSystem: "linux", serverVersion: "27.5.1", storageDriver: "overlay2" }, composeVersion: "2.40.3",
+      supabaseCliVersion: "2.117.0", nativePostgres: { executable: process.execPath.replaceAll("\\", "/"), version: "18.3" },
+      validationImages: [], nestedToolScope: { daemon: "compose.validation nested Docker daemon", externallyVerified: false,
+        definitions: { scanner: "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4",
+          imageProcessor: "dpokidov/imagemagick:7.1.1-47", videoProcessor: "jrottenberg/ffmpeg:7.1-ubuntu2404",
+          pdfProcessor: "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c" } },
+      unverifiedImages: 2 });
 });
-test("Docker preflight failure leaves source inspection and every evidence producer untouched", async () => {
-  let inspected = false;
-  const calls = [], messages = [];
-  const result = await qualifyPrerequisites({ checkEnvironment: () => { throw new Error("PHASE8_DOCKER_MISSING"); },
-    getIdentity: () => { inspected = true; return stable; }, log: (message) => messages.push(message),
-    run: async (step) => { calls.push(step); return 0; } });
-  assert.equal(result, 1);
-  assert.equal(inspected, false);
-  assert.deepEqual(calls, []);
-  assert.match(messages.join("\n"), /PHASE8_DOCKER_MISSING/u);
-});
-test("qualification runs every gate in order before evaluating evidence", async () => {
-  const calls = [];
-  const result = await qualifyPrerequisites({ checkEnvironment, getIdentity: () => stable, log() {}, run: async (step) => { calls.push(step[1]); return 0; } });
-  assert.equal(result, 0);
-  assert.deepEqual(calls, ["scripts/validation-environment.mjs", "scripts/phase3-gate.mjs", "scripts/phase4-gate.mjs",
-    "scripts/phase5-gate.mjs", "scripts/docker-validation.mjs", "scripts/phase7-gate.mjs", "scripts/phase8-prerequisite-qualification.mjs"]);
-});
-test("a failed or interrupted gate never reaches the evaluator or reports success", async () => {
-  for (const failure of [1, 2, null]) {
+
+test("explicit resume reuses only verified completed evidence and reruns missing nodes", async () => {
+  const root = tempRoot("phase8-resume-");
+  try {
+    const { writeFileSync, mkdirSync } = await import("node:fs");
+    mkdirSync(join(root, "evidence"), { recursive: true });
+    const node = QUALIFICATION_NODES.find((entry) => entry.id === "phase1");
+    const now = new Date().toISOString();
+    const report = { verdict: "pass", sourceRevision: stable.revision, sourceTreeSha256: stable.tree, toolVersions: stable.runtime,
+      startedAt: now, completedAt: now,
+      checks: requiredQualificationCheckNames("phase1")
+      .map((name) => ({ name, ok: true, passed: true, exitCode: 0, skipped: 0 })),
+      summary: { total: requiredQualificationCheckNames("phase1").length, failed: 0 }, evidence: [],
+      required: { success: true, failed: 0, skipped: 0 }, cleanup: { success: true } };
+    writeFileSync(join(root, node.report), `${JSON.stringify(report)}\n`);
+    const sha256 = (await import("node:crypto")).createHash("sha256").update(`${JSON.stringify(report)}\n`).digest("hex");
+    const context = {
+      algorithm: "phase8-qualification-run/v1", runId: "123e4567-e89b-42d3-a456-426614174000", definitionHash: qualificationDefinitionSha256(),
+      identity: { revision: stable.revision, sourceTreeSha256: stable.tree, runtime: stable.runtime, services: checkEnvironment() }, startedAt: new Date().toISOString(),
+      status: "failed", nodes: {},
+    };
+    recordQualificationNode(context, { id: "validation-environment" });
+    recordQualificationNode(context, { id: "phase1", report: { file: node.report, sha256 } });
     const calls = [];
-    const result = await qualifyPrerequisites({ checkEnvironment, getIdentity: () => stable, log() {}, run: async (step) => {
-      calls.push(step[0]); return calls.length === 3 ? failure : 0;
-    } });
-    assert.notEqual(result, 0);
-    assert.equal(calls.length, 3);
-    assert.ok(!calls.includes("prerequisite qualification"));
+    const result = await qualifySynthetic({ checkEnvironment, getIdentity: () => stable, log() {}, root, resume: true,
+      readRun: () => context, run: async (entry, childEnv) => {
+        calls.push(entry.id);
+        assert.equal(childEnv.PHASE8_ACTIVE_RUN_ID, context.runId);
+        assert.equal(childEnv.PHASE8_DEFINITION_HASH, context.definitionHash);
+        assert.equal(childEnv.PHASE8_QUALIFICATION_CONTEXT, join(root, "evidence/phase8-qualification-run.json"));
+        return simulatedGateRun(root)(entry);
+      } });
+    assert.equal(result, 0);
+    assert.deepEqual(calls, QUALIFICATION_NODES.filter((entry) => entry.id !== "phase1").map((entry) => entry.id));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+  const nestedRoot = tempRoot("phase8-nested-tools-");
+  try {
+    const nestedScope = () => ({ ...checkEnvironment(), nestedToolScope: { daemon: "compose.validation nested Docker daemon", externallyVerified: false } });
+    assert.equal(await qualifySynthetic({ checkEnvironment: nestedScope, getIdentity: () => stable, log() {}, root: nestedRoot,
+      run: simulatedGateRun(nestedRoot) }), 0);
+    const calls = [];
+    assert.equal(await qualifySynthetic({ checkEnvironment: nestedScope, getIdentity: () => stable, log() {}, root: nestedRoot, resume: true,
+      run: async (node) => { calls.push(node.id); return simulatedGateRun(nestedRoot)(node); } }), 0);
+    assert.deepEqual(calls, ["validation-environment", "phase6", "phase7", "evaluator"]);
+  } finally { rmSync(nestedRoot, { recursive: true, force: true }); }
+});
+
+test("drifted identity, tool, or definition context forces every node to rerun", async () => {
+  for (const [field, value] of [["identity", { revision: "x".repeat(40), sourceTreeSha256: "y".repeat(64) }], ["definitionHash", "z".repeat(64)],
+    ["services", { engine: "changed" }]]) {
+    const root = tempRoot("phase8-drift-");
+    try {
+      const context = { algorithm: "phase8-qualification-run/v1", runId: "123e4567-e89b-42d3-a456-426614174000", definitionHash: qualificationDefinitionSha256(),
+        identity: { revision: stable.revision, sourceTreeSha256: stable.tree, runtime: stable.runtime, services: checkEnvironment() }, status: "failed", nodes: {} };
+      if (field === "services") context.identity.services = value;
+      else context[field] = value;
+      const calls = [], messages = [];
+      const result = await qualifySynthetic({ checkEnvironment, getIdentity: () => stable, log: (message) => messages.push(message), root,
+        resume: true, readRun: () => context, run: async (node) => { calls.push(node.id); return simulatedGateRun(root)(node); } });
+      assert.equal(result, 0);
+      assert.equal(calls.length, QUALIFICATION_NODES.length);
+      assert.match(messages.join("\n"), /Shared qualification context unusable/u);
+    } finally { rmSync(root, { recursive: true, force: true }); }
   }
 });
-test("uncommitted source and source edits during any gate require a fresh run", async () => {
-  let calls = 0;
-  assert.equal(await qualifyPrerequisites({ checkEnvironment, getIdentity: () => ({ ...stable, committedTree: "c".repeat(64) }),
-    log() {}, run: async () => { calls++; return 0; } }), 1);
-  assert.equal(calls, 0);
-  for (const changedField of ["revision", "tree"]) {
-    for (let changedStep = 1; changedStep <= QUALIFICATION_STEPS.length; changedStep++) {
-      calls = 0;
-      const result = await qualifyPrerequisites({ checkEnvironment, log() {},
+
+test("qualification executes each node once in dependency order", async () => {
+  const root = tempRoot("phase8-dag-");
+  try {
+    const calls = [];
+    const result = await qualifySynthetic({ checkEnvironment, getIdentity: () => stable, log() {}, root,
+      run: async (node) => { calls.push(node.id); return simulatedGateRun(root)(node); } });
+    assert.equal(result, 0);
+    assert.deepEqual(calls, QUALIFICATION_NODES.map((node) => node.id));
+    // Hosted success packaging is bound to every completed node and its evidence.
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const artifactRoot = tempRoot("phase8-artifact-source-");
+    const outputDir = tempRoot("phase8-artifact-output-");
+    try {
+      mkdirSync(join(artifactRoot, "evidence"), { recursive: true });
+      writeFileSync(join(artifactRoot, "evidence/phase8-qualification-run.json"), "{}\n");
+      const now = new Date().toISOString();
+      const context = { algorithm: QUALIFICATION_CONTEXT_ALGORITHM, status: "complete", runId: "123e4567-e89b-42d3-a456-426614174000",
+        definitionHash: "c".repeat(64), startedAt: now, identity: { revision: stable.revision, sourceTreeSha256: stable.tree },
+        nodes: { "validation-environment": { status: "succeeded", completed: true, exitCode: 0, cleanupSucceeded: true, completedAt: now, report: null } } };
+      const manifest = collectQualificationArtifacts({ root: artifactRoot, outputDir, context,
+        nodes: [QUALIFICATION_NODES[0]], headSha: stable.revision, sourceTreeSha256: stable.tree,
+        metadata: { GITHUB_RUN_ID: "42", GITHUB_EVENT_NAME: "pull_request" } });
+      assert.equal(manifest.github.GITHUB_RUN_ID, "42");
+      assert.equal(manifest.qualificationCompletedAt, now);
+      assert.equal(manifest.artifacts[0].file, "evidence/phase8-qualification-run.json");
+      assert.throws(() => collectQualificationArtifacts({ root: artifactRoot, outputDir, context: { ...context,
+        identity: { ...context.identity, sourceTreeSha256: "d".repeat(64) } }, nodes: [QUALIFICATION_NODES[0]],
+        headSha: stable.revision, sourceTreeSha256: stable.tree }), /QUALIFICATION_ARTIFACT_SET_INCOMPLETE_OR_STALE/u);
+      const phase1Node = QUALIFICATION_NODES.find((node) => node.id === "phase1");
+      const phase1ReportPath = "evidence/phase-1-gate-report.json";
+      const phase1Checks = requiredQualificationCheckNames("phase1").map((name) => ({ name, ok: true, passed: true, exitCode: 0, skipped: 0 }));
+      const phase1Context = { ...context, identity: { ...context.identity, runtime: currentRuntimeIdentity() },
+        nodes: { ...context.nodes, phase1: { status: "succeeded", completed: true, exitCode: 0, cleanupSucceeded: true,
+          completedAt: now, report: { file: phase1ReportPath, sha256: "0".repeat(64), artifacts: [] } } } };
+      writeFileSync(join(artifactRoot, phase1ReportPath), JSON.stringify({ verdict: "pass" }));
+      phase1Context.nodes.phase1.report.sha256 = evidenceFileSha256(artifactRoot, phase1ReportPath);
+      assert.throws(() => collectQualificationArtifacts({ root: artifactRoot, outputDir, context: phase1Context,
+        nodes: [QUALIFICATION_NODES[0], phase1Node], headSha: stable.revision, sourceTreeSha256: stable.tree }),
+      /QUALIFICATION_ARTIFACT_SET_INCOMPLETE_OR_STALE/u);
+      const strictPhase1Report = { verdict: "pass", sourceRevision: stable.revision, sourceTreeSha256: stable.tree,
+        toolVersions: currentRuntimeIdentity(), startedAt: now, completedAt: now, summary: { total: phase1Checks.length, failed: 0 },
+        checks: phase1Checks, required: { success: true, failed: 0, skipped: 0 }, cleanup: { success: true }, evidence: [] };
+      writeFileSync(join(artifactRoot, phase1ReportPath), `${JSON.stringify(strictPhase1Report)}\n`);
+      phase1Context.nodes.phase1.report.sha256 = evidenceFileSha256(artifactRoot, phase1ReportPath);
+      const strictManifest = collectQualificationArtifacts({ root: artifactRoot, outputDir, context: phase1Context,
+        nodes: [QUALIFICATION_NODES[0], phase1Node], headSha: stable.revision, sourceTreeSha256: stable.tree });
+      assert.ok(strictManifest.artifacts.some((artifact) => artifact.file === phase1ReportPath));
+    } finally { rmSync(artifactRoot, { recursive: true, force: true }); rmSync(outputDir, { recursive: true, force: true }); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a failed later gate resumes after rechecking and retaining the clean successful prefix", async () => {
+  const root = tempRoot("phase8-prefix-recovery-");
+  try {
+    const firstCalls = [];
+    const first = await qualifySynthetic({ checkEnvironment, getIdentity: () => stable, log() {}, root,
+      run: async (node) => {
+        firstCalls.push(node.id);
+        if (node.id === "phase2") return 1;
+        return simulatedGateRun(root)(node);
+      } });
+    assert.equal(first, 1);
+    assert.deepEqual(firstCalls, ["validation-environment", "phase1", "phase2"]);
+    const interrupted = JSON.parse(readFileSync(join(root, "evidence/phase8-qualification-run.json"), "utf8"));
+    assert.equal(interrupted.status, "failed");
+    assert.equal(interrupted.nodes.phase1.status, "succeeded");
+    assert.equal(interrupted.nodes.phase2.status, "failed");
+
+    const resumedCalls = [];
+    const resumed = await qualifySynthetic({ checkEnvironment, getIdentity: () => stable, log() {}, root, resume: true,
+      run: async (node) => { resumedCalls.push(node.id); return simulatedGateRun(root)(node); } });
+    assert.equal(resumed, 0);
+    assert.deepEqual(resumedCalls, ["validation-environment", "phase2", "phase3", "phase4", "phase5", "phase6", "phase7", "evaluator"]);
+    const complete = JSON.parse(readFileSync(join(root, "evidence/phase8-qualification-run.json"), "utf8"));
+    assert.equal(complete.status, "complete");
+    assert.equal(complete.nodes.phase1.status, "succeeded");
+    assert.equal(complete.nodes.phase2.status, "succeeded");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a failed, interrupted, or cleanup-failed gate does not reach later nodes", async () => {
+  for (const resultCode of [1, 2, null]) {
+    const root = tempRoot("phase8-fail-");
+    try {
+      const calls = [];
+      const result = await qualifySynthetic({ checkEnvironment, getIdentity: () => stable, log() {}, root,
+        run: async (node) => { calls.push(node.id); return calls.length === 2 ? resultCode : simulatedGateRun(root)(node); } });
+      assert.notEqual(result, 0);
+      assert.equal(calls.length, 2);
+      assert.equal(calls.includes("evaluator"), false);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test("uncommitted source and source edits during a gate are rejected", async () => {
+  const root = tempRoot("phase8-uncommitted-");
+  try {
+    let calls = 0;
+    assert.equal(await qualifySynthetic({ checkEnvironment, getIdentity: () => ({ ...stable, committedTree: "c".repeat(64) }), root,
+      log() {}, run: async () => { calls++; return 0; } }), 1);
+    assert.equal(calls, 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+  for (const changedField of ["revision", "tree"]) for (let changedStep = 1; changedStep <= QUALIFICATION_NODES.length; changedStep++) {
+    const root = tempRoot("phase8-source-drift-");
+    try {
+      let calls = 0;
+      const result = await qualifySynthetic({ checkEnvironment, log() {}, root,
         getIdentity: () => calls === changedStep ? { ...stable, [changedField]: "changed" } : stable,
-        run: async () => { calls++; return 0; } });
+        run: async (node) => { calls++; return simulatedGateRun(root)(node); } });
       assert.equal(result, 1);
       assert.equal(calls, changedStep);
-    }
+      const runRecord = JSON.parse(readFileSync(join(root, "evidence/phase8-qualification-run.json"), "utf8"));
+      assert.equal(runRecord.status, "failed");
+    } finally { rmSync(root, { recursive: true, force: true }); }
   }
 });

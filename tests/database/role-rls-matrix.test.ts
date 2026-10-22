@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { declaredCapabilities } from "../../scripts/phase-contract-registry.mjs";
 
 const DATABASE_URL = process.env["PHASE3_DATABASE_URL"];
 if (process.env["PHASE3_REQUIRE_DATABASE"] === "1" && !DATABASE_URL) {
@@ -52,13 +53,20 @@ const RETRY_RECOVERY_POLICIES: ReadonlyArray<readonly [string, string, string, s
 ];
 
 /**
- * The bounded-retry tables ship in one migration, so a connection whose
- * migration ledger stopped at the Phase 3 release legitimately lacks them.
- * A connection that carries exactly one of the two objects instead of both is
+ * Expected capability state is read from the declared
+ * `PHASE_DATABASE_CAPABILITIES` list, never learned from the database being
+ * checked. The connection below is only a cross-guard: a ledger that stopped
+ * at the Phase 3 release legitimately lacks the bounded-retry tables while a
+ * connection that carries exactly one of the two objects instead of both is
  * treated as corruption and fails the matrix in every context.
  */
 let retryRecoverySchema = false;
 if (DATABASE_URL !== undefined) {
+  const declared = (process.env["PHASE_DATABASE_CAPABILITIES"] ?? declaredCapabilities().join(","))
+    .split(",").map((value) => value.trim()).filter(Boolean);
+  if (!declared.includes("operations.bounded_retries") && declared.length > 0) {
+    throw new Error("ROLE_MATRIX_DECLARED_CAPABILITY_UNKNOWN:" + declared.join(","));
+  }
   const era = adminClient();
   await era.connect();
   try {
@@ -70,13 +78,20 @@ if (DATABASE_URL !== undefined) {
                  where table_schema = 'operations'
                    and table_name = 'outbox_events'
                    and column_name = 'dead_at'
-              ) as has_dead_at`,
+               ) as has_dead_at`,
     );
     const row: Record<string, unknown> = result.rows[0] ?? {};
     if (row["has_incidents"] !== row["has_redrive"] || (row["has_incidents"] === false && row["has_dead_at"] === true)) {
       throw new Error("ROLE_MATRIX_SCHEMA_RECOVERY_INCOMPLETE");
     }
     retryRecoverySchema = row["has_incidents"] === true && row["has_dead_at"] === true;
+    if (declared.includes("operations.bounded_retries") !== retryRecoverySchema) {
+      throw new Error(
+        declared.includes("operations.bounded_retries")
+          ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:operations.bounded_retries"
+          : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:operations.bounded_retries",
+      );
+    }
   } finally {
     await era.end();
   }

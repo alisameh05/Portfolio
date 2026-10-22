@@ -8,6 +8,7 @@ import {
   localEnvironment,
   requireExecutedTests,
   requirePredecessorTests,
+  planCurrentCheckpointTests,
 } from "../../scripts/portfolio-settings-integration.mjs";
 import { migrationsAfterPhase5, phase4ReleaseMigrationFiles } from "../../scripts/phase4-migration-integrity.mjs";
 
@@ -98,6 +99,12 @@ test("Phase 3 predecessor evidence requires every historical suite to pass witho
     testResults: [{ status: "passed" }, { status: "passed" }],
   };
   assert.equal(requirePredecessorTests(passed, files), 8);
+  const currentFiles = ["tests/database/role-rls-matrix.test.ts", "tests/database/portfolio-settings.integration.test.ts",
+    "tests/database/content-authoring.integration.test.ts"];
+  const plan = planCurrentCheckpointTests(currentFiles, [currentFiles[1]]);
+  assert.deepEqual(plan.auditFiles, [currentFiles[0], currentFiles[2]]);
+  assert.deepEqual(plan.completeInventory, currentFiles);
+  assert.throws(() => planCurrentCheckpointTests(currentFiles, ["tests/other.test.ts"]), /INVENTORY_PARTITION_INVALID/u);
   for (const report of [
     { ...passed, numPendingTests: 1 },
     { ...passed, testResults: [{ status: "passed" }] },

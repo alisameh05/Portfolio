@@ -10,6 +10,7 @@ import {
   PHASE5_MIGRATION_COMPATIBILITY,
   PHASE4_APPLICATION_TABLES,
   validatePhase3MigrationSnapshot,
+  assertPhase3OperationsContractPreserved,
 } from "../../scripts/phase4-migration-integrity.mjs";
 
 const phase3Files = [
@@ -19,6 +20,21 @@ const phase3Files = [
 ];
 const contents = new Map(phase3Files.map((name) => [name, `-- ${name}\n`]));
 const sha256 = (text: string) => createHash("sha256").update(text.replaceAll("\r\n", "\n")).digest("hex");
+type CatalogRow = { schema?: string; name?: string; [key: string]: unknown };
+type OperationsSnapshot = {
+  postgresMajor: 17 | 18;
+  schemas: CatalogRow[];
+  objects: CatalogRow[];
+  columns: CatalogRow[];
+  constraints: CatalogRow[];
+  policies: CatalogRow[];
+  grants: CatalogRow[];
+  defaultPrivileges: CatalogRow[];
+  indexes: CatalogRow[];
+  functions: CatalogRow[];
+  triggers: CatalogRow[];
+  types: CatalogRow[];
+};
 
 describe("Phase 4 migration integrity", () => {
   it("compares migration role memberships as order-independent catalog facts", () => {
@@ -71,47 +87,95 @@ describe("Phase 4 migration integrity", () => {
     )).toThrow("PORTFOLIO_SETTINGS_DATABASE_STATE_DIFFER:policies");
   });
 
-  it("preserves the Phase 3 contract while allowing the declared Phase 7 event-job extension", () => {
-    const phase3 = {
-      schemas: [{ name: "operations", owner: "shipwithali_migration" }],
-      objects: [{ schema: "operations", name: "jobs", kind: "r" }],
-      columns: [],
-      constraints: [],
-      policies: [{ schema: "operations", tableName: "jobs", name: "jobs_worker_insert_policy" }],
-      grants: [{ schema: "operations", object: "jobs", grantee: "shipwithali_worker", privilege: "INSERT" }],
-      defaultPrivileges: [],
-      indexes: [],
-      functions: [],
-      triggers: [],
-      types: [],
+  it("applies exact reviewed row replacements and rejects a changed declared target", () => {
+    const phase3: OperationsSnapshot = {
+      postgresMajor: 17,
+      schemas: [{ name: "operations", owner: "shipwithali_migration", acl: "" }],
+      objects: [{ schema: "operations", name: "jobs", kind: "r", owner: "shipwithali_migration", rlsEnabled: true, rlsForced: true }],
+      columns: [], constraints: [], policies: [], grants: [], defaultPrivileges: [], indexes: [], functions: [], triggers: [], types: [],
     };
-    const upgraded = {
-      ...structuredClone(phase3),
-      policies: [
-        ...phase3.policies,
-        { schema: "operations", tableName: "jobs", name: "measurement_event_jobs_application_insert" },
-      ],
-      grants: [
-        ...phase3.grants,
-        { schema: "operations", object: "jobs", grantee: "shipwithali_application", privilege: "INSERT" },
-      ],
-    };
+    const oldPolicy = { schema: "operations", tableName: "jobs", name: "worker_insert", permissive: "permissive", roles: "{shipwithali_worker}", command: "INSERT", usingPredicate: "", withCheck: "true" };
+    const newPolicy = { ...oldPolicy, name: "application_insert", roles: "{shipwithali_application}", withCheck: "payload_version = 1 AND payload ? 'eventId'" };
+    const oldGrant = { schema: "operations", object: "jobs", objectType: "r", grantee: "shipwithali_worker", grantor: "shipwithali_migration", privilege: "INSERT", grantable: false };
+    const newGrant = { ...oldGrant, grantee: "shipwithali_application" };
+    phase3.policies.push(oldPolicy);
+    phase3.grants.push(oldGrant);
+    const operations = [
+      { category: "policies", identity: "operations.jobs.worker_insert", before: oldPolicy, after: null },
+      { category: "policies", identity: "operations.jobs.application_insert", before: null, after: newPolicy },
+      { category: "grants", identity: "operations.jobs.r.shipwithali_worker:shipwithali_migration:INSERT", before: oldGrant, after: null },
+      { category: "grants", identity: "operations.jobs.r.shipwithali_application:shipwithali_migration:INSERT", before: null, after: newGrant },
+    ];
+    const transformation = { migration: "synthetic-reviewed.sql", operations };
+    const upgraded = structuredClone(phase3);
+    upgraded.policies.splice(0, 1, newPolicy);
+    upgraded.grants.splice(0, 1, newGrant);
+    expect(() => assertPhase3OperationsContractPreserved(phase3, upgraded, { transformations: [transformation] })).not.toThrow();
+    expect(() => assertPhase3OperationsContractPreserved(phase3, { ...upgraded, postgresMajor: 18 }, { transformations: [transformation] }))
+      .toThrow("PHASE3_OPERATIONS_ENGINE_MISMATCH");
+    expect(() => assertPhase3OperationsContractPreserved({ ...phase3, postgresMajor: 16 }, upgraded, { transformations: [transformation] }))
+      .toThrow("PHASE3_OPERATIONS_ENGINE_UNSUPPORTED");
+    const widened = structuredClone(upgraded);
+    widened.policies[0]!["withCheck"] = "true";
+    try {
+      assertPhase3OperationsContractPreserved(phase3, widened, { transformations: [transformation] });
+      throw new Error("expected policy drift rejection");
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: "PHASE3_OPERATIONS_CONTRACT_ALTERED",
+        categories: ["policies"],
+        paths: ["policies:operations.jobs.application_insert:withCheck"],
+      });
+    }
+    const wrongTarget = { ...transformation, operations: operations.map((operation) =>
+      operation.identity === "operations.jobs.application_insert" ? { ...operation, after: { ...newPolicy, withCheck: "true" } } : operation) };
+    expect(() => assertPhase3OperationsContractPreserved(phase3, upgraded, { transformations: [wrongTarget] }))
+      .toThrow("PHASE3_OPERATIONS_CONTRACT_ALTERED");
+  });
 
-    expect(() => assertPhase4SnapshotsEquivalent(
-      phase3OperationsContract(phase3),
-      phase3OperationsContract(upgraded),
-    )).not.toThrow();
-    expect(() => assertPhase4SnapshotsEquivalent(
-      phase4ReleaseContract(phase3),
-      phase4ReleaseContract(upgraded),
-    )).not.toThrow();
-    expect(() => assertPhase4SnapshotsEquivalent(
-      phase3OperationsContract(phase3),
-      phase3OperationsContract({
-        ...upgraded,
-        grants: [...upgraded.grants, { schema: "operations", object: "jobs", grantee: "PUBLIC", privilege: "DELETE" }],
-      }),
-    )).toThrow("PORTFOLIO_SETTINGS_DATABASE_STATE_DIFFER:grants");
+  const preservationBaseline: OperationsSnapshot = {
+      postgresMajor: 17,
+      schemas: [{ name: "operations", owner: "shipwithali_migration", acl: "" }],
+      objects: [{ schema: "operations", name: "jobs", kind: "r", owner: "shipwithali_migration", rlsEnabled: true, rlsForced: true }],
+      columns: [{ schema: "operations", tableName: "jobs", name: "status", type: "text", nullable: "NO", default: null }],
+      constraints: [{ schema: "operations", tableName: "jobs", name: "jobs_status_check", type: "c", validated: true, definition: "CHECK (status <> '')" }],
+      policies: [{ schema: "operations", tableName: "jobs", name: "worker_select", roles: "{shipwithali_worker}", command: "SELECT", usingPredicate: "worker_scope", withCheck: "" }],
+      grants: [{ schema: "operations", object: "jobs", objectType: "r", grantee: "shipwithali_worker", grantor: "shipwithali_migration", privilege: "SELECT", grantable: false }],
+      defaultPrivileges: [],
+      indexes: [{ schema: "operations", table: "jobs", name: "jobs_status_idx", definition: "CREATE INDEX jobs_status_idx ON operations.jobs USING btree (status)" }],
+      functions: [], triggers: [], types: [],
+    };
+  const expectContractDriftRejected = (name: string, mutate: (candidate: typeof preservationBaseline) => void) => {
+    it(name, () => {
+      const candidate = structuredClone(preservationBaseline);
+      mutate(candidate);
+      expect(() => assertPhase3OperationsContractPreserved(preservationBaseline, candidate, { transformations: [] }))
+        .toThrow("PHASE3_OPERATIONS_CONTRACT_ALTERED");
+    });
+  };
+  expectContractDriftRejected("rejects changed existing column types", (candidate) => { candidate.columns[0]!["type"] = "integer"; });
+  expectContractDriftRejected("rejects changed existing column defaults", (candidate) => { (candidate.columns[0] as { default: string | null }).default = "1"; });
+  expectContractDriftRejected("rejects changed existing column nullability", (candidate) => { candidate.columns[0]!["nullable"] = "YES"; });
+  expectContractDriftRejected("rejects changed existing policy predicates", (candidate) => { candidate.policies[0]!["usingPredicate"] = "true"; });
+  expectContractDriftRejected("rejects changed existing policy roles", (candidate) => { candidate.policies[0]!["roles"] = "{anon}"; });
+  expectContractDriftRejected("rejects changed existing table ownership", (candidate) => { candidate.objects[0]!["owner"] = "anon"; });
+  expectContractDriftRejected("rejects changed existing RLS enforcement", (candidate) => { candidate.objects[0]!["rlsForced"] = false; });
+  expectContractDriftRejected("rejects changed existing grantability", (candidate) => { candidate.grants[0]!["grantable"] = true; });
+  expectContractDriftRejected("rejects changed existing constraint definitions", (candidate) => { candidate.constraints[0]!["definition"] = "CHECK (true)"; });
+  expectContractDriftRejected("rejects changed existing index definitions", (candidate) => { candidate.indexes[0]!["definition"] = "CREATE INDEX jobs_status_idx ON operations.jobs USING btree (status) WHERE true"; });
+
+  it("rejects duplicate table-scoped catalog identities instead of collapsing them", () => {
+    const snapshot = {
+      postgresMajor: 17 as const,
+      schemas: [], objects: [], columns: [], constraints: [], policies: [], grants: [], defaultPrivileges: [],
+      indexes: [], functions: [], triggers: [], types: [],
+    };
+    const duplicate = { ...structuredClone(snapshot), columns: [
+      { schema: "operations", tableName: "jobs", name: "status", type: "text" },
+      { schema: "operations", tableName: "jobs", name: "status", type: "text" },
+    ] };
+    expect(() => assertPhase3OperationsContractPreserved(snapshot, duplicate, { transformations: [] }))
+      .toThrow("PHASE3_OPERATIONS_CONTRACT_DUPLICATE_IDENTITY");
   });
 
   it("requires forced RLS and the intended policy roles and scope on every Phase 4 application table", () => {

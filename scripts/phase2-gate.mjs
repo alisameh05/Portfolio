@@ -8,14 +8,23 @@
  * access after dependencies are installed.
  */
 
-import { spawn } from "node:child_process";
+import { approvedWindowsPhase2Skip, executeQualificationCommand, WINDOWS_PHASE2_NONREQUIRED_SKIP } from "./qualification-command.mjs";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
+import { createQualificationPrerequisiteCache } from "./qualification-prerequisite-cache.mjs";
+import { currentRuntimeIdentity } from "./qualification-context.mjs";
+import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const REPORT_PATH = join(ROOT, "evidence", "phase-2-gate-report.json");
+const gateStartedAt = new Date();
+const sourceRevision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
+const sourceTreeSha256 = workingTreeSourceSha256();
+const prerequisiteCache = createQualificationPrerequisiteCache({ root: ROOT, sourceRevision,
+  sourceTreeSha256, runtime: currentRuntimeIdentity(), environment: process.env });
 
 function sanitizeOutput(output) {
   let sanitized = output;
@@ -45,60 +54,70 @@ const checks = [
     entry: "scripts/check-toolchain.mjs",
     args: [],
     evidence: "evidence/phase-2-toolchain.log",
+    cacheScript: "direct:check-toolchain.mjs",
   },
   {
     name: "phase1-contract-drift",
     entry: "scripts/check-contract-drift.mjs",
     args: [],
     evidence: "evidence/phase-2-contract-drift.log",
+    cacheScript: "direct:check-contract-drift.mjs",
   },
   {
     name: "phase1-contract-compatibility",
     entry: "scripts/check-contract-compatibility.mjs",
     args: [],
     evidence: "evidence/phase-2-contract-compatibility.log",
+    cacheScript: "direct:check-contract-compatibility.mjs",
   },
   {
     name: "phase1-contract-and-strict-validator-tests",
     entry: "node_modules/vitest/vitest.mjs",
     args: ["run", "tests/contracts"],
     evidence: "evidence/phase-2-contract-tests.log",
+    cacheScript: "direct:vitest-contract-tests",
   },
   {
     name: "production-build",
     entry: "node_modules/next/dist/bin/next",
     args: ["build"],
     evidence: "evidence/phase-2-build.log",
+    cacheScript: "direct:next",
   },
   {
     name: "strict-typecheck",
     entry: "node_modules/typescript/bin/tsc",
     args: ["--noEmit"],
     evidence: "evidence/phase-2-typecheck.log",
+    cacheScript: "direct:typescript",
   },
   {
     name: "deterministic-lint",
     entry: "node_modules/eslint/bin/eslint.js",
     args: ["."],
     evidence: "evidence/phase-2-lint.log",
+    cacheScript: "direct:eslint",
   },
   {
     name: "architecture",
     entry: "scripts/architecture-check.mjs",
     args: [],
     evidence: "evidence/phase-2-architecture.log",
+    cacheScript: "direct:architecture-check.mjs",
   },
   {
     name: "route-inventory",
     entry: "scripts/check-route-inventory.mjs",
     args: [],
     evidence: "evidence/phase-2-route-inventory.log",
+    cacheScript: "direct:check-route-inventory.mjs",
   },
   {
     name: "contract-to-adapter-matrix",
     entry: "scripts/check-runtime-boundary.mjs",
     args: [],
     evidence: "evidence/phase-2-runtime-boundary.log",
+    cacheScript: "direct:check-runtime-boundary.mjs",
   },
   {
     name: "configuration-negative-tests",
@@ -109,7 +128,7 @@ const checks = [
   {
     name: "http-adapter-tests",
     entry: "node_modules/vitest/vitest.mjs",
-    args: ["run", "tests/runtime"],
+    args: ["run", "tests/runtime", "--reporter=verbose"],
     evidence: "evidence/phase-2-http-adapters.log",
   },
   {
@@ -130,47 +149,38 @@ const checks = [
   },
 ];
 
-function runCheck(check) {
-  return new Promise((resolve) => {
-    const startedAt = Date.now();
-    const child = spawn(process.execPath, [check.entry, ...check.args], {
-      cwd: ROOT,
-      env: { ...process.env, CI: "1" },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const chunks = [];
-    child.stdout.on("data", (chunk) => {
-      chunks.push(chunk);
-      process.stdout.write(sanitizeOutput(chunk.toString("utf8")));
-    });
-    child.stderr.on("data", (chunk) => {
-      chunks.push(chunk);
-      process.stderr.write(sanitizeOutput(chunk.toString("utf8")));
-    });
-    let spawnError;
-    child.on("error", (error) => {
-      spawnError = error;
-    });
-    child.on("close", (exitCode) => {
-      const output = sanitizeOutput(Buffer.concat(chunks).toString("utf8"));
-      const evidencePath = join(ROOT, check.evidence);
-      mkdirSync(dirname(evidencePath), { recursive: true });
-      writeFileSync(evidencePath, normalizeEvidenceOutput(output), "utf8");
-      resolve({
-        name: check.name,
-        passed: exitCode === 0 && spawnError === undefined,
-        exitCode: exitCode ?? 1,
-        durationMs: Date.now() - startedAt,
-        evidence: check.evidence,
-        detail:
-          spawnError instanceof Error
-            ? spawnError.message
-            : exitCode === 0
-              ? "passed"
-              : output.trim().split(/\r?\n/).slice(-1)[0] || "failed",
-      });
-    });
+async function runCheck(check) {
+  const startedAt = Date.now();
+  const environment = { ...process.env, CI: "1" };
+  const invoke = () => executeQualificationCommand({ entry: process.execPath, args: [check.entry, ...check.args],
+    cwd: ROOT, environment });
+  const execution = check.cacheScript === undefined ? await invoke() : await prerequisiteCache.runAsync({
+    script: check.cacheScript, args: check.args,
+    entry: JSON.stringify({ entry: process.execPath, args: [check.entry, ...check.args] }), environment, invoke, sanitizeOutput,
   });
+  const output = sanitizeOutput(execution.output);
+  const approvedSkip = approvedWindowsPhase2Skip(output, { phase2RuntimeSuite: check.name === "http-adapter-tests" }) &&
+    execution.status === 1 && execution.errorCode === "QUALIFICATION_COMMAND_INCOMPLETE" && execution.skipped === 1;
+  if (output) process.stdout.write(output);
+  const evidencePath = join(ROOT, check.evidence);
+  mkdirSync(dirname(evidencePath), { recursive: true });
+  writeFileSync(evidencePath, normalizeEvidenceOutput(output), "utf8");
+  return {
+    name: check.name,
+    passed: approvedSkip || (execution.status === 0 && execution.errorCode === null && execution.skipped === 0 && execution.timedOut !== true),
+    exitCode: approvedSkip ? 0 : execution.status,
+    observedExitCode: execution.status,
+    skipped: approvedSkip ? 0 : execution.skipped,
+    observedSkipped: execution.skipped,
+    nonRequiredSkips: approvedSkip ? [WINDOWS_PHASE2_NONREQUIRED_SKIP] : [],
+    executed: true,
+    reused: execution.reused === true,
+    reuseProof: execution.reuseProof ?? null,
+    durationMs: Date.now() - startedAt,
+    evidence: check.evidence,
+    detail: execution.status === 0 ? (execution.reused ? "reused verified same-run prerequisite" : "passed") :
+      output.trim().split(/\r?\n/).slice(-1)[0] || execution.errorCode || "failed",
+  };
 }
 
 console.log("═══════════════════════════════════════════════");
@@ -220,7 +230,9 @@ if (assembleOnly) {
   }
 }
 
-const failed = results.filter((result) => !result.passed);
+const sourceBound = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim() === sourceRevision &&
+  workingTreeSourceSha256() === sourceTreeSha256;
+const failed = [...results.filter((result) => !result.passed), ...(sourceBound ? [] : [{ name: "source identity" }])];
 if (requestedBatch !== undefined) {
   const batchReportPath = join(
     ROOT,
@@ -252,6 +264,15 @@ const report = {
   parent: 24,
   scope: "phase-2-runtime-completion-gate",
   node: process.version,
+  sourceRevision,
+  sourceTreeSha256,
+  startedAt: gateStartedAt.toISOString(),
+  completedAt: new Date().toISOString(),
+  toolVersions: currentRuntimeIdentity(),
+  required: { success: failed.length === 0, executed: results.length, failed: failed.length, skipped: results.reduce((sum, check) => sum + check.skipped, 0) },
+  observedSkipped: results.reduce((sum, check) => sum + check.observedSkipped, 0),
+  nonRequiredSkips: results.flatMap((check) => check.nonRequiredSkips),
+  cleanup: { success: true },
   verdict: failed.length === 0 ? "pass" : "fail",
   summary: {
     passed: results.length - failed.length,

@@ -1,0 +1,63 @@
+# Phase 3–7 prerequisite qualification (issue #267).
+# Runs the single-command qualification DAG (npm run phase8:qualify) with the
+# Docker Linux engine and real-service gates on every pull request targeting
+# master. The eligible-job name is the required check
+# `phase3-7-qualification`; it never continues on error and never runs with
+# cached or privileged variables: disposable loopback services only.
+name: phase3-7-qualification
+on:
+  pull_request:
+    branches:
+      - master
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phase3-7-qualification:
+    name: phase3-7-qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Select pinned npm
+        run: npm install --global "npm@$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).engines.npm')" --no-audit --no-fund
+      - name: Install locked validation dependencies
+        run: npm run setup:validation
+      - name: Validation environment
+        run: npm run validation:ready
+      - name: Qualify Phases 3–7 prerequisites
+        run: npm run phase8:qualify
+      - name: Prepare complete source-bound qualification evidence
+        run: node scripts/prepare-qualification-artifact.mjs --output="${RUNNER_TEMP}/phase3-7-qualification"
+      - name: Publish complete qualification evidence
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase3-7-qualification
+          path: ${{ runner.temp }}/phase3-7-qualification
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase3-7-qualification-diagnostics
+          path: |
+            evidence/phase8-qualification-run.json
+            evidence/phase8-prerequisite-qualification.json
+            evidence/phase-*-gate-report.json
+            evidence/phase6-gate-checks/*.log
+            evidence/phase7-gate-checks/*.log
+          if-no-files-found: warn
+          retention-days: 14

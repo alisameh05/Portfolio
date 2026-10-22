@@ -8,6 +8,8 @@ import { sanitizeEvidenceOutput } from "./phase4-gate-support.mjs";
 import { observeRuntime, verifyEnvironment } from "./validation-environment.mjs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { evaluatePhase6Gate, PHASE6_GATE_COMPONENTS, PHASE6_GATE_REQUIRED_CHECKS, readPhase6GateEvidence } from "./phase6-gate-support.mjs";
+import { createQualificationPrerequisiteCache } from "./qualification-prerequisite-cache.mjs";
+import { normalizeQualificationCommandResult } from "./qualification-command.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE = join(ROOT, "evidence");
@@ -18,7 +20,7 @@ const DEFAULT_TIMEOUT = 30 * 60 * 1000;
 const LONG_TIMEOUT = 60 * 60 * 1000;
 
 const COMMANDS = Object.freeze([
-  { name: "toolchain", file: "scripts/check-toolchain.mjs", timeout: 120_000 },
+  { name: "toolchain", file: "scripts/check-toolchain.mjs", cacheKey: "direct:check-toolchain.mjs", timeout: 120_000 },
   { name: "phase6-setup", script: "phase6:focus:verification", timeout: LONG_TIMEOUT },
   { name: "upload-intents", script: "phase6:focus:upload-intents", timeout: LONG_TIMEOUT },
   { name: "pdf-processing", script: "phase6:focus:media-processing", timeout: LONG_TIMEOUT },
@@ -68,9 +70,10 @@ function gitRevision() {
   catch { return "unknown"; }
 }
 
-function npmInvocation(script) {
-  if (process.env.npm_execpath) return { entry: process.execPath, args: [process.env.npm_execpath, "run", script] };
-  return { entry: process.platform === "win32" ? "npm.cmd" : "npm", args: ["run", script], shell: process.platform === "win32" };
+function npmInvocation(script, args = []) {
+  if (script === "contract:verify") return { entry: process.execPath, args: [join(ROOT, "scripts/qualification-contract-verification.mjs")] };
+  if (process.env.npm_execpath) return { entry: process.execPath, args: [process.env.npm_execpath, "run", script, ...args] };
+  return { entry: process.platform === "win32" ? "npm.cmd" : "npm", args: ["run", script, ...args], shell: process.platform === "win32" };
 }
 
 function sanitize(output) {
@@ -88,12 +91,7 @@ export async function clearGateArtifacts({ reportPath, reportPaths, checksPath }
   for (const file of await readdir(checksPath)) rmSync(join(checksPath, file), { force: true });
 }
 
-function countSkipped(output) {
-  const matches = [...String(output).replaceAll(/\u001B\[[0-9;]*m/gu, "").matchAll(/\b(\d+)\s+skipped\b/giu)];
-  return matches.length ? Math.max(...matches.map((match) => Number(match[1]))) : 0;
-}
-
-function execute(definition, { runId, sourceRevision, sourceTreeSha256, validationReady, startedAt }) {
+function execute(definition, { runId, sourceRevision, sourceTreeSha256, validationReady, startedAt, prerequisiteCache }) {
   const began = new Date().toISOString();
   if (definition.requiresValidation && !validationReady) {
     return { name: definition.name, runId, sourceRevision, sourceTreeSha256, startedAt: began, completedAt: new Date().toISOString(),
@@ -101,23 +99,31 @@ function execute(definition, { runId, sourceRevision, sourceTreeSha256, validati
   }
   const invocation = definition.file
     ? { entry: process.execPath, args: [join(ROOT, definition.file)] }
-    : npmInvocation(definition.script);
-  const result = spawnSync(invocation.entry, invocation.args, {
-    cwd: ROOT, env: { ...process.env, CI: "1", SHIPWITHALI_PHASE: "phase6", PHASE6_GATE_RUN_ID: runId },
-    encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: definition.timeout ?? DEFAULT_TIMEOUT,
-    maxBuffer: MAX_OUTPUT_BYTES, shell: invocation.shell ?? false, windowsHide: true,
-  });
-  const output = sanitize(`${result.stdout ?? ""}${result.stderr ?? ""}`);
+    : npmInvocation(definition.script, definition.args ?? []);
+  const commandEnvironment = { ...process.env, CI: "1", SHIPWITHALI_PHASE: "phase6", PHASE6_GATE_RUN_ID: runId };
+  const result = prerequisiteCache.run({ script: definition.cacheKey ?? definition.script, args: definition.args ?? [],
+    entry: JSON.stringify({ entry: invocation.entry, args: invocation.args }), environment: commandEnvironment,
+    artifactPaths: definition.artifactPaths,
+    invoke: () => {
+      const spawned = spawnSync(invocation.entry, invocation.args, { cwd: ROOT, env: commandEnvironment,
+        encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: definition.timeout ?? DEFAULT_TIMEOUT,
+        maxBuffer: MAX_OUTPUT_BYTES, shell: invocation.shell ?? false, windowsHide: true });
+      return normalizeQualificationCommandResult({ status: Number.isInteger(spawned.status) ? spawned.status : 1,
+        output: `${spawned.stdout ?? ""}${spawned.stderr ?? ""}`, errorCode: spawned.error?.code ?? null,
+        signal: spawned.signal, timedOut: spawned.error?.code === "ETIMEDOUT" });
+    }, sanitizeOutput: sanitize });
+  const output = result.output;
   const logName = `${definition.name}.log`;
   const logPath = join(CHECKS, logName);
   writeFileSync(logPath, `${output.trimEnd()}${output.trimEnd() ? "\n" : ""}`, "utf8");
-  const skipped = countSkipped(output);
-  const timedOut = result.error?.code === "ETIMEDOUT";
-  const passed = result.status === 0 && !result.error && !timedOut && skipped === 0;
+  const skipped = result.skipped;
+  const timedOut = result.timedOut;
+  const passed = result.status === 0 && !result.errorCode && !timedOut && skipped === 0;
   return {
     name: definition.name, runId, sourceRevision, sourceTreeSha256, startedAt: began, completedAt: new Date().toISOString(),
-    executed: true, passed, exitCode: passed ? 0 : (result.status ?? 1), skipped, timedOut,
-    failure: passed ? null : timedOut ? "timeout" : result.error?.code ?? (skipped ? "required-skip" : "check-failed"),
+    executed: true, reused: result.reused, ...(result.reuseProof ? { reuseProof: result.reuseProof } : {}),
+    passed, exitCode: passed ? 0 : result.status, skipped, timedOut,
+    failure: passed ? null : timedOut ? "timeout" : result.errorCode ?? (skipped ? "required-skip" : "check-failed"),
     evidence: { path: `evidence/phase6-gate-checks/${logName}`, sha256: createHash("sha256").update(readFileSync(logPath)).digest("hex") },
   };
 }
@@ -131,6 +137,8 @@ async function main() {
   let sourceTreeSha256;
   try { sourceTreeSha256 = workingTreeSourceSha256(); } catch { sourceTreeSha256 = "unknown"; }
   const runtime = observeRuntime();
+  const prerequisiteCache = createQualificationPrerequisiteCache({ root: ROOT, sourceRevision, sourceTreeSha256,
+    runtime: { ...runtime, platform: process.platform, architecture: process.arch } });
   const packageJson = json(join(ROOT, "package.json")) ?? {};
   const expectedRuntime = { node: packageJson.engines?.node, npm: packageJson.engines?.npm };
   const readinessErrors = verifyEnvironment(ROOT, runtime);
@@ -142,7 +150,7 @@ async function main() {
   const validationReady = readinessErrors.length === 0;
   for (const definition of COMMANDS) {
     const result = execute({ ...definition, requiresValidation: definition.name !== "toolchain" },
-      { runId, sourceRevision, sourceTreeSha256, validationReady, startedAt });
+      { runId, sourceRevision, sourceTreeSha256, validationReady, startedAt, prerequisiteCache });
     checks.push(result);
     console.log(`${result.passed ? "PASS" : "FAIL"} ${definition.name}${result.failure ? ` (${result.failure})` : ""}`);
   }

@@ -1,0 +1,64 @@
+{
+  "baseline": "ed97e1fa15517a7b4cc2359def24aba1da102f29",
+  "executedAt": "2026-10-22T12:18:43.633Z",
+  "candidateSourceFiles": [
+    {
+      "file": "scripts/phase4-migration-integrity.mjs",
+      "sha256": "249c1c480141de21fab61f8ff9680b33514ce1ba025ee7aca86dcd02eabc0b2d"
+    },
+    {
+      "file": "scripts/phase-contract-registry.mjs",
+      "sha256": "06cd4daae4a68092a75806cd57b1ccec404aa33a109c6b1a063a19d93902ff2b"
+    },
+    {
+      "file": "scripts/validation-contracts/operations-transformations.json",
+      "sha256": "25e30e9e39af4edb4b346c626f4e9ae94725044c9d31acd610da50b634ba3995"
+    }
+  ],
+  "canonicalPostgresMajor": 18,
+  "currentCanonicalUpgradeAccepted": true,
+  "results": [
+    {
+      "name": "existing column type",
+      "baselineAccepted": true,
+      "currentRejected": true,
+      "rejection": {
+        "name": "ValidationFailure",
+        "code": "PHASE3_OPERATIONS_CONTRACT_ALTERED",
+        "stage": null,
+        "check": "phase3-operations-preservation",
+        "categories": [
+          "columns"
+        ],
+        "paths": [
+          "columns:operations.jobs.status:type"
+        ],
+        "detail": "columns catalog row operations.jobs.status differs at type",
+        "causeCode": null,
+        "cleanupFailures": [],
+        "message": "PHASE3_OPERATIONS_CONTRACT_ALTERED:phase3-operations-preservation:columns:columns_operations.jobs.status_type:columns catalog row operations.jobs.status differs at type"
+      }
+    },
+    {
+      "name": "existing policy predicate",
+      "baselineAccepted": true,
+      "currentRejected": true,
+      "rejection": {
+        "name": "ValidationFailure",
+        "code": "PHASE3_OPERATIONS_CONTRACT_ALTERED",
+        "stage": null,
+        "check": "phase3-operations-preservation",
+        "categories": [
+          "policies"
+        ],
+        "paths": [
+          "policies:operations.jobs.measurement_event_jobs_application_insert:withCheck"
+        ],
+        "detail": "policies catalog row operations.jobs.measurement_event_jobs_application_insert differs at withCheck",
+        "causeCode": null,
+        "cleanupFailures": [],
+        "message": "PHASE3_OPERATIONS_CONTRACT_ALTERED:phase3-operations-preservation:policies:policies_operations.jobs.measurement_event_jobs_application_insert_withCheck:policies catalog row operations.jobs.measurement_event_jobs_application_insert differs at withCheck"
+      }
+    }
+  ]
+}

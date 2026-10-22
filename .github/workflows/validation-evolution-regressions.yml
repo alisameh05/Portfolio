@@ -1,0 +1,86 @@
+# Validation-evolution regression guard (issue #267).
+# Runs the shared phase-contract registry, exact preservation comparisons,
+# structured safe-error, qualification DAG shared-context, and workflow
+# prevention tests on every pull request targeting master, on merge groups,
+# and on manual dispatch. No path filters: registry edits must fail fast on
+# any pull request. The aggregator check named
+# `validation-evolution-regressions` fails whenever any constituent job is
+# not successful; swallowing job failures with an error-continuing key is forbidden.
+name: validation-evolution-regressions
+on:
+  pull_request:
+    branches:
+      - master
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evolution-regressions:
+    name: validation-evolution regressions
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Select pinned npm
+        run: npm install --global "npm@$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).engines.npm')" --no-audit --no-fund
+      - name: Install locked validation dependencies
+        run: npm run setup:validation
+      - name: Validation environment
+        run: npm run validation:ready
+      - name: Validation-evolution registry and DAG tests
+        run: npm run test:validation-evolution
+      - name: Prevention workflow configuration self-check
+        run: npm run check:prevention-workflow
+
+  prevention-workflow-selfcheck:
+    name: prevention workflow self-check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Select pinned npm
+        run: npm install --global "npm@$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).engines.npm')" --no-audit --no-fund
+      - name: Install locked validation dependencies
+        run: npm run setup:validation
+      - name: Check prevention workflow configuration
+        run: npm run check:prevention-workflow
+      - name: Fail on error-continuing keys
+        run: |
+          node - <<'NODE'
+          import { readFileSync } from "node:fs";
+          const source = readFileSync(".github/workflows/validation-evolution-regressions.yml", "utf8");
+          if (/^\s*continue-on-error:/mu.test(source)) {
+            throw new Error("PREVENTION_WORKFLOW_ERROR_CONTINUING_KEY_PRESENT");
+          }
+          console.log("prevention workflow contains no error-continuing keys");
+          NODE
+
+
+  validation-evolution-regressions:
+    name: validation-evolution-regressions
+    needs: [evolution-regressions, prevention-workflow-selfcheck]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Aggregate validation-evolution results
+        env:
+          EVOLUTION_RESULTS: ${{ needs.evolution-regressions.result }}
+          SELFCHECK_RESULTS: ${{ needs.prevention-workflow-selfcheck.result }}
+        run: |
+          node -e "process.exitCode = process.env.EVOLUTION_RESULTS !== 'success' || process.env.SELFCHECK_RESULTS !== 'success' ? 1 : 0"

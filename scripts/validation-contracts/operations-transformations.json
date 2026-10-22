@@ -1,0 +1,1544 @@
+{
+  "format": 1,
+  "source": {
+    "baseline": "supabase/baselines/phase3.json",
+    "migrations": {
+      "20261015120000_persist_consented_public_events.sql": "49a176f484fda2e0f067925501c609222308a1a776eecea06f13abbe591e73f6",
+      "20261018172500_bound_job_retries_and_incidents.sql": "c63d813d82f4fab902fcfbfde78c667b95618b450e438f58d88aad103fe78b1e"
+    }
+  },
+  "transformations": [
+    {
+      "migration": "20261015120000_persist_consented_public_events.sql",
+      "operations": [
+        {
+          "category": "policies",
+          "identity": "operations.jobs.measurement_event_jobs_application_insert",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "jobs",
+            "name": "measurement_event_jobs_application_insert",
+            "permissive": "permissive",
+            "roles": "{shipwithali_application}",
+            "command": "INSERT",
+            "usingPredicate": "",
+            "withCheck": "((job_type = 'measurement.public-event-received.v1'::text) AND (payload_version = 1) AND (jsonb_typeof(payload) = 'object'::text) AND ( SELECT (count(*) = 2)\n   FROM jsonb_object_keys(jobs.payload) jsonb_object_keys(jsonb_object_keys)) AND (payload ?& ARRAY['eventId'::text, 'portfolioId'::text]) AND ((payload ->> 'portfolioId'::text) = NULLIF(current_setting('shipwithali.portfolio_id'::text, true), ''::text)) AND ((payload ->> 'eventId'::text) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text))"
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.jobs.r.shipwithali_application:shipwithali_migration:INSERT",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "jobs",
+            "objectType": "r",
+            "grantee": "shipwithali_application",
+            "grantor": "shipwithali_migration",
+            "privilege": "INSERT",
+            "grantable": false
+          }
+        }
+      ],
+      "stage": "expand",
+      "priorWriterCompatible": true,
+      "capability": "measurement.events"
+    },
+    {
+      "migration": "20261018172500_bound_job_retries_and_incidents.sql",
+      "operations": [
+        {
+          "category": "objects",
+          "identity": "operations.incidents",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "name": "incidents",
+            "kind": "r",
+            "owner": "shipwithali_migration",
+            "rlsEnabled": true,
+            "rlsForced": true
+          }
+        },
+        {
+          "category": "objects",
+          "identity": "operations.job_redrive_audit",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "name": "job_redrive_audit",
+            "kind": "r",
+            "owner": "shipwithali_migration",
+            "rlsEnabled": true,
+            "rlsForced": true
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.incidents.category",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "position": 3,
+            "name": "category",
+            "type": "text",
+            "typeSchema": "pg_catalog",
+            "typeName": "text",
+            "nullable": "NO",
+            "default": null,
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.incidents.first_observed_at",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "position": 7,
+            "name": "first_observed_at",
+            "type": "timestamp with time zone",
+            "typeSchema": "pg_catalog",
+            "typeName": "timestamptz",
+            "nullable": "NO",
+            "default": "transaction_timestamp()",
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": 6
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.incidents.incident_id",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "position": 1,
+            "name": "incident_id",
+            "type": "uuid",
+            "typeSchema": "pg_catalog",
+            "typeName": "uuid",
+            "nullable": "NO",
+            "default": "gen_random_uuid()",
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.incidents.incident_key",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "position": 2,
+            "name": "incident_key",
+            "type": "text",
+            "typeSchema": "pg_catalog",
+            "typeName": "text",
+            "nullable": "NO",
+            "default": null,
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.incidents.last_observed_at",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "position": 8,
+            "name": "last_observed_at",
+            "type": "timestamp with time zone",
+            "typeSchema": "pg_catalog",
+            "typeName": "timestamptz",
+            "nullable": "NO",
+            "default": "transaction_timestamp()",
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": 6
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.incidents.occurrences",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "position": 9,
+            "name": "occurrences",
+            "type": "integer",
+            "typeSchema": "pg_catalog",
+            "typeName": "int4",
+            "nullable": "NO",
+            "default": "1",
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": 32,
+            "numericScale": 0,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.incidents.resolved_at",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "position": 10,
+            "name": "resolved_at",
+            "type": "timestamp with time zone",
+            "typeSchema": "pg_catalog",
+            "typeName": "timestamptz",
+            "nullable": "YES",
+            "default": null,
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": 6
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.incidents.safe_error_code",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "position": 5,
+            "name": "safe_error_code",
+            "type": "text",
+            "typeSchema": "pg_catalog",
+            "typeName": "text",
+            "nullable": "NO",
+            "default": null,
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.incidents.severity",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "position": 6,
+            "name": "severity",
+            "type": "text",
+            "typeSchema": "pg_catalog",
+            "typeName": "text",
+            "nullable": "NO",
+            "default": null,
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.incidents.source_id",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "position": 4,
+            "name": "source_id",
+            "type": "uuid",
+            "typeSchema": "pg_catalog",
+            "typeName": "uuid",
+            "nullable": "YES",
+            "default": null,
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.job_redrive_audit.audit_id",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "position": 1,
+            "name": "audit_id",
+            "type": "uuid",
+            "typeSchema": "pg_catalog",
+            "typeName": "uuid",
+            "nullable": "NO",
+            "default": "gen_random_uuid()",
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.job_redrive_audit.created_at",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "position": 7,
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "typeSchema": "pg_catalog",
+            "typeName": "timestamptz",
+            "nullable": "NO",
+            "default": "transaction_timestamp()",
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": 6
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.job_redrive_audit.operator_scope_hash",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "position": 4,
+            "name": "operator_scope_hash",
+            "type": "text",
+            "typeSchema": "pg_catalog",
+            "typeName": "text",
+            "nullable": "NO",
+            "default": null,
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.job_redrive_audit.original_job_id",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "position": 2,
+            "name": "original_job_id",
+            "type": "uuid",
+            "typeSchema": "pg_catalog",
+            "typeName": "uuid",
+            "nullable": "NO",
+            "default": null,
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.job_redrive_audit.payload_sha256",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "position": 6,
+            "name": "payload_sha256",
+            "type": "text",
+            "typeSchema": "pg_catalog",
+            "typeName": "text",
+            "nullable": "NO",
+            "default": null,
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.job_redrive_audit.policy_version",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "position": 5,
+            "name": "policy_version",
+            "type": "text",
+            "typeSchema": "pg_catalog",
+            "typeName": "text",
+            "nullable": "NO",
+            "default": null,
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.job_redrive_audit.replacement_job_id",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "position": 3,
+            "name": "replacement_job_id",
+            "type": "uuid",
+            "typeSchema": "pg_catalog",
+            "typeName": "uuid",
+            "nullable": "NO",
+            "default": null,
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": null
+          }
+        },
+        {
+          "category": "columns",
+          "identity": "operations.outbox_events.dead_at",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "outbox_events",
+            "position": 17,
+            "name": "dead_at",
+            "type": "timestamp with time zone",
+            "typeSchema": "pg_catalog",
+            "typeName": "timestamptz",
+            "nullable": "YES",
+            "default": null,
+            "identity": "NO",
+            "identityGeneration": null,
+            "generated": "NEVER",
+            "generationExpression": null,
+            "characterMaximumLength": null,
+            "numericPrecision": null,
+            "numericScale": null,
+            "datetimePrecision": 6
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.incidents.incidents_category_check",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "name": "incidents_category_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (category = ANY (ARRAY['job'::text, 'outbox'::text, 'export'::text, 'backup'::text, 'recovery'::text]))"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.incidents.incidents_check",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "name": "incidents_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (last_observed_at >= first_observed_at)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.incidents.incidents_incident_key_key",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "name": "incidents_incident_key_key",
+            "type": "u",
+            "validated": true,
+            "definition": "UNIQUE (incident_key)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.incidents.incidents_occurrences_check",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "name": "incidents_occurrences_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (occurrences > 0)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.incidents.incidents_pkey",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "name": "incidents_pkey",
+            "type": "p",
+            "validated": true,
+            "definition": "PRIMARY KEY (incident_id)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.incidents.incidents_safe_error_code_check",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "name": "incidents_safe_error_code_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (safe_error_code ~ '^[A-Z][A-Z0-9_]{0,63}$'::text)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.incidents.incidents_severity_check",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "name": "incidents_severity_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (severity = ANY (ARRAY['warning'::text, 'critical'::text]))"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_check",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "name": "job_redrive_audit_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (original_job_id <> replacement_job_id)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_operator_scope_hash_check",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "name": "job_redrive_audit_operator_scope_hash_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (operator_scope_hash ~ '^[0-9a-f]{64}$'::text)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_original_job_id_fkey",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "name": "job_redrive_audit_original_job_id_fkey",
+            "type": "f",
+            "validated": true,
+            "definition": "FOREIGN KEY (original_job_id) REFERENCES operations.jobs(job_id)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_original_job_id_key",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "name": "job_redrive_audit_original_job_id_key",
+            "type": "u",
+            "validated": true,
+            "definition": "UNIQUE (original_job_id)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_payload_sha256_check",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "name": "job_redrive_audit_payload_sha256_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (payload_sha256 ~ '^[0-9a-f]{64}$'::text)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_pkey",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "name": "job_redrive_audit_pkey",
+            "type": "p",
+            "validated": true,
+            "definition": "PRIMARY KEY (audit_id)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_policy_version_check",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "name": "job_redrive_audit_policy_version_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (policy_version ~ '^[a-z][a-z0-9-]{0,63}$'::text)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_replacement_job_id_fkey",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "name": "job_redrive_audit_replacement_job_id_fkey",
+            "type": "f",
+            "validated": true,
+            "definition": "FOREIGN KEY (replacement_job_id) REFERENCES operations.jobs(job_id)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_replacement_job_id_key",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "name": "job_redrive_audit_replacement_job_id_key",
+            "type": "u",
+            "validated": true,
+            "definition": "UNIQUE (replacement_job_id)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.jobs.jobs_check",
+          "before": {
+            "schema": "operations",
+            "tableName": "jobs",
+            "name": "jobs_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (status = 'leased'::text AND lease_owner IS NOT NULL AND lease_token IS NOT NULL AND lease_expires_at IS NOT NULL AND completed_at IS NULL OR status = 'available'::text AND lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL AND completed_at IS NULL OR status = 'completed'::text AND lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL AND completed_at IS NOT NULL)"
+          },
+          "after": null
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.jobs.jobs_lifecycle_check",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "jobs",
+            "name": "jobs_lifecycle_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (status = 'leased'::text AND lease_owner IS NOT NULL AND lease_token IS NOT NULL AND lease_expires_at IS NOT NULL AND completed_at IS NULL OR status = 'available'::text AND lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL AND completed_at IS NULL OR status = 'completed'::text AND lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL AND completed_at IS NOT NULL OR status = 'dead'::text AND lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL AND completed_at IS NULL AND last_error_code IS NOT NULL)"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.jobs.jobs_status_check",
+          "before": {
+            "schema": "operations",
+            "tableName": "jobs",
+            "name": "jobs_status_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (status = ANY (ARRAY['available'::text, 'leased'::text, 'completed'::text]))"
+          },
+          "after": {
+            "schema": "operations",
+            "tableName": "jobs",
+            "name": "jobs_status_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK (status = ANY (ARRAY['available'::text, 'leased'::text, 'completed'::text, 'dead'::text]))"
+          }
+        },
+        {
+          "category": "constraints",
+          "identity": "operations.outbox_events.outbox_events_terminal_state_check",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "outbox_events",
+            "name": "outbox_events_terminal_state_check",
+            "type": "c",
+            "validated": true,
+            "definition": "CHECK ((completed_at IS NULL OR dead_at IS NULL) AND (dead_at IS NULL OR lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL))"
+          }
+        },
+        {
+          "category": "policies",
+          "identity": "operations.incidents.incidents_worker_insert_policy",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "name": "incidents_worker_insert_policy",
+            "permissive": "permissive",
+            "roles": "{shipwithali_worker}",
+            "command": "INSERT",
+            "usingPredicate": "",
+            "withCheck": "true"
+          }
+        },
+        {
+          "category": "policies",
+          "identity": "operations.incidents.incidents_worker_select_policy",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "name": "incidents_worker_select_policy",
+            "permissive": "permissive",
+            "roles": "{shipwithali_worker}",
+            "command": "SELECT",
+            "usingPredicate": "true",
+            "withCheck": ""
+          }
+        },
+        {
+          "category": "policies",
+          "identity": "operations.incidents.incidents_worker_update_policy",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "name": "incidents_worker_update_policy",
+            "permissive": "permissive",
+            "roles": "{shipwithali_worker}",
+            "command": "UPDATE",
+            "usingPredicate": "true",
+            "withCheck": "true"
+          }
+        },
+        {
+          "category": "policies",
+          "identity": "operations.incidents.operations_backup_policy_incidents",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "incidents",
+            "name": "operations_backup_policy_incidents",
+            "permissive": "permissive",
+            "roles": "{shipwithali_backup}",
+            "command": "SELECT",
+            "usingPredicate": "true",
+            "withCheck": ""
+          }
+        },
+        {
+          "category": "policies",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_worker_insert_policy",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "name": "job_redrive_audit_worker_insert_policy",
+            "permissive": "permissive",
+            "roles": "{shipwithali_worker}",
+            "command": "INSERT",
+            "usingPredicate": "",
+            "withCheck": "true"
+          }
+        },
+        {
+          "category": "policies",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_worker_select_policy",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "name": "job_redrive_audit_worker_select_policy",
+            "permissive": "permissive",
+            "roles": "{shipwithali_worker}",
+            "command": "SELECT",
+            "usingPredicate": "true",
+            "withCheck": ""
+          }
+        },
+        {
+          "category": "policies",
+          "identity": "operations.job_redrive_audit.operations_backup_policy_job_redrive_audit",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "tableName": "job_redrive_audit",
+            "name": "operations_backup_policy_job_redrive_audit",
+            "permissive": "permissive",
+            "roles": "{shipwithali_backup}",
+            "command": "SELECT",
+            "usingPredicate": "true",
+            "withCheck": ""
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.last_observed_at.c.shipwithali_worker:shipwithali_migration:UPDATE",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents.last_observed_at",
+            "objectType": "c",
+            "grantee": "shipwithali_worker",
+            "grantor": "shipwithali_migration",
+            "privilege": "UPDATE",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.occurrences.c.shipwithali_worker:shipwithali_migration:UPDATE",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents.occurrences",
+            "objectType": "c",
+            "grantee": "shipwithali_worker",
+            "grantor": "shipwithali_migration",
+            "privilege": "UPDATE",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.r.shipwithali_backup:shipwithali_migration:SELECT",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents",
+            "objectType": "r",
+            "grantee": "shipwithali_backup",
+            "grantor": "shipwithali_migration",
+            "privilege": "SELECT",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.r.shipwithali_migration:shipwithali_migration:DELETE",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "DELETE",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.r.shipwithali_migration:shipwithali_migration:INSERT",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "INSERT",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.r.shipwithali_migration:shipwithali_migration:MAINTAIN",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "MAINTAIN",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.r.shipwithali_migration:shipwithali_migration:REFERENCES",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "REFERENCES",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.r.shipwithali_migration:shipwithali_migration:SELECT",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "SELECT",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.r.shipwithali_migration:shipwithali_migration:TRIGGER",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "TRIGGER",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.r.shipwithali_migration:shipwithali_migration:TRUNCATE",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "TRUNCATE",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.r.shipwithali_migration:shipwithali_migration:UPDATE",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "UPDATE",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.r.shipwithali_worker:shipwithali_migration:INSERT",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents",
+            "objectType": "r",
+            "grantee": "shipwithali_worker",
+            "grantor": "shipwithali_migration",
+            "privilege": "INSERT",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.r.shipwithali_worker:shipwithali_migration:SELECT",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents",
+            "objectType": "r",
+            "grantee": "shipwithali_worker",
+            "grantor": "shipwithali_migration",
+            "privilege": "SELECT",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.resolved_at.c.shipwithali_worker:shipwithali_migration:UPDATE",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents.resolved_at",
+            "objectType": "c",
+            "grantee": "shipwithali_worker",
+            "grantor": "shipwithali_migration",
+            "privilege": "UPDATE",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.incidents.safe_error_code.c.shipwithali_worker:shipwithali_migration:UPDATE",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "incidents.safe_error_code",
+            "objectType": "c",
+            "grantee": "shipwithali_worker",
+            "grantor": "shipwithali_migration",
+            "privilege": "UPDATE",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.job_redrive_audit.r.shipwithali_backup:shipwithali_migration:SELECT",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "job_redrive_audit",
+            "objectType": "r",
+            "grantee": "shipwithali_backup",
+            "grantor": "shipwithali_migration",
+            "privilege": "SELECT",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.job_redrive_audit.r.shipwithali_migration:shipwithali_migration:DELETE",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "job_redrive_audit",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "DELETE",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.job_redrive_audit.r.shipwithali_migration:shipwithali_migration:INSERT",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "job_redrive_audit",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "INSERT",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.job_redrive_audit.r.shipwithali_migration:shipwithali_migration:MAINTAIN",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "job_redrive_audit",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "MAINTAIN",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.job_redrive_audit.r.shipwithali_migration:shipwithali_migration:REFERENCES",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "job_redrive_audit",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "REFERENCES",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.job_redrive_audit.r.shipwithali_migration:shipwithali_migration:SELECT",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "job_redrive_audit",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "SELECT",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.job_redrive_audit.r.shipwithali_migration:shipwithali_migration:TRIGGER",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "job_redrive_audit",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "TRIGGER",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.job_redrive_audit.r.shipwithali_migration:shipwithali_migration:TRUNCATE",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "job_redrive_audit",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "TRUNCATE",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.job_redrive_audit.r.shipwithali_migration:shipwithali_migration:UPDATE",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "job_redrive_audit",
+            "objectType": "r",
+            "grantee": "shipwithali_migration",
+            "grantor": "shipwithali_migration",
+            "privilege": "UPDATE",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.job_redrive_audit.r.shipwithali_worker:shipwithali_migration:INSERT",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "job_redrive_audit",
+            "objectType": "r",
+            "grantee": "shipwithali_worker",
+            "grantor": "shipwithali_migration",
+            "privilege": "INSERT",
+            "grantable": false
+          }
+        },
+        {
+          "category": "grants",
+          "identity": "operations.job_redrive_audit.r.shipwithali_worker:shipwithali_migration:SELECT",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "object": "job_redrive_audit",
+            "objectType": "r",
+            "grantee": "shipwithali_worker",
+            "grantor": "shipwithali_migration",
+            "privilege": "SELECT",
+            "grantable": false
+          }
+        },
+        {
+          "category": "indexes",
+          "identity": "operations.incidents.incidents_incident_key_key",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "table": "incidents",
+            "name": "incidents_incident_key_key",
+            "definition": "CREATE UNIQUE INDEX incidents_incident_key_key ON operations.incidents USING btree (incident_key)"
+          }
+        },
+        {
+          "category": "indexes",
+          "identity": "operations.incidents.incidents_open_idx",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "table": "incidents",
+            "name": "incidents_open_idx",
+            "definition": "CREATE INDEX incidents_open_idx ON operations.incidents USING btree (last_observed_at DESC, incident_id) WHERE (resolved_at IS NULL)"
+          }
+        },
+        {
+          "category": "indexes",
+          "identity": "operations.incidents.incidents_pkey",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "table": "incidents",
+            "name": "incidents_pkey",
+            "definition": "CREATE UNIQUE INDEX incidents_pkey ON operations.incidents USING btree (incident_id)"
+          }
+        },
+        {
+          "category": "indexes",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_original_idx",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "table": "job_redrive_audit",
+            "name": "job_redrive_audit_original_idx",
+            "definition": "CREATE INDEX job_redrive_audit_original_idx ON operations.job_redrive_audit USING btree (original_job_id, created_at)"
+          }
+        },
+        {
+          "category": "indexes",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_original_job_id_key",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "table": "job_redrive_audit",
+            "name": "job_redrive_audit_original_job_id_key",
+            "definition": "CREATE UNIQUE INDEX job_redrive_audit_original_job_id_key ON operations.job_redrive_audit USING btree (original_job_id)"
+          }
+        },
+        {
+          "category": "indexes",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_pkey",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "table": "job_redrive_audit",
+            "name": "job_redrive_audit_pkey",
+            "definition": "CREATE UNIQUE INDEX job_redrive_audit_pkey ON operations.job_redrive_audit USING btree (audit_id)"
+          }
+        },
+        {
+          "category": "indexes",
+          "identity": "operations.job_redrive_audit.job_redrive_audit_replacement_job_id_key",
+          "before": null,
+          "after": {
+            "schema": "operations",
+            "table": "job_redrive_audit",
+            "name": "job_redrive_audit_replacement_job_id_key",
+            "definition": "CREATE UNIQUE INDEX job_redrive_audit_replacement_job_id_key ON operations.job_redrive_audit USING btree (replacement_job_id)"
+          }
+        },
+        {
+          "category": "indexes",
+          "identity": "operations.outbox_events.outbox_events_due_idx",
+          "before": {
+            "schema": "operations",
+            "table": "outbox_events",
+            "name": "outbox_events_due_idx",
+            "definition": "CREATE INDEX outbox_events_due_idx ON operations.outbox_events USING btree (available_at, event_id) WHERE (completed_at IS NULL)"
+          },
+          "after": {
+            "schema": "operations",
+            "table": "outbox_events",
+            "name": "outbox_events_due_idx",
+            "definition": "CREATE INDEX outbox_events_due_idx ON operations.outbox_events USING btree (available_at, event_id) WHERE ((completed_at IS NULL) AND (dead_at IS NULL))"
+          }
+        }
+      ],
+      "stage": "lockstep",
+      "priorWriterCompatible": false,
+      "capability": "operations.bounded_retries",
+      "engineVariants": {
+        "17": [],
+        "18": [
+          {
+            "category": "constraints",
+            "identity": "operations.incidents.incidents_category_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "incidents",
+              "name": "incidents_category_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL category"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.incidents.incidents_first_observed_at_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "incidents",
+              "name": "incidents_first_observed_at_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL first_observed_at"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.incidents.incidents_incident_id_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "incidents",
+              "name": "incidents_incident_id_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL incident_id"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.incidents.incidents_incident_key_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "incidents",
+              "name": "incidents_incident_key_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL incident_key"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.incidents.incidents_last_observed_at_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "incidents",
+              "name": "incidents_last_observed_at_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL last_observed_at"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.incidents.incidents_occurrences_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "incidents",
+              "name": "incidents_occurrences_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL occurrences"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.incidents.incidents_safe_error_code_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "incidents",
+              "name": "incidents_safe_error_code_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL safe_error_code"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.incidents.incidents_severity_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "incidents",
+              "name": "incidents_severity_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL severity"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.job_redrive_audit.job_redrive_audit_audit_id_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "job_redrive_audit",
+              "name": "job_redrive_audit_audit_id_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL audit_id"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.job_redrive_audit.job_redrive_audit_created_at_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "job_redrive_audit",
+              "name": "job_redrive_audit_created_at_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL created_at"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.job_redrive_audit.job_redrive_audit_operator_scope_hash_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "job_redrive_audit",
+              "name": "job_redrive_audit_operator_scope_hash_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL operator_scope_hash"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.job_redrive_audit.job_redrive_audit_original_job_id_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "job_redrive_audit",
+              "name": "job_redrive_audit_original_job_id_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL original_job_id"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.job_redrive_audit.job_redrive_audit_payload_sha256_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "job_redrive_audit",
+              "name": "job_redrive_audit_payload_sha256_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL payload_sha256"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.job_redrive_audit.job_redrive_audit_policy_version_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "job_redrive_audit",
+              "name": "job_redrive_audit_policy_version_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL policy_version"
+            }
+          },
+          {
+            "category": "constraints",
+            "identity": "operations.job_redrive_audit.job_redrive_audit_replacement_job_id_not_null",
+            "before": null,
+            "after": {
+              "schema": "operations",
+              "tableName": "job_redrive_audit",
+              "name": "job_redrive_audit_replacement_job_id_not_null",
+              "type": "n",
+              "validated": true,
+              "definition": "NOT NULL replacement_job_id"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
