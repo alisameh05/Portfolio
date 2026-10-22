@@ -1,8 +1,8 @@
 {
   "ticket": 237,
-  "runId": "1479f18d-c6ff-489a-a44c-90f8d4e45fe7",
-  "sourceRevision": "bab48adb722cd7f255652950a1cb1f191c822f4f",
-  "sourceTreeSha256": "b042da3f499a79bcc5b36ce07c85a4603941c5cd6f7e223408840851833b7fee",
+  "runId": "51c1bf9b-807e-480f-8f0f-77e31fc6602d",
+  "sourceRevision": "d6b2ebeaa67dbb882bc9b0a300c77412ebde0059",
+  "sourceTreeSha256": "8ba65b683d46228bd2edb80edb158f1ba4a13dd635b578e672ee0ed97db752fd",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -263,18 +263,6 @@
       "status": "passed"
     },
     {
-      "title": "forces a domain rollback that yields no outbox event, job, or durable receipt",
-      "status": "passed"
-    },
-    {
-      "title": "keeps committed core state valid when optional post-commit export work fails",
-      "status": "passed"
-    },
-    {
-      "title": "puts failed export recovery on a fresh request instead of a replayed or reused artifact",
-      "status": "passed"
-    },
-    {
       "title": "runs retention before rebuilding the retained UTC horizon through module commands",
       "status": "passed"
     },
@@ -284,6 +272,18 @@
     },
     {
       "title": "rejects an invalid worker identity before queue access",
+      "status": "passed"
+    },
+    {
+      "title": "forces a domain rollback that yields no outbox event, job, or durable receipt",
+      "status": "passed"
+    },
+    {
+      "title": "keeps committed core state valid when optional post-commit export work fails",
+      "status": "passed"
+    },
+    {
+      "title": "puts failed export recovery on a fresh request instead of a replayed or reused artifact",
       "status": "passed"
     }
   ],

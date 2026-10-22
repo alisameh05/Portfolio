@@ -85,12 +85,17 @@ try {
   const testedSource = workingTreeSourceSha256();
   if (!refreshTypes && testedSource !== initialSource) throw new Error("PHASE7_JOBS_SOURCE_CHANGED_BEFORE_ACCEPTANCE");
   stage = "acceptance";
-  run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "tests/phase7/due-work.test.ts", "tests/phase7/due-work-postgres.test.ts",
+  // The #206 path must keep its exact original suite; the #237 path adds its
+  // dedicated rollback/recovery acceptance file.
+  const acceptanceFiles = ["tests/phase7/due-work.test.ts", "tests/phase7/due-work-postgres.test.ts",
+    ...(ticket237 ? ["tests/phase7/rollback-recovery-postgres.test.ts"] : [])];
+  const expectedTests = ticket237 ? 14 : 11;
+  run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
   const assertions = tests.testResults.flatMap(suite => suite.assertionResults ?? []);
   if (!tests.success || tests.numFailedTestSuites !== 0 || tests.numFailedTests !== 0 || tests.numPendingTests !== 0 || tests.numTodoTests !== 0 ||
-      tests.numPassedTests !== 14 || assertions.length !== 14 || tests.testResults.length !== 2 ||
+      tests.numPassedTests !== expectedTests || assertions.length !== expectedTests || tests.testResults.length !== acceptanceFiles.length ||
       tests.testResults.some(suite => suite.status !== "passed") || assertions.some(assertion => assertion.status !== "passed")) {
     throw new Error("PHASE7_JOBS_ACCEPTANCE_INCOMPLETE");
   }
