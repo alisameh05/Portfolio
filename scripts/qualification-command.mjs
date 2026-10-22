@@ -34,7 +34,7 @@ export function normalizeQualificationCommandResult({ status, errorCode = null, 
 }
 
 export function executeQualificationCommand({ entry, args = [], cwd, environment = process.env, shell = false,
-  heartbeat, heartbeatMs = 10_000 }) {
+  heartbeat, heartbeatMs = 10_000, timeoutMs }) {
   return new Promise((resolve) => {
     const child = spawn(entry, args, { cwd, env: environment, shell, windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"] });
@@ -42,12 +42,46 @@ export function executeQualificationCommand({ entry, args = [], cwd, environment
     child.stdout.on("data", (chunk) => chunks.push(chunk));
     child.stderr.on("data", (chunk) => chunks.push(chunk));
     let spawnError;
+    let timedOut = false;
     child.on("error", (error) => { spawnError = error; });
     const timer = heartbeat ? setInterval(heartbeat, heartbeatMs) : null;
+    const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, timeoutMs) : null;
     child.on("close", (code, signal) => {
       if (timer !== null) clearInterval(timer);
+      if (timeout !== null) clearTimeout(timeout);
       const output = Buffer.concat(chunks).toString("utf8");
-      resolve(normalizeQualificationCommandResult({ status: code, errorCode: spawnError?.code ?? null, signal, output }));
+      resolve(normalizeQualificationCommandResult({ status: code, errorCode: timedOut ? "ETIMEDOUT" : spawnError?.code ?? null,
+        timedOut, signal, output }));
     });
   });
+}
+
+/** Execute reviewed package prerequisites through the same live-run primitive cache. */
+export async function executeQualificationPackagePrerequisite({ script, root, cache, environment = process.env,
+  execute = executeQualificationCommand, timeoutMs = 900_000, sanitizeOutput = (value) => String(value ?? "") }) {
+  const began = performance.now();
+  const invoke = async (command) => {
+    const remaining = timeoutMs - (performance.now() - began);
+    if (remaining <= 0) return normalizeQualificationCommandResult({ status: 1, errorCode: "ETIMEDOUT", timedOut: true });
+    return normalizeQualificationCommandResult(await execute({ ...command, cwd: root, environment, timeoutMs: remaining }));
+  };
+  if (script === "contract:verify") {
+    const { verifyQualificationContracts } = await import("./qualification-contract-verification.mjs");
+    const verified = await verifyQualificationContracts({ root, cache, environment, execute: invoke, sanitizeOutput, log: () => {} });
+    const constituents = verified.results.map(({ script, reused, reuseProof }) => ({ script, reused, reuseProof }));
+    const reused = verified.results.every((result) => result.reused);
+    return { status: verified.status, errorCode: verified.results.find((result) => result.errorCode)?.errorCode ?? null,
+      timedOut: verified.results.some((result) => result.timedOut),
+      skipped: verified.results.reduce((sum, result) => sum + result.skipped, 0),
+      output: verified.results.map((result) => result.output).join("\n"), reused, constituents,
+      reuseProof: reused ? { algorithm: "qualification-contract-prerequisites/v1", constituents } : null };
+  }
+  const command = environment.npm_execpath
+    ? { entry: process.execPath, args: [environment.npm_execpath, "run", script] }
+    : { entry: process.platform === "win32" ? "npm.cmd" : "npm", args: ["run", script], shell: process.platform === "win32" };
+  return cache.runAsync({ script, args: [], entry: JSON.stringify({ entry: command.entry, args: command.args }), environment,
+    invoke: () => invoke(command), sanitizeOutput });
 }

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { createQualificationPrerequisiteCache } from "../../scripts/qualification-prerequisite-cache.mjs";
 
 const runtime = { node: "24.21.0", npm: "11.19.0", platform: process.platform, architecture: process.arch };
@@ -41,10 +41,13 @@ function invoke(cache, root, { script = "typecheck", env, args = [], result = { 
 test("reuses an equivalent checked command across phase gates only within the active run", () => {
   const f = fixture();
   try {
+    const pathKey = process.platform === "win32" ? "Path" : "PATH";
+    f.environment[pathKey] = ["/tools/first", "/tools/second", "", "/tools/first"].join(delimiter);
     let executions = 0;
     const first = f.cache.run({ script: "typecheck", entry: npmEntry(f.root, "typecheck"), environment: f.environment,
       invoke: () => { executions++; return { status: 0, output: "clean\n" }; }, sanitizeOutput: (value) => value.trim() });
     const phase6Env = { ...f.environment, SHIPWITHALI_PHASE: "phase6", PHASE6_GATE_RUN_ID: "gate-two" };
+    phase6Env[pathKey] = ["/tools/first", "/tools/first", "/tools/second", "", "/tools/second", ""].join(delimiter);
     const second = f.cache.run({ script: "typecheck", entry: npmEntry(f.root, "typecheck"), environment: phase6Env,
       invoke: () => { executions++; return { status: 0, output: "unexpected" }; }, sanitizeOutput: (value) => value.trim() });
     assert.equal(executions, 1);

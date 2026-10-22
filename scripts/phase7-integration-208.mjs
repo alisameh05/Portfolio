@@ -10,6 +10,10 @@ import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { migrationSha256 } from "./migration-checksum.mjs";
 import { createNativePostgresWorkspace, nativePostgresStartupFailure, removeNativePostgresWorkspace } from "./native-postgres-workspace.mjs";
 import { requireSupportedNativePostgres } from "./native-postgres-runtime.mjs";
+import { executeQualificationCommand, executeQualificationPackagePrerequisite } from "./qualification-command.mjs";
+import { createQualificationPrerequisiteCache } from "./qualification-prerequisite-cache.mjs";
+import { currentRuntimeIdentity } from "./qualification-context.mjs";
+import { sanitizePhase7Output } from "./phase7-gate-support.mjs";
 
 const root = process.cwd();
 const runId = randomUUID();
@@ -82,10 +86,26 @@ function verifyEvidenceInputs() {
     return { path: `evidence/${name}`, runId: evidence.runId ?? evidence.validationBatchId ?? "not-recorded", sourceRevision: evidence.sourceRevision ?? "not-recorded", baseCommit: evidence.baseCommit ?? null, sourceTreeSha256: evidence.sourceTreeSha256, passed: Number(required.passed ?? 0), failed: 0, skipped: 0, cleanup: true };
   });
 }
-function runPackageCheck(name) {
-  if (!process.env.npm_execpath) throw new Error("PHASE7_INTEGRATION_NPM_EXEC_PATH_MISSING");
-  run(process.execPath, [process.env.npm_execpath, "run", name], { timeout: 900_000 });
-  return { command: `npm run ${name}`, passed: true };
+export async function runIntegrationPackagePrerequisites({ root: workspace = root, environment = process.env,
+  cache, execute = executeQualificationCommand } = {}) {
+  if (!environment.npm_execpath) throw new Error("PHASE7_INTEGRATION_NPM_EXEC_PATH_MISSING");
+  const prerequisites = cache ?? createQualificationPrerequisiteCache({ root: workspace,
+    sourceRevision: git(["rev-parse", "HEAD"]), sourceTreeSha256: initialSource,
+    runtime: currentRuntimeIdentity(environment), environment });
+  const checks = [];
+  for (const name of ["lint", "contract:verify", "typecheck", "test:arch", "route:inventory", "runtime:architecture", "runtime:boundary", "build"]) {
+    const result = await executeQualificationPackagePrerequisite({ script: name, root: workspace, cache: prerequisites, environment,
+      execute, timeoutMs: 900_000, sanitizeOutput: (output) => sanitizePhase7Output(output, { workspace, environment }) });
+    if (result.status !== 0 || result.errorCode || result.timedOut || result.skipped) {
+      const code = result.timedOut ? "ETIMEDOUT" : result.errorCode ?? (result.skipped ? "QUALIFICATION_COMMAND_INCOMPLETE" : "PHASE7_INTEGRATION_PACKAGE_CHECK_FAILED");
+      const detail = sanitizePhase7Output(result.output, { workspace, environment }).replace(/\r?\n/gu, " | ").slice(-1_000) || "unavailable";
+      throw Object.assign(new Error(`PHASE7_INTEGRATION_PACKAGE_CHECK_FAILED:${name}:${code}:${detail}`), { code, check: name, detail });
+    }
+    checks.push({ command: `npm run ${name}`, passed: true, reused: result.reused,
+      ...(result.reuseProof ? { reuseProof: result.reuseProof } : {}),
+      ...(result.constituents ? { constituents: result.constituents } : {}) });
+  }
+  return checks;
 }
 function runUnitCheck() {
   run(process.execPath, ["--test", "tests/tooling/phase7-integration-208.test.mjs"], { timeout: 120_000 });
@@ -389,7 +409,7 @@ async function main() {
     const scoped=await verifyScopedRoles(cleanUrl,port);
     const plans=await seedAndInspectPlans(cleanUrl);
     const priorEvidence=verifyEvidenceInputs();
-    const checks=[runUnitCheck(),...(["lint","contract:verify","typecheck","test:arch","route:inventory","runtime:architecture","runtime:boundary","build"].map(runPackageCheck))];
+    const checks=[runUnitCheck(),...await runIntegrationPackagePrerequisites()];
     const sourceTreeSha256=workingTreeSourceSha256();
     if(sourceTreeSha256!==initialSource) throw new Error("PHASE7_INTEGRATION_SOURCE_CHANGED_DURING_RUN");
     result={ticket:208,runId,sourceRevision:git(["rev-parse","HEAD"]),sourceTreeSha256,startedAt,completedAt:new Date().toISOString(),postgresVersion,scope:isolationScope,

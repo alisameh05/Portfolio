@@ -13,7 +13,7 @@ const ROOT = fileURLToPath(new URL("../", import.meta.url));
 // primitive executions with earlier phase checks instead of caching an opaque
 // compound command that would run drift/compatibility a second time.
 export async function verifyQualificationContracts({ root = ROOT, cache, environment = process.env,
-  execute = executeQualificationCommand, log = (value) => process.stdout.write(value) } = {}) {
+  execute = executeQualificationCommand, sanitizeOutput = (value) => value, log = (value) => process.stdout.write(value) } = {}) {
   const npm = environment.npm_execpath
     ? { entry: process.execPath, args: [environment.npm_execpath, "run", "contract:generate"] }
     : { entry: process.platform === "win32" ? "npm.cmd" : "npm", args: ["run", "contract:generate"], shell: process.platform === "win32" };
@@ -35,7 +35,7 @@ export async function verifyQualificationContracts({ root = ROOT, cache, environ
         for (const [name, value] of Object.entries(environment)) {
           if (/(?:TOKEN|SECRET|PASSWORD|PRIVATE_KEY|SERVICE_ROLE_KEY)/iu.test(name) && value.length >= 6) safe = safe.replaceAll(value, "[redacted]");
         }
-        return safe;
+        return sanitizeOutput(safe);
       },
     });
     log(`${result.output}\n[qualification prerequisite ${script}: ${result.reused ? "reused" : "executed"}]\n`);

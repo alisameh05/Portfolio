@@ -85,9 +85,17 @@ function runtimeIdentity(runtime) {
   return { node: String(runtime.node ?? "").replace(/^v/u, ""), npm: String(runtime.npm ?? "").replace(/^npm\//u, ""), platform: runtime.platform, architecture: runtime.architecture };
 }
 
-function normalizedEnvironment(environment) {
+function normalizedEnvironment(environment, platform) {
   const ignored = /^(?:SHIPWITHALI_PHASE|PHASE[34567]_GATE_RUN_ID|PHASE8_QUALIFICATION_CONTEXT|PHASE8_ACTIVE_RUN_ID|PHASE8_DEFINITION_HASH|npm_lifecycle_event|npm_lifecycle_script|npm_lifecycle_path|npm_package_json|npm_command|npm_execpath)$/u;
-  return Object.fromEntries(Object.entries(environment ?? {}).filter(([key]) => !ignored.test(key)).sort(([a], [b]) => a.localeCompare(b)));
+  return Object.fromEntries(Object.entries(environment ?? {}).filter(([key]) => !ignored.test(key))
+    .map(([key, value]) => {
+      // npm prepends its bin directories on every nesting level. Exact duplicate
+      // entries do not change executable search order; every distinct entry does.
+      const isPath = key === "PATH" || (platform === "win32" && key.toUpperCase() === "PATH");
+      if (!isPath || typeof value !== "string") return [key, value];
+      const delimiter = platform === "win32" ? ";" : ":";
+      return [key, [...new Set(value.split(delimiter))].join(delimiter)];
+    }).sort(([a], [b]) => a.localeCompare(b)));
 }
 
 function sidecarPath(root, runId) {
@@ -161,7 +169,7 @@ export function createQualificationPrerequisiteCache({ root, sourceRevision, sou
       installStampSha256: fileHash(join(root, "node_modules", ".shipwithali-validation.json")),
     };
     const definition = { id: canonical?.id ?? null, args: canonical?.semanticArgs ?? normalizedArgs,
-      environmentSha256: digest(JSON.stringify(normalizedEnvironment(commandEnvironment))), toolIdentity,
+      environmentSha256: digest(JSON.stringify(normalizedEnvironment(commandEnvironment, expectedRuntime.platform))), toolIdentity,
       runtime: expectedRuntime, platformScope: `${expectedRuntime.platform}-${expectedRuntime.architecture}` };
     const definitionSha256 = digest(JSON.stringify(definition));
     const cachePath = context ? join(sidecarPath(root, activeRunId), `${definitionSha256}.json`) : null;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,6 +21,17 @@ test("native PostgreSQL admission requires supported transaction timeout and cat
     const trace = join(scratch, "native-calls.jsonl"), preload = join(scratch, "process-boundary.cjs");
     writeFileSync(preload, `const cp = require('node:child_process');
 const original = cp.spawnSync;
+const originalExecFile = cp.execFileSync;
+// Map only the integration runner's release-history reads to the owned fixture commit.
+cp.execFileSync = (command, args, options) => {
+  const release = '978287ed7863aae3f5390596c0e91229bd546621';
+  if (command === 'git' && args.join(' ') === 'ls-tree -r --name-only ' + release + ' supabase/migrations') {
+    args = [...args]; args[3] = process.env.NATIVE_ADMISSION_PREDECESSOR;
+  } else if (command === 'git' && args.length === 2 && args[0] === 'show' && args[1].startsWith(release + ':supabase/migrations/')) {
+    args = ['show', process.env.NATIVE_ADMISSION_PREDECESSOR + args[1].slice(release.length)];
+  }
+  return originalExecFile(command, args, options);
+};
 cp.spawnSync = (command, args, options) => {
   const name = require('node:path').basename(command).replace(/\\.exe$/, '');
   if (['postgres', 'initdb', 'pg_ctl'].includes(name)) {
@@ -32,11 +43,29 @@ cp.spawnSync = (command, args, options) => {
 };
 require('node:module').syncBuiltinESMExports();
 `);
-    const gitDirectory = execFileSync("git", ["rev-parse", "--absolute-git-dir"], { cwd: root, encoding: "utf8" }).trim();
+    // Deliberately own only fixture history: a shallow caller need not have the release commit.
+    const gitDirectory = join(scratch, ".git");
+    const fixtureConfig = join(scratch, "gitconfig");
+    writeFileSync(fixtureConfig, "");
+    const fixtureEnv = { ...process.env, GIT_DIR: gitDirectory, GIT_WORK_TREE: scratch, GIT_ALTERNATE_OBJECT_DIRECTORIES: "",
+      GIT_CONFIG_GLOBAL: fixtureConfig, GIT_CONFIG_NOSYSTEM: "1" };
+    const fixtureGit = (args) => execFileSync("git", args, { cwd: scratch, env: fixtureEnv, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    fixtureGit(["init", "--quiet"]);
+    const predecessorFiles = readdirSync(join(scratch, "supabase/migrations"))
+      .filter((name) => name < "20261014194925_measurement_consent.sql").map((name) => `supabase/migrations/${name}`);
+    fixtureGit(["-c", "core.autocrlf=false", "add", "--", ...predecessorFiles]);
+    fixtureGit(["-c", "user.name=Native admission fixture", "-c", "user.email=fixture@example.invalid",
+      "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "test: create owned predecessor fixture"]);
+    const predecessor = fixtureGit(["rev-parse", "HEAD"]);
+    writeFileSync(join(gitDirectory, "shallow"), `${predecessor}\n`);
+    assert.equal(fixtureGit(["rev-parse", "--is-shallow-repository"]), "true");
+    assert.notEqual(spawnSync("git", ["cat-file", "-e", "978287ed7863aae3f5390596c0e91229bd546621"],
+      { cwd: scratch, env: fixtureEnv, stdio: "ignore" }).status, 0);
     for (const script of ["phase7-events.mjs", "phase7-goal-conversions.mjs", "phase7-integration-208.mjs"]) {
       writeFileSync(trace, "");
       const child = spawnSync(process.execPath, ["--require", preload, join(root, "scripts", script)], {
-        cwd: scratch, env: { ...process.env, GIT_DIR: gitDirectory, PHASE7_POSTGRES_BIN: join(scratch, "bin"), NATIVE_ADMISSION_TRACE: trace },
+        cwd: scratch, env: { ...fixtureEnv, NATIVE_ADMISSION_PREDECESSOR: predecessor,
+          PHASE7_POSTGRES_BIN: join(scratch, "bin"), NATIVE_ADMISSION_TRACE: trace },
         encoding: "utf8", timeout: 30_000, windowsHide: true,
       });
       assert.equal(child.status, 1, `${script}: ${child.error?.code ?? child.stderr}`);

@@ -67,6 +67,11 @@ test("compound contract verification reuses the actual earlier drift and compati
 });
 
 test("qualification command rejects Vitest skips and cancelled or todo TAP outcomes", async () => {
+  const timeout = await executeQualificationCommand({ entry: process.execPath,
+    args: ["--input-type=module", "-e", "setTimeout(() => {}, 500)"], timeoutMs: 20 });
+  assert.equal(timeout.status, 1);
+  assert.equal(timeout.timedOut, true);
+  assert.equal(timeout.errorCode, "ETIMEDOUT");
   for (const output of ["Tests 2 passed | 1 skipped (3)", "# cancelled 1", "# todo 1", "# fail 1"]) {
     const result = await executeQualificationCommand({ entry: process.execPath,
       args: ["--input-type=module", "-e", `process.stdout.write(${JSON.stringify(output)})`] });
