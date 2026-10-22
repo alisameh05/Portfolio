@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { join } from "node:path";
 
 export const WINDOWS_PHASE2_NONREQUIRED_SKIP = "tests/runtime/media-processing-tools.test.ts > bounded PDF output reads > stops helper processes before rejecting a timed out or oversized worker";
 
@@ -36,25 +37,65 @@ export function normalizeQualificationCommandResult({ status, errorCode = null, 
 export function executeQualificationCommand({ entry, args = [], cwd, environment = process.env, shell = false,
   heartbeat, heartbeatMs = 10_000, timeoutMs }) {
   return new Promise((resolve) => {
+    const windows = process.platform === "win32";
+    const bounded = Number.isFinite(timeoutMs) && timeoutMs > 0;
     const child = spawn(entry, args, { cwd, env: environment, shell, windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"] });
+      detached: bounded && !windows, stdio: ["ignore", "pipe", "pipe"] });
     const chunks = [];
-    child.stdout.on("data", (chunk) => chunks.push(chunk));
-    child.stderr.on("data", (chunk) => chunks.push(chunk));
-    let spawnError;
-    let timedOut = false;
+    let spawnError, errorCode = null, timedOut = false, stopping = false, settled = false, closed = false;
+    let exitCode = null, exitSignal = null, escalation, completion, killer, killerDeadline;
+    const finish = (cleanupFailed = false) => {
+      if (settled) return;
+      settled = true;
+      for (const timer of [heartbeatTimer, timeout, escalation, completion, killerDeadline]) if (timer) clearTimeout(timer);
+      // An escaped inherited writer must never hold validation/DB cleanup hostage.
+      child.stdout.destroy(); child.stderr.destroy(); child.unref();
+      if (killer) killer.kill();
+      if (cleanupFailed) chunks.push(Buffer.from("\nQUALIFICATION_COMMAND_PROCESS_CLEANUP_FAILED\n"));
+      resolve({ ...normalizeQualificationCommandResult({ status: exitCode,
+        errorCode: errorCode ?? spawnError?.code ?? null, timedOut, signal: exitSignal,
+        output: Buffer.concat(chunks).toString("utf8") }), ...(cleanupFailed ? { cleanupFailed: true } : {}) });
+    };
+    const signalGroup = (signal) => {
+      if (!bounded || child.pid === undefined) return false;
+      // Only this live invocation's newly created process group is addressed.
+      try { process.kill(-child.pid, signal); return true; }
+      catch (error) { return error.code === "ESRCH"; }
+    };
+    const stop = () => {
+      if (stopping) return;
+      stopping = true;
+      completion = setTimeout(() => finish(!closed), 500);
+      if (windows) {
+        // Never look up an exited/reused parent PID. An active ChildProcess is
+        // owned by this invocation; taskkill terminates its currently live tree.
+        if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
+        killer = spawn(join(process.env.SystemRoot ?? "C:/Windows", "System32", "taskkill.exe"),
+          ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore", windowsHide: true });
+        const fallback = () => { child.kill(); if (closed) finish(); };
+        killerDeadline = setTimeout(() => { killer.kill(); fallback(); }, 300);
+        killer.once("error", fallback);
+        killer.once("close", () => { clearTimeout(killerDeadline); fallback(); });
+      } else {
+        signalGroup("SIGTERM");
+        escalation = setTimeout(() => { signalGroup("SIGKILL"); if (closed) finish(); }, 100);
+      }
+    };
+    const capture = (chunk) => { if (!settled) chunks.push(chunk); };
+    child.stdout.on("data", capture);
+    child.stderr.on("data", capture);
     child.on("error", (error) => { spawnError = error; });
-    const timer = heartbeat ? setInterval(heartbeat, heartbeatMs) : null;
-    const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? setTimeout(() => {
+    const heartbeatTimer = heartbeat ? setInterval(heartbeat, heartbeatMs) : null;
+    const timeout = bounded ? setTimeout(() => {
       timedOut = true;
-      child.kill();
+      errorCode = "ETIMEDOUT";
+      stop();
     }, timeoutMs) : null;
     child.on("close", (code, signal) => {
-      if (timer !== null) clearInterval(timer);
-      if (timeout !== null) clearTimeout(timeout);
-      const output = Buffer.concat(chunks).toString("utf8");
-      resolve(normalizeQualificationCommandResult({ status: code, errorCode: timedOut ? "ETIMEDOUT" : spawnError?.code ?? null,
-        timedOut, signal, output }));
+      closed = true; exitCode = code; exitSignal = signal;
+      if (!stopping) finish();
+      else if (!windows) { signalGroup("SIGKILL"); finish(); }
+      else if (!killer || killer.exitCode !== null) finish();
     });
   });
 }

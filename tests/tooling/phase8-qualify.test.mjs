@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { requireQualificationDocker, qualifyPrerequisites } from "../../scripts/phase8-qualify.mjs";
-import { evidenceFileSha256 } from "../../scripts/qualification-context.mjs";
+import { contextIdentityErrors, evidenceFileSha256 } from "../../scripts/qualification-context.mjs";
 import { collectQualificationArtifacts } from "../../scripts/prepare-qualification-artifact.mjs";
 import { QUALIFICATION_NODES, currentRuntimeIdentity, qualificationDefinitionSha256, recordQualificationNode,
   requiredQualificationCheckNames, QUALIFICATION_CONTEXT_ALGORITHM, reportArtifactPaths }
@@ -86,6 +86,7 @@ test("Docker preflight distinguishes executable, access, OS, and Compose failure
   ]) assert.throws(() => requireQualificationDocker(() => result), new RegExp(code));
   assert.throws(() => requireQualificationDocker((_, args) => args[0] === "info" ? linux : { status: 1 }), /PHASE8_DOCKER_COMPOSE_REQUIRED/u);
   const priorPostgresBin = process.env.PHASE7_POSTGRES_BIN;
+  const priorRegistry = process.env.SUPABASE_INTERNAL_IMAGE_REGISTRY, priorSlim = process.env.SUPABASE_USE_SLIM_IMAGES;
   const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
   const nativeBin = tempRoot("phase8 postgres bin-");
   try {
@@ -96,13 +97,18 @@ test("Docker preflight distinguishes executable, access, OS, and Compose failure
       writeFileSync(nativeExecutable, "fixture: intercepted by the probe\n");
       const nativeProbes = [];
       let nativeVersion = "18.3";
+      let imageRows = "clamav/clamav:<none>|sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4\njbarlow83/ocrmypdf-alpine:<none>|sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c\n";
+      const imageProofs = new Map(), inspections = [];
       const probe = (command, args) => {
         if (args[0] === "info") return linux;
         if (args[0] === "compose") return { status: 0, stdout: "2.40.3\n" };
         if (args[0] === "image" && args[1] === "ls") return {
-          status: 0, stdout: "clamav/clamav:<none>|sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4\njbarlow83/ocrmypdf-alpine:<none>|sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c\n",
+          status: 0, stdout: imageRows,
         };
-        if (args[0] === "image" && args[1] === "inspect") return { status: 1 };
+        if (args[0] === "image" && args[1] === "inspect") {
+          inspections.push(...args.slice(4));
+          return { status: 0, stdout: args.slice(4).map((reference) => imageProofs.get(reference) ?? "unverified|[]").join("\n") };
+        }
         if (args[0] === "--version") {
           nativeProbes.push({ command, args });
           assert.equal(command, nativeExecutable);
@@ -125,11 +131,77 @@ test("Docker preflight distinguishes executable, access, OS, and Compose failure
       assert.equal(requireQualificationDocker(probe).nativePostgres.version, "17.9");
       nativeVersion = "16.15";
       assert.throws(() => requireQualificationDocker(probe), /NATIVE_POSTGRES_VERSION_UNSUPPORTED/u);
+      nativeVersion = "17.9";
+      const aliases = ["ghcr.io/supabase/postgres:17.6.1.167", "ghcr.io/supabase/gotrue:v2.196.0"];
+      for (const [index, reference] of aliases.entries()) {
+        const repository = reference.slice(0, reference.lastIndexOf(":"));
+        const id = `sha256:${String(index + 1).repeat(64)}`;
+        imageProofs.set(reference, `${id}|${JSON.stringify([`${repository}@${id}`])}`);
+      }
+      imageRows = aliases.map((reference) => `${reference}|short-id|observed-digest`).join("\n");
+      const fallback = requireQualificationDocker(probe);
+      assert.deepEqual(fallback.unverifiedImages, [], "pinned CLI GHCR fallback images must retain immutable service proof");
+      assert.deepEqual(inspections, [...aliases].sort());
+      assert.equal(fallback.validationImages.length, 2);
+      const observe = (references) => {
+        imageProofs.clear();
+        for (const [index, reference] of references.entries()) {
+          const repository = reference.slice(0, reference.lastIndexOf(":")), id = `sha256:${index + 1}`.padEnd(71, String(index + 1));
+          imageProofs.set(reference, `${id}|${JSON.stringify([`${repository}@${id}`])}`);
+        }
+        imageRows = references.map((reference) => `${reference}|short-id|observed-digest`).join("\n");
+        return requireQualificationDocker(probe);
+      };
+      for (const references of [
+        ["public.ecr.aws/supabase/postgres:17.6.1.167", "public.ecr.aws/supabase/gotrue:v2.196.0", "public.ecr.aws/supabase/storage-api:v1.72.1", "public.ecr.aws/supabase/postgrest:v16.2", "public.ecr.aws/supabase/kong:2.8.1"],
+        [...aliases, "ghcr.io/supabase/storage-api:v1.72.1", "ghcr.io/supabase/postgrest:v16.2", "ghcr.io/supabase/kong:2.8.1"],
+        ["supabase/postgres:17.6.1.167", "supabase/gotrue:v2.196.0", "supabase/storage-api:v1.72.1", "postgrest/postgrest:v16.2", "library/kong:2.8.1"],
+        ["docker.io/supabase/postgres:17.6.1.167", "docker.io/supabase/gotrue:v2.196.0", "docker.io/supabase/storage-api:v1.72.1", "docker.io/postgrest/postgrest:v16.2", "docker.io/library/kong:2.8.1"],
+      ]) {
+        const supported = observe(references);
+        assert.deepEqual(supported.unverifiedImages, []);
+        assert.deepEqual(supported.validationImages.map((image) => image.reference), [...references].sort());
+        assert.ok(supported.validationImages.every((image) => /^sha256:[a-f0-9]{64}$/u.test(image.imageId) && image.digest));
+      }
+      process.env.SUPABASE_INTERNAL_IMAGE_REGISTRY = "mirror.example";
+      process.env.SUPABASE_USE_SLIM_IMAGES = "true";
+      // These ambient overrides are stripped by the actual Auth/settings gates;
+      // their unrelated inventory must not certify the default service scope.
+      for (const references of [
+        ["ghcr.io/foreign/postgres:17.6.1.167", "ghcr.io/foreign/gotrue:v2.196.0"],
+        ["mirror.example/supabase/postgres:17.6.1.167", "mirror.example/supabase/gotrue:v2.196.0"],
+        ["ghcr.io/supabase/cli/postgres:17.6.1.167", "ghcr.io/supabase/cli/auth:v2.196.0"],
+        ["postgres:17.6.1.167", "gotrue:v2.196.0"], [...aliases.map((reference) => reference.replace(/:[^:]+$/u, ":<none>"))],
+      ]) {
+        const count = inspections.length, unsupported = observe(references);
+        assert.deepEqual(unsupported.unverifiedImages, ["postgres", "gotrue"]);
+        assert.deepEqual(unsupported.validationImages, []);
+        assert.equal(inspections.length, count, "unknown namespaces must never be inspected as approved services");
+      }
+      observe(aliases);
+      const postgres = aliases[0], id = `sha256:${"1".repeat(64)}`;
+      for (const proof of ["short-id|[]", "|[]", `${id}|[]`, `${id}|not-json`,
+        `${id}|${JSON.stringify([`foreign/postgres@${id}`])}`, `${id}|${JSON.stringify(["ghcr.io/supabase/postgres@sha256:bad"])}`]) {
+        imageProofs.set(postgres, proof);
+        assert.deepEqual(requireQualificationDocker(probe).unverifiedImages, ["postgres"]);
+      }
+      const original = observe(aliases), changedId = `sha256:${"6".repeat(64)}`;
+      imageProofs.set(postgres, `${changedId}|${JSON.stringify([`ghcr.io/supabase/postgres@${changedId}`])}`);
+      const changed = requireQualificationDocker(probe), definitionHash = "c".repeat(64);
+      const context = { algorithm: QUALIFICATION_CONTEXT_ALGORITHM, runId: "12345678-1234-4234-8234-123456789abc", definitionHash,
+        identity: { revision: stable.revision, sourceTreeSha256: stable.tree, runtime: stable.runtime, services: original } };
+      const identity = { revision: stable.revision, sourceTreeSha256: stable.tree, runtime: stable.runtime, definitionHash };
+      assert.deepEqual(contextIdentityErrors(context, { ...identity, services: original }), []);
+      assert.ok(contextIdentityErrors(context, { ...identity, services: changed }).includes("QUALIFICATION_CONTEXT_SERVICE_IDENTITY_CHANGED"));
+      assert.ok(contextIdentityErrors(context, { ...identity, services: observe(["supabase/postgres:17.6.1.167", "supabase/gotrue:v2.196.0"]) })
+        .includes("QUALIFICATION_CONTEXT_SERVICE_IDENTITY_CHANGED"));
     }
   } finally {
     Object.defineProperty(process, "platform", platformDescriptor);
     if (priorPostgresBin === undefined) delete process.env.PHASE7_POSTGRES_BIN;
     else process.env.PHASE7_POSTGRES_BIN = priorPostgresBin;
+    if (priorRegistry === undefined) delete process.env.SUPABASE_INTERNAL_IMAGE_REGISTRY; else process.env.SUPABASE_INTERNAL_IMAGE_REGISTRY = priorRegistry;
+    if (priorSlim === undefined) delete process.env.SUPABASE_USE_SLIM_IMAGES; else process.env.SUPABASE_USE_SLIM_IMAGES = priorSlim;
     rmSync(nativeBin, { recursive: true, force: true });
   }
 });

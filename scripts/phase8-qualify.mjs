@@ -29,6 +29,22 @@ import {
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export { QUALIFICATION_NODES as QUALIFICATION_STEPS };
 
+// Supabase CLI 2.117.0's pinned registry resolver tries ECR, GHCR, then the
+// original Docker Hub repository (21db8559, legacy-docker-registry.ts).
+const SERVICE_IMAGE_REPOSITORIES = new Map(Object.entries({
+  postgres: ["supabase/postgres"], gotrue: ["supabase/gotrue"], "storage-api": ["supabase/storage-api"],
+  postgrest: ["postgrest/postgrest"], kong: ["library/kong", "kong"],
+}).flatMap(([service, originals]) => [
+  [`public.ecr.aws/supabase/${service}`, service], [`ghcr.io/supabase/${service}`, service],
+  ...originals.flatMap((repository) => [[repository, service], [`docker.io/${repository}`, service]]),
+]));
+
+function serviceImageRole(reference) {
+  const separator = reference.lastIndexOf(":");
+  if (separator < 0 || !/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/u.test(reference.slice(separator + 1))) return null;
+  return SERVICE_IMAGE_REPOSITORIES.get(reference.slice(0, separator)) ?? null;
+}
+
 /** Check the real Linux engine before any gate can overwrite acceptance evidence. */
 export function requireQualificationDocker(probe = spawnSync) {
   const options = { cwd: ROOT, encoding: "utf8", timeout: 15_000, maxBuffer: 16 * 1024, windowsHide: true };
@@ -69,12 +85,11 @@ export function requireQualificationDocker(probe = spawnSync) {
   if (imageInventory.error || imageInventory.status !== 0) {
     throw new Error("PHASE8_DOCKER_IMAGE_IDENTITY_UNVERIFIED: Docker must report locally available validation image identities before qualification.");
   }
-  const references = String(imageInventory.stdout ?? "").split(/\r?\n/u).flatMap((line) => {
+  const references = [...new Set(String(imageInventory.stdout ?? "").split(/\r?\n/u).flatMap((line) => {
     const [reference, imageId] = line.trim().split("|");
     if (!reference || !imageId || imageId === "<none>:<none>") return [];
-    const expected = /^(?:public\.ecr\.aws\/supabase\/(?:postgres|gotrue|storage-api|postgrest|kong):)/u.test(reference);
-    return expected ? [reference] : [];
-  }).sort();
+    return serviceImageRole(reference) ? [reference] : [];
+  }))].sort();
   const inspected = references.length === 0 ? { status: 0, stdout: "" } :
     probe("docker", ["image", "inspect", "--format", "{{.Id}}|{{json .RepoDigests}}", ...references], options);
   if (inspected.error || inspected.status !== 0) {
@@ -86,12 +101,15 @@ export function requireQualificationDocker(probe = spawnSync) {
     if (!/^sha256:[a-f0-9]{64}$/iu.test(imageId ?? "")) return [];
     let digests = [];
     try { digests = JSON.parse(digestsJson); } catch { /* no digest is recorded for locally built images */ }
-    const digest = Array.isArray(digests) ? digests.find((value) => typeof value === "string" && /^.+@sha256:[a-f0-9]{64}$/iu.test(value)) ?? null : null;
+    const role = serviceImageRole(reference);
+    const digest = Array.isArray(digests) ? digests.find((value) => {
+      if (typeof value !== "string" || !/^.+@sha256:[a-f0-9]{64}$/iu.test(value)) return false;
+      return SERVICE_IMAGE_REPOSITORIES.get(value.slice(0, value.lastIndexOf("@"))) === role;
+    }) ?? null : null;
+    if (digest === null) return [];
     return [{ reference, imageId, digest }];
   });
-  const availablePrefixes = ["postgres", "gotrue"].map((service) =>
-    `public.ecr.aws/supabase/${service}:`).filter((prefix) => !installed.some((image) => image.reference.startsWith(prefix)));
-  const unverifiedImages = availablePrefixes;
+  const unverifiedImages = ["postgres", "gotrue"].filter((role) => !installed.some((image) => serviceImageRole(image.reference) === role));
   const nativePostgresBin = process.env.PHASE7_POSTGRES_BIN?.trim();
   let nativePostgresPath = nativePostgresBin ? join(nativePostgresBin, process.platform === "win32" ? "postgres.exe" : "postgres") : null;
   if (nativePostgresPath === null && process.platform === "win32") {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createHash } from "node:crypto";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -47,7 +48,10 @@ require('node:module').syncBuiltinESMExports();
     const gitDirectory = join(scratch, ".git");
     const fixtureConfig = join(scratch, "gitconfig");
     writeFileSync(fixtureConfig, "");
-    const fixtureEnv = { ...process.env, GIT_DIR: gitDirectory, GIT_WORK_TREE: scratch, GIT_ALTERNATE_OBJECT_DIRECTORIES: "",
+    // Git location/configuration overrides from a validation container must never
+    // redirect fixture writes into the caller's mounted repository metadata.
+    const inherited = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_/iu.test(name)));
+    const fixtureEnv = { ...inherited, GIT_DIR: gitDirectory, GIT_WORK_TREE: scratch, GIT_ALTERNATE_OBJECT_DIRECTORIES: "",
       GIT_CONFIG_GLOBAL: fixtureConfig, GIT_CONFIG_NOSYSTEM: "1" };
     const fixtureGit = (args) => execFileSync("git", args, { cwd: scratch, env: fixtureEnv, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
     fixtureGit(["init", "--quiet"]);
@@ -73,6 +77,42 @@ require('node:module').syncBuiltinESMExports();
       assert.equal(readFileSync(trace, "utf8"), "postgres\n", `${script} must reject PostgreSQL 16 before cluster creation`);
     }
   } finally { rmSync(scratch, { recursive: true, force: true }); }
+});
+
+test("native PostgreSQL fixture isolates inherited Git paths and preserves caller metadata", () => {
+  const caller = mkdtempSync(join(tmpdir(), "p7-git-caller-"));
+  const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_/iu.test(name)));
+  delete environment.NODE_TEST_CONTEXT;
+  const snapshot = () => {
+    const files = [];
+    const visit = (directory, prefix = "") => {
+      for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+        const path = join(directory, entry.name), relative = `${prefix}${entry.name}`;
+        if (entry.isDirectory()) visit(path, `${relative}/`);
+        else files.push([relative, createHash("sha256").update(readFileSync(path)).digest("hex")]);
+      }
+    };
+    visit(caller);
+    return files;
+  };
+  try {
+    execFileSync("git", ["init", "--bare", "--quiet", caller], { env: environment, stdio: "pipe" });
+    const index = join(caller, "caller-index"), config = join(caller, "caller-config");
+    writeFileSync(index, "caller index sentinel");
+    writeFileSync(config, "# caller configuration sentinel\n");
+    for (const inherited of [{ GIT_COMMON_DIR: caller }, {
+      GIT_COMMON_DIR: caller, GIT_OBJECT_DIRECTORY: join(caller, "objects"), GIT_INDEX_FILE: index,
+      GIT_SHALLOW_FILE: join(caller, "caller-shallow"), GIT_GRAFT_FILE: join(caller, "info/grafts"),
+      GIT_CONFIG_GLOBAL: config, GIT_CONFIG_SYSTEM: config, GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: join(caller, "hooks"), GIT_TRACE: join(caller, "caller-trace"),
+    }]) {
+      const before = snapshot();
+      const child = spawnSync(process.execPath, ["--test", "--test-name-pattern=^native PostgreSQL admission requires",
+        fileURLToPath(import.meta.url)], { env: { ...environment, ...inherited }, encoding: "utf8", timeout: 30_000, windowsHide: true });
+      assert.deepEqual(snapshot(), before, "fixture Git commands must not alter caller refs, objects, index, configuration or logs");
+      assert.equal(child.status, 0, `${child.stdout}\n${child.stderr}`);
+    }
+  } finally { rmSync(caller, { recursive: true, force: true }); }
 });
 
 test("CI native PostgreSQL setup uses signed PGDG packages and exports only a verified selected runtime", () => {
