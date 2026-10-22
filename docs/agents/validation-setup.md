@@ -198,10 +198,22 @@ The validation preflight records the observed Docker engine, Compose, pinned
 Supabase CLI, selected native PostgreSQL executable, and locally available
 validation image IDs/digests. Resume requires those identities to match. If a
 required image is not already present, the preflight marks the service scope
-unverified and prior nodes cannot be reused; the fresh gate may pull its pinned
-images as part of normal service startup. The operations catalog manifest has
+unverified; service-free predecessor nodes can still be reused, while nodes
+requiring that service rerun and may pull their pinned images during startup.
+The operations catalog manifest has
 explicit PostgreSQL 17 and 18 variants; a snapshot from an unsupported or
 unmatched major fails closed.
+
+Native Phase 7 validation also requires PostgreSQL 17 or 18 because Media
+correctness transactions use `transaction_timeout`. Select the installed binary
+directory with `PHASE7_POSTGRES_BIN`; qualification rejects unsupported majors
+before running the DAG. The Ubuntu 24.04 Runtime and qualification jobs run
+`node scripts/setup-ci-native-postgres.mjs`, which installs PostgreSQL 17 using
+the [official signed PGDG repository](https://www.postgresql.org/download/linux/ubuntu/)
+and exports that directory for subsequent steps. This setup script only runs
+inside the hosted GitHub Ubuntu job. The actual installed minor version remains
+part of the service identity and resume proof. Native clusters use short owned
+OS temporary directories and reject socket filenames longer than 107 UTF-8 bytes.
 
 Phase 6 runs its media tools in the nested daemon started by its validation
 compose project. The host cannot inspect that daemon's image IDs, so a resume

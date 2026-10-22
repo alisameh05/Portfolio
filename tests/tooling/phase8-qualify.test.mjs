@@ -95,7 +95,8 @@ test("Docker preflight distinguishes executable, access, OS, and Compose failure
       const nativeExecutable = join(nativeBin, platform === "win32" ? "postgres.exe" : "postgres");
       writeFileSync(nativeExecutable, "fixture: intercepted by the probe\n");
       const nativeProbes = [];
-      const observed = requireQualificationDocker((command, args) => {
+      let nativeVersion = "18.3";
+      const probe = (command, args) => {
         if (args[0] === "info") return linux;
         if (args[0] === "compose") return { status: 0, stdout: "2.40.3\n" };
         if (args[0] === "image" && args[1] === "ls") return {
@@ -105,11 +106,12 @@ test("Docker preflight distinguishes executable, access, OS, and Compose failure
         if (args[0] === "--version") {
           nativeProbes.push({ command, args });
           assert.equal(command, nativeExecutable);
-          return { status: 0, stdout: "postgres (PostgreSQL) 18.3\n" };
+          return { status: 0, stdout: `postgres (PostgreSQL) ${nativeVersion}\n` };
         }
         assert.equal(command, process.execPath, "the explicit bin directory must bypass discovery");
         return { status: 0, stdout: "2.117.0\n" };
-      });
+      };
+      const observed = requireQualificationDocker(probe);
       assert.deepEqual(nativeProbes, [{ command: nativeExecutable, args: ["--version"] }]);
       assert.deepEqual({ ...observed, unverifiedImages: observed.unverifiedImages.length },
         { docker: { operatingSystem: "linux", serverVersion: "27.5.1", storageDriver: "overlay2" }, composeVersion: "2.40.3",
@@ -119,6 +121,10 @@ test("Docker preflight distinguishes executable, access, OS, and Compose failure
               imageProcessor: "dpokidov/imagemagick:7.1.1-47", videoProcessor: "jrottenberg/ffmpeg:7.1-ubuntu2404",
               pdfProcessor: "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c" } },
           unverifiedImages: 2 });
+      nativeVersion = "17.9";
+      assert.equal(requireQualificationDocker(probe).nativePostgres.version, "17.9");
+      nativeVersion = "16.15";
+      assert.throws(() => requireQualificationDocker(probe), /NATIVE_POSTGRES_VERSION_UNSUPPORTED/u);
     }
   } finally {
     Object.defineProperty(process, "platform", platformDescriptor);

@@ -1,10 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, readdirSync, copyFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync, readdirSync, copyFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { Client } from "pg";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
+import { createNativePostgresWorkspace, nativePostgresStartupFailure, removeNativePostgresWorkspace } from "./native-postgres-workspace.mjs";
+import { requireSupportedNativePostgres } from "./native-postgres-runtime.mjs";
 
 const root = process.cwd(), runId = randomUUID(), source = workingTreeSourceSha256();
 const refreshTypes = process.argv.includes("--refresh-types");
@@ -24,13 +26,16 @@ function run(command, args, env = process.env) {
   const r = spawnSync(command, args, { cwd: root, env, encoding: "utf8", windowsHide: true,
     ...(command === exe("pg_ctl") ? { stdio: "ignore" } : {}), timeout: 180_000 });
   if (r.error || r.status !== 0) {
+    if (command === exe("pg_ctl") || command === exe("initdb")) {
+      throw new Error(`EVENT_COMMAND_FAILED:${args[0]}:${r.status ?? "unavailable"}:${nativePostgresStartupFailure(r, workspace.serverLog)}`);
+    }
     const diagnostic = [r.stderr, r.stdout, r.error?.message].filter(Boolean).join("\n").trim().slice(-1_500).replace(/\r?\n/g, " | ") || "unavailable";
     throw new Error(`EVENT_COMMAND_FAILED:${args[0] ?? command}:${r.status ?? "unavailable"}:${diagnostic}`);
   }
   return r.stdout;
 }
-mkdirSync(join(root, "node_modules", ".cache"), { recursive: true });
-const temp = mkdtempSync(join(root, "node_modules", ".cache", "portfolio-events-196-")), data = join(temp, "data");
+const workspace = createNativePostgresWorkspace("p7-events-");
+const temp = workspace.directory, data = workspace.data;
 mkdirSync("artifacts", { recursive: true }); rmSync(reportPath, { force: true }); rmSync(evidencePath, { force: true });
 const port = await new Promise((ok, fail) => {
   const server = createServer(); server.once("error", fail); server.listen(0, "127.0.0.1", () => {
@@ -42,6 +47,7 @@ let started = false, connected = false, result, cleanup = false, stage = "runtim
 try {
   run(process.execPath, ["scripts/validation-environment.mjs"]);
   const version = run(exe("postgres"), ["--version"]).trim();
+  requireSupportedNativePostgres(version.match(/PostgreSQL\)\s+(\d+\.\d+(?:\.\d+)?)/u)?.[1]);
   stage = "cluster"; run(exe("initdb"), ["-D", data, "--no-locale", "-A", "trust", "-U", "postgres"]); started = true;
   mkdirSync(join(temp, "socket"), { recursive: true });
   run(exe("pg_ctl"), ["-D", data, "-l", join(temp, "server.log"), "-o", `-h 127.0.0.1 -p ${port} -F -k ${join(temp, "socket")}`, "-w", "start"]);
@@ -116,8 +122,8 @@ try {
 } finally {
   if (connected) await client.end();
   try {
-    if (started) run(exe("pg_ctl"), ["-D", data, "-m", "immediate", "-w", "stop"]);
-    rmSync(temp, { recursive: true, force: true }); cleanup = true;
+    if (started && existsSync(join(data, "postmaster.pid"))) run(exe("pg_ctl"), ["-D", data, "-m", "immediate", "-w", "stop"]);
+    removeNativePostgresWorkspace(temp, "p7-events-"); cleanup = true;
   } catch { console.error("EVENT_CLEANUP_FAILED"); process.exitCode = 1; }
   if (result && cleanup) {
     mkdirSync("evidence", { recursive: true });

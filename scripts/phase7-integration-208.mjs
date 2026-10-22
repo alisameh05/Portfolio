@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { Client, Pool } from "pg";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { migrationSha256 } from "./migration-checksum.mjs";
+import { createNativePostgresWorkspace, nativePostgresStartupFailure, removeNativePostgresWorkspace } from "./native-postgres-workspace.mjs";
+import { requireSupportedNativePostgres } from "./native-postgres-runtime.mjs";
 
 const root = process.cwd();
 const runId = randomUUID();
@@ -50,6 +51,9 @@ function run(command, args, options = {}) {
   const result = spawnSync(command, args, { cwd: root, env: options.env ?? process.env, encoding: "utf8", windowsHide: true,
     ...(command === exe("pg_ctl") ? { stdio: "ignore" } : {}), timeout: options.timeout ?? 240_000 });
   if (result.error || result.status !== 0) {
+    if (command === exe("pg_ctl") || command === exe("initdb")) {
+      throw new Error(`PHASE7_INTEGRATION_COMMAND_FAILED:${args[0]}:${result.status ?? "unavailable"}:${nativePostgresStartupFailure(result, options.startupLog)}`);
+    }
     const detail = [result.stderr, result.stdout, result.error?.message].filter(Boolean).join("\n").trim()
       .replace(/postgres(?:ql)?:\/\/\S+/giu, "[database-url]").replace(/\r?\n/gu, " | ").slice(-1_000) || "unavailable";
     throw new Error(`PHASE7_INTEGRATION_COMMAND_FAILED:${args[0] ?? command}:${result.status ?? "unavailable"}:${detail}`);
@@ -342,18 +346,20 @@ async function main() {
   const newNames = current.filter(name => !previous.includes(name));
   if (!newNames.length || newNames.some(name => name < firstPhase7Migration)) throw new Error("PHASE7_INTEGRATION_MIGRATION_DELTA_INVALID");
   const port = await new Promise((ok, fail) => { const server = createServer(); server.once("error", fail); server.listen(0,integrationHost,()=>{const value=server.address().port;server.close(()=>ok(value));}); });
-  const temp = join(root, "node_modules", ".cache", `phase7-integration-208-${runId}`);
-  const data = join(temp, "data"); mkdirSync(temp,{recursive:true}); mkdirSync("artifacts",{recursive:true}); rmSync(reportPath,{force:true});
+  const workspace = createNativePostgresWorkspace("p7-integrated-");
+  const temp = workspace.directory, data = workspace.data;
+  mkdirSync("artifacts",{recursive:true}); rmSync(reportPath,{force:true});
   const isolationScope = classifyIntegrationScope({ host: integrationHost, dataDirectory: data, temporaryDirectory: temp, port });
   const adminUrl = connectString("postgres","postgres",port); const admin = new Client({connectionString:adminUrl});
   let started=false,connected=false,cleanup=false,result;
   try {
     run(process.execPath,["scripts/validation-environment.mjs"]);
     const postgresVersion=run(exe("postgres"),["--version"]).trim();
-    run(exe("initdb"),["-D",data,"--no-locale","-A","trust","-U","postgres"]);
+    requireSupportedNativePostgres(postgresVersion.match(/PostgreSQL\)\s+(\d+\.\d+(?:\.\d+)?)/u)?.[1]);
+    run(exe("initdb"),["-D",data,"--no-locale","-A","trust","-U","postgres"],{startupLog:workspace.serverLog});
     mkdirSync(join(temp, "socket"), { recursive: true });
-    run(exe("pg_ctl"),["-D",data,"-l",join(temp,"server.log"),"-o",`-h 127.0.0.1 -p ${port} -F -k ${join(temp, "socket")}`,"-w","start"]);
     started=true;
+    run(exe("pg_ctl"),["-D",data,"-l",join(temp,"server.log"),"-o",`-h 127.0.0.1 -p ${port} -F -k ${join(temp, "socket")}`,"-w","start"],{startupLog:workspace.serverLog});
     await admin.connect(); connected=true;
     await admin.query("create role anon nologin; create role authenticated nologin; create role service_role nologin; create role shipwithali_migration nologin nosuperuser nobypassrls; grant create on database postgres to shipwithali_migration");
     await admin.query("create role phase7_integration_app login nosuperuser nocreatedb nocreaterole noreplication nobypassrls; create role phase7_integration_worker login nosuperuser nocreatedb nocreaterole noreplication nobypassrls");
@@ -410,9 +416,9 @@ async function main() {
     let connectionClosed=true;
     if(connected) try {await admin.end();} catch {connectionClosed=false;console.error("PHASE7_INTEGRATION_CONNECTION_CLEANUP_FAILED");process.exitCode=1;}
     let serverStopped=!started;
-    if(started) try {run(exe("pg_ctl"),["-D",data,"-m","immediate","-w","stop"]);serverStopped=true;} catch {console.error("PHASE7_INTEGRATION_POSTGRES_CLEANUP_FAILED");process.exitCode=1;}
+    if(started) try {if(existsSync(join(data,"postmaster.pid")))run(exe("pg_ctl"),["-D",data,"-m","immediate","-w","stop"],{startupLog:workspace.serverLog});serverStopped=true;} catch {console.error("PHASE7_INTEGRATION_POSTGRES_CLEANUP_FAILED");process.exitCode=1;}
     let directoryRemoved=false;
-    try {rmSync(temp,{recursive:true,force:true});directoryRemoved=true;} catch {console.error("PHASE7_INTEGRATION_DIRECTORY_CLEANUP_FAILED");process.exitCode=1;}
+    try {removeNativePostgresWorkspace(temp,"p7-integrated-");directoryRemoved=true;} catch {console.error("PHASE7_INTEGRATION_DIRECTORY_CLEANUP_FAILED");process.exitCode=1;}
     cleanup=connectionClosed&&serverStopped&&directoryRemoved;
     if(result&&cleanup){result.cleanup=true;mkdirSync("evidence",{recursive:true});writeFileSync(evidencePath,`${JSON.stringify(result,null,2)}\n`);console.log(JSON.stringify({required:result.required,runId,sourceTreeSha256:result.sourceTreeSha256,evidence:evidencePath,cleanup}));}
   }

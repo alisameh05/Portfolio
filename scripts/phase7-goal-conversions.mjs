@@ -1,10 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:net";
-import { join, resolve, sep } from "node:path";
+import { join, resolve } from "node:path";
 import { Client } from "pg";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
+import { createNativePostgresWorkspace, nativePostgresStartupFailure, removeNativePostgresWorkspace } from "./native-postgres-workspace.mjs";
+import { requireSupportedNativePostgres } from "./native-postgres-runtime.mjs";
 
 const root = process.cwd();
 const runId = randomUUID();
@@ -21,6 +23,9 @@ function run(command, args, env = process.env) {
   const result = spawnSync(command, args, { cwd: root, env, encoding: "utf8", windowsHide: true,
     ...(command === exe("pg_ctl") ? { stdio: "ignore" } : {}), timeout: 180_000 });
   if (result.error || result.status !== 0) {
+    if (command === exe("pg_ctl") || command === exe("initdb")) {
+      throw new Error(`GOAL_CONVERSION_COMMAND_FAILED:${args[0]}:${result.status ?? "unavailable"}:${nativePostgresStartupFailure(result, workspace.serverLog)}`);
+    }
     const detail = [result.stderr, result.stdout, result.error?.message].filter(Boolean).join("\n").slice(-1_000)
       .replace(/postgres(?:ql)?:\/\/\S+/gi, "[database-url]").replace(/\r?\n/g, " | ");
     throw new Error(`GOAL_CONVERSION_COMMAND_FAILED:${args[0] ?? command}:${result.status ?? "unavailable"}:${detail || "unavailable"}`);
@@ -28,15 +33,11 @@ function run(command, args, env = process.env) {
   return result.stdout;
 }
 
-const cacheRoot = resolve(root, "node_modules", ".cache");
-mkdirSync(cacheRoot, { recursive: true });
 mkdirSync("artifacts", { recursive: true });
 rmSync(reportPath, { force: true });
 if (!refreshTypes) rmSync(evidencePath, { force: true });
-const temp = mkdtempSync(join(cacheRoot, "portfolio-goal-conversions-201-"));
-const safeTemp = resolve(temp);
-if (!safeTemp.startsWith(`${cacheRoot}${sep}`)) throw new Error("GOAL_CONVERSION_TEMP_PATH_INVALID");
-const data = join(temp, "data");
+const workspace = createNativePostgresWorkspace("p7-goals-");
+const temp = workspace.directory, data = workspace.data;
 const port = await new Promise((resolvePort, reject) => {
   const server = createServer(); server.once("error", reject);
   server.listen(0, "127.0.0.1", () => { const value = server.address().port; server.close(() => resolvePort(value)); });
@@ -47,6 +48,7 @@ let started = false, connected = false, cleanup = false, result, stage = "runtim
 try {
   run(process.execPath, ["scripts/validation-environment.mjs"]);
   const postgresVersion = run(exe("postgres"), ["--version"]).trim();
+  requireSupportedNativePostgres(postgresVersion.match(/PostgreSQL\)\s+(\d+\.\d+(?:\.\d+)?)/u)?.[1]);
   stage = "cluster";
   run(exe("initdb"), ["-D", data, "--no-locale", "-A", "trust", "-U", "postgres"]);
   started = true;
@@ -126,8 +128,8 @@ try {
 } finally {
   if (connected) await admin.end();
   try {
-    if (started) run(exe("pg_ctl"), ["-D", data, "-m", "immediate", "-w", "stop"]);
-    rmSync(safeTemp, { recursive: true, force: true }); cleanup = true;
+    if (started && existsSync(join(data, "postmaster.pid"))) run(exe("pg_ctl"), ["-D", data, "-m", "immediate", "-w", "stop"]);
+    removeNativePostgresWorkspace(temp, "p7-goals-"); cleanup = true;
   } catch { console.error("GOAL_CONVERSION_CLEANUP_FAILED"); process.exitCode = 1; }
   if (result && cleanup && !refreshTypes) {
     mkdirSync("evidence", { recursive: true });

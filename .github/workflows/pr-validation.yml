@@ -31,6 +31,8 @@ jobs:
           npm install --global "npm@$npm_version" --no-audit --no-fund
       - name: Install locked development dependencies
         run: npm run setup:validation
+      - name: Select supported native PostgreSQL
+        run: node scripts/setup-ci-native-postgres.mjs
       - run: npm run test:setup
       - run: npm run typecheck
       - run: npm run phase4:focus:context

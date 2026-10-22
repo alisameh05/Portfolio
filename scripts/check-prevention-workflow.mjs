@@ -10,6 +10,7 @@ import { REQUIRED_REGRESSION_TESTS } from "./run-validation-evolution-tests.mjs"
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const PREVENTION_WORKFLOW = ".github/workflows/validation-evolution-regressions.yml";
 export const PR_VALIDATION_WORKFLOW = ".github/workflows/pr-validation.yml";
+export const QUALIFICATION_WORKFLOW = ".github/workflows/phase3-7-qualification.yml";
 export const REQUIRED_REGRESSION_TEST_COUNT = 30;
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -131,9 +132,34 @@ export function validatePhase6PrerequisiteWorkflowSource(source) {
   return [];
 }
 
+/** Hosted native gates must use the verified supported server, never the image default. */
+export function validateNativePostgresWorkflowSource(source, jobId, gateCommand) {
+  let workflow;
+  try { workflow = YAML.parse(source); } catch { return ["NATIVE_POSTGRES_WORKFLOW_INVALID_YAML"]; }
+  const job = workflow?.jobs?.[jobId], steps = job?.steps;
+  if (!isObject(job) || !Array.isArray(steps) || job["runs-on"] !== "ubuntu-24.04" || owns(job, "if") ||
+      (owns(job, "continue-on-error") && job["continue-on-error"] !== false) || owns(workflow, "defaults") || owns(job, "defaults") ||
+      owns(workflow?.env, "PHASE7_POSTGRES_BIN") || owns(job?.env, "PHASE7_POSTGRES_BIN")) return ["NATIVE_POSTGRES_WORKFLOW_NOT_REQUIRED"];
+  const positions = ["node scripts/setup-ci-native-postgres.mjs", gateCommand].map((command) => {
+    const matches = steps.flatMap((step, index) => normalizeRun(step?.run) === command ? [index] : []);
+    return matches.length === 1 ? matches[0] : -1;
+  });
+  if (positions.some((index) => index < 0) || positions[0] >= positions[1]) return ["NATIVE_POSTGRES_SETUP_NOT_WIRED"];
+  const setup = steps[positions[0]], gate = steps[positions[1]];
+  if (!exactKeys(setup, ["name", "run"]) || owns(gate, "if") || owns(gate, "working-directory") || owns(gate, "shell") ||
+      (owns(gate, "continue-on-error") && gate["continue-on-error"] !== false) ||
+      steps.slice(positions[0]).some((step) => owns(step?.env, "PHASE7_POSTGRES_BIN")) ||
+      steps.slice(positions[0] + 1, positions[1]).some((step) => typeof step?.uses === "string" && step.uses.startsWith("actions/checkout@"))) {
+    return ["NATIVE_POSTGRES_SETUP_NOT_REQUIRED"];
+  }
+  return [];
+}
+
 if (process.argv[1]?.replaceAll("\\", "/").endsWith("scripts/check-prevention-workflow.mjs")) {
   const failures = [...validatePreventionWorkflowSource(readFileSync(join(ROOT, PREVENTION_WORKFLOW), "utf8")),
-    ...validatePhase6PrerequisiteWorkflowSource(readFileSync(join(ROOT, PR_VALIDATION_WORKFLOW), "utf8"))];
+    ...validatePhase6PrerequisiteWorkflowSource(readFileSync(join(ROOT, PR_VALIDATION_WORKFLOW), "utf8")),
+    ...validateNativePostgresWorkflowSource(readFileSync(join(ROOT, PR_VALIDATION_WORKFLOW), "utf8"), "validation", "npm run phase7:focus:consent"),
+    ...validateNativePostgresWorkflowSource(readFileSync(join(ROOT, QUALIFICATION_WORKFLOW), "utf8"), "phase3-7-qualification", "npm run phase8:qualify")];
   if (failures.length > 0) {
     for (const failure of failures) console.error(`✗ ${failure}`);
     process.exitCode = 1;

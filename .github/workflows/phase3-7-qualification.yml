@@ -36,6 +36,8 @@ jobs:
         run: npm run setup:validation
       - name: Validation environment
         run: npm run validation:ready
+      - name: Select supported native PostgreSQL
+        run: node scripts/setup-ci-native-postgres.mjs
       - name: Qualify Phases 3–7 prerequisites
         run: npm run phase8:qualify
       - name: Prepare complete source-bound qualification evidence

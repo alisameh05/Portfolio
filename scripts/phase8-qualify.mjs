@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { sourceMetadataAtRevision } from "./phase8-prerequisite-qualification.mjs";
 import { PHASE6_TOOL_DEFINITIONS } from "./phase6-verification-support.mjs";
+import { requireSupportedNativePostgres } from "./native-postgres-runtime.mjs";
 import {
   QUALIFICATION_CONTEXT_VARIABLE,
   QUALIFICATION_NODES,
@@ -112,6 +113,7 @@ export function requireQualificationDocker(probe = spawnSync) {
   if (nativePostgresProbe.error || nativePostgresProbe.status !== 0 || !nativePostgresVersion) {
     throw new Error("PHASE8_NATIVE_POSTGRES_IDENTITY_UNVERIFIED: Phase 7 native PostgreSQL must report its actual version.");
   }
+  requireSupportedNativePostgres(nativePostgresVersion);
   return { docker: { operatingSystem, serverVersion, storageDriver }, composeVersion, supabaseCliVersion,
     nativePostgres: { executable: nativePostgresPath.replaceAll("\\", "/"), version: nativePostgresVersion },
     validationImages: installed, nestedToolScope: { daemon: "compose.validation nested Docker daemon", externallyVerified: false,

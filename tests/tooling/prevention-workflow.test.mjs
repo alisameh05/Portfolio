@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { PREVENTION_WORKFLOW, PR_VALIDATION_WORKFLOW, validatePhase6PrerequisiteWorkflowSource, validatePreventionWorkflowSource }
+import { PREVENTION_WORKFLOW, PR_VALIDATION_WORKFLOW, QUALIFICATION_WORKFLOW, validateNativePostgresWorkflowSource, validatePhase6PrerequisiteWorkflowSource, validatePreventionWorkflowSource }
   from "../../scripts/check-prevention-workflow.mjs";
 import YAML from "yaml";
 import { REQUIRED_CACHE_TESTS, REQUIRED_REGRESSION_TESTS, validatePrerequisiteCacheTap, validateValidationEvolutionTap }
@@ -12,10 +12,13 @@ import { REQUIRED_CACHE_TESTS, REQUIRED_REGRESSION_TESTS, validatePrerequisiteCa
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const baseline = readFileSync(join(ROOT, PREVENTION_WORKFLOW), "utf8");
 const prValidation = readFileSync(join(ROOT, PR_VALIDATION_WORKFLOW), "utf8");
+const qualification = readFileSync(join(ROOT, QUALIFICATION_WORKFLOW), "utf8");
 
 test("the declared prevention workflow runs the complete regression inventory and strict aggregator", () => {
   assert.deepEqual(validatePreventionWorkflowSource(baseline), []);
   assert.deepEqual(validatePhase6PrerequisiteWorkflowSource(prValidation), []);
+  assert.deepEqual(validateNativePostgresWorkflowSource(prValidation, "validation", "npm run phase7:focus:consent"), []);
+  assert.deepEqual(validateNativePostgresWorkflowSource(qualification, "phase3-7-qualification", "npm run phase8:qualify"), []);
 });
 
 test("workflow mutations cannot omit triggers, suites, checks, or failures", () => {
@@ -59,6 +62,25 @@ test("workflow mutations cannot omit triggers, suites, checks, or failures", () 
     const workflow = YAML.parse(prValidation);
     mutate(workflow.jobs["phase6-media-cv"]);
     assert.notDeepEqual(validatePhase6PrerequisiteWorkflowSource(YAML.stringify(workflow)), []);
+  }
+  for (const [source, jobId, gate] of [[prValidation, "validation", "npm run phase7:focus:consent"],
+    [qualification, "phase3-7-qualification", "npm run phase8:qualify"]]) {
+    const setup = "node scripts/setup-ci-native-postgres.mjs";
+    const mutations = [
+      (job) => { job.steps = job.steps.filter((step) => step.run !== setup); },
+      (job) => { job.steps.find((step) => step.run === setup).if = false; },
+      (job) => { job.steps.find((step) => step.run === setup)["continue-on-error"] = true; },
+      (job) => { job.steps.find((step) => step.run === setup).run += " || true"; },
+      (job) => { const index = job.steps.findIndex((step) => step.run === setup); job.steps.push(job.steps.splice(index, 1)[0]); },
+      (job) => { job.steps.find((step) => step.run === gate).env = { PHASE7_POSTGRES_BIN: "/usr/lib/postgresql/16/bin" }; },
+      (job) => { job.if = false; },
+      (job) => { job["continue-on-error"] = true; },
+    ];
+    for (const mutate of mutations) {
+      const workflow = YAML.parse(source);
+      mutate(workflow.jobs[jobId]);
+      assert.notDeepEqual(validateNativePostgresWorkflowSource(YAML.stringify(workflow), jobId, gate), []);
+    }
   }
 });
 
