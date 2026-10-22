@@ -3,15 +3,19 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { PREVENTION_WORKFLOW, validatePreventionWorkflowSource } from "../../scripts/check-prevention-workflow.mjs";
+import { PREVENTION_WORKFLOW, PR_VALIDATION_WORKFLOW, validatePhase6PrerequisiteWorkflowSource, validatePreventionWorkflowSource }
+  from "../../scripts/check-prevention-workflow.mjs";
+import YAML from "yaml";
 import { REQUIRED_CACHE_TESTS, REQUIRED_REGRESSION_TESTS, validatePrerequisiteCacheTap, validateValidationEvolutionTap }
   from "../../scripts/run-validation-evolution-tests.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const baseline = readFileSync(join(ROOT, PREVENTION_WORKFLOW), "utf8");
+const prValidation = readFileSync(join(ROOT, PR_VALIDATION_WORKFLOW), "utf8");
 
 test("the declared prevention workflow runs the complete regression inventory and strict aggregator", () => {
   assert.deepEqual(validatePreventionWorkflowSource(baseline), []);
+  assert.deepEqual(validatePhase6PrerequisiteWorkflowSource(prValidation), []);
 });
 
 test("workflow mutations cannot omit triggers, suites, checks, or failures", () => {
@@ -37,6 +41,24 @@ test("workflow mutations cannot omit triggers, suites, checks, or failures", () 
   ];
   for (const [name, mutate] of mutations) {
     assert.notDeepEqual(validatePreventionWorkflowSource(mutate(baseline)), [], name);
+  }
+  const phase6Mutations = [
+    (job) => { job.steps = job.steps.filter((step) => step.run !== "npm run phase5:gate"); },
+    (job) => { job.if = false; },
+    (job) => { job["continue-on-error"] = true; },
+    (job) => { job.steps.find((step) => step.run === "npm run phase5:gate").if = false; },
+    (job) => { job.steps.find((step) => step.run === "npm run phase5:gate")["continue-on-error"] = true; },
+    (job) => { job.steps.find((step) => step.run === "npm run phase5:gate").run += " || true"; },
+    (job) => { job.steps.find((step) => step.run === "npm run phase5:gate").run += "\ntrue"; },
+    (job) => { job.steps.find((step) => step.run === "npm run phase5:gate")["working-directory"] = "historical-release"; },
+    (job) => { job.steps.find((step) => step.run === "npm run phase5:gate").env = { PHASE8_QUALIFICATION_CONTEXT: "stale" }; },
+    (job) => { const index = job.steps.findIndex((step) => step.run === "npm run phase5:gate"); job.steps.push(job.steps.splice(index, 1)[0]); },
+    (job) => { const index = job.steps.findIndex((step) => step.run === "npm run phase6:gate"); job.steps.splice(index, 0, { uses: "actions/checkout@different-source" }); },
+  ];
+  for (const mutate of phase6Mutations) {
+    const workflow = YAML.parse(prValidation);
+    mutate(workflow.jobs["phase6-media-cv"]);
+    assert.notDeepEqual(validatePhase6PrerequisiteWorkflowSource(YAML.stringify(workflow)), []);
   }
 });
 

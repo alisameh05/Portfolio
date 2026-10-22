@@ -9,6 +9,7 @@ import { REQUIRED_REGRESSION_TESTS } from "./run-validation-evolution-tests.mjs"
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const PREVENTION_WORKFLOW = ".github/workflows/validation-evolution-regressions.yml";
+export const PR_VALIDATION_WORKFLOW = ".github/workflows/pr-validation.yml";
 export const REQUIRED_REGRESSION_TEST_COUNT = 30;
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -103,8 +104,36 @@ export function validatePreventionWorkflowSource(source) {
   return validatePreventionWorkflow(parsed);
 }
 
+/** Standalone Phase 6 acceptance needs a fresh Phase 5 gate in the same checkout. */
+export function validatePhase6PrerequisiteWorkflowSource(source) {
+  let workflow;
+  try { workflow = YAML.parse(source); } catch { return ["PHASE6_PREDECESSOR_WORKFLOW_INVALID_YAML"]; }
+  const job = workflow?.jobs?.["phase6-media-cv"];
+  const steps = job?.steps;
+  if (!isObject(job) || !Array.isArray(steps) || owns(job, "if") ||
+      (owns(job, "continue-on-error") && job["continue-on-error"] !== false) ||
+      owns(workflow, "defaults") || owns(job, "defaults")) return ["PHASE6_PREDECESSOR_WORKFLOW_NOT_REQUIRED"];
+  const commands = ["npm run setup:validation", "npm run phase5:gate", "npm run phase6:gate"];
+  const positions = commands.map((command) => {
+    const matches = steps.flatMap((step, index) => normalizeRun(step?.run) === command ? [index] : []);
+    return matches.length === 1 ? matches[0] : -1;
+  });
+  if (positions.some((index) => index < 0) || positions[0] >= positions[1] || positions[1] >= positions[2]) {
+    return ["PHASE6_FRESH_PHASE5_PREDECESSOR_NOT_WIRED"];
+  }
+  const [setup, predecessor, gate] = positions.map((index) => steps[index]);
+  if (!exactKeys(setup, ["name", "run"]) || !exactKeys(predecessor, ["name", "run"]) ||
+      owns(gate, "if") || owns(gate, "working-directory") || owns(gate, "shell") ||
+      (owns(gate, "continue-on-error") && gate["continue-on-error"] !== false) ||
+      steps.slice(positions[0] + 1, positions[2]).some((step) => typeof step?.uses === "string" && step.uses.startsWith("actions/checkout@"))) {
+    return ["PHASE6_FRESH_PHASE5_PREDECESSOR_NOT_REQUIRED"];
+  }
+  return [];
+}
+
 if (process.argv[1]?.replaceAll("\\", "/").endsWith("scripts/check-prevention-workflow.mjs")) {
-  const failures = validatePreventionWorkflowSource(readFileSync(join(ROOT, PREVENTION_WORKFLOW), "utf8"));
+  const failures = [...validatePreventionWorkflowSource(readFileSync(join(ROOT, PREVENTION_WORKFLOW), "utf8")),
+    ...validatePhase6PrerequisiteWorkflowSource(readFileSync(join(ROOT, PR_VALIDATION_WORKFLOW), "utf8"))];
   if (failures.length > 0) {
     for (const failure of failures) console.error(`✗ ${failure}`);
     process.exitCode = 1;
