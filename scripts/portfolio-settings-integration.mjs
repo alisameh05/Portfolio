@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -148,9 +148,13 @@ export function requestedDatabaseTestFiles({ ticket123, ticket122, contentAuthor
 export function planCurrentCheckpointTests(currentCheckpointFiles, finalFiles) {
   if (!Array.isArray(currentCheckpointFiles) || !Array.isArray(finalFiles) ||
       new Set(currentCheckpointFiles).size !== currentCheckpointFiles.length || new Set(finalFiles).size !== finalFiles.length ||
-      finalFiles.some((file) => !currentCheckpointFiles.includes(file))) throw new Error("PORTFOLIO_SETTINGS_CURRENT_TEST_INVENTORY_PARTITION_INVALID");
+      [...currentCheckpointFiles, ...finalFiles].some((file) => typeof file !== "string" ||
+        !/^tests\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_.-]+\.test\.[cm]?[jt]s$/u.test(file) ||
+        !existsSync(join(ROOT, file)) || !statSync(join(ROOT, file)).isFile())) {
+    throw new Error("PORTFOLIO_SETTINGS_CURRENT_TEST_INVENTORY_PARTITION_INVALID");
+  }
   const auditFiles = currentCheckpointFiles.filter((file) => !finalFiles.includes(file));
-  return { auditFiles, finalFiles: [...finalFiles], completeInventory: [...currentCheckpointFiles] };
+  return { auditFiles, finalFiles: [...finalFiles], completeInventory: [...new Set([...currentCheckpointFiles, ...finalFiles])] };
 }
 
 export function requireExecutedTests(report, expectedSuiteCount = 1) {

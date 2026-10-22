@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -85,26 +85,46 @@ test("Docker preflight distinguishes executable, access, OS, and Compose failure
   ]) assert.throws(() => requireQualificationDocker(() => result), new RegExp(code));
   assert.throws(() => requireQualificationDocker((_, args) => args[0] === "info" ? linux : { status: 1 }), /PHASE8_DOCKER_COMPOSE_REQUIRED/u);
   const priorPostgresBin = process.env.PHASE7_POSTGRES_BIN;
-  process.env.PHASE7_POSTGRES_BIN = process.execPath;
-  let observed;
+  const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+  const nativeBin = tempRoot("phase8 postgres bin-");
   try {
-    observed = requireQualificationDocker((command, args) => args[0] === "info" ? linux : args[0] === "compose" ?
-      { status: 0, stdout: "2.40.3\n" } : args[0] === "image" && args[1] === "ls" ?
-        { status: 0, stdout: "clamav/clamav:<none>|sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4\njbarlow83/ocrmypdf-alpine:<none>|sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c\n" } :
-        args[0] === "image" && args[1] === "inspect" ? { status: 1 } : command === process.execPath && args[0] === "--version" ?
-          { status: 0, stdout: "postgres (PostgreSQL) 18.3\n" } : { status: 0, stdout: "2.117.0\n" });
+    process.env.PHASE7_POSTGRES_BIN = nativeBin;
+    for (const platform of ["win32", "linux"]) {
+      Object.defineProperty(process, "platform", { value: platform });
+      const nativeExecutable = join(nativeBin, platform === "win32" ? "postgres.exe" : "postgres");
+      writeFileSync(nativeExecutable, "fixture: intercepted by the probe\n");
+      const nativeProbes = [];
+      const observed = requireQualificationDocker((command, args) => {
+        if (args[0] === "info") return linux;
+        if (args[0] === "compose") return { status: 0, stdout: "2.40.3\n" };
+        if (args[0] === "image" && args[1] === "ls") return {
+          status: 0, stdout: "clamav/clamav:<none>|sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4\njbarlow83/ocrmypdf-alpine:<none>|sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c\n",
+        };
+        if (args[0] === "image" && args[1] === "inspect") return { status: 1 };
+        if (args[0] === "--version") {
+          nativeProbes.push({ command, args });
+          assert.equal(command, nativeExecutable);
+          return { status: 0, stdout: "postgres (PostgreSQL) 18.3\n" };
+        }
+        assert.equal(command, process.execPath, "the explicit bin directory must bypass discovery");
+        return { status: 0, stdout: "2.117.0\n" };
+      });
+      assert.deepEqual(nativeProbes, [{ command: nativeExecutable, args: ["--version"] }]);
+      assert.deepEqual({ ...observed, unverifiedImages: observed.unverifiedImages.length },
+        { docker: { operatingSystem: "linux", serverVersion: "27.5.1", storageDriver: "overlay2" }, composeVersion: "2.40.3",
+          supabaseCliVersion: "2.117.0", nativePostgres: { executable: nativeExecutable.replaceAll("\\", "/"), version: "18.3" },
+          validationImages: [], nestedToolScope: { daemon: "compose.validation nested Docker daemon", externallyVerified: false,
+            definitions: { scanner: "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4",
+              imageProcessor: "dpokidov/imagemagick:7.1.1-47", videoProcessor: "jrottenberg/ffmpeg:7.1-ubuntu2404",
+              pdfProcessor: "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c" } },
+          unverifiedImages: 2 });
+    }
   } finally {
+    Object.defineProperty(process, "platform", platformDescriptor);
     if (priorPostgresBin === undefined) delete process.env.PHASE7_POSTGRES_BIN;
     else process.env.PHASE7_POSTGRES_BIN = priorPostgresBin;
+    rmSync(nativeBin, { recursive: true, force: true });
   }
-  assert.deepEqual({ ...observed, unverifiedImages: observed.unverifiedImages.length },
-    { docker: { operatingSystem: "linux", serverVersion: "27.5.1", storageDriver: "overlay2" }, composeVersion: "2.40.3",
-      supabaseCliVersion: "2.117.0", nativePostgres: { executable: process.execPath.replaceAll("\\", "/"), version: "18.3" },
-      validationImages: [], nestedToolScope: { daemon: "compose.validation nested Docker daemon", externallyVerified: false,
-        definitions: { scanner: "clamav/clamav@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4",
-          imageProcessor: "dpokidov/imagemagick:7.1.1-47", videoProcessor: "jrottenberg/ffmpeg:7.1-ubuntu2404",
-          pdfProcessor: "jbarlow83/ocrmypdf-alpine@sha256:7f4055a0db3f6301a6d58d9ed0302f96d90ec06c038b065c6197d4d22ceae71c" } },
-      unverifiedImages: 2 });
 });
 
 test("explicit resume reuses only verified completed evidence and reruns missing nodes", async () => {

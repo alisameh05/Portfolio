@@ -6,6 +6,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { Client } from "pg";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
+import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 
 const root = process.cwd(), runId = randomUUID(), source = workingTreeSourceSha256();
 const summaries = process.argv.includes("--summaries");
@@ -142,7 +143,8 @@ try {
   if (readFileSyncSafe(reportPath)) {
     const r = JSON.parse(readFileSync(reportPath, "utf8"));
     for (const suite of r.testResults ?? []) console.error(JSON.stringify({ suite: suite.name.replace(root, ""), status: suite.status,
-      assertions: (suite.assertionResults ?? []).map(a => ({ title: a.title.replace(/: \{.*$/, ": invalid shape"), status: a.status })) }));
+      assertions: (suite.assertionResults ?? []).map(a => ({ title: a.title.replace(/: \{.*$/, ": invalid shape"), status: a.status,
+        ...(a.status === "failed" ? { diagnostic: safeAssertionDiagnostic(a) } : {}) })) }));
   }
   process.exitCode = 1;
 } finally {

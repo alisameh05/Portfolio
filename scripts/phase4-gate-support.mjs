@@ -89,7 +89,8 @@ export function classifyCheckResult({
     );
 
   let failure = null;
-  if (spawnError !== undefined) failure = "spawn-failed";
+  // Native spawn results omit errors; normalized cache consumers use null.
+  if (spawnError !== undefined && spawnError !== null) failure = "spawn-failed";
   else if (code !== 0) failure = "exit-nonzero";
   else if (skippedOrPartial) failure = "skipped-or-partial";
   else if (serviceUnavailable) failure = "required-service-unavailable";

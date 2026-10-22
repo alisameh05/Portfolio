@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { combineWithCleanupFailures, ValidationFailure } from "../../scripts/validation-errors.mjs";
+import { combineWithCleanupFailures, safeAssertionDiagnostic, ValidationFailure } from "../../scripts/validation-errors.mjs";
 import { serializePortfolioSettingsFailure } from "../../scripts/portfolio-settings-integration.mjs";
 
 test("structured failures sanitize metadata, paths, causes, and serialized output", () => {
@@ -26,6 +26,34 @@ test("structured failures sanitize metadata, paths, causes, and serialized outpu
   const escapedJson = JSON.stringify({ message: JSON.stringify({ token: "fixture-double-json-secret-267" }) });
   const redactedJson = new ValidationFailure({ code: "FIXTURE_FAILURE", stage: "test", detail: `${jsonSecrets} ${escapedJson}` }).toSafeJson();
   assert.doesNotMatch(JSON.stringify(redactedJson), /fixture-private-(?:password|service-key|token|jwt)-267|fixture-double-json-secret-267/u);
+
+  const source = "tests/phase7/moderation-postgres.test.ts:147:29";
+  const booleanFailure = safeAssertionDiagnostic({ failureMessages: [
+    `AssertionError: expected false to be true // Object.is equality\n\n- Expected\n+ Received\n\n- true\n+ false\n\n ❯ D:\\private-home\\Portfolio\\${source.replaceAll("/", "\\")}\n`,
+  ] });
+  assert.deepEqual(booleanFailure, { source, comparison: { kind: "boolean-mismatch", actual: false, expected: true }, sqlState: null });
+  assert.deepEqual(safeAssertionDiagnostic({ failureMessages: [
+    "\u001b[31mAssertionError: expected true to be false // Object.is equality\u001b[39m\n",
+  ] }), { source: null, comparison: { kind: "boolean-mismatch", actual: true, expected: false }, sqlState: null });
+  assert.deepEqual(safeAssertionDiagnostic({ failureMessages: [
+    "AssertionError: expected 123456789 to be 0 // Object.is equality\n ❯ /private/home/Portfolio/tests/phase7/moderation-postgres.test.ts:155:7\n",
+  ] }), { source: "tests/phase7/moderation-postgres.test.ts:155:7", comparison: { kind: "number-mismatch" }, sqlState: null });
+  const privateFailure = safeAssertionDiagnostic({ failureMessages: [
+    "AssertionError: expected { paragraph: 'fixture-private-feedback', author_name: 'fixture-private-person', token: 'fixture-private-token' } to deeply equal {}\n" +
+      "- Expected\n+ Received\n+ SERVICE_ROLE_KEY=fixture-private-service-key\n+ postgres://admin:fixture-private-password@localhost/db\n" +
+      " ❯ /private/home/Portfolio/tests/phase7/moderation-postgres.test.ts:188:11\n" +
+      "Serialized Error: { code: '42501', detail: 'fixture-private-payload' }",
+  ], expected: { paragraph: "fixture-private-feedback" }, actual: "fixture-private-feedback" });
+  assert.deepEqual(privateFailure, { source: "tests/phase7/moderation-postgres.test.ts:188:11", comparison: null, sqlState: "42501" });
+  assert.doesNotMatch(JSON.stringify([booleanFailure, privateFailure]), /fixture-private-|private-home|private\/home|postgres:\/\/|SERVICE_ROLE_KEY/u);
+  assert.deepEqual(safeAssertionDiagnostic({ failureMessages: ["password=fixture-private-password\ncode='fixture-private-token'"] }),
+    { source: null, comparison: null, sqlState: null });
+  assert.deepEqual(safeAssertionDiagnostic({ failureMessages: [escapedJson, jsonSecrets],
+    actual: { token: "fixture-private-token" }, expected: { author: "fixture-private-person" } }),
+  { source: null, comparison: null, sqlState: null });
+  assert.deepEqual(safeAssertionDiagnostic({ failureMessages: ['Serialized Error: { "code": "23514", "detail": "fixture-private-payload" }'] }),
+    { source: null, comparison: null, sqlState: "23514" });
+  assert.deepEqual(safeAssertionDiagnostic(null), { source: null, comparison: null, sqlState: null });
 });
 
 test("combined cleanup failures retain the primary cause and every cleanup cause safely", () => {

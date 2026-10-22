@@ -34,6 +34,30 @@ export function redactSafeDetail(value) {
     .slice(0, 400);
 }
 
+/** Extract actionable assertion facts without serializing messages, stacks or payload diffs. */
+export function safeAssertionDiagnostic(assertion) {
+  const messages = (Array.isArray(assertion?.failureMessages) ? assertion.failureMessages : [])
+    .filter((message) => typeof message === "string").slice(0, 3).map((message) => message.slice(0, 16_384))
+    .join("\n").replace(/\x1b\[[0-9;]*m/gu, "");
+  const source = messages.replaceAll("\\", "/").match(
+    /\b(tests\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.(?:test|spec)\.[cm]?[jt]sx?:[1-9]\d{0,5}:[1-9]\d{0,4})(?=\s|\)|$)/u,
+  )?.[1] ?? null;
+  const mismatch = messages.match(
+    /^AssertionError: expected (true|false|-?\d+(?:\.\d+)?) to (?:be|equal) (true|false|-?\d+(?:\.\d+)?)(?=$| \/\/)/mu,
+  );
+  let comparison = null;
+  if (mismatch && mismatch[1] !== mismatch[2]) {
+    if ([mismatch[1], mismatch[2]].every((value) => value === "true" || value === "false")) {
+      comparison = { kind: "boolean-mismatch", actual: mismatch[1] === "true", expected: mismatch[2] === "true" };
+    } else if ([mismatch[1], mismatch[2]].every((value) => /^-?\d+(?:\.\d+)?$/u.test(value))) {
+      // Numeric values may themselves be private payloads; retain only the mismatch category.
+      comparison = { kind: "number-mismatch" };
+    }
+  }
+  const sqlState = messages.match(/\b(?:SQLSTATE|sqlState|code)["']?\s*[:=]\s*["']?([0-9A-Z]{5})["']?(?=\s|[,}.)]|$)/u)?.[1] ?? null;
+  return { source, comparison, sqlState };
+}
+
 /**
  * A structured validation failure with stage/check/cause and precise paths.
  * `message` is the safe single-line form; structured fields are also exposed.

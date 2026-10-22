@@ -91,7 +91,8 @@ export function requireQualificationDocker(probe = spawnSync) {
   const availablePrefixes = ["postgres", "gotrue"].map((service) =>
     `public.ecr.aws/supabase/${service}:`).filter((prefix) => !installed.some((image) => image.reference.startsWith(prefix)));
   const unverifiedImages = availablePrefixes;
-  let nativePostgresPath = process.env.PHASE7_POSTGRES_BIN?.trim() || null;
+  const nativePostgresBin = process.env.PHASE7_POSTGRES_BIN?.trim();
+  let nativePostgresPath = nativePostgresBin ? join(nativePostgresBin, process.platform === "win32" ? "postgres.exe" : "postgres") : null;
   if (nativePostgresPath === null && process.platform === "win32") {
     const windowsPostgres = "C:/Program Files/PostgreSQL/18/bin/postgres.exe";
     if (existsSync(windowsPostgres)) nativePostgresPath = windowsPostgres;
