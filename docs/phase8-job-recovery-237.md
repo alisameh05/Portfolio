@@ -10,7 +10,12 @@ largest integer delay is 1,125,000ms. PostgreSQL adds the delay to its own
 clock and the worker lease token fences the update.
 
 `PHASE7_WORK_FAILED` is the safe transient worker code. Invalid work uses
-`PHASE7_JOB_INVALID` and is terminal immediately. At five claims, a final
+`PHASE7_JOB_INVALID` and is terminal immediately — executed by the probe
+`terminalizes a mismatched payload version immediately with one incident
+instead of a retry` in `tests/phase7/rollback-recovery-postgres.test.ts`,
+which proves the first claim failure-codes and terminalizes without a retry
+window and writes
+one deduplicated `job:<uuid>` incident. At five claims, a final
 failure or an expired fifth lease terminalizes as `dead` and writes the
 deduplicated `job:<uuid>` incident. Outbox work follows the same five-claim
 bound and stores its terminal timestamp and safe cause.
@@ -38,7 +43,8 @@ npm run phase8:focus:retry-recovery
 It starts disposable native PostgreSQL, applies all migrations, exercises the
 restricted worker runtime role (`due_work_worker_runtime`, member of
 `shipwithali_worker`), the application runtime role (`due_work_application_runtime`,
-member of `shipwithali_application`), the restricted-role RLS matrix (68 role
+member of `shipwithali_application`, provisioned on the #237 path only), the
+restricted-role RLS matrix (68 role
 probes), and cleans up its cluster. It does not perform a live re-drive. This
 ticket does not provision operator credentials or a deployed operator CLI; do
 not invoke `redriveDeadJob` without the host authorization composition.

@@ -1,8 +1,8 @@
 {
   "ticket": 237,
-  "runId": "51c1bf9b-807e-480f-8f0f-77e31fc6602d",
-  "sourceRevision": "d6b2ebeaa67dbb882bc9b0a300c77412ebde0059",
-  "sourceTreeSha256": "8ba65b683d46228bd2edb80edb158f1ba4a13dd635b578e672ee0ed97db752fd",
+  "runId": "36cea30a-345f-436a-adcd-3ad639a79fb3",
+  "sourceRevision": "82ab2a4e1d1d2bd27f6b3f9050a7fa81d9eb19c1",
+  "sourceTreeSha256": "9498700e6c0653c10e83c0d62c5bd337bbf7877b7837c613b3d4441706414ac2",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -216,7 +216,7 @@
   },
   "required": {
     "success": true,
-    "passed": 14,
+    "passed": 15,
     "failed": 0,
     "skipped": 0,
     "todo": 0,
@@ -285,6 +285,10 @@
     {
       "title": "puts failed export recovery on a fresh request instead of a replayed or reused artifact",
       "status": "passed"
+    },
+    {
+      "title": "terminalizes a mismatched payload version immediately with one incident instead of a retry",
+      "status": "passed"
     }
   ],
   "databaseRoles": [
@@ -307,6 +311,6 @@
     "P8-54"
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase8:focus:retry-recovery",
-  "scope": "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, bounded five-attempt retry policy with seeded vectors, database-time availability and lease fences, stale-token denial, retry/dead-letter incident atomicity, final-attempt crash recovery, idempotent post-effect replay, forced domain rollback with no outbox/job/receipt residue, post-commit optional export-failure preservation of committed core state, and fresh-request recovery after failed export.",
+  "scope": "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, bounded five-attempt retry policy with seeded vectors, database-time availability and lease fences, stale-token denial, retry/dead-letter incident atomicity, final-attempt crash recovery, and idempotent post-effect replay. The #237 path adds forced domain rollback with no outbox/job/receipt residue, post-commit optional export-failure preservation of committed core state, immediate invalid-payload terminalization without a retry, and fresh-request recovery after failed export.",
   "cleanup": true
 }

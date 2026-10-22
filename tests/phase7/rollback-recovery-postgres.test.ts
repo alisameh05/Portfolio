@@ -11,10 +11,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
+import { createSystemIdGenerator } from "../../src/runtime/ports.js";
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import { parseSafeErrorCode } from "../../src/modules/portability-operations/index.js";
 import { createDailyAggregateWorkService } from "../../src/modules/measurement/application/daily-aggregates.js";
 import { createPostgresDailyAggregateRepository } from "../../src/modules/measurement/adapters/postgres-daily-aggregates.js";
+import { createMeasurementRetentionWorkService } from "../../src/modules/measurement/application/retention.js";
+import { createPostgresMeasurementRetentionRepository } from "../../src/modules/measurement/adapters/postgres-retention.js";
+import { createFeedbackRetentionWorkService } from "../../src/modules/interaction-moderation/application/retention.js";
+import { createPostgresFeedbackRetentionRepository } from "../../src/modules/interaction-moderation/adapters/postgres-retention.js";
+import { createPhase7DueWorkService } from "../../src/runtime/phase7-due-work.js";
 import { requestTransactionRollback } from "../../src/runtime/ports.js";
 import { parseIdempotencyKey, parseStableId, type IdempotencyKey, type StableId } from "../../src/shared/domain/index.js";
 
@@ -89,7 +95,7 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL && APPLICATION_URL))("Phase 8 rol
     const forcedEffectEventId = id("DomainEvent");
     const expiresAt = new Date(Date.parse(now) + 3_600_000).toISOString();
     const rollbackKey = parseIdempotencyKey("export-rollback-recovery-key");
-    if (!rollbackKey.ok) throw new Error("TEST_IDEMPOTENCY_KEY_INVALID");
+    if (!rollbackKey.ok) throw new Error("PHASE8_ROLLBACK_RECOVERY_IDEMPOTENCY_KEY_INVALID");
     const forced = await applicationOperations.transactions.run(async transaction => {
       await applicationOperations.outbox.append(transaction, {
         eventId: forcedEventId, aggregateId: portfolioId, aggregateVersion: 1,
@@ -202,7 +208,7 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL && APPLICATION_URL))("Phase 8 rol
     const neverUsedEventId = id("DomainEvent");
     const originalRequestKey = parseIdempotencyKey("owner-export-request-237");
     const recoveryRequestKey = parseIdempotencyKey("owner-export-recovery-237");
-    if (!originalRequestKey.ok || !recoveryRequestKey.ok) throw new Error("TEST_IDEMPOTENCY_KEY_INVALID");
+    if (!originalRequestKey.ok || !recoveryRequestKey.ok) throw new Error("PHASE8_ROLLBACK_RECOVERY_IDEMPOTENCY_KEY_INVALID");
     const executeRequest = (key: IdempotencyKey, requestHash: string, exportId: string, eventId: string) =>
       applicationOperations.idempotency.execute({
         operationScope: "portfolio.owner-export", actorScope,
@@ -269,5 +275,35 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL && APPLICATION_URL))("Phase 8 rol
       .toEqual([failedJobRow]);
     expect((await admin!.query("select occurrences,safe_error_code from operations.incidents where incident_key=$1",
       [`job:${failedExportJobId}`])).rows).toEqual([{ occurrences: 1, safe_error_code: "EXPORT_ASSEMBLY_FAILED" }]);
+  });
+
+  it("terminalizes a mismatched payload version immediately with one incident instead of a retry", async () => {
+    // The documented permanent path: a job whose payload version fails the
+    // current handler policy is failure-coded on its first claim and
+    // terminalized without consuming a retry window.
+    const invalidJobId = id("Job");
+    const invalidAvailableAt = new Date(Date.parse(now) - 60_000).toISOString();
+    await admin!.query(`insert into operations.jobs(job_id,job_type,payload_version,payload,available_at)
+      values ($1,'measurement.detail-retention.v1',2,'{}'::jsonb,$2)`, [invalidJobId, invalidAvailableAt]);
+    const daily = createDailyAggregateWorkService({ portfolioId, transactions: worker!.transactions,
+      repository: createPostgresDailyAggregateRepository() });
+    const measurementRetention = createMeasurementRetentionWorkService({ portfolioId, transactions: worker!.transactions,
+      repository: createPostgresMeasurementRetentionRepository() });
+    const feedbackRetention = createFeedbackRetentionWorkService({ portfolioId, transactions: worker!.transactions,
+      repository: createPostgresFeedbackRetentionRepository() });
+    const service = createPhase7DueWorkService({ portfolioId, clock: { now: () => now }, ids: createSystemIdGenerator(),
+      operations: createPostgresOperationsPersistence(worker!.database),
+      measurement: { ...daily, ...measurementRetention }, interaction: feedbackRetention });
+    const result = await service.runDueWork({ workerId: "phase8-invalid-payload" });
+    expect(result).toMatchObject({ ok: true, value: { scheduled: 4, claimed: 1, completed: 0, released: 0,
+      failed: 1, staleLeases: 0, processedCount: 0, incomplete: true } });
+    expect((await admin!.query("select status,attempt_count,payload,last_error_code from operations.jobs where job_id=$1",
+      [invalidJobId])).rows)
+      .toEqual([{ status: "dead", attempt_count: 1, payload: {}, last_error_code: "PHASE7_JOB_INVALID" }]);
+    expect((await admin!.query("select occurrences,safe_error_code from operations.incidents where incident_key=$1",
+      [`job:${invalidJobId}`])).rows).toEqual([{ occurrences: 1, safe_error_code: "PHASE7_JOB_INVALID" }]);
+    // attempt_count stays at 1 and the row is terminal: no retry window was
+    // consumed for the invalid payload.
+    expect(result.ok && result.value.released).toBe(0);
   });
 });

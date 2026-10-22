@@ -12,6 +12,10 @@ const runId = randomUUID();
 const refreshTypes = process.argv.includes("--refresh-types");
 const ticket237 = process.argv.includes("--ticket-237");
 const initialSource = workingTreeSourceSha256();
+// The #206 scope must stay byte-equivalent to the originally recorded
+// #206 evidence; only the #237 path mentions the #237-owned probes.
+const scope206 = "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, bounded five-attempt retry policy with seeded vectors, database-time availability and lease fences, stale-token denial, retry/dead-letter incident atomicity, final-attempt crash recovery, and idempotent post-effect replay.";
+const scope237 = `${scope206} The #237 path adds forced domain rollback with no outbox/job/receipt residue, post-commit optional export-failure preservation of committed core state, immediate invalid-payload terminalization without a retry, and fresh-request recovery after failed export.`;
 const discoveredBin = process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" :
   spawnSync("pg_config", ["--bindir"], { encoding: "utf8", timeout: 5_000 }).stdout?.trim();
 const bin = process.env.PHASE7_POSTGRES_BIN ?? discoveredBin ?? "";
@@ -64,14 +68,16 @@ try {
   await admin.query("create role due_work_worker_runtime login nosuperuser nobypassrls; grant shipwithali_worker to due_work_worker_runtime");
   const workerUrl = `postgres://due_work_worker_runtime@127.0.0.1:${port}/postgres?sslmode=disable`;
   // #237 application-runner probes reserve idempotency receipts and append
-  // outbox events, which the application role alone owns, so its runtime login
-  // is provisioned beside the restricted worker login.
-  await admin.query("create role due_work_application_runtime login nosuperuser nobypassrls; grant shipwithali_application to due_work_application_runtime");
+  // outbox events, which the application role alone owns, so that runtime login
+  // is provisioned only on the #237 path; the #206 path keeps its originally
+  // recorded worker/anon/authenticated provisioning unchanged.
+  if (ticket237) {
+    await admin.query("create role due_work_application_runtime login nosuperuser nobypassrls; grant shipwithali_application to due_work_application_runtime");
+  }
   const applicationUrl = `postgres://due_work_application_runtime@127.0.0.1:${port}/postgres?sslmode=disable`;
   const env = { ...process.env, PHASE7_JOBS_WORKER_URL: workerUrl,
     PHASE7_JOBS_SECOND_WORKER_URL: workerUrl, PHASE7_JOBS_ADMIN_URL: `${adminUrl}?sslmode=disable`,
-    PHASE7_JOBS_APPLICATION_URL: applicationUrl,
-    ...(ticket237 ? { PHASE3_DATABASE_URL: `${adminUrl}?sslmode=disable`, PHASE3_REQUIRE_DATABASE: "1" } : {}) };
+    ...(ticket237 ? { PHASE7_JOBS_APPLICATION_URL: applicationUrl, PHASE3_DATABASE_URL: `${adminUrl}?sslmode=disable`, PHASE3_REQUIRE_DATABASE: "1" } : {}) };
   stage = "type-generation";
   for (const [schema, typeFile] of [
     ["measurement", "src/modules/measurement/adapters/database.generated.ts"],
@@ -89,7 +95,7 @@ try {
   // dedicated rollback/recovery acceptance file.
   const acceptanceFiles = ["tests/phase7/due-work.test.ts", "tests/phase7/due-work-postgres.test.ts",
     ...(ticket237 ? ["tests/phase7/rollback-recovery-postgres.test.ts"] : [])];
-  const expectedTests = ticket237 ? 14 : 11;
+  const expectedTests = ticket237 ? 15 : 11;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -127,7 +133,7 @@ try {
       ["T19-01", "T19-02", "T19-03", "T19-04", "T19-05", "T19-06", "T19-07", "T19-08", "T19-09"],
     reproduction: ticket237 ? "npm run setup:validation; npm run validation:ready; npm run phase8:focus:retry-recovery" :
       "npm run setup:validation; npm run validation:ready; npm run phase7:focus:jobs",
-    scope: "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, bounded five-attempt retry policy with seeded vectors, database-time availability and lease fences, stale-token denial, retry/dead-letter incident atomicity, final-attempt crash recovery, idempotent post-effect replay, forced domain rollback with no outbox/job/receipt residue, post-commit optional export-failure preservation of committed core state, and fresh-request recovery after failed export.",
+    scope: ticket237 ? scope237 : scope206,
   };
   console.log(JSON.stringify({ required: result.required, runId, sourceTreeSha256: testedSource }));
 } catch (error) {
