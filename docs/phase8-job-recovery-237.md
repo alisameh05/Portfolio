@@ -36,10 +36,12 @@ npm run phase8:focus:retry-recovery
 ```
 
 It starts disposable native PostgreSQL, applies all migrations, exercises the
-restricted worker role and cleans up its cluster. It does not perform a live
-re-drive. This ticket does not provision operator credentials or a deployed
-operator CLI; do not invoke `redriveDeadJob` without the host authorization
-composition.
+restricted worker runtime role (`due_work_worker_runtime`, member of
+`shipwithali_worker`), the application runtime role (`due_work_application_runtime`,
+member of `shipwithali_application`), the restricted-role RLS matrix (68 role
+probes), and cleans up its cluster. It does not perform a live re-drive. This
+ticket does not provision operator credentials or a deployed operator CLI; do
+not invoke `redriveDeadJob` without the host authorization composition.
 
 ## Delivery guarantees and owner recovery
 
@@ -52,6 +54,31 @@ add provider idempotency or durable reconciliation before it is registered.
 Failed Owner exports remain terminal and their artifact IDs are not reused.
 The Owner recovery path is a new `requestOwnerExport` operation with a fresh
 idempotency key, which creates a new export ID; there is no product retry
-operation. Publication, route, taxonomy, CV and moderation mutations continue
-to commit state, projection and outbox together. Optional post-commit work must
-not roll back or replace the last valid publication when it fails.
+operation. The application-runner probe
+`puts failed export recovery on a fresh request instead of a replayed or reused artifact`
+exercises this on the application role: the original request executes and then
+replays verbatim, a replay with changed effect content under the original key
+is refused as a conflict, and recovery only proceeds with a new key, new
+request hash and new artifact ID, which persists its own receipt and outbox
+event. Failed recovery therefore never mutates the terminal artifact or its
+receipt.
+
+Forced domain rollback discards every write in the domain transaction. The
+probe `forces a domain rollback that yields no outbox event, job, or durable
+receipt` rolls back an application-role transaction holding an explicit
+outbox event, an idempotency receipt with its projected effect event (zero
+rows for both events and zero receipts), and a worker-role transaction
+holding a queue reservation (zero job rows while a committed sibling
+reservation survives). Publication, route, taxonomy, CV and moderation
+mutations continue to commit state, projection and outbox together, and
+their forced-rollback atomicity is also asserted by the Phase 5
+`content-authoring` integration tests, such as
+`rolls back route, pointer, projection, success receipt, and event after injected writes fail`
+and `rolls back the root, Revision, receipt, and outbox when the event append fails`
+(`tests/database/content-authoring.integration.test.ts`). Optional
+post-commit failures must not roll back or replace the last valid
+publication: the probe
+`keeps committed core state valid when optional post-commit export work fails`
+shows a committed daily aggregate and its public event stay valid while a
+later export-assembly job fails terminally with `EXPORT_ASSEMBLY_FAILED` and
+one incident.
