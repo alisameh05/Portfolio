@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
 import { createHash, randomUUID } from "node:crypto";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { approvedWindowsPhase2Skip, executeQualificationCommand, WINDOWS_PHASE2_NONREQUIRED_SKIP } from "./qualification-command.mjs";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
+import { createQualificationPrerequisiteCache } from "./qualification-prerequisite-cache.mjs";
+import { currentRuntimeIdentity } from "./qualification-context.mjs";
 
 import {
   classifyCheckResult,
@@ -15,6 +18,12 @@ import {
   REQUIRED_PHASE4_CHECK_NAMES,
   sanitizeEvidenceOutput,
 } from "./phase4-gate-support.mjs";
+import {
+  QUALIFICATION_CONTEXT_VARIABLE,
+  qualificationDefinitionSha256,
+  readQualificationRun,
+  verifyGatePredecessors,
+} from "./qualification-context.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const REPORT = join(ROOT, "evidence", "phase-4-gate-report.json");
@@ -22,6 +31,21 @@ const startedAt = Date.now();
 const runId = randomUUID();
 const revision = gitRevision();
 const sourceTreeSha256 = workingTreeSourceSha256();
+const prerequisiteCache = createQualificationPrerequisiteCache({ root: ROOT, sourceRevision: revision,
+  sourceTreeSha256, runtime: currentRuntimeIdentity(), environment: process.env });
+const sharedContextPath = process.env[QUALIFICATION_CONTEXT_VARIABLE] ?? null;
+const sharedPredecessors = verifyGatePredecessors({
+  context: sharedContextPath === null ? null : readQualificationRun(ROOT, sharedContextPath),
+  nodeIds: ["phase1", "phase2"],
+  root: ROOT,
+  revision,
+  sourceTreeSha256,
+  definitionHash: qualificationDefinitionSha256(),
+});
+const SHARED_PREDECESSOR_NODES = Object.freeze({
+  "predecessor-phase1": "phase1",
+  "predecessor-phase2": "phase2",
+});
 
 const checks = [
   { name: "validation-ready", npmScript: "validation:ready", args: [] },
@@ -49,16 +73,16 @@ const checks = [
     env: { SHIPWITHALI_PHASE: "phase4" },
     failOnSkipped: true,
   },
-  { name: "exact-toolchain", entry: "scripts/check-toolchain.mjs", args: [] },
-  { name: "contract-verification", npmScript: "contract:verify", args: [] },
-  { name: "tooling-tests", npmScript: "test:setup", args: [] },
-  { name: "typecheck", entry: "node_modules/typescript/bin/tsc", args: ["--noEmit"] },
-  { name: "lint", entry: "node_modules/eslint/bin/eslint.js", args: ["."] },
-  { name: "production-build", entry: "node_modules/next/dist/bin/next", args: ["build"] },
-  { name: "architecture", entry: "scripts/architecture-check.mjs", args: [] },
-  { name: "route-inventory", entry: "scripts/check-route-inventory.mjs", args: [] },
-  { name: "runtime-boundary", entry: "scripts/check-runtime-boundary.mjs", args: [] },
-  { name: "runtime-architecture", entry: "scripts/check-runtime-architecture.mjs", args: [] },
+  { name: "exact-toolchain", entry: "scripts/check-toolchain.mjs", args: [], cacheScript: "direct:check-toolchain.mjs" },
+  { name: "contract-verification", npmScript: "contract:verify", args: [], cacheScript: "contract:verify" },
+  { name: "tooling-tests", npmScript: "test:setup", args: [], cacheScript: "test:setup" },
+  { name: "typecheck", entry: "node_modules/typescript/bin/tsc", args: ["--noEmit"], cacheScript: "direct:typescript" },
+  { name: "lint", entry: "node_modules/eslint/bin/eslint.js", args: ["."], cacheScript: "direct:eslint" },
+  { name: "production-build", entry: "node_modules/next/dist/bin/next", args: ["build"], cacheScript: "direct:next" },
+  { name: "architecture", entry: "scripts/architecture-check.mjs", args: [], cacheScript: "direct:architecture-check.mjs" },
+  { name: "route-inventory", entry: "scripts/check-route-inventory.mjs", args: [], cacheScript: "direct:check-route-inventory.mjs" },
+  { name: "runtime-boundary", entry: "scripts/check-runtime-boundary.mjs", args: [], cacheScript: "direct:check-runtime-boundary.mjs" },
+  { name: "runtime-architecture", entry: "scripts/check-runtime-architecture.mjs", args: [], cacheScript: "direct:check-runtime-architecture.mjs" },
   { name: "phase4-context", entry: "scripts/check-phase4-context.mjs", args: [], failOnSkipped: true },
   {
     name: "phase4-focused-tests",
@@ -108,6 +132,7 @@ function sanitize(value) {
 }
 
 function npmCommand(script, args) {
+  if (script === "contract:verify") return { entry: process.execPath, args: [join(ROOT, "scripts/qualification-contract-verification.mjs")] };
   if (process.env.npm_execpath) {
     return { entry: process.execPath, args: [process.env.npm_execpath, "run", script, ...args] };
   }
@@ -118,50 +143,41 @@ function npmCommand(script, args) {
   };
 }
 
-function run(check) {
-  return new Promise((resolve) => {
-    const command = check.npmScript
-      ? npmCommand(check.npmScript, check.args)
-      : { entry: process.execPath, args: [check.entry, ...check.args] };
-    const child = spawn(command.entry, command.args, {
-      cwd: ROOT,
-      env: { ...process.env, CI: "1", SHIPWITHALI_PHASE: "phase4", ...check.env },
-      shell: command.shell ?? false,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const chunks = [];
-    child.stdout.on("data", (chunk) => chunks.push(chunk));
-    child.stderr.on("data", (chunk) => chunks.push(chunk));
-    let spawnError;
-    child.on("error", (error) => { spawnError = error; });
-    const heartbeat = setInterval(() => console.log(`… ${check.name} still running`), 10_000);
-    child.on("close", (code) => {
-      clearInterval(heartbeat);
-      const output = sanitize(Buffer.concat(chunks).toString("utf8"))
-        .split(/\r?\n/)
-        .map((line) => line.trimEnd())
-        .join("\n")
-        .trimEnd();
-      const evidence = `evidence/phase-4-${check.name}.log`;
-      const evidencePath = join(ROOT, evidence);
-      mkdirSync(dirname(evidencePath), { recursive: true });
-      writeFileSync(evidencePath, `${output}\n`, "utf8");
-      if (output) process.stdout.write(`${output}\n`);
-
-      const classified = classifyCheckResult({
-        code: code ?? 1,
-        spawnError,
-        output,
-        failOnSkipped: check.failOnSkipped ?? false,
-        allowWindowsPhase2HelperProcessSkip: check.allowWindowsPhase2HelperProcessSkip ?? false,
-        requiresService: check.requiresService ?? null,
-      });
-      if (classified.failure) {
-        console.error(`✗ ${check.name}: ${classified.failure}`);
-      }
-      resolve({ name: check.name, ...classified, evidence });
-    });
+async function run(check) {
+  const command = check.npmScript
+    ? npmCommand(check.npmScript, check.args)
+    : { entry: process.execPath, args: [check.entry, ...check.args] };
+  const environment = { ...process.env, CI: "1", SHIPWITHALI_PHASE: "phase4", ...check.env };
+  const invoke = () => executeQualificationCommand({ ...command, cwd: ROOT, environment,
+    heartbeat: () => console.log(`… ${check.name} still running`) });
+  const execution = check.cacheScript === undefined ? await invoke() : await prerequisiteCache.runAsync({
+    script: check.cacheScript, args: check.args, entry: check.npmScript ? `npm:${check.npmScript}` :
+      JSON.stringify({ entry: command.entry, args: command.args }),
+    environment, invoke, sanitizeOutput: sanitize,
   });
+  const output = sanitize(execution.output).split(/\r?\n/).map((line) => line.trimEnd()).join("\n").trimEnd();
+  const approvedSkip = check.name === "predecessor-phase2" && approvedWindowsPhase2Skip(output, { phase2RuntimeSuite: true }) &&
+    execution.status === 1 && execution.errorCode === "QUALIFICATION_COMMAND_INCOMPLETE" && execution.skipped === 1;
+  const evidence = `evidence/phase-4-${check.name}.log`;
+  const evidencePath = join(ROOT, evidence);
+  mkdirSync(dirname(evidencePath), { recursive: true });
+  writeFileSync(evidencePath, `${output}\n`, "utf8");
+  if (output) process.stdout.write(`${output}\n`);
+
+  const spawnError = execution.errorCode === null ? undefined : Object.assign(new Error("spawn failed"), { code: execution.errorCode });
+  const classified = approvedSkip ? { passed: true, exitCode: 0, failure: null } : classifyCheckResult({
+    code: execution.status,
+    spawnError,
+    output,
+    failOnSkipped: check.failOnSkipped ?? false,
+    allowWindowsPhase2HelperProcessSkip: check.allowWindowsPhase2HelperProcessSkip ?? false,
+    requiresService: check.requiresService ?? null,
+  });
+  if (execution.skipped > 0 && check.failOnSkipped && !approvedSkip) classified.failure = "skipped-or-partial", classified.passed = false, classified.exitCode = 1;
+  if (classified.failure) console.error(`✗ ${check.name}: ${classified.failure}`);
+  return { name: check.name, ...classified, observedExitCode: execution.status, skipped: approvedSkip ? 0 : execution.skipped,
+    observedSkipped: execution.skipped, nonRequiredSkips: approvedSkip ? [WINDOWS_PHASE2_NONREQUIRED_SKIP] : [], evidence, executed: true, reused: execution.reused === true,
+    reuseProof: execution.reuseProof ?? null };
 }
 
 function evidenceRecord(file) {
@@ -272,25 +288,41 @@ async function main() {
       results.push({ name: check.name, passed: false, exitCode: 1, failure: "validation-not-ready", evidence });
       continue;
     }
+    const reusedNode = SHARED_PREDECESSOR_NODES[check.name] ?? null;
+    const reuse = reusedNode === null ? undefined : sharedPredecessors.reuse.get(reusedNode);
+    if (reuse !== undefined) {
+      console.log(`… ${check.name} reused from the shared qualification context (${reuse.file}).`);
+      results.push({
+        name: check.name,
+        passed: true,
+        exitCode: 0,
+        reused: true,
+        reusedFrom: reuse,
+        evidence: null,
+      });
+      continue;
+    }
     const result = await run(check);
     results.push(result);
     if (check.name === "validation-ready" && !result.passed) validationReady = false;
   }
 
   const requiredEvidence = [
-    ...results.map((result) => result.evidence),
+    ...results.map((result) => result.evidence).filter((file) => typeof file === "string"),
     "evidence/phase-1-gate-report.json",
     "evidence/phase-2-gate-report.json",
     "evidence/phase-4-context.json",
     "evidence/phase-4-database-integrity.json",
   ];
   const evidence = requiredEvidence.map(evidenceRecord);
+  const reusableEvidence = [...sharedPredecessors.reuse.values()].map(({ file, sha256 }) => ({ file, sha256 }));
   const gate = evaluateGate({
     checks: results,
     requiredCheckNames: REQUIRED_PHASE4_CHECK_NAMES,
     evidence,
     runId,
     revision,
+    reusableEvidence,
   });
   const database = readJson("evidence/phase-4-database-integrity.json");
   const finalRevision = gitRevision();

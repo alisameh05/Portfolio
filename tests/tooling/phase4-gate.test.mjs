@@ -8,6 +8,7 @@ import {
   REQUIRED_PHASE4_CHECK_NAMES,
   sanitizeEvidenceOutput,
 } from "../../scripts/phase4-gate-support.mjs";
+import { approvedWindowsPhase2Skip, normalizeQualificationCommandResult, WINDOWS_PHASE2_NONREQUIRED_SKIP } from "../../scripts/qualification-command.mjs";
 
 test("the required checklist includes every predecessor and Phase 4 acceptance runner", () => {
   assert.deepEqual(REQUIRED_PHASE4_CHECK_NAMES, [
@@ -38,6 +39,28 @@ test("a passing constituent passes only when it exits cleanly", () => {
     classifyCheckResult({ code: 0, output: "All assertions passed", failOnSkipped: true }),
     { passed: true, exitCode: 0, failure: null },
   );
+  // Phase 5 maps the normalized prerequisite-cache outcome into writeCheck's
+  // error field, which is forwarded unchanged as classifyCheckResult.spawnError.
+  const classifyCached = (outcome) => classifyCheckResult({
+    code: outcome.status, spawnError: outcome.errorCode ? { code: outcome.errorCode } : null,
+    output: outcome.output, failOnSkipped: true,
+  });
+  const success = normalizeQualificationCommandResult({ status: 0, output: "All assertions passed" });
+  assert.equal(success.errorCode, null);
+  assert.deepEqual(classifyCached(success), { passed: true, exitCode: 0, failure: null });
+  for (const outcome of [
+    normalizeQualificationCommandResult({ status: 0, errorCode: "ENOENT", output: "command could not start" }),
+    normalizeQualificationCommandResult({ status: 1, output: "command failed" }),
+    normalizeQualificationCommandResult({ status: 0, output: "2 skipped" }),
+    normalizeQualificationCommandResult({ status: 0, signal: "SIGTERM", output: "command interrupted" }),
+    normalizeQualificationCommandResult({ status: 0, timedOut: true, output: "command timed out" }),
+  ]) assert.equal(classifyCached(outcome).passed, false);
+  for (const spawnError of [null, undefined]) {
+    assert.deepEqual(classifyCheckResult({ code: 0, spawnError, output: "All assertions passed" }),
+      { passed: true, exitCode: 0, failure: null });
+  }
+  assert.deepEqual(classifyCheckResult({ code: 0, spawnError: { code: "ENOENT" }, output: "All assertions passed" }),
+    { passed: false, exitCode: 1, failure: "spawn-failed" });
 });
 
 test("a required local service cannot pass when unavailable even with exit code zero", () => {
@@ -69,7 +92,10 @@ test("skipped and partial required results fail", () => {
 });
 
 test("Phase 2's single known Windows helper-process skip is the only tolerated skip", () => {
-  const knownSkip = "✓ tests/runtime/media-processing-tools.test.ts (14 tests | 1 skipped) 6357ms\nTests 624 passed | 1 skipped (625)";
+  const knownSkip = `↓ ${WINDOWS_PHASE2_NONREQUIRED_SKIP}\nTests 629 passed | 1 skipped (630)`;
+  assert.equal(approvedWindowsPhase2Skip(knownSkip, { platform: "win32", phase2RuntimeSuite: true }), true);
+  assert.equal(approvedWindowsPhase2Skip(`${knownSkip}\n↓ other.test.ts > skipped`, { platform: "win32", phase2RuntimeSuite: true }), false);
+  assert.equal(approvedWindowsPhase2Skip(knownSkip, { platform: "linux", phase2RuntimeSuite: true }), false);
   assert.deepEqual(classifyCheckResult({ code: 0, output: knownSkip, failOnSkipped: true,
     allowWindowsPhase2HelperProcessSkip: true, platform: "win32" }),
   { passed: true, exitCode: 0, failure: null });

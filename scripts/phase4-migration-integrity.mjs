@@ -1,5 +1,17 @@
-import { migrationSha256 } from "./migration-checksum.mjs";
+﻿import { migrationSha256 } from "./migration-checksum.mjs";
+import {
+  composeOperationsBoundary,
+  PHASE4_RELEASE_BOUNDARY,
+  PHASE5_MIGRATION_COMPATIBILITY,
+  PHASE5_MIGRATION_FIRST,
+  PHASE5_MIGRATION_LAST,
+  PHASE_DATABASE_TRANSFORMATIONS,
+  resolveMigrationClassifications,
+} from "./phase-contract-registry.mjs";
+import { ValidationFailure } from "./validation-errors.mjs";
 import { Client } from "pg";
+
+export { PHASE5_MIGRATION_COMPATIBILITY };
 
 export const PHASE4_APPLICATION_TABLES = Object.freeze([
   "identity_access.owner_links",
@@ -36,25 +48,9 @@ const PHASE4_APPLICATION_POLICIES = new Map([
   ]],
 ]);
 
-export const PHASE5_MIGRATION_COMPATIBILITY = Object.freeze({
-  "20261005001318_create_content_authoring.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds new content item and immutable revision tables; existing Phase 4 write paths are unchanged." },
-  "20261007090000_add_immutable_content_revision_reviews.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds review storage and revision identity uniqueness; existing content writes remain valid." },
-  "20261007170000_add_project_publication_routes.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds route, publication, history, and discovery tables without removing the previous content contract." },
-  "20261007190000_add_achievement_publication_timeline.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Broadens publication kinds and relaxes route identity for non-Project content; Project publications still require a route identity." },
-  "20261007200000_publish_localized_testimonials.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds testimonial publication and projection tables without changing existing write requirements." },
-  "20261008090000_preserve_project_route_history.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds immutable route history and broadens Owner discovery scope for lifecycle management." },
-  "20261008120000_add_content_lifecycle_history.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds an append-only lifecycle history table; existing content rows and writes remain valid." },
-  "20261008130000_add_project_status_and_featured.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds nullable status references and default-false Featured columns; existing Project inserts retain valid defaults." },
-  "20261008180000_add_project_relationships.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds relationship, view, and history tables without changing existing content writes." },
-  "20261008210000_provision_project_taxonomies.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds Taxonomy and assignment tables plus nullable discovery projection fields; existing Project writes remain valid." },
-  "20261009090000_record_taxonomy_evolution_actor_reason.sql": { stage: "lockstep", priorWriterCompatible: false, boundary: "The new history check requires Owner actor IDs for rename, retire, and merge writes. Deploy the actor-aware #120 writer with this migration and do not keep older actor-less writers online." },
-  "20261009100000_index_project_discovery_reads.sql": { stage: "expand", priorWriterCompatible: true, boundary: "Adds two indexes only; no application contract changes." },
-});
-const PHASE5_MIGRATION_FIRST = "20261005001318_create_content_authoring.sql";
-const PHASE5_MIGRATION_LAST = "20261009100000_index_project_discovery_reads.sql";
 
 export function phase4ReleaseMigrationFiles(files) {
-  return [...files].filter((file) => file.localeCompare(PHASE5_MIGRATION_FIRST) < 0);
+  return [...files].filter((file) => file.localeCompare(PHASE4_RELEASE_BOUNDARY) < 0);
 }
 
 export function migrationsAfterPhase5(files) {
@@ -223,7 +219,14 @@ export async function snapshotPhase4Database(connectionString) {
   await client.connect();
   let stage = "schemas";
   try {
-    const serverVersion = await client.query("select version() as version");
+    const serverVersion = await client.query(
+      "select version() as version, current_setting('server_version_num')::integer as \"serverVersionNum\"",
+    );
+    const serverVersionNum = serverVersion.rows[0]?.serverVersionNum;
+    const postgresMajor = typeof serverVersionNum === "number" && serverVersionNum >= 100000
+      ? Math.floor(serverVersionNum / 10000)
+      : null;
+    if (postgresMajor !== 17 && postgresMajor !== 18) throw new Error(`PHASE4_POSTGRES_MAJOR_UNSUPPORTED:${postgresMajor ?? "unknown"}`);
     const schemas = await client.query(
       `select n.nspname as name, pg_get_userbyid(n.nspowner) as owner,
               coalesce(n.nspacl::text, '') as acl
@@ -391,6 +394,7 @@ export async function snapshotPhase4Database(connectionString) {
     );
     const result = {
       postgresVersion: serverVersion.rows[0]?.version ?? null,
+      postgresMajor,
       schemas: schemas.rows,
       roles: roles.rows,
       roleMemberships: roleMemberships.rows,
@@ -427,18 +431,12 @@ export async function snapshotPhase4Database(connectionString) {
 
 export function phase3OperationsContract(snapshot) {
   return {
-    operationsSchema: snapshot.schemas.filter((schema) => schema.name === "operations"),
+    schemas: snapshot.schemas.filter((schema) => schema.name === "operations"),
     objects: snapshot.objects.filter((object) => object.schema === "operations"),
     columns: snapshot.columns.filter((column) => column.schema === "operations"),
     constraints: snapshot.constraints.filter((constraint) => constraint.schema === "operations"),
-    policies: snapshot.policies.filter((policy) =>
-      policy.schema === "operations" &&
-      policy.name !== "measurement_event_jobs_application_insert",
-    ),
-    grants: snapshot.grants.filter((grant) =>
-      grant.schema === "operations" &&
-      !(grant.object === "jobs" && grant.grantee === "shipwithali_application" && grant.privilege === "INSERT"),
-    ),
+    policies: snapshot.policies.filter((policy) => policy.schema === "operations"),
+    grants: snapshot.grants.filter((grant) => grant.schema === "operations"),
     defaultPrivileges: snapshot.defaultPrivileges.filter((grant) => grant.schema === "operations"),
     indexes: snapshot.indexes.filter((index) => index.schema === "operations"),
     functions: snapshot.functions.filter((fn) => fn.schema === "operations"),
@@ -451,117 +449,124 @@ export function phase4ReleaseContract(snapshot) {
   return {
     ...snapshot,
     roleMemberships: roleMembershipContract(snapshot.roleMemberships ?? []),
-    policies: snapshot.policies.filter((policy) =>
-      !(policy.schema === "operations" && policy.name === "measurement_event_jobs_application_insert"),
-    ),
-    grants: snapshot.grants.filter((grant) =>
-      !(grant.schema === "operations" && grant.object === "jobs" &&
-        grant.grantee === "shipwithali_application" && grant.privilege === "INSERT"),
-    ),
+    policies: snapshot.policies,
+    grants: snapshot.grants,
   };
 }
 
 // The Phase 8 bounded-retry migration (bound_job_retries_and_incidents) is the
-// one sanctioned transformation of the Phase 3 operations contract: it adds the
-// incidents and job_redrive_audit surfaces, extends outbox_events with dead_at,
-// and replaces the jobs lifecycle/status checks and the outbox due-work index.
-// Every other Phase 3 operations row must survive the upgrade unchanged, and
-// additions are only accepted inside the declared new tables (plus dead_at and
-// the new terminal-state check).
-const PHASE8_OPERATIONS_BOUNDARY = Object.freeze({
-  newTables: Object.freeze(["incidents", "job_redrive_audit"]),
-  constraintsReplaced: Object.freeze({ jobs_check: "jobs_lifecycle_check" }),
-  constraintsRedefined: Object.freeze(["jobs_status_check"]),
-  newConstraints: Object.freeze(["outbox_events_terminal_state_check"]),
-  indexesRedefined: Object.freeze(["outbox_events_due_idx"]),
-  newColumn: "dead_at",
+// one sanctioned transformation of the Phase 3 operations contract. Its exact
+// deltas are declared in the shared registry (scripts/phase-contract-registry.mjs);
+// historical gates compose that boundary instead of holding hard-coded ticket
+// exceptions. Everything else must survive the upgrade byte-for-byte: any
+// undeclared removal, alteration, or addition of existing rows - including
+// changed definitions, predicates, types, ownership, grants, or grantability -
+// fails with the offending schema path.
+const OPERATION_CONTRACT_CATEGORIES = Object.freeze({
+  schemas: (row) => row.name,
+  objects: (row) => `${row.schema}.${row.name}`,
+  columns: (row) => `${row.schema}.${row.tableName}.${row.name}`,
+  constraints: (row) => `${row.schema}.${row.tableName}.${row.name}`,
+  policies: (row) => `${row.schema}.${row.tableName}.${row.name}`,
+  grants: (row) => `${row.schema}.${row.object}.${row.objectType}.${row.grantee}:${row.grantor}:${row.privilege}`,
+  defaultPrivileges: (row) => `${row.schema}.${row.owner}.${row.objectType}.${row.grantee}:${row.grantor}:${row.privilege}`,
+  indexes: (row) => `${row.schema}.${row.table}.${row.name}`,
+  functions: (row) => `${row.schema}.${row.name}(${row.arguments})`,
+  triggers: (row) => `${row.schema}.${row.tableName}.${row.name}`,
+  types: (row) => `${row.schema}.${row.name}`,
 });
 
-function additionsWithSurvivors(label, beforeRows, afterRows, key) {
-  const afterKeys = new Set(afterRows.map(key));
-  const beforeKeys = new Set(beforeRows.map(key));
-  const missing = beforeRows.filter((row) => !afterKeys.has(key(row)));
-  if (missing.length > 0) {
-    throw new Error(`PHASE3_OPERATIONS_CONTRACT_LOST:${label}:${missing.map(key).join("|")}`);
-  }
-  return afterRows.filter((row) => !beforeKeys.has(key(row)));
+function contractRows(snapshot, category) {
+  const rows = snapshot[category];
+  return Array.isArray(rows) ? rows.filter((row) => row.schema === "operations" || category === "schemas" && row.name === "operations") : [];
 }
 
-export function assertPhase3OperationsContractPreserved(phase3, upgraded) {
-  const before = phase3OperationsContract(phase3);
-  const after = phase3OperationsContract(upgraded);
-  for (const label of ["schemas", "functions", "triggers", "types", "defaultPrivileges"]) {
-    if (JSON.stringify(before[label]) !== JSON.stringify(after[label])) {
-      throw new Error(`PHASE3_OPERATIONS_CONTRACT_ALTERED:${label}`);
+function jsonEqual(left, right) {
+  return JSON.stringify(stable(left)) === JSON.stringify(stable(right));
+}
+
+function firstDifference(left, right, path = "") {
+  if (jsonEqual(left, right)) return null;
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") return path || "value";
+  for (const key of [...new Set([...Object.keys(left), ...Object.keys(right)])].sort()) {
+    const difference = firstDifference(left[key], right[key], path ? `${path}.${key}` : key);
+    if (difference !== null) return difference;
+  }
+  return path || "value";
+}
+
+function catalogIdentity(category, row) {
+  const identity = OPERATION_CONTRACT_CATEGORIES[category];
+  if (!identity) throw new Error(`PHASE3_OPERATIONS_CONTRACT_CATEGORY_UNKNOWN:${category}`);
+  return identity(row);
+}
+
+function failPreservation(code, category, identity, suffix = "") {
+  throw new ValidationFailure({
+    code,
+    check: "phase3-operations-preservation",
+    categories: [category],
+    paths: [`${category}:${identity}${suffix ? `:${suffix}` : ""}`],
+    detail: `${category} catalog row ${identity}${suffix ? ` differs at ${suffix}` : " differs from the reviewed contract"}`,
+  });
+}
+
+function assertUniqueOperationsRows(snapshot, stage) {
+  for (const category of Object.keys(OPERATION_CONTRACT_CATEGORIES)) {
+    const rows = contractRows(snapshot, category);
+    const keys = rows.map((row) => catalogIdentity(category, row));
+    const duplicate = keys.find((key, index) => keys.indexOf(key) !== index);
+    if (duplicate !== undefined) failPreservation("PHASE3_OPERATIONS_CONTRACT_DUPLICATE_IDENTITY", category, duplicate, stage);
+  }
+}
+
+export function assertPhase3OperationsContractPreserved(phase3, upgraded, {
+  transformations = PHASE_DATABASE_TRANSFORMATIONS,
+} = {}) {
+  if (![17, 18].includes(phase3?.postgresMajor) || ![17, 18].includes(upgraded?.postgresMajor)) {
+    throw new ValidationFailure({ code: "PHASE3_OPERATIONS_ENGINE_UNSUPPORTED", check: "phase3-operations-preservation", paths: ["postgresMajor"] });
+  }
+  if (phase3.postgresMajor !== upgraded.postgresMajor) {
+    throw new ValidationFailure({ code: "PHASE3_OPERATIONS_ENGINE_MISMATCH", check: "phase3-operations-preservation", paths: ["postgresMajor"] });
+  }
+  const expected = phase3OperationsContract(phase3);
+  const actual = phase3OperationsContract(upgraded);
+  assertUniqueOperationsRows(expected, "baseline");
+  assertUniqueOperationsRows(actual, "candidate");
+  const boundary = composeOperationsBoundary(transformations, phase3.postgresMajor);
+  for (const operation of boundary.operations) {
+    const rows = expected[operation.category];
+    if (!Array.isArray(rows)) throw new Error(`PHASE3_OPERATIONS_CONTRACT_CATEGORY_UNKNOWN:${operation.category}`);
+    const key = catalogIdentity(operation.category, operation.after ?? operation.before);
+    if (key !== operation.identity) throw new Error(`PHASE3_OPERATIONS_CONTRACT_DECLARATION_IDENTITY_MISMATCH:${operation.category}:${operation.identity}`);
+    const index = rows.findIndex((row) => catalogIdentity(operation.category, row) === operation.identity);
+    if (operation.before === null) {
+      if (index !== -1) failPreservation("PHASE3_OPERATIONS_CONTRACT_DECLARATION_PRECONDITION_FAILED", operation.category, operation.identity);
+    } else {
+      if (index === -1) failPreservation("PHASE3_OPERATIONS_CONTRACT_DECLARATION_PRECONDITION_FAILED", operation.category, operation.identity);
+      const difference = firstDifference(rows[index], operation.before);
+      if (difference !== null) failPreservation("PHASE3_OPERATIONS_CONTRACT_DECLARATION_PRECONDITION_FAILED", operation.category, operation.identity, difference);
+      rows.splice(index, 1);
     }
+    if (operation.after !== null) rows.push(structuredClone(operation.after));
   }
-  const newTableName = (value) => PHASE8_OPERATIONS_BOUNDARY.newTables.includes(String(value ?? "").split(".")[0]);
-
-  const objectAdditions = additionsWithSurvivors("objects", before.objects, after.objects, (row) => row.name);
-  const acceptedObjects = objectAdditions.filter((row) => newTableName(row.name));
-  if (acceptedObjects.length !== objectAdditions.length) {
-    throw new Error(`PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION:objects:${objectAdditions.filter((row) => !acceptedObjects.includes(row)).map((row) => row.name).join("|")}`);
-  }
-
-  const columnAdditions = additionsWithSurvivors(
-    "columns", before.columns, after.columns, (row) => `${row.tableName}.${row.name}`);
-  const acceptedColumns = columnAdditions.filter(
-    (row) => newTableName(row.tableName) || row.tableName === "outbox_events" && row.name === PHASE8_OPERATIONS_BOUNDARY.newColumn,
-  );
-  if (acceptedColumns.length !== columnAdditions.length) {
-    throw new Error(`PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION:columns:${columnAdditions.filter((row) => !acceptedColumns.includes(row)).map((row) => `${row.tableName}.${row.name}`).join("|")}`);
-  }
-
-  const constraintsAfter = new Set(after.constraints.map((row) => row.name));
-  for (const replacement of Object.values(PHASE8_OPERATIONS_BOUNDARY.constraintsReplaced)) {
-    if (!constraintsAfter.has(replacement)) {
-      throw new Error(`PHASE3_OPERATIONS_CONTRACT_REPLACEMENT_MISSING:constraints:${replacement}`);
+  assertUniqueOperationsRows(expected, "expected");
+  for (const category of Object.keys(OPERATION_CONTRACT_CATEGORIES)) {
+    const expectedRows = expected[category];
+    const actualRows = actual[category];
+    const byIdentity = new Map(actualRows.map((row) => [catalogIdentity(category, row), row]));
+    const expectedIds = new Set(expectedRows.map((row) => catalogIdentity(category, row)));
+    for (const expectedRow of expectedRows) {
+      const identity = catalogIdentity(category, expectedRow);
+      const actualRow = byIdentity.get(identity);
+      if (actualRow === undefined) failPreservation("PHASE3_OPERATIONS_CONTRACT_LOST", category, identity);
+      const difference = firstDifference(expectedRow, actualRow);
+      if (difference !== null) failPreservation("PHASE3_OPERATIONS_CONTRACT_ALTERED", category, identity, difference);
     }
-  }
-  for (const name of [...PHASE8_OPERATIONS_BOUNDARY.constraintsRedefined, ...PHASE8_OPERATIONS_BOUNDARY.newConstraints]) {
-    if (!constraintsAfter.has(name)) {
-      throw new Error(`PHASE3_OPERATIONS_CONTRACT_REPLACEMENT_MISSING:constraints:${name}`);
+    for (const actualRow of actualRows) {
+      const identity = catalogIdentity(category, actualRow);
+      if (!expectedIds.has(identity)) failPreservation("PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION", category, identity);
     }
-  }
-  const constraintLost = before.constraints.filter((row) =>
-    !constraintsAfter.has(row.name) &&
-    !Object.hasOwn(PHASE8_OPERATIONS_BOUNDARY.constraintsReplaced, row.name) &&
-    !PHASE8_OPERATIONS_BOUNDARY.constraintsRedefined.includes(row.name),
-  );
-  if (constraintLost.length > 0) {
-    throw new Error(`PHASE3_OPERATIONS_CONTRACT_LOST:constraints:${constraintLost.map((row) => `${row.tableName}.${row.name}`).join("|")}`);
-  }
-  const constraintAdditions = after.constraints.filter((row) =>
-    !before.constraints.some((beforeRow) => beforeRow.name === row.name) &&
-    !newTableName(row.tableName) &&
-    !PHASE8_OPERATIONS_BOUNDARY.newConstraints.includes(row.name) &&
-    !Object.values(PHASE8_OPERATIONS_BOUNDARY.constraintsReplaced).includes(row.name),
-  );
-  if (constraintAdditions.length > 0) {
-    throw new Error(`PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION:constraints:${constraintAdditions.map((row) => `${row.tableName}.${row.name}`).join("|")}`);
-  }
-
-  const indexAdditions = additionsWithSurvivors(
-    "indexes", before.indexes, after.indexes, (row) => `${row.table}.${row.name}`);
-  const acceptedIndexes = indexAdditions.filter(
-    (row) => newTableName(row.table) || PHASE8_OPERATIONS_BOUNDARY.indexesRedefined.includes(row.name),
-  );
-  if (acceptedIndexes.length !== indexAdditions.length) {
-    throw new Error(`PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION:indexes:${indexAdditions.filter((row) => !acceptedIndexes.includes(row)).map((row) => `${row.table}.${row.name}`).join("|")}`);
-  }
-
-  const policyAdditions = additionsWithSurvivors(
-    "policies", before.policies, after.policies, (row) => `${row.tableName}.${row.name}.${row.roles}.${row.command}`);
-  const acceptedPolicies = policyAdditions.filter((row) => newTableName(row.tableName));
-  if (acceptedPolicies.length !== policyAdditions.length) {
-    throw new Error(`PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION:policies:${policyAdditions.filter((row) => !acceptedPolicies.includes(row)).map((row) => `${row.tableName}.${row.name}`).join("|")}`);
-  }
-
-  const grantAdditions = additionsWithSurvivors(
-    "grants", before.grants, after.grants, (row) => `${row.object}.${row.grantee}:${row.privilege}`);
-  const acceptedGrants = grantAdditions.filter((row) => newTableName(row.object));
-  if (acceptedGrants.length !== grantAdditions.length) {
-    throw new Error(`PHASE3_OPERATIONS_CONTRACT_UNEXPECTED_ADDITION:grants:${grantAdditions.filter((row) => !acceptedGrants.includes(row)).map((row) => `${row.object}.${row.grantee}:${row.privilege}`).join("|")}`);
   }
 }
 

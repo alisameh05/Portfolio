@@ -8,8 +8,62 @@ import {
   localEnvironment,
   requireExecutedTests,
   requirePredecessorTests,
+  planCurrentCheckpointTests,
+  requestedDatabaseTestFiles,
 } from "../../scripts/portfolio-settings-integration.mjs";
 import { migrationsAfterPhase5, phase4ReleaseMigrationFiles } from "../../scripts/phase4-migration-integrity.mjs";
+import { PHASE_DATABASE_CHECKPOINTS } from "../../scripts/phase-contract-registry.mjs";
+
+for (const ticket of [122, 123]) {
+  test(`ticket ${ticket} executes every current checkpoint and required final suite exactly once`, () => {
+    const currentFiles = PHASE_DATABASE_CHECKPOINTS.find((checkpoint) => checkpoint.id === "current")
+      .suites.map((suite) => suite.file);
+    const finalFiles = requestedDatabaseTestFiles({
+      ticket122: ticket === 122, ticket123: ticket === 123, contentAuthoringTicket: true,
+    });
+    assert.equal(finalFiles.length, ticket === 122 ? 10 : 7);
+    assert.ok(finalFiles.some((file) => !currentFiles.includes(file)), "the mode requires additional suites");
+    const plan = planCurrentCheckpointTests(currentFiles, finalFiles);
+    assert.deepEqual(plan.auditFiles, currentFiles.filter((file) => !finalFiles.includes(file)));
+    assert.deepEqual(plan.finalFiles, finalFiles);
+    const executions = [...plan.auditFiles, ...plan.finalFiles];
+    const expected = [...new Set([...currentFiles, ...finalFiles])];
+    assert.deepEqual(plan.completeInventory, expected);
+    assert.deepEqual([...executions].sort(), [...expected].sort());
+    assert.equal(new Set(executions).size, executions.length);
+  });
+}
+
+test("checkpoint planning preserves default and content-authoring final suites without reruns", () => {
+  const currentFiles = PHASE_DATABASE_CHECKPOINTS.find((checkpoint) => checkpoint.id === "current")
+    .suites.map((suite) => suite.file);
+  for (const contentAuthoringTicket of [false, true]) {
+    const finalFiles = requestedDatabaseTestFiles({ contentAuthoringTicket });
+    const plan = planCurrentCheckpointTests(currentFiles, finalFiles);
+    assert.deepEqual(plan.finalFiles, finalFiles);
+    assert.deepEqual(plan.completeInventory, currentFiles);
+    assert.deepEqual([...plan.auditFiles, ...plan.finalFiles].sort(), [...currentFiles].sort());
+  }
+});
+
+test("checkpoint planning rejects duplicate inventories and invalid suite paths", () => {
+  const currentFiles = ["tests/database/role-rls-matrix.test.ts", "tests/database/portfolio-settings.integration.test.ts"];
+  const finalFiles = [currentFiles[1]];
+  const invalidInventories = [
+    [null, finalFiles],
+    [currentFiles, null],
+    [[...currentFiles, currentFiles[0]], finalFiles],
+    [currentFiles, [...finalFiles, finalFiles[0]]],
+  ];
+  for (const invalid of [undefined, null, 1, {}, "", "../tests/database/role-rls-matrix.test.ts",
+    "tests/database/../database/role-rls-matrix.test.ts", "tests\\database\\role-rls-matrix.test.ts",
+    "/tests/database/role-rls-matrix.test.ts", "package.json", "tests/other.test.ts"]) {
+    invalidInventories.push([[...currentFiles, invalid], finalFiles], [currentFiles, [invalid]]);
+  }
+  for (const [checkpoint, final] of invalidInventories) {
+    assert.throws(() => planCurrentCheckpointTests(checkpoint, final), /INVENTORY_PARTITION_INVALID/u);
+  }
+});
 
 test("settings project identities fit the CLI's 40-character container identity limit", () => {
   for (const kind of ["clean", "upgrade"]) {
@@ -98,6 +152,12 @@ test("Phase 3 predecessor evidence requires every historical suite to pass witho
     testResults: [{ status: "passed" }, { status: "passed" }],
   };
   assert.equal(requirePredecessorTests(passed, files), 8);
+  const currentFiles = ["tests/database/role-rls-matrix.test.ts", "tests/database/portfolio-settings.integration.test.ts",
+    "tests/database/content-authoring.integration.test.ts"];
+  const plan = planCurrentCheckpointTests(currentFiles, [currentFiles[1]]);
+  assert.deepEqual(plan.auditFiles, [currentFiles[0], currentFiles[2]]);
+  assert.deepEqual(plan.completeInventory, currentFiles);
+  assert.throws(() => planCurrentCheckpointTests(currentFiles, ["tests/other.test.ts"]), /INVENTORY_PARTITION_INVALID/u);
   for (const report of [
     { ...passed, numPendingTests: 1 },
     { ...passed, testResults: [{ status: "passed" }] },

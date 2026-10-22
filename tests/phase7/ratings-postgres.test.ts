@@ -335,10 +335,18 @@ describe.runIf(Boolean(url))("real PostgreSQL Rating acceptance", () => {
       expect((await client.query("select * from interaction.ratings")).rows).toHaveLength(1);
       expect((await client.query("select rolsuper,rolbypassrls from pg_roles where rolname=current_user")).rows)
         .toEqual([{ rolsuper: false, rolbypassrls: false }]);
-      await client.query("set local enable_seqscan=off");
-      const plan = await client.query("explain (format json) select value from interaction.ratings where portfolio_id=$1 and project_id=$2 and visitor_id=$3 for update",
-        [portfolioId, projectId, visitor.functionalId]);
-      expect(JSON.stringify(plan.rows)).toContain("ratings_pkey");
+      const plannerSettings = (await client.query("show enable_seqscan")).rows;
+      await client.query("savepoint rating_index_plan");
+      try {
+        await client.query("set local enable_seqscan=off");
+        const plan = await client.query("explain (format json) select value from interaction.ratings where portfolio_id=$1 and project_id=$2 and visitor_id=$3 for update",
+          [portfolioId, projectId, visitor.functionalId]);
+        expect(JSON.stringify(plan.rows)).toContain("ratings_pkey");
+      } finally {
+        await client.query("rollback to savepoint rating_index_plan");
+        await client.query("release savepoint rating_index_plan");
+      }
+      expect((await client.query("show enable_seqscan")).rows).toEqual(plannerSettings);
       await client.query("select set_config('shipwithali.functional_id',$1,true)", [createStableId("FunctionalVisitor")]);
       expect((await client.query("select * from interaction.ratings")).rows).toEqual([]);
       await client.query("select set_config('shipwithali.functional_id',$1,true),set_config('shipwithali.portfolio_id',$2,true)", [visitor.functionalId, createStableId("Portfolio")]);

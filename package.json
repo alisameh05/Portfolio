@@ -17,6 +17,8 @@
     "setup:validation": "node scripts/setup-validation.mjs",
     "validation:ready": "node scripts/validation-environment.mjs",
     "test:setup": "node --test --test-isolation=none tests/tooling/*.test.mjs",
+    "test:validation-evolution": "node scripts/run-validation-evolution-tests.mjs",
+    "check:prevention-workflow": "node scripts/check-prevention-workflow.mjs",
     "pretypecheck": "npm run validation:ready",
     "prephase4:focus:context": "npm run validation:ready",
     "build": "next build",
@@ -213,6 +215,7 @@
     "uuidv7": "1.0.2",
     "valibot": "1.1.0",
     "vitest": "3.2.4",
+    "yaml": "1.10.3",
     "zod": "3.25.51"
   }
 }

@@ -54,9 +54,18 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureDependencyCruiserTsSupport } from "./ensure-depcruise-support.mjs";
+import { createQualificationPrerequisiteCache } from "./qualification-prerequisite-cache.mjs";
+import { currentRuntimeIdentity } from "./qualification-context.mjs";
+import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const GATE_REPORT = join(ROOT, "evidence", "phase-1-gate-report.json");
+const gateStartedAt = new Date();
+const sourceRevision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
+const sourceTreeSha256 = workingTreeSourceSha256();
+const prerequisiteCache = createQualificationPrerequisiteCache({ root: ROOT, sourceRevision,
+  sourceTreeSha256, runtime: currentRuntimeIdentity(), environment: process.env });
+const prerequisiteOperations = [];
 
 ensureDependencyCruiserTsSupport(ROOT);
 
@@ -64,25 +73,37 @@ const results = [];
 const evidenceLogs = {};
 
 function check(name, fn) {
+  const firstOperation = prerequisiteOperations.length;
   try {
     const detail = fn();
-    results.push({ name, ok: true, detail: detail ?? "passed" });
+    results.push({ name, ok: true, detail: detail ?? "passed", prerequisiteOperations: prerequisiteOperations.slice(firstOperation) });
     console.log(`✓ ${name}${detail ? ` — ${detail}` : ""}`);
   } catch (err) {
     const detail = err instanceof Error ? err.message.split("\n")[0] : String(err);
-    results.push({ name, ok: false, detail });
+    results.push({ name, ok: false, detail, prerequisiteOperations: prerequisiteOperations.slice(firstOperation) });
     console.error(`✗ ${name}`);
     console.error(`  ${detail}`);
   }
 }
 
-function runNodeScript(script, args = [], evidenceKey) {
+function runNodeScript(script, args = [], evidenceKey, cacheScript = null) {
   try {
-    const output = execFileSync(process.execPath, [script, ...args], {
-      cwd: ROOT,
-      stdio: "pipe",
-      encoding: "utf8",
-    });
+    const commandEnvironment = cacheScript === null ? process.env : { ...process.env, CI: "1" };
+    const invoke = () => {
+      try { return { status: 0, output: execFileSync(process.execPath, [script, ...args], {
+        cwd: ROOT, env: commandEnvironment, stdio: "pipe", encoding: "utf8",
+      }), errorCode: null, skipped: 0, timedOut: false }; }
+      catch (error) { return { status: error.status ?? 1, output: [error.stdout?.toString?.() ?? "", error.stderr?.toString?.() ?? ""].join("\n"),
+        errorCode: typeof error.code === "string" ? error.code : null, skipped: 0, timedOut: error.code === "ETIMEDOUT" }; }
+    };
+    const cached = cacheScript === null ? null : prerequisiteCache.run({ script: cacheScript, args,
+      entry: JSON.stringify({ entry: process.execPath, args: [script, ...args] }),
+      environment: commandEnvironment, invoke, sanitizeOutput: (value) => String(value ?? "") });
+    const result = cached ?? invoke();
+    if (cached !== null) prerequisiteOperations.push({ script: cacheScript, executed: !cached.reused, reused: cached.reused === true,
+      reuseProof: cached.reuseProof ?? null });
+    if (result.status !== 0) throw Object.assign(new Error(result.output || "non-zero exit"), { stdout: result.output });
+    const output = result.output;
     if (evidenceKey) evidenceLogs[evidenceKey] = (evidenceLogs[evidenceKey] ?? "") + output;
     return output;
   } catch (err) {
@@ -129,7 +150,7 @@ console.log("══════════════════════�
 
 // ── 1. Toolchain verification ────────────────────────────────────────────────
 check("toolchain verification", () => {
-  runNodeScript("scripts/check-toolchain.mjs");
+  runNodeScript("scripts/check-toolchain.mjs", [], undefined, "direct:check-toolchain.mjs");
   return "pins match; manifest written";
 });
 
@@ -137,7 +158,7 @@ check("toolchain verification", () => {
 // Invoke the pinned local compiler through the active Node executable. This
 // avoids Windows npm.cmd/npx shell spawning while retaining the same seam.
 check("typechecking (tsc --noEmit)", () => {
-  runNodeScript("node_modules/typescript/bin/tsc", ["--noEmit"]);
+  runNodeScript("node_modules/typescript/bin/tsc", ["--noEmit"], undefined, "direct:typescript");
   return "strict, noUncheckedIndexedAccess, exactOptionalPropertyTypes";
 });
 
@@ -212,7 +233,7 @@ check("contract bundle owner@v1 (canonical)", () => {
 
 // ── 8. Generation + drift (byte-for-byte, twice in clean temp) ───────────────
 check("generation + drift (byte-for-byte)", () => {
-  runNodeScript("scripts/check-contract-drift.mjs", [], "drift");
+  runNodeScript("scripts/check-contract-drift.mjs", [], "drift", "direct:check-contract-drift.mjs");
   return "two clean generations identical; committed artifacts without drift";
 });
 
@@ -221,13 +242,13 @@ check("compatibility (master baseline)", () => {
   for (const f of ["openapi/baseline/master/public-v1.json", "openapi/baseline/master/owner-v1.json"]) {
     if (!existsSync(join(ROOT, f))) throw new Error(`compatibility baseline missing: ${f}`);
   }
-  runNodeScript("scripts/check-contract-compatibility.mjs", [], "compatibility");
+  runNodeScript("scripts/check-contract-compatibility.mjs", [], "compatibility", "direct:check-contract-compatibility.mjs");
   return "both surfaces backward compatible with master baseline";
 });
 
 // ── 10. Architecture (valid passes; invalid fixtures rejected) ───────────────
 check("architecture (dependency rules + fixtures)", () => {
-  runNodeScript("scripts/architecture-check.mjs", [], "architecture");
+  runNodeScript("scripts/architecture-check.mjs", [], "architecture", "direct:architecture-check.mjs");
   return "valid skeletons pass; 4 invalid fixtures rejected with stable rules";
 });
 
@@ -245,7 +266,7 @@ check("coderabbit inventory (no repo-controlled surface)", () => {
 
 // ── 13. Route + source inventory (declared vs runtime; forbidden scan) ────────
 check("route + source inventory (declared vs runtime)", () => {
-  runNodeScript("scripts/check-route-inventory.mjs");
+  runNodeScript("scripts/check-route-inventory.mjs", [], undefined, "direct:check-route-inventory.mjs");
   const reportPath = join(ROOT, "evidence", "phase-1-route-inventory.json");
   if (!existsSync(reportPath)) throw new Error("evidence/phase-1-route-inventory.json not emitted");
   const report = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -312,7 +333,9 @@ for (const [key, filename] of [
 }
 
 const passed = results.filter((r) => r.ok).length;
-const failed = results.filter((r) => !r.ok);
+const sourceBound = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim() === sourceRevision &&
+  workingTreeSourceSha256() === sourceTreeSha256;
+const failed = [...results.filter((r) => !r.ok), ...(sourceBound ? [] : [{ name: "source identity", detail: "source changed during gate" }])];
 
 const evidenceFiles = [
   "openapi/generated/public-v1.json",
@@ -331,6 +354,13 @@ const report = {
   ticket: 12,
   parent: 1,
   scope: "phase-1-conformance-gate",
+  sourceRevision,
+  sourceTreeSha256,
+  startedAt: gateStartedAt.toISOString(),
+  completedAt: new Date().toISOString(),
+  toolVersions: currentRuntimeIdentity(),
+  required: { success: failed.length === 0, executed: results.length, failed: failed.length, skipped: 0 },
+  cleanup: { success: true },
   verdict: failed.length === 0 ? "pass" : "fail",
   summary: { passed, failed: failed.length, total: results.length },
   checks: results,

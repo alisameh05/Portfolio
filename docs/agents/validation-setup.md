@@ -145,3 +145,90 @@ write access to the repository's Git metadata.
 Historical attribute files are reconstructed in an isolated temporary directory,
 which is removed on success or failure. The caller's index and working files
 are preserved, including on the validation image's Git 2.39.
+
+## Validation evolution: registry edits and qualification reuse
+
+Database-era expectations live in one shared registry,
+`scripts/phase-contract-registry.mjs`: migration classifications
+(`baseline`, `phase5`, `operations-transformation`, `declared-additive`),
+the reviewed engineering-check-preservation contract for every declared
+operations transformation, per-checkpoint paired suites, and the declared
+database capabilities exported as the `PHASE_DATABASE_CAPABILITIES`
+environment contract. Do not re-derive these facts inline in gates or tests;
+prevention tests fail on undeclared drift.
+
+Editing the registry (synthetic-evolution and preservation coverage):
+
+```text
+npm run test:validation-evolution
+```
+
+Every new migration file must be classified exactly once. An undeclared
+migration fails its first consumer with
+`PHASE_CONTRACT_MIGRATION_UNDECLARED:<file>`, so the declaration happens at
+review time, never during an incident. A new operations-era migration is
+declared with its reviewed source checksum, schema-qualified additions, and
+expected security identities. New policy and grant rows specify their table,
+role, command, scope, and grantability. Existing catalog definitions are
+compared in full outside explicitly reviewed transformations.
+`composeOperationsBoundary()` drives the Phase 3 preservation comparison;
+anything not declared fails with
+`PHASE3_OPERATIONS_CONTRACT_ALTERED|LOST|UNEXPECTED_ADDITION|REPLACEMENT_MISSING`
+plus stage, check, category, and precise schema paths.
+
+One qualification command: `npm run phase8:qualify`. It runs the DAG
+validation-environment, phase1, phase2, phase3, phase4, phase5, phase6,
+phase7, and the prerequisite evaluator, in topological order.
+
+`--resume` reuses only successful, cleaned nodes from a previous run recorded in
+`evidence/phase8-qualification-run.json`. The record binds to the current
+committed revision and source tree, pinned migration checksum inventory, Node
+and npm versions, host platform and architecture, and a digest of the process
+environment. The DAG definition hash includes each node's script, arguments,
+dependencies, report path, and exact required check inventory. Reused reports
+must retain their digest, exact named checks, successful cleanup, recent
+timestamps, and every referenced evidence artifact digest. Database checkpoints
+also require matching source and tool identities, migration checksums, and a
+successful isolated PostgreSQL service scope. The live validation-environment
+preflight runs on every resume; a successful preflight preserves the verified
+prefix. Failed, running, missing, or corrupted nodes and their descendants
+rerun. A changed source or input invalidates the context.
+
+The validation preflight records the observed Docker engine, Compose, pinned
+Supabase CLI, selected native PostgreSQL executable, and locally available
+validation image IDs/digests. Resume requires those identities to match. If a
+required image is not already present, the preflight marks the service scope
+unverified; service-free predecessor nodes can still be reused, while nodes
+requiring that service rerun and may pull their pinned images during startup.
+The operations catalog manifest has
+explicit PostgreSQL 17 and 18 variants; a snapshot from an unsupported or
+unmatched major fails closed.
+
+Native Phase 7 validation also requires PostgreSQL 17 or 18 because Media
+correctness transactions use `transaction_timeout`. Select the installed binary
+directory with `PHASE7_POSTGRES_BIN`; qualification rejects unsupported majors
+before running the DAG. The Ubuntu 24.04 Runtime and qualification jobs run
+`node scripts/setup-ci-native-postgres.mjs`, which installs PostgreSQL 17 using
+the [official signed PGDG repository](https://www.postgresql.org/download/linux/ubuntu/)
+and exports that directory for subsequent steps. This setup script only runs
+inside the hosted GitHub Ubuntu job. The actual installed minor version remains
+part of the service identity and resume proof. Native clusters use short owned
+OS temporary directories and reject socket filenames longer than 107 UTF-8 bytes.
+
+Phase 6 runs its media tools in the nested daemon started by its validation
+compose project. The host cannot inspect that daemon's image IDs, so a resume
+always reruns Phase 6 and its Phase 7/evaluator descendants. The Phase 6 report
+still checks the pinned tool definitions and observed processor versions.
+
+The hosted qualification workflow targets the pull request's current head SHA.
+After the Codex review bot finishes a clean review for that exact SHA, rerun the
+failed `Codex review` check on the corresponding run with
+`gh run rerun <current-head-Codex-run-id> --failed`. Confirm the run's head SHA
+still matches the reviewed pull request before relying on its result; a review
+or check for an older commit does not qualify the current head.
+
+Focused diagnostics: prefer the gate's own log under `evidence/` first, then
+the failing domain check (for database era questions,
+`npm run phase3:focus:role-rls`, which now reads the declared
+`PHASE_DATABASE_CAPABILITIES` list instead of inferring the era from the
+database being checked).

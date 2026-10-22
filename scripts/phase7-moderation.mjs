@@ -6,6 +6,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { Client } from "pg";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
+import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 
 const root = process.cwd(), runId = randomUUID(), source = workingTreeSourceSha256();
 const summaries = process.argv.includes("--summaries");
@@ -117,7 +118,7 @@ try {
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "tests/phase7/moderation.test.ts", "tests/phase7/moderation-postgres.test.ts", "tests/runtime/owner-moderation.test.ts", "tests/phase4/owner-request-security.test.ts", "tests/phase4/owner-session-auth.test.ts",
     ...(suppression ? ["tests/phase7/suppression-postgres.test.ts"] : []),
     ...(summaries ? ["tests/phase7/summaries-postgres.test.ts", "tests/phase7/reactions-postgres.test.ts", "tests/phase7/ratings-postgres.test.ts"] : []),
-    "--no-file-parallelism", "--reporter=json", "--outputFile=" + reportPath], env);
+    "--no-file-parallelism", "--reporter=./scripts/validation-json-reporter.mjs", "--outputFile=" + reportPath], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
   const assertions = tests.testResults.flatMap(s => s.assertionResults ?? []);
   if (!tests.success || tests.numFailedTestSuites || tests.numFailedTests || tests.numPendingTests || tests.numTodoTests ||
@@ -142,7 +143,8 @@ try {
   if (readFileSyncSafe(reportPath)) {
     const r = JSON.parse(readFileSync(reportPath, "utf8"));
     for (const suite of r.testResults ?? []) console.error(JSON.stringify({ suite: suite.name.replace(root, ""), status: suite.status,
-      assertions: (suite.assertionResults ?? []).map(a => ({ title: a.title.replace(/: \{.*$/, ": invalid shape"), status: a.status })) }));
+      assertions: (suite.assertionResults ?? []).map(a => ({ title: a.title.replace(/: \{.*$/, ": invalid shape"), status: a.status,
+        ...(a.status === "failed" ? { diagnostic: safeAssertionDiagnostic(a) } : {}) })) }));
   }
   process.exitCode = 1;
 } finally {

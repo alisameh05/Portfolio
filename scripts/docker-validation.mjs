@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
+import { readOptionalGitAlternates } from "./git-object-alternates.mjs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,8 +26,7 @@ try {
     PORTFOLIO_GIT_COMMON_DIR: capture("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], "Cannot locate Git common directory."),
   };
   const alternatesFile = join(env.PORTFOLIO_GIT_COMMON_DIR, "objects", "info", "alternates");
-  const alternates = readFileSync(alternatesFile, "utf8")
-    .split(/\r?\n/u).map((entry) => entry.trim()).filter(Boolean)[0] ?? "";
+  const alternates = readOptionalGitAlternates(alternatesFile);
   if (alternates) {
     env.PORTFOLIO_MAIN_OBJECTS = resolve(root, alternates.replaceAll("\\", "/"));
     env.PORTFOLIO_USE_MAIN_OBJECTS = "1";

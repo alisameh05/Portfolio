@@ -1,0 +1,24 @@
+{
+  "branch": "master",
+  "requiredStatusChecksStrict": true,
+  "requiredChecks": [
+    { "context": "Runtime, typecheck and context", "app_id": 15368 },
+    { "context": "Local Auth real-token", "app_id": 15368 },
+    { "context": "Portfolio settings real-PostgreSQL", "app_id": 15368 },
+    { "context": "Phase 6 Media and CV real-PostgreSQL-Storage", "app_id": 15368 },
+    { "context": "Cloud bootstrap from Node 20", "app_id": 15368 },
+    { "context": "validation-evolution-regressions", "app_id": 15368 },
+    { "context": "phase3-7-qualification", "app_id": 15368 },
+    { "context": "Codex review", "app_id": 15368 }
+  ],
+  "minHumanApprovals": 1,
+  "dismissStaleReviews": true,
+  "requireLastPushApproval": true,
+  "enforceAdmins": true,
+  "allowForcePushes": false,
+  "allowDeletions": false,
+  "requiredConversationResolution": true,
+  "bypassActors": [],
+  "linearHistoryRequired": false,
+  "source": "Applied master protection readback 2026-10-22; see run artifact master-protection-live.json"
+}

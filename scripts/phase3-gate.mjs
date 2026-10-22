@@ -1,13 +1,22 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { createPhase3GateProject, removePhase3GateProject, skippedTestCount } from "./phase3-gate-support.mjs";
+import { createQualificationPrerequisiteCache } from "./qualification-prerequisite-cache.mjs";
+import { normalizeQualificationCommandResult } from "./qualification-command.mjs";
+import {
+  QUALIFICATION_CONTEXT_VARIABLE,
+  qualificationDefinitionSha256,
+  readQualificationRun,
+  verifyGatePredecessors,
+  currentRuntimeIdentity,
+} from "./qualification-context.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url)).replace(/[\\/]$/, "");
 const REPORT = join(ROOT, "evidence", "phase-3-gate-report.json");
@@ -16,6 +25,18 @@ const startedAt = Date.now();
 const runId = randomUUID();
 const sourceRevision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
 const sourceTreeSha256 = workingTreeSourceSha256();
+const prerequisiteCache = createQualificationPrerequisiteCache({ root: ROOT, sourceRevision, sourceTreeSha256,
+  runtime: currentRuntimeIdentity(), environment: process.env });
+const sharedContextPath = process.env[QUALIFICATION_CONTEXT_VARIABLE] ?? null;
+const sharedPredecessors = verifyGatePredecessors({
+  context: sharedContextPath === null ? null : readQualificationRun(ROOT, sharedContextPath),
+  nodeIds: ["phase2"],
+  root: ROOT,
+  revision: sourceRevision,
+  sourceTreeSha256,
+  definitionHash: qualificationDefinitionSha256(),
+});
+const reusedEvidence = new Map([...sharedPredecessors.reuse.entries()].flatMap(([id, proof]) => [[id, proof], [proof.file, proof]]));
 let postgresVersion = null;
 const PHASE3_DATABASE_TESTS = Object.freeze([
   "tests/database/idempotency.test.ts",
@@ -42,7 +63,7 @@ function sanitize(value) {
     .replace(/(?:password|token|secret|idempotency[-_]?key)\s*[=:]\s*[^\s,;]+/gi, "$1=[redacted]");
 }
 
-function run(name, entry, args, { env = {}, evidence, failOnSkipped = false } = {}) {
+function runUncached(name, entry, args, { env = {}, evidence, failOnSkipped = false } = {}) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [entry, ...args], {
       cwd: ROOT,
@@ -81,9 +102,46 @@ function run(name, entry, args, { env = {}, evidence, failOnSkipped = false } = 
         exitCode: skippedCount > 0 ? 1 : (code ?? 1),
         skipped: skippedCount,
         evidence,
+        output,
+        errorCode: spawnError?.code ?? null,
       });
     });
   });
+}
+
+const SHARED_COMMANDS = Object.freeze({
+  "strict-typecheck": "direct:typescript",
+  "deterministic-lint": "direct:eslint",
+  architecture: "direct:architecture-check.mjs",
+});
+
+async function run(name, entry, args, options = {}) {
+  const script = SHARED_COMMANDS[name];
+  if (script === undefined) {
+    const result = await runUncached(name, entry, args, options);
+    return { name: result.name, passed: result.passed, exitCode: result.exitCode,
+      skipped: result.skipped, evidence: result.evidence };
+  }
+  const execution = await prerequisiteCache.runAsync({ script, args,
+    entry: JSON.stringify({ entry: process.execPath, args: [join(ROOT, entry), ...args] }),
+    environment: { ...process.env, ...options.env, CI: "1" }, sanitizeOutput: sanitize,
+    invoke: async () => {
+      const result = await runUncached(name, entry, args, options);
+      return normalizeQualificationCommandResult({ status: result.exitCode, errorCode: result.errorCode,
+        skipped: result.skipped, output: result.output });
+    },
+  });
+  if (execution.reused) {
+    console.log(`✓ ${name} — reused verified same-run prerequisite.`);
+    if (options.evidence) {
+      const path = join(ROOT, options.evidence);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, execution.output, "utf8");
+    }
+  }
+  const passed = execution.status === 0 && execution.errorCode === null && execution.skipped === 0 && !execution.timedOut;
+  return { name, passed, exitCode: passed ? 0 : 1, skipped: execution.skipped, evidence: options.evidence,
+    reused: execution.reused === true, reuseProof: execution.reuseProof ?? null };
 }
 
 async function readLocalDatabaseUrl(workdir) {
@@ -118,7 +176,12 @@ async function readLocalDatabaseUrl(workdir) {
 
 function fresh(path) {
   const full = join(ROOT, path);
-  return existsSync(full) && statSync(full).mtimeMs >= startedAt - 1_000;
+  if (!existsSync(full)) return false;
+  const reused = reusedEvidence.get(path);
+  if (reused !== undefined) {
+    return createHash("sha256").update(readFileSync(full)).digest("hex") === reused.sha256;
+  }
+  return statSync(full).mtimeMs >= startedAt - 1_000;
 }
 
 function readJsonEvidence(path) {
@@ -142,11 +205,19 @@ const results = [];
 let databaseStarted = false;
 let databaseProject;
 try {
-  results.push(
-    await run("phase2-gate", "scripts/phase2-gate.mjs", [], {
-      evidence: "evidence/phase-3-phase2-gate.log",
-    }),
-  );
+  const sharedPhase2 = reusedEvidence.get("phase2");
+  if (sharedPhase2 !== undefined) {
+    console.log(
+      `✓ shared-context predecessor phase2 — reused from ${sharedPhase2.file} (recorded ${sharedPhase2.completedAt}).`,
+    );
+    results.push({ name: "phase2-gate", passed: true, exitCode: 0, reused: true, evidence: "evidence/phase-2-gate-report.json" });
+  } else {
+    results.push(
+      await run("phase2-gate", "scripts/phase2-gate.mjs", [], {
+        evidence: "evidence/phase-3-phase2-gate.log",
+      }),
+    );
+  }
   const phase2ReportConsistent = phase2ReportMatchesRuntime();
   console.log(
     `${phase2ReportConsistent ? "✓" : "✗"} phase2-report-runtime — nested report matches ${process.version}`,

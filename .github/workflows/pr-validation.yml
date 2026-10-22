@@ -31,6 +31,8 @@ jobs:
           npm install --global "npm@$npm_version" --no-audit --no-fund
       - name: Install locked development dependencies
         run: npm run setup:validation
+      - name: Select supported native PostgreSQL
+        run: node scripts/setup-ci-native-postgres.mjs
       - run: npm run test:setup
       - run: npm run typecheck
       - run: npm run phase4:focus:context
@@ -168,6 +170,9 @@ jobs:
           npm install --global "npm@$npm_version" --no-audit --no-fund
       - name: Install locked development dependencies
         run: npm run setup:validation
+      # Phase 6 verifies Phase 5 report/context hashes against this source tree.
+      - name: Require fresh Phase 5 predecessor evidence for this source
+        run: npm run phase5:gate
       - name: Build the portable Linux Docker validation runner
         run: docker compose -p portfolio-validation -f compose.validation.yaml build validation
       - name: Require the complete fail-closed Phase 6 gate

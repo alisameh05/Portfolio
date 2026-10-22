@@ -1,0 +1,24 @@
+{
+  "observedAt": "2026-10-22T12:29:18.310Z",
+  "pullRequest": "https://github.com/alisameh05/Portfolio/pull/268",
+  "headSha": "4d9ea1537791c12d5a48abfe4b67096e42d1795c",
+  "isDraft": true,
+  "mergeStateStatus": "BLOCKED",
+  "reviewDecision": "REVIEW_REQUIRED",
+  "failedRequiredChecks": [
+    {
+      "name": "Codex review",
+      "detailsUrl": "https://github.com/alisameh05/Portfolio/actions/runs/39777753614/job/119820929784",
+      "conclusion": "FAILURE"
+    },
+    {
+      "name": "Runtime, typecheck and context",
+      "detailsUrl": "https://github.com/alisameh05/Portfolio/actions/runs/39777753500/job/119820930725",
+      "conclusion": "FAILURE"
+    }
+  ],
+  "requiredChecksStrict": true,
+  "enforceAdmins": true,
+  "mergeAttempted": false,
+  "note": "Failed checks match live required contexts; draft status and independent human approval are additional unmet conditions. No merge or protection bypass was attempted."
+}
