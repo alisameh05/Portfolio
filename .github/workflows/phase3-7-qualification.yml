@@ -57,6 +57,10 @@ jobs:
             evidence/phase8-qualification-run.json
             evidence/phase8-prerequisite-qualification.json
             evidence/phase-*-gate-report.json
+            evidence/phase-5-gate-checks/*.log
+            evidence/phase-5-verification-*.json
+            evidence/phase-5-security-migrations-postgres.json
+            evidence/phase-5-integrated-scenarios.json
             evidence/phase6-gate-checks/*.log
             evidence/phase7-gate-checks/*.log
           if-no-files-found: warn

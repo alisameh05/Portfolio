@@ -26,6 +26,7 @@ import {
   PHASE_DATABASE_CHECKPOINTS,
   DECLARED_CAPABILITIES_VARIABLE,
   PHASE_DATABASE_TRANSFORMATIONS,
+  PHASE5_MIGRATION_COMPATIBILITY,
   declaredCapabilities,
   capabilitiesForCheckpoint,
   resolveMigrationClassifications,
@@ -812,6 +813,7 @@ export async function main() {
       }
     }
 
+    failureStage = "acceptance-evidence-construction";
     const evidence = contentAuthoringTicket ? {
       sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(),
       ...(ticket122 || ticket123 ? {
