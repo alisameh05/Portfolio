@@ -35,7 +35,7 @@ export const REQUIRED_REGRESSION_TESTS = Object.freeze([
   "every committed migration is classified exactly once and matches the declared phase ranges",
   "undeclared, duplicate, or unreviewed transformation migrations fail closed",
   "a synthetic future transformation is admitted only through the injected shared registry",
-  "the configuration export migration admits only its source-bound outbox policy addition",
+  "the configuration export migration admits only its source-bound outbox policy and insert grant",
   "canonical operations expectations bind complete row operations to reviewed migrations",
   "capabilities are declared per checkpoint, never learned from a database",
   "checkpoint pairing requires every historical suite to exist in the tree",

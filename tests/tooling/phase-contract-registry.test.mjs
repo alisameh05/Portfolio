@@ -106,10 +106,14 @@ test("a synthetic future transformation is admitted only through the injected sh
     /PHASE3_OPERATIONS_CONTRACT_ALTERED.*operations\.future_events\.event_id/u);
 });
 
-test("the configuration export migration admits only its source-bound outbox policy addition", () => {
+test("the configuration export migration admits only its source-bound outbox policy and insert grant", () => {
   const policy = {
     schema: "operations", tableName: "outbox_events", name: "owner_export_produced_outbox_worker_insert",
     permissive: "permissive", roles: "{shipwithali_worker}", command: "INSERT", usingPredicate: "", withCheck: "true",
+  };
+  const grant = {
+    schema: "operations", object: "outbox_events", objectType: "r", grantee: "shipwithali_worker",
+    grantor: "shipwithali_migration", privilege: "INSERT", grantable: false,
   };
   const phase3 = {
     postgresMajor: 17,
@@ -121,6 +125,7 @@ test("the configuration export migration admits only its source-bound outbox pol
     ...structuredClone(phase3),
     migrationLedger: [{ version: "20261023100000", name: "build_configuration_owner_exports" }],
     policies: [policy],
+    grants: [grant],
   };
   assert.doesNotThrow(() => assertPhase3OperationsContractPreserved(phase3, upgraded, { transformations: [] }));
   assert.throws(() => assertPhase3OperationsContractPreserved(phase3, {
@@ -130,6 +135,14 @@ test("the configuration export migration admits only its source-bound outbox pol
   assert.throws(() => assertPhase3OperationsContractPreserved(phase3, {
     ...upgraded,
     policies: [],
+  }, { transformations: [] }), /PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_MISSING/u);
+  assert.throws(() => assertPhase3OperationsContractPreserved(phase3, {
+    ...upgraded,
+    grants: [{ ...grant, grantable: true }],
+  }, { transformations: [] }), /PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_ALTERED/u);
+  assert.throws(() => assertPhase3OperationsContractPreserved(phase3, {
+    ...upgraded,
+    grants: [],
   }, { transformations: [] }), /PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_MISSING/u);
 });
 

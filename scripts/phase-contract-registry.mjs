@@ -174,6 +174,19 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
           usingPredicate: "",
         }),
       }),
+      Object.freeze({
+        category: "grants",
+        identity: "operations.outbox_events.r.shipwithali_worker:shipwithali_migration:INSERT",
+        expected: Object.freeze({
+          schema: "operations",
+          object: "outbox_events",
+          objectType: "r",
+          grantee: "shipwithali_worker",
+          grantor: "shipwithali_migration",
+          privilege: "INSERT",
+          grantable: false,
+        }),
+      }),
     ]),
   }),
 ]);
