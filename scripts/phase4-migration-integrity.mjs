@@ -195,8 +195,11 @@ export function assertPhase4ApplicationRls(snapshot) {
     ["PUBLIC", "anon", "authenticated", "shipwithali_worker"].includes(grant.grantee) &&
     (grant.objectType === "n" || grant.privilege !== "USAGE") &&
     !(configurationExportApplied && grant.schema === "portfolio_config" &&
-      ["settings", "contact_channels"].includes(grant.object) && grant.objectType === "r" &&
-      grant.grantee === "shipwithali_worker" && grant.privilege === "SELECT"),
+      grant.grantee === "shipwithali_worker" && grant.grantable !== true && (
+        (grant.objectType === "n" && grant.object === "portfolio_config" && grant.privilege === "USAGE") ||
+        (grant.objectType === "r" && ["settings", "contact_channels"].includes(grant.object) &&
+          grant.privilege === "SELECT")
+      )),
   );
   if (publicGrants.length > 0) throw new Error("PHASE4_APPLICATION_GRANT_EXPOSURE");
   const unauthorizedBackupGrants = snapshot.grants.filter((grant) =>

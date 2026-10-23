@@ -245,6 +245,7 @@ describe("Phase 4 migration integrity", () => {
         { schema: "portfolio_config", tableName: "contact_channels", name: "portfolio_channels_worker_export_select", command: "SELECT", roles: "{shipwithali_worker}", permissive: "permissive", usingPredicate: workerChannelsScope, withCheck: "" },
       ],
       grants: [
+        { schema: "portfolio_config", object: "portfolio_config", objectType: "n", grantee: "shipwithali_worker", privilege: "USAGE" },
         { schema: "portfolio_config", object: "settings", objectType: "r", grantee: "shipwithali_worker", privilege: "SELECT" },
         { schema: "portfolio_config", object: "contact_channels", objectType: "r", grantee: "shipwithali_worker", privilege: "SELECT" },
       ],
@@ -254,6 +255,11 @@ describe("Phase 4 migration integrity", () => {
       ...configurationExportSnapshot,
       grants: [...configurationExportSnapshot.grants,
         { schema: "portfolio_config", object: "settings", objectType: "r", grantee: "shipwithali_worker", privilege: "UPDATE" }],
+    })).toThrow("PHASE4_APPLICATION_GRANT_EXPOSURE");
+    expect(() => assertPhase4ApplicationRls({
+      ...configurationExportSnapshot,
+      grants: [...configurationExportSnapshot.grants,
+        { schema: "portfolio_config", object: "portfolio_config", objectType: "n", grantee: "shipwithali_worker", privilege: "CREATE" }],
     })).toThrow("PHASE4_APPLICATION_GRANT_EXPOSURE");
   });
 
