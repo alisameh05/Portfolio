@@ -670,51 +670,53 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
     }
   });
 
-  it("publishes the declared portability owner-export policies (#238)", { skip: !portabilityExportSchema }, async () => {
-    const admin = adminClient();
-    await admin.connect();
-    try {
-      const portability = await admin.query(
-        `select tablename, policyname, roles, cmd
-           from pg_policies
-          where schemaname = 'portability' and tablename = 'owner_exports'
-          order by policyname`,
-      );
-      expect(
-        portability.rows.map((row) => [
-          row["tablename"],
-          row["policyname"],
-          row["cmd"],
-          String(row["roles"]),
-        ]),
-      ).toEqual([...PORTABILITY_EXPORT_POLICIES].sort((left, right) => left[1].localeCompare(right[1])));
-      const jobs = await admin.query(
-        `select tablename, policyname, roles, cmd
-           from pg_policies
-          where schemaname = 'operations' and tablename = 'jobs'
-            and policyname in ('owner_export_jobs_application_insert')
-          order by policyname`,
-      );
-      expect(
-        jobs.rows.map((row) => [
-          row["tablename"],
-          row["policyname"],
-          row["cmd"],
-          String(row["roles"]),
-        ]),
-      ).toEqual(OWNER_EXPORT_JOB_POLICIES);
-      const rel = await admin.query(
-        `select c.relrowsecurity, c.relforcerowsecurity
-           from pg_class c join pg_namespace n on n.oid = c.relnamespace
-          where n.nspname = 'portability' and c.relname = 'owner_exports'`,
-      );
-      expect(rel.rows).toHaveLength(1);
-      expect(rel.rows[0]?.["relrowsecurity"]).toBe(true);
-      expect(rel.rows[0]?.["relforcerowsecurity"]).toBe(true);
-    } finally {
-      await admin.end();
-    }
-  });
+  if (portabilityExportSchema) {
+    it("publishes the declared portability owner-export policies (#238)", async () => {
+      const admin = adminClient();
+      await admin.connect();
+      try {
+        const portability = await admin.query(
+          `select tablename, policyname, roles, cmd
+             from pg_policies
+            where schemaname = 'portability' and tablename = 'owner_exports'
+            order by policyname`,
+        );
+        expect(
+          portability.rows.map((row) => [
+            row["tablename"],
+            row["policyname"],
+            row["cmd"],
+            String(row["roles"]),
+          ]),
+        ).toEqual([...PORTABILITY_EXPORT_POLICIES].sort((left, right) => left[1].localeCompare(right[1])));
+        const jobs = await admin.query(
+          `select tablename, policyname, roles, cmd
+             from pg_policies
+            where schemaname = 'operations' and tablename = 'jobs'
+              and policyname in ('owner_export_jobs_application_insert')
+            order by policyname`,
+        );
+        expect(
+          jobs.rows.map((row) => [
+            row["tablename"],
+            row["policyname"],
+            row["cmd"],
+            String(row["roles"]),
+          ]),
+        ).toEqual(OWNER_EXPORT_JOB_POLICIES);
+        const rel = await admin.query(
+          `select c.relrowsecurity, c.relforcerowsecurity
+             from pg_class c join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'portability' and c.relname = 'owner_exports'`,
+        );
+        expect(rel.rows).toHaveLength(1);
+        expect(rel.rows[0]?.["relrowsecurity"]).toBe(true);
+        expect(rel.rows[0]?.["relforcerowsecurity"]).toBe(true);
+      } finally {
+        await admin.end();
+      }
+    });
+  }
 
   it("ships no privilege-elevated functions in Phase 3 operations", async () => {
     const admin = adminClient();

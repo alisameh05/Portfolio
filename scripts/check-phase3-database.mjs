@@ -208,6 +208,7 @@ async function localVerification(connectionString) {
       ["jobs", "jobs_worker_select_policy", "SELECT", "shipwithali_worker"],
       ["jobs", "jobs_worker_update_policy", "UPDATE", "shipwithali_worker"],
       ["jobs", "measurement_event_jobs_application_insert", "INSERT", "shipwithali_application"],
+      ["jobs", "owner_export_jobs_application_insert", "INSERT", "shipwithali_application"],
       ["jobs", "operations_backup_policy_jobs", "SELECT", "shipwithali_backup"],
       ["incidents", "incidents_worker_insert_policy", "INSERT", "shipwithali_worker"],
       ["incidents", "incidents_worker_select_policy", "SELECT", "shipwithali_worker"],
