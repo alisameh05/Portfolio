@@ -27,7 +27,7 @@ test("every committed migration is classified exactly once and matches the decla
   assert.equal(classifications.size, files.length);
   const kinds = Object.groupBy(classifications, ([, value]) => value.kind);
   assert.ok(Object.keys(kinds).every((kind) => ["baseline", "phase4-release", "phase5", "operations-transformation", "declared-additive"].includes(kind)));
-  assert.equal(kinds["operations-transformation"].length, 2);
+  assert.equal(kinds["operations-transformation"].length, 3);
   for (const [file, value] of classifications) {
     if (value.kind === "phase5") {
       assert.ok(PHASE5_MIGRATION_COMPATIBILITY[file], file);
@@ -101,9 +101,9 @@ test("a synthetic future transformation is admitted only through the injected sh
 
 test("canonical operations expectations bind complete row operations to reviewed migrations", () => {
   const boundary = composeOperationsBoundary(undefined, 18);
-  assert.equal(boundary.operations.length, 98);
+  assert.equal(boundary.operations.length, 99);
   const pg17 = composeOperationsBoundary(undefined, 17);
-  assert.equal(pg17.operations.length, 83);
+  assert.equal(pg17.operations.length, 84);
   assert.ok(!pg17.operations.some((operation) => operation.category === "constraints" && operation.after?.type === "n"));
   assert.throws(() => composeOperationsBoundary(undefined, 16), /PHASE3_OPERATIONS_ENGINE_UNSUPPORTED/u);
   assert.ok(boundary.operations.some((operation) => operation.category === "objects" && operation.identity === "operations.incidents" && operation.after?.rlsForced === true));
@@ -112,7 +112,7 @@ test("canonical operations expectations bind complete row operations to reviewed
 });
 
 test("capabilities are declared per checkpoint, never learned from a database", () => {
-  assert.deepEqual(declaredCapabilities().toSorted(), ["measurement.events", "operations.bounded_retries"]);
+  assert.deepEqual(declaredCapabilities().toSorted(), ["measurement.events", "operations.bounded_retries", "portability.owner_export_requests"]);
   assert.equal(DECLARED_CAPABILITIES_VARIABLE, "PHASE_DATABASE_CAPABILITIES");
 });
 

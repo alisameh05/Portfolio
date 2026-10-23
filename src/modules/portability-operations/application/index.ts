@@ -63,3 +63,22 @@ export {
   type VersionedPayload,
 } from "./persistence.js";
 export { calculateJobRetryDelayMilliseconds, JOB_MAX_ATTEMPTS } from "./retry-policy.js";
+export {
+  applyGuardedOwnerExportTransition,
+  canonicalizeOwnerExportScopes,
+  createOwnerExportService,
+  isManifestShape,
+  OWNER_EXPORT_ARTIFACT_FILENAME,
+  OWNER_EXPORT_RECEIPT_TTL_SECONDS,
+  OWNER_EXPORT_SCHEMA_VERSION,
+  transportFailureCode,
+  validateOwnerExportTransition,
+  type OwnerExportServiceDependencies,
+} from "./owner-export-service.js";
+export type {
+  OwnerExportStorePort,
+  OwnerExportReservationInput,
+  OwnerExportTransitionInput,
+  OwnerExportTransitionOutcome,
+  PersistedOwnerExport,
+} from "./owner-export-store.js";

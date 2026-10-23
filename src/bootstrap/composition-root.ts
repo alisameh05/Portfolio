@@ -23,6 +23,7 @@ import {
 } from "./configuration.js";
 import { RuntimeConfigError } from "./configuration.js";
 import type { OperationsPersistencePorts } from "../modules/portability-operations/application/index.js";
+import type { OwnerExportApplicationService } from "../modules/portability-operations/index.js";
 import type { OwnerConfigurationApplicationService } from "../runtime/http/owner-configuration.js";
 import type { ContentAuthoringService } from "../modules/content-publishing/application/authoring.js";
 import type { MediaAcceptancePort } from "../modules/content-publishing/application/service.js";
@@ -67,6 +68,7 @@ export type { RuntimeConfig } from "./configuration.js";
 
 let current: RuntimeConfig | undefined;
 let currentOperations: OperationsPersistencePorts | undefined;
+let currentOwnerExport: OwnerExportApplicationService | undefined;
 let currentOwnerConfiguration: OwnerConfigurationApplicationService | undefined;
 let currentContentAuthoring: ContentAuthoringService | undefined;
 let currentOwnerTaxonomy: OwnerTaxonomyApplicationService | undefined;
@@ -147,6 +149,7 @@ export interface DatabaseRuntimeDependencies {
   readonly consent?: ConsentApplicationService;
   readonly eventIngestion?: MeasurementEventRuntimeServices;
   readonly operations: OperationsPersistencePorts;
+  readonly ownerExport?: OwnerExportApplicationService;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
   readonly contentAuthoring?: ContentAuthoringService;
   readonly ownerTaxonomy?: OwnerTaxonomyApplicationService;
@@ -223,6 +226,16 @@ export async function initializeDatabaseRuntime(
         }
         const database = createPostgresRuntimeDatabase(databaseUrl);
         const operations = createPostgresOperationsPersistence(database.database);
+        const [{ createPostgresOwnerExportStore }, { createOwnerExportService }] = await Promise.all([
+          import("../modules/portability-operations/adapters/postgres-owner-export-store.js"),
+          import("../modules/portability-operations/application/owner-export-service.js"),
+        ]);
+        const ownerExportService = createOwnerExportService({
+          operations,
+          exports: createPostgresOwnerExportStore(database.database, { outbox: operations.outbox }),
+          clock: createSystemClock(),
+          ids: createSystemIdGenerator(),
+        });
         let ownerConfiguration: OwnerConfigurationApplicationService | undefined;
         let contentAuthoring: ContentAuthoringService | undefined;
         let ownerTaxonomy: OwnerTaxonomyApplicationService | undefined;
@@ -704,6 +717,7 @@ export async function initializeDatabaseRuntime(
         }
         return {
           operations,
+          ...(ownerExportService === undefined ? {} : { ownerExport: ownerExportService }),
           ...(reaction === undefined ? {} : { reaction }),
           ...(rating === undefined ? {} : { rating }),
           ...(feedback === undefined ? {} : { feedback }),
@@ -741,6 +755,7 @@ export async function initializeDatabaseRuntime(
     lifecycle.registerReadinessCheck(dependencies.readiness);
     current = config;
     currentOperations = dependencies.operations;
+    currentOwnerExport = dependencies.ownerExport;
     currentReaction = dependencies.reaction;
     currentRating = dependencies.rating;
     currentFeedback = dependencies.feedback;
@@ -775,6 +790,13 @@ export function getOperationsPersistence(): OperationsPersistencePorts {
     throw new Error("Database persistence is not initialized.");
   }
   return currentOperations;
+}
+
+/** The three Owner export operations resolve through the composed PostgreSQL assembly. */
+export async function getOwnerExportApplicationService(): Promise<OwnerExportApplicationService> {
+  if (currentOwnerExport !== undefined) return currentOwnerExport;
+  const { createProductionOwnerExportService } = await import("../runtime/fakes/owner-export.js");
+  return createProductionOwnerExportService();
 }
 
 /** Database composition activates only configuration commands with completed phase tickets. */

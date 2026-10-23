@@ -52,6 +52,25 @@ export {
   type SnapshotPageLimit,
 } from "./application/index.js";
 export { calculateJobRetryDelayMilliseconds, JOB_MAX_ATTEMPTS } from "./application/index.js";
+export {
+  applyGuardedOwnerExportTransition,
+  canonicalizeOwnerExportScopes,
+  createOwnerExportService,
+  isManifestShape,
+  OWNER_EXPORT_ARTIFACT_FILENAME,
+  OWNER_EXPORT_RECEIPT_TTL_SECONDS,
+  OWNER_EXPORT_SCHEMA_VERSION,
+  transportFailureCode,
+  validateOwnerExportTransition,
+  type OwnerExportServiceDependencies,
+} from "./application/owner-export-service.js";
+export type {
+  OwnerExportStorePort,
+  OwnerExportReservationInput,
+  OwnerExportTransitionInput,
+  OwnerExportTransitionOutcome,
+  PersistedOwnerExport,
+} from "./application/owner-export-store.js";
 export { JOB_REDRIVE_POLICY_VERSION, parsePhase7WorkPayload, redriveDeadJob,
   type Phase7WorkPayload, type RedriveDeadJobCommand, type RedriveDeadJobDependencies } from "./application/index.js";
 
