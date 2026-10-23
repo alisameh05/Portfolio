@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:net";
@@ -12,6 +12,10 @@ const runId = randomUUID();
 const refreshTypes = process.argv.includes("--refresh-types");
 const ticket237 = process.argv.includes("--ticket-237");
 const initialSource = workingTreeSourceSha256();
+// The #206 scope must stay byte-equivalent to the originally recorded
+// #206 evidence; only the #237 path mentions the #237-owned probes.
+const scope206 = "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, bounded five-attempt retry policy with seeded vectors, database-time availability and lease fences, stale-token denial, retry/dead-letter incident atomicity, final-attempt crash recovery, and idempotent post-effect replay.";
+const scope237 = `${scope206} The #237 path adds forced domain rollback with no outbox/job/receipt residue, post-commit optional export-failure preservation of committed core state, immediate invalid-payload terminalization without a retry, and fresh-request recovery after failed export.`;
 const discoveredBin = process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" :
   spawnSync("pg_config", ["--bindir"], { encoding: "utf8", timeout: 5_000 }).stdout?.trim();
 const bin = process.env.PHASE7_POSTGRES_BIN ?? discoveredBin ?? "";
@@ -52,8 +56,10 @@ try {
   stage = "cluster";
   run(exe("initdb"), ["-D", data, "--no-locale", "-A", "trust", "-U", "postgres"]);
   started = true;
-  mkdirSync(join(temp, "socket"), { recursive: true });
-  run(exe("pg_ctl"), ["-D", data, "-l", join(temp, "server.log"), "-o", `-h 127.0.0.1 -p ${port} -F -k ${join(temp, "socket")}`, "-w", "start"]);
+  // Unix-domain socket paths must stay under a 107-byte limit; connection URLs
+  // below are TCP loopback, so the extended configuration removes the socket.
+  appendFileSync(join(data, "postgresql.conf"), "unix_socket_directories = ''\n");
+  run(exe("pg_ctl"), ["-D", data, "-l", join(temp, "server.log"), "-o", `-h 127.0.0.1 -p ${port} -F`, "-w", "start"]);
   await admin.connect(); connected = true;
   stage = "migrations";
   await admin.query("create role anon nologin; create role authenticated nologin; create role shipwithali_migration nologin nosuperuser nobypassrls; grant create on database postgres to shipwithali_migration");
@@ -61,9 +67,17 @@ try {
   for (const name of migrations) { stage = `migration:${name}`; await admin.query(readFileSync(join("supabase/migrations", name), "utf8")); }
   await admin.query("create role due_work_worker_runtime login nosuperuser nobypassrls; grant shipwithali_worker to due_work_worker_runtime");
   const workerUrl = `postgres://due_work_worker_runtime@127.0.0.1:${port}/postgres?sslmode=disable`;
+  // #237 application-runner probes reserve idempotency receipts and append
+  // outbox events, which the application role alone owns, so that runtime login
+  // is provisioned only on the #237 path; the #206 path keeps its originally
+  // recorded worker/anon/authenticated provisioning unchanged.
+  if (ticket237) {
+    await admin.query("create role due_work_application_runtime login nosuperuser nobypassrls; grant shipwithali_application to due_work_application_runtime");
+  }
+  const applicationUrl = `postgres://due_work_application_runtime@127.0.0.1:${port}/postgres?sslmode=disable`;
   const env = { ...process.env, PHASE7_JOBS_WORKER_URL: workerUrl,
     PHASE7_JOBS_SECOND_WORKER_URL: workerUrl, PHASE7_JOBS_ADMIN_URL: `${adminUrl}?sslmode=disable`,
-    ...(ticket237 ? { PHASE3_DATABASE_URL: `${adminUrl}?sslmode=disable`, PHASE3_REQUIRE_DATABASE: "1" } : {}) };
+    ...(ticket237 ? { PHASE7_JOBS_APPLICATION_URL: applicationUrl, PHASE3_DATABASE_URL: `${adminUrl}?sslmode=disable`, PHASE3_REQUIRE_DATABASE: "1" } : {}) };
   stage = "type-generation";
   for (const [schema, typeFile] of [
     ["measurement", "src/modules/measurement/adapters/database.generated.ts"],
@@ -77,12 +91,17 @@ try {
   const testedSource = workingTreeSourceSha256();
   if (!refreshTypes && testedSource !== initialSource) throw new Error("PHASE7_JOBS_SOURCE_CHANGED_BEFORE_ACCEPTANCE");
   stage = "acceptance";
-  run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "tests/phase7/due-work.test.ts", "tests/phase7/due-work-postgres.test.ts",
+  // The #206 path must keep its exact original suite; the #237 path adds its
+  // dedicated rollback/recovery acceptance file.
+  const acceptanceFiles = ["tests/phase7/due-work.test.ts", "tests/phase7/due-work-postgres.test.ts",
+    ...(ticket237 ? ["tests/phase7/rollback-recovery-postgres.test.ts"] : [])];
+  const expectedTests = ticket237 ? 15 : 11;
+  run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
   const assertions = tests.testResults.flatMap(suite => suite.assertionResults ?? []);
   if (!tests.success || tests.numFailedTestSuites !== 0 || tests.numFailedTests !== 0 || tests.numPendingTests !== 0 || tests.numTodoTests !== 0 ||
-      tests.numPassedTests !== 11 || assertions.length !== 11 || tests.testResults.length !== 2 ||
+      tests.numPassedTests !== expectedTests || assertions.length !== expectedTests || tests.testResults.length !== acceptanceFiles.length ||
       tests.testResults.some(suite => suite.status !== "passed") || assertions.some(assertion => assertion.status !== "passed")) {
     throw new Error("PHASE7_JOBS_ACCEPTANCE_INCOMPLETE");
   }
@@ -108,12 +127,13 @@ try {
     ...(ticket237 ? { roleMatrix: { success: roleMatrix.success, passed: roleMatrix.numPassedTests,
       failed: roleMatrix.numFailedTests, skipped: roleMatrix.numPendingTests, todo: roleMatrix.numTodoTests } } : {}),
     assertions: assertions.map(assertion => ({ title: assertion.title, status: assertion.status })),
-    databaseRoles: ["due_work_worker_runtime", "shipwithali_worker", "anon", "authenticated"],
+    databaseRoles: ticket237 ? ["due_work_application_runtime", "shipwithali_application", "due_work_worker_runtime",
+      "shipwithali_worker", "anon", "authenticated"] : ["due_work_worker_runtime", "shipwithali_worker", "anon", "authenticated"],
     criteria: ticket237 ? ["P8-40", "P8-41", "P8-42", "P8-43", "P8-44", "P8-08", "P8-38", "P8-39", "P8-54"] :
       ["T19-01", "T19-02", "T19-03", "T19-04", "T19-05", "T19-06", "T19-07", "T19-08", "T19-09"],
     reproduction: ticket237 ? "npm run setup:validation; npm run validation:ready; npm run phase8:focus:retry-recovery" :
       "npm run setup:validation; npm run validation:ready; npm run phase7:focus:jobs",
-    scope: "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, bounded five-attempt retry policy with seeded vectors, database-time availability and lease fences, stale-token denial, retry/dead-letter incident atomicity, final-attempt crash recovery, and idempotent post-effect replay.",
+    scope: ticket237 ? scope237 : scope206,
   };
   console.log(JSON.stringify({ required: result.required, runId, sourceTreeSha256: testedSource }));
 } catch (error) {

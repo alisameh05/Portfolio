@@ -9,10 +9,18 @@ export function createPhase3GateProject(root) {
   const workdir = mkdtempSync(join(tmpdir(), `${projectId}-`));
   const directory = join(workdir, "supabase");
   mkdirSync(join(directory, "migrations"), { recursive: true });
-  const basePort = 53000 + (process.pid % 400) * 20;
+  // The rewrite below maps every Supabase 543xx port onto basePort + xx - 20.
+  // When the pid-derived base reaches exactly 54320 the mapping is an identity
+  // and the copied config silently keeps the shared default ports, so force
+  // that single bucket out of the new range.
+  let basePort = 53000 + (process.pid % 400) * 20;
+  if (basePort === 54320) basePort += 20;
   const config = readFileSync(join(root, "supabase/config.toml"), "utf8")
     .replace('project_id = "shipwithali-portfolio"', `project_id = "${projectId}"`)
     .replace(/\bport = 543(\d\d)\b/gu, (_, suffix) => `port = ${basePort + Number(suffix) - 20}`);
+  if (/\bport = 543(?:2[1-9])\b/u.test(config)) {
+    throw new Error("PHASE3_CONFIG_KEEPS_SHARED_PORTS");
+  }
   writeFileSync(join(directory, "config.toml"), config);
   copyFileSync(join(root, "supabase/seed.sql"), join(directory, "seed.sql"));
   for (const name of readdirSync(join(root, "supabase/migrations")).filter(name => /^\d{14}_.+\.sql$/u.test(name))) {

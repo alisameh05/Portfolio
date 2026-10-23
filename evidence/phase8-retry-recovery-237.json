@@ -1,8 +1,8 @@
 {
   "ticket": 237,
-  "runId": "e4f38a47-4ef3-440a-96a5-1c63452b78cc",
-  "sourceRevision": "b3275006368d62dec0a58e69ef254f9bb0c63c37",
-  "sourceTreeSha256": "56b46c83b4c48125f47703f04a4ca671712ee5f22858c97952570bb0d851c6b6",
+  "runId": "36cea30a-345f-436a-adcd-3ad639a79fb3",
+  "sourceRevision": "82ab2a4e1d1d2bd27f6b3f9050a7fa81d9eb19c1",
+  "sourceTreeSha256": "9498700e6c0653c10e83c0d62c5bd337bbf7877b7837c613b3d4441706414ac2",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -216,7 +216,7 @@
   },
   "required": {
     "success": true,
-    "passed": 11,
+    "passed": 15,
     "failed": 0,
     "skipped": 0,
     "todo": 0,
@@ -273,9 +273,27 @@
     {
       "title": "rejects an invalid worker identity before queue access",
       "status": "passed"
+    },
+    {
+      "title": "forces a domain rollback that yields no outbox event, job, or durable receipt",
+      "status": "passed"
+    },
+    {
+      "title": "keeps committed core state valid when optional post-commit export work fails",
+      "status": "passed"
+    },
+    {
+      "title": "puts failed export recovery on a fresh request instead of a replayed or reused artifact",
+      "status": "passed"
+    },
+    {
+      "title": "terminalizes a mismatched payload version immediately with one incident instead of a retry",
+      "status": "passed"
     }
   ],
   "databaseRoles": [
+    "due_work_application_runtime",
+    "shipwithali_application",
     "due_work_worker_runtime",
     "shipwithali_worker",
     "anon",
@@ -293,6 +311,6 @@
     "P8-54"
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase8:focus:retry-recovery",
-  "scope": "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, bounded five-attempt retry policy with seeded vectors, database-time availability and lease fences, stale-token denial, retry/dead-letter incident atomicity, final-attempt crash recovery, and idempotent post-effect replay.",
+  "scope": "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, bounded five-attempt retry policy with seeded vectors, database-time availability and lease fences, stale-token denial, retry/dead-letter incident atomicity, final-attempt crash recovery, and idempotent post-effect replay. The #237 path adds forced domain rollback with no outbox/job/receipt residue, post-commit optional export-failure preservation of committed core state, immediate invalid-payload terminalization without a retry, and fresh-request recovery after failed export.",
   "cleanup": true
 }
