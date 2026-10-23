@@ -125,6 +125,10 @@ const CONFIGURATION_EXPORT_READ_POLICIES: ReadonlyArray<readonly [string, string
   ["contact_channels", "portfolio_channels_worker_export_select", "SELECT", "{shipwithali_worker}"],
 ];
 
+const CONFIGURATION_EXPORT_OUTBOX_POLICY: ReadonlyArray<readonly [string, string, string, string]> = [
+  ["outbox_events", "owner_export_produced_outbox_worker_insert", "INSERT", "{shipwithali_worker}"],
+];
+
 const CONFIGURATION_EXPORT_MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
   ["shipwithali_worker", "insert produced event for unready export",
     "insert into operations.outbox_events (event_id, event_type, schema_version, aggregate_id, aggregate_version, payload, correlation_id, causation_id, occurred_at, available_at) " +
@@ -736,7 +740,7 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
         ["outbox_events", "outbox_application_insert_policy", "INSERT", "{shipwithali_application}"],
         ["outbox_events", "outbox_worker_select_policy", "SELECT", "{shipwithali_worker}"],
         ["outbox_events", "outbox_worker_update_policy", "UPDATE", "{shipwithali_worker}"],
-        ["outbox_events", "owner_export_produced_outbox_worker_insert", "INSERT", "{shipwithali_worker}"],
+        ...(configurationExportSchema ? CONFIGURATION_EXPORT_OUTBOX_POLICY : []),
       ]);
     } finally {
       await admin.end();
