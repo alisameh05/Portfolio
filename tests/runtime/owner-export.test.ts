@@ -261,9 +261,9 @@ describe("Owner export status retrieval (#32)", () => {
   const lifecycleViews: readonly OwnerExportView[] = [
     { ...baseView, state: "requested", downloadAvailable: false },
     { ...baseView, state: "building", downloadAvailable: false },
-    { ...baseView, state: "ready", completedAt: "2026-10-18T00:01:00.000Z", integrityManifest: exportManifest, downloadAvailable: true },
+    { ...baseView, state: "ready", completedAt: "2026-10-18T00:01:00.000Z", expiresAt: "2026-10-25T00:01:00.000Z", integrityManifest: exportManifest, downloadAvailable: true },
     { ...baseView, state: "failed", failedAt: "2026-10-18T00:01:00.000Z", failureCode: "assembly_failed", downloadAvailable: false },
-    { ...baseView, state: "expired", completedAt: "2026-10-18T00:01:00.000Z", expiredAt: "2026-10-19T00:01:00.000Z", integrityManifest: exportManifest, downloadAvailable: false },
+    { ...baseView, state: "expired", completedAt: "2026-10-18T00:01:00.000Z", expiredAt: "2026-10-19T00:01:00.000Z", expiresAt: "2026-10-19T00:01:00.000Z", integrityManifest: exportManifest, downloadAvailable: false },
   ];
 
   it.each(lifecycleViews)("preserves the accepted $state status view", async (view) => {

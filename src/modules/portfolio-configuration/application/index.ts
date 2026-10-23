@@ -14,7 +14,9 @@ export type {
 export type { MeasurementConfigurationPublicFactsPort } from "./measurement-public-facts.js";
 export {
   createPortfolioSettingsReader,
+  createPortfolioConfigurationExportSnapshotReader,
   type PortfolioSettingsApplicationService,
+  type PortfolioConfigurationExportSnapshotReader,
 } from "./settings-service.js";
 export {
   createPortfolioProfileCommandService,

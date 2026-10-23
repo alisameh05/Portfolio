@@ -129,6 +129,8 @@ function createFakeExportStore() {
     async findOwnerExport() {
       return null;
     },
+    async saveOwnerExportSnapshot() { return { ok: true as const, value: "stale" as const }; },
+    async saveOwnerExportCandidate() { return { ok: true as const, value: "stale" as const }; },
     async applyOwnerExportTransition() {
       return { ok: true as const, value: { kind: "stale" as const } };
     },
@@ -359,6 +361,8 @@ describe("AC04 (service slice): replay and conflict semantics", () => {
       async findOwnerExport() {
         return null;
       },
+      async saveOwnerExportSnapshot() { return { ok: true as const, value: "stale" as const }; },
+      async saveOwnerExportCandidate() { return { ok: true as const, value: "stale" as const }; },
       async applyOwnerExportTransition() {
         return { ok: true as const, value: { kind: "stale" as const } };
       },
@@ -381,6 +385,8 @@ describe("AC05 (service slice): reservation members share one effect context", (
       async findOwnerExport() {
         return null;
       },
+      async saveOwnerExportSnapshot() { return { ok: true as const, value: "stale" as const }; },
+      async saveOwnerExportCandidate() { return { ok: true as const, value: "stale" as const }; },
       async applyOwnerExportTransition() {
         return { ok: true as const, value: { kind: "stale" as const } };
       },
@@ -412,13 +418,19 @@ describe("versioned Owner export downloads", () => {
       includedScopes: ["analytics-reports"],
       status: "ready",
       schemaVersion: "1.0",
+      aggregateVersion: 3,
       requestedAt: NOW,
       completedAt: NOW,
       artifactId: unsafeStableId<"OwnerExportArtifact">("0196a1b2-7c3d-7e11-9f22-000000000032"),
+      artifactSha256: "a".repeat(64),
+      artifactContentLength: 1,
+      expiresAt: "2026-10-30T08:00:00.000Z",
     };
     const exports: OwnerExportStorePort = {
       async reserveOwnerExport() {},
       async findOwnerExport() { return record; },
+      async saveOwnerExportSnapshot() { return { ok: true as const, value: "stale" as const }; },
+      async saveOwnerExportCandidate() { return { ok: true as const, value: "stale" as const }; },
       async applyOwnerExportTransition() { return { ok: true as const, value: { kind: "stale" as const } }; },
     };
     const content = (async function* () { yield Uint8Array.of(1); })();
@@ -459,6 +471,7 @@ describe("AC07 (validator slice): declared lifecycle edges with exact metadata",
     expectedAggregateVersion: 1,
     transitionedAt: NOW,
     actingJobId: unsafeStableId<"Job">("0196a1b2-7c3d-7e11-9f22-000000000021"),
+    leaseToken: "0123456789abcdef0123456789abcdef",
   };
 
   it("accepts exactly the declared edges and their required metadata", async () => {

@@ -154,6 +154,7 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
   Object.freeze({ migration: "20261017142000_revoke_public_aggregate_guard_execution.sql", ticket: 203, capability: "measurement.aggregate_privacy" }),
   Object.freeze({ migration: "20261018172500_bound_job_retries_and_incidents.sql", ticket: 237, capability: "operations.bounded_retries" }),
   Object.freeze({ migration: "20261023090000_reserve_owner_export_requests.sql", ticket: 238, capability: "portability.owner_export_requests" }),
+  Object.freeze({ migration: "20261023100000_build_configuration_owner_exports.sql", ticket: 240, capability: "portability.configuration_export", includeInDeclaredCapabilities: true }),
 ]);
 
 // Historical checkpoints and their paired database checks. A suite whose
@@ -241,11 +242,20 @@ export function composeOperationsBoundary(transformations = PHASE_DATABASE_TRANS
   return Object.freeze({ operations: Object.freeze(operations.map(Object.freeze)) });
 }
 
-export function declaredCapabilities(transformations = PHASE_DATABASE_TRANSFORMATIONS) {
+export function declaredCapabilities(
+  transformations = PHASE_DATABASE_TRANSFORMATIONS,
+  additiveMigrations = PHASE_DECLARED_ADDITIVE_MIGRATIONS,
+) {
   const capabilities = [];
   for (const transformation of transformations) {
     if (typeof transformation.capability === "string" && transformation.capability.length > 0 &&
       !capabilities.includes(transformation.capability)) capabilities.push(transformation.capability);
+  }
+  for (const migration of additiveMigrations) {
+    if (migration.includeInDeclaredCapabilities === true && typeof migration.capability === "string" &&
+      migration.capability.length > 0 && !capabilities.includes(migration.capability)) {
+      capabilities.push(migration.capability);
+    }
   }
   return Object.freeze(capabilities);
 }

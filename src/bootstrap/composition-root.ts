@@ -69,6 +69,7 @@ export type { RuntimeConfig } from "./configuration.js";
 let current: RuntimeConfig | undefined;
 let currentOperations: OperationsPersistencePorts | undefined;
 let currentOwnerExport: OwnerExportApplicationService | undefined;
+let currentOwnerExportAssembly: ReturnType<typeof import("../modules/portability-operations/application/owner-export-assembly.js").createOwnerExportAssemblyService> | undefined;
 let currentOwnerConfiguration: OwnerConfigurationApplicationService | undefined;
 let currentContentAuthoring: ContentAuthoringService | undefined;
 let currentOwnerTaxonomy: OwnerTaxonomyApplicationService | undefined;
@@ -150,6 +151,7 @@ export interface DatabaseRuntimeDependencies {
   readonly eventIngestion?: MeasurementEventRuntimeServices;
   readonly operations: OperationsPersistencePorts;
   readonly ownerExport?: OwnerExportApplicationService;
+  readonly ownerExportAssembly?: ReturnType<typeof import("../modules/portability-operations/application/owner-export-assembly.js").createOwnerExportAssemblyService>;
   readonly ownerConfiguration?: OwnerConfigurationApplicationService;
   readonly contentAuthoring?: ContentAuthoringService;
   readonly ownerTaxonomy?: OwnerTaxonomyApplicationService;
@@ -230,12 +232,105 @@ export async function initializeDatabaseRuntime(
           import("../modules/portability-operations/adapters/postgres-owner-export-store.js"),
           import("../modules/portability-operations/application/owner-export-service.js"),
         ]);
+        const ownerExportStore = createPostgresOwnerExportStore(database.database, { outbox: operations.outbox });
+        let ownerExportStorage: Awaited<ReturnType<typeof import("../runtime/adapters/supabase-owner-export-storage.js").createSupabaseOwnerExportStorage>> | undefined;
+        if (env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]) {
+          const { createSupabaseOwnerExportStorage } = await import("../runtime/adapters/supabase-owner-export-storage.js");
+          ownerExportStorage = createSupabaseOwnerExportStorage({
+            storageUrl: env["SUPABASE_URL"],
+            serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
+            ...(env["OWNER_EXPORTS_BUCKET"] === undefined ? {} : { bucket: env["OWNER_EXPORTS_BUCKET"] }),
+          });
+        }
+        const unavailableOwnerExportStorage = {
+          async writeOwnerExport() {
+            return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
+          },
+          async readOwnerExport() {
+            return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
+          },
+        };
         const ownerExportService = createOwnerExportService({
           operations,
-          exports: createPostgresOwnerExportStore(database.database, { outbox: operations.outbox }),
+          exports: ownerExportStore,
           clock: createSystemClock(),
           ids: createSystemIdGenerator(),
+          ...(ownerExportStorage === undefined ? {} : { objectRead: ownerExportStorage }),
         });
+        let ownerExportAssembly: ReturnType<typeof import("../modules/portability-operations/application/owner-export-assembly.js").createOwnerExportAssemblyService> | undefined;
+        if (runtimeKind === "worker") {
+          const [
+            { createOwnerExportAssemblyService },
+            { createPortfolioConfigurationExportSnapshotReader },
+            { createPostgresPortfolioSettingsRepository },
+            { createOwnerExportConfigurationSnapshotReader },
+          ] = await Promise.all([
+            import("../modules/portability-operations/application/owner-export-assembly.js"),
+            import("../modules/portfolio-configuration/application/settings-service.js"),
+            import("../modules/portfolio-configuration/adapters/postgres-settings.js"),
+            import("../runtime/adapters/owner-export-configuration-snapshot.js"),
+          ]);
+          ownerExportAssembly = createOwnerExportAssemblyService({
+            operations,
+            exports: ownerExportStore,
+            snapshots: createOwnerExportConfigurationSnapshotReader({
+              configuration: createPortfolioConfigurationExportSnapshotReader({
+                repository: createPostgresPortfolioSettingsRepository(),
+                transactions: operations.transactions,
+              }),
+              capabilities: {
+                async read(scope) {
+                  if (!env["SUPABASE_URL"] || !env["SUPABASE_SERVICE_ROLE_KEY"]) {
+                    return { currentCvAvailable: false, externalLinksAvailable: false };
+                  }
+                  const [
+                    { createMediaAcceptanceApplicationService },
+                    { createPostgresMediaAcceptanceRepository },
+                    { createPostgresCurrentCvSnapshotRepository },
+                    { createCurrentCvDeliveryService },
+                    { createSupabaseCurrentCvDelivery },
+                  ] = await Promise.all([
+                    import("../modules/media/application/acceptance.js"),
+                    import("../modules/media/adapters/postgres-acceptance.js"),
+                    import("../modules/cv-portfolio/adapters/postgres-portfolio.js"),
+                    import("../modules/cv-portfolio/application/current-delivery.js"),
+                    import("../runtime/adapters/supabase-current-cv-delivery.js"),
+                  ]);
+                  const capabilityScope = { portfolioId: scope.portfolioId, ownerId: scope.ownerId };
+                  const media = createMediaAcceptanceApplicationService({
+                    scope: capabilityScope,
+                    repository: createPostgresMediaAcceptanceRepository({
+                      database: database.database,
+                      transactions: operations.transactions,
+                      scope: capabilityScope,
+                    }),
+                  });
+                  const currentCv = createCurrentCvDeliveryService({
+                    repository: createPostgresCurrentCvSnapshotRepository({
+                      database: database.database,
+                      transactions: operations.transactions,
+                      scope: capabilityScope,
+                      media,
+                    }),
+                    storage: createSupabaseCurrentCvDelivery({
+                      storageUrl: env["SUPABASE_URL"]!,
+                      serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"]!,
+                      mode: env["NODE_ENV"] === "test" ? "test" : "deployed",
+                      ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+                    }),
+                  });
+                  return {
+                    currentCvAvailable: await currentCv.getAvailability() === "available",
+                    externalLinksAvailable: false,
+                  };
+                },
+              },
+            }),
+            storage: ownerExportStorage ?? unavailableOwnerExportStorage,
+            clock: createSystemClock(),
+            ids: createSystemIdGenerator(),
+          });
+        }
         let ownerConfiguration: OwnerConfigurationApplicationService | undefined;
         let contentAuthoring: ContentAuthoringService | undefined;
         let ownerTaxonomy: OwnerTaxonomyApplicationService | undefined;
@@ -718,6 +813,7 @@ export async function initializeDatabaseRuntime(
         return {
           operations,
           ...(ownerExportService === undefined ? {} : { ownerExport: ownerExportService }),
+          ...(ownerExportAssembly === undefined ? {} : { ownerExportAssembly }),
           ...(reaction === undefined ? {} : { reaction }),
           ...(rating === undefined ? {} : { rating }),
           ...(feedback === undefined ? {} : { feedback }),
@@ -756,6 +852,7 @@ export async function initializeDatabaseRuntime(
     current = config;
     currentOperations = dependencies.operations;
     currentOwnerExport = dependencies.ownerExport;
+    currentOwnerExportAssembly = dependencies.ownerExportAssembly;
     currentReaction = dependencies.reaction;
     currentRating = dependencies.rating;
     currentFeedback = dependencies.feedback;
@@ -797,6 +894,12 @@ export async function getOwnerExportApplicationService(): Promise<OwnerExportApp
   if (currentOwnerExport !== undefined) return currentOwnerExport;
   const { createProductionOwnerExportService } = await import("../runtime/fakes/owner-export.js");
   return createProductionOwnerExportService();
+}
+
+/** Worker-only queue handler for resumable Owner export assembly jobs. */
+export function getOwnerExportAssemblyService() {
+  if (currentOwnerExportAssembly === undefined) throw new Error("OWNER_EXPORT_ASSEMBLY_NOT_CONFIGURED");
+  return currentOwnerExportAssembly;
 }
 
 /** Database composition activates only configuration commands with completed phase tickets. */
@@ -962,6 +1065,8 @@ export function getProjectInteractionSummaryApplicationService() {
 export function resetRuntimeForTests(): void {
   current = undefined;
   currentOperations = undefined;
+  currentOwnerExport = undefined;
+  currentOwnerExportAssembly = undefined;
   currentConsent = undefined;
   currentEventIngestion = undefined;
   currentReaction = undefined;

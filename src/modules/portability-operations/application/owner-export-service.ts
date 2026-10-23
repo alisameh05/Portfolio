@@ -55,6 +55,7 @@ import type {
   OwnerExportRequestReceipt,
   OwnerExportView,
   RequestOwnerExportApplicationCommand,
+  OWNER_EXPORT_ASSEMBLY_JOB_TYPE,
 } from "./service.js";
 import { validateOwnerExportObjectRead } from "./service.js";
 import type {
@@ -69,15 +70,15 @@ import type {
 } from "./owner-export-store.js";
 import type { OwnerExportObjectReadPort } from "./service.js";
 
-export const OWNER_EXPORT_SCHEMA_VERSION = "1.1";
+export const OWNER_EXPORT_SCHEMA_VERSION = "1.2";
 function artifactFilename(schemaVersion: string): string {
   return `shipwithali-owner-export-${schemaVersion}.zip`;
 }
 export const OWNER_EXPORT_ARTIFACT_FILENAME = artifactFilename(OWNER_EXPORT_SCHEMA_VERSION);
+export const OWNER_EXPORT_RETENTION_SECONDS = 7 * 86400;
 /** Purpose-limited receipt lifetime: exact replay stays addressable for 30 days. */
 export const OWNER_EXPORT_RECEIPT_TTL_SECONDS = 30 * 86400;
 const REQUEST_OPERATION_SCOPE = "portability.owner-export-request";
-const ASSEMBLY_JOB_TYPE = "portability.owner-export-assembly.v1";
 
 const EXPORT_STATUS_VALUES: readonly ExportStatus[] = [
   "requested", "building", "ready", "failed", "expired",
@@ -239,7 +240,7 @@ export function createOwnerExportService(
           await operations.jobs.enqueue(context, {
             jobId,
             payload: {
-              type: ASSEMBLY_JOB_TYPE,
+              type: OWNER_EXPORT_ASSEMBLY_JOB_TYPE,
               version: 1,
               value: {
                 exportId,
@@ -289,10 +290,23 @@ export function createOwnerExportService(
         if (record.completedAt === undefined || record.integrityManifest === undefined) {
           return { ok: false, error: rejectionForPersistence() };
         }
+        const expiresAt = record.expiresAt ?? new Date(Date.parse(record.completedAt) + OWNER_EXPORT_RETENTION_SECONDS * 1000).toISOString();
+        if (Date.parse(clock.now()) >= Date.parse(expiresAt)) {
+          return ok({
+            ...base,
+            state: "expired",
+            completedAt: record.completedAt,
+            expiredAt: record.expiredAt ?? expiresAt,
+            expiresAt,
+            integrityManifest: record.integrityManifest,
+            downloadAvailable: false,
+          });
+        }
         return ok({
           ...base,
           state: "ready",
           completedAt: record.completedAt,
+          expiresAt,
           integrityManifest: record.integrityManifest,
           downloadAvailable: true,
         });
@@ -319,6 +333,7 @@ export function createOwnerExportService(
           state: "expired",
           completedAt: record.completedAt,
           expiredAt: record.expiredAt,
+          expiresAt: record.expiresAt ?? record.expiredAt,
           integrityManifest: record.integrityManifest,
           downloadAvailable: false,
         });
@@ -377,6 +392,15 @@ export function createOwnerExportService(
         : "OWNER_EXPORT_NOT_READY";
       return { ok: false, error: { kind: "conflict", code } };
     }
+    const expiresAt = record.expiresAt ?? (record.completedAt === undefined
+      ? undefined
+      : new Date(Date.parse(record.completedAt) + OWNER_EXPORT_RETENTION_SECONDS * 1000).toISOString());
+    if (expiresAt === undefined || Date.parse(clock.now()) >= Date.parse(expiresAt)) {
+      return { ok: false, error: { kind: "conflict", code: "OWNER_EXPORT_DOWNLOAD_EXPIRED" } };
+    }
+    if (record.artifactSha256 === undefined || record.artifactContentLength === undefined) {
+      return { ok: false, error: { kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
+    }
     if (objectRead === undefined) {
       return { ok: false, error: { kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
     }
@@ -385,6 +409,8 @@ export function createOwnerExportService(
         portfolioId: query.portfolioId,
         exportId: query.exportId,
         artifactId: record.artifactId,
+        expectedSha256: record.artifactSha256,
+        expectedContentLength: record.artifactContentLength,
       });
       if (!read.ok) return read;
       const validated = validateOwnerExportObjectRead(read.value);
@@ -429,7 +455,7 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const entries = value["entries"];
   const commonShape = (
     value["packageFormat"] === "shipwithali-owner-export" &&
-    ["1.0", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
+    ["1.0", "1.1", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
     typeof value["createdAt"] === "string" &&
     Number.isFinite(Date.parse(value["createdAt"] as string)) &&
     value["algorithm"] === "sha-256" &&
@@ -464,7 +490,7 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const snapshot = value["snapshot"];
   const stableId = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   return (
-    value["schemaVersion"] === OWNER_EXPORT_SCHEMA_VERSION &&
+    ["1.1", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
     typeof value["exportId"] === "string" && stableId.test(value["exportId"]) &&
     isRecord(snapshot) && typeof snapshot["snapshotId"] === "string" && stableId.test(snapshot["snapshotId"]) &&
     typeof snapshot["capturedAt"] === "string" && Number.isFinite(Date.parse(snapshot["capturedAt"])) &&
@@ -493,6 +519,17 @@ export function validateOwnerExportTransition(
   }
   if (!Number.isFinite(Date.parse(input.transitionedAt))) {
     return err({ kind: "validation", code: "OWNER_EXPORT_TRANSITION_INSTANT_INVALID" });
+  }
+  if ((input.toStatus !== "expired" && input.leaseToken === undefined) ||
+      (input.leaseToken !== undefined && (input.leaseToken.length < 16 || input.leaseToken.length > 256))) {
+    return err({ kind: "validation", code: "OWNER_EXPORT_TRANSITION_LEASE_INVALID" });
+  }
+  if (input.expiresAt !== undefined && (!Number.isFinite(Date.parse(input.expiresAt)) ||
+      new Date(Date.parse(input.expiresAt)).toISOString() !== input.expiresAt)) {
+    return err({ kind: "validation", code: "OWNER_EXPORT_TRANSITION_EXPIRY_INVALID" });
+  }
+  if (input.expiresAt !== undefined && input.toStatus !== "ready") {
+    return err({ kind: "validation", code: "OWNER_EXPORT_TRANSITION_METADATA_UNEXPECTED" });
   }
   if (!parseStableId("Job", input.actingJobId).ok) {
     return err({ kind: "validation", code: "OPERATIONS_WORKER_PURPOSE_INVALID" });

@@ -42,6 +42,7 @@ const readyExport = {
   schemaVersion: "1.0",
   requestedAt: "2026-09-18T00:00:00Z",
   completedAt: "2026-09-18T00:01:00Z",
+  expiresAt: "2026-09-25T00:01:00Z",
   includedScopes: ["analytics-reports"],
   publicEventDataCoverage: { mode: "excluded" },
   integrityManifest: {

@@ -1,5 +1,6 @@
 export {
   isExportScope,
+  OWNER_EXPORT_ASSEMBLY_JOB_TYPE,
   MAX_OWNER_EXPORT_ARTIFACT_BYTES,
   MAX_EXPORT_SNAPSHOT_PAGE_SIZE,
   MAX_EXPORT_SNAPSHOT_CURSOR_LENGTH,
@@ -82,6 +83,18 @@ export {
   validateOwnerExportTransition,
   type OwnerExportServiceDependencies,
 } from "./owner-export-service.js";
+export {
+  createOwnerExportAssemblyService,
+  type OwnerExportAssemblyDependencies,
+  type OwnerExportAssemblyRunResult,
+  type OwnerExportConfigurationSnapshotReaderPort,
+  type OwnerExportObjectStoragePort,
+} from "./owner-export-assembly.js";
+export {
+  buildConfigurationOwnerExportPackage,
+  type BuiltOwnerExportPackage,
+  type OwnerExportConfigurationSnapshot,
+} from "./owner-export-package.js";
 export type {
   OwnerExportStorePort,
   OwnerExportReservationInput,

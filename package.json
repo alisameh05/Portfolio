@@ -86,6 +86,7 @@
     "phase8:qualify": "node scripts/phase8-qualify.mjs",
     "owner-export:validate": "node scripts/owner-export/validate-cli.mjs",
     "test:phase8:owner-export-package": "vitest run tests/phase8/owner-export-package.test.ts",
+    "test:phase8:owner-export-assembly": "vitest run tests/phase8/owner-export-assembly.test.ts",
     "phase7:http:assembly": "node scripts/phase7-http-assembly.mjs",
     "prephase7:http:assembly": "npm run validation:ready",
     "test:phase7:gate": "node --test tests/tooling/phase7-gate.test.mjs",

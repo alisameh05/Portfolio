@@ -94,7 +94,13 @@ export interface TransactionRunner {
     callback: (
       context: TransactionContext,
     ) => Promise<T | TransactionRollback<T>> | T | TransactionRollback<T>,
+    options?: TransactionRunOptions,
   ): Promise<T>;
+}
+
+/** Transaction properties required by a provider-neutral consistency boundary. */
+export interface TransactionRunOptions {
+  readonly isolationLevel?: "read committed" | "repeatable read" | "serializable";
 }
 
 // ── Logger ───────────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import type {
 import type { TransactionContext } from "../../../runtime/ports.js";
 import type { ExportStatus, ExportScope } from "../domain/index.js";
 import type { OwnerExportPackageManifest } from "./service.js";
+import type { OwnerExportConfigurationSnapshot } from "./owner-export-package.js";
 import type { SafeErrorCode } from "./persistence.js";
 
 /** Durable five-state identity and lifecycle facts for one Owner export request. */
@@ -16,6 +17,7 @@ export interface PersistedOwnerExport {
   readonly includedScopes: readonly ExportScope[];
   readonly status: ExportStatus;
   readonly schemaVersion: string;
+  readonly aggregateVersion: number;
   readonly requestedAt: string;
   readonly startedAt?: string;
   readonly completedAt?: string;
@@ -25,6 +27,13 @@ export interface PersistedOwnerExport {
   readonly failureCode?: SafeErrorCode;
   readonly integrityManifest?: OwnerExportPackageManifest;
   readonly artifactId?: StableId<"OwnerExportArtifact">;
+  readonly snapshot?: OwnerExportConfigurationSnapshot;
+  readonly candidateArtifactId?: StableId<"OwnerExportArtifact">;
+  readonly candidateSha256?: string;
+  readonly candidateContentLength?: number;
+  readonly artifactSha256?: string;
+  readonly artifactContentLength?: number;
+  readonly expiresAt?: string;
 }
 
 export interface OwnerExportReservationInput {
@@ -47,11 +56,14 @@ export interface OwnerExportTransitionInput {
   readonly toStatus: ExportStatus;
   /** Optimistic guard: the writer's expected existing aggregate version. */
   readonly expectedAggregateVersion: number;
+  /** Current shared-queue lease token fences every lifecycle transition. */
+  readonly leaseToken?: string;
   readonly transitionedAt: string;
   readonly actingJobId: StableId<"Job">;
   readonly failureCode?: SafeErrorCode;
   readonly integrityManifest?: OwnerExportPackageManifest;
   readonly artifactId?: StableId<"OwnerExportArtifact">;
+  readonly expiresAt?: string;
 }
 
 /**
@@ -70,6 +82,21 @@ export interface OwnerExportStorePort {
     readonly portfolioId: StableId<"Portfolio">;
     readonly ownerId: StableId<"Owner">;
   }): Promise<PersistedOwnerExport | null>;
+  /** Snapshot checkpoints survive process loss; each write must verify the live queue lease. */
+  saveOwnerExportSnapshot(input: {
+    readonly exportId: StableId<"OwnerExport">;
+    readonly actingJobId: StableId<"Job">;
+    readonly leaseToken: string;
+    readonly snapshot: OwnerExportConfigurationSnapshot;
+  }): Promise<Result<"saved" | "stale", Rejection>>;
+  saveOwnerExportCandidate(input: {
+    readonly exportId: StableId<"OwnerExport">;
+    readonly actingJobId: StableId<"Job">;
+    readonly leaseToken: string;
+    readonly artifactId: StableId<"OwnerExportArtifact">;
+    readonly sha256: string;
+    readonly contentLength: number;
+  }): Promise<Result<"saved" | "stale", Rejection>>;
   /** Applies the guarded transition in one transaction; readiness also emits the produced event. */
   applyOwnerExportTransition(
     input: OwnerExportTransitionInput,

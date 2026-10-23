@@ -26,6 +26,10 @@ export interface PortfolioSettingsRepository {
     scope: PortfolioScope,
     context: TransactionContext,
   ): Promise<Result<OwnerPortfolioSettingsView, Rejection>>;
+  getSettingsSnapshot?(scope: PortfolioScope, context: TransactionContext): Promise<Result<{
+    readonly settings: OwnerPortfolioSettingsView | null;
+    readonly capturedAt: string;
+  }, Rejection>>;
   provisionSettings(
     scope: PortfolioScope,
     settings: OwnerPortfolioSettingsView,
@@ -49,6 +53,35 @@ export interface PortfolioSettingsRepository {
     expectedVersion: number,
     context: TransactionContext,
   ): Promise<Result<PortfolioAggregateUpdate, Rejection>>;
+}
+
+export interface PortfolioConfigurationExportSnapshotReader {
+  capture(scope: PortfolioScope): Promise<Result<{
+    readonly settings: OwnerPortfolioSettingsView | null;
+    readonly capturedAt: string;
+  }, Rejection>>;
+}
+
+/** Captures the owning module's retained configuration through its repository boundary. */
+export function createPortfolioConfigurationExportSnapshotReader(input: {
+  readonly repository: Pick<PortfolioSettingsRepository, "getSettingsSnapshot">;
+  readonly transactions: TransactionRunner;
+}): PortfolioConfigurationExportSnapshotReader {
+  return {
+    async capture(scope: PortfolioScope): Promise<Result<{ readonly settings: OwnerPortfolioSettingsView | null; readonly capturedAt: string }, Rejection>> {
+      if (input.repository.getSettingsSnapshot === undefined) {
+        return err({ kind: "temporarily_unavailable", code: "PORTFOLIO_CONFIGURATION_SNAPSHOT_UNAVAILABLE" });
+      }
+      try {
+        return await input.transactions.run(
+          (context) => input.repository.getSettingsSnapshot!(scope, context),
+          { isolationLevel: "repeatable read" },
+        );
+      } catch {
+        return err({ kind: "temporarily_unavailable", code: "PORTFOLIO_CONFIGURATION_SNAPSHOT_UNAVAILABLE" });
+      }
+    },
+  };
 }
 
 export interface PortfolioSettingsProvisioningValues {

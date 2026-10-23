@@ -970,6 +970,7 @@ export type ReadyOwnerExportView = {
     schemaVersion: string;
     requestedAt: string;
     completedAt: string;
+    expiresAt: string;
     includedScopes: Array<OwnerExportScope>;
     publicEventDataCoverage: PublicEventDataCoverage;
     integrityManifest: OwnerExportPackageManifest;
@@ -995,6 +996,7 @@ export type ExpiredOwnerExportView = {
     requestedAt: string;
     completedAt: string;
     expiredAt: string;
+    expiresAt: string;
     includedScopes: Array<OwnerExportScope>;
     publicEventDataCoverage: PublicEventDataCoverage;
     integrityManifest: OwnerExportPackageManifest;
