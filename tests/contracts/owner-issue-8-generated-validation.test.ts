@@ -8,6 +8,7 @@ import {
   zCreateOwnerAnalyticsGoalVersionBody,
   zCreateOwnerAnalyticsGoalVersionHeaders,
   zOwnerExportRecord,
+  zOwnerExportPackageManifest,
   zOwnerExportView,
   zRequestOwnerExportBody,
   zRequestOwnerExportHeaders,
@@ -153,6 +154,44 @@ describe("generated Owner Measurement validators", () => {
   });
 });
 
+describe("generated portable Owner export manifest validator", () => {
+  it("accepts the versioned snapshot, dependency, schema and asset coverage contract", () => {
+    const manifest = {
+      packageFormat: "shipwithali-owner-export",
+      schemaVersion: "1.1",
+      exportId: ids.export,
+      snapshot: { snapshotId: ids.goal, capturedAt: "2026-10-23T10:00:00Z", consistency: "transactional" },
+      createdAt: "2026-10-23T10:01:00Z",
+      algorithm: "sha-256",
+      digest,
+      requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"],
+      includedScopes: ["analytics-reports"],
+      publicEventDataCoverage: { mode: "excluded" },
+      dependencies: [],
+      exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"],
+      entries: [{
+        path: "records/analytics-reports.ndjson",
+        scope: "analytics-reports",
+        mediaType: "application/x-ndjson",
+        recordSchema: "urn:shipwithali:owner-export-schema:analytics-reports:1.0",
+        schemaPath: "schemas/analytics-reports.schema.json",
+        schemaVersion: "1.0",
+        digest,
+        recordCount: 0,
+      }],
+      schemas: [
+        { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.1", schemaVersion: "1.1", digest },
+        { kind: "record", scope: "analytics-reports", path: "schemas/analytics-reports.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:analytics-reports:1.0", schemaVersion: "1.0", digest },
+      ],
+      assets: [],
+    };
+
+    expect(zOwnerExportPackageManifest.safeParse(manifest).success).toBe(true);
+    expect(zOwnerExportPackageManifest.safeParse({ ...manifest, schemas: [] }).success).toBe(false);
+    expect(zOwnerExportPackageManifest.safeParse(readyExport.integrityManifest).success).toBe(true);
+  });
+});
+
 describe("generated Owner Portability validators", () => {
   it("accepts the declared export request with creation-only idempotency", () => {
     expect(zRequestOwnerExportBody.safeParse(requestExample(
@@ -187,6 +226,8 @@ describe("generated Owner Portability validators", () => {
         contentId: ids.project,
         contentType: "project",
         lifecycle: "published",
+        projectStatus: "complete",
+        featured: true,
         revisions: [{
           revisionId: ids.version,
           locale: "en",
@@ -206,6 +247,7 @@ describe("generated Owner Portability validators", () => {
           claim: "The implementation passed its contract gate.",
           state: "supported",
           supportingArtifactIds: [ids.media],
+          mediaAssetId: ids.media,
         }],
       },
       {
@@ -213,14 +255,17 @@ describe("generated Owner Portability validators", () => {
         taxonomyId: ids.taxonomy,
         aggregateVersion: 1,
         kind: "technology",
-        values: [{ valueId: ids.value, name: "TypeScript", state: "active" }],
+        values: [
+          { valueId: ids.value, name: "TypeScript", state: "active" },
+          { valueId: ids.goal, name: "Legacy TypeScript", state: "merged", mergedIntoId: ids.value },
+        ],
         renameHistory: [{
           valueId: ids.value,
           previousName: "TS",
           newName: "TypeScript",
           renamedAt: "2026-09-17T00:00:00Z",
         }],
-        assignments: [{ projectId: ids.project, valueId: ids.value }],
+        assignments: [{ targetId: ids.project, taxonomyValueId: ids.value }],
       },
       {
         scope: "media-metadata",
@@ -228,17 +273,31 @@ describe("generated Owner Portability validators", () => {
         kind: "image",
         state: "accepted",
         accessibilityMetadata: { kind: "described-image", altText: "Portfolio result." },
-        processingHistory: [],
-        decisionHistory: [{ decision: "accepted", decidedAt: "2026-09-17T01:00:00Z" }],
+        processingHistory: Array.from({ length: 100 }, () => ({
+          result: "passed", detectedMediaType: "image/png", detectedByteLength: 8, sha256: digest, findings: [], recordedAt: "2026-09-17T01:00:00Z",
+        })),
+        processingHistoryTruncated: true,
+        decisionHistory: Array.from({ length: 100 }, () => ({ decision: "accepted", decidedAt: "2026-09-17T01:00:00Z" })),
+        decisionHistoryTruncated: true,
         publicationState: "accepted",
-        portableReference: "media/portfolio-result.png",
+        portableReference: `assets/media-metadata/${ids.media}`,
       },
       {
         scope: "cv-metadata",
         aggregateVersion: 1,
-        currentVersionId: null,
-        versions: [],
-        activationHistory: [],
+        currentVersionId: `${ids.version.slice(0, -3)}100`,
+        versionsTruncated: true,
+        versions: Array.from({ length: 100 }, (_, index) => ({
+          versionId: `${ids.version.slice(0, -3)}${String(100 + index).padStart(3, "0")}`,
+          mediaId: ids.media,
+          locale: "en",
+          label: "Retained CV",
+          state: index === 0 ? "accepted" : "registered",
+          isCurrent: index === 0,
+          ...(index === 0 ? { portableReference: `assets/cv-metadata/${ids.media}` } : {}),
+        })),
+        activationHistory: Array.from({ length: 100 }, () => ({ versionId: ids.version, activatedAt: "2026-09-18T00:00:00Z" })),
+        activationHistoryTruncated: true,
       },
       {
         scope: "moderation-history",
@@ -292,41 +351,94 @@ describe("generated Owner Portability validators", () => {
         },
       },
     ] as const;
+    const packageRecords = records.map(({ scope, ...value }) => ({ scope, value }));
 
-    for (const record of records) {
-      expect(zOwnerExportRecord.safeParse(record).success).toBe(true);
+    for (const record of packageRecords) {
+      const result = zOwnerExportRecord.safeParse(record);
+      expect(result.success, `${record.scope}: ${result.success ? "valid" : JSON.stringify(result.error.issues)}`).toBe(true);
     }
+    expect(zOwnerExportRecord.safeParse(records[0]).success).toBe(false);
 
-    const roundTripped = JSON.parse(JSON.stringify(records)) as Array<Record<string, unknown>>;
+    const roundTripped = JSON.parse(JSON.stringify(packageRecords)) as Array<Record<string, unknown>>;
     for (const record of roundTripped) {
       expect(zOwnerExportRecord.safeParse(record).success).toBe(true);
     }
-    expect(roundTripped[0]?.["taxonomyValueIds"]).toContain(ids.value);
-    expect(roundTripped[1]?.["assignments"]).toContainEqual({
-      projectId: ids.project,
-      valueId: ids.value,
+    const firstValue = roundTripped[0]?.["value"] as Record<string, unknown>;
+    const secondValue = roundTripped[1]?.["value"] as Record<string, unknown>;
+    expect(firstValue["taxonomyValueIds"]).toContain(ids.value);
+    expect(secondValue["assignments"]).toContainEqual({
+      targetId: ids.project,
+      taxonomyValueId: ids.value,
     });
+    const contentWithoutOptionalFacts = structuredClone(roundTripped[0]) as Record<string, unknown>;
+    const contentValue = contentWithoutOptionalFacts["value"] as Record<string, unknown>;
+    delete contentValue["projectStatus"];
+    delete contentValue["featured"];
+    expect(zOwnerExportRecord.safeParse(contentWithoutOptionalFacts).success).toBe(true);
+    const taxonomyWithOldAssignmentNames = structuredClone(roundTripped[1]) as Record<string, unknown>;
+    const taxonomyValue = taxonomyWithOldAssignmentNames["value"] as Record<string, unknown>;
+    taxonomyValue["assignments"] = [{ projectId: ids.project, valueId: ids.value }];
+    expect(zOwnerExportRecord.safeParse(taxonomyWithOldAssignmentNames).success).toBe(false);
 
+    const missingTaxonomyId = structuredClone(roundTripped[0]) as Record<string, unknown>;
+    const missingTaxonomyValue = missingTaxonomyId["value"] as Record<string, unknown>;
+    missingTaxonomyValue["taxonomyValueIds"] = undefined;
     expect(zOwnerExportRecord.safeParse({
-      ...records[0],
-      taxonomyValueIds: undefined,
+      ...missingTaxonomyId,
     }).success).toBe(false);
+    const mediaWithoutBytes = structuredClone(roundTripped[2]) as Record<string, unknown>;
+    const mediaMetadata = mediaWithoutBytes["value"] as Record<string, unknown>;
+    delete mediaMetadata["portableReference"];
     expect(zOwnerExportRecord.safeParse({
-      ...records[2],
-      portableReference: undefined,
+      ...mediaWithoutBytes,
+    }).success).toBe(true);
+    const invalidMediaReference = structuredClone(roundTripped[2]) as Record<string, unknown>;
+    const invalidMediaValue = invalidMediaReference["value"] as Record<string, unknown>;
+    invalidMediaValue["portableReference"] = "../private/media.bin";
+    expect(zOwnerExportRecord.safeParse(invalidMediaReference).success).toBe(false);
+    const pendingMediaReference = structuredClone(roundTripped[2]) as Record<string, unknown>;
+    const pendingMediaValue = pendingMediaReference["value"] as Record<string, unknown>;
+    pendingMediaValue["state"] = "processing";
+    expect(zOwnerExportRecord.safeParse(pendingMediaReference).success).toBe(false);
+    const shortProcessingHistory = structuredClone(roundTripped[2]) as Record<string, unknown>;
+    const shortMediaValue = shortProcessingHistory["value"] as Record<string, unknown>;
+    shortMediaValue["processingHistory"] = (shortMediaValue["processingHistory"] as unknown[]).slice(1);
+    expect(zOwnerExportRecord.safeParse(shortProcessingHistory).success).toBe(false);
+    const shortDecisionHistory = structuredClone(roundTripped[2]) as Record<string, unknown>;
+    const shortDecisionMediaValue = shortDecisionHistory["value"] as Record<string, unknown>;
+    shortDecisionMediaValue["decisionHistoryTruncated"] = true;
+    shortDecisionMediaValue["decisionHistory"] = (shortDecisionMediaValue["decisionHistory"] as unknown[]).slice(1);
+    expect(zOwnerExportRecord.safeParse(shortDecisionHistory).success).toBe(false);
+    const missingProjectId = structuredClone(roundTripped[4]) as Record<string, unknown>;
+    const moderationValue = missingProjectId["value"] as Record<string, unknown>;
+    moderationValue["projectId"] = undefined;
+    expect(zOwnerExportRecord.safeParse({
+      ...missingProjectId,
     }).success).toBe(false);
-    expect(zOwnerExportRecord.safeParse({
-      ...records[4],
-      projectId: undefined,
-    }).success).toBe(false);
-    expect(zOwnerExportRecord.safeParse({
-      ...records[5],
+    const cvWithoutReference = structuredClone(roundTripped[3]) as Record<string, unknown>;
+    const cvValue = cvWithoutReference["value"] as Record<string, unknown>;
+    const cvVersions = cvValue["versions"] as Array<Record<string, unknown>>;
+    delete cvVersions[0]?.["portableReference"];
+    expect(zOwnerExportRecord.safeParse(cvWithoutReference).success).toBe(false);
+    const shortCvVersions = structuredClone(roundTripped[3]) as Record<string, unknown>;
+    const shortVersionsValue = shortCvVersions["value"] as Record<string, unknown>;
+    shortVersionsValue["versionsTruncated"] = true;
+    shortVersionsValue["versions"] = (shortVersionsValue["versions"] as unknown[]).slice(1);
+    expect(zOwnerExportRecord.safeParse(shortCvVersions).success).toBe(false);
+    const shortCvHistory = structuredClone(roundTripped[3]) as Record<string, unknown>;
+    const shortCvValue = shortCvHistory["value"] as Record<string, unknown>;
+    shortCvValue["activationHistory"] = (shortCvValue["activationHistory"] as unknown[]).slice(1);
+    expect(zOwnerExportRecord.safeParse(shortCvHistory).success).toBe(false);
+    const privacyFields = structuredClone(roundTripped[5]) as Record<string, unknown>;
+    const privacyValue = privacyFields["value"] as Record<string, unknown>;
+    Object.assign(privacyValue, {
       visitorName: "Private visitor",
       feedbackText: "Private feedback",
       cvContents: "Private CV text",
       accessToken: "secret",
       ipAddress: "203.0.113.1",
-    }).success).toBe(false);
+    });
+    expect(zOwnerExportRecord.safeParse(privacyFields).success).toBe(false);
   });
 
   it("rejects provider backups, provider fields, and malformed versions", () => {

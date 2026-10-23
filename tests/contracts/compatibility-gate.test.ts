@@ -108,6 +108,51 @@ describe("contract compatibility gate", () => {
     expect(result.stdout).toContain("backward compatible");
   });
 
+  it("accepts a versioned response union that retains the prior representation", () => {
+    const baselineDocument = structuredClone(baseline);
+    const oldRepresentation = {
+      type: "object",
+      additionalProperties: false,
+      required: ["id"],
+      properties: { id: { type: "string" } },
+    };
+    baselineDocument["paths"]["/widgets"].get = {
+      operationId: "getWidget",
+      responses: { "200": { description: "Found", content: { "application/json": { schema: oldRepresentation } } } },
+    };
+    const candidateDocument = structuredClone(baselineDocument);
+    candidateDocument["paths"]["/widgets"].get.responses["200"].content["application/json"].schema = {
+      oneOf: [
+        oldRepresentation,
+        { type: "object", required: ["id", "schemaVersion"], properties: { id: { type: "string" }, schemaVersion: { const: "2.0" } } },
+      ],
+    };
+
+    const result = runCompatibilityAgainst(baselineDocument, candidateDocument);
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain("backward compatible");
+  });
+
+  it("rejects a versioned response union that drops the prior representation", () => {
+    const baselineDocument = structuredClone(baseline);
+    baselineDocument["paths"]["/widgets"].get = {
+      operationId: "getWidget",
+      responses: { "200": { description: "Found", content: { "application/json": { schema: {
+        type: "object", required: ["id"], properties: { id: { type: "string" } },
+      } } } } },
+    };
+    const candidateDocument = structuredClone(baselineDocument);
+    candidateDocument["paths"]["/widgets"].get.responses["200"].content["application/json"].schema = {
+      oneOf: [{ type: "object", required: ["schemaVersion"], properties: { schemaVersion: { const: "2.0" } } }],
+    };
+
+    const result = runCompatibilityAgainst(baselineDocument, candidateDocument);
+
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain("no response union alternative preserves");
+  });
+
   it("rejects a relationship receipt narrowed to an unrelated outcome", () => {
     const baselineDocument = relationshipReceiptContract();
     const candidateDocument = structuredClone(baselineDocument);

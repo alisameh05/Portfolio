@@ -1,0 +1,100 @@
+# Portable Owner export ZIP format
+
+This document defines the offline `shipwithali-owner-export` package. A package is a data interchange artifact, not a database backup. Validation reads the ZIP in memory, checks its declared content, and never extracts entries or contacts a provider, application service, or network endpoint.
+
+## Package layout
+
+Each ZIP contains exactly the entries declared by `manifest.json`:
+
+```text
+manifest.json
+schemas/manifest.schema.json             # v1.1 and later 1.x manifests
+schemas/<scope>.schema.json              # one pinned record schema per selected scope
+records/<scope>.ndjson                   # or records/<scope>.json
+assets/<scope>/<stable-asset-id>          # only for referenced portable assets
+```
+
+The seven scope names are `portfolio-content`, `taxonomy`, `media-metadata`, `cv-metadata`, `moderation-history`, `analytics-reports`, and `portfolio-configuration`. Each selected scope has exactly one record entry, including a selected scope with no records. A non-empty NDJSON entry is UTF-8 without a BOM, has one JSON record per line, and ends with one LF. An empty selected scope is exactly zero bytes, has `recordCount: 0`, and uses the SHA-256 digest of the empty byte string. A zero-byte entry declared as JSON is invalid. JSON-array entries are UTF-8 without a BOM and contain one top-level array; an empty scope still uses the zero-byte NDJSON representation.
+
+Every record is an object with `scope` and `value`. Record IDs are stable lowercase UUIDv7 strings. Scope-specific meaning is fixed by the immutable `recordSchema` URI. The record schemas currently published under `schemas/owner-export/v1.0/` describe these seven record variants.
+
+| Scope | `value` variant |
+| --- | --- |
+| `portfolio-content` | `contentId`, `contentType` (`project`, `achievement`, or `testimonial`), lifecycle and optional status/Featured facts, localized `revisions`, route identity/history, related project IDs, taxonomy value IDs, media asset IDs, and evidence items. Revisions require stable ID, locale, positive sequence, title/summary/body, review state, and current-publication state. Evidence requires claim, editorial state, and supporting artifact IDs; an optional `mediaAssetId` is a dependency. |
+| `taxonomy` | `taxonomyId`, `aggregateVersion`, `kind`, values, rename history, and assignments. Values are active, retired, or merged; merged values require `mergedIntoId`. Rename entries carry value ID, previous/new names, and UTC instant. Assignment entries carry `targetId` and `taxonomyValueId`. Identities remain stable across rename, retirement, or merge. |
+| `media-metadata` | `mediaId`, kind/state, accessibility metadata, processing and decision histories (newest first, at most 100 each), optional `processingHistoryTruncated` and `decisionHistoryTruncated` flags, publication state, and an optional package-relative `portableReference`. Include that reference only when accepted media bytes are packaged; omit it for upload-pending, processing, processed, or rejected media and when bytes are not included. A true truncation flag requires the corresponding 100-entry history and means older retained rows exist; preserve it so the package does not imply a complete history. Accessibility variants are described image, decorative image, video, or document. Processing entries carry result, detected media type/length, SHA-256, findings, and recorded instant. |
+| `cv-metadata` | `aggregateVersion`, nullable `currentVersionId`, English CV `versions`, activation history, and optional `versionsTruncated` and `activationHistoryTruncated` flags. Each array is newest first and contains at most 100 entries. A true truncation flag requires the corresponding 100-entry array and means older retained rows exist. Each accepted version references its included bytes. |
+| `moderation-history` | `feedbackId`, `projectId`, locale, aggregate version, moderation state, retention-eligible author/text fields, submission instant, and decision history. Each decision requires an approved/rejected/suppressed result, reason, and UTC instant. Removed text is never replaced with placeholder prose. |
+| `analytics-reports` | Immutable `goal` identity/version/definition/activation history and `reports` with version, period, sample state, and aggregate count. A low-sample/suppressed report retains its state; it is not converted to a zero count. |
+| `portfolio-configuration` | The `profile`, `contactChannels`, and `projectCta` configuration objects. Runtime credentials and environment secrets are never part of this record. |
+
+The pinned schemas close the `scope`, `value`, and every declared nested object to its supported fields. Contact channels contain the channel kind, label, destination, and one or more unique locales; profile and CTA objects contain only their documented display fields and optional profile media ID. Histories retain source array order. Unknown properties are invalid under a schema URI; adding a field or variant requires a new record-schema URI and validator support. Omitted optional values remain omitted, `null` has only the meaning assigned by that field, and consumers must not synthesize values for absent history.
+
+## Manifest versions and meaning
+
+`packageFormat` is `shipwithali-owner-export`. Manifest schema versions use `major.minor` decimal notation. `1.0` is retained for read-only compatibility. It identifies its record schema per scope and declares exact record bytes and counts, but it does not claim transactional snapshot identity, complete dependency coverage, or packaged asset-byte integrity. It cannot carry media records with asset bytes under this validator.
+
+Manifest `1.1` adds stable export and transactional snapshot IDs, an ordered required-feature list, explicit dependencies and exclusions, pinned schema descriptors, and asset descriptors. The five required features are, in order: `asset-integrity-v1`, `dependency-coverage-v1`, `record-integrity-v1`, `schema-integrity-v1`, and `snapshot-identity-v1`. The six exclusions, in order, are `raw-public-event-data`, `functional-visitor-identities`, `measurement-visitor-identities`, `sessions`, `credentials`, and `lab-entries`. `publicEventDataCoverage` is exactly `{ "mode": "excluded" }`.
+
+The validator accepts additive `1.x` minors when they preserve those exact required semantics and keep new optional data inside `extensions`. It retains extension values as opaque manifest metadata. It rejects another major version, unknown required features, missing required features, and missing required fields with distinct validation codes. No producer may change the meaning or bytes of a published schema under its existing URI. A breaking manifest change requires a new major version; a record meaning change requires a new record-schema URI and explicit validator support. Version `1.0` remains readable and is not upgraded by guessing fields that it never declared.
+
+For JSON fields, `null` means the source explicitly represented no value. An omitted optional property makes no claim about the source value and must not be converted to `null` or a fabricated default. There is no universal redaction sentinel. Sensitive values are omitted under their scope contract and recorded through the fixed package exclusions; if a required field cannot be safely represented, that record cannot be emitted as a valid record. These rules prevent consumers from confusing redaction with an actual domain value.
+
+## Ordering and references
+
+Ordering is part of the format:
+
+1. `includedScopes` follows the scope order listed above.
+2. `entries` has exactly one entry per selected scope in that order.
+3. `schemas` starts with the manifest schema, then one record schema per selected scope in the same order. A `1.0` manifest has only the selected record schemas.
+4. `dependencies` sorts by source-scope order, source ID, target-scope order, then target ID using lowercase ASCII ordinal order. Duplicate edges are invalid.
+5. For scopes with multiple records, records sort by their stable identity ID in lowercase ASCII ordinal order. CV metadata and portfolio configuration each contain at most one aggregate record.
+6. Content revisions group locale as `en`, then `ar`, and sort within each locale by ascending sequence and revision ID. Analytics goal versions sort by ascending version number, activation history by ascending UTC instant then version ID, and reports by period start, period end, then goal-version ID. CV versions and activation history preserve the owning CV view's newest-first order. Other domain history arrays preserve their source sequence; arrays are never reordered during canonical hashing.
+7. Asset descriptors sort by ascending path. ZIP members are ordered as `manifest.json`, declared schemas, record entries, then assets in ascending path order.
+
+An entry path is exactly `records/<scope>.ndjson` or `records/<scope>.json`. Its `recordSchema`, `schemaPath`, and `schemaVersion` must match the pinned schema for that scope. The dependency table has one edge for every relationship in these portable fields: `relatedProjectIds`, `taxonomyValueIds`, `mediaAssetIds` and nested evidence `mediaAssetId`; taxonomy assignment targets/value IDs and `mergedIntoId`; profile `mediaAssetId`; CV version `mediaId`; moderation `projectId`; and analytics step `projectIds`/`publicRouteIds`. Sources use the owning record identity; the singleton configuration's optional profile-media edge uses that media ID as both the source value and target identity. The validator extracts those references from parsed records and requires an exact edge-set match, so missing and invented dependency rows fail. `included` means the target is present and has no reason; `omitted` has one reason: `scope-not-selected`, `not-retained`, `unsupported-variant`, or `external-destination`. A target in an unselected scope must use `scope-not-selected`. All source IDs must resolve to entities in selected records; included target IDs must also resolve.
+
+An asset belongs to `media-metadata` or `cv-metadata`. Its path is `assets/<scope>/<asset-id>`, and its descriptor supplies media type, byte length, and SHA-256. A record that references an asset uses that exact package path; the referenced scope must match the record scope. Every accepted CV version carries a `cv-metadata` asset reference; registered CV versions may omit bytes. Every referenced asset must have one descriptor, and every declared asset must be referenced. Asset references are package-relative strings only; the validator never follows URLs or filesystem paths.
+
+## Encoding and integrity
+
+All text entries are strict UTF-8 without a BOM. JSON objects with duplicate keys are invalid. NDJSON has LF line endings and no empty lines. Arrays preserve order. Object keys are ordered by Unicode code point for canonical manifest hashing. Manifest JSON numbers are finite safe integers.
+
+Each record entry digest hashes its exact decompressed member bytes, including NDJSON line terminators. Each asset digest hashes the exact asset bytes. In `1.1+`, each schema descriptor digest hashes the exact schema file bytes. The manifest digest is lowercase SHA-256 over compact UTF-8 JSON after recursively sorting object keys by Unicode code point and removing only the root object's `digest` property. Nested properties named `digest` remain in the canonical bytes. Array order is preserved. The digest is not a ZIP digest: the offline validator separately reports SHA-256 of the complete original ZIP byte sequence.
+
+The independently published vectors are in `schemas/owner-export/vectors/`. `canonicalization-v1.json` covers Unicode ordering, nested objects and arrays, and removal of only the top-level digest. `exact-byte-sha256-v1.json` covers zero-byte scopes and exact UTF-8 bytes including a terminal LF. The package test implements its own canonicalizer and checks these fixed vectors; it does not import a producer canonicalizer.
+
+Schema files embedded in a ZIP must match the corresponding pinned files in this repository byte-for-byte. A matching URI with altered bytes, a changed schema digest, or a descriptor that points to another path fails validation. This prevents silently redefining a schema under an old version.
+
+## Bounded offline validation
+
+The validator supports only single-disk ZIPs without ZIP64, comments, data descriptors, extra fields, directory entries, symlinks, or overlapping member ranges. It accepts stored and deflate members. Paths are lowercase ASCII, at most 240 bytes overall and 100 bytes per segment; absolute paths, drive prefixes, backslashes, percent encoding, traversal segments, duplicate normalized names, and non-file entries fail.
+
+| Limit | Maximum |
+| --- | ---: |
+| ZIP archive bytes (checked before CLI allocation) | 64 MiB |
+| ZIP member count | 512 |
+| Expanded bytes per member | 32 MiB |
+| Total expanded member bytes | 128 MiB |
+| Asset bytes | 25,000,000 bytes |
+| Manifest or schema bytes | 1,000,000 bytes |
+| Deflate expansion ratio | 100:1 |
+| Records per selected scope | 100,000 |
+| JSON nesting depth | 64 |
+| JSON values per entry | 500,000 |
+
+The validator checks central and local ZIP headers, member bounds, CRC32, decompressed lengths, UTF-8, JSON structure, schema descriptors, record schemas, actual record counts, exact-byte hashes, asset references, dependency references, and the manifest digest before returning success. It does not write to disk, mutate application state, or read provider data. Malformed and over-limit archives fail with a bounded machine-readable error code.
+
+## Local use
+
+Run the validator from the repository root:
+
+```sh
+npm run owner-export:validate -- path/to/export.zip
+```
+
+The command prints a compact JSON summary with validity, version, selected scopes, record counts, verified schema/asset counts, dependency count, and the ZIP digest. It never prints record contents. The focused reproducible check is:
+
+```sh
+npm run test:phase8:owner-export-package
+```

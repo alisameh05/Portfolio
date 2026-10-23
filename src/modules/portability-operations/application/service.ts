@@ -45,9 +45,8 @@ export interface OwnerExportEntryDescriptor<TScope extends ExportScope = ExportS
   readonly recordCount: number;
 }
 
-export interface OwnerExportPackageManifest {
+interface OwnerExportPackageManifestBase {
   readonly packageFormat: "shipwithali-owner-export";
-  readonly schemaVersion: "1.0";
   readonly createdAt: string;
   readonly algorithm: "sha-256";
   readonly digest: string;
@@ -55,6 +54,69 @@ export interface OwnerExportPackageManifest {
   readonly publicEventDataCoverage: { readonly mode: "excluded" };
   readonly entries: readonly OwnerExportEntryDescriptor[];
 }
+
+export interface OwnerExportPackageManifestV1_0 extends OwnerExportPackageManifestBase {
+  readonly schemaVersion: "1.0";
+}
+
+export interface OwnerExportSchemaDescriptor {
+  readonly kind: "manifest" | "record";
+  readonly path: string;
+  readonly scope?: ExportScope;
+  readonly schemaUri: string;
+  readonly schemaVersion: string;
+  readonly digest: string;
+}
+
+export interface OwnerExportAssetDescriptor {
+  readonly path: string;
+  readonly scope: "media-metadata" | "cv-metadata";
+  readonly assetId: string;
+  readonly mediaType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp" | "video/mp4";
+  readonly byteLength: number;
+  readonly digest: string;
+}
+
+export interface OwnerExportDependencyDescriptor {
+  readonly sourceScope: ExportScope;
+  readonly sourceId: string;
+  readonly targetScope: ExportScope;
+  readonly targetId: string;
+  readonly disposition: "included" | "omitted";
+  readonly reason?: "scope-not-selected" | "not-retained" | "unsupported-variant" | "external-destination";
+}
+
+export type OwnerExportRequiredFeature =
+  | "asset-integrity-v1"
+  | "dependency-coverage-v1"
+  | "record-integrity-v1"
+  | "schema-integrity-v1"
+  | "snapshot-identity-v1";
+
+export interface OwnerExportPackageManifestV1_1 extends OwnerExportPackageManifestBase {
+  readonly schemaVersion: "1.1";
+  readonly exportId: string;
+  readonly snapshot: {
+    readonly snapshotId: string;
+    readonly capturedAt: string;
+    readonly consistency: "transactional";
+  };
+  readonly requiredFeatures: readonly OwnerExportRequiredFeature[];
+  readonly dependencies: readonly OwnerExportDependencyDescriptor[];
+  readonly exclusions: readonly (
+    | "raw-public-event-data"
+    | "functional-visitor-identities"
+    | "measurement-visitor-identities"
+    | "sessions"
+    | "credentials"
+    | "lab-entries"
+  )[];
+  readonly schemas: readonly OwnerExportSchemaDescriptor[];
+  readonly assets: readonly OwnerExportAssetDescriptor[];
+  readonly extensions?: Readonly<Record<string, unknown>>;
+}
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1;
 
 interface OwnerExportViewBase {
   readonly exportId: StableId<"OwnerExport">;
@@ -170,24 +232,41 @@ type AnalyticsExportReport = {
   readonly goalVersionId: string; readonly periodStart: string; readonly periodEnd: string;
   readonly sampleState: "sufficient" | "low-sample" | "suppressed"; readonly aggregateCount: number;
 };
+type PortableContentRevision = {
+  readonly revisionId: string;
+  readonly locale: "en" | "ar";
+  readonly sequence: number;
+  readonly title: string;
+  readonly summary: string;
+  readonly body: string;
+  readonly reviewed: boolean;
+  readonly currentlyPublished: boolean;
+};
+type PortableRouteRedirect = { readonly fromSlug: string; readonly toSlug: string };
 type ExportRecordValueByScope = {
   readonly "portfolio-content": {
     readonly contentId: string; readonly contentType: "project" | "achievement" | "testimonial";
-    readonly lifecycle: string; readonly revisions: readonly ExportJsonObject[]; readonly publicRouteIdentity: string | null;
-    readonly routeHistory: readonly ExportJsonObject[]; readonly relatedProjectIds: readonly string[];
-    readonly taxonomyValueIds: readonly string[]; readonly mediaAssetIds: readonly string[]; readonly evidenceItems: readonly ExportJsonObject[];
+    readonly lifecycle: "draft" | "published" | "hidden" | "archived"; readonly projectStatus?: string | null; readonly featured?: boolean;
+    readonly revisions: readonly PortableContentRevision[]; readonly publicRouteIdentity: string | null;
+    readonly routeHistory: readonly PortableRouteRedirect[]; readonly relatedProjectIds: readonly string[];
+    readonly taxonomyValueIds: readonly string[]; readonly mediaAssetIds: readonly string[];
+    readonly evidenceItems: readonly ExportEvidenceItem[];
   };
   readonly taxonomy: {
-    readonly taxonomyId: string; readonly aggregateVersion: number; readonly kind: string;
-    readonly values: readonly ExportJsonObject[]; readonly renameHistory: readonly ExportJsonObject[]; readonly assignments: readonly ExportJsonObject[];
+    readonly taxonomyId: string; readonly aggregateVersion: number;
+    readonly kind: "category" | "ai-ml-domain" | "technology" | "project-type";
+    readonly values: readonly ExportTaxonomyValue[]; readonly renameHistory: readonly ExportTaxonomyRename[];
+    readonly assignments: readonly ExportTaxonomyAssignment[];
   };
   readonly "media-metadata": {
     readonly mediaId: string; readonly kind: string; readonly state: string; readonly accessibilityMetadata: ExportJsonObject | null;
     readonly processingHistory: readonly ExportJsonObject[]; readonly decisionHistory: readonly ExportJsonObject[];
-    readonly publicationState: string; readonly portableReference: string;
+    readonly processingHistoryTruncated?: boolean; readonly decisionHistoryTruncated?: boolean;
+    readonly publicationState: string; readonly portableReference?: string;
   };
   readonly "cv-metadata": {
     readonly aggregateVersion: number; readonly currentVersionId: string | null;
+    readonly versionsTruncated?: boolean; readonly activationHistoryTruncated?: boolean;
     readonly versions: readonly ExportJsonObject[]; readonly activationHistory: readonly ExportJsonObject[];
   };
   readonly "moderation-history": {
@@ -200,6 +279,24 @@ type ExportRecordValueByScope = {
     readonly profile: ExportJsonObject; readonly contactChannels: ExportJsonObject; readonly projectCta: ExportJsonObject;
   };
 };
+
+type ExportEvidenceItem = {
+  readonly claim: string;
+  readonly state: "unreviewed" | "supported" | "unsupported";
+  readonly supportingArtifactIds: readonly string[];
+  readonly mediaAssetId?: string;
+};
+type ExportTaxonomyValue =
+  | { readonly valueId: string; readonly name: string; readonly state: "active" }
+  | { readonly valueId: string; readonly name: string; readonly state: "retired" }
+  | { readonly valueId: string; readonly name: string; readonly state: "merged"; readonly mergedIntoId: string };
+type ExportTaxonomyRename = {
+  readonly valueId: string;
+  readonly previousName: string;
+  readonly newName: string;
+  readonly renamedAt: string;
+};
+type ExportTaxonomyAssignment = { readonly targetId: string; readonly taxonomyValueId: string };
 
 export interface OwnerExportRecord<TScope extends ExportScope = ExportScope> {
   readonly scope: TScope;
@@ -238,6 +335,82 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 function hasOnlyKeys(value: unknown, allowed: readonly string[]): value is Record<string, unknown> {
   return isRecord(value) && Object.keys(value).every((key) => allowed.includes(key));
+}
+function hasRequiredKeys(value: Record<string, unknown>, required: readonly string[]): boolean {
+  return required.every((key) => Object.hasOwn(value, key));
+}
+const PORTABLE_STABLE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+function isPortableStableId(value: unknown): value is string {
+  return typeof value === "string" && PORTABLE_STABLE_ID.test(value);
+}
+function isBoundedString(value: unknown, minLength: number, maxLength: number): value is string {
+  return typeof value === "string" && value.length >= minLength && value.length <= maxLength;
+}
+function isUniquePortableIdArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(isPortableStableId) && new Set(value).size === value.length;
+}
+function isPortableContentRevision(value: unknown): boolean {
+  return hasOnlyKeys(value, ["revisionId", "locale", "sequence", "title", "summary", "body", "reviewed", "currentlyPublished"]) &&
+    hasRequiredKeys(value, ["revisionId", "locale", "sequence", "title", "summary", "body", "reviewed", "currentlyPublished"]) &&
+    isPortableStableId(value["revisionId"]) && ["en", "ar"].includes(String(value["locale"])) &&
+    Number.isSafeInteger(value["sequence"]) && Number(value["sequence"]) >= 1 &&
+    isBoundedString(value["title"], 1, 160) && isBoundedString(value["summary"], 1, 500) &&
+    isBoundedString(value["body"], 1, 50_000) && typeof value["reviewed"] === "boolean" &&
+    typeof value["currentlyPublished"] === "boolean";
+}
+function isPortableRouteRedirect(value: unknown): boolean {
+  const slug = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  return hasOnlyKeys(value, ["fromSlug", "toSlug"]) && hasRequiredKeys(value, ["fromSlug", "toSlug"]) &&
+    typeof value["fromSlug"] === "string" && slug.test(value["fromSlug"]) &&
+    typeof value["toSlug"] === "string" && slug.test(value["toSlug"]);
+}
+function isPortableEvidenceItem(value: unknown): boolean {
+  return hasOnlyKeys(value, ["claim", "state", "supportingArtifactIds", "mediaAssetId"]) &&
+    hasRequiredKeys(value, ["claim", "state", "supportingArtifactIds"]) &&
+    isBoundedString(value["claim"], 1, 1_000) &&
+    ["unreviewed", "supported", "unsupported"].includes(String(value["state"])) &&
+    isUniquePortableIdArray(value["supportingArtifactIds"]) &&
+    (value["mediaAssetId"] === undefined || isPortableStableId(value["mediaAssetId"]));
+}
+function isSafePortfolioContentExportValue(value: unknown): boolean {
+  const keys = ["contentId", "contentType", "lifecycle", "projectStatus", "featured", "revisions", "publicRouteIdentity", "routeHistory", "relatedProjectIds", "taxonomyValueIds", "mediaAssetIds", "evidenceItems"];
+  const required = ["contentId", "contentType", "lifecycle", "revisions", "publicRouteIdentity", "routeHistory", "relatedProjectIds", "taxonomyValueIds", "mediaAssetIds", "evidenceItems"];
+  return hasOnlyKeys(value, keys) && hasRequiredKeys(value, required) &&
+    isPortableStableId(value["contentId"]) && ["project", "achievement", "testimonial"].includes(String(value["contentType"])) &&
+    ["draft", "published", "hidden", "archived"].includes(String(value["lifecycle"])) &&
+    (value["projectStatus"] === undefined || value["projectStatus"] === null || typeof value["projectStatus"] === "string") &&
+    (value["featured"] === undefined || typeof value["featured"] === "boolean") &&
+    Array.isArray(value["revisions"]) && value["revisions"].length >= 1 && value["revisions"].every(isPortableContentRevision) &&
+    (value["publicRouteIdentity"] === null || isPortableStableId(value["publicRouteIdentity"])) &&
+    Array.isArray(value["routeHistory"]) && value["routeHistory"].every(isPortableRouteRedirect) &&
+    isUniquePortableIdArray(value["relatedProjectIds"]) && isUniquePortableIdArray(value["taxonomyValueIds"]) &&
+    isUniquePortableIdArray(value["mediaAssetIds"]) && Array.isArray(value["evidenceItems"]) && value["evidenceItems"].every(isPortableEvidenceItem);
+}
+function isPortableTaxonomyValue(value: unknown): boolean {
+  if (!isRecord(value) || !isPortableStableId(value["valueId"]) || !isBoundedString(value["name"], 1, 100)) return false;
+  if (value["state"] === "active" || value["state"] === "retired") {
+    return hasOnlyKeys(value, ["valueId", "name", "state"]) && hasRequiredKeys(value, ["valueId", "name", "state"]);
+  }
+  return value["state"] === "merged" && hasOnlyKeys(value, ["valueId", "name", "state", "mergedIntoId"]) &&
+    hasRequiredKeys(value, ["valueId", "name", "state", "mergedIntoId"]) && isPortableStableId(value["mergedIntoId"]);
+}
+function isPortableTaxonomyRename(value: unknown): boolean {
+  const utcInstant = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?Z$/;
+  return hasOnlyKeys(value, ["valueId", "previousName", "newName", "renamedAt"]) &&
+    hasRequiredKeys(value, ["valueId", "previousName", "newName", "renamedAt"]) &&
+    isPortableStableId(value["valueId"]) && isBoundedString(value["previousName"], 1, 100) &&
+    isBoundedString(value["newName"], 1, 100) && typeof value["renamedAt"] === "string" && utcInstant.test(value["renamedAt"]);
+}
+function isSafeTaxonomyExportValue(value: unknown): boolean {
+  return hasOnlyKeys(value, ["taxonomyId", "aggregateVersion", "kind", "values", "renameHistory", "assignments"]) &&
+    hasRequiredKeys(value, ["taxonomyId", "aggregateVersion", "kind", "values", "renameHistory", "assignments"]) &&
+    isPortableStableId(value["taxonomyId"]) && Number.isSafeInteger(value["aggregateVersion"]) && Number(value["aggregateVersion"]) >= 1 &&
+    ["category", "ai-ml-domain", "technology", "project-type"].includes(String(value["kind"])) &&
+    Array.isArray(value["values"]) && value["values"].every(isPortableTaxonomyValue) &&
+    Array.isArray(value["renameHistory"]) && value["renameHistory"].every(isPortableTaxonomyRename) &&
+    Array.isArray(value["assignments"]) && value["assignments"].every((assignment) =>
+      hasOnlyKeys(assignment, ["targetId", "taxonomyValueId"]) && hasRequiredKeys(assignment, ["targetId", "taxonomyValueId"]) &&
+      isPortableStableId(assignment["targetId"]) && isPortableStableId(assignment["taxonomyValueId"]));
 }
 function isStableIdArray(kind: string, value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string" && parseStableId(kind, item).ok);
@@ -303,8 +476,10 @@ export function validateOwnerExportSnapshotPage<TScope extends ExportScope>(
     page.records.length > context.pageSize ||
     descriptor.recordCount !== page.records.length ||
     page.records.some((record) =>
-      record === null || typeof record !== "object" || record.scope !== context.scope ||
-      (context.scope === "analytics-reports" && !isSafeAnalyticsExportRecord(record.value)),
+      !hasOnlyKeys(record, ["scope", "value"]) || record["scope"] !== context.scope ||
+      (context.scope === "portfolio-content" && !isSafePortfolioContentExportValue(record["value"])) ||
+      (context.scope === "taxonomy" && !isSafeTaxonomyExportValue(record["value"])) ||
+      (context.scope === "analytics-reports" && !isSafeAnalyticsExportRecord(record["value"])),
     ) ||
     (page.nextCursor !== undefined && !parseSnapshotCursor(page.nextCursor).ok)
   ) {

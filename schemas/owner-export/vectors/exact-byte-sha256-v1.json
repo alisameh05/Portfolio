@@ -1,0 +1,15 @@
+{
+  "format": "shipwithali-owner-export-exact-byte-sha256-v1",
+  "cases": [
+    {
+      "name": "empty-selected-scope",
+      "bytesHex": "",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "utf8-ndjson-line-including-terminal-lf",
+      "bytesHex": "68656c6c6f0a",
+      "sha256": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
+    }
+  ]
+}

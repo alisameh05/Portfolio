@@ -63,6 +63,31 @@ function compareSchemas({ baselineDocument, candidateDocument, baselineSchema, c
     return;
   }
 
+  // A response may add explicitly versioned representations as a union. Keep
+  // the previous response contract compatible when at least one alternative
+  // still accepts its shape; otherwise report the closest failed alternative.
+  if (mode === "output" && Array.isArray(candidate.oneOf) && !Array.isArray(baseline.oneOf)) {
+    const alternatives = candidate.oneOf.map((alternative) => {
+      const alternativeChanges = [];
+      compareSchemas({
+        baselineDocument,
+        candidateDocument,
+        baselineSchema,
+        candidateSchema: alternative,
+        location,
+        mode,
+        changes: alternativeChanges,
+        seen: new Set(seen),
+      });
+      return alternativeChanges;
+    });
+    if (alternatives.some((alternativeChanges) => alternativeChanges.length === 0)) return;
+    const closest = alternatives.toSorted((left, right) => left.length - right.length)[0] ?? [];
+    changes.push(`${location}: no response union alternative preserves the prior schema`);
+    changes.push(...closest);
+    return;
+  }
+
   const pair = `${baselineSchema?.$ref ?? location}|${candidateSchema?.$ref ?? location}|${mode}`;
   if (seen.has(pair)) return;
   seen.add(pair);

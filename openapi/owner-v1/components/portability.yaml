@@ -50,49 +50,48 @@ schemas:
   PortfolioContentExportRecord:
     type: object
     additionalProperties: false
-    required:
-      - scope
-      - contentId
-      - contentType
-      - lifecycle
-      - revisions
-      - publicRouteIdentity
-      - routeHistory
-      - relatedProjectIds
-      - taxonomyValueIds
-      - mediaAssetIds
-      - evidenceItems
+    required: [scope, value]
     properties:
       scope: { type: string, const: portfolio-content }
-      contentId: { $ref: ./common.yaml#/schemas/StableId }
-      contentType: { type: string, enum: [project, achievement, testimonial] }
-      lifecycle: { type: string, enum: [draft, published, hidden, archived] }
-      revisions:
-        type: array
-        minItems: 1
-        items: { $ref: '#/schemas/PortableContentRevision' }
-      publicRouteIdentity:
-        oneOf:
-          - { $ref: ./common.yaml#/schemas/StableId }
-          - { type: 'null' }
-      routeHistory:
-        type: array
-        items: { $ref: ./projects.yaml#/schemas/PublicRouteRedirectView }
-      relatedProjectIds:
-        type: array
-        uniqueItems: true
-        items: { $ref: ./common.yaml#/schemas/StableId }
-      taxonomyValueIds:
-        type: array
-        uniqueItems: true
-        items: { $ref: ./common.yaml#/schemas/StableId }
-      mediaAssetIds:
-        type: array
-        uniqueItems: true
-        items: { $ref: ./common.yaml#/schemas/StableId }
-      evidenceItems:
-        type: array
-        items: { $ref: '#/schemas/PortableEvidenceItem' }
+      value:
+        type: object
+        additionalProperties: false
+        required: [contentId, contentType, lifecycle, revisions, publicRouteIdentity, routeHistory, relatedProjectIds, taxonomyValueIds, mediaAssetIds, evidenceItems]
+        properties:
+          contentId: { $ref: ./common.yaml#/schemas/StableId }
+          contentType: { type: string, enum: [project, achievement, testimonial] }
+          lifecycle: { type: string, enum: [draft, published, hidden, archived] }
+          projectStatus:
+            oneOf:
+              - { type: string }
+              - { type: 'null' }
+          featured: { type: boolean }
+          revisions:
+            type: array
+            minItems: 1
+            items: { $ref: '#/schemas/PortableContentRevision' }
+          publicRouteIdentity:
+            oneOf:
+              - { $ref: ./common.yaml#/schemas/StableId }
+              - { type: 'null' }
+          routeHistory:
+            type: array
+            items: { $ref: ./projects.yaml#/schemas/PublicRouteRedirectView }
+          relatedProjectIds:
+            type: array
+            uniqueItems: true
+            items: { $ref: ./common.yaml#/schemas/StableId }
+          taxonomyValueIds:
+            type: array
+            uniqueItems: true
+            items: { $ref: ./common.yaml#/schemas/StableId }
+          mediaAssetIds:
+            type: array
+            uniqueItems: true
+            items: { $ref: ./common.yaml#/schemas/StableId }
+          evidenceItems:
+            type: array
+            items: { $ref: '#/schemas/PortableEvidenceItem' }
   PortableEvidenceItem:
     type: object
     additionalProperties: false
@@ -104,6 +103,7 @@ schemas:
         type: array
         uniqueItems: true
         items: { $ref: ./common.yaml#/schemas/StableId }
+      mediaAssetId: { $ref: ./common.yaml#/schemas/StableId }
   PortableTaxonomyRename:
     type: object
     additionalProperties: false
@@ -116,95 +116,222 @@ schemas:
   PortableTaxonomyAssignment:
     type: object
     additionalProperties: false
-    required: [projectId, valueId]
+    required: [targetId, taxonomyValueId]
     properties:
-      projectId: { $ref: ./common.yaml#/schemas/StableId }
+      targetId: { $ref: ./common.yaml#/schemas/StableId }
+      taxonomyValueId: { $ref: ./common.yaml#/schemas/StableId }
+  PortableTaxonomyValue:
+    oneOf:
+      - { $ref: '#/schemas/PortableActiveTaxonomyValue' }
+      - { $ref: '#/schemas/PortableRetiredTaxonomyValue' }
+      - { $ref: '#/schemas/PortableMergedTaxonomyValue' }
+    discriminator:
+      propertyName: state
+      mapping:
+        active: '#/schemas/PortableActiveTaxonomyValue'
+        retired: '#/schemas/PortableRetiredTaxonomyValue'
+        merged: '#/schemas/PortableMergedTaxonomyValue'
+  PortableActiveTaxonomyValue:
+    type: object
+    additionalProperties: false
+    required: [valueId, name, state]
+    properties:
       valueId: { $ref: ./common.yaml#/schemas/StableId }
+      name: { type: string, minLength: 1, maxLength: 100 }
+      state: { type: string, const: active }
+  PortableRetiredTaxonomyValue:
+    type: object
+    additionalProperties: false
+    required: [valueId, name, state]
+    properties:
+      valueId: { $ref: ./common.yaml#/schemas/StableId }
+      name: { type: string, minLength: 1, maxLength: 100 }
+      state: { type: string, const: retired }
+  PortableMergedTaxonomyValue:
+    type: object
+    additionalProperties: false
+    required: [valueId, name, state, mergedIntoId]
+    properties:
+      valueId: { $ref: ./common.yaml#/schemas/StableId }
+      name: { type: string, minLength: 1, maxLength: 100 }
+      state: { type: string, const: merged }
+      mergedIntoId: { $ref: ./common.yaml#/schemas/StableId }
   TaxonomyExportRecord:
     type: object
     additionalProperties: false
-    required: [scope, taxonomyId, aggregateVersion, kind, values, renameHistory, assignments]
+    required: [scope, value]
     properties:
       scope: { type: string, const: taxonomy }
-      taxonomyId: { $ref: ./common.yaml#/schemas/StableId }
-      aggregateVersion: { type: integer, minimum: 1 }
-      kind: { type: string, enum: [category, ai-ml-domain, technology, project-type] }
-      values:
-        type: array
-        items: { $ref: ./taxonomy.yaml#/schemas/TaxonomyValueView }
-      renameHistory:
-        type: array
-        items: { $ref: '#/schemas/PortableTaxonomyRename' }
-      assignments:
-        type: array
-        items: { $ref: '#/schemas/PortableTaxonomyAssignment' }
+      value:
+        type: object
+        additionalProperties: false
+        required: [taxonomyId, aggregateVersion, kind, values, renameHistory, assignments]
+        properties:
+          taxonomyId: { $ref: ./common.yaml#/schemas/StableId }
+          aggregateVersion: { type: integer, minimum: 1 }
+          kind: { type: string, enum: [category, ai-ml-domain, technology, project-type] }
+          values:
+            type: array
+            items: { $ref: '#/schemas/PortableTaxonomyValue' }
+          renameHistory:
+            type: array
+            items: { $ref: '#/schemas/PortableTaxonomyRename' }
+          assignments:
+            type: array
+            items: { $ref: '#/schemas/PortableTaxonomyAssignment' }
   MediaMetadataExportRecord:
     type: object
     additionalProperties: false
-    required:
-      - scope
-      - mediaId
-      - kind
-      - state
-      - accessibilityMetadata
-      - processingHistory
-      - decisionHistory
-      - publicationState
-      - portableReference
+    required: [scope, value]
     properties:
       scope: { type: string, const: media-metadata }
-      mediaId: { $ref: ./common.yaml#/schemas/StableId }
-      kind: { $ref: ./media.yaml#/schemas/MediaKind }
-      state: { type: string, enum: [upload-pending, processing, processed, accepted, rejected] }
-      accessibilityMetadata:
-        oneOf:
-          - { $ref: ./media.yaml#/schemas/MediaAccessibilityMetadata }
-          - { type: 'null' }
-      processingHistory:
-        type: array
-        items: { $ref: ./media.yaml#/schemas/MediaProcessingView }
-      decisionHistory:
-        type: array
-        items: { $ref: ./media.yaml#/schemas/MediaDecisionView }
-      publicationState: { type: string, enum: [private, accepted, published, withdrawn] }
-      portableReference:
-        type: string
-        format: uri-reference
-        description: Provider-neutral path or URI for media included with the export package.
+      value:
+        type: object
+        additionalProperties: false
+        required: [mediaId, kind, state, accessibilityMetadata, processingHistory, decisionHistory, publicationState]
+        properties:
+          mediaId: { $ref: ./common.yaml#/schemas/StableId }
+          kind: { $ref: ./media.yaml#/schemas/MediaKind }
+          state: { type: string, enum: [upload-pending, processing, processed, accepted, rejected] }
+          accessibilityMetadata:
+            oneOf:
+              - { $ref: ./media.yaml#/schemas/MediaAccessibilityMetadata }
+              - { type: 'null' }
+          processingHistory:
+            type: array
+            maxItems: 100
+            items: { $ref: ./media.yaml#/schemas/MediaProcessingView }
+          decisionHistory:
+            type: array
+            maxItems: 100
+            items: { $ref: ./media.yaml#/schemas/MediaDecisionView }
+          processingHistoryTruncated: { type: boolean, description: True when the 100-entry processing history is truncated. }
+          decisionHistoryTruncated: { type: boolean, description: True when the 100-entry decision history is truncated. }
+          publicationState: { type: string, enum: [private, accepted, published, withdrawn] }
+          portableReference:
+            type: string
+            pattern: '^assets/media-metadata/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            description: Package-relative path present only when accepted media bytes are included; omit for other states or when bytes are not packaged.
+        allOf:
+          - if:
+              properties:
+                portableReference: { type: string }
+              required: [portableReference]
+            then:
+              properties:
+                state: { type: string, const: accepted }
+          - if:
+              properties:
+                processingHistoryTruncated: { const: true }
+              required: [processingHistoryTruncated]
+            then:
+              properties:
+                processingHistory: { type: array, minItems: 100 }
+          - if:
+              properties:
+                decisionHistoryTruncated: { const: true }
+              required: [decisionHistoryTruncated]
+            then:
+              properties:
+                decisionHistory: { type: array, minItems: 100 }
   CvMetadataExportRecord:
     type: object
     additionalProperties: false
-    required: [scope, aggregateVersion, currentVersionId, versions, activationHistory]
+    required: [scope, value]
     properties:
       scope: { type: string, const: cv-metadata }
-      aggregateVersion: { type: integer, minimum: 1 }
-      currentVersionId:
-        oneOf:
-          - { $ref: ./common.yaml#/schemas/StableId }
-          - { type: 'null' }
-      versions:
-        type: array
-        items: { $ref: ./cv.yaml#/schemas/CvVersionView }
-      activationHistory:
-        type: array
-        items: { $ref: ./cv.yaml#/schemas/CvActivationView }
+      value:
+        type: object
+        additionalProperties: false
+        required: [aggregateVersion, currentVersionId, versions, activationHistory]
+        properties:
+          aggregateVersion: { type: integer, minimum: 1 }
+          currentVersionId:
+            oneOf:
+              - { $ref: ./common.yaml#/schemas/StableId }
+              - { type: 'null' }
+          versionsTruncated: { type: boolean, description: True when older retained CV versions were omitted from this bounded view. }
+          versions:
+            type: array
+            maxItems: 100
+            items: { $ref: '#/schemas/PortableCvVersionExport' }
+          activationHistory:
+            type: array
+            maxItems: 100
+            items: { $ref: ./cv.yaml#/schemas/CvActivationView }
+          activationHistoryTruncated: { type: boolean, description: True when older retained activations were omitted from this bounded view. }
+        allOf:
+          - if:
+              properties:
+                versionsTruncated: { const: true }
+              required: [versionsTruncated]
+            then:
+              properties:
+                versions: { type: array, minItems: 100 }
+          - if:
+              properties:
+                activationHistoryTruncated: { const: true }
+              required: [activationHistoryTruncated]
+            then:
+              properties:
+                activationHistory: { type: array, minItems: 100 }
+  PortableCvVersionExport:
+    oneOf:
+      - { $ref: '#/schemas/RegisteredPortableCvVersion' }
+      - { $ref: '#/schemas/AcceptedPortableCvVersion' }
+    discriminator:
+      propertyName: state
+      mapping:
+        registered: '#/schemas/RegisteredPortableCvVersion'
+        accepted: '#/schemas/AcceptedPortableCvVersion'
+  RegisteredPortableCvVersion:
+    type: object
+    additionalProperties: false
+    required: [versionId, mediaId, locale, label, state, isCurrent]
+    properties:
+      versionId: { $ref: ./common.yaml#/schemas/StableId }
+      mediaId: { $ref: ./common.yaml#/schemas/StableId }
+      locale: { type: string, const: en }
+      label: { type: string, minLength: 1, maxLength: 120 }
+      state: { type: string, const: registered }
+      isCurrent: { type: boolean }
+  AcceptedPortableCvVersion:
+    type: object
+    additionalProperties: false
+    required: [versionId, mediaId, locale, label, state, isCurrent, portableReference]
+    properties:
+      versionId: { $ref: ./common.yaml#/schemas/StableId }
+      mediaId: { $ref: ./common.yaml#/schemas/StableId }
+      locale: { type: string, const: en }
+      label: { type: string, minLength: 1, maxLength: 120 }
+      state: { type: string, const: accepted }
+      isCurrent: { type: boolean }
+      portableReference:
+        type: string
+        pattern: '^assets/cv-metadata/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        description: Package-relative path for the accepted CV document included in the package.
   ModerationHistoryExportRecord:
     type: object
     additionalProperties: false
-    required: [scope, feedbackId, projectId, locale, aggregateVersion, state, authorName, paragraph, submittedAt, decisionHistory]
+    required: [scope, value]
     properties:
       scope: { type: string, const: moderation-history }
-      feedbackId: { $ref: ./common.yaml#/schemas/StableId }
-      projectId: { $ref: ./common.yaml#/schemas/StableId }
-      locale: { $ref: ./common.yaml#/schemas/Locale }
-      aggregateVersion: { type: integer, minimum: 1 }
-      state: { type: string, enum: [pending, approved, rejected, suppressed] }
-      authorName: { type: string, minLength: 1, maxLength: 120 }
-      paragraph: { type: string, minLength: 1, maxLength: 5000 }
-      submittedAt: { type: string, format: date-time }
-      decisionHistory:
-        type: array
-        items: { $ref: ./moderation.yaml#/schemas/ModerationDecisionView }
+      value:
+        type: object
+        additionalProperties: false
+        required: [feedbackId, projectId, locale, aggregateVersion, state, authorName, paragraph, submittedAt, decisionHistory]
+        properties:
+          feedbackId: { $ref: ./common.yaml#/schemas/StableId }
+          projectId: { $ref: ./common.yaml#/schemas/StableId }
+          locale: { $ref: ./common.yaml#/schemas/Locale }
+          aggregateVersion: { type: integer, minimum: 1 }
+          state: { type: string, enum: [pending, approved, rejected, suppressed] }
+          authorName: { type: string, minLength: 1, maxLength: 120 }
+          paragraph: { type: string, minLength: 1, maxLength: 5000 }
+          submittedAt: { type: string, format: date-time }
+          decisionHistory:
+            type: array
+            items: { $ref: ./moderation.yaml#/schemas/ModerationDecisionView }
   PortableAnalyticsAggregate:
     type: object
     additionalProperties: false
@@ -218,22 +345,32 @@ schemas:
   AnalyticsReportExportRecord:
     type: object
     additionalProperties: false
-    required: [scope, goal, reports]
+    required: [scope, value]
     properties:
       scope: { type: string, const: analytics-reports }
-      goal: { $ref: ./measurement.yaml#/schemas/AnalyticsGoalAggregateView }
-      reports:
-        type: array
-        items: { $ref: '#/schemas/PortableAnalyticsAggregate' }
+      value:
+        type: object
+        additionalProperties: false
+        required: [goal, reports]
+        properties:
+          goal: { $ref: ./measurement.yaml#/schemas/AnalyticsGoalAggregateView }
+          reports:
+            type: array
+            items: { $ref: '#/schemas/PortableAnalyticsAggregate' }
   PortfolioConfigurationExportRecord:
     type: object
     additionalProperties: false
-    required: [scope, profile, contactChannels, projectCta]
+    required: [scope, value]
     properties:
       scope: { type: string, const: portfolio-configuration }
-      profile: { $ref: ./configuration.yaml#/schemas/ProfileUpdate }
-      contactChannels: { $ref: ./configuration.yaml#/schemas/ContactChannelsUpdate }
-      projectCta: { $ref: ./configuration.yaml#/schemas/ProjectCtaUpdate }
+      value:
+        type: object
+        additionalProperties: false
+        required: [profile, contactChannels, projectCta]
+        properties:
+          profile: { $ref: ./configuration.yaml#/schemas/ProfileUpdate }
+          contactChannels: { $ref: ./configuration.yaml#/schemas/ContactChannelsUpdate }
+          projectCta: { $ref: ./configuration.yaml#/schemas/ProjectCtaUpdate }
   OwnerExportRecord:
     oneOf:
       - { $ref: '#/schemas/PortfolioContentExportRecord' }
@@ -286,14 +423,82 @@ schemas:
       schemaVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+$' }
       digest: { type: string, pattern: '^[a-f0-9]{64}$' }
       recordCount: { type: integer, minimum: 0 }
-  OwnerExportPackageManifest:
+  OwnerExportManifestSchemaDescriptor:
     type: object
-    description: Versioned manifest.json for the documented ShipWithAli Owner export package.
+    additionalProperties: false
+    required: [kind, path, schemaUri, schemaVersion, digest]
+    properties:
+      kind: { type: string, const: manifest }
+      path: { type: string, const: schemas/manifest.schema.json }
+      schemaUri: { type: string, const: 'urn:shipwithali:owner-export-schema:manifest:1.1' }
+      schemaVersion: { type: string, const: '1.1' }
+      digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+  OwnerExportRecordSchemaDescriptor:
+    type: object
+    additionalProperties: false
+    required: [kind, path, scope, schemaUri, schemaVersion, digest]
+    properties:
+      kind: { type: string, const: record }
+      path:
+        type: string
+        pattern: '^schemas/[a-z0-9-]+\.schema\.json$'
+      scope: { $ref: '#/schemas/OwnerExportScope' }
+      schemaUri:
+        type: string
+        format: uri
+        enum:
+          - urn:shipwithali:owner-export-schema:portfolio-content:1.0
+          - urn:shipwithali:owner-export-schema:taxonomy:1.0
+          - urn:shipwithali:owner-export-schema:media-metadata:1.0
+          - urn:shipwithali:owner-export-schema:cv-metadata:1.0
+          - urn:shipwithali:owner-export-schema:moderation-history:1.0
+          - urn:shipwithali:owner-export-schema:analytics-reports:1.0
+          - urn:shipwithali:owner-export-schema:portfolio-configuration:1.0
+      schemaVersion: { type: string, const: '1.0' }
+      digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+  OwnerExportSchemaDescriptor:
+    oneOf:
+      - { $ref: '#/schemas/OwnerExportManifestSchemaDescriptor' }
+      - { $ref: '#/schemas/OwnerExportRecordSchemaDescriptor' }
+  OwnerExportDependencyDescriptor:
+    type: object
+    additionalProperties: false
+    required: [sourceScope, sourceId, targetScope, targetId, disposition]
+    allOf:
+      - if:
+          properties:
+            disposition: { const: omitted }
+          required: [disposition]
+        then:
+          required: [reason]
+        else:
+          not: { required: [reason] }
+    properties:
+      sourceScope: { $ref: '#/schemas/OwnerExportScope' }
+      sourceId: { $ref: ./common.yaml#/schemas/StableId }
+      targetScope: { $ref: '#/schemas/OwnerExportScope' }
+      targetId: { $ref: ./common.yaml#/schemas/StableId }
+      disposition: { type: string, enum: [included, omitted] }
+      reason: { type: string, enum: [scope-not-selected, not-retained, unsupported-variant, external-destination] }
+  OwnerExportAssetDescriptor:
+    type: object
+    additionalProperties: false
+    required: [path, scope, assetId, mediaType, byteLength, digest]
+    properties:
+      path: { type: string, pattern: '^assets/(?:media-metadata|cv-metadata)/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' }
+      scope: { type: string, enum: [media-metadata, cv-metadata] }
+      assetId: { $ref: ./common.yaml#/schemas/StableId }
+      mediaType: { type: string, enum: [application/pdf, image/jpeg, image/png, image/webp, video/mp4] }
+      byteLength: { type: integer, minimum: 1, maximum: 9007199254740991 }
+      digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+  OwnerExportPackageManifestV1_0:
+    type: object
+    description: Legacy 1.0 manifest retained for read-only migration compatibility.
     additionalProperties: false
     required: [packageFormat, schemaVersion, createdAt, algorithm, digest, includedScopes, publicEventDataCoverage, entries]
     properties:
       packageFormat: { type: string, const: shipwithali-owner-export }
-      schemaVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+$' }
+      schemaVersion: { type: string, const: '1.0' }
       createdAt: { type: string, format: date-time }
       algorithm: { type: string, const: sha-256 }
       digest: { type: string, pattern: '^[a-f0-9]{64}$' }
@@ -308,6 +513,59 @@ schemas:
         minItems: 1
         description: Data entries whose packaged schemaPath files define the versioned OwnerExportRecord shapes.
         items: { $ref: '#/schemas/OwnerExportEntryDescriptor' }
+  OwnerExportPackageManifestV1_1:
+    type: object
+    description: Manifest 1.1 adds exact export and snapshot identity, dependency coverage, and integrity descriptors for records, schemas, and assets.
+    additionalProperties: false
+    required: [packageFormat, schemaVersion, exportId, snapshot, createdAt, algorithm, digest, requiredFeatures, includedScopes, publicEventDataCoverage, dependencies, exclusions, entries, schemas, assets]
+    properties:
+      packageFormat: { type: string, const: shipwithali-owner-export }
+      schemaVersion: { type: string, pattern: '^1\.(?:[1-9][0-9]*)$' }
+      exportId: { $ref: ./common.yaml#/schemas/StableId }
+      snapshot:
+        type: object
+        additionalProperties: false
+        required: [snapshotId, capturedAt, consistency]
+        properties:
+          snapshotId: { $ref: ./common.yaml#/schemas/StableId }
+          capturedAt: { type: string, format: date-time }
+          consistency: { type: string, const: transactional }
+      createdAt: { type: string, format: date-time }
+      algorithm: { type: string, const: sha-256 }
+      digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+      requiredFeatures:
+        type: array
+        const: [asset-integrity-v1, dependency-coverage-v1, record-integrity-v1, schema-integrity-v1, snapshot-identity-v1]
+      includedScopes:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: { $ref: '#/schemas/OwnerExportScope' }
+      publicEventDataCoverage: { $ref: '#/schemas/PublicEventDataCoverage' }
+      dependencies:
+        type: array
+        items: { $ref: '#/schemas/OwnerExportDependencyDescriptor' }
+      exclusions:
+        type: array
+        const: [raw-public-event-data, functional-visitor-identities, measurement-visitor-identities, sessions, credentials, lab-entries]
+      entries:
+        type: array
+        minItems: 1
+        items: { $ref: '#/schemas/OwnerExportEntryDescriptor' }
+      schemas:
+        type: array
+        minItems: 2
+        items: { $ref: '#/schemas/OwnerExportSchemaDescriptor' }
+      assets:
+        type: array
+        items: { $ref: '#/schemas/OwnerExportAssetDescriptor' }
+      extensions:
+        type: object
+        additionalProperties: true
+  OwnerExportPackageManifest:
+    oneOf:
+      - { $ref: '#/schemas/OwnerExportPackageManifestV1_0' }
+      - { $ref: '#/schemas/OwnerExportPackageManifestV1_1' }
   RequestedOwnerExportView:
     type: object
     additionalProperties: false

@@ -829,11 +829,11 @@ export type OwnerExportEntryDescriptor = {
 };
 
 /**
- * Versioned manifest.json for the documented ShipWithAli Owner export package.
+ * Legacy 1.0 manifest retained for read-only migration compatibility.
  */
-export type OwnerExportPackageManifest = {
+export type OwnerExportPackageManifestV10 = {
     packageFormat: 'shipwithali-owner-export';
-    schemaVersion: string;
+    schemaVersion: '1.0';
     createdAt: string;
     algorithm: 'sha-256';
     digest: string;
@@ -844,6 +844,86 @@ export type OwnerExportPackageManifest = {
      */
     entries: Array<OwnerExportEntryDescriptor>;
 };
+
+export type OwnerExportDependencyDescriptor = unknown & {
+    sourceScope: OwnerExportScope;
+    sourceId: StableId;
+    targetScope: OwnerExportScope;
+    targetId: StableId;
+    disposition: 'included' | 'omitted';
+    reason?: 'scope-not-selected' | 'not-retained' | 'unsupported-variant' | 'external-destination';
+};
+
+export type OwnerExportManifestSchemaDescriptor = {
+    kind: 'manifest';
+    path: 'schemas/manifest.schema.json';
+    schemaUri: 'urn:shipwithali:owner-export-schema:manifest:1.1';
+    schemaVersion: '1.1';
+    digest: string;
+};
+
+export type OwnerExportRecordSchemaDescriptor = {
+    kind: 'record';
+    path: string;
+    scope: OwnerExportScope;
+    schemaUri: 'urn:shipwithali:owner-export-schema:portfolio-content:1.0' | 'urn:shipwithali:owner-export-schema:taxonomy:1.0' | 'urn:shipwithali:owner-export-schema:media-metadata:1.0' | 'urn:shipwithali:owner-export-schema:cv-metadata:1.0' | 'urn:shipwithali:owner-export-schema:moderation-history:1.0' | 'urn:shipwithali:owner-export-schema:analytics-reports:1.0' | 'urn:shipwithali:owner-export-schema:portfolio-configuration:1.0';
+    schemaVersion: '1.0';
+    digest: string;
+};
+
+export type OwnerExportSchemaDescriptor = OwnerExportManifestSchemaDescriptor | OwnerExportRecordSchemaDescriptor;
+
+export type OwnerExportAssetDescriptor = {
+    path: string;
+    scope: 'media-metadata' | 'cv-metadata';
+    assetId: StableId;
+    mediaType: 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp' | 'video/mp4';
+    byteLength: number;
+    digest: string;
+};
+
+/**
+ * Manifest 1.1 adds exact export and snapshot identity, dependency coverage, and integrity descriptors for records, schemas, and assets.
+ */
+export type OwnerExportPackageManifestV11 = {
+    packageFormat: 'shipwithali-owner-export';
+    schemaVersion: string;
+    exportId: StableId;
+    snapshot: {
+        snapshotId: StableId;
+        capturedAt: string;
+        consistency: 'transactional';
+    };
+    createdAt: string;
+    algorithm: 'sha-256';
+    digest: string;
+    requiredFeatures: [
+        'asset-integrity-v1',
+        'dependency-coverage-v1',
+        'record-integrity-v1',
+        'schema-integrity-v1',
+        'snapshot-identity-v1'
+    ];
+    includedScopes: Array<OwnerExportScope>;
+    publicEventDataCoverage: PublicEventDataCoverage;
+    dependencies: Array<OwnerExportDependencyDescriptor>;
+    exclusions: [
+        'raw-public-event-data',
+        'functional-visitor-identities',
+        'measurement-visitor-identities',
+        'sessions',
+        'credentials',
+        'lab-entries'
+    ];
+    entries: Array<OwnerExportEntryDescriptor>;
+    schemas: Array<OwnerExportSchemaDescriptor>;
+    assets: Array<OwnerExportAssetDescriptor>;
+    extensions?: {
+        [key: string]: unknown;
+    };
+};
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV10 | OwnerExportPackageManifestV11;
 
 /**
  * A completed versioned domain artifact, never a database dump or provider backup.
@@ -912,21 +992,53 @@ export type PortableEvidenceItem = {
     claim: string;
     state: 'unreviewed' | 'supported' | 'unsupported';
     supportingArtifactIds: Array<StableId>;
+    mediaAssetId?: StableId;
 };
 
 export type PortfolioContentExportRecord = {
     scope: 'portfolio-content';
-    contentId: StableId;
-    contentType: 'project' | 'achievement' | 'testimonial';
-    lifecycle: 'draft' | 'published' | 'hidden' | 'archived';
-    revisions: Array<PortableContentRevision>;
-    publicRouteIdentity: StableId | null;
-    routeHistory: Array<PublicRouteRedirectView>;
-    relatedProjectIds: Array<StableId>;
-    taxonomyValueIds: Array<StableId>;
-    mediaAssetIds: Array<StableId>;
-    evidenceItems: Array<PortableEvidenceItem>;
+    value: {
+        contentId: StableId;
+        contentType: 'project' | 'achievement' | 'testimonial';
+        lifecycle: 'draft' | 'published' | 'hidden' | 'archived';
+        projectStatus?: string | null;
+        featured?: boolean;
+        revisions: Array<PortableContentRevision>;
+        publicRouteIdentity: StableId | null;
+        routeHistory: Array<PublicRouteRedirectView>;
+        relatedProjectIds: Array<StableId>;
+        taxonomyValueIds: Array<StableId>;
+        mediaAssetIds: Array<StableId>;
+        evidenceItems: Array<PortableEvidenceItem>;
+    };
 };
+
+export type PortableActiveTaxonomyValue = {
+    valueId: StableId;
+    name: string;
+    state: 'active';
+};
+
+export type PortableRetiredTaxonomyValue = {
+    valueId: StableId;
+    name: string;
+    state: 'retired';
+};
+
+export type PortableMergedTaxonomyValue = {
+    valueId: StableId;
+    name: string;
+    state: 'merged';
+    mergedIntoId: StableId;
+};
+
+export type PortableTaxonomyValue = ({
+    state: 'active';
+} & PortableActiveTaxonomyValue) | ({
+    state: 'retired';
+} & PortableRetiredTaxonomyValue) | ({
+    state: 'merged';
+} & PortableMergedTaxonomyValue);
 
 export type PortableTaxonomyRename = {
     valueId: StableId;
@@ -936,54 +1048,106 @@ export type PortableTaxonomyRename = {
 };
 
 export type PortableTaxonomyAssignment = {
-    projectId: StableId;
-    valueId: StableId;
+    targetId: StableId;
+    taxonomyValueId: StableId;
 };
 
 export type TaxonomyExportRecord = {
     scope: 'taxonomy';
-    taxonomyId: StableId;
-    aggregateVersion: number;
-    kind: 'category' | 'ai-ml-domain' | 'technology' | 'project-type';
-    values: Array<TaxonomyValueView>;
-    renameHistory: Array<PortableTaxonomyRename>;
-    assignments: Array<PortableTaxonomyAssignment>;
+    value: {
+        taxonomyId: StableId;
+        aggregateVersion: number;
+        kind: 'category' | 'ai-ml-domain' | 'technology' | 'project-type';
+        values: Array<PortableTaxonomyValue>;
+        renameHistory: Array<PortableTaxonomyRename>;
+        assignments: Array<PortableTaxonomyAssignment>;
+    };
 };
 
 export type MediaMetadataExportRecord = {
     scope: 'media-metadata';
+    value: unknown & {
+        mediaId: StableId;
+        kind: MediaKind;
+        state: 'upload-pending' | 'processing' | 'processed' | 'accepted' | 'rejected';
+        accessibilityMetadata: MediaAccessibilityMetadata | null;
+        processingHistory: Array<MediaProcessingView>;
+        decisionHistory: Array<MediaDecisionView>;
+        /**
+         * True when the 100-entry processing history is truncated.
+         */
+        processingHistoryTruncated?: boolean;
+        /**
+         * True when the 100-entry decision history is truncated.
+         */
+        decisionHistoryTruncated?: boolean;
+        publicationState: 'private' | 'accepted' | 'published' | 'withdrawn';
+        /**
+         * Package-relative path present only when accepted media bytes are included; omit for other states or when bytes are not packaged.
+         */
+        portableReference?: string;
+    };
+};
+
+export type RegisteredPortableCvVersion = {
+    versionId: StableId;
     mediaId: StableId;
-    kind: MediaKind;
-    state: 'upload-pending' | 'processing' | 'processed' | 'accepted' | 'rejected';
-    accessibilityMetadata: MediaAccessibilityMetadata | null;
-    processingHistory: Array<MediaProcessingView>;
-    decisionHistory: Array<MediaDecisionView>;
-    publicationState: 'private' | 'accepted' | 'published' | 'withdrawn';
+    locale: 'en';
+    label: string;
+    state: 'registered';
+    isCurrent: boolean;
+};
+
+export type AcceptedPortableCvVersion = {
+    versionId: StableId;
+    mediaId: StableId;
+    locale: 'en';
+    label: string;
+    state: 'accepted';
+    isCurrent: boolean;
     /**
-     * Provider-neutral path or URI for media included with the export package.
+     * Package-relative path for the accepted CV document included in the package.
      */
     portableReference: string;
 };
 
+export type PortableCvVersionExport = ({
+    state: 'registered';
+} & RegisteredPortableCvVersion) | ({
+    state: 'accepted';
+} & AcceptedPortableCvVersion);
+
 export type CvMetadataExportRecord = {
     scope: 'cv-metadata';
-    aggregateVersion: number;
-    currentVersionId: StableId | null;
-    versions: Array<CvVersionView>;
-    activationHistory: Array<CvActivationView>;
+    value: unknown & {
+        aggregateVersion: number;
+        currentVersionId: StableId | null;
+        /**
+         * True when older retained CV versions were omitted from this bounded view.
+         */
+        versionsTruncated?: boolean;
+        versions: Array<PortableCvVersionExport>;
+        activationHistory: Array<CvActivationView>;
+        /**
+         * True when older retained activations were omitted from this bounded view.
+         */
+        activationHistoryTruncated?: boolean;
+    };
 };
 
 export type ModerationHistoryExportRecord = {
     scope: 'moderation-history';
-    feedbackId: StableId;
-    projectId: StableId;
-    locale: Locale;
-    aggregateVersion: number;
-    state: 'pending' | 'approved' | 'rejected' | 'suppressed';
-    authorName: string;
-    paragraph: string;
-    submittedAt: string;
-    decisionHistory: Array<ModerationDecisionView>;
+    value: {
+        feedbackId: StableId;
+        projectId: StableId;
+        locale: Locale;
+        aggregateVersion: number;
+        state: 'pending' | 'approved' | 'rejected' | 'suppressed';
+        authorName: string;
+        paragraph: string;
+        submittedAt: string;
+        decisionHistory: Array<ModerationDecisionView>;
+    };
 };
 
 export type PortableAnalyticsAggregate = {
@@ -996,15 +1160,19 @@ export type PortableAnalyticsAggregate = {
 
 export type AnalyticsReportExportRecord = {
     scope: 'analytics-reports';
-    goal: AnalyticsGoalAggregateView;
-    reports: Array<PortableAnalyticsAggregate>;
+    value: {
+        goal: AnalyticsGoalAggregateView;
+        reports: Array<PortableAnalyticsAggregate>;
+    };
 };
 
 export type PortfolioConfigurationExportRecord = {
     scope: 'portfolio-configuration';
-    profile: ProfileUpdate;
-    contactChannels: ContactChannelsUpdate;
-    projectCta: ProjectCtaUpdate;
+    value: {
+        profile: ProfileUpdate;
+        contactChannels: ContactChannelsUpdate;
+        projectCta: ProjectCtaUpdate;
+    };
 };
 
 /**

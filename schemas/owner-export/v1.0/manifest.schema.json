@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shipwithali:owner-export-schema:manifest:1.0",
+  "title": "ShipWithAli Owner export manifest 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["packageFormat", "schemaVersion", "createdAt", "algorithm", "digest", "includedScopes", "publicEventDataCoverage", "entries"],
+  "properties": {
+    "packageFormat": { "const": "shipwithali-owner-export" },
+    "schemaVersion": { "const": "1.0" },
+    "createdAt": { "$ref": "#/$defs/utcInstant" },
+    "algorithm": { "const": "sha-256" },
+    "digest": { "$ref": "#/$defs/digest" },
+    "includedScopes": { "$ref": "#/$defs/scopeList" },
+    "publicEventDataCoverage": { "const": { "mode": "excluded" } },
+    "entries": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/entry" } }
+  },
+  "$defs": {
+    "scope": { "enum": ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "moderation-history", "analytics-reports", "portfolio-configuration"] },
+    "scopeList": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/scope" } },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "utcInstant": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$" },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "scope", "mediaType", "recordSchema", "schemaPath", "schemaVersion", "digest", "recordCount"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^records/[a-z0-9-]+\\.(?:json|ndjson)$" },
+        "scope": { "$ref": "#/$defs/scope" },
+        "mediaType": { "enum": ["application/json", "application/x-ndjson"] },
+        "recordSchema": { "type": "string", "pattern": "^urn:shipwithali:owner-export-schema:[a-z0-9-]+:1\\.0$" },
+        "schemaPath": { "type": "string", "pattern": "^schemas/[a-z0-9-]+\\.schema\\.json$" },
+        "schemaVersion": { "const": "1.0" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "recordCount": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+      }
+    }
+  }
+}

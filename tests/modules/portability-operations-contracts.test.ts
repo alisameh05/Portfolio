@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { unsafeStableId } from "../../src/shared/domain/index.js";
 import {
   isExportScope,
+  OWNER_EXPORT_ARTIFACT_FILENAME,
   MAX_OWNER_EXPORT_ARTIFACT_BYTES,
   MAX_EXPORT_SNAPSHOT_CURSOR_LENGTH,
   parseSnapshotPageLimit,
@@ -81,6 +82,10 @@ function page(recordCount: number): OwnerExportSnapshotPage<"taxonomy"> {
 }
 
 describe("Portability and Operations public contracts", () => {
+  it("names the current versioned Owner export artifact", () => {
+    expect(OWNER_EXPORT_ARTIFACT_FILENAME).toBe("shipwithali-owner-export-1.1.zip");
+  });
+
   it("exposes only the seven declared export scopes", () => {
     for (const scope of validScopes) expect(isExportScope(scope)).toBe(true);
     expect(isExportScope("identity-access" )).toBe(false);
@@ -113,6 +118,98 @@ describe("Portability and Operations public contracts", () => {
     expect(limit.ok).toBe(true);
     if (!limit.ok) return;
     expect(validateOwnerExportSnapshotPage(context(limit.value), page(2)).ok).toBe(true);
+  });
+
+  it("validates portable content and taxonomy values at the module boundary", () => {
+    const limit = parseSnapshotPageLimit(1);
+    expect(limit.ok).toBe(true);
+    if (!limit.ok) return;
+
+    const validContent = {
+      contentId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ee7",
+      contentType: "project",
+      lifecycle: "published",
+      revisions: [{
+        revisionId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ee8",
+        locale: "en",
+        sequence: 1,
+        title: "Project",
+        summary: "Summary",
+        body: "Body",
+        reviewed: true,
+        currentlyPublished: true,
+      }],
+      publicRouteIdentity: null,
+      routeHistory: [],
+      relatedProjectIds: [],
+      taxonomyValueIds: [],
+      mediaAssetIds: [],
+      evidenceItems: [],
+    };
+    const contentContext = { ...context(limit.value), scope: "portfolio-content" as const };
+    const contentPage = {
+      descriptor: {
+        ...page(0).descriptor,
+        path: "content/records.ndjson",
+        scope: "portfolio-content" as const,
+        recordSchema: "urn:shipwithali:owner-export-schema:portfolio-content:1.0" as const,
+        schemaPath: "schemas/portfolio-content.schema.json" as const,
+        recordCount: 1,
+      },
+      records: [{ scope: "portfolio-content" as const, value: validContent }],
+    } as unknown as OwnerExportSnapshotPage<"portfolio-content">;
+    expect(validateOwnerExportSnapshotPage(contentContext, contentPage).ok).toBe(true);
+    const invalidLifecycle = {
+      ...contentPage,
+      records: [{ scope: "portfolio-content" as const, value: { ...validContent, lifecycle: "unknown" } }],
+    } as unknown as OwnerExportSnapshotPage<"portfolio-content">;
+    expect(validateOwnerExportSnapshotPage(contentContext, invalidLifecycle).ok).toBe(false);
+    const malformedRevision = {
+      ...contentPage,
+      records: [{ scope: "portfolio-content" as const, value: { ...validContent, revisions: [{ ...validContent.revisions[0], unexpected: true }] } }],
+    } as unknown as OwnerExportSnapshotPage<"portfolio-content">;
+    expect(validateOwnerExportSnapshotPage(contentContext, malformedRevision).ok).toBe(false);
+
+    const taxonomyContext = context(limit.value);
+    const validTaxonomyValue = {
+      valueId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ee9",
+      name: "TypeScript",
+      state: "active",
+    };
+    const validTaxonomy = {
+      ...page(1).records[0]!.value,
+      values: [validTaxonomyValue],
+      renameHistory: [{
+        valueId: validTaxonomyValue.valueId,
+        previousName: "TS",
+        newName: "TypeScript",
+        renamedAt: "2026-10-18T00:00:00.000Z",
+      }],
+      assignments: [{
+        targetId: "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7eea",
+        taxonomyValueId: validTaxonomyValue.valueId,
+      }],
+    };
+    const validTaxonomyPage = {
+      ...page(1),
+      records: [{ scope: "taxonomy" as const, value: validTaxonomy }],
+    } as OwnerExportSnapshotPage<"taxonomy">;
+    expect(validateOwnerExportSnapshotPage(taxonomyContext, validTaxonomyPage).ok).toBe(true);
+    const invalidTaxonomyKind = {
+      ...validTaxonomyPage,
+      records: [{ scope: "taxonomy" as const, value: { ...validTaxonomy, kind: "unknown" } }],
+    } as unknown as OwnerExportSnapshotPage<"taxonomy">;
+    expect(validateOwnerExportSnapshotPage(taxonomyContext, invalidTaxonomyKind).ok).toBe(false);
+    const malformedAssignment = {
+      ...validTaxonomyPage,
+      records: [{ scope: "taxonomy" as const, value: { ...validTaxonomy, assignments: [{ targetId: "bad-id", taxonomyValueId: "bad-id" }] } }],
+    } as unknown as OwnerExportSnapshotPage<"taxonomy">;
+    expect(validateOwnerExportSnapshotPage(taxonomyContext, malformedAssignment).ok).toBe(false);
+    const malformedRename = {
+      ...validTaxonomyPage,
+      records: [{ scope: "taxonomy" as const, value: { ...validTaxonomy, renameHistory: [{ ...validTaxonomy.renameHistory[0], renamedAt: "yesterday" }] } }],
+    } as unknown as OwnerExportSnapshotPage<"taxonomy">;
+    expect(validateOwnerExportSnapshotPage(taxonomyContext, malformedRename).ok).toBe(false);
   });
 
   it("rejects oversized and wrong-scope module snapshots", () => {
