@@ -2,6 +2,7 @@
 import {
   composeOperationsBoundary,
   PHASE4_RELEASE_BOUNDARY,
+  PHASE_DECLARED_ADDITIVE_MIGRATIONS,
   PHASE5_MIGRATION_COMPATIBILITY,
   PHASE5_MIGRATION_FIRST,
   PHASE5_MIGRATION_LAST,
@@ -554,6 +555,20 @@ export function assertPhase3OperationsContractPreserved(phase3, upgraded, {
   }
   const expected = phase3OperationsContract(phase3);
   const actual = phase3OperationsContract(upgraded);
+  const appliedMigrationNames = new Set((upgraded.migrationLedger ?? []).map((migration) => migration.name));
+  const declaredAdditions = PHASE_DECLARED_ADDITIVE_MIGRATIONS
+    .filter((migration) => appliedMigrationNames.has(migration.migration.slice(15, -4)))
+    .flatMap((migration) => migration.operationsAdditions ?? []);
+  for (const addition of declaredAdditions) {
+    const rows = actual[addition.category];
+    if (!Array.isArray(rows)) throw new Error(`PHASE3_OPERATIONS_CONTRACT_CATEGORY_UNKNOWN:${addition.category}`);
+    const index = rows.findIndex((row) => catalogIdentity(addition.category, row) === addition.identity);
+    if (index === -1) failPreservation("PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_MISSING", addition.category, addition.identity);
+    const actualFields = Object.fromEntries(Object.keys(addition.expected).map((field) => [field, rows[index][field]]));
+    const difference = firstDifference(addition.expected, actualFields);
+    if (difference !== null) failPreservation("PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_ALTERED", addition.category, addition.identity, difference);
+    rows.splice(index, 1);
+  }
   assertUniqueOperationsRows(expected, "baseline");
   assertUniqueOperationsRows(actual, "candidate");
   const boundary = composeOperationsBoundary(transformations, phase3.postgresMajor);

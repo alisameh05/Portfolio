@@ -55,6 +55,12 @@ test("undeclared, duplicate, or unreviewed transformation migrations fail closed
     }),
     /PHASE_CONTRACT_MIGRATION_DUPLICATE/u,
   );
+  assert.throws(() => resolveMigrationClassifications([phase3[0], "20260101000000_declared.sql"], {
+    phase3Files: phase3,
+    transformations: [],
+    additiveMigrations: [{ migration: "20260101000000_declared.sql", migrationSha256: "0".repeat(64) }],
+    migrationContents: new Map([["20260101000000_declared.sql", "select 1;"]]),
+  }), /PHASE_CONTRACT_ADDITIVE_CHECKSUM_MISMATCH/u);
   assert.throws(
     () => validateTransformationShape({ migration: "x.sql" }),
     /PHASE_REGISTRY_TRANSFORMATION_INVALID/u,
@@ -98,6 +104,33 @@ test("a synthetic future transformation is admitted only through the injected sh
   altered.columns[0].nullable = "YES";
   assert.throws(() => assertPhase3OperationsContractPreserved(before, altered, { transformations: [transformation] }),
     /PHASE3_OPERATIONS_CONTRACT_ALTERED.*operations\.future_events\.event_id/u);
+});
+
+test("the configuration export migration admits only its source-bound outbox policy addition", () => {
+  const policy = {
+    schema: "operations", tableName: "outbox_events", name: "owner_export_produced_outbox_worker_insert",
+    permissive: "permissive", roles: "{shipwithali_worker}", command: "INSERT", usingPredicate: "", withCheck: "true",
+  };
+  const phase3 = {
+    postgresMajor: 17,
+    migrationLedger: [],
+    schemas: [], objects: [], columns: [], constraints: [], policies: [], grants: [], defaultPrivileges: [],
+    indexes: [], functions: [], triggers: [], types: [],
+  };
+  const upgraded = {
+    ...structuredClone(phase3),
+    migrationLedger: [{ version: "20261023100000", name: "build_configuration_owner_exports" }],
+    policies: [policy],
+  };
+  assert.doesNotThrow(() => assertPhase3OperationsContractPreserved(phase3, upgraded, { transformations: [] }));
+  assert.throws(() => assertPhase3OperationsContractPreserved(phase3, {
+    ...upgraded,
+    policies: [{ ...policy, roles: "{anon}" }],
+  }, { transformations: [] }), /PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_ALTERED/u);
+  assert.throws(() => assertPhase3OperationsContractPreserved(phase3, {
+    ...upgraded,
+    policies: [],
+  }, { transformations: [] }), /PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_MISSING/u);
 });
 
 test("canonical operations expectations bind complete row operations to reviewed migrations", () => {

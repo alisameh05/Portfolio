@@ -154,7 +154,28 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
   Object.freeze({ migration: "20261017142000_revoke_public_aggregate_guard_execution.sql", ticket: 203, capability: "measurement.aggregate_privacy" }),
   Object.freeze({ migration: "20261018172500_bound_job_retries_and_incidents.sql", ticket: 237, capability: "operations.bounded_retries" }),
   Object.freeze({ migration: "20261023090000_reserve_owner_export_requests.sql", ticket: 238, capability: "portability.owner_export_requests" }),
-  Object.freeze({ migration: "20261023100000_build_configuration_owner_exports.sql", ticket: 240, capability: "portability.configuration_export", includeInDeclaredCapabilities: true }),
+  Object.freeze({
+    migration: "20261023100000_build_configuration_owner_exports.sql",
+    migrationSha256: "3b2525935b8e8e1c83c64d1fe28ca0af60f6534cde53627bcb012059ce992966",
+    ticket: 240,
+    capability: "portability.configuration_export",
+    includeInDeclaredCapabilities: true,
+    operationsAdditions: Object.freeze([
+      Object.freeze({
+        category: "policies",
+        identity: "operations.outbox_events.owner_export_produced_outbox_worker_insert",
+        expected: Object.freeze({
+          schema: "operations",
+          tableName: "outbox_events",
+          name: "owner_export_produced_outbox_worker_insert",
+          permissive: "permissive",
+          roles: "{shipwithali_worker}",
+          command: "INSERT",
+          usingPredicate: "",
+        }),
+      }),
+    ]),
+  }),
 ]);
 
 // Historical checkpoints and their paired database checks. A suite whose
@@ -327,7 +348,12 @@ export function resolveMigrationClassifications(migrationFiles, {
       if (additiveMigrations.filter((entry) => entry.migration === file).length !== 1) {
         throw new Error(`PHASE_CONTRACT_MIGRATION_DUPLICATE_DECLARATION:${file}`);
       }
-      classifications.set(file, { kind: "declared-additive", additive: additiveMigrations.find((entry) => entry.migration === file) });
+      const additive = additiveMigrations.find((entry) => entry.migration === file);
+      if (additive.migrationSha256 && migrationContents instanceof Map) {
+        const actual = migrationContents.has(file) ? migrationSha256(migrationContents.get(file)) : null;
+        if (actual !== additive.migrationSha256) throw new Error(`PHASE_CONTRACT_ADDITIVE_CHECKSUM_MISMATCH:${file}`);
+      }
+      classifications.set(file, { kind: "declared-additive", additive });
       continue;
     }
     throw new Error(`PHASE_CONTRACT_MIGRATION_UNDECLARED:${file}`);
