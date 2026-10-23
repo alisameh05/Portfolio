@@ -106,7 +106,7 @@ test("a synthetic future transformation is admitted only through the injected sh
     /PHASE3_OPERATIONS_CONTRACT_ALTERED.*operations\.future_events\.event_id/u);
 });
 
-test("the configuration export migration admits only its source-bound outbox policy and insert grant", () => {
+test("the configuration export migration admits only its source-bound outbox policy, insert grant, and unique index", () => {
   const policy = {
     schema: "operations", tableName: "outbox_events", name: "owner_export_produced_outbox_worker_insert",
     permissive: "permissive", roles: "{shipwithali_worker}", command: "INSERT", usingPredicate: "", withCheck: "true",
@@ -114,6 +114,10 @@ test("the configuration export migration admits only its source-bound outbox pol
   const grant = {
     schema: "operations", object: "outbox_events", objectType: "r", grantee: "shipwithali_worker",
     grantor: "shipwithali_migration", privilege: "INSERT", grantable: false,
+  };
+  const index = {
+    schema: "operations", table: "outbox_events", name: "owner_export_produced_outbox_once",
+    definition: "CREATE UNIQUE INDEX owner_export_produced_outbox_once ON operations.outbox_events USING btree (aggregate_id, aggregate_version) WHERE (event_type = 'portability.export_produced.v1'::text)",
   };
   const phase3 = {
     postgresMajor: 17,
@@ -126,6 +130,7 @@ test("the configuration export migration admits only its source-bound outbox pol
     migrationLedger: [{ version: "20261023100000", name: "build_configuration_owner_exports" }],
     policies: [policy],
     grants: [grant],
+    indexes: [index],
   };
   assert.doesNotThrow(() => assertPhase3OperationsContractPreserved(phase3, upgraded, { transformations: [] }));
   assert.throws(() => assertPhase3OperationsContractPreserved(phase3, {
@@ -143,6 +148,14 @@ test("the configuration export migration admits only its source-bound outbox pol
   assert.throws(() => assertPhase3OperationsContractPreserved(phase3, {
     ...upgraded,
     grants: [],
+  }, { transformations: [] }), /PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_MISSING/u);
+  assert.throws(() => assertPhase3OperationsContractPreserved(phase3, {
+    ...upgraded,
+    indexes: [{ ...index, definition: `${index.definition} OR true` }],
+  }, { transformations: [] }), /PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_ALTERED/u);
+  assert.throws(() => assertPhase3OperationsContractPreserved(phase3, {
+    ...upgraded,
+    indexes: [],
   }, { transformations: [] }), /PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_MISSING/u);
 });
 

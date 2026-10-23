@@ -187,6 +187,16 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
           grantable: false,
         }),
       }),
+      Object.freeze({
+        category: "indexes",
+        identity: "operations.outbox_events.owner_export_produced_outbox_once",
+        expected: Object.freeze({
+          schema: "operations",
+          table: "outbox_events",
+          name: "owner_export_produced_outbox_once",
+          definition: "CREATE UNIQUE INDEX owner_export_produced_outbox_once ON operations.outbox_events USING btree (aggregate_id, aggregate_version) WHERE (event_type = 'portability.export_produced.v1'::text)",
+        }),
+      }),
     ]),
   }),
 ]);
