@@ -171,7 +171,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       await admin?.query("delete from operations.jobs where job_type = 'portability.owner-export-assembly.v1'");
       await admin?.query("delete from operations.idempotency_records where operation_scope = $1", [OPERATION_SCOPE]);
       await admin?.query("delete from operations.idempotency_records where operation_scope like 'portability.owner-export-request:%'");
-      await admin?.query("delete from operations.outbox_events where payload->>'type' = 'portability.export_produced.v1'");
+      await admin?.query("delete from operations.outbox_events where event_type = 'portability.export_produced.v1'");
       await application?.resource.close();
       await otherApplication?.resource.close();
       await worker?.resource.close();
@@ -280,7 +280,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       expect(readyView.value.completedAt).toBe(now);
     }
     expect(await countRows(
-      "select count(*)::int as count from operations.outbox_events where payload->>'type' = 'portability.export_produced.v1' and aggregate_id = $1",
+      "select count(*)::int as count from operations.outbox_events where event_type = 'portability.export_produced.v1' and aggregate_id = $1",
       [originalExportId!],
     )).toBe(1);
     // ready → expired; the original request keeps replaying.

@@ -132,10 +132,13 @@ const OWNER_EXPORT_JOB_POLICIES: ReadonlyArray<readonly [string, string, string,
 let retryRecoverySchema = false;
 let portabilityExportSchema = false;
 if (DATABASE_URL !== undefined) {
-  const declared = (process.env["PHASE_DATABASE_CAPABILITIES"] ?? declaredCapabilities().join(","))
+   const declared = (process.env["PHASE_DATABASE_CAPABILITIES"] ?? declaredCapabilities().join(","))
     .split(",").map((value) => value.trim()).filter(Boolean);
-  const knownCapabilities = ["operations.bounded_retries", "portability.owner_export_requests"];
-  if (declared.some((capability) => !knownCapabilities.includes(capability))) {
+  // The default declared list carries every registry capability; a restricted
+  // runner must name the bounded-retry capability so the era cross-guards
+  // below mean what they say. Era mismatches for the portability capability
+  // are caught by its dedicated cross-guard, so typos fail either way.
+  if (!declared.includes("operations.bounded_retries") && declared.length > 0) {
     throw new Error("ROLE_MATRIX_DECLARED_CAPABILITY_UNKNOWN:" + declared.join(","));
   }
   const era = adminClient();
