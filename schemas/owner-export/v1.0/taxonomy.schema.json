@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shipwithali:owner-export-schema:taxonomy:1.0",
+  "title": "Portable taxonomy record 1.0 (legacy flat record)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scope",
+    "taxonomyId",
+    "aggregateVersion",
+    "kind",
+    "values",
+    "renameHistory",
+    "assignments"
+  ],
+  "properties": {
+    "scope": {
+      "const": "taxonomy"
+    },
+    "taxonomyId": {
+      "$ref": "#/$defs/stableId"
+    },
+    "aggregateVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "kind": {
+      "enum": [
+        "category",
+        "ai-ml-domain",
+        "technology",
+        "project-type"
+      ]
+    },
+    "values": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/taxonomyValue"
+      }
+    },
+    "renameHistory": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rename"
+      }
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assignment"
+      }
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "taxonomyValue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "valueId",
+            "name",
+            "state"
+          ],
+          "properties": {
+            "valueId": {
+              "$ref": "#/$defs/stableId"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "state": {
+              "const": "active"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "valueId",
+            "name",
+            "state"
+          ],
+          "properties": {
+            "valueId": {
+              "$ref": "#/$defs/stableId"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "state": {
+              "const": "retired"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "valueId",
+            "name",
+            "state",
+            "mergedIntoValueId"
+          ],
+          "properties": {
+            "valueId": {
+              "$ref": "#/$defs/stableId"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "state": {
+              "const": "merged"
+            },
+            "mergedIntoValueId": {
+              "$ref": "#/$defs/stableId"
+            }
+          }
+        }
+      ]
+    },
+    "rename": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valueId",
+        "previousName",
+        "newName",
+        "renamedAt"
+      ],
+      "properties": {
+        "valueId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "previousName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "newName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "renamedAt": {
+          "$ref": "#/$defs/utcInstant"
+        }
+      }
+    },
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectId",
+        "valueId"
+      ],
+      "properties": {
+        "projectId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "valueId": {
+          "$ref": "#/$defs/stableId"
+        }
+      }
+    },
+    "utcInstant": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+    }
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shipwithali:owner-export-schema:portfolio-configuration:1.0",
+  "title": "Portable portfolio configuration record 1.0 (legacy flat record)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scope",
+    "profile",
+    "contactChannels",
+    "projectCta"
+  ],
+  "properties": {
+    "scope": {
+      "const": "portfolio-configuration"
+    },
+    "profile": {
+      "$ref": "#/$defs/profile"
+    },
+    "contactChannels": {
+      "$ref": "#/$defs/contactChannels"
+    },
+    "projectCta": {
+      "$ref": "#/$defs/projectCta"
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "locale": {
+      "enum": [
+        "en",
+        "ar"
+      ]
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "displayName",
+        "headline",
+        "bio"
+      ],
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "headline": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "bio": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "mediaAssetId": {
+          "$ref": "#/$defs/stableId"
+        }
+      }
+    },
+    "contactChannels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channels"
+      ],
+      "properties": {
+        "channels": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "channel",
+              "label",
+              "destination",
+              "availableLocales"
+            ],
+            "properties": {
+              "channel": {
+                "enum": [
+                  "linkedin",
+                  "whatsapp",
+                  "instagram",
+                  "phone",
+                  "email",
+                  "other"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "destination": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              "availableLocales": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/locale"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "projectCta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "destination",
+        "unavailableFallback"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "destination": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "unavailableFallback": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    }
+  }
+}

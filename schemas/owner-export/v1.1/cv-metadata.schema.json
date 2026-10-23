@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shipwithali:owner-export-schema:cv-metadata:1.1",
+  "title": "Portable CV metadata record 1.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scope",
+    "value"
+  ],
+  "properties": {
+    "scope": {
+      "const": "cv-metadata"
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "aggregateVersion",
+        "currentVersionId",
+        "versions",
+        "activationHistory"
+      ],
+      "properties": {
+        "aggregateVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "currentVersionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/stableId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "versions": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "versionId",
+              "mediaId",
+              "locale",
+              "label",
+              "state",
+              "isCurrent"
+            ],
+            "properties": {
+              "versionId": {
+                "$ref": "#/$defs/stableId"
+              },
+              "mediaId": {
+                "$ref": "#/$defs/stableId"
+              },
+              "locale": {
+                "const": "en"
+              },
+              "portableReference": {
+                "type": "string",
+                "pattern": "^assets/cv-metadata/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "state": {
+                "enum": [
+                  "registered",
+                  "accepted"
+                ]
+              },
+              "isCurrent": {
+                "type": "boolean"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "state": {
+                      "const": "accepted"
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "portableReference"
+                  ],
+                  "properties": {
+                    "portableReference": {
+                      "type": "string",
+                      "pattern": "^assets/cv-metadata/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "versionsTruncated": {
+          "type": "boolean"
+        },
+        "activationHistory": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "versionId",
+              "activatedAt"
+            ],
+            "properties": {
+              "versionId": {
+                "$ref": "#/$defs/stableId"
+              },
+              "activatedAt": {
+                "$ref": "#/$defs/utcInstant"
+              }
+            }
+          }
+        },
+        "activationHistoryTruncated": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "versionsTruncated": {
+                "const": true
+              }
+            },
+            "required": [
+              "versionsTruncated"
+            ]
+          },
+          "then": {
+            "properties": {
+              "versions": {
+                "type": "array",
+                "minItems": 100
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "activationHistoryTruncated": {
+                "const": true
+              }
+            },
+            "required": [
+              "activationHistoryTruncated"
+            ]
+          },
+          "then": {
+            "properties": {
+              "activationHistory": {
+                "type": "array",
+                "minItems": 100
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "utcInstant": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+    }
+  }
+}

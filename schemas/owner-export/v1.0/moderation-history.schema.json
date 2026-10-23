@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shipwithali:owner-export-schema:moderation-history:1.0",
+  "title": "Portable moderation history record 1.0 (legacy flat record)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scope",
+    "feedbackId",
+    "projectId",
+    "locale",
+    "aggregateVersion",
+    "state",
+    "authorName",
+    "paragraph",
+    "submittedAt",
+    "decisionHistory"
+  ],
+  "properties": {
+    "scope": {
+      "const": "moderation-history"
+    },
+    "feedbackId": {
+      "$ref": "#/$defs/stableId"
+    },
+    "projectId": {
+      "$ref": "#/$defs/stableId"
+    },
+    "locale": {
+      "enum": [
+        "en",
+        "ar"
+      ]
+    },
+    "aggregateVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "state": {
+      "enum": [
+        "pending",
+        "approved",
+        "rejected",
+        "suppressed"
+      ]
+    },
+    "authorName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "paragraph": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 5000
+    },
+    "submittedAt": {
+      "$ref": "#/$defs/utcInstant"
+    },
+    "decisionHistory": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decision"
+      }
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "utcInstant": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "reason",
+        "decidedAt"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "approved",
+            "rejected",
+            "suppressed"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "decidedAt": {
+          "$ref": "#/$defs/utcInstant"
+        }
+      }
+    }
+  }
+}

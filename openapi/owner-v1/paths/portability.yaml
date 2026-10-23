@@ -51,6 +51,56 @@ export:
         content:
           application/json:
             schema: { $ref: ../components/portability.yaml#/schemas/OwnerExportView }
+            examples:
+              readyWithOfflineIntegrityV1_1:
+                summary: Ready export with an explicitly empty selected scope and packaged schema integrity
+                value:
+                  exportId: 01890f3e-7b2f-7cc0-98cf-5a2890378abc
+                  state: ready
+                  schemaVersion: '1.1'
+                  requestedAt: '2026-10-23T10:00:00Z'
+                  completedAt: '2026-10-23T10:01:00Z'
+                  includedScopes: [analytics-reports]
+                  publicEventDataCoverage: { mode: excluded }
+                  integrityManifest:
+                    packageFormat: shipwithali-owner-export
+                    schemaVersion: '1.1'
+                    exportId: 01890f3e-7b2f-7cc0-98cf-5a2890378abc
+                    snapshot:
+                      snapshotId: 01890f3e-7b2f-7cc0-98cf-5a2890378abd
+                      capturedAt: '2026-10-23T09:59:59Z'
+                      consistency: transactional
+                    createdAt: '2026-10-23T10:01:00Z'
+                    algorithm: sha-256
+                    digest: ce6c1a31a5052e44b1f03a76a58dbb2670d4848a9e32497a849fc563d108efb1
+                    requiredFeatures: [asset-integrity-v1, dependency-coverage-v1, record-integrity-v1, schema-integrity-v1, snapshot-identity-v1]
+                    includedScopes: [analytics-reports]
+                    publicEventDataCoverage: { mode: excluded }
+                    dependencies: []
+                    exclusions: [raw-public-event-data, functional-visitor-identities, measurement-visitor-identities, sessions, credentials, lab-entries]
+                    entries:
+                      - path: records/analytics-reports.ndjson
+                        scope: analytics-reports
+                        mediaType: application/x-ndjson
+                        recordSchema: urn:shipwithali:owner-export-schema:analytics-reports:1.1
+                        schemaPath: schemas/analytics-reports.schema.json
+                        schemaVersion: '1.1'
+                        digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+                        recordCount: 0
+                    schemas:
+                      - kind: manifest
+                        path: schemas/manifest.schema.json
+                        schemaUri: urn:shipwithali:owner-export-schema:manifest:1.1
+                        schemaVersion: '1.1'
+                        digest: cee62fcf794284c8c439a0b2d07e7103f63676f7accc16f2e76077180fe41c52
+                      - kind: record
+                        scope: analytics-reports
+                        path: schemas/analytics-reports.schema.json
+                        schemaUri: urn:shipwithali:owner-export-schema:analytics-reports:1.1
+                        schemaVersion: '1.1'
+                        digest: 7d0435d3e80081347534bce46c45365550a764a93ccbbf6b4997bbb6e8f836a3
+                    assets: []
+                  downloadAvailable: true
       '400': { $ref: ../components/common.yaml#/responses/BadRequestProblem }
       '401': { $ref: ../components/common.yaml#/responses/UnauthenticatedProblem }
       '403': { $ref: ../components/common.yaml#/responses/ForbiddenProblem }

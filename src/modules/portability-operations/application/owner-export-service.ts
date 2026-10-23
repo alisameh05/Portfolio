@@ -69,8 +69,11 @@ import type {
 } from "./owner-export-store.js";
 import type { OwnerExportObjectReadPort } from "./service.js";
 
-export const OWNER_EXPORT_SCHEMA_VERSION = "1.0";
-export const OWNER_EXPORT_ARTIFACT_FILENAME = "shipwithali-owner-export-1.0.zip";
+export const OWNER_EXPORT_SCHEMA_VERSION = "1.1";
+function artifactFilename(schemaVersion: string): string {
+  return `shipwithali-owner-export-${schemaVersion}.zip`;
+}
+export const OWNER_EXPORT_ARTIFACT_FILENAME = artifactFilename(OWNER_EXPORT_SCHEMA_VERSION);
 /** Purpose-limited receipt lifetime: exact replay stays addressable for 30 days. */
 export const OWNER_EXPORT_RECEIPT_TTL_SECONDS = 30 * 86400;
 const REQUEST_OPERATION_SCOPE = "portability.owner-export-request";
@@ -388,8 +391,8 @@ export function createOwnerExportService(
       if (!validated.ok) return validated;
       return ok({
         exportId: query.exportId,
-        schemaVersion: OWNER_EXPORT_SCHEMA_VERSION,
-        filename: OWNER_EXPORT_ARTIFACT_FILENAME,
+        schemaVersion: record.schemaVersion,
+        filename: artifactFilename(record.schemaVersion),
         contentLength: validated.value.contentLength,
         content: validated.value.content,
       });
@@ -421,11 +424,12 @@ const TRANSITION_METADATA: Record<ExportStatus, readonly ("failureCode" | "integ
 
 export function isManifestShape(value: unknown): value is OwnerExportPackageManifest {
   if (!isRecord(value)) return false;
+  const entrySchemaVersion = value["schemaVersion"] === "1.0" ? "1.0" : "1.1";
   const scopes = value["includedScopes"];
   const entries = value["entries"];
-  return (
+  const commonShape = (
     value["packageFormat"] === "shipwithali-owner-export" &&
-    value["schemaVersion"] === OWNER_EXPORT_SCHEMA_VERSION &&
+    ["1.0", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
     typeof value["createdAt"] === "string" &&
     Number.isFinite(Date.parse(value["createdAt"] as string)) &&
     value["algorithm"] === "sha-256" &&
@@ -440,10 +444,35 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
       (OWNER_EXPORT_SCOPES as readonly string[]).includes(entry["scope"] as string) &&
       ["application/x-ndjson", "application/json"].includes(entry["mediaType"] as string) &&
       typeof entry["recordSchema"] === "string" &&
+      entry["recordSchema"] === `urn:shipwithali:owner-export-schema:${String(entry["scope"])}:${entrySchemaVersion}` &&
       entry["schemaPath"] === `schemas/${String(entry["scope"])}.schema.json` &&
-      entry["schemaVersion"] === OWNER_EXPORT_SCHEMA_VERSION &&
+      entry["schemaVersion"] === entrySchemaVersion &&
       typeof entry["digest"] === "string" && /^[a-f0-9]{64}$/.test(entry["digest"] as string) &&
       Number.isSafeInteger(entry["recordCount"]) && (entry["recordCount"] as number) >= 0)
+  );
+  if (!commonShape) return false;
+  if (value["schemaVersion"] === "1.0") return true;
+
+  const requiredFeatures = [
+    "asset-integrity-v1",
+    "dependency-coverage-v1",
+    "record-integrity-v1",
+    "schema-integrity-v1",
+    "snapshot-identity-v1",
+  ];
+  const declaredRequiredFeatures = value["requiredFeatures"];
+  const snapshot = value["snapshot"];
+  const stableId = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  return (
+    value["schemaVersion"] === OWNER_EXPORT_SCHEMA_VERSION &&
+    typeof value["exportId"] === "string" && stableId.test(value["exportId"]) &&
+    isRecord(snapshot) && typeof snapshot["snapshotId"] === "string" && stableId.test(snapshot["snapshotId"]) &&
+    typeof snapshot["capturedAt"] === "string" && Number.isFinite(Date.parse(snapshot["capturedAt"])) &&
+    snapshot["consistency"] === "transactional" &&
+    Array.isArray(declaredRequiredFeatures) && requiredFeatures.every((feature) => declaredRequiredFeatures.includes(feature)) &&
+    declaredRequiredFeatures.length === requiredFeatures.length &&
+    Array.isArray(value["dependencies"]) && Array.isArray(value["exclusions"]) &&
+    Array.isArray(value["schemas"]) && Array.isArray(value["assets"])
   );
 }
 

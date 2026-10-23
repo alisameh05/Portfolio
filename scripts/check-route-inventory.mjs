@@ -298,8 +298,11 @@ export function buildInventory() {
   });
 
   const ownerSurface = JSON.stringify(ownerBundle.paths ?? {});
+  // The portability manifest names the explicitly excluded scope; that value
+  // is not an exposed Lab route or presentation surface.
+  const ownerSurfaceWithoutDeclaredExclusion = ownerSurface.replaceAll('"lab-entries"', "");
   const ownerForbidden =
-    /\blab\b/i.test(ownerSurface) ||
+    /\blab\b/i.test(ownerSurfaceWithoutDeclaredExclusion) ||
     Object.keys(ownerBundle.paths ?? {}).some((path) => /\/patch\b/i.test(path)) ||
     ownerOperations.some((op) => op.startsWith("PATCH "));
   checks.push({

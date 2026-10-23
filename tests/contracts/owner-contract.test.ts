@@ -112,7 +112,7 @@ describe("Owner v1 contract", () => {
     );
 
     expect(actual.sort()).toEqual([...expectedOperations].sort());
-    expect(JSON.stringify(document.paths)).not.toMatch(/\blab\b|\/patch|generic/i);
+    expect(JSON.stringify(document.paths).replaceAll('"lab-entries"', "")).not.toMatch(/\blab\b|\/patch|generic/i);
   });
 
   it("requires the Owner session globally and distinguishes 401 from 403", () => {
@@ -273,8 +273,16 @@ describe("Owner v1 contract", () => {
       oneOf: expect.any(Array),
       discriminator: { propertyName: "scope" },
     });
-    expect(document.components.schemas["OwnerExportPackageManifest"]).toMatchObject({
+    expect(document.components.schemas["OwnerExportPackageManifest"]?.["oneOf"]).toEqual([
+      { $ref: "#/components/schemas/OwnerExportPackageManifestV1_0" },
+      { $ref: "#/components/schemas/OwnerExportPackageManifestV1_1" },
+    ]);
+    expect(document.components.schemas["OwnerExportPackageManifestV1_0"]).toMatchObject({
       required: expect.arrayContaining(["includedScopes", "publicEventDataCoverage", "entries"]),
+      additionalProperties: false,
+    });
+    expect(document.components.schemas["OwnerExportPackageManifestV1_1"]).toMatchObject({
+      required: expect.arrayContaining(["requiredFeatures", "schemas", "assets"]),
       additionalProperties: false,
     });
   });

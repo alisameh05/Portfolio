@@ -1,0 +1,17 @@
+{
+  "format": "shipwithali-owner-export-canonicalization-v1",
+  "cases": [
+    {
+      "name": "unicode-code-point-order-top-level-digest-only",
+      "input": {
+        "z": 1,
+        "é": { "💡": "astral", "": "bmp" },
+        "list": [3, { "b": 2, "a": 1 }],
+        "nested": { "digest": "keep" },
+        "digest": "removed"
+      },
+      "canonicalUtf8": "{\"list\":[3,{\"a\":1,\"b\":2}],\"nested\":{\"digest\":\"keep\"},\"z\":1,\"é\":{\"\":\"bmp\",\"💡\":\"astral\"}}",
+      "sha256": "e6f5779e66f55f2b36e43dec050ada658ab90ace4f568295b9c4bef40c012266"
+    }
+  ]
+}

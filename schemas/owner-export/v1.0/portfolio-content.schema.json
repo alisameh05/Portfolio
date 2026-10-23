@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shipwithali:owner-export-schema:portfolio-content:1.0",
+  "title": "Portable portfolio content record 1.0 (legacy flat record)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scope",
+    "contentId",
+    "contentType",
+    "lifecycle",
+    "revisions",
+    "publicRouteIdentity",
+    "routeHistory",
+    "relatedProjectIds",
+    "taxonomyValueIds",
+    "mediaAssetIds",
+    "evidenceItems"
+  ],
+  "properties": {
+    "scope": {
+      "const": "portfolio-content"
+    },
+    "contentId": {
+      "$ref": "#/$defs/stableId"
+    },
+    "contentType": {
+      "enum": [
+        "project",
+        "achievement",
+        "testimonial"
+      ]
+    },
+    "lifecycle": {
+      "enum": [
+        "draft",
+        "published",
+        "hidden",
+        "archived"
+      ]
+    },
+    "revisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/revision"
+      }
+    },
+    "publicRouteIdentity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/stableId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "routeHistory": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/routeRedirect"
+      }
+    },
+    "relatedProjectIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/stableId"
+      }
+    },
+    "taxonomyValueIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/stableId"
+      }
+    },
+    "mediaAssetIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/stableId"
+      }
+    },
+    "evidenceItems": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidenceItem"
+      }
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revisionId",
+        "locale",
+        "sequence",
+        "title",
+        "summary",
+        "body",
+        "reviewed",
+        "currentlyPublished"
+      ],
+      "properties": {
+        "revisionId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "locale": {
+          "enum": [
+            "en",
+            "ar"
+          ]
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50000
+        },
+        "reviewed": {
+          "type": "boolean"
+        },
+        "currentlyPublished": {
+          "type": "boolean"
+        }
+      }
+    },
+    "routeRedirect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fromSlug",
+        "toSlug"
+      ],
+      "properties": {
+        "fromSlug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "toSlug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        }
+      }
+    },
+    "evidenceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim",
+        "state",
+        "supportingArtifactIds"
+      ],
+      "properties": {
+        "claim": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "state": {
+          "enum": [
+            "unreviewed",
+            "supported",
+            "unsupported"
+          ]
+        },
+        "supportingArtifactIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    }
+  }
+}

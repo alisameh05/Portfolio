@@ -36,6 +36,8 @@ import {
   type LeasedJobStorePort,
   type OperationsPersistencePorts,
   type OwnerExportServiceDependencies,
+  type OwnerExportObjectReadPort,
+  type PersistedOwnerExport,
   type OwnerExportStorePort,
   type OwnerExportTransitionInput,
   type OwnerExportPackageManifest,
@@ -138,6 +140,7 @@ function makeService(overrides: {
   operations?: OperationsPersistencePorts;
   exports?: OwnerExportStorePort;
   ids?: StableIdGenerator;
+  objectRead?: OwnerExportObjectReadPort;
 } = {}) {
   const fakeOperations = createFakeOperations();
   const fakeStore = createFakeExportStore();
@@ -146,6 +149,7 @@ function makeService(overrides: {
     exports: overrides.exports ?? fakeStore.store,
     clock: { now: () => NOW },
     ids: overrides.ids ?? ids(),
+    ...(overrides.objectRead === undefined ? {} : { objectRead: overrides.objectRead }),
   };
   return { service: createOwnerExportService(dependencies), fakeOperations, fakeStore };
 }
@@ -399,10 +403,41 @@ describe("AC05 (service slice): reservation members share one effect context", (
   });
 });
 
+describe("versioned Owner export downloads", () => {
+  it("keeps the downloaded filename and schema version aligned with the persisted artifact", async () => {
+    const record: PersistedOwnerExport = {
+      exportId: unsafeStableId<"OwnerExport">("0196a1b2-7c3d-7e11-9f22-000000000031"),
+      portfolioId: PORTFOLIO_ID,
+      ownerId: OWNER_ID,
+      includedScopes: ["analytics-reports"],
+      status: "ready",
+      schemaVersion: "1.0",
+      requestedAt: NOW,
+      completedAt: NOW,
+      artifactId: unsafeStableId<"OwnerExportArtifact">("0196a1b2-7c3d-7e11-9f22-000000000032"),
+    };
+    const exports: OwnerExportStorePort = {
+      async reserveOwnerExport() {},
+      async findOwnerExport() { return record; },
+      async applyOwnerExportTransition() { return { ok: true as const, value: { kind: "stale" as const } }; },
+    };
+    const content = (async function* () { yield Uint8Array.of(1); })();
+    const objectRead: OwnerExportObjectReadPort = {
+      async readOwnerExport() {
+        return { ok: true as const, value: { contentLength: 1, sha256: "a".repeat(64), content } };
+      },
+    };
+    const { service } = makeService({ exports, objectRead });
+    const result = await service.downloadOwnerExport({ actor, portfolioId: PORTFOLIO_ID, exportId: record.exportId });
+
+    expect(result).toMatchObject({ ok: true, value: { schemaVersion: "1.0", filename: "shipwithali-owner-export-1.0.zip" } });
+  });
+});
+
 describe("AC07 (validator slice): declared lifecycle edges with exact metadata", () => {
   const manifest: OwnerExportPackageManifest = {
     packageFormat: "shipwithali-owner-export" as const,
-    schemaVersion: OWNER_EXPORT_SCHEMA_VERSION,
+    schemaVersion: "1.0",
     createdAt: NOW,
     algorithm: "sha-256" as const,
     digest: "a".repeat(64),
@@ -414,7 +449,7 @@ describe("AC07 (validator slice): declared lifecycle edges with exact metadata",
       mediaType: "application/x-ndjson" as const,
       recordSchema: "urn:shipwithali:owner-export-schema:portfolio-content:1.0" as const,
       schemaPath: "schemas/portfolio-content.schema.json" as const,
-      schemaVersion: OWNER_EXPORT_SCHEMA_VERSION,
+      schemaVersion: "1.0",
       digest: "b".repeat(64),
       recordCount: 3,
     }],

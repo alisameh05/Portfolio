@@ -98,7 +98,8 @@ describe("Phase 1 route and source inventory (#11)", () => {
     expect(actual).toContain("POST /api/owner/v1/content");
     expect(actual).toContain("GET /api/owner/v1/content/{contentId}/history");
     expect(actual).toContain("POST /api/owner/v1/project-status-values/{valueId}/commands/retire");
-    expect(JSON.stringify(bundle.paths)).not.toMatch(/\blab\b/i);
+    // The owner export manifest names the explicitly excluded Lab scope.
+    expect(JSON.stringify(bundle.paths).replaceAll('"lab-entries"', "")).not.toMatch(/\blab\b/i);
     expect(actual.some((op) => op.startsWith("PATCH "))).toBe(false);
   });
 
