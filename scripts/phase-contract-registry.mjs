@@ -260,6 +260,19 @@ export function declaredCapabilities(
   return Object.freeze(capabilities);
 }
 
+export function capabilitiesForMigrations(
+  migrationFiles,
+  transformations = PHASE_DATABASE_TRANSFORMATIONS,
+  additiveMigrations = PHASE_DECLARED_ADDITIVE_MIGRATIONS,
+) {
+  const files = new Set(migrationFiles);
+  const capabilities = declaredCapabilities(transformations, additiveMigrations);
+  return Object.freeze(capabilities.filter((capability) =>
+    transformations.some((entry) => entry.capability === capability && files.has(entry.migration)) ||
+    additiveMigrations.some((entry) => entry.includeInDeclaredCapabilities === true &&
+      entry.capability === capability && files.has(entry.migration))));
+}
+
 // Classifies every migration file exactly once, in declared registry order.
 // Failures carry PHASE_CONTRACT_* codes: an undeclared migration, a duplicate
 // declaration, or a declaration naming a file outside the inventory.
