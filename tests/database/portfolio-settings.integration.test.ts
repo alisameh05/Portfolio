@@ -218,6 +218,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
       select role_name,
              has_schema_privilege(role_name, 'portfolio_config', 'USAGE') as schema_usage,
              has_table_privilege(role_name, 'portfolio_config.settings', 'SELECT') as can_select,
+             has_table_privilege(role_name, 'portfolio_config.contact_channels', 'SELECT') as can_select_channels,
              has_table_privilege(role_name, 'portfolio_config.settings', 'INSERT') as can_insert,
              has_table_privilege(role_name, 'portfolio_config.contact_channels', 'DELETE') as can_delete_channels,
              has_column_privilege(role_name, 'portfolio_config.settings', 'display_name', 'UPDATE') as can_update_profile,
@@ -230,12 +231,18 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
     const byRole = new Map(privileges.rows.map((row) => [row.role_name, row]));
     expect(byRole.get("shipwithali_application")).toMatchObject({
       schema_usage: true, can_select: true, can_insert: true,
+      can_select_channels: true,
       can_delete_channels: true,
       can_update_profile: true, can_update_cta: true, can_update_identity: false,
     });
-    for (const role of ["shipwithali_worker", "shipwithali_backup", "anon", "authenticated"]) {
+    expect(byRole.get("shipwithali_worker")).toMatchObject({
+      schema_usage: true, can_select: true, can_select_channels: true,
+      can_insert: false, can_delete_channels: false,
+      can_update_profile: false, can_update_cta: false, can_update_identity: false,
+    });
+    for (const role of ["shipwithali_backup", "anon", "authenticated"]) {
       expect(byRole.get(role)).toMatchObject({
-        schema_usage: false, can_select: false, can_insert: false,
+        schema_usage: false, can_select: false, can_select_channels: false, can_insert: false,
         can_delete_channels: false,
         can_update_profile: false, can_update_cta: false, can_update_identity: false,
       });
@@ -283,7 +290,7 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
       await allowedIdentityRead.end();
     }
 
-    for (const role of ["anon", "authenticated", "shipwithali_worker"] as const) {
+    for (const role of ["anon", "authenticated"] as const) {
       const untrusted = new Client({ connectionString: restrictedLogins.get(role)! });
       await untrusted.connect();
       try {
@@ -297,6 +304,20 @@ describeDatabase("Portfolio Configuration production migration and restricted pr
 
     const otherScope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
     await createPortfolioSettingsService({ repository, transactions: database.transactions, scope: otherScope }).provision(values);
+
+    const worker = new Client({ connectionString: restrictedLogins.get("shipwithali_worker")! });
+    await worker.connect();
+    try {
+      await worker.query("select set_config('shipwithali.portfolio_id', $1, false), set_config('shipwithali.owner_id', $2, false), set_config('request.jwt.claims', $3, false)", [scope.portfolioId, scope.ownerId, claims]);
+      const workerSettings = await worker.query("select portfolio_id::text from portfolio_config.settings");
+      const workerChannels = await worker.query("select count(*)::int as count from portfolio_config.contact_channels");
+      expect(workerSettings.rows).toEqual([{ portfolio_id: scope.portfolioId }]);
+      expect(workerChannels.rows[0]?.count).toBe(values.contactChannels.length);
+      await expect(worker.query("select count(*) from identity_access.owner_links")).rejects.toBeDefined();
+    } finally {
+      await worker.end();
+    }
+
     const configuredRows = await admin.query(
       "select portfolio_id::text from portfolio_config.settings where portfolio_id = any($1::uuid[]) order by portfolio_id",
       [[scope.portfolioId, otherScope.portfolioId]],
