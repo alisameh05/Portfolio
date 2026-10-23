@@ -29,6 +29,8 @@ const CAPABILITY_ROLES = [
 ];
 const SETTINGS_SCOPE_PREDICATE = "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))";
 const CHANNEL_SCOPE_PREDICATE = "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND (EXISTS ( SELECT 1 FROM portfolio_config.settings settings WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = current_setting('shipwithali.owner_id'::text, true))))))";
+const CONFIGURATION_EXPORT_SETTINGS_SCOPE_PREDICATE = "(((portfolio_id)::text = nullif(current_setting('shipwithali.portfolio_id'::text, true), ''::text)) AND ((owner_id)::text = nullif(current_setting('shipwithali.owner_id'::text, true), ''::text)))";
+const CONFIGURATION_EXPORT_CHANNEL_SCOPE_PREDICATE = "(((portfolio_id)::text = nullif(current_setting('shipwithali.portfolio_id'::text, true), ''::text)) AND (EXISTS ( SELECT 1 FROM portfolio_config.settings settings WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = nullif(current_setting('shipwithali.owner_id'::text, true), ''::text))))))";
 const PHASE4_APPLICATION_POLICIES = new Map([
   ["identity_access.owner_links", [
     ["owner_links_application_select_policy", "SELECT", "{shipwithali_application}", "true"],
@@ -49,10 +51,10 @@ const PHASE4_APPLICATION_POLICIES = new Map([
 ]);
 const CONFIGURATION_EXPORT_WORKER_POLICIES = new Map([
   ["portfolio_config.settings", [
-    ["portfolio_settings_worker_export_select", "SELECT", "{shipwithali_worker}", SETTINGS_SCOPE_PREDICATE],
+    ["portfolio_settings_worker_export_select", "SELECT", "{shipwithali_worker}", CONFIGURATION_EXPORT_SETTINGS_SCOPE_PREDICATE],
   ]],
   ["portfolio_config.contact_channels", [
-    ["portfolio_channels_worker_export_select", "SELECT", "{shipwithali_worker}", CHANNEL_SCOPE_PREDICATE],
+    ["portfolio_channels_worker_export_select", "SELECT", "{shipwithali_worker}", CONFIGURATION_EXPORT_CHANNEL_SCOPE_PREDICATE],
   ]],
 ]);
 
