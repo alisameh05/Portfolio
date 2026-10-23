@@ -221,7 +221,7 @@ export async function buildConfigurationOwnerExportPackage(input: {
   };
   const recordBytes = recordValue === undefined
     ? new Uint8Array()
-    : utf8.encode(`${JSON.stringify({ scope: "portfolio-configuration", value: recordValue })}\n`);
+    : utf8.encode(`${canonicalJson({ scope: "portfolio-configuration", value: recordValue })}\n`);
   const recordCount = recordValue === undefined ? 0 : 1;
   const dependencies = settings?.profile.mediaAssetId === undefined ? [] : [{
     sourceScope: "portfolio-configuration" as const,

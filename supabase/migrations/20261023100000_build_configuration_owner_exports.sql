@@ -68,6 +68,57 @@ create policy owner_exports_application_update_policy on portability.owner_expor
 grant usage on schema portfolio_config to shipwithali_worker;
 grant select on portfolio_config.settings, portfolio_config.contact_channels to shipwithali_worker;
 
+-- The assembly worker commits a produced event with the ready transition.
+-- Keep its insert capability limited to the matching ready Owner export.
+grant insert on operations.outbox_events to shipwithali_worker;
+
+create unique index owner_export_produced_outbox_once
+  on operations.outbox_events (aggregate_id, aggregate_version)
+  where event_type = 'portability.export_produced.v1';
+
+create policy owner_export_produced_outbox_worker_insert on operations.outbox_events
+  for insert to shipwithali_worker
+  with check (
+    event_type = 'portability.export_produced.v1'
+    and schema_version = 1
+    and occurred_at = available_at
+    and exists (
+      select 1
+        from portability.owner_exports owner_export
+       where owner_export.export_id = outbox_events.aggregate_id
+         and owner_export.status = 'ready'
+         and owner_export.aggregate_version = outbox_events.aggregate_version
+         and owner_export.manifest is not null
+         and outbox_events.correlation_id = owner_export.export_id::text
+         and outbox_events.payload = jsonb_build_object(
+           'exportId', owner_export.export_id::text,
+           'manifest', jsonb_build_object(
+             'schemaVersion', '1.0',
+             'exportId', owner_export.export_id::text,
+             'checksumSha256', owner_export.manifest->>'digest',
+             'recordCounts', (
+               select jsonb_object_agg(entry.value->>'scope', entry.value->'recordCount')
+                 from jsonb_array_elements(owner_export.manifest->'entries') as entry(value)
+             )
+           )
+         )
+         and exists (
+           select 1
+             from operations.jobs job
+            where job.job_id::text = outbox_events.causation_id
+              and job.job_type = 'portability.owner-export-assembly.v1'
+              and job.payload_version = 1
+              and job.payload->>'exportId' = owner_export.export_id::text
+              and job.payload->>'portfolioId' = owner_export.portfolio_id::text
+              and job.payload->>'ownerId' = owner_export.owner_id::text
+              and job.payload->'includedScopes' = to_jsonb(owner_export.included_scopes)
+              and job.status = 'leased'
+              and job.lease_token is not null
+              and job.lease_expires_at > clock_timestamp()
+         )
+    )
+  );
+
 create policy portfolio_settings_worker_export_select on portfolio_config.settings
   for select to shipwithali_worker
   using (

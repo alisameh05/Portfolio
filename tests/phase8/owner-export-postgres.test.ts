@@ -25,7 +25,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 
 import { createPostgresOwnerExportStore } from "../../src/modules/portability-operations/adapters/postgres-owner-export-store.js";
@@ -63,7 +63,7 @@ const actor: OwnerActor = { kind: "owner", ownerId, sessionId: "phase8-owner-exp
 const FOREIGN_OWNER_ID = createStableId("Owner");
 const FOREIGN_PORTFOLIO_ID = createStableId("Portfolio");
 const OPERATION_SCOPE = `portability.owner-export-request:${portfolioId}`;
-let now = "2026-10-23T09:00:00.000Z";
+let now = "2030-10-23T09:00:00.000Z";
 const advance = () => {
   const next = new Date(Date.parse(now) + 1_000);
   now = next.toISOString();
@@ -122,6 +122,14 @@ async function assemblyJobCount(): Promise<number> {
 
 async function receiptCount(): Promise<number> {
   return countRows("select count(*)::int as count from operations.idempotency_records where operation_scope = $1", [OPERATION_SCOPE]);
+}
+
+async function receiptCountForKey(idempotencyKey: string): Promise<number> {
+  const keyHash = createHash("sha256").update(idempotencyKey, "utf8").digest("hex");
+  return countRows(
+    "select count(*)::int as count from operations.idempotency_records where operation_scope = $1 and key_hash = $2",
+    [OPERATION_SCOPE, keyHash],
+  );
 }
 
 function manifestFor(
@@ -338,7 +346,7 @@ async function startIsolatedObjectStorage(): Promise<{
   return { server, baseUrl: `http://127.0.0.1:${address.port}`, objects, requests };
 }
 
-function configurationSettings(contactLabel: string): PortfolioSettings {
+function configurationSettings(contactLabel: string, mediaAssetId?: StableId<"MediaAsset">): PortfolioSettings {
   return {
     portfolioId,
     version: 1,
@@ -346,7 +354,7 @@ function configurationSettings(contactLabel: string): PortfolioSettings {
       displayName: "Snapshot Ada",
       headline: "Systems builder",
       bio: "The retained configuration.",
-      mediaAssetId: createStableId("MediaAsset"),
+      ...(mediaAssetId === undefined ? {} : { mediaAssetId }),
     },
     contactChannels: [{
       channel: "email",
@@ -397,6 +405,9 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     try {
       await admin?.query("delete from portability.owner_exports where owner_id = any($1::uuid[])", [[ownerId, FOREIGN_OWNER_ID]]);
       await admin?.query("delete from portfolio_config.contact_channels where portfolio_id in (select portfolio_id from portfolio_config.settings where owner_id = any($1::uuid[]))", [[ownerId, FOREIGN_OWNER_ID]]);
+      await admin?.query("delete from taxonomy.roots where portfolio_id in (select portfolio_id from portfolio_config.settings where owner_id = any($1::uuid[]))", [[ownerId, FOREIGN_OWNER_ID]]);
+      await admin?.query("update portfolio_config.settings set profile_media_asset_id = null where owner_id = any($1::uuid[])", [[ownerId, FOREIGN_OWNER_ID]]);
+      await admin?.query("delete from media.assets where owner_id = any($1::uuid[])", [[ownerId, FOREIGN_OWNER_ID]]);
       await admin?.query("delete from portfolio_config.settings where owner_id = any($1::uuid[])", [[ownerId, FOREIGN_OWNER_ID]]);
       await admin?.query("delete from operations.jobs where job_type = 'portability.owner-export-assembly.v1'");
       await admin?.query("delete from operations.idempotency_records where operation_scope = $1", [OPERATION_SCOPE]);
@@ -420,6 +431,19 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     const configured = await application!.transactions.run((context) =>
       settingsRepository.provisionSettings(scope, configurationSettings("Email v1"), context));
     expect(configured.ok).toBe(true);
+    const profileMediaAssetId = createStableId("MediaAsset");
+    await admin!.query(
+      "insert into media.assets (media_id, portfolio_id, owner_id, kind, original_file_name, declared_media_type, declared_byte_length, declared_sha256) values ($1::uuid, $2::uuid, $3::uuid, 'image', 'profile.png', 'image/png', 1, $4)",
+      [profileMediaAssetId, portfolioId, ownerId, "a".repeat(64)],
+    );
+    const mediaConfigured = await application!.transactions.run((context) =>
+      settingsRepository.updateProfile(
+        scope,
+        configurationSettings("Email v1", profileMediaAssetId).profile,
+        1,
+        context,
+      ));
+    expect(mediaConfigured).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
 
     let racedUpdate: unknown;
     const snapshots = storedConfigurationSnapshotReader({
@@ -430,7 +454,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
             label: "Email v2",
             destination: "mailto:ada@example.test",
             availableLocales: ["en", "ar"],
-          }], 1, context));
+          }], 2, context));
       },
     });
     const objectServer = await startIsolatedObjectStorage();
@@ -456,18 +480,18 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
 
       expect(await assembly.runOwnerExportAssembly({ workerId: "phase8-config-export-worker" }))
         .toMatchObject({ ok: true, value: { claimed: 1, completed: 1, retried: 0, failed: 0 } });
-      expect(racedUpdate).toMatchObject({ ok: true, value: { aggregateVersion: 2 } });
+      expect(racedUpdate).toMatchObject({ ok: true, value: { aggregateVersion: 3 } });
       const persisted = await workerStore.findOwnerExport({ exportId: request.value.exportId, ...scope });
       expect(persisted).toMatchObject({
         status: "ready",
         schemaVersion: OWNER_EXPORT_SCHEMA_VERSION,
         snapshot: {
-          configurationVersion: 1,
-          settings: { contactChannels: [{ label: "Email v1" }] },
+          configurationVersion: 2,
+          settings: { profile: { mediaAssetId: profileMediaAssetId }, contactChannels: [{ label: "Email v1" }] },
         },
         integrityManifest: {
           schemaVersion: "1.2",
-          extensions: { configurationSnapshot: { aggregateVersion: 1 } },
+          extensions: { configurationSnapshot: { aggregateVersion: 2 } },
         },
       });
 
@@ -478,7 +502,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       const validated = validateOwnerExportZip(firstBytes);
       expect(validated.manifest.schemaVersion).toBe("1.2");
       expect(validated.manifest.extensions).toMatchObject({
-        configurationSnapshot: { aggregateVersion: 1, availableLocales: ["ar", "en"] },
+        configurationSnapshot: { aggregateVersion: 2, availableLocales: ["ar", "en"] },
       });
       expect(validated.manifest.dependencies).toContainEqual(expect.objectContaining({
         sourceScope: "portfolio-configuration",
@@ -576,13 +600,14 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
 
       expect(await assembly.runOwnerExportAssembly({ workerId: "phase8-config-retry-worker" }))
         .toMatchObject({ ok: true, value: { claimed: 1, retried: 1, completed: 0 } });
-      expect(await baseStore.findOwnerExport({ exportId, ...scope })).toMatchObject({ status: "building" });
+      const afterFirstRetry = await baseStore.findOwnerExport({ exportId, ...scope });
+      expect(afterFirstRetry).toMatchObject({ status: "building" });
       await makeAssemblyJobDue(exportId);
 
       expect(await assembly.runOwnerExportAssembly({ workerId: "phase8-config-retry-worker" }))
         .toMatchObject({ ok: true, value: { claimed: 1, retried: 1, completed: 0 } });
       const checkpointed = await baseStore.findOwnerExport({ exportId, ...scope });
-      expect(checkpointed).toMatchObject({ status: "building", snapshot: { configurationVersion: 2 } });
+      expect(checkpointed).toMatchObject({ status: "building", snapshot: { configurationVersion: 3 } });
       expect(checkpointed?.candidateArtifactId).toBeDefined();
       expect(await ownerExportCount()).toBeGreaterThan(0);
       await makeAssemblyJobDue(exportId);
@@ -678,7 +703,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     expect(settledSecond).toEqual(settledFirst);
     expect(await ownerExportCount()).toBe(beforeExports + 1);
     expect(await assemblyJobCount()).toBe(beforeJobs + 1);
-    expect(await receiptCount()).toBe(1);
+    expect(await receiptCountForKey(raceKey)).toBe(1);
     const rows = await admin!.query(
       `select export_id::text as export_id from portability.owner_exports where owner_id = $1 and status = 'requested'`,
       [ownerId],
@@ -741,6 +766,60 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       "select count(*)::int as count from operations.outbox_events where event_type = 'portability.export_produced.v1' and aggregate_id = $1",
       [originalExportId!],
     )).toBe(1);
+    const producedEvent = await admin!.query(
+      "select event_type, schema_version, aggregate_id::text as aggregate_id, aggregate_version, " +
+      "payload, correlation_id, causation_id, occurred_at, available_at " +
+      "from operations.outbox_events " +
+      "where event_type = 'portability.export_produced.v1' and aggregate_id = $1",
+      [originalExportId!],
+    );
+    expect(producedEvent.rowCount).toBe(1);
+    const event = producedEvent.rows[0];
+    expect(event).toBeDefined();
+    const workerProbe = new Client({ connectionString: WORKER_URL! });
+    await workerProbe.connect();
+    const insertProducedEvent = (payload: string, eventId: string) => workerProbe.query(
+      "insert into operations.outbox_events (" +
+      "event_id, event_type, schema_version, aggregate_id, aggregate_version, " +
+      "payload, correlation_id, causation_id, occurred_at, available_at" +
+      ") values ($1::uuid, $2, $3, $4::uuid, $5, $6::jsonb, $7, $8, $9::timestamptz, $10::timestamptz)",
+      [
+        eventId,
+        event!["event_type"],
+        event!["schema_version"],
+        event!["aggregate_id"],
+        event!["aggregate_version"],
+        payload,
+        event!["correlation_id"],
+        event!["causation_id"],
+        event!["occurred_at"],
+        event!["available_at"],
+      ],
+    );
+    try {
+      const eventPayload = event!["payload"] as Record<string, unknown>;
+      await expect(insertProducedEvent(JSON.stringify(eventPayload), randomUUID()))
+        .rejects.toMatchObject({ code: "42501" });
+      const reopenedJob = await admin!.query(
+        "update operations.jobs " +
+        "set status = 'leased', completed_at = null, lease_owner = 'phase8-duplicate-probe', " +
+        "lease_token = $2, lease_expires_at = clock_timestamp() + interval '5 minutes' " +
+        "where job_id = $1::uuid",
+        [event!["causation_id"], randomUUID()],
+      );
+      expect(reopenedJob.rowCount).toBe(1);
+      const eventManifest = eventPayload["manifest"] as Record<string, unknown>;
+      const malformedPayload = {
+        ...eventPayload,
+        manifest: { ...eventManifest, checksumSha256: "f".repeat(64) },
+      };
+      await expect(insertProducedEvent(JSON.stringify(malformedPayload), randomUUID()))
+        .rejects.toMatchObject({ code: "42501" });
+      await expect(insertProducedEvent(JSON.stringify(eventPayload), randomUUID()))
+        .rejects.toMatchObject({ code: "23505" });
+    } finally {
+      await workerProbe.end();
+    }
     // ready → expired; the original request keeps replaying.
     advance();
     expect(await applyGuardedOwnerExportTransition(workerStore, transitionInput(

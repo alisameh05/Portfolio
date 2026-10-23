@@ -85,6 +85,29 @@ describe("configuration Owner export assembly", () => {
     expect(built.contentLength).toBe(bytes.byteLength);
   });
 
+  it("keeps configuration package bytes stable when persisted JSON key order changes", async () => {
+    const firstSettings: PortfolioSettings = {
+      portfolioId,
+      version: 42,
+      profile: { displayName: "Ada", headline: "Builder", bio: "A retained profile." },
+      contactChannels: [{ channel: "email", label: "Email", destination: "ada@example.test", availableLocales: ["en", "ar"] }],
+      globalCta: { label: "Work together", destination: "https://example.test/work", unavailableFallback: "Contact me" },
+    };
+    const restoredSettings: PortfolioSettings = {
+      portfolioId,
+      version: 42,
+      profile: { bio: "A retained profile.", headline: "Builder", displayName: "Ada" },
+      contactChannels: [{ availableLocales: ["en", "ar"], destination: "ada@example.test", label: "Email", channel: "email" }],
+      globalCta: { unavailableFallback: "Contact me", destination: "https://example.test/work", label: "Work together" },
+    };
+
+    const first = await buildConfigurationOwnerExportPackage({ exportId, snapshot: snapshot(firstSettings, 42) });
+    const restored = await buildConfigurationOwnerExportPackage({ exportId, snapshot: snapshot(restoredSettings, 42) });
+
+    expect(restored.contentLength).toBe(first.contentLength);
+    expect(restored.sha256).toBe(first.sha256);
+  });
+
   it("represents an explicitly empty selected configuration scope as zero-byte NDJSON", async () => {
     const built = await buildConfigurationOwnerExportPackage({ exportId, snapshot: snapshot(null, null) });
     const bytes = await collectBytes(built.content);

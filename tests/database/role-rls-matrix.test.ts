@@ -126,6 +126,11 @@ const CONFIGURATION_EXPORT_READ_POLICIES: ReadonlyArray<readonly [string, string
 ];
 
 const CONFIGURATION_EXPORT_MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+  ["shipwithali_worker", "insert produced event for unready export",
+    "insert into operations.outbox_events (event_id, event_type, schema_version, aggregate_id, aggregate_version, payload, correlation_id, causation_id, occurred_at, available_at) " +
+    "values ('018f4f7d-5000-7000-8000-000000000291', 'portability.export_produced.v1', 1, '018f4f7d-5000-7000-8000-000000000292', 2, " +
+    "jsonb_build_object('exportId', '018f4f7d-5000-7000-8000-000000000292', 'manifest', jsonb_build_object('schemaVersion', '1.0', 'exportId', '018f4f7d-5000-7000-8000-000000000292', 'checksumSha256', repeat('a', 64), 'recordCounts', '{}'::jsonb)), " +
+    "'018f4f7d-5000-7000-8000-000000000292', '018f4f7d-5000-7000-8000-000000000293', transaction_timestamp(), transaction_timestamp())", false],
   ["anon", "select configuration settings", "select count(*) from portfolio_config.settings", false],
   ["authenticated", "select configuration settings", "select count(*) from portfolio_config.settings", false],
   ["shipwithali_worker", "select configuration settings", `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; select count(*) from portfolio_config.settings`, true],
@@ -434,8 +439,9 @@ async function attemptAs(role: string | null, statement: string): Promise<RoleAt
     let allowed = true;
     let rows: Array<Record<string, unknown>> = [];
     try {
-      const result = await probe.query(statement);
-      rows = result.rows as Array<Record<string, unknown>>;
+      const results = await probe.query(statement);
+      const result = Array.isArray(results) ? results.at(-1) : results;
+      rows = (result?.rows ?? []) as Array<Record<string, unknown>>;
     } catch {
       allowed = false;
     }
@@ -529,6 +535,7 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
       if (configurationExportSchema) {
         await admin.query("delete from portability.owner_exports where export_id = $1", [CONFIGURATION_EXPORT_FIXTURE_ID]);
         await admin.query("delete from portfolio_config.contact_channels where portfolio_id = $1", [CONFIGURATION_EXPORT_PORTFOLIO]);
+        await admin.query("delete from taxonomy.roots where portfolio_id = $1", [CONFIGURATION_EXPORT_PORTFOLIO]);
         await admin.query("delete from portfolio_config.settings where portfolio_id = $1", [CONFIGURATION_EXPORT_PORTFOLIO]);
         await admin.query(
           `insert into portfolio_config.settings (
@@ -566,6 +573,7 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
       if (configurationExportSchema) {
         await admin.query("delete from portability.owner_exports where export_id = $1", [CONFIGURATION_EXPORT_FIXTURE_ID]);
         await admin.query("delete from portfolio_config.contact_channels where portfolio_id = $1", [CONFIGURATION_EXPORT_PORTFOLIO]);
+        await admin.query("delete from taxonomy.roots where portfolio_id = $1", [CONFIGURATION_EXPORT_PORTFOLIO]);
         await admin.query("delete from portfolio_config.settings where portfolio_id = $1", [CONFIGURATION_EXPORT_PORTFOLIO]);
       }
       await admin.query("set role shipwithali_migration");
@@ -728,6 +736,7 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
         ["outbox_events", "outbox_application_insert_policy", "INSERT", "{shipwithali_application}"],
         ["outbox_events", "outbox_worker_select_policy", "SELECT", "{shipwithali_worker}"],
         ["outbox_events", "outbox_worker_update_policy", "UPDATE", "{shipwithali_worker}"],
+        ["outbox_events", "owner_export_produced_outbox_worker_insert", "INSERT", "{shipwithali_worker}"],
       ]);
     } finally {
       await admin.end();

@@ -9,6 +9,7 @@ import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 
 const root = process.cwd();
 const runId = randomUUID();
+const startedAt = new Date().toISOString();
 const initialSource = workingTreeSourceSha256();
 const scope = "All repository migrations on disposable native PostgreSQL; a restricted application runtime role and an independent worker runtime role; configuration-only Owner export request-to-ready assembly against the Configuration repository and isolated private object Storage; repeatable-read capture with a concurrent Configuration change; durable snapshot and immutable artifact checkpoints; capture, upload, verification, and post-ready-commit interruption recovery; exact replayed download bytes; empty-scope package validation; unsupported scopes failing safely; owner export request/inspection acceptance, canonical scope selection hashing, exact concurrent reservation replay, original-receipt replay across all five truthful states after settlement, meaning-change conflicts, atomic reservation rollback without receipt/export/job residue, uniform protected-existence denial, guarded lifecycle transitions, explicit safe error mapping, private/no-store download headers, and role/RLS matrix enforcement.";
 const discoveredBin = process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" :
@@ -78,7 +79,7 @@ try {
   stage = "acceptance";
   const acceptanceFiles = ["tests/phase8/owner-export-requests.test.ts", "tests/phase8/owner-export-adapter.test.ts",
     "tests/phase8/owner-export-postgres.test.ts", "tests/phase8/owner-export-assembly.test.ts"];
-  const expectedTests = 47;
+  const expectedTests = 49;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -99,7 +100,7 @@ try {
   }
   if (workingTreeSourceSha256() !== testedSource) throw new Error("PHASE8_OWNER_EXPORT_SOURCE_CHANGED_DURING_ACCEPTANCE");
   result = {
-    ticket: 240, runId, sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(), sourceTreeSha256: testedSource, postgresVersion,
+    ticket: 240, runId, startedAt, sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(), sourceTreeSha256: testedSource, postgresVersion,
     migrations: migrations.map(name => ({ name, sha256: createHash("sha256").update(readFileSync(join("supabase/migrations", name))).digest("hex") })),
     tools: { node: process.versions.node, npm: (process.env.npm_config_user_agent ?? "").match(/npm\/([^\s]+)/)?.[1] ?? "unavailable" },
     required: { success: tests.success, passed: tests.numPassedTests, failed: tests.numFailedTests, skipped: tests.numPendingTests,
@@ -129,6 +130,7 @@ try {
   catch { console.error("PHASE8_OWNER_EXPORT_CLEANUP_FAILED"); process.exitCode = 1; }
   if (result && cleanup) {
     mkdirSync("evidence", { recursive: true });
+    result.completedAt = new Date().toISOString();
     writeFileSync(evidencePath, `${JSON.stringify({ ...result, cleanup }, null, 2)}\n`);
     console.log(JSON.stringify({ evidence: evidencePath, cleanup }));
   }
