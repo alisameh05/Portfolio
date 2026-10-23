@@ -1,6 +1,8 @@
 /.agents
 node_modules/
 .worktrees/
+.workspaces/
+.npm-cache/
 artifacts/
 coverage/
 .next/

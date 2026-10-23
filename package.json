@@ -186,6 +186,8 @@
     "phase7:focus:jobs": "node scripts/phase7-jobs.mjs",
     "prephase8:focus:retry-recovery": "npm run validation:ready",
     "phase8:focus:retry-recovery": "node scripts/phase7-jobs.mjs --ticket-237",
+    "prephase8:focus:exports": "npm run validation:ready",
+    "phase8:focus:exports": "node scripts/phase8-owner-export.mjs",
     "prephase7:focus:integrated": "npm run validation:ready",
     "phase7:focus:integrated": "node scripts/phase7-integration-208.mjs",
     "prephase7:focus:feedback-retention": "npm run validation:ready",

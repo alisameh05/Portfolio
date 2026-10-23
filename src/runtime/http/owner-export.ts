@@ -64,6 +64,7 @@ import type {
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
+  OWNER_PRIVATE_RESPONSE_HEADERS,
   type OwnerRequestSecurity,
 } from "./owner-security.js";
 import {
@@ -198,7 +199,7 @@ export async function handleRequestOwnerExport(
       );
     }
     logger?.info("request.completed", { traceId, status: 202 });
-    return Response.json(parsed.data, { status: 202 });
+    return Response.json(parsed.data, { status: 202, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
@@ -258,7 +259,7 @@ export async function handleGetOwnerExport(
       );
     }
     logger?.info("request.completed", { traceId, status: 200 });
-    return Response.json(parsed.data, { status: 200 });
+    return Response.json(parsed.data, { status: 200, headers: OWNER_PRIVATE_RESPONSE_HEADERS });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
@@ -385,6 +386,7 @@ export async function handleDownloadOwnerExport(
         "content-type": OWNER_EXPORT_MEDIA_TYPE,
         "content-disposition": `attachment; filename="${result.value.filename}"`,
         "x-shipwithali-export-schema-version": result.value.schemaVersion,
+        ...OWNER_PRIVATE_RESPONSE_HEADERS,
       },
     });
   } catch (error) {

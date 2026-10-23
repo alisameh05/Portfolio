@@ -153,6 +153,7 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
   Object.freeze({ migration: "20261015203000_retain_feedback_privacy.sql", ticket: 205, capability: "measurement.retention" }),
   Object.freeze({ migration: "20261017142000_revoke_public_aggregate_guard_execution.sql", ticket: 203, capability: "measurement.aggregate_privacy" }),
   Object.freeze({ migration: "20261018172500_bound_job_retries_and_incidents.sql", ticket: 237, capability: "operations.bounded_retries" }),
+  Object.freeze({ migration: "20261023090000_reserve_owner_export_requests.sql", ticket: 238, capability: "portability.owner_export_requests" }),
 ]);
 
 // Historical checkpoints and their paired database checks. A suite whose

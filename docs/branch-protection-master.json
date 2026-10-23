@@ -8,8 +8,7 @@
     { "context": "Phase 6 Media and CV real-PostgreSQL-Storage", "app_id": 15368 },
     { "context": "Cloud bootstrap from Node 20", "app_id": 15368 },
     { "context": "validation-evolution-regressions", "app_id": 15368 },
-    { "context": "phase3-7-qualification", "app_id": 15368 },
-    { "context": "Codex review", "app_id": 15368 }
+    { "context": "phase3-7-qualification", "app_id": 15368 }
   ],
   "minHumanApprovals": 1,
   "dismissStaleReviews": true,
@@ -20,5 +19,5 @@
   "requiredConversationResolution": true,
   "bypassActors": [],
   "linearHistoryRequired": false,
-  "source": "Applied master protection readback 2026-10-22; see run artifact master-protection-live.json"
+  "source": "Applied master protection readback 2026-10-22; Codex review check removed from the required set 2026-10-23 (workflow retired); see run artifact master-protection-live.json"
 }

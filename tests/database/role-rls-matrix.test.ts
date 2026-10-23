@@ -52,6 +52,75 @@ const RETRY_RECOVERY_POLICIES: ReadonlyArray<readonly [string, string, string, s
   ["job_redrive_audit", "operations_backup_policy_job_redrive_audit", "SELECT", "{shipwithali_backup}"],
 ];
 
+const PORTABILITY_EXPORT_UUID = "018f4f7d-5000-7000-8000-000000000170";
+
+const PORTABILITY_EXPORT_OWNER_SETTINGS = `set local shipwithali.owner_id = '${PORTABILITY_EXPORT_UUID}';`;
+const PORTABILITY_EXPORT_OTHER_SETTINGS = `set local shipwithali.owner_id = '018f4f7d-5000-7000-8000-000000000271';`;
+const PORTABILITY_EXPORT_INSERT = `${PORTABILITY_EXPORT_OWNER_SETTINGS} insert into portability.owner_exports (
+  export_id, portfolio_id, owner_id, included_scopes, status, schema_version, requested_at
+) values (
+  '${PORTABILITY_EXPORT_UUID}', '${PORTABILITY_EXPORT_UUID}', '${PORTABILITY_EXPORT_UUID}',
+  array['portfolio-content'], 'requested', '1.0', transaction_timestamp()
+)`;
+const PORTABILITY_EXPORT_OTHER_OWNER_INSERT = `${PORTABILITY_EXPORT_OWNER_SETTINGS} insert into portability.owner_exports (
+  export_id, portfolio_id, owner_id, included_scopes, status, schema_version, requested_at
+) values (
+  '${PORTABILITY_EXPORT_UUID}', '${PORTABILITY_EXPORT_UUID}', '018f4f7d-5000-7000-8000-000000000271',
+  array['portfolio-content'], 'requested', '1.0', transaction_timestamp()
+)`;
+const PORTABILITY_EXPORT_UNSCOPED_INSERT = `insert into portability.owner_exports (
+  export_id, portfolio_id, owner_id, included_scopes, status, schema_version, requested_at
+) values (
+  '${PORTABILITY_EXPORT_UUID}', '${PORTABILITY_EXPORT_UUID}', '${PORTABILITY_EXPORT_UUID}',
+  array['portfolio-content'], 'requested', '1.0', transaction_timestamp()
+)`;
+
+/**
+ * Phase 8 #238 Owner-export matrix. Identity binding is the point: the
+ * application may write only rows that carry its resolved Owner scope, and no
+ * writer may remove rows through a delete path.
+ */
+const PORTABILITY_EXPORT_MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+  ["anon", "select owner exports", "select count(*) from portability.owner_exports", false],
+  ["authenticated", "select owner exports", "select count(*) from portability.owner_exports", false],
+  ["shipwithali_application", "select owner exports", "select count(*) from portability.owner_exports", true],
+  ["shipwithali_application", "insert owner export in Owner scope", PORTABILITY_EXPORT_INSERT, true],
+  ["shipwithali_application", "insert owner export for another Owner", PORTABILITY_EXPORT_OTHER_OWNER_INSERT, false],
+  ["shipwithali_application", "insert owner export without Owner scope", PORTABILITY_EXPORT_UNSCOPED_INSERT, false],
+  [
+    "shipwithali_application",
+    "update owner exports",
+    "update portability.owner_exports set status = status where false",
+    true,
+  ],
+  ["shipwithali_application", "delete owner exports", "delete from portability.owner_exports where false", false],
+  ["shipwithali_worker", "select owner exports", "select count(*) from portability.owner_exports", true],
+  [
+    "shipwithali_worker",
+    "update owner exports",
+    "update portability.owner_exports set status = status where false",
+    true,
+  ],
+  ["shipwithali_worker", "insert owner exports", PORTABILITY_EXPORT_UNSCOPED_INSERT, false],
+  ["shipwithali_worker", "delete owner exports", "delete from portability.owner_exports where false", false],
+  ["shipwithali_backup", "select owner exports", "select count(*) from portability.owner_exports", true],
+  ["shipwithali_backup", "insert owner exports", PORTABILITY_EXPORT_UNSCOPED_INSERT, false],
+];
+
+const PORTABILITY_EXPORT_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
+  ["owner_exports", "operations_backup_policy_owner_exports", "SELECT", "{shipwithali_backup}"],
+  ["owner_exports", "owner_exports_application_insert_policy", "INSERT", "{shipwithali_application}"],
+  ["owner_exports", "owner_exports_application_select_policy", "SELECT", "{shipwithali_application}"],
+  ["owner_exports", "owner_exports_application_update_policy", "UPDATE", "{shipwithali_application}"],
+  ["owner_exports", "owner_exports_worker_select_policy", "SELECT", "{shipwithali_worker}"],
+  ["owner_exports", "owner_exports_worker_update_policy", "UPDATE", "{shipwithali_worker}"],
+];
+
+/** The scoped assembly-job policy reviewed for #238 in operations.jobs. */
+const OWNER_EXPORT_JOB_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
+  ["jobs", "owner_export_jobs_application_insert", "INSERT", "{shipwithali_application}"],
+];
+
 /**
  * Expected capability state is read from the declared
  * `PHASE_DATABASE_CAPABILITIES` list, never learned from the database being
@@ -61,16 +130,21 @@ const RETRY_RECOVERY_POLICIES: ReadonlyArray<readonly [string, string, string, s
  * treated as corruption and fails the matrix in every context.
  */
 let retryRecoverySchema = false;
+let portabilityExportSchema = false;
 if (DATABASE_URL !== undefined) {
-  const declared = (process.env["PHASE_DATABASE_CAPABILITIES"] ?? declaredCapabilities().join(","))
+   const declared = (process.env["PHASE_DATABASE_CAPABILITIES"] ?? declaredCapabilities().join(","))
     .split(",").map((value) => value.trim()).filter(Boolean);
+  // The default declared list carries every registry capability; a restricted
+  // runner must name the bounded-retry capability so the era cross-guards
+  // below mean what they say. Era mismatches for the portability capability
+  // are caught by its dedicated cross-guard, so typos fail either way.
   if (!declared.includes("operations.bounded_retries") && declared.length > 0) {
     throw new Error("ROLE_MATRIX_DECLARED_CAPABILITY_UNKNOWN:" + declared.join(","));
   }
   const era = adminClient();
   await era.connect();
   try {
-    const result = await era.query(
+    const bounded = await era.query(
       `select to_regclass('operations.incidents') is not null as has_incidents,
               to_regclass('operations.job_redrive_audit') is not null as has_redrive,
               exists (
@@ -80,16 +154,27 @@ if (DATABASE_URL !== undefined) {
                    and column_name = 'dead_at'
                ) as has_dead_at`,
     );
-    const row: Record<string, unknown> = result.rows[0] ?? {};
-    if (row["has_incidents"] !== row["has_redrive"] || (row["has_incidents"] === false && row["has_dead_at"] === true)) {
+    const boundedRow: Record<string, unknown> = bounded.rows[0] ?? {};
+    if (boundedRow["has_incidents"] !== boundedRow["has_redrive"] || (boundedRow["has_incidents"] === false && boundedRow["has_dead_at"] === true)) {
       throw new Error("ROLE_MATRIX_SCHEMA_RECOVERY_INCOMPLETE");
     }
-    retryRecoverySchema = row["has_incidents"] === true && row["has_dead_at"] === true;
+    retryRecoverySchema = boundedRow["has_incidents"] === true && boundedRow["has_dead_at"] === true;
     if (declared.includes("operations.bounded_retries") !== retryRecoverySchema) {
       throw new Error(
         declared.includes("operations.bounded_retries")
           ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:operations.bounded_retries"
           : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:operations.bounded_retries",
+      );
+    }
+    const portability = await era.query(
+      `select to_regclass('portability.owner_exports') is not null as has_owner_exports`,
+    );
+    portabilityExportSchema = portability.rows[0]?.["has_owner_exports"] === true;
+    if (declared.includes("portability.owner_export_requests") !== portabilityExportSchema) {
+      throw new Error(
+        declared.includes("portability.owner_export_requests")
+          ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:portability.owner_export_requests"
+          : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:portability.owner_export_requests",
       );
     }
   } finally {
@@ -260,6 +345,7 @@ const BASE_MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
 const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
   ...BASE_MATRIX,
   ...(retryRecoverySchema ? RETRY_RECOVERY_MATRIX : []),
+  ...(portabilityExportSchema ? PORTABILITY_EXPORT_MATRIX : []),
 ];
 
 interface RoleAttempt {
@@ -554,6 +640,7 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
            from pg_policies
           where schemaname = 'operations'
             and policyname <> 'measurement_event_jobs_application_insert'
+            and policyname <> 'owner_export_jobs_application_insert'
           order by tablename, policyname`,
       );
       expect(
@@ -582,6 +669,54 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
       await admin.end();
     }
   });
+
+  if (portabilityExportSchema) {
+    it("publishes the declared portability owner-export policies (#238)", async () => {
+      const admin = adminClient();
+      await admin.connect();
+      try {
+        const portability = await admin.query(
+          `select tablename, policyname, roles, cmd
+             from pg_policies
+            where schemaname = 'portability' and tablename = 'owner_exports'
+            order by policyname`,
+        );
+        expect(
+          portability.rows.map((row) => [
+            row["tablename"],
+            row["policyname"],
+            row["cmd"],
+            String(row["roles"]),
+          ]),
+        ).toEqual([...PORTABILITY_EXPORT_POLICIES].sort((left, right) => left[1].localeCompare(right[1])));
+        const jobs = await admin.query(
+          `select tablename, policyname, roles, cmd
+             from pg_policies
+            where schemaname = 'operations' and tablename = 'jobs'
+              and policyname in ('owner_export_jobs_application_insert')
+            order by policyname`,
+        );
+        expect(
+          jobs.rows.map((row) => [
+            row["tablename"],
+            row["policyname"],
+            row["cmd"],
+            String(row["roles"]),
+          ]),
+        ).toEqual(OWNER_EXPORT_JOB_POLICIES);
+        const rel = await admin.query(
+          `select c.relrowsecurity, c.relforcerowsecurity
+             from pg_class c join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'portability' and c.relname = 'owner_exports'`,
+        );
+        expect(rel.rows).toHaveLength(1);
+        expect(rel.rows[0]?.["relrowsecurity"]).toBe(true);
+        expect(rel.rows[0]?.["relforcerowsecurity"]).toBe(true);
+      } finally {
+        await admin.end();
+      }
+    });
+  }
 
   it("ships no privilege-elevated functions in Phase 3 operations", async () => {
     const admin = adminClient();
