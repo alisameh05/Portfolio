@@ -1,0 +1,419 @@
+{
+  "ticket": 238,
+  "runId": "893ac45b-8c07-41c9-b7d2-12f0ab3e8fc7",
+  "sourceRevision": "0aacdc848d481d426312a47907e3ed49f881b35c",
+  "sourceTreeSha256": "172d2212143f044e1cbf52aa8c01fa3baa538a42732232c75a2c3f5007118f66",
+  "postgresVersion": "postgres (PostgreSQL) 18.3",
+  "migrations": [
+    {
+      "name": "20260922170000_prepare_migration_capability.sql",
+      "sha256": "0a6b85ed5198b8a58b51a4ed8d702d200968fd2002065d6f48c972817fe800cb"
+    },
+    {
+      "name": "20260922171906_establish_database_security_baseline.sql",
+      "sha256": "f57b86d6718d64f4a1901823a79e3fb01d862e5b57ed627ce47cd94b8ef888de"
+    },
+    {
+      "name": "20260922203000_create_operations_primitives.sql",
+      "sha256": "7dbbfec208f85d0619f623b2d0bf3634212933fa91aca9d3918d1f0c30d197a8"
+    },
+    {
+      "name": "20261001220000_create_identity_access_owner_links.sql",
+      "sha256": "e7e0ef112352594c0ff60bd696cb5f1b8ad3f55ef56401670254b022b85507d9"
+    },
+    {
+      "name": "20261002120000_create_portfolio_configuration_settings.sql",
+      "sha256": "8b85ae5db68761c79a141d0c3f339c9ca3a69b376a074cecb4d4f7904539ea06"
+    },
+    {
+      "name": "20261002130000_allow_versioned_portfolio_profile_updates.sql",
+      "sha256": "1a7a6393cefb10bfe2c05dc2721e35f4f9ab7528f4cfa88f716b3942d1c1f14b"
+    },
+    {
+      "name": "20261002140000_allow_owner_contact_channel_replacement.sql",
+      "sha256": "595ccc57be68861c1fb57f5847c6ad9bb158c7b57c753f40f1de1d12693f8d15"
+    },
+    {
+      "name": "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+      "sha256": "8f5e72eff3e5272cd492ca8d4ea254d54f5e8fda6ffaf5d4621cf1b9907a2286"
+    },
+    {
+      "name": "20261005001318_create_content_authoring.sql",
+      "sha256": "b56a8a0ea567bdd3b16c7843f39db68cba9e575d06a46daa86dce1837f156fd6"
+    },
+    {
+      "name": "20261007090000_add_immutable_content_revision_reviews.sql",
+      "sha256": "1489209223628079f6bcf67305b4eeeeba0a0d82708613c218a6d161d02dc608"
+    },
+    {
+      "name": "20261007170000_add_project_publication_routes.sql",
+      "sha256": "7fec3917e79a5b88295bf43a0a104aaa598c1b15cbb4502d0ae54c5aec6cecb2"
+    },
+    {
+      "name": "20261007190000_add_achievement_publication_timeline.sql",
+      "sha256": "83796eb2527a61a65cb4d5aefa1b80c3b26c88a064321c9998614720871a2d2b"
+    },
+    {
+      "name": "20261007200000_publish_localized_testimonials.sql",
+      "sha256": "b5424eed7afb2da9cdb8041bffca710a97ad58826ad1104139478efa300d8e8d"
+    },
+    {
+      "name": "20261008090000_preserve_project_route_history.sql",
+      "sha256": "7809d7da7e8dc15693215ff48d10ee68448b66af3877ab1fe8233a5597bc4cd4"
+    },
+    {
+      "name": "20261008120000_add_content_lifecycle_history.sql",
+      "sha256": "710f1a5ea135adc7e691c684ebac274ea26fc005fbe7adbe9c0fad3f51dacc91"
+    },
+    {
+      "name": "20261008130000_add_project_status_and_featured.sql",
+      "sha256": "e99a4446ae090ef5f1608e50af8d53cf0df6e6e68bacad5655233c15d31d252e"
+    },
+    {
+      "name": "20261008180000_add_project_relationships.sql",
+      "sha256": "9d3e74830807aec569911742dd714852c1c0e35950a18733986cfbacb6c41deb"
+    },
+    {
+      "name": "20261008210000_provision_project_taxonomies.sql",
+      "sha256": "362936fd680ce6e6bbba06b18d9fa9bf7d18c5631845d256225ffe609315c6bb"
+    },
+    {
+      "name": "20261009090000_record_taxonomy_evolution_actor_reason.sql",
+      "sha256": "db907e8f18da525db9a4dc608aa4a29d0f5b6354e764524fb0b6f3efb0dd29c2"
+    },
+    {
+      "name": "20261009100000_index_project_discovery_reads.sql",
+      "sha256": "ad685fa5f79f1f7c3b9ba001c3c5ea73272845ce6881eece0787a25fcd056d48"
+    },
+    {
+      "name": "20261010100000_create_private_media_upload_intents.sql",
+      "sha256": "dc9148b681510d17d79b6c9d81bd7f2f1a0538b6fc3033cc973ce5a82cc7987d"
+    },
+    {
+      "name": "20261010200000_record_trusted_pdf_processing.sql",
+      "sha256": "5780f2f4fcd167a9d3c806887cbcc71bf14694e606f0cda6338ceecfc2932dd6"
+    },
+    {
+      "name": "20261011210000_harden_trusted_pdf_processing.sql",
+      "sha256": "13664c93dbbdf3001c793d661739a3989c76fc7e8f00b7e5cdb781734171332a"
+    },
+    {
+      "name": "20261011220000_record_bounded_video_variants.sql",
+      "sha256": "81cc24aef5bb3393b9e405c269e806121598010675affb6239dbc1b901031cbe"
+    },
+    {
+      "name": "20261011230000_process_bounded_media_image_variants.sql",
+      "sha256": "de011d9c57ce64acdec8e4330e7e958fbd390541dd608bcba29c0e81c3059eca"
+    },
+    {
+      "name": "20261012000000_restore_video_variant_policy_after_images.sql",
+      "sha256": "172a5fed40a44dcc83833d12d8e0412f095e80fcb7af2b760b4d75f7b0921d69"
+    },
+    {
+      "name": "20261012010000_accept_media_with_editorial_accessibility.sql",
+      "sha256": "879e0bd7110e9e2867fc9be61e4f1d6758f739566075af92d76a8d57621494f3"
+    },
+    {
+      "name": "20261012020000_index_current_visible_media_references.sql",
+      "sha256": "9b166b1a14d6f2d05a32c5023657ab89ed90d3aae153fb2c1a28ca9af6b4e736"
+    },
+    {
+      "name": "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "sha256": "777d87a02304e3707d6420a80d219e6e7e5be101dc4de7cd03d854ef8c34210c"
+    },
+    {
+      "name": "20261012040000_accept_registered_cv_versions.sql",
+      "sha256": "bae3eb3d78f01690eba48d8027c63402243a6d0e6bdde425f71b946d0e413da9"
+    },
+    {
+      "name": "20261012050000_activate_current_cv_atomically.sql",
+      "sha256": "1b6a5576aecb056850924b93119727eadf64af01d1000f99ec81db824b5abc31"
+    },
+    {
+      "name": "20261012060000_reject_media_with_usage_guard.sql",
+      "sha256": "c8e577aaf24b0c090f0bef8d876f1be6538a48bd7bcaa3299de4c8befa8cacbf"
+    },
+    {
+      "name": "20261013100000_configure_public_profile_media.sql",
+      "sha256": "36f524652c3d7c66fb5924ce2ad281406a58eb1d4bb767287e5d8e1b3cdfce8f"
+    },
+    {
+      "name": "20261014194925_measurement_consent.sql",
+      "sha256": "9b122a259e91cee3875aa22133ff1b529c0b07203f01464378d0e3116ba01630"
+    },
+    {
+      "name": "20261014210000_persist_project_reactions.sql",
+      "sha256": "0217150ac17a8f1a156821dc22755b11ea743c8510e230f6d0fad1060d59b941"
+    },
+    {
+      "name": "20261014211320_persist_project_ratings.sql",
+      "sha256": "98b27aa626fa29c74b0e844f22ba83c87272338fffafccbc113963655d4f4133"
+    },
+    {
+      "name": "20261015003000_persist_private_feedback.sql",
+      "sha256": "991aeb268280b9e00c089d527598eeb20114f005e35057fb4521d2d9deaaa19c"
+    },
+    {
+      "name": "20261015010000_retain_feedback_moderation.sql",
+      "sha256": "5dcb17fa99531d21cdbd0ae60af6fd2b7178a6b161b8f66daa56ed70c5136938"
+    },
+    {
+      "name": "20261015093040_query_current_interaction_summaries.sql",
+      "sha256": "8fbef1951cc33e3a6ae286dc9f1d53bee87b45eb0dc9e45e4c080eb7a56cea88"
+    },
+    {
+      "name": "20261015120000_persist_consented_public_events.sql",
+      "sha256": "49a176f484fda2e0f067925501c609222308a1a776eecea06f13abbe591e73f6"
+    },
+    {
+      "name": "20261015130000_enable_public_interaction_event_facts.sql",
+      "sha256": "360c8a80bf10242bfa45c70da4dbcba9e4afd00207bd98883411f40ec694049b"
+    },
+    {
+      "name": "20261015150000_enable_configuration_interaction_event_facts.sql",
+      "sha256": "ce3d4700c6cf9154f8aa5a462bca3032d19ead3faf1b73ef64dca4ff954a03a9"
+    },
+    {
+      "name": "20261015160000_persist_immutable_analytics_goal_versions.sql",
+      "sha256": "db9ef116e1a8a1a5898b1c2c369c85f043fda60d115f8baee03bbd07ff83d085"
+    },
+    {
+      "name": "20261015170000_activate_analytics_goal_versions.sql",
+      "sha256": "7f6a8d3444468125fd9bbecf8d3f95bd1ea6c953f8a1626b140a707a82c54f66"
+    },
+    {
+      "name": "20261015180000_match_analytics_goal_conversions.sql",
+      "sha256": "682a4c7b6f3fd7e19c10fef259cb0fc50df93eec9c9bfd2c119e436ebea2a03a"
+    },
+    {
+      "name": "20261015190000_persist_reproducible_daily_aggregates.sql",
+      "sha256": "f0bf8f4237f6b16413c521bccb46ef790f607dd791c4e86f319b5016455bfefc"
+    },
+    {
+      "name": "20261015200000_enable_fixed_aggregate_dimensions.sql",
+      "sha256": "bf2e22a2e285faedba9b13962303da71b2c18f59cb4131720a8917722c02bd79"
+    },
+    {
+      "name": "20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
+      "sha256": "04e33297a492b55c2dc8b2392fc9f0291fa3e10f9ade40e7c9ef6fc97b297221"
+    },
+    {
+      "name": "20261015203000_retain_feedback_privacy.sql",
+      "sha256": "7f1910911ff0069922e2188673531d492b9d98e9cf6c3f2e971f379152c433bb"
+    },
+    {
+      "name": "20261017142000_revoke_public_aggregate_guard_execution.sql",
+      "sha256": "7b385899021083dca28b10d34d175b14c6daa443e98a846953f3ff16212d1a91"
+    },
+    {
+      "name": "20261018172500_bound_job_retries_and_incidents.sql",
+      "sha256": "c63d813d82f4fab902fcfbfde78c667b95618b450e438f58d88aad103fe78b1e"
+    },
+    {
+      "name": "20261023090000_reserve_owner_export_requests.sql",
+      "sha256": "43d9996f1d8c59c663c5c81842631248001ed8a6b551652e5a43acd22d6badd4"
+    }
+  ],
+  "tools": {
+    "node": "24.21.0",
+    "npm": "11.19.0"
+  },
+  "required": {
+    "success": true,
+    "passed": 40,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "failedSuites": 0
+  },
+  "roleMatrix": {
+    "success": true,
+    "passed": 83,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "assertions": [
+    {
+      "title": "rejects requests without a session cookie as 401 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "rejects denied sessions and phases via declared rejections cheaply and early",
+      "status": "passed"
+    },
+    {
+      "title": "rejects forwarded host, origin mismatch, and CSRF proof mismatch as 403 before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "returns 429 with Retry-After and no dispatch when the rate limit denies",
+      "status": "passed"
+    },
+    {
+      "title": "never reveals protected existence for cross-owner and cross-portfolio reads",
+      "status": "passed"
+    },
+    {
+      "title": "sends every success response with the private no-store headers",
+      "status": "passed"
+    },
+    {
+      "title": "rejects malformed ids, missing keys, and unknown body properties before dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "serializes declared rejections as strict Problem Details with Retry-After",
+      "status": "passed"
+    },
+    {
+      "title": "AC03: commits exact concurrent requests once and replays the original receipt to both",
+      "status": "passed"
+    },
+    {
+      "title": "AC04: retries replay the original receipt across truthful settlements; meaning changes conflict",
+      "status": "passed"
+    },
+    {
+      "title": "AC05: a forced reservation failure leaves no receipt, export, or job and frees the key",
+      "status": "passed"
+    },
+    {
+      "title": "AC07: guarded transitions keep the metadata truthful and stale attempts never win",
+      "status": "passed"
+    },
+    {
+      "title": "AC06: protected existence is uniform for cross-owner and cross-portfolio reads",
+      "status": "passed"
+    },
+    {
+      "title": "AC08: jobs follow the assembly payload contract and carry resolved Owner identity",
+      "status": "passed"
+    },
+    {
+      "title": "accepts every nonempty subset in canonical declared order",
+      "status": "passed"
+    },
+    {
+      "title": "normalizes every permutation of one selection to identical canonical meaning",
+      "status": "passed"
+    },
+    {
+      "title": "hashes the canonical order, so permutations reuse the same reservation meaning",
+      "status": "passed"
+    },
+    {
+      "title": "rejects the empty selection without durable effects",
+      "status": "passed"
+    },
+    {
+      "title": "rejects non-array selection before any reservation",
+      "status": "passed"
+    },
+    {
+      "title": "rejects duplicate scope before any reservation",
+      "status": "passed"
+    },
+    {
+      "title": "rejects unknown scope before any reservation",
+      "status": "passed"
+    },
+    {
+      "title": "rejects invalid member type before any reservation",
+      "status": "passed"
+    },
+    {
+      "title": "rejects malformed portfolio identity before any reservation",
+      "status": "passed"
+    },
+    {
+      "title": "rejects malformed owner identity before any reservation",
+      "status": "passed"
+    },
+    {
+      "title": "rejects empty idempotency key before any reservation",
+      "status": "passed"
+    },
+    {
+      "title": "rejects oversized idempotency key before any reservation",
+      "status": "passed"
+    },
+    {
+      "title": "rejects non-owner actors as forbidden without durable effects",
+      "status": "passed"
+    },
+    {
+      "title": "reserves exactly one export row and one job for one accepted request",
+      "status": "passed"
+    },
+    {
+      "title": "replays the original receipt exactly on exact retry and conflicts on changed meaning",
+      "status": "passed"
+    },
+    {
+      "title": "maps persistence faults to the fail-closed rejection",
+      "status": "passed"
+    },
+    {
+      "title": "hands the same effect context to the export reservation and the job enqueue",
+      "status": "passed"
+    },
+    {
+      "title": "accepts exactly the declared edges and their required metadata",
+      "status": "passed"
+    },
+    {
+      "title": "rejects impossible edge locally",
+      "status": "passed"
+    },
+    {
+      "title": "rejects unknown state locally",
+      "status": "passed"
+    },
+    {
+      "title": "rejects missing manifest on readiness locally",
+      "status": "passed"
+    },
+    {
+      "title": "rejects artifact without manifest locally",
+      "status": "passed"
+    },
+    {
+      "title": "rejects invalid failure code shape locally",
+      "status": "passed"
+    },
+    {
+      "title": "rejects malformed manifest locally",
+      "status": "passed"
+    },
+    {
+      "title": "rejects stale aggregate version locally",
+      "status": "passed"
+    },
+    {
+      "title": "maps declared uppercase persistence codes to lowercase transport codes",
+      "status": "passed"
+    }
+  ],
+  "databaseRoles": [
+    "owner_export_application_runtime",
+    "shipwithali_application",
+    "owner_export_worker_runtime",
+    "shipwithali_worker",
+    "anon",
+    "authenticated"
+  ],
+  "criteria": [
+    "AC01",
+    "AC02",
+    "AC03",
+    "AC04",
+    "AC05",
+    "AC06",
+    "AC07",
+    "AC08"
+  ],
+  "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase8:focus:exports",
+  "scope": "All repository migrations on disposable native PostgreSQL; a restricted application runtime role and an independent worker runtime role; authorized Owner export request/inspection scope acceptance, canonical scope selection hashing, exact concurrent reservation replay, original-receipt replay across all five truthful states after settlement, meaning-change conflicts, atomic reservation rollback without receipt/export/job residue, uniform protected-existence denial for cross-owner and cross-portfolio reads, guarded five-state lifecycle transitions with later-worker completion slicing, declared assembly job payloads, explicit lowercase transport failure-code mapping, private/no-store inspection responses with Retry-After, and role/RLS matrix enforcement over the declared portability owner-export policies.",
+  "cleanup": true
+}
