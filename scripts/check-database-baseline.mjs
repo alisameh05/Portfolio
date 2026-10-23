@@ -254,6 +254,9 @@ function isolatedConfig(projectId, basePort) {
     if (!config.includes(from)) throw new Error("LOCAL_CONFIG_PORT_LAYOUT_CHANGED");
     config = config.replace(from, to);
   }
+  if (/\bport = 543(?:2[1-9])\b/u.test(config)) {
+    throw new Error("LOCAL_CONFIG_KEEPS_SHARED_PORTS");
+  }
   return config;
 }
 
@@ -539,7 +542,11 @@ async function snapshot(baseUrl) {
 }
 
 async function verifyLocal() {
-  const basePort = 54000 + (process.pid % 500) * 20;
+  // When the pid-derived base reaches exactly 54320 every replacement below
+  // becomes an identity and the isolated projects silently keep the shared
+  // default ports, which then collide with the concurrent default project.
+  let basePort = 54000 + (process.pid % 500) * 20;
+  if (basePort === 54320) basePort += 20;
   const projects = [];
   let evidence;
   let primaryError;
