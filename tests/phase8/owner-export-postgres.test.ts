@@ -293,8 +293,8 @@ async function startIsolatedObjectStorage(): Promise<{
   const server = createServer(async (request, response) => {
     const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
     requests.push(`${request.method ?? "GET"} ${path}`);
-    if (request.headers.apikey !== "phase8-isolated-storage-key" ||
-        request.headers.authorization !== "Bearer phase8-isolated-storage-key") {
+    if (request.headers["apikey"] !== "phase8-isolated-storage-key" ||
+        request.headers["authorization"] !== "Bearer phase8-isolated-storage-key") {
       response.writeHead(401).end();
       return;
     }

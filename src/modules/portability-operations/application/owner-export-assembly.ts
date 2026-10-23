@@ -62,16 +62,26 @@ function parseJob(value: unknown): {
 } | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
   const payload = value as Record<string, unknown>;
-  if (!parseStableId("OwnerExport", payload["exportId"]).ok ||
-      !parseStableId("Portfolio", payload["portfolioId"]).ok ||
-      !parseStableId("Owner", payload["ownerId"]).ok ||
-      !Array.isArray(payload["includedScopes"]) ||
-      !payload["includedScopes"].every((scope) => typeof scope === "string")) return undefined;
+  const exportId = payload["exportId"];
+  const portfolioId = payload["portfolioId"];
+  const ownerId = payload["ownerId"];
+  const rawScopes = payload["includedScopes"];
+  if (typeof exportId !== "string" || typeof portfolioId !== "string" ||
+      typeof ownerId !== "string" || !Array.isArray(rawScopes)) return undefined;
+  const parsedExportId = parseStableId("OwnerExport", exportId);
+  const parsedPortfolioId = parseStableId("Portfolio", portfolioId);
+  const parsedOwnerId = parseStableId("Owner", ownerId);
+  if (!parsedExportId.ok || !parsedPortfolioId.ok || !parsedOwnerId.ok) return undefined;
+  const includedScopes: string[] = [];
+  for (const scope of rawScopes as unknown[]) {
+    if (typeof scope !== "string") return undefined;
+    includedScopes.push(scope);
+  }
   return {
-    exportId: payload["exportId"] as StableId<"OwnerExport">,
-    portfolioId: payload["portfolioId"] as StableId<"Portfolio">,
-    ownerId: payload["ownerId"] as StableId<"Owner">,
-    includedScopes: payload["includedScopes"] as string[],
+    exportId: parsedExportId.value,
+    portfolioId: parsedPortfolioId.value,
+    ownerId: parsedOwnerId.value,
+    includedScopes,
   };
 }
 
@@ -134,7 +144,7 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
       failureCode: code,
     });
     if (!transition.ok) return "stale";
-    return transition.value;
+    return transition.value === "applied" ? "failed" : "stale";
   }
 
   async function processJob(job: {
@@ -266,6 +276,7 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
       });
       return completed.ok && completed.value === "applied" ? "completed" : "stale";
     } catch {
+      if (record === null) return "stale";
       if (job.attemptCount >= 5) {
         const failed = await failExport(record, { jobId: jobId.value, leaseToken: job.leaseToken }, PERMANENT_FAILURE);
         return failed;

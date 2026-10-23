@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { StableId } from "@shared/domain";
-import type { PortfolioSettings } from "../../portfolio-configuration/domain/index.js";
+import type { PortfolioSettings } from "@shared/domain";
 import type {
+  OwnerExportEntryDescriptor,
   OwnerExportPackageManifestV1_2,
   OwnerExportSchemaDescriptor,
 } from "./service.js";
@@ -235,7 +236,7 @@ export async function buildConfigurationOwnerExportPackage(input: {
     { kind: "record", scope: "portfolio-configuration", path: "schemas/portfolio-configuration.schema.json", schemaUri: RECORD_SCHEMA_URI, schemaVersion: "1.1", digest: sha256(recordSchema) },
   ];
   const entryDigest = sha256(recordBytes);
-  const entry = {
+  const entry: OwnerExportEntryDescriptor<"portfolio-configuration"> = {
     path: "records/portfolio-configuration.ndjson",
     scope: "portfolio-configuration" as const,
     mediaType: "application/x-ndjson" as const,

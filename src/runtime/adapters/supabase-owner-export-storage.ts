@@ -160,7 +160,7 @@ export function createSupabaseOwnerExportStorage(options: SupabaseOwnerExportSto
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetcher(new URL(requestPath, base), {
+      const requestInit: RequestInit & { duplex: "half" } = {
         method: "POST",
         signal: controller.signal,
         duplex: "half",
@@ -171,10 +171,17 @@ export function createSupabaseOwnerExportStorage(options: SupabaseOwnerExportSto
           "x-upsert": "false",
         },
         body: toVerifiedReadableStream(input.content, input.contentLength, input.sha256),
-      });
+      };
+      const response = await fetcher(new URL(requestPath, base), requestInit);
       if (response.ok) return ok(undefined);
       if (response.status === 409 || response.status === 400) {
-        const existing = await readOwnerExport({ ...input, expectedContentLength: input.contentLength });
+        const existing = await readOwnerExport({
+          portfolioId: input.portfolioId,
+          exportId: input.exportId,
+          artifactId: input.artifactId,
+          expectedSha256: input.sha256,
+          expectedContentLength: input.contentLength,
+        });
         if (existing.ok && await verifyStream(existing.value.content, input.contentLength, input.sha256)) return ok(undefined);
       }
       return unavailable();

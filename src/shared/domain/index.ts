@@ -28,6 +28,17 @@ export {
   stableIdTimestampMs,
 } from "./stable-id.js";
 
+// Retained Portfolio configuration value contracts shared across modules.
+export type {
+  SupportedLocale,
+  ContactChannelType,
+  PortfolioProfile,
+  ContactChannel,
+  GlobalProjectCta,
+  PortfolioSettings,
+  OwnerPortfolioSettingsView,
+} from "./portfolio-settings.js";
+
 // Idempotency keys
 export type { IdempotencyKey } from "./idempotency-key.js";
 export {
