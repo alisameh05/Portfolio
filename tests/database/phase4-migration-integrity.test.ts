@@ -233,6 +233,26 @@ describe("Phase 4 migration integrity", () => {
       ...snapshot,
       grants: [{ schema: "portfolio_config", grantee: "shipwithali_worker", privilege: "SELECT", objectType: "r" }],
     })).toThrow("PHASE4_APPLICATION_GRANT_EXPOSURE");
+
+    const configurationExportSnapshot = {
+      ...snapshot,
+      migrationLedger: [{ version: "20261023100000", name: "build_configuration_owner_exports" }],
+      policies: [
+        ...snapshot.policies,
+        { schema: "portfolio_config", tableName: "settings", name: "portfolio_settings_worker_export_select", command: "SELECT", roles: "{shipwithali_worker}", permissive: "permissive", usingPredicate: settingsScope, withCheck: "" },
+        { schema: "portfolio_config", tableName: "contact_channels", name: "portfolio_channels_worker_export_select", command: "SELECT", roles: "{shipwithali_worker}", permissive: "permissive", usingPredicate: channelsScope, withCheck: "" },
+      ],
+      grants: [
+        { schema: "portfolio_config", object: "settings", objectType: "r", grantee: "shipwithali_worker", privilege: "SELECT" },
+        { schema: "portfolio_config", object: "contact_channels", objectType: "r", grantee: "shipwithali_worker", privilege: "SELECT" },
+      ],
+    };
+    expect(() => assertPhase4ApplicationRls(configurationExportSnapshot)).not.toThrow();
+    expect(() => assertPhase4ApplicationRls({
+      ...configurationExportSnapshot,
+      grants: [...configurationExportSnapshot.grants,
+        { schema: "portfolio_config", object: "settings", objectType: "r", grantee: "shipwithali_worker", privilege: "UPDATE" }],
+    })).toThrow("PHASE4_APPLICATION_GRANT_EXPOSURE");
   });
 
   it("requires timestamped Phase 5 migrations with bounded lock timeouts and recovery notes", () => {

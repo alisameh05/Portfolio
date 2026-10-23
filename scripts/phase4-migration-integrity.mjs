@@ -47,6 +47,14 @@ const PHASE4_APPLICATION_POLICIES = new Map([
     ["portfolio_channels_application_delete", "DELETE", "{shipwithali_application}", CHANNEL_SCOPE_PREDICATE],
   ]],
 ]);
+const CONFIGURATION_EXPORT_WORKER_POLICIES = new Map([
+  ["portfolio_config.settings", [
+    ["portfolio_settings_worker_export_select", "SELECT", "{shipwithali_worker}", SETTINGS_SCOPE_PREDICATE],
+  ]],
+  ["portfolio_config.contact_channels", [
+    ["portfolio_channels_worker_export_select", "SELECT", "{shipwithali_worker}", CHANNEL_SCOPE_PREDICATE],
+  ]],
+]);
 
 
 export function phase4ReleaseMigrationFiles(files) {
@@ -142,6 +150,9 @@ export function assertPhase4SnapshotsEquivalent(clean, upgrade) {
 }
 
 export function assertPhase4ApplicationRls(snapshot) {
+  const configurationExportApplied = snapshot.migrationLedger?.some((migration) =>
+    migration.name === "build_configuration_owner_exports",
+  ) === true;
   const tables = new Map(
     snapshot.objects.filter((object) => object.kind === "r")
       .map((object) => [`${object.schema}.${object.name}`, object]),
@@ -154,7 +165,11 @@ export function assertPhase4ApplicationRls(snapshot) {
     const policies = snapshot.policies.filter((policy) =>
       `${policy.schema}.${policy.tableName}` === name,
     );
-    const expected = PHASE4_APPLICATION_POLICIES.get(name);
+    const baseExpected = PHASE4_APPLICATION_POLICIES.get(name);
+    const expected = baseExpected === undefined ? undefined : [
+      ...baseExpected,
+      ...(configurationExportApplied ? CONFIGURATION_EXPORT_WORKER_POLICIES.get(name) ?? [] : []),
+    ];
     const byName = new Map(policies.map((policy) => [policy.name, policy]));
     if (expected === undefined || policies.length !== expected.length || byName.size !== expected.length ||
       expected.some(([policyName, command, roles, scope]) => {
@@ -176,7 +191,10 @@ export function assertPhase4ApplicationRls(snapshot) {
   const publicGrants = snapshot.grants.filter((grant) =>
     APPLICATION_SCHEMAS.includes(grant.schema) &&
     ["PUBLIC", "anon", "authenticated", "shipwithali_worker"].includes(grant.grantee) &&
-    (grant.objectType === "n" || grant.privilege !== "USAGE"),
+    (grant.objectType === "n" || grant.privilege !== "USAGE") &&
+    !(configurationExportApplied && grant.schema === "portfolio_config" &&
+      ["settings", "contact_channels"].includes(grant.object) && grant.objectType === "r" &&
+      grant.grantee === "shipwithali_worker" && grant.privilege === "SELECT"),
   );
   if (publicGrants.length > 0) throw new Error("PHASE4_APPLICATION_GRANT_EXPOSURE");
   const unauthorizedBackupGrants = snapshot.grants.filter((grant) =>
