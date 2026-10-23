@@ -221,6 +221,7 @@ async function localVerification(connectionString) {
       ["outbox_events", "outbox_application_insert_policy", "INSERT", "shipwithali_application"],
       ["outbox_events", "outbox_worker_select_policy", "SELECT", "shipwithali_worker"],
       ["outbox_events", "outbox_worker_update_policy", "UPDATE", "shipwithali_worker"],
+      ["outbox_events", "owner_export_produced_outbox_worker_insert", "INSERT", "shipwithali_worker"],
     ];
     const policyMatches = expectedPolicies.every(([table, policy, command, role]) =>
       policies.rows.some(
