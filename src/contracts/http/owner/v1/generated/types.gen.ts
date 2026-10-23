@@ -20,6 +20,22 @@ export type OwnerExportRecord = ({
     scope: 'portfolio-configuration';
 } & PortfolioConfigurationExportRecord);
 
+export type OwnerExportRecordV11 = ({
+    scope: 'portfolio-content';
+} & PortfolioContentExportRecordV11) | ({
+    scope: 'taxonomy';
+} & TaxonomyExportRecordV11) | ({
+    scope: 'media-metadata';
+} & MediaMetadataExportRecordV11) | ({
+    scope: 'cv-metadata';
+} & CvMetadataExportRecordV11) | ({
+    scope: 'moderation-history';
+} & ModerationHistoryExportRecordV11) | ({
+    scope: 'analytics-reports';
+} & AnalyticsReportExportRecordV11) | ({
+    scope: 'portfolio-configuration';
+} & PortfolioConfigurationExportRecordV11);
+
 /**
  * Immutable UUIDv7 identity, independent of routes, labels, and providers.
  */
@@ -854,6 +870,26 @@ export type OwnerExportDependencyDescriptor = unknown & {
     reason?: 'scope-not-selected' | 'not-retained' | 'unsupported-variant' | 'external-destination';
 };
 
+/**
+ * Portable record-set entry using the immutable v1.1 wrapped record schemas.
+ */
+export type OwnerExportEntryDescriptorV11 = {
+    /**
+     * Relative path inside the export package.
+     */
+    path: string;
+    scope: OwnerExportScope;
+    mediaType: 'application/x-ndjson' | 'application/json';
+    recordSchema: 'urn:shipwithali:owner-export-schema:portfolio-content:1.1' | 'urn:shipwithali:owner-export-schema:taxonomy:1.1' | 'urn:shipwithali:owner-export-schema:media-metadata:1.1' | 'urn:shipwithali:owner-export-schema:cv-metadata:1.1' | 'urn:shipwithali:owner-export-schema:moderation-history:1.1' | 'urn:shipwithali:owner-export-schema:analytics-reports:1.1' | 'urn:shipwithali:owner-export-schema:portfolio-configuration:1.1';
+    /**
+     * Packaged JSON Schema file for offline compatible importers.
+     */
+    schemaPath: string;
+    schemaVersion: '1.1';
+    digest: string;
+    recordCount: number;
+};
+
 export type OwnerExportManifestSchemaDescriptor = {
     kind: 'manifest';
     path: 'schemas/manifest.schema.json';
@@ -866,8 +902,8 @@ export type OwnerExportRecordSchemaDescriptor = {
     kind: 'record';
     path: string;
     scope: OwnerExportScope;
-    schemaUri: 'urn:shipwithali:owner-export-schema:portfolio-content:1.0' | 'urn:shipwithali:owner-export-schema:taxonomy:1.0' | 'urn:shipwithali:owner-export-schema:media-metadata:1.0' | 'urn:shipwithali:owner-export-schema:cv-metadata:1.0' | 'urn:shipwithali:owner-export-schema:moderation-history:1.0' | 'urn:shipwithali:owner-export-schema:analytics-reports:1.0' | 'urn:shipwithali:owner-export-schema:portfolio-configuration:1.0';
-    schemaVersion: '1.0';
+    schemaUri: 'urn:shipwithali:owner-export-schema:portfolio-content:1.1' | 'urn:shipwithali:owner-export-schema:taxonomy:1.1' | 'urn:shipwithali:owner-export-schema:media-metadata:1.1' | 'urn:shipwithali:owner-export-schema:cv-metadata:1.1' | 'urn:shipwithali:owner-export-schema:moderation-history:1.1' | 'urn:shipwithali:owner-export-schema:analytics-reports:1.1' | 'urn:shipwithali:owner-export-schema:portfolio-configuration:1.1';
+    schemaVersion: '1.1';
     digest: string;
 };
 
@@ -915,7 +951,7 @@ export type OwnerExportPackageManifestV11 = {
         'credentials',
         'lab-entries'
     ];
-    entries: Array<OwnerExportEntryDescriptor>;
+    entries: Array<OwnerExportEntryDescriptorV11>;
     schemas: Array<OwnerExportSchemaDescriptor>;
     assets: Array<OwnerExportAssetDescriptor>;
     extensions?: {
@@ -992,10 +1028,106 @@ export type PortableEvidenceItem = {
     claim: string;
     state: 'unreviewed' | 'supported' | 'unsupported';
     supportingArtifactIds: Array<StableId>;
-    mediaAssetId?: StableId;
 };
 
 export type PortfolioContentExportRecord = {
+    scope: 'portfolio-content';
+    contentId: StableId;
+    contentType: 'project' | 'achievement' | 'testimonial';
+    lifecycle: 'draft' | 'published' | 'hidden' | 'archived';
+    revisions: Array<PortableContentRevision>;
+    publicRouteIdentity: StableId | null;
+    routeHistory: Array<PublicRouteRedirectView>;
+    relatedProjectIds: Array<StableId>;
+    taxonomyValueIds: Array<StableId>;
+    mediaAssetIds: Array<StableId>;
+    evidenceItems: Array<PortableEvidenceItem>;
+};
+
+export type PortableTaxonomyRename = {
+    valueId: StableId;
+    previousName: string;
+    newName: string;
+    renamedAt: string;
+};
+
+export type PortableTaxonomyAssignment = {
+    projectId: StableId;
+    valueId: StableId;
+};
+
+export type TaxonomyExportRecord = {
+    scope: 'taxonomy';
+    taxonomyId: StableId;
+    aggregateVersion: number;
+    kind: 'category' | 'ai-ml-domain' | 'technology' | 'project-type';
+    values: Array<TaxonomyValueView>;
+    renameHistory: Array<PortableTaxonomyRename>;
+    assignments: Array<PortableTaxonomyAssignment>;
+};
+
+export type MediaMetadataExportRecord = {
+    scope: 'media-metadata';
+    mediaId: StableId;
+    kind: MediaKind;
+    state: 'upload-pending' | 'processing' | 'processed' | 'accepted' | 'rejected';
+    accessibilityMetadata: MediaAccessibilityMetadata | null;
+    processingHistory: Array<MediaProcessingView>;
+    decisionHistory: Array<MediaDecisionView>;
+    publicationState: 'private' | 'accepted' | 'published' | 'withdrawn';
+    portableReference: string;
+};
+
+export type CvMetadataExportRecord = {
+    scope: 'cv-metadata';
+    aggregateVersion: number;
+    currentVersionId: StableId | null;
+    versions: Array<CvVersionView>;
+    activationHistory: Array<CvActivationView>;
+};
+
+export type ModerationHistoryExportRecord = {
+    scope: 'moderation-history';
+    feedbackId: StableId;
+    projectId: StableId;
+    locale: Locale;
+    aggregateVersion: number;
+    state: 'pending' | 'approved' | 'rejected' | 'suppressed';
+    authorName: string;
+    paragraph: string;
+    submittedAt: string;
+    decisionHistory: Array<ModerationDecisionView>;
+};
+
+export type PortableAnalyticsAggregate = {
+    goalVersionId: StableId;
+    periodStart: string;
+    periodEnd: string;
+    sampleState: 'sufficient' | 'low-sample' | 'suppressed';
+    aggregateCount: number;
+};
+
+export type AnalyticsReportExportRecord = {
+    scope: 'analytics-reports';
+    goal: AnalyticsGoalAggregateView;
+    reports: Array<PortableAnalyticsAggregate>;
+};
+
+export type PortfolioConfigurationExportRecord = {
+    scope: 'portfolio-configuration';
+    profile: ProfileUpdate;
+    contactChannels: ContactChannelsUpdate;
+    projectCta: ProjectCtaUpdate;
+};
+
+export type PortableEvidenceItemV11 = {
+    claim: string;
+    state: 'unreviewed' | 'supported' | 'unsupported';
+    supportingArtifactIds: Array<StableId>;
+    mediaAssetId?: StableId;
+};
+
+export type PortfolioContentExportRecordV11 = {
     scope: 'portfolio-content';
     value: {
         contentId: StableId;
@@ -1009,7 +1141,7 @@ export type PortfolioContentExportRecord = {
         relatedProjectIds: Array<StableId>;
         taxonomyValueIds: Array<StableId>;
         mediaAssetIds: Array<StableId>;
-        evidenceItems: Array<PortableEvidenceItem>;
+        evidenceItems: Array<PortableEvidenceItemV11>;
     };
 };
 
@@ -1040,19 +1172,12 @@ export type PortableTaxonomyValue = ({
     state: 'merged';
 } & PortableMergedTaxonomyValue);
 
-export type PortableTaxonomyRename = {
-    valueId: StableId;
-    previousName: string;
-    newName: string;
-    renamedAt: string;
-};
-
-export type PortableTaxonomyAssignment = {
+export type PortableTaxonomyAssignmentV11 = {
     targetId: StableId;
     taxonomyValueId: StableId;
 };
 
-export type TaxonomyExportRecord = {
+export type TaxonomyExportRecordV11 = {
     scope: 'taxonomy';
     value: {
         taxonomyId: StableId;
@@ -1060,11 +1185,11 @@ export type TaxonomyExportRecord = {
         kind: 'category' | 'ai-ml-domain' | 'technology' | 'project-type';
         values: Array<PortableTaxonomyValue>;
         renameHistory: Array<PortableTaxonomyRename>;
-        assignments: Array<PortableTaxonomyAssignment>;
+        assignments: Array<PortableTaxonomyAssignmentV11>;
     };
 };
 
-export type MediaMetadataExportRecord = {
+export type MediaMetadataExportRecordV11 = {
     scope: 'media-metadata';
     value: unknown & {
         mediaId: StableId;
@@ -1117,7 +1242,7 @@ export type PortableCvVersionExport = ({
     state: 'accepted';
 } & AcceptedPortableCvVersion);
 
-export type CvMetadataExportRecord = {
+export type CvMetadataExportRecordV11 = {
     scope: 'cv-metadata';
     value: unknown & {
         aggregateVersion: number;
@@ -1135,7 +1260,7 @@ export type CvMetadataExportRecord = {
     };
 };
 
-export type ModerationHistoryExportRecord = {
+export type ModerationHistoryExportRecordV11 = {
     scope: 'moderation-history';
     value: {
         feedbackId: StableId;
@@ -1150,15 +1275,7 @@ export type ModerationHistoryExportRecord = {
     };
 };
 
-export type PortableAnalyticsAggregate = {
-    goalVersionId: StableId;
-    periodStart: string;
-    periodEnd: string;
-    sampleState: 'sufficient' | 'low-sample' | 'suppressed';
-    aggregateCount: number;
-};
-
-export type AnalyticsReportExportRecord = {
+export type AnalyticsReportExportRecordV11 = {
     scope: 'analytics-reports';
     value: {
         goal: AnalyticsGoalAggregateView;
@@ -1166,7 +1283,7 @@ export type AnalyticsReportExportRecord = {
     };
 };
 
-export type PortfolioConfigurationExportRecord = {
+export type PortfolioConfigurationExportRecordV11 = {
     scope: 'portfolio-configuration';
     value: {
         profile: ProfileUpdate;

@@ -7,7 +7,7 @@ import {
   zAnalyticsGoalAggregateView,
   zCreateOwnerAnalyticsGoalVersionBody,
   zCreateOwnerAnalyticsGoalVersionHeaders,
-  zOwnerExportRecord,
+  zOwnerExportRecordV11,
   zOwnerExportPackageManifest,
   zOwnerExportView,
   zRequestOwnerExportBody,
@@ -173,15 +173,15 @@ describe("generated portable Owner export manifest validator", () => {
         path: "records/analytics-reports.ndjson",
         scope: "analytics-reports",
         mediaType: "application/x-ndjson",
-        recordSchema: "urn:shipwithali:owner-export-schema:analytics-reports:1.0",
+        recordSchema: "urn:shipwithali:owner-export-schema:analytics-reports:1.1",
         schemaPath: "schemas/analytics-reports.schema.json",
-        schemaVersion: "1.0",
+        schemaVersion: "1.1",
         digest,
         recordCount: 0,
       }],
       schemas: [
         { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.1", schemaVersion: "1.1", digest },
-        { kind: "record", scope: "analytics-reports", path: "schemas/analytics-reports.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:analytics-reports:1.0", schemaVersion: "1.0", digest },
+        { kind: "record", scope: "analytics-reports", path: "schemas/analytics-reports.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:analytics-reports:1.1", schemaVersion: "1.1", digest },
       ],
       assets: [],
     };
@@ -354,14 +354,14 @@ describe("generated Owner Portability validators", () => {
     const packageRecords = records.map(({ scope, ...value }) => ({ scope, value }));
 
     for (const record of packageRecords) {
-      const result = zOwnerExportRecord.safeParse(record);
+      const result = zOwnerExportRecordV11.safeParse(record);
       expect(result.success, `${record.scope}: ${result.success ? "valid" : JSON.stringify(result.error.issues)}`).toBe(true);
     }
-    expect(zOwnerExportRecord.safeParse(records[0]).success).toBe(false);
+    expect(zOwnerExportRecordV11.safeParse(records[0]).success).toBe(false);
 
     const roundTripped = JSON.parse(JSON.stringify(packageRecords)) as Array<Record<string, unknown>>;
     for (const record of roundTripped) {
-      expect(zOwnerExportRecord.safeParse(record).success).toBe(true);
+      expect(zOwnerExportRecordV11.safeParse(record).success).toBe(true);
     }
     const firstValue = roundTripped[0]?.["value"] as Record<string, unknown>;
     const secondValue = roundTripped[1]?.["value"] as Record<string, unknown>;
@@ -374,61 +374,61 @@ describe("generated Owner Portability validators", () => {
     const contentValue = contentWithoutOptionalFacts["value"] as Record<string, unknown>;
     delete contentValue["projectStatus"];
     delete contentValue["featured"];
-    expect(zOwnerExportRecord.safeParse(contentWithoutOptionalFacts).success).toBe(true);
+    expect(zOwnerExportRecordV11.safeParse(contentWithoutOptionalFacts).success).toBe(true);
     const taxonomyWithOldAssignmentNames = structuredClone(roundTripped[1]) as Record<string, unknown>;
     const taxonomyValue = taxonomyWithOldAssignmentNames["value"] as Record<string, unknown>;
     taxonomyValue["assignments"] = [{ projectId: ids.project, valueId: ids.value }];
-    expect(zOwnerExportRecord.safeParse(taxonomyWithOldAssignmentNames).success).toBe(false);
+    expect(zOwnerExportRecordV11.safeParse(taxonomyWithOldAssignmentNames).success).toBe(false);
 
     const missingTaxonomyId = structuredClone(roundTripped[0]) as Record<string, unknown>;
     const missingTaxonomyValue = missingTaxonomyId["value"] as Record<string, unknown>;
     missingTaxonomyValue["taxonomyValueIds"] = undefined;
-    expect(zOwnerExportRecord.safeParse({
+    expect(zOwnerExportRecordV11.safeParse({
       ...missingTaxonomyId,
     }).success).toBe(false);
     const mediaWithoutBytes = structuredClone(roundTripped[2]) as Record<string, unknown>;
     const mediaMetadata = mediaWithoutBytes["value"] as Record<string, unknown>;
     delete mediaMetadata["portableReference"];
-    expect(zOwnerExportRecord.safeParse({
+    expect(zOwnerExportRecordV11.safeParse({
       ...mediaWithoutBytes,
     }).success).toBe(true);
     const invalidMediaReference = structuredClone(roundTripped[2]) as Record<string, unknown>;
     const invalidMediaValue = invalidMediaReference["value"] as Record<string, unknown>;
     invalidMediaValue["portableReference"] = "../private/media.bin";
-    expect(zOwnerExportRecord.safeParse(invalidMediaReference).success).toBe(false);
+    expect(zOwnerExportRecordV11.safeParse(invalidMediaReference).success).toBe(false);
     const pendingMediaReference = structuredClone(roundTripped[2]) as Record<string, unknown>;
     const pendingMediaValue = pendingMediaReference["value"] as Record<string, unknown>;
     pendingMediaValue["state"] = "processing";
-    expect(zOwnerExportRecord.safeParse(pendingMediaReference).success).toBe(false);
+    expect(zOwnerExportRecordV11.safeParse(pendingMediaReference).success).toBe(false);
     const shortProcessingHistory = structuredClone(roundTripped[2]) as Record<string, unknown>;
     const shortMediaValue = shortProcessingHistory["value"] as Record<string, unknown>;
     shortMediaValue["processingHistory"] = (shortMediaValue["processingHistory"] as unknown[]).slice(1);
-    expect(zOwnerExportRecord.safeParse(shortProcessingHistory).success).toBe(false);
+    expect(zOwnerExportRecordV11.safeParse(shortProcessingHistory).success).toBe(false);
     const shortDecisionHistory = structuredClone(roundTripped[2]) as Record<string, unknown>;
     const shortDecisionMediaValue = shortDecisionHistory["value"] as Record<string, unknown>;
     shortDecisionMediaValue["decisionHistoryTruncated"] = true;
     shortDecisionMediaValue["decisionHistory"] = (shortDecisionMediaValue["decisionHistory"] as unknown[]).slice(1);
-    expect(zOwnerExportRecord.safeParse(shortDecisionHistory).success).toBe(false);
+    expect(zOwnerExportRecordV11.safeParse(shortDecisionHistory).success).toBe(false);
     const missingProjectId = structuredClone(roundTripped[4]) as Record<string, unknown>;
     const moderationValue = missingProjectId["value"] as Record<string, unknown>;
     moderationValue["projectId"] = undefined;
-    expect(zOwnerExportRecord.safeParse({
+    expect(zOwnerExportRecordV11.safeParse({
       ...missingProjectId,
     }).success).toBe(false);
     const cvWithoutReference = structuredClone(roundTripped[3]) as Record<string, unknown>;
     const cvValue = cvWithoutReference["value"] as Record<string, unknown>;
     const cvVersions = cvValue["versions"] as Array<Record<string, unknown>>;
     delete cvVersions[0]?.["portableReference"];
-    expect(zOwnerExportRecord.safeParse(cvWithoutReference).success).toBe(false);
+    expect(zOwnerExportRecordV11.safeParse(cvWithoutReference).success).toBe(false);
     const shortCvVersions = structuredClone(roundTripped[3]) as Record<string, unknown>;
     const shortVersionsValue = shortCvVersions["value"] as Record<string, unknown>;
     shortVersionsValue["versionsTruncated"] = true;
     shortVersionsValue["versions"] = (shortVersionsValue["versions"] as unknown[]).slice(1);
-    expect(zOwnerExportRecord.safeParse(shortCvVersions).success).toBe(false);
+    expect(zOwnerExportRecordV11.safeParse(shortCvVersions).success).toBe(false);
     const shortCvHistory = structuredClone(roundTripped[3]) as Record<string, unknown>;
     const shortCvValue = shortCvHistory["value"] as Record<string, unknown>;
     shortCvValue["activationHistory"] = (shortCvValue["activationHistory"] as unknown[]).slice(1);
-    expect(zOwnerExportRecord.safeParse(shortCvHistory).success).toBe(false);
+    expect(zOwnerExportRecordV11.safeParse(shortCvHistory).success).toBe(false);
     const privacyFields = structuredClone(roundTripped[5]) as Record<string, unknown>;
     const privacyValue = privacyFields["value"] as Record<string, unknown>;
     Object.assign(privacyValue, {
@@ -438,7 +438,7 @@ describe("generated Owner Portability validators", () => {
       accessToken: "secret",
       ipAddress: "203.0.113.1",
     });
-    expect(zOwnerExportRecord.safeParse(privacyFields).success).toBe(false);
+    expect(zOwnerExportRecordV11.safeParse(privacyFields).success).toBe(false);
   });
 
   it("rejects provider backups, provider fields, and malformed versions", () => {

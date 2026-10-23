@@ -22,6 +22,7 @@ export {
   type OwnerExportAuthorizationContext,
   type OwnerExportDownloadView,
   type OwnerExportEntryDescriptor,
+  type OwnerExportEntryDescriptorV1_0,
   type OwnerExportObjectRead,
   type OwnerExportObjectReadPort,
   type OwnerExportObjectReadRequest,

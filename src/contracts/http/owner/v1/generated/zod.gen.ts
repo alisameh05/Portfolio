@@ -866,6 +866,28 @@ export const zOwnerExportDependencyDescriptor = z.intersection(z.unknown(), z.st
     ]).optional()
 }));
 
+/**
+ * Portable record-set entry using the immutable v1.1 wrapped record schemas.
+ */
+export const zOwnerExportEntryDescriptorV11 = z.strictObject({
+    path: z.string().regex(/^[a-z0-9][a-z0-9._\/-]*$/),
+    scope: zOwnerExportScope,
+    mediaType: z.enum(['application/x-ndjson', 'application/json']),
+    recordSchema: z.enum([
+        'urn:shipwithali:owner-export-schema:portfolio-content:1.1',
+        'urn:shipwithali:owner-export-schema:taxonomy:1.1',
+        'urn:shipwithali:owner-export-schema:media-metadata:1.1',
+        'urn:shipwithali:owner-export-schema:cv-metadata:1.1',
+        'urn:shipwithali:owner-export-schema:moderation-history:1.1',
+        'urn:shipwithali:owner-export-schema:analytics-reports:1.1',
+        'urn:shipwithali:owner-export-schema:portfolio-configuration:1.1'
+    ]),
+    schemaPath: z.string().regex(/^schemas\/[a-z0-9-]+\.schema\.json$/),
+    schemaVersion: z.literal('1.1'),
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    recordCount: z.number().int().gte(0)
+});
+
 export const zOwnerExportManifestSchemaDescriptor = z.strictObject({
     kind: z.literal('manifest'),
     path: z.literal('schemas/manifest.schema.json'),
@@ -879,15 +901,15 @@ export const zOwnerExportRecordSchemaDescriptor = z.strictObject({
     path: z.string().regex(/^schemas\/[a-z0-9-]+\.schema\.json$/),
     scope: zOwnerExportScope,
     schemaUri: z.enum([
-        'urn:shipwithali:owner-export-schema:portfolio-content:1.0',
-        'urn:shipwithali:owner-export-schema:taxonomy:1.0',
-        'urn:shipwithali:owner-export-schema:media-metadata:1.0',
-        'urn:shipwithali:owner-export-schema:cv-metadata:1.0',
-        'urn:shipwithali:owner-export-schema:moderation-history:1.0',
-        'urn:shipwithali:owner-export-schema:analytics-reports:1.0',
-        'urn:shipwithali:owner-export-schema:portfolio-configuration:1.0'
+        'urn:shipwithali:owner-export-schema:portfolio-content:1.1',
+        'urn:shipwithali:owner-export-schema:taxonomy:1.1',
+        'urn:shipwithali:owner-export-schema:media-metadata:1.1',
+        'urn:shipwithali:owner-export-schema:cv-metadata:1.1',
+        'urn:shipwithali:owner-export-schema:moderation-history:1.1',
+        'urn:shipwithali:owner-export-schema:analytics-reports:1.1',
+        'urn:shipwithali:owner-export-schema:portfolio-configuration:1.1'
     ]),
-    schemaVersion: z.literal('1.0'),
+    schemaVersion: z.literal('1.1'),
     digest: z.string().regex(/^[a-f0-9]{64}$/)
 });
 
@@ -944,7 +966,7 @@ export const zOwnerExportPackageManifestV11 = z.strictObject({
         z.literal('credentials'),
         z.literal('lab-entries')
     ]),
-    entries: z.array(zOwnerExportEntryDescriptor).min(1),
+    entries: z.array(zOwnerExportEntryDescriptorV11).min(1),
     schemas: z.array(zOwnerExportSchemaDescriptor).min(2),
     assets: z.array(zOwnerExportAssetDescriptor),
     extensions: z.record(z.unknown()).optional()
@@ -1021,11 +1043,155 @@ export const zPortableEvidenceItem = z.strictObject({
         'supported',
         'unsupported'
     ]),
+    supportingArtifactIds: z.array(zStableId)
+});
+
+export const zPortfolioContentExportRecord = z.strictObject({
+    scope: z.literal('portfolio-content'),
+    contentId: zStableId,
+    contentType: z.enum([
+        'project',
+        'achievement',
+        'testimonial'
+    ]),
+    lifecycle: z.enum([
+        'draft',
+        'published',
+        'hidden',
+        'archived'
+    ]),
+    revisions: z.array(zPortableContentRevision).min(1),
+    publicRouteIdentity: zStableId.nullable(),
+    routeHistory: z.array(zPublicRouteRedirectView),
+    relatedProjectIds: z.array(zStableId),
+    taxonomyValueIds: z.array(zStableId),
+    mediaAssetIds: z.array(zStableId),
+    evidenceItems: z.array(zPortableEvidenceItem)
+});
+
+export const zPortableTaxonomyRename = z.strictObject({
+    valueId: zStableId,
+    previousName: z.string().min(1).max(100),
+    newName: z.string().min(1).max(100),
+    renamedAt: z.string().datetime()
+});
+
+export const zPortableTaxonomyAssignment = z.strictObject({
+    projectId: zStableId,
+    valueId: zStableId
+});
+
+export const zTaxonomyExportRecord = z.strictObject({
+    scope: z.literal('taxonomy'),
+    taxonomyId: zStableId,
+    aggregateVersion: z.number().int().gte(1),
+    kind: z.enum([
+        'category',
+        'ai-ml-domain',
+        'technology',
+        'project-type'
+    ]),
+    values: z.array(zTaxonomyValueView),
+    renameHistory: z.array(zPortableTaxonomyRename),
+    assignments: z.array(zPortableTaxonomyAssignment)
+});
+
+export const zMediaMetadataExportRecord = z.strictObject({
+    scope: z.literal('media-metadata'),
+    mediaId: zStableId,
+    kind: zMediaKind,
+    state: z.enum([
+        'upload-pending',
+        'processing',
+        'processed',
+        'accepted',
+        'rejected'
+    ]),
+    accessibilityMetadata: zMediaAccessibilityMetadata.nullable(),
+    processingHistory: z.array(zMediaProcessingView),
+    decisionHistory: z.array(zMediaDecisionView),
+    publicationState: z.enum([
+        'private',
+        'accepted',
+        'published',
+        'withdrawn'
+    ]),
+    portableReference: z.string()
+});
+
+export const zCvMetadataExportRecord = z.strictObject({
+    scope: z.literal('cv-metadata'),
+    aggregateVersion: z.number().int().gte(1),
+    currentVersionId: zStableId.nullable(),
+    versions: z.array(zCvVersionView),
+    activationHistory: z.array(zCvActivationView)
+});
+
+export const zModerationHistoryExportRecord = z.strictObject({
+    scope: z.literal('moderation-history'),
+    feedbackId: zStableId,
+    projectId: zStableId,
+    locale: zLocale,
+    aggregateVersion: z.number().int().gte(1),
+    state: z.enum([
+        'pending',
+        'approved',
+        'rejected',
+        'suppressed'
+    ]),
+    authorName: z.string().min(1).max(120),
+    paragraph: z.string().min(1).max(5000),
+    submittedAt: z.string().datetime(),
+    decisionHistory: z.array(zModerationDecisionView)
+});
+
+export const zPortableAnalyticsAggregate = z.strictObject({
+    goalVersionId: zStableId,
+    periodStart: z.string().datetime(),
+    periodEnd: z.string().datetime(),
+    sampleState: z.enum([
+        'sufficient',
+        'low-sample',
+        'suppressed'
+    ]),
+    aggregateCount: z.number().int().gte(0)
+});
+
+export const zAnalyticsReportExportRecord = z.strictObject({
+    scope: z.literal('analytics-reports'),
+    goal: zAnalyticsGoalAggregateView,
+    reports: z.array(zPortableAnalyticsAggregate)
+});
+
+export const zPortfolioConfigurationExportRecord = z.strictObject({
+    scope: z.literal('portfolio-configuration'),
+    profile: zProfileUpdate,
+    contactChannels: zContactChannelsUpdate,
+    projectCta: zProjectCtaUpdate
+});
+
+export const zOwnerExportRecord = z.discriminatedUnion('scope', [
+    zPortfolioContentExportRecord,
+    zTaxonomyExportRecord,
+    zMediaMetadataExportRecord,
+    zCvMetadataExportRecord,
+    zModerationHistoryExportRecord,
+    zAnalyticsReportExportRecord,
+    zPortfolioConfigurationExportRecord
+]);
+
+export const zPortableEvidenceItemV11 = z.strictObject({
+    claim: z.string().min(1).max(1000),
+    state: z.enum([
+        'unreviewed',
+        'supported',
+        'unsupported'
+    ]),
     supportingArtifactIds: z.array(zStableId),
     mediaAssetId: zStableId.optional()
 });
 
-export const zPortfolioContentExportRecord = z.strictObject({
+export const zPortfolioContentExportRecordV11 = z.strictObject({
     scope: z.literal('portfolio-content'),
     value: z.strictObject({
         contentId: zStableId,
@@ -1048,7 +1214,7 @@ export const zPortfolioContentExportRecord = z.strictObject({
         relatedProjectIds: z.array(zStableId),
         taxonomyValueIds: z.array(zStableId),
         mediaAssetIds: z.array(zStableId),
-        evidenceItems: z.array(zPortableEvidenceItem)
+        evidenceItems: z.array(zPortableEvidenceItemV11)
     })
 });
 
@@ -1077,19 +1243,12 @@ export const zPortableTaxonomyValue = z.discriminatedUnion('state', [
     zPortableMergedTaxonomyValue
 ]);
 
-export const zPortableTaxonomyRename = z.strictObject({
-    valueId: zStableId,
-    previousName: z.string().min(1).max(100),
-    newName: z.string().min(1).max(100),
-    renamedAt: z.string().datetime()
-});
-
-export const zPortableTaxonomyAssignment = z.strictObject({
+export const zPortableTaxonomyAssignmentV11 = z.strictObject({
     targetId: zStableId,
     taxonomyValueId: zStableId
 });
 
-export const zTaxonomyExportRecord = z.strictObject({
+export const zTaxonomyExportRecordV11 = z.strictObject({
     scope: z.literal('taxonomy'),
     value: z.strictObject({
         taxonomyId: zStableId,
@@ -1102,11 +1261,11 @@ export const zTaxonomyExportRecord = z.strictObject({
         ]),
         values: z.array(zPortableTaxonomyValue),
         renameHistory: z.array(zPortableTaxonomyRename),
-        assignments: z.array(zPortableTaxonomyAssignment)
+        assignments: z.array(zPortableTaxonomyAssignmentV11)
     })
 });
 
-export const zMediaMetadataExportRecord = z.strictObject({
+export const zMediaMetadataExportRecordV11 = z.strictObject({
     scope: z.literal('media-metadata'),
     value: z.intersection(z.unknown(), z.strictObject({
         mediaId: zStableId,
@@ -1172,7 +1331,7 @@ export const zPortableCvVersionExport = z.discriminatedUnion('state', [
     zAcceptedPortableCvVersion
 ]);
 
-export const zCvMetadataExportRecord = z.strictObject({
+export const zCvMetadataExportRecordV11 = z.strictObject({
     scope: z.literal('cv-metadata'),
     value: z.intersection(z.unknown(), z.strictObject({
         aggregateVersion: z.number().int().gte(1),
@@ -1191,7 +1350,7 @@ export const zCvMetadataExportRecord = z.strictObject({
 })
 });
 
-export const zModerationHistoryExportRecord = z.strictObject({
+export const zModerationHistoryExportRecordV11 = z.strictObject({
     scope: z.literal('moderation-history'),
     value: z.strictObject({
         feedbackId: zStableId,
@@ -1211,19 +1370,7 @@ export const zModerationHistoryExportRecord = z.strictObject({
     })
 });
 
-export const zPortableAnalyticsAggregate = z.strictObject({
-    goalVersionId: zStableId,
-    periodStart: z.string().datetime(),
-    periodEnd: z.string().datetime(),
-    sampleState: z.enum([
-        'sufficient',
-        'low-sample',
-        'suppressed'
-    ]),
-    aggregateCount: z.number().int().gte(0)
-});
-
-export const zAnalyticsReportExportRecord = z.strictObject({
+export const zAnalyticsReportExportRecordV11 = z.strictObject({
     scope: z.literal('analytics-reports'),
     value: z.strictObject({
         goal: zAnalyticsGoalAggregateView,
@@ -1231,7 +1378,7 @@ export const zAnalyticsReportExportRecord = z.strictObject({
     })
 });
 
-export const zPortfolioConfigurationExportRecord = z.strictObject({
+export const zPortfolioConfigurationExportRecordV11 = z.strictObject({
     scope: z.literal('portfolio-configuration'),
     value: z.strictObject({
         profile: zProfileUpdate,
@@ -1240,14 +1387,14 @@ export const zPortfolioConfigurationExportRecord = z.strictObject({
     })
 });
 
-export const zOwnerExportRecord = z.discriminatedUnion('scope', [
-    zPortfolioContentExportRecord,
-    zTaxonomyExportRecord,
-    zMediaMetadataExportRecord,
-    zCvMetadataExportRecord,
-    zModerationHistoryExportRecord,
-    zAnalyticsReportExportRecord,
-    zPortfolioConfigurationExportRecord
+export const zOwnerExportRecordV11 = z.discriminatedUnion('scope', [
+    zPortfolioContentExportRecordV11,
+    zTaxonomyExportRecordV11,
+    zMediaMetadataExportRecordV11,
+    zCvMetadataExportRecordV11,
+    zModerationHistoryExportRecordV11,
+    zAnalyticsReportExportRecordV11,
+    zPortfolioConfigurationExportRecordV11
 ]);
 
 /**

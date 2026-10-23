@@ -1,73 +1,195 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:shipwithali:owner-export-schema:analytics-reports:1.0",
-  "title": "Portable analytics report record 1.0",
-  "type": "object", "additionalProperties": false, "required": ["scope", "value"],
+  "title": "Portable analytics report record 1.0 (legacy flat record)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scope",
+    "goal",
+    "reports"
+  ],
   "properties": {
-    "scope": { "const": "analytics-reports" },
-    "value": {
-      "type": "object", "additionalProperties": false, "required": ["goal", "reports"],
+    "scope": {
+      "const": "analytics-reports"
+    },
+    "goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "goalId",
+        "aggregateVersion",
+        "activeVersionId",
+        "versions",
+        "activationHistory"
+      ],
       "properties": {
-        "goal": {
-          "type": "object", "additionalProperties": false,
-          "required": ["goalId", "aggregateVersion", "activeVersionId", "versions", "activationHistory"],
-          "properties": {
-            "goalId": { "$ref": "#/$defs/stableId" },
-            "aggregateVersion": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
-            "activeVersionId": { "anyOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }] },
-            "versions": {
-              "type": "array", "minItems": 1,
-              "items": {
-                "type": "object", "additionalProperties": false, "required": ["versionId", "versionNumber", "definition", "createdAt"],
-                "properties": {
-                  "versionId": { "$ref": "#/$defs/stableId" },
-                  "versionNumber": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
-                  "definition": { "$ref": "#/$defs/definition" },
-                  "createdAt": { "$ref": "#/$defs/utcInstant" }
-                }
-              }
+        "goalId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "aggregateVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "activeVersionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/stableId"
             },
-            "activationHistory": {
-              "type": "array",
-              "items": {
-                "type": "object", "additionalProperties": false, "required": ["versionId", "activatedAt"],
-                "properties": { "versionId": { "$ref": "#/$defs/stableId" }, "activatedAt": { "$ref": "#/$defs/utcInstant" } }
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "versions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "versionId",
+              "versionNumber",
+              "definition",
+              "createdAt"
+            ],
+            "properties": {
+              "versionId": {
+                "$ref": "#/$defs/stableId"
+              },
+              "versionNumber": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "definition": {
+                "$ref": "#/$defs/definition"
+              },
+              "createdAt": {
+                "$ref": "#/$defs/utcInstant"
               }
             }
           }
         },
-        "reports": {
+        "activationHistory": {
           "type": "array",
           "items": {
-            "type": "object", "additionalProperties": false,
-            "required": ["goalVersionId", "periodStart", "periodEnd", "sampleState", "aggregateCount"],
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "versionId",
+              "activatedAt"
+            ],
             "properties": {
-              "goalVersionId": { "$ref": "#/$defs/stableId" },
-              "periodStart": { "$ref": "#/$defs/utcInstant" },
-              "periodEnd": { "$ref": "#/$defs/utcInstant" },
-              "sampleState": { "enum": ["sufficient", "low-sample", "suppressed"] },
-              "aggregateCount": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+              "versionId": {
+                "$ref": "#/$defs/stableId"
+              },
+              "activatedAt": {
+                "$ref": "#/$defs/utcInstant"
+              }
             }
+          }
+        }
+      }
+    },
+    "reports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "goalVersionId",
+          "periodStart",
+          "periodEnd",
+          "sampleState",
+          "aggregateCount"
+        ],
+        "properties": {
+          "goalVersionId": {
+            "$ref": "#/$defs/stableId"
+          },
+          "periodStart": {
+            "$ref": "#/$defs/utcInstant"
+          },
+          "periodEnd": {
+            "$ref": "#/$defs/utcInstant"
+          },
+          "sampleState": {
+            "enum": [
+              "sufficient",
+              "low-sample",
+              "suppressed"
+            ]
+          },
+          "aggregateCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         }
       }
     }
   },
   "$defs": {
-    "stableId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-    "utcInstant": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$" },
+    "stableId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "utcInstant": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+    },
     "definition": {
-      "type": "object", "additionalProperties": false, "required": ["name", "steps"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "steps"
+      ],
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
         "steps": {
-          "type": "array", "minItems": 1, "maxItems": 10,
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
           "items": {
-            "type": "object", "additionalProperties": false, "required": ["action"],
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "action"
+            ],
             "properties": {
-              "action": { "enum": ["page-viewed", "project-viewed", "active-engagement-sampled", "media-engaged", "related-project-opened", "contact-channel-opened", "external-project-link-opened", "testimonial-engaged", "global-project-cta-opened"] },
-              "publicRouteIds": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/stableId" } },
-              "projectIds": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/stableId" } }
+              "action": {
+                "enum": [
+                  "page-viewed",
+                  "project-viewed",
+                  "active-engagement-sampled",
+                  "media-engaged",
+                  "related-project-opened",
+                  "contact-channel-opened",
+                  "external-project-link-opened",
+                  "testimonial-engaged",
+                  "global-project-cta-opened"
+                ]
+              },
+              "publicRouteIds": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/stableId"
+                }
+              },
+              "projectIds": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/stableId"
+                }
+              }
             }
           }
         }

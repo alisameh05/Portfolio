@@ -61,9 +61,9 @@ function page(recordCount: number): OwnerExportSnapshotPage<"taxonomy"> {
       path: "taxonomy/values.ndjson",
       scope: "taxonomy",
       mediaType: "application/x-ndjson",
-      recordSchema: "urn:shipwithali:owner-export-schema:taxonomy:1.0",
+      recordSchema: "urn:shipwithali:owner-export-schema:taxonomy:1.1",
       schemaPath: "schemas/taxonomy.schema.json",
-      schemaVersion: "1.0",
+      schemaVersion: "1.1",
       digest: "a".repeat(64),
       recordCount,
     },
@@ -152,7 +152,7 @@ describe("Portability and Operations public contracts", () => {
         ...page(0).descriptor,
         path: "content/records.ndjson",
         scope: "portfolio-content" as const,
-        recordSchema: "urn:shipwithali:owner-export-schema:portfolio-content:1.0" as const,
+        recordSchema: "urn:shipwithali:owner-export-schema:portfolio-content:1.1" as const,
         schemaPath: "schemas/portfolio-content.schema.json" as const,
         recordCount: 1,
       },
@@ -263,7 +263,7 @@ describe("Portability and Operations public contracts", () => {
         path: "analytics/reports.json",
         scope: "analytics-reports" as const,
         mediaType: "application/json" as const,
-        recordSchema: "urn:shipwithali:owner-export-schema:analytics-reports:1.0" as const,
+        recordSchema: "urn:shipwithali:owner-export-schema:analytics-reports:1.1" as const,
         schemaPath: "schemas/analytics-reports.schema.json" as const,
         recordCount: 1,
       },
@@ -281,6 +281,53 @@ describe("Portability and Operations public contracts", () => {
       }],
     } as unknown as OwnerExportSnapshotPage<"analytics-reports">;
     expect(validateOwnerExportSnapshotPage(analyticsContext, unsafeIdentifier).ok).toBe(false);
+  });
+
+  it("closes media, CV, moderation, and configuration projections against extra fields", () => {
+    const limit = parseSnapshotPageLimit(1);
+    expect(limit.ok).toBe(true);
+    if (!limit.ok) return;
+    const id = "0196a1b2-7c3d-7e11-9f22-3a4b5c6d7ef0";
+    const cases = [
+      {
+        scope: "media-metadata" as const,
+        value: { mediaId: id, kind: "image", state: "accepted", accessibilityMetadata: null, processingHistory: [], decisionHistory: [], publicationState: "accepted" },
+        extra: { accessibilityMetadata: { kind: "described-image", altText: "Portrait", privateEmail: "private@example.test" } },
+      },
+      {
+        scope: "cv-metadata" as const,
+        value: { aggregateVersion: 1, currentVersionId: null, versions: [{ versionId: id, mediaId: id, locale: "en", label: "Resume", state: "registered", isCurrent: false }], activationHistory: [] },
+        extra: { versions: [{ versionId: id, mediaId: id, locale: "en", label: "Resume", state: "registered", isCurrent: false, ownerEmail: "private@example.test" }] },
+      },
+      {
+        scope: "moderation-history" as const,
+        value: { feedbackId: id, projectId: id, locale: "en", aggregateVersion: 1, state: "pending", authorName: "Author", paragraph: "Feedback", submittedAt: "2026-10-18T00:00:00.000Z", decisionHistory: [] },
+        extra: { decisionHistory: [{ decision: "approved", reason: "Reviewed", decidedAt: "2026-10-18T00:00:00.000Z", moderatorEmail: "private@example.test" }] },
+      },
+      {
+        scope: "portfolio-configuration" as const,
+        value: { profile: { displayName: "Owner", headline: "Builder", bio: "Bio" }, contactChannels: { channels: [] }, projectCta: { label: "Contact", destination: "https://example.test/contact", unavailableFallback: "Unavailable" } },
+        extra: { profile: { displayName: "Owner", headline: "Builder", bio: "Bio", internalPhone: "+10000000000" } },
+      },
+    ];
+
+    for (const { scope, value, extra } of cases) {
+      const exportContext = { ...context(limit.value), scope } as OwnerExportSnapshotContext<typeof scope>;
+      const descriptor = {
+        ...page(0).descriptor,
+        path: `records/${scope}.ndjson`,
+        scope,
+        recordSchema: `urn:shipwithali:owner-export-schema:${scope}:1.1`,
+        schemaPath: `schemas/${scope}.schema.json`,
+        schemaVersion: "1.1",
+        recordCount: 1,
+      };
+      const validPage = { descriptor, records: [{ scope, value }] } as unknown as OwnerExportSnapshotPage<typeof scope>;
+      const unsafePage = { descriptor, records: [{ scope, value: { ...value, ...extra } }] } as unknown as OwnerExportSnapshotPage<typeof scope>;
+
+      expect(validateOwnerExportSnapshotPage(exportContext, validPage).ok, `${scope} allowlisted projection`).toBe(true);
+      expect(validateOwnerExportSnapshotPage(exportContext, unsafePage).ok, `${scope} rejects nested private fields`).toBe(false);
+    }
   });
 
   it("rejects an unrecognized scope before selecting a module reader", async () => {

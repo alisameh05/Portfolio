@@ -24,7 +24,7 @@ function appendValueRefinement(generated, schemaName, refinement) {
 function preserveOwnerExportSemantics(generated) {
   let refined = appendValueRefinement(
     generated,
-    "zMediaMetadataExportRecord",
+    "zMediaMetadataExportRecordV11",
     `(value, context) => {
     if (value.portableReference !== undefined) {
         if (value.state !== 'accepted') {
@@ -44,7 +44,7 @@ function preserveOwnerExportSemantics(generated) {
   );
   refined = appendValueRefinement(
     refined,
-    "zCvMetadataExportRecord",
+    "zCvMetadataExportRecordV11",
     `(value, context) => {
     if (value.versionsTruncated === true && value.versions.length !== 100) {
         context.addIssue({ code: 'custom', path: ['versions'], message: 'A truncated CV version history must contain the 100-entry bound.' });

@@ -38,6 +38,17 @@ export interface OwnerExportEntryDescriptor<TScope extends ExportScope = ExportS
   readonly path: string;
   readonly scope: TScope;
   readonly mediaType: "application/x-ndjson" | "application/json";
+  readonly recordSchema: `urn:shipwithali:owner-export-schema:${TScope}:1.1`;
+  readonly schemaPath: `schemas/${TScope}.schema.json`;
+  readonly schemaVersion: "1.1";
+  readonly digest: string;
+  readonly recordCount: number;
+}
+
+export interface OwnerExportEntryDescriptorV1_0<TScope extends ExportScope = ExportScope> {
+  readonly path: string;
+  readonly scope: TScope;
+  readonly mediaType: "application/x-ndjson" | "application/json";
   readonly recordSchema: `urn:shipwithali:owner-export-schema:${TScope}:1.0`;
   readonly schemaPath: `schemas/${TScope}.schema.json`;
   readonly schemaVersion: "1.0";
@@ -52,11 +63,11 @@ interface OwnerExportPackageManifestBase {
   readonly digest: string;
   readonly includedScopes: readonly ExportScope[];
   readonly publicEventDataCoverage: { readonly mode: "excluded" };
-  readonly entries: readonly OwnerExportEntryDescriptor[];
 }
 
 export interface OwnerExportPackageManifestV1_0 extends OwnerExportPackageManifestBase {
   readonly schemaVersion: "1.0";
+  readonly entries: readonly OwnerExportEntryDescriptorV1_0[];
 }
 
 export interface OwnerExportSchemaDescriptor {
@@ -95,6 +106,7 @@ export type OwnerExportRequiredFeature =
 
 export interface OwnerExportPackageManifestV1_1 extends OwnerExportPackageManifestBase {
   readonly schemaVersion: "1.1";
+  readonly entries: readonly OwnerExportEntryDescriptor[];
   readonly exportId: string;
   readonly snapshot: {
     readonly snapshotId: string;
@@ -216,7 +228,6 @@ export interface OwnerExportSnapshotContext<TScope extends ExportScope = ExportS
   readonly cursor?: SnapshotCursor;
 }
 
-type ExportJsonObject = Readonly<Record<string, import("./persistence.js").JsonValue>>;
 type AnalyticsExportStep = {
   readonly action: string;
   readonly publicRouteIds?: readonly string[];
@@ -243,6 +254,55 @@ type PortableContentRevision = {
   readonly currentlyPublished: boolean;
 };
 type PortableRouteRedirect = { readonly fromSlug: string; readonly toSlug: string };
+type PortableMediaAccessibility =
+  | { readonly kind: "described-image"; readonly altText: string }
+  | { readonly kind: "decorative-image" }
+  | { readonly kind: "video" | "document"; readonly summary: string };
+type PortableMediaProcessing = {
+  readonly result: "passed" | "failed";
+  readonly detectedMediaType: string;
+  readonly detectedByteLength: number;
+  readonly sha256: string;
+  readonly findings: readonly string[];
+  readonly recordedAt: string;
+};
+type PortableMediaDecision = {
+  readonly decision: "accepted" | "rejected";
+  readonly decidedAt: string;
+  readonly reason?: string;
+};
+type PortableCvVersion = {
+  readonly versionId: string;
+  readonly mediaId: string;
+  readonly locale: "en";
+  readonly portableReference?: string;
+  readonly label: string;
+  readonly state: "registered" | "accepted";
+  readonly isCurrent: boolean;
+};
+type PortableCvActivation = { readonly versionId: string; readonly activatedAt: string };
+type PortableModerationDecision = {
+  readonly decision: "approved" | "rejected" | "suppressed";
+  readonly reason: string;
+  readonly decidedAt: string;
+};
+type PortableProfile = {
+  readonly displayName: string;
+  readonly headline: string;
+  readonly bio: string;
+  readonly mediaAssetId?: string;
+};
+type PortableContactChannel = {
+  readonly channel: "linkedin" | "whatsapp" | "instagram" | "phone" | "email" | "other";
+  readonly label: string;
+  readonly destination: string;
+  readonly availableLocales: readonly ("en" | "ar")[];
+};
+type PortableProjectCta = {
+  readonly label: string;
+  readonly destination: string;
+  readonly unavailableFallback: string;
+};
 type ExportRecordValueByScope = {
   readonly "portfolio-content": {
     readonly contentId: string; readonly contentType: "project" | "achievement" | "testimonial";
@@ -259,24 +319,29 @@ type ExportRecordValueByScope = {
     readonly assignments: readonly ExportTaxonomyAssignment[];
   };
   readonly "media-metadata": {
-    readonly mediaId: string; readonly kind: string; readonly state: string; readonly accessibilityMetadata: ExportJsonObject | null;
-    readonly processingHistory: readonly ExportJsonObject[]; readonly decisionHistory: readonly ExportJsonObject[];
+    readonly mediaId: string; readonly kind: "image" | "video" | "document";
+    readonly state: "upload-pending" | "processing" | "processed" | "accepted" | "rejected";
+    readonly accessibilityMetadata: PortableMediaAccessibility | null;
+    readonly processingHistory: readonly PortableMediaProcessing[]; readonly decisionHistory: readonly PortableMediaDecision[];
     readonly processingHistoryTruncated?: boolean; readonly decisionHistoryTruncated?: boolean;
-    readonly publicationState: string; readonly portableReference?: string;
+    readonly publicationState: "private" | "accepted" | "published" | "withdrawn"; readonly portableReference?: string;
   };
   readonly "cv-metadata": {
     readonly aggregateVersion: number; readonly currentVersionId: string | null;
     readonly versionsTruncated?: boolean; readonly activationHistoryTruncated?: boolean;
-    readonly versions: readonly ExportJsonObject[]; readonly activationHistory: readonly ExportJsonObject[];
+    readonly versions: readonly PortableCvVersion[]; readonly activationHistory: readonly PortableCvActivation[];
   };
   readonly "moderation-history": {
-    readonly feedbackId: string; readonly projectId: string; readonly locale: string; readonly aggregateVersion: number;
-    readonly state: string; readonly authorName: string; readonly paragraph: string; readonly submittedAt: string;
-    readonly decisionHistory: readonly ExportJsonObject[];
+    readonly feedbackId: string; readonly projectId: string; readonly locale: "en" | "ar"; readonly aggregateVersion: number;
+    readonly state: "pending" | "approved" | "rejected" | "suppressed";
+    readonly authorName: string; readonly paragraph: string; readonly submittedAt: string;
+    readonly decisionHistory: readonly PortableModerationDecision[];
   };
   readonly "analytics-reports": { readonly goal: AnalyticsExportGoal; readonly reports: readonly AnalyticsExportReport[] };
   readonly "portfolio-configuration": {
-    readonly profile: ExportJsonObject; readonly contactChannels: ExportJsonObject; readonly projectCta: ExportJsonObject;
+    readonly profile: PortableProfile;
+    readonly contactChannels: { readonly channels: readonly PortableContactChannel[] };
+    readonly projectCta: PortableProjectCta;
   };
 };
 
@@ -340,8 +405,12 @@ function hasRequiredKeys(value: Record<string, unknown>, required: readonly stri
   return required.every((key) => Object.hasOwn(value, key));
 }
 const PORTABLE_STABLE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const PORTABLE_UTC_INSTANT = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?Z$/;
 function isPortableStableId(value: unknown): value is string {
   return typeof value === "string" && PORTABLE_STABLE_ID.test(value);
+}
+function isPortableUtcInstant(value: unknown): value is string {
+  return typeof value === "string" && PORTABLE_UTC_INSTANT.test(value);
 }
 function isBoundedString(value: unknown, minLength: number, maxLength: number): value is string {
   return typeof value === "string" && value.length >= minLength && value.length <= maxLength;
@@ -395,11 +464,10 @@ function isPortableTaxonomyValue(value: unknown): boolean {
     hasRequiredKeys(value, ["valueId", "name", "state", "mergedIntoId"]) && isPortableStableId(value["mergedIntoId"]);
 }
 function isPortableTaxonomyRename(value: unknown): boolean {
-  const utcInstant = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?Z$/;
   return hasOnlyKeys(value, ["valueId", "previousName", "newName", "renamedAt"]) &&
     hasRequiredKeys(value, ["valueId", "previousName", "newName", "renamedAt"]) &&
     isPortableStableId(value["valueId"]) && isBoundedString(value["previousName"], 1, 100) &&
-    isBoundedString(value["newName"], 1, 100) && typeof value["renamedAt"] === "string" && utcInstant.test(value["renamedAt"]);
+    isBoundedString(value["newName"], 1, 100) && isPortableUtcInstant(value["renamedAt"]);
 }
 function isSafeTaxonomyExportValue(value: unknown): boolean {
   return hasOnlyKeys(value, ["taxonomyId", "aggregateVersion", "kind", "values", "renameHistory", "assignments"]) &&
@@ -411,6 +479,115 @@ function isSafeTaxonomyExportValue(value: unknown): boolean {
     Array.isArray(value["assignments"]) && value["assignments"].every((assignment) =>
       hasOnlyKeys(assignment, ["targetId", "taxonomyValueId"]) && hasRequiredKeys(assignment, ["targetId", "taxonomyValueId"]) &&
       isPortableStableId(assignment["targetId"]) && isPortableStableId(assignment["taxonomyValueId"]));
+}
+function isPortableMediaAccessibility(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (value["kind"] === "described-image") {
+    return hasOnlyKeys(value, ["kind", "altText"]) && hasRequiredKeys(value, ["kind", "altText"]) &&
+      isBoundedString(value["altText"], 1, 500);
+  }
+  if (value["kind"] === "decorative-image") {
+    return hasOnlyKeys(value, ["kind"]) && hasRequiredKeys(value, ["kind"]);
+  }
+  return (value["kind"] === "video" || value["kind"] === "document") &&
+    hasOnlyKeys(value, ["kind", "summary"]) && hasRequiredKeys(value, ["kind", "summary"]) &&
+    isBoundedString(value["summary"], 1, 2_000);
+}
+function isPortableMediaProcessing(value: unknown): boolean {
+  return hasOnlyKeys(value, ["result", "detectedMediaType", "detectedByteLength", "sha256", "findings", "recordedAt"]) &&
+    hasRequiredKeys(value, ["result", "detectedMediaType", "detectedByteLength", "sha256", "findings", "recordedAt"]) &&
+    ["passed", "failed"].includes(String(value["result"])) && typeof value["detectedMediaType"] === "string" &&
+    Number.isSafeInteger(value["detectedByteLength"]) && Number(value["detectedByteLength"]) >= 1 &&
+    typeof value["sha256"] === "string" && /^[a-f0-9]{64}$/.test(value["sha256"]) &&
+    Array.isArray(value["findings"]) && value["findings"].length <= 50 &&
+    value["findings"].every((finding) => isBoundedString(finding, 1, 200)) && isPortableUtcInstant(value["recordedAt"]);
+}
+function isPortableMediaDecision(value: unknown): boolean {
+  return hasOnlyKeys(value, ["decision", "decidedAt", "reason"]) && hasRequiredKeys(value, ["decision", "decidedAt"]) &&
+    ["accepted", "rejected"].includes(String(value["decision"])) && isPortableUtcInstant(value["decidedAt"]) &&
+    (value["reason"] === undefined || isBoundedString(value["reason"], 1, 500));
+}
+function isSafeMediaMetadataExportValue(value: unknown): boolean {
+  const keys = ["mediaId", "kind", "state", "accessibilityMetadata", "processingHistory", "decisionHistory", "processingHistoryTruncated", "decisionHistoryTruncated", "publicationState", "portableReference"];
+  const required = ["mediaId", "kind", "state", "accessibilityMetadata", "processingHistory", "decisionHistory", "publicationState"];
+  const mediaReference = /^assets\/media-metadata\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  return hasOnlyKeys(value, keys) && hasRequiredKeys(value, required) && isPortableStableId(value["mediaId"]) &&
+    ["image", "video", "document"].includes(String(value["kind"])) &&
+    ["upload-pending", "processing", "processed", "accepted", "rejected"].includes(String(value["state"])) &&
+    (value["accessibilityMetadata"] === null || isPortableMediaAccessibility(value["accessibilityMetadata"])) &&
+    Array.isArray(value["processingHistory"]) && value["processingHistory"].length <= 100 && value["processingHistory"].every(isPortableMediaProcessing) &&
+    Array.isArray(value["decisionHistory"]) && value["decisionHistory"].length <= 100 && value["decisionHistory"].every(isPortableMediaDecision) &&
+    (value["processingHistoryTruncated"] === undefined || typeof value["processingHistoryTruncated"] === "boolean") &&
+    (value["decisionHistoryTruncated"] === undefined || typeof value["decisionHistoryTruncated"] === "boolean") &&
+    (value["processingHistoryTruncated"] !== true || value["processingHistory"].length === 100) &&
+    (value["decisionHistoryTruncated"] !== true || value["decisionHistory"].length === 100) &&
+    ["private", "accepted", "published", "withdrawn"].includes(String(value["publicationState"])) &&
+    (value["portableReference"] === undefined ||
+      typeof value["portableReference"] === "string" && mediaReference.test(value["portableReference"]) && value["state"] === "accepted");
+}
+function isPortableCvVersion(value: unknown): boolean {
+  const reference = /^assets\/cv-metadata\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  return hasOnlyKeys(value, ["versionId", "mediaId", "locale", "portableReference", "label", "state", "isCurrent"]) &&
+    hasRequiredKeys(value, ["versionId", "mediaId", "locale", "label", "state", "isCurrent"]) &&
+    isPortableStableId(value["versionId"]) && isPortableStableId(value["mediaId"]) && value["locale"] === "en" &&
+    (value["portableReference"] === undefined || typeof value["portableReference"] === "string" && reference.test(value["portableReference"])) &&
+    isBoundedString(value["label"], 1, 120) && ["registered", "accepted"].includes(String(value["state"])) &&
+    (value["state"] !== "accepted" || value["portableReference"] !== undefined) && typeof value["isCurrent"] === "boolean";
+}
+function isPortableCvActivation(value: unknown): boolean {
+  return hasOnlyKeys(value, ["versionId", "activatedAt"]) && hasRequiredKeys(value, ["versionId", "activatedAt"]) &&
+    isPortableStableId(value["versionId"]) && isPortableUtcInstant(value["activatedAt"]);
+}
+function isSafeCvMetadataExportValue(value: unknown): boolean {
+  const keys = ["aggregateVersion", "currentVersionId", "versions", "versionsTruncated", "activationHistory", "activationHistoryTruncated"];
+  const required = ["aggregateVersion", "currentVersionId", "versions", "activationHistory"];
+  return hasOnlyKeys(value, keys) && hasRequiredKeys(value, required) && Number.isSafeInteger(value["aggregateVersion"]) &&
+    Number(value["aggregateVersion"]) >= 1 && (value["currentVersionId"] === null || isPortableStableId(value["currentVersionId"])) &&
+    Array.isArray(value["versions"]) && value["versions"].length <= 100 && value["versions"].every(isPortableCvVersion) &&
+    (value["versionsTruncated"] === undefined || typeof value["versionsTruncated"] === "boolean") &&
+    (value["versionsTruncated"] !== true || value["versions"].length === 100) &&
+    Array.isArray(value["activationHistory"]) && value["activationHistory"].length <= 100 && value["activationHistory"].every(isPortableCvActivation) &&
+    (value["activationHistoryTruncated"] === undefined || typeof value["activationHistoryTruncated"] === "boolean") &&
+    (value["activationHistoryTruncated"] !== true || value["activationHistory"].length === 100);
+}
+function isPortableModerationDecision(value: unknown): boolean {
+  return hasOnlyKeys(value, ["decision", "reason", "decidedAt"]) && hasRequiredKeys(value, ["decision", "reason", "decidedAt"]) &&
+    ["approved", "rejected", "suppressed"].includes(String(value["decision"])) &&
+    isBoundedString(value["reason"], 1, 500) && isPortableUtcInstant(value["decidedAt"]);
+}
+function isSafeModerationHistoryExportValue(value: unknown): boolean {
+  return hasOnlyKeys(value, ["feedbackId", "projectId", "locale", "aggregateVersion", "state", "authorName", "paragraph", "submittedAt", "decisionHistory"]) &&
+    hasRequiredKeys(value, ["feedbackId", "projectId", "locale", "aggregateVersion", "state", "authorName", "paragraph", "submittedAt", "decisionHistory"]) &&
+    isPortableStableId(value["feedbackId"]) && isPortableStableId(value["projectId"]) && ["en", "ar"].includes(String(value["locale"])) &&
+    Number.isSafeInteger(value["aggregateVersion"]) && Number(value["aggregateVersion"]) >= 1 &&
+    ["pending", "approved", "rejected", "suppressed"].includes(String(value["state"])) &&
+    isBoundedString(value["authorName"], 1, 120) && isBoundedString(value["paragraph"], 1, 5_000) &&
+    isPortableUtcInstant(value["submittedAt"]) && Array.isArray(value["decisionHistory"]) && value["decisionHistory"].every(isPortableModerationDecision);
+}
+function isPortableProfile(value: unknown): boolean {
+  return hasOnlyKeys(value, ["displayName", "headline", "bio", "mediaAssetId"]) && hasRequiredKeys(value, ["displayName", "headline", "bio"]) &&
+    isBoundedString(value["displayName"], 1, 100) && isBoundedString(value["headline"], 1, 160) &&
+    isBoundedString(value["bio"], 1, 4_000) && (value["mediaAssetId"] === undefined || isPortableStableId(value["mediaAssetId"]));
+}
+function isPortableContactChannel(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const locales = value["availableLocales"];
+  return hasOnlyKeys(value, ["channel", "label", "destination", "availableLocales"]) &&
+    hasRequiredKeys(value, ["channel", "label", "destination", "availableLocales"]) &&
+    ["linkedin", "whatsapp", "instagram", "phone", "email", "other"].includes(String(value["channel"])) &&
+    isBoundedString(value["label"], 1, 80) && isBoundedString(value["destination"], 1, 2_048) &&
+    Array.isArray(locales) && locales.length >= 1 && locales.every((locale) => locale === "en" || locale === "ar") &&
+    new Set(locales).size === locales.length;
+}
+function isSafePortfolioConfigurationExportValue(value: unknown): boolean {
+  return hasOnlyKeys(value, ["profile", "contactChannels", "projectCta"]) && hasRequiredKeys(value, ["profile", "contactChannels", "projectCta"]) &&
+    isPortableProfile(value["profile"]) && hasOnlyKeys(value["contactChannels"], ["channels"]) &&
+    hasRequiredKeys(value["contactChannels"], ["channels"]) && Array.isArray(value["contactChannels"]["channels"]) &&
+    value["contactChannels"]["channels"].length <= 20 && value["contactChannels"]["channels"].every(isPortableContactChannel) &&
+    hasOnlyKeys(value["projectCta"], ["label", "destination", "unavailableFallback"]) &&
+    hasRequiredKeys(value["projectCta"], ["label", "destination", "unavailableFallback"]) &&
+    isBoundedString(value["projectCta"]["label"], 1, 80) && isBoundedString(value["projectCta"]["destination"], 1, 2_048) &&
+    isBoundedString(value["projectCta"]["unavailableFallback"], 1, 160);
 }
 function isStableIdArray(kind: string, value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string" && parseStableId(kind, item).ok);
@@ -454,7 +631,7 @@ export function validateOwnerExportSnapshotPage<TScope extends ExportScope>(
   context: OwnerExportSnapshotContext<TScope>,
   page: OwnerExportSnapshotPage<TScope>,
 ): Result<OwnerExportSnapshotPage<TScope>, Extract<Rejection, { kind: "validation" }>> {
-  const expectedSchema = `urn:shipwithali:owner-export-schema:${context.scope}:1.0`;
+  const expectedSchema = `urn:shipwithali:owner-export-schema:${context.scope}:1.1`;
   if (page === null || typeof page !== "object" || page.descriptor === null || typeof page.descriptor !== "object") {
     return err({ kind: "validation", code: "EXPORT_SNAPSHOT_PAGE_INVALID" });
   }
@@ -467,7 +644,7 @@ export function validateOwnerExportSnapshotPage<TScope extends ExportScope>(
     descriptor.scope !== context.scope ||
     descriptor.recordSchema !== expectedSchema ||
     descriptor.schemaPath !== `schemas/${context.scope}.schema.json` ||
-    descriptor.schemaVersion !== "1.0" ||
+    descriptor.schemaVersion !== "1.1" ||
     !["application/x-ndjson", "application/json"].includes(descriptor.mediaType) ||
     !safePath(descriptor.path) ||
     !/^[a-f0-9]{64}$/.test(descriptor.digest) ||
@@ -479,7 +656,11 @@ export function validateOwnerExportSnapshotPage<TScope extends ExportScope>(
       !hasOnlyKeys(record, ["scope", "value"]) || record["scope"] !== context.scope ||
       (context.scope === "portfolio-content" && !isSafePortfolioContentExportValue(record["value"])) ||
       (context.scope === "taxonomy" && !isSafeTaxonomyExportValue(record["value"])) ||
-      (context.scope === "analytics-reports" && !isSafeAnalyticsExportRecord(record["value"])),
+      (context.scope === "media-metadata" && !isSafeMediaMetadataExportValue(record["value"])) ||
+      (context.scope === "cv-metadata" && !isSafeCvMetadataExportValue(record["value"])) ||
+      (context.scope === "moderation-history" && !isSafeModerationHistoryExportValue(record["value"])) ||
+      (context.scope === "analytics-reports" && !isSafeAnalyticsExportRecord(record["value"])) ||
+      (context.scope === "portfolio-configuration" && !isSafePortfolioConfigurationExportValue(record["value"])),
     ) ||
     (page.nextCursor !== undefined && !parseSnapshotCursor(page.nextCursor).ok)
   ) {

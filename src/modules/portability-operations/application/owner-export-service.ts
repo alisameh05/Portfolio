@@ -424,6 +424,7 @@ const TRANSITION_METADATA: Record<ExportStatus, readonly ("failureCode" | "integ
 
 export function isManifestShape(value: unknown): value is OwnerExportPackageManifest {
   if (!isRecord(value)) return false;
+  const entrySchemaVersion = value["schemaVersion"] === "1.0" ? "1.0" : "1.1";
   const scopes = value["includedScopes"];
   const entries = value["entries"];
   const commonShape = (
@@ -443,9 +444,9 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
       (OWNER_EXPORT_SCOPES as readonly string[]).includes(entry["scope"] as string) &&
       ["application/x-ndjson", "application/json"].includes(entry["mediaType"] as string) &&
       typeof entry["recordSchema"] === "string" &&
-      entry["recordSchema"] === `urn:shipwithali:owner-export-schema:${String(entry["scope"])}:1.0` &&
+      entry["recordSchema"] === `urn:shipwithali:owner-export-schema:${String(entry["scope"])}:${entrySchemaVersion}` &&
       entry["schemaPath"] === `schemas/${String(entry["scope"])}.schema.json` &&
-      entry["schemaVersion"] === "1.0" &&
+      entry["schemaVersion"] === entrySchemaVersion &&
       typeof entry["digest"] === "string" && /^[a-f0-9]{64}$/.test(entry["digest"] as string) &&
       Number.isSafeInteger(entry["recordCount"]) && (entry["recordCount"] as number) >= 0)
   );

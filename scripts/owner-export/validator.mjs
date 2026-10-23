@@ -386,12 +386,19 @@ const manifestValidators = new Map([
   ["1.0", ajv.compile(localManifest10.schema)],
   ["1.1", ajv.compile(localManifest11.schema)],
 ]);
-const localRecordSchemas = new Map(SCOPES.map((scope) => {
-  const source = readLocalSchema(`v1.0/${scope}.schema.json`);
-  const expectedUri = `urn:shipwithali:owner-export-schema:${scope}:1.0`;
-  if (source.schema.$id !== expectedUri) throw new Error(`invalid local schema identity for ${scope}`);
-  return [scope, { ...source, validate: ajv.compile(source.schema), uri: expectedUri }];
-}));
+function readLocalRecordSchemas(schemaVersion) {
+  return new Map(SCOPES.map((scope) => {
+    const source = readLocalSchema(`v${schemaVersion}/${scope}.schema.json`);
+    const expectedUri = `urn:shipwithali:owner-export-schema:${scope}:${schemaVersion}`;
+    if (source.schema.$id !== expectedUri) throw new Error(`invalid local schema identity for ${scope}`);
+    return [scope, { ...source, validate: ajv.compile(source.schema), uri: expectedUri }];
+  }));
+}
+const localRecordSchemas10 = readLocalRecordSchemas("1.0");
+const localRecordSchemas11 = readLocalRecordSchemas("1.1");
+function recordSchemasForVersion(version) {
+  return version === "1.0" ? localRecordSchemas10 : localRecordSchemas11;
+}
 
 function object(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -423,11 +430,12 @@ function validateSchema(validator, value, code) {
 function validateEntryDescriptor(entry, version) {
   if (!object(entry) || !SCOPE_SET.has(entry.scope)) fail("PACKAGE_ENTRY_DESCRIPTOR_INVALID");
   const extension = entry.mediaType === "application/x-ndjson" ? "ndjson" : entry.mediaType === "application/json" ? "json" : "";
-  const schema = localRecordSchemas.get(entry.scope);
+  const schemaVersion = version === "1.0" ? "1.0" : "1.1";
+  const schema = recordSchemasForVersion(version).get(entry.scope);
   if (
     extension === "" || entry.path !== `records/${entry.scope}.${extension}` ||
     entry.recordSchema !== schema.uri || entry.schemaPath !== `schemas/${entry.scope}.schema.json` ||
-    entry.schemaVersion !== "1.0" || !DIGEST_PATTERN.test(entry.digest) ||
+    entry.schemaVersion !== schemaVersion || !DIGEST_PATTERN.test(entry.digest) ||
     !Number.isSafeInteger(entry.recordCount) || entry.recordCount < 0 || entry.recordCount > LIMITS.recordsPerScope
   ) {
     fail("PACKAGE_ENTRY_DESCRIPTOR_INVALID");
@@ -440,6 +448,8 @@ function validateEntryDescriptor(entry, version) {
 
 function verifySchemaEntries(manifest, version, entryMap) {
   const usedScopes = manifest.entries.map((entry) => entry.scope);
+  const schemaVersion = version === "1.0" ? "1.0" : "1.1";
+  const localRecordSchemas = recordSchemasForVersion(version);
   const schemaDescriptors = version === "1.0" ? undefined : manifest.schemas;
   const expectedDescriptors = [];
   if (version !== "1.0") {
@@ -452,7 +462,7 @@ function verifySchemaEntries(manifest, version, entryMap) {
     const source = localRecordSchemas.get(scope);
     expectedDescriptors.push({
       kind: "record", scope, path: `schemas/${scope}.schema.json`, schemaUri: source.uri,
-      schemaVersion: "1.0", digest: sha256(source.bytes), source,
+      schemaVersion, digest: sha256(source.bytes), source,
     });
   }
   if (version !== "1.0") {
@@ -533,17 +543,19 @@ function compareUtcInstant(left, right) {
     : baseOrder;
 }
 
-function verifyRecordOrdering(scope, records) {
+function verifyRecordOrdering(scope, records, version) {
+  const valueOf = (record) => version === "1.0" ? record : record.value;
   if (scope === "cv-metadata" || scope === "portfolio-configuration") {
     if (records.length > 1) fail("PACKAGE_RECORD_ORDER_INVALID");
   } else {
     let previousId = "";
     for (const record of records) {
-      const identity = scope === "portfolio-content" ? record.value.contentId
-        : scope === "taxonomy" ? record.value.taxonomyId
-          : scope === "media-metadata" ? record.value.mediaId
-            : scope === "moderation-history" ? record.value.feedbackId
-              : record.value.goal.goalId;
+      const value = valueOf(record);
+      const identity = scope === "portfolio-content" ? value.contentId
+        : scope === "taxonomy" ? value.taxonomyId
+          : scope === "media-metadata" ? value.mediaId
+            : scope === "moderation-history" ? value.feedbackId
+              : value.goal.goalId;
       if (typeof identity !== "string" || !STABLE_ID_PATTERN.test(identity) || identity <= previousId) {
         fail("PACKAGE_RECORD_ORDER_INVALID");
       }
@@ -555,7 +567,7 @@ function verifyRecordOrdering(scope, records) {
     const localeOrder = new Map([["en", 0], ["ar", 1]]);
     for (const record of records) {
       let previous;
-      for (const revision of record.value.revisions) {
+      for (const revision of valueOf(record).revisions) {
         if (!object(revision) || !localeOrder.has(revision.locale) || !Number.isSafeInteger(revision.sequence) ||
           typeof revision.revisionId !== "string" || !STABLE_ID_PATTERN.test(revision.revisionId)) {
           fail("PACKAGE_RECORD_ORDER_INVALID");
@@ -570,7 +582,7 @@ function verifyRecordOrdering(scope, records) {
     }
   } else if (scope === "cv-metadata") {
     for (const record of records) {
-      const value = record.value;
+      const value = valueOf(record);
       const currentVersions = value.versions.filter((version) => version.isCurrent);
       if (value.currentVersionId === null && currentVersions.length !== 0 ||
         value.currentVersionId !== null && (currentVersions.length !== 1 || currentVersions[0].versionId !== value.currentVersionId || currentVersions[0].state !== "accepted")) {
@@ -587,7 +599,7 @@ function verifyRecordOrdering(scope, records) {
     }
   } else if (scope === "analytics-reports") {
     for (const record of records) {
-      const goal = record.value.goal;
+      const goal = valueOf(record).goal;
       for (let index = 1; index < goal.versions.length; index += 1) {
         if (goal.versions[index - 1].versionNumber >= goal.versions[index].versionNumber) fail("PACKAGE_RECORD_ORDER_INVALID");
       }
@@ -599,9 +611,10 @@ function verifyRecordOrdering(scope, records) {
           fail("PACKAGE_RECORD_ORDER_INVALID");
         }
       }
-      for (let index = 1; index < record.value.reports.length; index += 1) {
-        const previous = record.value.reports[index - 1];
-        const current = record.value.reports[index];
+      const reports = valueOf(record).reports;
+      for (let index = 1; index < reports.length; index += 1) {
+        const previous = reports[index - 1];
+        const current = reports[index];
         if (compareUtcInstant(previous.periodStart, current.periodStart) > 0 ||
           compareUtcInstant(previous.periodStart, current.periodStart) === 0 && compareUtcInstant(previous.periodEnd, current.periodEnd) > 0 ||
           compareUtcInstant(previous.periodStart, current.periodStart) === 0 && compareUtcInstant(previous.periodEnd, current.periodEnd) === 0 && previous.goalVersionId >= current.goalVersionId) {
@@ -828,9 +841,9 @@ export function validateOwnerExportZip(input) {
   const recordsByScope = new Map();
   const recordCounts = {};
   for (const descriptor of manifest.entries) {
-    const validatorForScope = localRecordSchemas.get(descriptor.scope).validate;
+    const validatorForScope = recordSchemasForVersion(version).get(descriptor.scope).validate;
     const records = recordsFromEntry(findEntry(entryMap, descriptor.path), descriptor, validatorForScope);
-    verifyRecordOrdering(descriptor.scope, records);
+    verifyRecordOrdering(descriptor.scope, records, version);
     recordsByScope.set(descriptor.scope, records);
     recordCounts[descriptor.scope] = records.length;
   }

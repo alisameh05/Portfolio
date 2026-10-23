@@ -135,6 +135,8 @@ components:
   schemas:
     OwnerExportRecord:
       $ref: ./components/portability.yaml#/schemas/OwnerExportRecord
+    OwnerExportRecordV1_1:
+      $ref: ./components/portability.yaml#/schemas/OwnerExportRecordV1_1
   securitySchemes:
     OwnerSession:
       type: apiKey

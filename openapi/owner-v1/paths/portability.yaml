@@ -82,9 +82,9 @@ export:
                       - path: records/analytics-reports.ndjson
                         scope: analytics-reports
                         mediaType: application/x-ndjson
-                        recordSchema: urn:shipwithali:owner-export-schema:analytics-reports:1.0
+                        recordSchema: urn:shipwithali:owner-export-schema:analytics-reports:1.1
                         schemaPath: schemas/analytics-reports.schema.json
-                        schemaVersion: '1.0'
+                        schemaVersion: '1.1'
                         digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
                         recordCount: 0
                     schemas:
@@ -96,8 +96,8 @@ export:
                       - kind: record
                         scope: analytics-reports
                         path: schemas/analytics-reports.schema.json
-                        schemaUri: urn:shipwithali:owner-export-schema:analytics-reports:1.0
-                        schemaVersion: '1.0'
+                        schemaUri: urn:shipwithali:owner-export-schema:analytics-reports:1.1
+                        schemaVersion: '1.1'
                         digest: 7d0435d3e80081347534bce46c45365550a764a93ccbbf6b4997bbb6e8f836a3
                     assets: []
                   downloadAvailable: true

@@ -46,9 +46,9 @@
         "path": { "type": "string", "pattern": "^records/[a-z0-9-]+\\.(?:json|ndjson)$" },
         "scope": { "$ref": "#/$defs/scope" },
         "mediaType": { "enum": ["application/json", "application/x-ndjson"] },
-        "recordSchema": { "type": "string", "pattern": "^urn:shipwithali:owner-export-schema:[a-z0-9-]+:1\\.0$" },
+        "recordSchema": { "type": "string", "pattern": "^urn:shipwithali:owner-export-schema:[a-z0-9-]+:1\\.1$" },
         "schemaPath": { "type": "string", "pattern": "^schemas/[a-z0-9-]+\\.schema\\.json$" },
-        "schemaVersion": { "const": "1.0" },
+        "schemaVersion": { "const": "1.1" },
         "digest": { "$ref": "#/$defs/digest" },
         "recordCount": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
       }
@@ -67,7 +67,7 @@
       },
       "oneOf": [
         { "properties": { "kind": { "const": "manifest" }, "path": { "const": "schemas/manifest.schema.json" }, "schemaUri": { "const": "urn:shipwithali:owner-export-schema:manifest:1.1" }, "schemaVersion": { "const": "1.1" } }, "not": { "properties": { "scope": true }, "required": ["scope"] } },
-        { "required": ["scope"], "properties": { "kind": { "const": "record" } } }
+        { "required": ["scope"], "properties": { "kind": { "const": "record" }, "schemaUri": { "type": "string", "pattern": "^urn:shipwithali:owner-export-schema:[a-z0-9-]+:1\\.1$" }, "schemaVersion": { "const": "1.1" } } }
       ]
     },
     "dependency": {

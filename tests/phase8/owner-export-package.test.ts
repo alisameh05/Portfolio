@@ -103,12 +103,12 @@ function buildRepresentativePackage(options: {
   readonly adjustManifest?: (manifest: Record<string, unknown>) => void;
 } = {}): Buffer {
   const manifestSchema = readFileSync("schemas/owner-export/v1.1/manifest.schema.json");
-  const sourceMediaSchema = readFileSync("schemas/owner-export/v1.0/media-metadata.schema.json");
+  const sourceMediaSchema = readFileSync("schemas/owner-export/v1.1/media-metadata.schema.json");
   const mediaSchema = Buffer.from(sourceMediaSchema);
   if (options.corruptSchemaSameLength) mediaSchema[mediaSchema.length - 2] = mediaSchema[mediaSchema.length - 2]! ^ 1;
-  const cvSchema = readFileSync("schemas/owner-export/v1.0/cv-metadata.schema.json");
-  const analyticsSchema = readFileSync("schemas/owner-export/v1.0/analytics-reports.schema.json");
-  const configurationSchema = readFileSync("schemas/owner-export/v1.0/portfolio-configuration.schema.json");
+  const cvSchema = readFileSync("schemas/owner-export/v1.1/cv-metadata.schema.json");
+  const analyticsSchema = readFileSync("schemas/owner-export/v1.1/analytics-reports.schema.json");
+  const configurationSchema = readFileSync("schemas/owner-export/v1.1/portfolio-configuration.schema.json");
   const assetId = stableId("001");
   const mediaRecord = Buffer.from(`${JSON.stringify({
     scope: "media-metadata",
@@ -191,17 +191,17 @@ function buildRepresentativePackage(options: {
   if (options.corruptRecordSameLength) mediaRecordForZip[mediaRecordForZip.length - 2] = mediaRecordForZip[mediaRecordForZip.length - 2]! ^ 1;
   const descriptorRecordBytes = options.malformedRecord ? mediaRecordForZip : mediaRecord;
   const entries = [
-    { path: "records/media-metadata.ndjson", scope: "media-metadata", mediaType: "application/x-ndjson", recordSchema: "urn:shipwithali:owner-export-schema:media-metadata:1.0", schemaPath: "schemas/media-metadata.schema.json", schemaVersion: "1.0", digest: digest(descriptorRecordBytes), recordCount: 1 },
-    { path: "records/cv-metadata.ndjson", scope: "cv-metadata", mediaType: "application/x-ndjson", recordSchema: "urn:shipwithali:owner-export-schema:cv-metadata:1.0", schemaPath: "schemas/cv-metadata.schema.json", schemaVersion: "1.0", digest: digest(cvRecord), recordCount: 1 },
-    { path: "records/analytics-reports.ndjson", scope: "analytics-reports", mediaType: "application/x-ndjson", recordSchema: "urn:shipwithali:owner-export-schema:analytics-reports:1.0", schemaPath: "schemas/analytics-reports.schema.json", schemaVersion: "1.0", digest: digest(analyticsRecords), recordCount: 1 },
-    { path: `records/portfolio-configuration.${options.emptyConfigurationAsJson ? "json" : "ndjson"}`, scope: "portfolio-configuration", mediaType: options.emptyConfigurationAsJson ? "application/json" : "application/x-ndjson", recordSchema: "urn:shipwithali:owner-export-schema:portfolio-configuration:1.0", schemaPath: "schemas/portfolio-configuration.schema.json", schemaVersion: "1.0", digest: digest(configurationRecords), recordCount: options.includeProfileMediaAsset ? 1 : 0 },
+    { path: "records/media-metadata.ndjson", scope: "media-metadata", mediaType: "application/x-ndjson", recordSchema: "urn:shipwithali:owner-export-schema:media-metadata:1.1", schemaPath: "schemas/media-metadata.schema.json", schemaVersion: "1.1", digest: digest(descriptorRecordBytes), recordCount: 1 },
+    { path: "records/cv-metadata.ndjson", scope: "cv-metadata", mediaType: "application/x-ndjson", recordSchema: "urn:shipwithali:owner-export-schema:cv-metadata:1.1", schemaPath: "schemas/cv-metadata.schema.json", schemaVersion: "1.1", digest: digest(cvRecord), recordCount: 1 },
+    { path: "records/analytics-reports.ndjson", scope: "analytics-reports", mediaType: "application/x-ndjson", recordSchema: "urn:shipwithali:owner-export-schema:analytics-reports:1.1", schemaPath: "schemas/analytics-reports.schema.json", schemaVersion: "1.1", digest: digest(analyticsRecords), recordCount: 1 },
+    { path: `records/portfolio-configuration.${options.emptyConfigurationAsJson ? "json" : "ndjson"}`, scope: "portfolio-configuration", mediaType: options.emptyConfigurationAsJson ? "application/json" : "application/x-ndjson", recordSchema: "urn:shipwithali:owner-export-schema:portfolio-configuration:1.1", schemaPath: "schemas/portfolio-configuration.schema.json", schemaVersion: "1.1", digest: digest(configurationRecords), recordCount: options.includeProfileMediaAsset ? 1 : 0 },
   ];
   const schemas = [
     { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.1", schemaVersion: "1.1", digest: digest(manifestSchema) },
-    { kind: "record", scope: "media-metadata", path: "schemas/media-metadata.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:media-metadata:1.0", schemaVersion: "1.0", digest: digest(sourceMediaSchema) },
-    { kind: "record", scope: "cv-metadata", path: "schemas/cv-metadata.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:cv-metadata:1.0", schemaVersion: "1.0", digest: digest(cvSchema) },
-    { kind: "record", scope: "analytics-reports", path: "schemas/analytics-reports.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:analytics-reports:1.0", schemaVersion: "1.0", digest: digest(analyticsSchema) },
-    { kind: "record", scope: "portfolio-configuration", path: "schemas/portfolio-configuration.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:portfolio-configuration:1.0", schemaVersion: "1.0", digest: digest(configurationSchema) },
+    { kind: "record", scope: "media-metadata", path: "schemas/media-metadata.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:media-metadata:1.1", schemaVersion: "1.1", digest: digest(sourceMediaSchema) },
+    { kind: "record", scope: "cv-metadata", path: "schemas/cv-metadata.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:cv-metadata:1.1", schemaVersion: "1.1", digest: digest(cvSchema) },
+    { kind: "record", scope: "analytics-reports", path: "schemas/analytics-reports.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:analytics-reports:1.1", schemaVersion: "1.1", digest: digest(analyticsSchema) },
+    { kind: "record", scope: "portfolio-configuration", path: "schemas/portfolio-configuration.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:portfolio-configuration:1.1", schemaVersion: "1.1", digest: digest(configurationSchema) },
   ];
   const manifest: Record<string, unknown> = {
     packageFormat: "shipwithali-owner-export",
@@ -252,14 +252,12 @@ function buildLegacyV1Package(): Buffer {
   const analyticsSchema = readFileSync("schemas/owner-export/v1.0/analytics-reports.schema.json");
   const record = Buffer.from(`${JSON.stringify({
     scope: "analytics-reports",
-    value: {
-      goal: {
-        goalId: stableId("011"), aggregateVersion: 1, activeVersionId: null,
-        versions: [{ versionId: stableId("012"), versionNumber: 1, definition: { name: "Journey", steps: [{ action: "project-viewed" }] }, createdAt: "2026-10-23T10:00:00Z" }],
-        activationHistory: [],
-      },
-      reports: [],
+    goal: {
+      goalId: stableId("011"), aggregateVersion: 1, activeVersionId: null,
+      versions: [{ versionId: stableId("012"), versionNumber: 1, definition: { name: "Journey", steps: [{ action: "project-viewed" }] }, createdAt: "2026-10-23T10:00:00Z" }],
+      activationHistory: [],
     },
+    reports: [],
   })}\n`, "utf8");
   const manifest: Record<string, unknown> = {
     packageFormat: "shipwithali-owner-export",
@@ -375,16 +373,45 @@ describe("offline Owner export ZIP validation", () => {
       },
     ];
     for (const { scope, value, invalid } of cases) {
-      const schema = JSON.parse(readFileSync(`schemas/owner-export/v1.0/${scope}.schema.json`, "utf8"));
+      const schema = JSON.parse(readFileSync(`schemas/owner-export/v1.1/${scope}.schema.json`, "utf8"));
       const validate = ajv.compile(schema);
       expect(validate({ scope, value }), `${scope} valid variant`).toBe(true);
       expect(validate({ scope, value: invalid }), `${scope} malformed nested variant`).toBe(false);
+    }
+
+    for (const { scope, value } of cases) {
+      const legacyValue = structuredClone(value) as Record<string, unknown>;
+      if (scope === "portfolio-content") {
+        for (const evidence of legacyValue["evidenceItems"] as Array<Record<string, unknown>>) delete evidence["mediaAssetId"];
+      } else if (scope === "taxonomy") {
+        for (const taxonomyValue of legacyValue["values"] as Array<Record<string, unknown>>) {
+          if (taxonomyValue["mergedIntoId"] !== undefined) {
+            taxonomyValue["mergedIntoValueId"] = taxonomyValue["mergedIntoId"];
+            delete taxonomyValue["mergedIntoId"];
+          }
+        }
+        legacyValue["assignments"] = (legacyValue["assignments"] as Array<Record<string, unknown>>).map(({ targetId, taxonomyValueId }) => ({
+          projectId: targetId,
+          valueId: taxonomyValueId,
+        }));
+      } else if (scope === "media-metadata") {
+        delete legacyValue["processingHistoryTruncated"];
+        delete legacyValue["decisionHistoryTruncated"];
+      } else if (scope === "cv-metadata") {
+        delete legacyValue["versionsTruncated"];
+        delete legacyValue["activationHistoryTruncated"];
+        for (const version of legacyValue["versions"] as Array<Record<string, unknown>>) delete version["portableReference"];
+      }
+      const schema = JSON.parse(readFileSync(`schemas/owner-export/v1.0/${scope}.schema.json`, "utf8"));
+      const validate = ajv.compile(schema);
+      expect(validate({ scope, ...legacyValue }), `${scope} immutable v1.0 flat record`).toBe(true);
+      expect(validate({ scope, value }), `${scope} v1.1 wrapper is not redefined as v1.0`).toBe(false);
     }
   });
 
   it("allows media metadata without packaged bytes and only references accepted media bytes", () => {
     const ajv = new Ajv2020({ allErrors: true, strict: true, allowUnionTypes: true });
-    const schema = JSON.parse(readFileSync("schemas/owner-export/v1.0/media-metadata.schema.json", "utf8"));
+    const schema = JSON.parse(readFileSync("schemas/owner-export/v1.1/media-metadata.schema.json", "utf8"));
     const validate = ajv.compile(schema);
     const pending = {
       scope: "media-metadata",
@@ -400,8 +427,8 @@ describe("offline Owner export ZIP validation", () => {
 
   it("requires bounded media and CV histories to fill the retained limit when marked truncated", () => {
     const ajv = new Ajv2020({ allErrors: true, strict: true, allowUnionTypes: true });
-    const mediaSchema = JSON.parse(readFileSync("schemas/owner-export/v1.0/media-metadata.schema.json", "utf8"));
-    const cvSchema = JSON.parse(readFileSync("schemas/owner-export/v1.0/cv-metadata.schema.json", "utf8"));
+    const mediaSchema = JSON.parse(readFileSync("schemas/owner-export/v1.1/media-metadata.schema.json", "utf8"));
+    const cvSchema = JSON.parse(readFileSync("schemas/owner-export/v1.1/cv-metadata.schema.json", "utf8"));
     const validateMedia = ajv.compile(mediaSchema);
     const validateCv = ajv.compile(cvSchema);
     const processing = { result: "passed", detectedMediaType: "image/png", detectedByteLength: 8, sha256: "a".repeat(64), findings: [], recordedAt: "2026-10-23T10:00:00Z" };
@@ -441,6 +468,10 @@ describe("offline Owner export ZIP validation", () => {
 
     expect(result.manifest["schemaVersion"]).toBe("1.2");
     expect(result.manifest["extensions"]).toEqual({ producerNote: "preserved as opaque metadata" });
+    expect(result.manifest["exportId"]).toBe(stableId("003"));
+    expect(result.manifest["snapshot"]).toMatchObject({ snapshotId: stableId("004"), consistency: "transactional" });
+    expect(result.manifest["entries"].map((entry) => entry.recordSchema))
+      .toEqual(scopes.map((scope) => `urn:shipwithali:owner-export-schema:${scope}:1.1`));
   });
 
   it("rejects same-length record and schema corruption against declared bytes", () => {
