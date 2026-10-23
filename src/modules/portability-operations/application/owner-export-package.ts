@@ -7,6 +7,7 @@ import type {
   OwnerExportPackageManifestV1_2,
   OwnerExportSchemaDescriptor,
 } from "./service.js";
+import { MAX_OWNER_EXPORT_ARTIFACT_BYTES } from "./service.js";
 
 const utf8 = new TextEncoder();
 const RECORD_SCHEMA_URI = "urn:shipwithali:owner-export-schema:portfolio-configuration:1.1";
@@ -27,9 +28,10 @@ export interface OwnerExportConfigurationSnapshot {
 }
 
 export interface BuiltOwnerExportPackage {
-  readonly bytes: Uint8Array;
+  readonly contentLength: number;
   readonly sha256: string;
   readonly manifest: OwnerExportPackageManifestV1_2;
+  readonly content: AsyncIterable<Uint8Array>;
 }
 
 function sha256(bytes: Uint8Array | string): string {
@@ -68,10 +70,33 @@ const crcTable = (() => {
   return table;
 })();
 
-function crc32(bytes: Uint8Array): number {
-  let value = 0xffffffff;
+function updateCrc32(value: number, bytes: Uint8Array): number {
   for (const byte of bytes) value = crcTable[(value ^ byte) & 0xff]! ^ (value >>> 8);
-  return (value ^ 0xffffffff) >>> 0;
+  return value >>> 0;
+}
+
+export interface OwnerExportStreamIntegrity {
+  readonly contentLength: number;
+  readonly sha256: string;
+  readonly crc32: number;
+}
+
+/** Measures an artifact stream without retaining its chunks in memory. */
+export async function measureOwnerExportStream(
+  content: AsyncIterable<Uint8Array>,
+): Promise<OwnerExportStreamIntegrity> {
+  const digest = createHash("sha256");
+  let contentLength = 0;
+  let crc = 0xffffffff;
+  for await (const chunk of content) {
+    contentLength += chunk.byteLength;
+    if (!Number.isSafeInteger(contentLength) || contentLength > MAX_OWNER_EXPORT_ARTIFACT_BYTES) {
+      throw new RangeError("OWNER_EXPORT_ARTIFACT_LIMIT_EXCEEDED");
+    }
+    digest.update(chunk);
+    crc = updateCrc32(crc, chunk);
+  }
+  return { contentLength, sha256: digest.digest("hex"), crc32: (crc ^ 0xffffffff) >>> 0 };
 }
 
 function u16(value: number): Uint8Array {
@@ -94,40 +119,82 @@ function concat(parts: readonly Uint8Array[]): Uint8Array {
   return bytes;
 }
 
-interface ZipEntry {
+export interface StoredOwnerExportZipEntry {
   readonly name: string;
-  readonly bytes: Uint8Array;
+  readonly contentLength: number;
+  readonly crc32: number;
+  readonly content: () => AsyncIterable<Uint8Array>;
 }
 
-/** Produces a deterministic, stored ZIP whose member lengths and CRCs are known before emission. */
-function storedZip(entries: readonly ZipEntry[]): Uint8Array {
-  const local: Uint8Array[] = [];
-  const central: Uint8Array[] = [];
+/** Emits a deterministic ZIP with one member chunk in flight and no archive buffer. */
+export function createStoredOwnerExportZip(entries: readonly StoredOwnerExportZipEntry[]): {
+  readonly contentLength: number;
+  readonly content: AsyncIterable<Uint8Array>;
+} {
+  if (entries.length < 1 || entries.length > 0xffff || new Set(entries.map((entry) => entry.name)).size !== entries.length) {
+    throw new RangeError("OWNER_EXPORT_ZIP_DIRECTORY_INVALID");
+  }
+  const prepared: { readonly entry: StoredOwnerExportZipEntry; readonly local: Uint8Array; readonly central: Uint8Array }[] = [];
   let offset = 0;
   for (const entry of entries) {
     const name = utf8.encode(entry.name);
-    const length = entry.bytes.byteLength;
-    if (length > 0xffffffff || offset > 0xffffffff) throw new RangeError("OWNER_EXPORT_ZIP32_LIMIT");
-    const checksum = crc32(entry.bytes);
+    const length = entry.contentLength;
+    if (name.byteLength < 1 || name.byteLength > 0xffff || !Number.isSafeInteger(length) || length < 0 ||
+        length > 0xffffffff || offset > 0xffffffff || !Number.isInteger(entry.crc32) || entry.crc32 < 0 || entry.crc32 > 0xffffffff) {
+      throw new RangeError("OWNER_EXPORT_ZIP32_LIMIT");
+    }
+    const checksum = entry.crc32 >>> 0;
     const localHeader = concat([
       u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0x0021),
       u32(checksum), u32(length), u32(length), u16(name.byteLength), u16(0), name,
     ]);
-    local.push(localHeader, entry.bytes);
-    central.push(concat([
+    const centralHeader = concat([
       u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0x0021),
       u32(checksum), u32(length), u32(length), u16(name.byteLength), u16(0), u16(0),
       u16(0), u16(0), u32(0), u32(offset), name,
-    ]));
+    ]);
+    prepared.push({ entry, local: localHeader, central: centralHeader });
     offset += localHeader.byteLength + length;
   }
-  const centralDirectory = concat(central);
+  if (offset > 0xffffffff) throw new RangeError("OWNER_EXPORT_ZIP32_LIMIT");
+  const centralDirectory = concat(prepared.map((entry) => entry.central));
   const centralOffset = offset;
   const end = concat([
     u32(0x06054b50), u16(0), u16(0), u16(entries.length), u16(entries.length),
     u32(centralDirectory.byteLength), u32(centralOffset), u16(0),
   ]);
-  return concat([...local, centralDirectory, end]);
+  const contentLength = centralOffset + centralDirectory.byteLength + end.byteLength;
+  if (contentLength > MAX_OWNER_EXPORT_ARTIFACT_BYTES) throw new RangeError("OWNER_EXPORT_ARTIFACT_LIMIT_EXCEEDED");
+  const content: AsyncIterable<Uint8Array> = {
+    async *[Symbol.asyncIterator]() {
+      for (const { entry, local } of prepared) {
+        yield local;
+        let memberLength = 0;
+        let memberCrc = 0xffffffff;
+        for await (const chunk of entry.content()) {
+          memberLength += chunk.byteLength;
+          if (memberLength > entry.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_MEMBER_LENGTH_MISMATCH");
+          memberCrc = updateCrc32(memberCrc, chunk);
+          yield chunk;
+        }
+        if (memberLength !== entry.contentLength || ((memberCrc ^ 0xffffffff) >>> 0) !== (entry.crc32 >>> 0)) {
+          throw new RangeError("OWNER_EXPORT_ZIP_MEMBER_INTEGRITY_MISMATCH");
+        }
+      }
+      yield centralDirectory;
+      yield end;
+    },
+  };
+  return { contentLength, content };
+}
+
+function fixedBytesMember(name: string, bytes: Uint8Array): StoredOwnerExportZipEntry {
+  return {
+    name,
+    contentLength: bytes.byteLength,
+    crc32: (updateCrc32(0xffffffff, bytes) ^ 0xffffffff) >>> 0,
+    content: () => ({ async *[Symbol.asyncIterator]() { yield bytes; } }),
+  };
 }
 
 function readPinnedSchema(path: string): Uint8Array {
@@ -139,10 +206,10 @@ function readPinnedSchema(path: string): Uint8Array {
  * v1.1 record/schema URIs and carries the source aggregate version and captured
  * capability facts in an additive extension.
  */
-export function buildConfigurationOwnerExportPackage(input: {
+export async function buildConfigurationOwnerExportPackage(input: {
   readonly exportId: StableId<"OwnerExport">;
   readonly snapshot: OwnerExportConfigurationSnapshot;
-}): BuiltOwnerExportPackage {
+}): Promise<BuiltOwnerExportPackage> {
   const manifestSchema = readPinnedSchema("manifest.schema.json");
   const recordSchema = readPinnedSchema("portfolio-configuration.schema.json");
   const settings = input.snapshot.settings;
@@ -209,12 +276,14 @@ export function buildConfigurationOwnerExportPackage(input: {
   const digest = sha256(utf8.encode(canonicalJson(manifest, true)));
   const completeManifest = { ...manifest, digest };
   const manifestBytes = utf8.encode(`${JSON.stringify(completeManifest)}\n`);
-  const zipEntries: ZipEntry[] = [
-    { name: "manifest.json", bytes: manifestBytes },
-    { name: "schemas/manifest.schema.json", bytes: manifestSchema },
-    { name: "schemas/portfolio-configuration.schema.json", bytes: recordSchema },
-    { name: entry.path, bytes: recordBytes },
+  const zipEntries: StoredOwnerExportZipEntry[] = [
+    fixedBytesMember("manifest.json", manifestBytes),
+    fixedBytesMember("schemas/manifest.schema.json", manifestSchema),
+    fixedBytesMember("schemas/portfolio-configuration.schema.json", recordSchema),
+    fixedBytesMember(entry.path, recordBytes),
   ];
-  const bytes = storedZip(zipEntries);
-  return { bytes, sha256: sha256(bytes), manifest: completeManifest };
+  const archive = createStoredOwnerExportZip(zipEntries);
+  const integrity = await measureOwnerExportStream(archive.content);
+  if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
 }

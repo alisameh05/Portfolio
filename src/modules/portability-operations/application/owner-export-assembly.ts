@@ -30,7 +30,8 @@ export interface OwnerExportObjectStoragePort extends OwnerExportObjectReadPort 
     readonly portfolioId: StableId<"Portfolio">;
     readonly exportId: StableId<"OwnerExport">;
     readonly artifactId: StableId<"OwnerExportArtifact">;
-    readonly bytes: Uint8Array;
+    readonly content: AsyncIterable<Uint8Array>;
+    readonly contentLength: number;
     readonly sha256: string;
   }): Promise<Result<void, Rejection>>;
 }
@@ -211,7 +212,7 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         snapshot = captured.value;
       }
 
-      const built = buildConfigurationOwnerExportPackage({ exportId: record.exportId, snapshot });
+      const built = await buildConfigurationOwnerExportPackage({ exportId: record.exportId, snapshot });
       if (record.candidateArtifactId === undefined || record.candidateSha256 === undefined || record.candidateContentLength === undefined) {
         const candidateArtifactId = parseStableId("OwnerExportArtifact", deps.ids.generate("OwnerExportArtifact"));
         if (!candidateArtifactId.ok) throw new Error("OWNER_EXPORT_ARTIFACT_ID_INVALID");
@@ -221,20 +222,21 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
           leaseToken: job.leaseToken,
           artifactId: candidateArtifactId.value,
           sha256: built.sha256,
-          contentLength: built.bytes.byteLength,
+          contentLength: built.contentLength,
         });
         if (!saved.ok || saved.value !== "saved") return "stale";
         record = await deps.exports.findOwnerExport({ exportId: parsed.exportId, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId });
         if (record === null) return "stale";
       }
       if (record.candidateArtifactId === undefined || record.candidateSha256 !== built.sha256 ||
-          record.candidateContentLength !== built.bytes.byteLength) throw new Error("OWNER_EXPORT_CANDIDATE_MISMATCH");
+          record.candidateContentLength !== built.contentLength) throw new Error("OWNER_EXPORT_CANDIDATE_MISMATCH");
       const artifactId = record.candidateArtifactId;
       const stored = await deps.storage.writeOwnerExport({
         portfolioId: parsed.portfolioId,
         exportId: record.exportId,
         artifactId,
-        bytes: built.bytes,
+        content: built.content,
+        contentLength: built.contentLength,
         sha256: built.sha256,
       });
       if (!stored.ok) throw new Error("OWNER_EXPORT_STORAGE_WRITE_FAILED");
@@ -245,8 +247,8 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         expectedSha256: record.candidateSha256!,
         expectedContentLength: record.candidateContentLength!,
       });
-      if (!read.ok || read.value.contentLength !== built.bytes.byteLength ||
-          !await verifyArtifact(read.value.content, built.bytes.byteLength, built.sha256)) {
+      if (!read.ok || read.value.contentLength !== built.contentLength ||
+          !await verifyArtifact(read.value.content, built.contentLength, built.sha256)) {
         throw new Error("OWNER_EXPORT_STORAGE_VERIFY_FAILED");
       }
       const completedAt = deps.clock.now();

@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
 import { err, ok, type Rejection, type Result, type StableId } from "@shared/domain";
-import type { OwnerExportObjectReadPort, OwnerExportObjectReadRequest } from "../../modules/portability-operations/application/service.js";
+import { MAX_OWNER_EXPORT_ARTIFACT_BYTES, type OwnerExportObjectReadPort, type OwnerExportObjectReadRequest } from "../../modules/portability-operations/application/service.js";
 
 export interface OwnerExportObjectWritePort {
   writeOwnerExport(input: {
     readonly portfolioId: StableId<"Portfolio">;
     readonly exportId: StableId<"OwnerExport">;
     readonly artifactId: StableId<"OwnerExportArtifact">;
-    readonly bytes: Uint8Array;
+    readonly content: AsyncIterable<Uint8Array>;
+    readonly contentLength: number;
     readonly sha256: string;
   }): Promise<Result<void, Rejection>>;
 }
@@ -30,10 +31,6 @@ function validBucket(value: string): string {
   return value;
 }
 
-function hash(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
-}
-
 async function verifyStream(
   content: AsyncIterable<Uint8Array>,
   expectedLength: number,
@@ -51,6 +48,40 @@ async function verifyStream(
     return false;
   }
   return total === expectedLength && digest.digest("hex") === expectedSha256;
+}
+
+function toVerifiedReadableStream(
+  content: AsyncIterable<Uint8Array>,
+  expectedLength: number,
+  expectedSha256: string,
+): ReadableStream<Uint8Array> {
+  const iterator = content[Symbol.asyncIterator]();
+  const digest = createHash("sha256");
+  let total = 0;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const next = await iterator.next();
+        if (next.done) {
+          if (total !== expectedLength || digest.digest("hex") !== expectedSha256) {
+            throw new Error("OWNER_EXPORT_UPLOAD_STREAM_INTEGRITY_MISMATCH");
+          }
+          controller.close();
+          return;
+        }
+        total += next.value.byteLength;
+        if (total > expectedLength) throw new Error("OWNER_EXPORT_UPLOAD_STREAM_LENGTH_MISMATCH");
+        digest.update(next.value);
+        controller.enqueue(next.value);
+      } catch (error) {
+        await iterator.return?.();
+        controller.error(error);
+      }
+    },
+    async cancel() {
+      await iterator.return?.();
+    },
+  }, { highWaterMark: 1 });
 }
 
 /** Private server-side Storage adapter; provider paths and credentials stay inside this closure. */
@@ -120,25 +151,31 @@ export function createSupabaseOwnerExportStorage(options: SupabaseOwnerExportSto
   }
 
   async function writeOwnerExport(input: Parameters<OwnerExportObjectWritePort["writeOwnerExport"]>[0]) {
-    if (hash(input.bytes) !== input.sha256 || input.bytes.byteLength < 1) {
+    if (!Number.isSafeInteger(input.contentLength) || input.contentLength < 1 ||
+        input.contentLength > MAX_OWNER_EXPORT_ARTIFACT_BYTES || !/^[a-f0-9]{64}$/.test(input.sha256) ||
+        input.content === null || typeof input.content[Symbol.asyncIterator] !== "function") {
       return err({ kind: "validation" as const, code: "EXPORT_OBJECT_CANDIDATE_INVALID" });
     }
     const requestPath = `/storage/v1/object/${encodeURIComponent(bucket)}/${pathFor(input)}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const body = new ArrayBuffer(input.bytes.byteLength);
-      new Uint8Array(body).set(input.bytes);
       const response = await fetcher(new URL(requestPath, base), {
         method: "POST",
         signal: controller.signal,
-        headers: { ...headers, "content-type": "application/vnd.shipwithali.owner-export+zip", "x-upsert": "false" },
-        body,
+        duplex: "half",
+        headers: {
+          ...headers,
+          "content-type": "application/vnd.shipwithali.owner-export+zip",
+          "content-length": String(input.contentLength),
+          "x-upsert": "false",
+        },
+        body: toVerifiedReadableStream(input.content, input.contentLength, input.sha256),
       });
       if (response.ok) return ok(undefined);
       if (response.status === 409 || response.status === 400) {
-        const existing = await readOwnerExport({ ...input, expectedContentLength: input.bytes.byteLength });
-        if (existing.ok && await verifyStream(existing.value.content, input.bytes.byteLength, input.sha256)) return ok(undefined);
+        const existing = await readOwnerExport({ ...input, expectedContentLength: input.contentLength });
+        if (existing.ok && await verifyStream(existing.value.content, input.contentLength, input.sha256)) return ok(undefined);
       }
       return unavailable();
     } catch {

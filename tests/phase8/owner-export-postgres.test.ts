@@ -203,6 +203,28 @@ async function leaseExportJob(exportId: StableId<"OwnerExport">): Promise<{ read
   return { jobId: parsedJobId.value, leaseToken };
 }
 
+async function leaseUnboundAssemblyJob(): Promise<{ readonly jobId: StableId<"Job">; readonly leaseToken: string }> {
+  const jobId = createStableId("Job");
+  const leaseToken = randomUUID();
+  const payload = JSON.stringify({
+    exportId: createStableId("OwnerExport"),
+    portfolioId,
+    ownerId,
+    includedScopes: ["taxonomy"],
+  });
+  await admin!.query(
+    `insert into operations.jobs (
+       job_id, job_type, payload_version, payload, available_at, status,
+       lease_owner, lease_token, lease_expires_at
+     ) values (
+       $1, 'portability.owner-export-assembly.v1', 1, $2::jsonb, clock_timestamp(), 'leased',
+       'phase8-unrelated-worker', $3, clock_timestamp() + interval '5 minutes'
+     )`,
+    [jobId, payload, leaseToken],
+  );
+  return { jobId, leaseToken };
+}
+
 async function checkpointTestArtifact(
   store: OwnerExportStorePort,
   exportId: StableId<"OwnerExport">,
@@ -676,6 +698,8 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
 
   it("AC04: retries replay the original receipt across truthful settlements; meaning changes conflict", async () => {
     const primary = composeService(application!);
+    const workerOperations = createPostgresOperationsPersistence(worker!.database, { now: () => now });
+    const workerStore = createPostgresOwnerExportStore(worker!.database, { outbox: workerOperations.outbox });
     const replayKey = "phase8-replay-export-key-001";
     const requested = await primary.service.requestOwnerExport(command(["portfolio-content", "taxonomy"], replayKey));
     expect(requested.ok).toBe(true);
@@ -690,7 +714,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     // requested → building.
     const lease = await leaseExportJob(originalExportId!);
     advance();
-    expect(await applyGuardedOwnerExportTransition(primary.store, transitionInput(
+    expect(await applyGuardedOwnerExportTransition(workerStore, transitionInput(
       originalExportId!, "requested", "building", 1, now,
       { leaseToken: lease.leaseToken, actingJobId: lease.jobId },
     ))).toEqual({ ok: true, value: "applied" });
@@ -699,9 +723,9 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       .toMatchObject({ ok: true, value: { state: "building", downloadAvailable: false } });
     // building → ready; the view turns truthful and the produced event lands once.
     advance();
-    const { artifactId, snapshotId } = await checkpointTestArtifact(primary.store, originalExportId!, lease);
+    const { artifactId, snapshotId } = await checkpointTestArtifact(workerStore, originalExportId!, lease);
     const manifest = manifestFor("taxonomy", originalExportId!, snapshotId);
-    expect(await applyGuardedOwnerExportTransition(primary.store, transitionInput(
+    expect(await applyGuardedOwnerExportTransition(workerStore, transitionInput(
       originalExportId!, "building", "ready", 2, now,
       { integrityManifest: manifest, artifactId, leaseToken: lease.leaseToken, actingJobId: lease.jobId },
     ))).toEqual({ ok: true, value: "applied" });
@@ -719,7 +743,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     )).toBe(1);
     // ready → expired; the original request keeps replaying.
     advance();
-    expect(await applyGuardedOwnerExportTransition(primary.store, transitionInput(
+    expect(await applyGuardedOwnerExportTransition(workerStore, transitionInput(
       originalExportId!, "ready", "expired", 3, now,
       { integrityManifest: manifest, artifactId },
     ))).toEqual({ ok: true, value: "applied" });
@@ -742,7 +766,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     const failedExportId = failedRequest.ok ? failedRequest.value.exportId : undefined;
     const failedLease = await leaseExportJob(failedExportId!);
     advance();
-    expect(await applyGuardedOwnerExportTransition(primary.store, transitionInput(
+    expect(await applyGuardedOwnerExportTransition(workerStore, transitionInput(
       failedExportId!, "requested", "failed", 1, now,
       { failureCode: parseSafeErrorCode("ASSEMBLY_FAILED"), leaseToken: failedLease.leaseToken, actingJobId: failedLease.jobId },
     ))).toEqual({ ok: true, value: "applied" });
@@ -791,19 +815,21 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
 
   it("AC07: guarded transitions keep the metadata truthful and stale attempts never win", async () => {
     const primary = composeService(application!);
+    const workerOperations = createPostgresOperationsPersistence(worker!.database, { now: () => now });
+    const workerStore = createPostgresOwnerExportStore(worker!.database, { outbox: workerOperations.outbox });
     const keyed = await primary.service.requestOwnerExport(command(["cv-metadata"], "phase8-transition-export-key-001"));
     expect(keyed.ok).toBe(true);
     const exportId = keyed.ok ? keyed.value.exportId : undefined;
     const failedLease = await leaseExportJob(exportId!);
     advance();
-    expect(await applyGuardedOwnerExportTransition(primary.store, transitionInput(
+    expect(await applyGuardedOwnerExportTransition(workerStore, transitionInput(
       exportId!, "requested", "failed", 1, now,
       { failureCode: parseSafeErrorCode("ASSEMBLY_FAILED"), leaseToken: failedLease.leaseToken, actingJobId: failedLease.jobId },
     ))).toEqual({ ok: true, value: "applied" });
     const failedView = await primary.service.getOwnerExport({ actor, portfolioId, exportId: exportId! });
     expect(failedView.ok ? failedView.value.state : undefined).toBe("failed");
     // Impossible edges lose locally without touching the store.
-    expect(await applyGuardedOwnerExportTransition(primary.store, transitionInput(
+    expect(await applyGuardedOwnerExportTransition(workerStore, transitionInput(
       exportId!, "failed", "building", 2, now,
     ))).toMatchObject({ ok: false });
     expect(await primary.service.getOwnerExport({ actor, portfolioId, exportId: exportId! }))
@@ -815,25 +841,50 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     const secondId = second.ok ? second.value.exportId : undefined;
     const lease = await leaseExportJob(secondId!);
     advance();
-    expect(await applyGuardedOwnerExportTransition(primary.store, transitionInput(
+    expect(await applyGuardedOwnerExportTransition(workerStore, transitionInput(
       secondId!, "requested", "building", 2, now,
       { leaseToken: lease.leaseToken, actingJobId: lease.jobId },
     ))).toEqual({ ok: true, value: "stale" });
     expect(await primary.service.getOwnerExport({ actor, portfolioId, exportId: secondId! }))
       .toMatchObject({ ok: true, value: { state: "requested" } });
-    expect(await applyGuardedOwnerExportTransition(primary.store, transitionInput(
+    expect(await applyGuardedOwnerExportTransition(workerStore, transitionInput(
       secondId!, "requested", "building", 1, now,
       { leaseToken: lease.leaseToken, actingJobId: lease.jobId },
     ))).toEqual({ ok: true, value: "applied" });
     // building → ready requires exactly the readiness metadata.
-    expect(await applyGuardedOwnerExportTransition(primary.store, transitionInput(
+    expect(await applyGuardedOwnerExportTransition(workerStore, transitionInput(
       secondId!, "building", "ready", 2, now,
       { leaseToken: lease.leaseToken, actingJobId: lease.jobId },
     ))).toMatchObject({ ok: false });
     advance();
-    const { artifactId, snapshotId } = await checkpointTestArtifact(primary.store, secondId!, lease);
+    const unrelatedLease = await leaseUnboundAssemblyJob();
+    const unrelatedSnapshot: OwnerExportConfigurationSnapshot = {
+      snapshotId: createStableId("OwnerExportArtifact"),
+      capturedAt: now,
+      configurationVersion: null,
+      settings: null,
+      capabilities: { currentCvAvailable: false, externalLinksAvailable: false, globalProjectCtaAvailable: false },
+    };
+    expect(await workerStore.saveOwnerExportSnapshot({
+      exportId: secondId!,
+      actingJobId: unrelatedLease.jobId,
+      leaseToken: unrelatedLease.leaseToken,
+      snapshot: unrelatedSnapshot,
+    })).toEqual({ ok: true, value: "stale" });
+    const { artifactId, snapshotId } = await checkpointTestArtifact(workerStore, secondId!, lease);
     const manifest = manifestFor("taxonomy", secondId!, snapshotId);
-    expect(await applyGuardedOwnerExportTransition(primary.store, transitionInput(
+    expect(await applyGuardedOwnerExportTransition(workerStore, transitionInput(
+      secondId!, "building", "ready", 2, now,
+      {
+        integrityManifest: manifest,
+        artifactId,
+        leaseToken: unrelatedLease.leaseToken,
+        actingJobId: unrelatedLease.jobId,
+      },
+    ))).toEqual({ ok: true, value: "stale" });
+    expect(await primary.service.getOwnerExport({ actor, portfolioId, exportId: secondId! }))
+      .toMatchObject({ ok: true, value: { state: "building" } });
+    expect(await applyGuardedOwnerExportTransition(workerStore, transitionInput(
       secondId!, "building", "ready", 2, now,
       { integrityManifest: manifest, artifactId, leaseToken: lease.leaseToken, actingJobId: lease.jobId },
     ))).toEqual({ ok: true, value: "applied" });

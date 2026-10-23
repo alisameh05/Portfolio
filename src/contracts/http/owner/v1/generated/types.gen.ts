@@ -970,6 +970,9 @@ export type ReadyOwnerExportView = {
     schemaVersion: string;
     requestedAt: string;
     completedAt: string;
+    /**
+     * Effective artifact expiry after policy and default retention are applied.
+     */
     expiresAt: string;
     includedScopes: Array<OwnerExportScope>;
     publicEventDataCoverage: PublicEventDataCoverage;
@@ -996,6 +999,9 @@ export type ExpiredOwnerExportView = {
     requestedAt: string;
     completedAt: string;
     expiredAt: string;
+    /**
+     * Effective artifact expiry after policy and default retention are applied.
+     */
     expiresAt: string;
     includedScopes: Array<OwnerExportScope>;
     publicEventDataCoverage: PublicEventDataCoverage;

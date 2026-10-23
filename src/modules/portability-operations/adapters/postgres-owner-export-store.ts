@@ -40,7 +40,7 @@ import type {
   OwnerExportTransitionOutcome,
   PersistedOwnerExport,
 } from "../application/owner-export-store.js";
-import type { OwnerExportPackageManifest } from "../application/service.js";
+import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportPackageManifest } from "../application/service.js";
 import type { OwnerExportConfigurationSnapshot } from "../application/owner-export-package.js";
 import type { TransactionContext } from "../../../runtime/ports.js";
 
@@ -225,15 +225,23 @@ export function createPostgresOwnerExportStore(
   async function lockCurrentLease(executor: PostgresExecutor, input: {
     readonly actingJobId: string;
     readonly leaseToken: string;
+    readonly exportId: string;
   }): Promise<boolean> {
     const result = await sql<{ job_id: string }>`
-      select job_id::text
-        from operations.jobs
-       where job_id = ${input.actingJobId}::uuid
-         and status = 'leased'
-         and lease_token = ${input.leaseToken}
-         and lease_expires_at > clock_timestamp()
-       for update
+      select job.job_id::text
+        from operations.jobs job
+        join portability.owner_exports export on export.export_id = ${input.exportId}::uuid
+       where job.job_id = ${input.actingJobId}::uuid
+         and job.job_type = ${OWNER_EXPORT_ASSEMBLY_JOB_TYPE}
+         and job.payload_version = 1
+         and job.payload->>'exportId' = export.export_id::text
+         and job.payload->>'portfolioId' = export.portfolio_id::text
+         and job.payload->>'ownerId' = export.owner_id::text
+         and job.payload->'includedScopes' = to_jsonb(export.included_scopes)
+         and job.status = 'leased'
+         and job.lease_token = ${input.leaseToken}
+         and job.lease_expires_at > clock_timestamp()
+       for update of job
     `.execute(executor);
     return result.rows.length === 1;
   }
@@ -294,7 +302,11 @@ export function createPostgresOwnerExportStore(
         if (input.toStatus !== "expired" && input.leaseToken === undefined) {
           return { ok: true as const, value: { kind: "stale" as const } };
         }
-        if (input.leaseToken !== undefined && !await lockCurrentLease(executor, { actingJobId: input.actingJobId, leaseToken: input.leaseToken })) {
+        if (input.leaseToken !== undefined && !await lockCurrentLease(executor, {
+          actingJobId: input.actingJobId,
+          leaseToken: input.leaseToken,
+          exportId: input.exportId,
+        })) {
           return { ok: true as const, value: { kind: "stale" as const } };
         }
         const result = await sql<ExportRow>`
