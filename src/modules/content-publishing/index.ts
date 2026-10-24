@@ -131,3 +131,8 @@ export {
 export type { ContentRepositoryPort } from "./ports/index.js";
 
 export type { ProjectInteractionFacts, ProjectInteractionEligibilityPort, ContentMeasurementPublicFactsPort } from "./application/interaction-facts.js";
+export type {
+  ContentTaxonomyExportScope,
+  ContentTaxonomyExportAssignments,
+  ContentTaxonomyExportAssignmentReader,
+} from "./application/taxonomy-export.js";

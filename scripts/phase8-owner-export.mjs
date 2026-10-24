@@ -122,6 +122,18 @@ try {
     for (const suite of report.testResults ?? []) console.error(JSON.stringify({ suite: suite.name.replace(root, ""), status: suite.status,
       assertions: (suite.assertionResults ?? []).map(assertion => ({ title: assertion.title, status: assertion.status })) }));
   } catch { /* no test report exists */ }
+  try {
+    const report = JSON.parse(readFileSync(roleReportPath, "utf8"));
+    for (const suite of report.testResults ?? []) {
+      const failed = (suite.assertionResults ?? []).filter(assertion => assertion.status !== "passed");
+      if (suite.status !== "passed" || failed.length > 0) {
+        console.error(JSON.stringify({ suite: suite.name.replace(root, ""), status: suite.status,
+          assertions: failed.map(assertion => ({ title: assertion.title, status: assertion.status,
+            failureMessages: assertion.failureMessages?.map(message => String(message)
+              .replace(/postgres(?:ql)?:\/\/\S+/gi, "[database-url]").replace(/\r?\n/g, " | ").slice(-1_000)) })) }));
+      }
+    }
+  } catch { /* no role matrix report is available */ }
   process.exitCode = 1;
 } finally {
   if (connected) await admin.end();

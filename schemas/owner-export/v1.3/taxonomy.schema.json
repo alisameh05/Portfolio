@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shipwithali:owner-export-schema:taxonomy:1.2",
+  "title": "Portable taxonomy identity and history record 1.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scope", "value"],
+  "properties": {
+    "scope": { "const": "taxonomy" },
+    "value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taxonomyId", "aggregateVersion", "kind", "values", "evolutionHistory", "assignments", "assignmentHistory"],
+      "properties": {
+        "taxonomyId": { "$ref": "#/$defs/stableId" },
+        "aggregateVersion": { "$ref": "#/$defs/positiveInteger" },
+        "kind": { "enum": ["category", "ai-ml-domain", "technology", "project-type"] },
+        "values": { "type": "array", "items": { "$ref": "#/$defs/value" } },
+        "evolutionHistory": { "type": "array", "items": { "$ref": "#/$defs/evolution" } },
+        "assignments": { "type": "array", "items": { "$ref": "#/$defs/assignment" } },
+        "assignmentHistory": { "type": "array", "items": { "$ref": "#/$defs/assignmentHistory" } }
+      }
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "positiveInteger": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "value": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["valueId", "name", "state", "valueVersion"],
+          "properties": {
+            "valueId": { "$ref": "#/$defs/stableId" },
+            "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "state": { "const": "active" },
+            "valueVersion": { "$ref": "#/$defs/positiveInteger" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["valueId", "name", "state", "valueVersion"],
+          "properties": {
+            "valueId": { "$ref": "#/$defs/stableId" },
+            "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "state": { "const": "retired" },
+            "valueVersion": { "$ref": "#/$defs/positiveInteger" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["valueId", "name", "state", "valueVersion", "mergedIntoValueId"],
+          "properties": {
+            "valueId": { "$ref": "#/$defs/stableId" },
+            "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "state": { "const": "merged" },
+            "valueVersion": { "$ref": "#/$defs/positiveInteger" },
+            "mergedIntoValueId": { "$ref": "#/$defs/stableId" }
+          }
+        }
+      ]
+    },
+    "evolution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["valueId", "transitionSequence", "action", "previousName", "name", "state", "changedAt"],
+      "properties": {
+        "valueId": { "$ref": "#/$defs/stableId" },
+        "transitionSequence": { "$ref": "#/$defs/positiveInteger" },
+        "action": { "enum": ["created", "renamed", "retired", "merged"] },
+        "previousName": { "type": ["string", "null"], "maxLength": 100 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "state": { "enum": ["active", "retired", "merged"] },
+        "changedAt": { "$ref": "#/$defs/utcInstant" },
+        "mergedIntoValueId": { "$ref": "#/$defs/stableId" }
+      },
+      "allOf": [{
+        "if": { "properties": { "action": { "const": "merged" } }, "required": ["action"] },
+        "then": {
+          "required": ["mergedIntoValueId"],
+          "properties": { "mergedIntoValueId": { "$ref": "#/$defs/stableId" } }
+        },
+        "else": { "not": { "required": ["mergedIntoValueId"] } }
+      }]
+    },
+    "assignment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["targetId", "taxonomyValueId", "assignedAt"],
+      "properties": {
+        "targetId": { "$ref": "#/$defs/stableId" },
+        "taxonomyValueId": { "$ref": "#/$defs/stableId" },
+        "assignedAt": { "$ref": "#/$defs/utcInstant" }
+      }
+    },
+    "assignmentHistory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["targetId", "taxonomyValueId", "sequence", "projectVersion", "changedAt"],
+      "properties": {
+        "targetId": { "$ref": "#/$defs/stableId" },
+        "taxonomyValueId": { "$ref": "#/$defs/stableId" },
+        "sequence": { "$ref": "#/$defs/positiveInteger" },
+        "projectVersion": { "$ref": "#/$defs/positiveInteger" },
+        "changedAt": { "$ref": "#/$defs/utcInstant" }
+      }
+    },
+    "utcInstant": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+    }
+  }
+}

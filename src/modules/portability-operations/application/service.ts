@@ -58,6 +58,17 @@ export interface OwnerExportContentEntryDescriptor {
   readonly recordCount: number;
 }
 
+export interface OwnerExportTaxonomyEntryDescriptor {
+  readonly path: "records/taxonomy.ndjson";
+  readonly scope: "taxonomy";
+  readonly mediaType: "application/x-ndjson";
+  readonly recordSchema: "urn:shipwithali:owner-export-schema:taxonomy:1.2";
+  readonly schemaPath: "schemas/taxonomy.schema.json";
+  readonly schemaVersion: "1.2";
+  readonly digest: string;
+  readonly recordCount: number;
+}
+
 export interface OwnerExportEntryDescriptorV1_0<TScope extends ExportScope = ExportScope> {
   readonly path: string;
   readonly scope: TScope;
@@ -152,7 +163,13 @@ export interface OwnerExportPackageManifestV1_3 extends Omit<OwnerExportPackageM
   readonly entries: readonly (OwnerExportEntryDescriptor | OwnerExportContentEntryDescriptor)[];
 }
 
-export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3;
+/** Package 1.4 adds complete taxonomy identity and evolution records. */
+export interface OwnerExportPackageManifestV1_4 extends Omit<OwnerExportPackageManifestV1_1, "schemaVersion" | "entries"> {
+  readonly schemaVersion: "1.4";
+  readonly entries: readonly (OwnerExportEntryDescriptor | OwnerExportContentEntryDescriptor | OwnerExportTaxonomyEntryDescriptor)[];
+}
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3 | OwnerExportPackageManifestV1_4;
 
 interface OwnerExportViewBase {
   readonly exportId: StableId<"OwnerExport">;

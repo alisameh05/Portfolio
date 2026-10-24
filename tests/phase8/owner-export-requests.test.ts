@@ -218,7 +218,7 @@ describe("AC01: canonical Owner export scope selection and hashing", () => {
     let subsetIndex = 0;
     for (const subset of subsets(OWNER_EXPORT_SCOPES)) {
       subsetIndex += 1;
-      const schemaVersion = subset.includes("portfolio-content") ? "1.3" : "1.2";
+      const schemaVersion = subset.includes("taxonomy") ? "1.4" : subset.includes("portfolio-content") ? "1.3" : "1.2";
       const expectedHash = await hashCanonicalRequest({
         operation: "owner-export-request",
         schemaVersion,

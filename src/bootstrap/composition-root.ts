@@ -263,11 +263,17 @@ export async function initializeDatabaseRuntime(
             { createOwnerExportAssemblyService },
             { createPostgresPortfolioSettingsRepository },
             { createPostgresContentAuthoringRepository },
+            { createPostgresTaxonomyOwnerRepository },
+            { createPostgresContentTaxonomyExportAssignmentReader },
+            { createTaxonomyOwnerExportSnapshotReader },
             { createOwnerExportSnapshotReader },
           ] = await Promise.all([
             import("../modules/portability-operations/application/owner-export-assembly.js"),
             import("../modules/portfolio-configuration/adapters/postgres-settings.js"),
             import("../modules/content-publishing/adapters/postgres-authoring.js"),
+            import("../modules/taxonomy-discovery/adapters/postgres-owner-taxonomies.js"),
+            import("../modules/content-publishing/adapters/postgres-taxonomy-export-reader.js"),
+            import("../modules/taxonomy-discovery/application/taxonomy-export.js"),
             import("../runtime/adapters/owner-export-snapshot.js"),
           ]);
           ownerExportAssembly = createOwnerExportAssemblyService({
@@ -276,6 +282,10 @@ export async function initializeDatabaseRuntime(
             snapshots: createOwnerExportSnapshotReader({
               configuration: createPostgresPortfolioSettingsRepository(),
               content: createPostgresContentAuthoringRepository(),
+              taxonomy: createTaxonomyOwnerExportSnapshotReader({
+                repository: createPostgresTaxonomyOwnerRepository(),
+                assignments: createPostgresContentTaxonomyExportAssignmentReader(),
+              }),
               transactions: operations.transactions,
               capabilities: {
                 async read(scope) {

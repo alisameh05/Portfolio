@@ -47,3 +47,4 @@ export class StubContentRepository implements ContentRepositoryPort {
 
 export { createPostgresContentAuthoringRepository } from "./postgres-authoring.js";
 export { createPostgresContentTaxonomyAssignmentsPort } from "./postgres-taxonomy-assignments.js";
+export { createPostgresContentTaxonomyExportAssignmentReader } from "./postgres-taxonomy-export-reader.js";

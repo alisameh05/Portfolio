@@ -37,6 +37,9 @@ jobs:
       - run: npm run typecheck
       - name: Require Phase 8 Owner export PostgreSQL and Storage acceptance
         run: npm run phase8:focus:exports
+      - name: Require Issue #242 taxonomy PostgreSQL acceptance with zero skips
+        id: taxonomy-acceptance
+        run: npm run phase8:focus:taxonomy
       - name: Publish sanitized Phase 8 Owner export acceptance evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -44,6 +47,14 @@ jobs:
           name: phase8-owner-exports
           path: evidence/phase8-owner-exports-240.json
           if-no-files-found: warn
+          retention-days: 14
+      - name: Publish sanitized Issue #242 taxonomy acceptance evidence
+        if: always() && steps.taxonomy-acceptance.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase8-owner-export-taxonomy-242
+          path: evidence/phase8-owner-export-taxonomy-242.json
+          if-no-files-found: error
           retention-days: 14
       - run: npm run phase4:focus:context
       - run: npm run test:arch

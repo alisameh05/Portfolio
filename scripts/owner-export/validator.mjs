@@ -383,10 +383,12 @@ function readLocalSchema(relativePath) {
 const localManifest10 = readLocalSchema("v1.0/manifest.schema.json");
 const localManifest11 = readLocalSchema("v1.1/manifest.schema.json");
 const localManifest12 = readLocalSchema("v1.2/manifest.schema.json");
+const localManifest13 = readLocalSchema("v1.3/manifest.schema.json");
 const manifestValidators = new Map([
   ["1.0", ajv.compile(localManifest10.schema)],
   ["1.1", ajv.compile(localManifest11.schema)],
   ["1.3", ajv.compile(localManifest12.schema)],
+  ["1.4", ajv.compile(localManifest13.schema)],
 ]);
 function readLocalRecordSchemas(schemaVersion) {
   return new Map(SCOPES.map((scope) => {
@@ -406,8 +408,15 @@ const localRecordSchemas12 = new Map(localRecordSchemas11);
   if (source.schema.$id !== expectedUri) throw new Error(`invalid local schema identity for ${scope}`);
   localRecordSchemas12.set(scope, { ...source, validate: ajv.compile(source.schema), uri: expectedUri });
 }
+const localRecordSchemas13 = new Map(localRecordSchemas11);
+localRecordSchemas13.set("portfolio-content", localRecordSchemas12.get("portfolio-content"));
+const taxonomySchema13 = readLocalSchema("v1.3/taxonomy.schema.json");
+if (taxonomySchema13.schema.$id !== "urn:shipwithali:owner-export-schema:taxonomy:1.2") {
+  throw new Error("invalid local taxonomy schema identity");
+}
+localRecordSchemas12.set("taxonomy", { ...taxonomySchema13, validate: ajv.compile(taxonomySchema13.schema), uri: taxonomySchema13.schema.$id });
 function recordSchemasForVersion(version) {
-  return version === "1.0" ? localRecordSchemas10 : version === "1.3" ? localRecordSchemas12 : localRecordSchemas11;
+  return version === "1.0" ? localRecordSchemas10 : version === "1.3" ? localRecordSchemas13 : version === "1.4" ? localRecordSchemas12 : localRecordSchemas11;
 }
 
 function object(value) {
@@ -421,6 +430,7 @@ function supportedManifestVersion(manifest) {
   if (major !== 1) fail("PACKAGE_VERSION_MAJOR_UNSUPPORTED");
   if (minor === 0) return "1.0";
   if (minor === 3) return "1.3";
+  if (minor === 4) return "1.4";
   if (minor === undefined || minor < 1) fail("PACKAGE_VERSION_MINOR_UNSUPPORTED");
   return "1.1";
 }
@@ -441,7 +451,8 @@ function validateSchema(validator, value, code) {
 function validateEntryDescriptor(entry, version) {
   if (!object(entry) || !SCOPE_SET.has(entry.scope)) fail("PACKAGE_ENTRY_DESCRIPTOR_INVALID");
   const extension = entry.mediaType === "application/x-ndjson" ? "ndjson" : entry.mediaType === "application/json" ? "json" : "";
-  const schemaVersion = version === "1.0" ? "1.0" : version === "1.3" && entry.scope === "portfolio-content" ? "1.2" : "1.1";
+  const schemaVersion = version === "1.0" ? "1.0" :
+    (version === "1.3" || version === "1.4") && entry.scope === "portfolio-content" || version === "1.4" && entry.scope === "taxonomy" ? "1.2" : "1.1";
   const schema = recordSchemasForVersion(version).get(entry.scope);
   if (
     extension === "" || entry.path !== `records/${entry.scope}.${extension}` ||
@@ -464,8 +475,8 @@ function verifySchemaEntries(manifest, version, entryMap) {
   const schemaDescriptors = version === "1.0" ? undefined : manifest.schemas;
   const expectedDescriptors = [];
   if (version !== "1.0") {
-    const manifestSchema = version === "1.3" ? localManifest12 : localManifest11;
-    const manifestSchemaVersion = version === "1.3" ? "1.2" : "1.1";
+    const manifestSchema = version === "1.4" ? localManifest13 : version === "1.3" ? localManifest12 : localManifest11;
+    const manifestSchemaVersion = version === "1.4" ? "1.3" : version === "1.3" ? "1.2" : "1.1";
     expectedDescriptors.push({
       kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: `urn:shipwithali:owner-export-schema:manifest:${manifestSchemaVersion}`,
       schemaVersion: manifestSchemaVersion, digest: sha256(manifestSchema.bytes), source: manifestSchema,
@@ -473,7 +484,8 @@ function verifySchemaEntries(manifest, version, entryMap) {
   }
   for (const scope of usedScopes) {
     const source = localRecordSchemas.get(scope);
-    const recordVersion = version === "1.3" && scope === "portfolio-content" ? "1.2" : schemaVersion;
+    const recordVersion = (version === "1.3" || version === "1.4") && scope === "portfolio-content" || version === "1.4" && scope === "taxonomy"
+      ? "1.2" : schemaVersion;
     expectedDescriptors.push({
       kind: "record", scope, path: `schemas/${scope}.schema.json`, schemaUri: source.uri,
       schemaVersion: recordVersion, digest: sha256(source.bytes), source,
@@ -726,6 +738,128 @@ function verifyContentSnapshotFacts(records) {
   }
 }
 
+function verifyTaxonomySnapshotFacts(records, contentRecords, includedScopes) {
+  const require = condition => { if (!condition) fail("TAXONOMY_SNAPSHOT_FACTS_INVALID"); };
+  const stable = value => typeof value === "string" && STABLE_ID_PATTERN.test(value);
+  const utc = value => typeof value === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?Z$/.test(value);
+  const projects = new Map((contentRecords ?? []).map(record => [record.value.contentId, record.value]));
+  const selectedContent = includedScopes.includes("portfolio-content");
+  const globalValueIds = new Set();
+  const taxonomyKinds = new Map();
+  const currentAssignmentsByProject = new Map();
+  const assignmentSequences = new Map();
+  for (const record of records) {
+    const value = record.value;
+    require(stable(value.taxonomyId) && Number.isSafeInteger(value.aggregateVersion) && value.aggregateVersion >= 1);
+    taxonomyKinds.set(value.taxonomyId, value.kind);
+    const valuesById = new Map();
+    for (let index = 0; index < value.values.length; index += 1) {
+      const item = value.values[index];
+      require(stable(item.valueId) && (index === 0 || value.values[index - 1].valueId < item.valueId) &&
+        !globalValueIds.has(item.valueId) && Number.isSafeInteger(item.valueVersion) && item.valueVersion >= 1 &&
+        ["active", "retired", "merged"].includes(item.state));
+      globalValueIds.add(item.valueId);
+      valuesById.set(item.valueId, item);
+      require((item.state === "merged") === (item.mergedIntoValueId !== undefined));
+      if (item.mergedIntoValueId !== undefined) require(stable(item.mergedIntoValueId) && item.mergedIntoValueId !== item.valueId);
+    }
+    require(value.evolutionHistory.length === value.aggregateVersion - 1);
+    const historyByValue = new Map();
+    let previousEvent;
+    for (const event of value.evolutionHistory) {
+      require(stable(event.valueId) && valuesById.has(event.valueId) && Number.isSafeInteger(event.transitionSequence) &&
+        event.transitionSequence > 0 &&
+        utc(event.changedAt) && ["created", "renamed", "retired", "merged"].includes(event.action) &&
+        ["active", "retired", "merged"].includes(event.state));
+      if (previousEvent !== undefined) require(previousEvent.valueId < event.valueId ||
+        previousEvent.valueId === event.valueId && previousEvent.transitionSequence < event.transitionSequence);
+      previousEvent = event;
+      const history = historyByValue.get(event.valueId) ?? [];
+      history.push(event);
+      historyByValue.set(event.valueId, history);
+    }
+    for (const item of value.values) {
+      const history = historyByValue.get(item.valueId) ?? [];
+      require(history.length === item.valueVersion && history.length > 0);
+      let currentName;
+      let currentState;
+      history.forEach((event, index) => {
+        require(event.transitionSequence === index + 1);
+        if (index === 0) {
+          require(event.action === "created" && event.previousName === null && event.state === "active");
+        } else if (event.action === "renamed") {
+          require(currentState === "active" && event.previousName === currentName && event.name !== currentName && event.state === "active");
+        } else if (event.action === "retired") {
+          require(currentState === "active" && event.previousName === currentName && event.name === currentName && event.state === "retired");
+        } else if (event.action === "merged") {
+          require((currentState === "active" || currentState === "retired") && event.previousName === currentName &&
+            event.name === currentName && event.state === "merged" && stable(event.mergedIntoValueId) &&
+            valuesById.has(event.mergedIntoValueId) && event.mergedIntoValueId !== item.valueId);
+          require(item.mergedIntoValueId === event.mergedIntoValueId);
+        } else require(false);
+        currentName = event.name;
+        currentState = event.state;
+      });
+      require(currentName === item.name && currentState === item.state);
+    }
+    const assignments = new Set();
+    let previousAssignment;
+    for (const assignment of value.assignments) {
+      const key = `${assignment.targetId}|${assignment.taxonomyValueId}`;
+      require(stable(assignment.targetId) && stable(assignment.taxonomyValueId) && valuesById.has(assignment.taxonomyValueId) &&
+        utc(assignment.assignedAt) && !assignments.has(key));
+      if (previousAssignment !== undefined) require(previousAssignment.targetId < assignment.targetId ||
+        previousAssignment.targetId === assignment.targetId && previousAssignment.taxonomyValueId < assignment.taxonomyValueId);
+      previousAssignment = assignment;
+      assignments.add(key);
+      if (selectedContent) {
+        require(projects.get(assignment.targetId)?.contentType === "project");
+        const projectAssignments = currentAssignmentsByProject.get(assignment.targetId) ?? new Set();
+        projectAssignments.add(`${value.taxonomyId}|${assignment.taxonomyValueId}`);
+        currentAssignmentsByProject.set(assignment.targetId, projectAssignments);
+      }
+    }
+    let previousHistory;
+    for (const assignment of value.assignmentHistory) {
+      require(stable(assignment.targetId) && stable(assignment.taxonomyValueId) && valuesById.has(assignment.taxonomyValueId) &&
+        Number.isSafeInteger(assignment.sequence) && assignment.sequence > 0 && Number.isSafeInteger(assignment.projectVersion) &&
+        assignment.projectVersion > 1 && utc(assignment.changedAt));
+      if (previousHistory !== undefined) require(previousHistory.targetId < assignment.targetId ||
+        previousHistory.targetId === assignment.targetId && previousHistory.sequence < assignment.sequence);
+      previousHistory = assignment;
+      const history = assignmentSequences.get(assignment.targetId) ?? [];
+      history.push(assignment.sequence);
+      assignmentSequences.set(assignment.targetId, history);
+      if (selectedContent) require(projects.get(assignment.targetId)?.contentType === "project");
+    }
+  }
+  for (const sequences of assignmentSequences.values()) {
+    sequences.sort((left, right) => left - right);
+    for (let index = 0; index < sequences.length; index += 1) require(sequences[index] === index + 1);
+  }
+  if (selectedContent) {
+    for (const project of projects.values()) {
+      if (project.contentType !== "project") continue;
+      const projectAssignments = new Set();
+      for (const assignment of project.taxonomyAssignments) {
+        require(object(assignment) && stable(assignment.taxonomyId) && stable(assignment.valueId) &&
+          taxonomyKinds.get(assignment.taxonomyId) === assignment.kind && globalValueIds.has(assignment.valueId));
+        const key = `${assignment.taxonomyId}|${assignment.valueId}`;
+        require(!projectAssignments.has(key));
+        projectAssignments.add(key);
+      }
+      const taxonomyAssignments = currentAssignmentsByProject.get(project.contentId) ?? new Set();
+      require(projectAssignments.size === taxonomyAssignments.size &&
+        [...projectAssignments].every(key => taxonomyAssignments.has(key)));
+
+      const assignmentValueIds = new Set([...projectAssignments].map(key => key.slice(key.lastIndexOf("|") + 1)));
+      const projectedValueIds = new Set(project.taxonomyValueIds);
+      require(project.taxonomyValueIds.length === projectedValueIds.size && assignmentValueIds.size === projectedValueIds.size &&
+        [...assignmentValueIds].every(valueId => projectedValueIds.has(valueId)));
+    }
+  }
+}
+
 function verifyManifestSemantics(manifest, version) {
   const scopeList = scopeOrder(manifest.includedScopes);
   if (scopeList.some((scope, index) => manifest.includedScopes[index] !== scope)) fail("PACKAGE_SCOPE_ORDER_INVALID");
@@ -830,8 +964,18 @@ function expectedDependencies(recordsByScope) {
           if (object(assignment) && assignment.targetId !== undefined) add(scope, value.taxonomyId, "portfolio-content", assignment.targetId);
           if (object(assignment) && assignment.taxonomyValueId !== undefined) add(scope, value.taxonomyId, scope, assignment.taxonomyValueId);
         }
+        for (const assignment of value.assignmentHistory ?? []) {
+          if (object(assignment) && assignment.targetId !== undefined) add(scope, value.taxonomyId, "portfolio-content", assignment.targetId);
+          if (object(assignment) && assignment.taxonomyValueId !== undefined) add(scope, value.taxonomyId, scope, assignment.taxonomyValueId);
+        }
         for (const taxonomyValue of value.values) {
-          if (object(taxonomyValue) && taxonomyValue.mergedIntoId !== undefined) add(scope, value.taxonomyId, scope, taxonomyValue.mergedIntoId);
+          if (object(taxonomyValue)) {
+            const targetId = taxonomyValue.mergedIntoValueId ?? taxonomyValue.mergedIntoId;
+            if (targetId !== undefined) add(scope, value.taxonomyId, scope, targetId);
+          }
+        }
+        for (const event of value.evolutionHistory ?? []) {
+          if (object(event) && event.mergedIntoValueId !== undefined) add(scope, value.taxonomyId, scope, event.mergedIntoValueId);
         }
       } else if (scope === "cv-metadata") {
         for (const version of value.versions) {
@@ -940,6 +1084,8 @@ export function validateOwnerExportZip(input) {
   const includedScopes = verifyManifestSemantics(manifest, version);
   if (version === "1.3" && (includedScopes.some(scope => !["portfolio-content", "portfolio-configuration"].includes(scope)) ||
       !includedScopes.includes("portfolio-content"))) fail("PACKAGE_SCOPE_UNSUPPORTED");
+  if (version === "1.4" && (includedScopes.some(scope => !["portfolio-content", "taxonomy", "portfolio-configuration"].includes(scope)) ||
+      !includedScopes.includes("taxonomy"))) fail("PACKAGE_SCOPE_UNSUPPORTED");
   const descriptors = verifySchemaEntries(manifest, version, entryMap);
   const recordsByScope = new Map();
   const recordCounts = {};
@@ -950,7 +1096,12 @@ export function validateOwnerExportZip(input) {
     recordsByScope.set(descriptor.scope, records);
     recordCounts[descriptor.scope] = records.length;
   }
-  if (version === "1.3") verifyContentSnapshotFacts(recordsByScope.get("portfolio-content"));
+  if (version === "1.3" || version === "1.4" && includedScopes.includes("portfolio-content")) {
+    verifyContentSnapshotFacts(recordsByScope.get("portfolio-content"));
+  }
+  if (version === "1.4") verifyTaxonomySnapshotFacts(
+    recordsByScope.get("taxonomy"), recordsByScope.get("portfolio-content"), includedScopes,
+  );
   const assets = verifyAssets(manifest, version, entryMap, recordsByScope);
   const dependencies = verifyDependencies(manifest, version, recordsByScope);
 
