@@ -11,6 +11,7 @@ import type {
   ContentAuthoringReview,
   ContentAuthoringPublication,
   ContentAuthoringRevision,
+  ContentOwnerExportRecord,
   ContentAuthoringScope,
   ContentProjectOwnerView,
   ContentProjectStatusHistoryEntry,
@@ -369,6 +370,225 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
   }
 
   return {
+    async readOwnerExportSnapshot(scope, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await sql`select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
+                         set_config('shipwithali.owner_id', ${scope.ownerId}, true),
+                         set_config('shipwithali.worker_purpose', 'content.owner-export', true)`.execute(executor);
+        const timestamp = await sql<{ captured_at: Date | string }>`select transaction_timestamp() as captured_at`.execute(executor);
+        const capturedAtValue = timestamp.rows[0]?.captured_at;
+        if (capturedAtValue === undefined) throw new PostgresInfrastructureError();
+        const capturedAt = databaseTime(capturedAtValue);
+        const roots = await sql<{
+          content_id: string; content_type: string; lifecycle: string; aggregate_version: number;
+          candidate_slug: string | null; first_published_at: Date | string | null; status_value_id: string | null;
+          status_label: string | null; status_state: string | null; featured: boolean;
+        }>`
+          select item.content_id::text, item.content_type, item.lifecycle, item.aggregate_version,
+                 item.candidate_slug, item.first_published_at, item.status_value_id::text,
+                 status.label as status_label, status.state as status_state, item.featured
+            from content.items item
+            left join content.project_status_values status
+              on status.value_id = item.status_value_id and status.portfolio_id = item.portfolio_id
+           where item.portfolio_id = ${scope.portfolioId}::uuid
+           order by item.content_id
+        `.execute(executor);
+        const ids = roots.rows.map((row) => row.content_id);
+        if (ids.length === 0) return { ok: true, value: { capturedAt, records: [] } };
+
+        const revisions = await sql<{
+          revision_id: string; content_id: string; content_type: string; locale: string; stream_sequence: number;
+          aggregate_version: number; title: string; summary: string; body: string; payload: unknown; saved_at: Date | string;
+        }>`
+          select revision_id::text, content_id::text, content_type, locale, stream_sequence, aggregate_version,
+                 title, summary, body, payload, saved_at
+            from content.revisions
+           where portfolio_id = ${scope.portfolioId}::uuid
+           order by content_id, locale, stream_sequence
+        `.execute(executor);
+        const reviews = await sql<{
+          review_id: string; revision_id: string; content_id: string; content_type: string; locale: string;
+          snapshot_hash: string; evidence_version: number; reviewer_id: string; review_sequence: number;
+          decision: string; findings: unknown; reviewed_at: Date | string;
+        }>`
+          select review_id::text, revision_id::text, content_id::text, content_type, locale,
+                 snapshot_hash, evidence_version, reviewer_id::text, review_sequence, decision, findings, reviewed_at
+            from content.revision_reviews
+           where portfolio_id = ${scope.portfolioId}::uuid
+           order by content_id, locale, review_sequence
+        `.execute(executor);
+        const publications = await sql<{
+          content_id: string; locale: string; revision_id: string; review_id: string;
+          publication_sequence: number; published_at: Date | string;
+        }>`
+          select content_id::text, locale, revision_id::text, review_id::text, publication_sequence, published_at
+            from (
+              select content_id, locale, revision_id, review_id, publication_sequence, published_at
+                from content.language_publications where portfolio_id = ${scope.portfolioId}::uuid
+              union all
+              select content_id, locale, revision_id, review_id, publication_sequence, published_at
+                from content.testimonial_language_publications where portfolio_id = ${scope.portfolioId}::uuid
+            ) current_publications
+           order by content_id, locale
+        `.execute(executor);
+        const publicationHistory = await sql<{
+          content_id: string; locale: string; publication_sequence: number; revision_id: string;
+          review_id: string; published_at: Date | string;
+        }>`
+          select content_id::text, locale, publication_sequence, revision_id::text, review_id::text, published_at
+            from (
+              select content_id, locale, publication_sequence, revision_id, review_id, published_at
+                from content.publication_history where portfolio_id = ${scope.portfolioId}::uuid
+              union all
+              select content_id, locale, publication_sequence, revision_id, review_id, published_at
+                from content.testimonial_publication_history where portfolio_id = ${scope.portfolioId}::uuid
+            ) retained
+           order by content_id, locale, publication_sequence
+        `.execute(executor);
+        const lifecycle = await sql<{
+          content_id: string; transition_sequence: number; previous_lifecycle: string; lifecycle: string;
+          aggregate_version: number; reason: string | null; changed_at: Date | string;
+        }>`
+          select content_id::text, transition_sequence, previous_lifecycle, lifecycle, aggregate_version, reason, changed_at
+            from content.lifecycle_history where portfolio_id = ${scope.portfolioId}::uuid
+           order by content_id, transition_sequence
+        `.execute(executor);
+        const routes = await sql<{
+          content_id: string; route_identity: string; current_slug: string; first_published_at: Date | string;
+          normalized_slug: string; is_current: boolean; reserved_at: Date | string;
+        }>`
+          select route.content_id::text, route.route_identity::text, route.current_slug, route.first_published_at,
+                 reservation.normalized_slug, reservation.is_current, reservation.reserved_at
+            from content.public_routes route
+            join content.public_route_reservations reservation
+              on reservation.route_identity = route.route_identity and reservation.content_id = route.content_id
+             and reservation.portfolio_id = route.portfolio_id
+           where route.portfolio_id = ${scope.portfolioId}::uuid
+           order by route.content_id, reservation.reserved_at, reservation.normalized_slug
+        `.execute(executor);
+        const routeHistory = await sql<{
+          content_id: string; sequence: number; from_slug: string; to_slug: string; changed_at: Date | string;
+        }>`
+          select content_id::text, sequence, from_slug, to_slug, changed_at
+            from content.public_route_history where portfolio_id = ${scope.portfolioId}::uuid
+           order by content_id, sequence
+        `.execute(executor);
+        const related = await sql<{ project_id: string; related_project_id: string }>`
+          select project_id::text, related_project_id::text from content.project_relationship_views
+           where portfolio_id = ${scope.portfolioId}::uuid order by project_id, related_project_id
+        `.execute(executor);
+        const relationshipHistory = await sql<{
+          left_project_id: string; right_project_id: string; sequence: number; initiating_project_id: string;
+          related_project_id: string; occurred_at: Date | string;
+        }>`
+          select left_project_id::text, right_project_id::text, sequence, initiating_project_id::text,
+                 related_project_id::text, occurred_at from content.project_relationship_history
+           where portfolio_id = ${scope.portfolioId}::uuid order by left_project_id, right_project_id, sequence
+        `.execute(executor);
+        const assignments = await sql<{ content_id: string; taxonomy_id: string; kind: string; value_id: string }>`
+          select assignment.content_id::text, assignment.taxonomy_id::text, root.kind, assignment.value_id::text
+            from content.project_taxonomy_assignments assignment
+            join taxonomy.roots root on root.portfolio_id = assignment.portfolio_id
+              and root.taxonomy_id = assignment.taxonomy_id
+           where assignment.portfolio_id = ${scope.portfolioId}::uuid
+           order by assignment.content_id, assignment.taxonomy_id, assignment.value_id
+        `.execute(executor);
+
+        const reviewsByRevision = new Map<string, ContentAuthoringReview[]>();
+        for (const row of reviews.rows) {
+          let findings = row.findings;
+          if (typeof findings === "string") { try { findings = JSON.parse(findings) as unknown; } catch { throw new PostgresInfrastructureError(); } }
+          if (!isKind(row.content_type) || !isLocale(row.locale) || !Array.isArray(findings) || !findings.every((item) => typeof item === "string") ||
+              !Number.isSafeInteger(row.review_sequence) || row.review_sequence < 1 || !Number.isSafeInteger(row.evidence_version) || row.evidence_version < 1 ||
+              !/^[a-f0-9]{64}$/.test(row.snapshot_hash) || (row.decision !== "accepted" && row.decision !== "rejected")) throw new PostgresInfrastructureError();
+          const list = reviewsByRevision.get(row.revision_id) ?? [];
+          list.push({ reviewId: row.review_id as StableId<"ContentReview">, revisionId: row.revision_id as StableId<"Revision">,
+            contentId: row.content_id as StableId<string>, contentType: row.content_type, locale: row.locale, snapshotHash: row.snapshot_hash,
+            evidenceVersion: row.evidence_version, reviewerId: row.reviewer_id as StableId<"Owner">, reviewSequence: row.review_sequence,
+            decision: row.decision, findings, reviewedAt: databaseTime(row.reviewed_at) });
+          reviewsByRevision.set(row.revision_id, list);
+        }
+        const revisionsByContent = new Map<string, ContentOwnerExportRecord["revisions"] extends readonly (infer T)[] ? T[] : never>();
+        for (const row of revisions.rows) {
+          if (!isKind(row.content_type) || !isLocale(row.locale) || !Number.isSafeInteger(row.stream_sequence) || row.stream_sequence < 1 ||
+              !Number.isSafeInteger(row.aggregate_version) || row.aggregate_version < 1) throw new PostgresInfrastructureError();
+          const payload = parsePayload(row.payload, row as RevisionRow);
+          const list = revisionsByContent.get(row.content_id) ?? [];
+          list.push({ revisionId: row.revision_id as StableId<"Revision">, locale: row.locale, sequence: row.stream_sequence,
+            aggregateVersion: row.aggregate_version, savedAt: databaseTime(row.saved_at), payload, reviews: reviewsByRevision.get(row.revision_id) ?? [] });
+          revisionsByContent.set(row.content_id, list);
+        }
+        const group = <T,>(rows: readonly T[], key: (row: T) => string): Map<string, T[]> => {
+          const result = new Map<string, T[]>();
+          for (const row of rows) { const id = key(row); const list = result.get(id) ?? []; list.push(row); result.set(id, list); }
+          return result;
+        };
+        const publicationsByContent = group(publications.rows, (row) => row.content_id);
+        const publicationHistoryByContent = group(publicationHistory.rows, (row) => row.content_id);
+        const lifecycleByContent = group(lifecycle.rows, (row) => row.content_id);
+        const routesByContent = group(routes.rows, (row) => row.content_id);
+        const routeHistoryByContent = group(routeHistory.rows, (row) => row.content_id);
+        const relationshipsByProject = group(related.rows, (row) => row.project_id);
+        const relationshipHistoryByProject = new Map<string, typeof relationshipHistory.rows[number][]>();
+        for (const row of relationshipHistory.rows) {
+          for (const projectId of [row.left_project_id, row.right_project_id]) {
+            const list = relationshipHistoryByProject.get(projectId) ?? [];
+            list.push(row);
+            relationshipHistoryByProject.set(projectId, list);
+          }
+        }
+        const assignmentsByContent = group(assignments.rows, (row) => row.content_id);
+        const records: ContentOwnerExportRecord[] = roots.rows.map((root) => {
+          if (!isKind(root.content_type) || !["draft", "published", "hidden", "archived"].includes(root.lifecycle) ||
+              !Number.isSafeInteger(root.aggregate_version) || root.aggregate_version < 1) throw new PostgresInfrastructureError();
+          const routeRows = routesByContent.get(root.content_id) ?? [];
+          const firstRoute = routeRows[0];
+          const routeIdentity = firstRoute?.route_identity;
+          if (routeRows.some((row) => row.route_identity !== routeIdentity || row.current_slug !== firstRoute?.current_slug ||
+              databaseTime(row.first_published_at) !== databaseTime(firstRoute!.first_published_at))) throw new PostgresInfrastructureError();
+          const route = firstRoute === undefined ? null : {
+            identity: firstRoute.route_identity as StableId<"PublicRoute">, canonicalSlug: firstRoute.current_slug,
+            firstPublishedAt: databaseTime(firstRoute.first_published_at),
+            reservations: routeRows.map((row) => ({ slug: row.normalized_slug, isCurrent: row.is_current, reservedAt: databaseTime(row.reserved_at) })),
+            history: (routeHistoryByContent.get(root.content_id) ?? []).map((row) => ({ sequence: row.sequence, fromSlug: row.from_slug,
+              toSlug: row.to_slug, changedAt: databaseTime(row.changed_at) })),
+          };
+          return {
+            contentId: root.content_id as StableId<string>, contentType: root.content_type,
+            lifecycle: root.lifecycle as ContentOwnerExportRecord["lifecycle"], aggregateVersion: root.aggregate_version,
+            candidateSlug: root.candidate_slug, firstPublishedAt: root.first_published_at === null ? null : databaseTime(root.first_published_at),
+            projectStatus: root.status_value_id === null ? null : root.status_label === null || root.status_state === null ? (() => { throw new PostgresInfrastructureError(); })() :
+              { valueId: root.status_value_id as StableId<"ProjectStatusValue">, label: root.status_label, state: root.status_state as "active" | "retired" },
+            featured: root.featured, revisions: revisionsByContent.get(root.content_id) ?? [],
+            publications: (publicationsByContent.get(root.content_id) ?? []).map((row) => {
+              if (!isLocale(row.locale) || !Number.isSafeInteger(row.publication_sequence) || row.publication_sequence < 1) throw new PostgresInfrastructureError();
+              return { locale: row.locale, revisionId: row.revision_id as StableId<"Revision">, reviewId: row.review_id as StableId<"ContentReview">,
+                publicationSequence: row.publication_sequence, publishedAt: databaseTime(row.published_at) };
+            }),
+            publicationHistory: (publicationHistoryByContent.get(root.content_id) ?? []).map((row) => {
+              if (!isLocale(row.locale) || !Number.isSafeInteger(row.publication_sequence) || row.publication_sequence < 1) throw new PostgresInfrastructureError();
+              return { locale: row.locale, sequence: row.publication_sequence, revisionId: row.revision_id as StableId<"Revision">,
+                reviewId: row.review_id as StableId<"ContentReview">, publishedAt: databaseTime(row.published_at) };
+            }),
+            lifecycleHistory: (lifecycleByContent.get(root.content_id) ?? []).map((row) => ({ sequence: row.transition_sequence,
+              previousLifecycle: row.previous_lifecycle, lifecycle: row.lifecycle, aggregateVersion: row.aggregate_version,
+              reason: row.reason, changedAt: databaseTime(row.changed_at) })),
+            publicRoute: route,
+            relatedProjectIds: (relationshipsByProject.get(root.content_id) ?? []).map((row) => row.related_project_id as StableId<"Project">),
+            relationshipHistory: (relationshipHistoryByProject.get(root.content_id) ?? []).map((row) => ({ leftProjectId: row.left_project_id as StableId<"Project">,
+              rightProjectId: row.right_project_id as StableId<"Project">, sequence: row.sequence, initiatingProjectId: row.initiating_project_id as StableId<"Project">,
+              relatedProjectId: row.related_project_id as StableId<"Project">, occurredAt: databaseTime(row.occurred_at) })),
+            taxonomyAssignments: (assignmentsByContent.get(root.content_id) ?? []).map((row) => ({ taxonomyId: row.taxonomy_id as StableId<"Taxonomy">,
+              kind: row.kind, valueId: row.value_id as StableId<"TaxonomyValue"> })),
+          };
+        });
+        return { ok: true, value: { capturedAt, records } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
     async projectExists(projectId, scope, context) {
       const executor = resolvePostgresTransaction(context);
       try {

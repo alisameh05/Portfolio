@@ -125,6 +125,25 @@ const CONFIGURATION_EXPORT_READ_POLICIES: ReadonlyArray<readonly [string, string
   ["contact_channels", "portfolio_channels_worker_export_select", "SELECT", "{shipwithali_worker}"],
 ];
 
+const CONTENT_EXPORT_READ_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
+  ["items", "content_items_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["project_status_values", "project_status_values_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["revisions", "content_revisions_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["revision_reviews", "content_revision_reviews_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["language_publications", "language_publications_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["testimonial_language_publications", "testimonial_publications_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["publication_history", "publication_history_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["testimonial_publication_history", "testimonial_publication_history_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["lifecycle_history", "lifecycle_history_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["public_routes", "public_routes_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["public_route_reservations", "public_route_reservations_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["public_route_history", "public_route_history_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["project_relationship_views", "project_relationship_views_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["project_relationship_history", "project_relationship_history_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["project_taxonomy_assignments", "project_taxonomy_assignments_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["roots", "taxonomy_roots_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+];
+
 const CONFIGURATION_EXPORT_OUTBOX_POLICY: ReadonlyArray<readonly [string, string, string, string]> = [
   ["outbox_events", "owner_export_produced_outbox_worker_insert", "INSERT", "{shipwithali_worker}"],
 ];
@@ -143,6 +162,16 @@ const CONFIGURATION_EXPORT_MATRIX: ReadonlyArray<readonly [string, string, strin
   ["shipwithali_worker", "insert Contact channel", "insert into portfolio_config.contact_channels (portfolio_id, position, channel, label, destination, available_locales) values ('018f4f7d-5000-7000-8000-000000000290', 9, 'email', 'Email', 'owner@example.test', '[\"en\"]'::jsonb)", false],
 ];
 
+const CONTENT_EXPORT_MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+  ["shipwithali_worker", "select Content snapshot in exact Owner purpose",
+    `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; set local shipwithali.worker_purpose = 'content.owner-export'; select count(*) from content.items`, true],
+  ["shipwithali_worker", "select Content snapshot for another purpose",
+    `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; set local shipwithali.worker_purpose = 'portability.configuration-export'; select count(*) from content.items`, true],
+  ["shipwithali_worker", "update Content items", "update content.items set aggregate_version = aggregate_version where false", false],
+  ["shipwithali_worker", "insert Content item", "insert into content.items (content_id, portfolio_id, content_type) values ('018f4f7d-5000-7000-8000-000000000294', '018f4f7d-5000-7000-8000-000000000290', 'project')", false],
+  ["shipwithali_worker", "delete Content item", "delete from content.items where false", false],
+];
+
 /** The scoped assembly-job policy reviewed for #238 in operations.jobs. */
 const OWNER_EXPORT_JOB_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
   ["jobs", "owner_export_jobs_application_insert", "INSERT", "{shipwithali_application}"],
@@ -159,6 +188,7 @@ const OWNER_EXPORT_JOB_POLICIES: ReadonlyArray<readonly [string, string, string,
 let retryRecoverySchema = false;
 let portabilityExportSchema = false;
 let configurationExportSchema = false;
+let contentExportSchema = false;
 if (DATABASE_URL !== undefined) {
    const declared = (process.env["PHASE_DATABASE_CAPABILITIES"] ?? declaredCapabilities().join(","))
     .split(",").map((value) => value.trim()).filter(Boolean);
@@ -216,6 +246,23 @@ if (DATABASE_URL !== undefined) {
         declared.includes("portability.configuration_export")
           ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:portability.configuration_export"
           : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:portability.configuration_export",
+      );
+    }
+    const contentPolicies = await era.query(
+      `select count(*)::int as policy_count,
+              to_regprocedure('content.owner_export_scope_is_valid(uuid)') is not null as has_scope_function
+         from pg_policies
+        where (schemaname = 'content' and policyname = any($1::text[]))
+           or (schemaname = 'taxonomy' and policyname = 'taxonomy_roots_worker_owner_export')`,
+      [CONTENT_EXPORT_READ_POLICIES.filter(([, policy]) => policy !== "taxonomy_roots_worker_owner_export").map(([, policy]) => policy)],
+    );
+    contentExportSchema = Number(contentPolicies.rows[0]?.["policy_count"] ?? 0) === CONTENT_EXPORT_READ_POLICIES.length &&
+      contentPolicies.rows[0]?.["has_scope_function"] === true;
+    if (declared.includes("portability.content_export") !== contentExportSchema) {
+      throw new Error(
+        declared.includes("portability.content_export")
+          ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:portability.content_export"
+          : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:portability.content_export",
       );
     }
   } finally {
@@ -388,6 +435,7 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
   ...(retryRecoverySchema ? RETRY_RECOVERY_MATRIX : []),
   ...(portabilityExportSchema ? PORTABILITY_EXPORT_MATRIX : []),
   ...(configurationExportSchema ? CONFIGURATION_EXPORT_MATRIX : []),
+  ...(contentExportSchema ? CONTENT_EXPORT_MATRIX : []),
 ];
 
 interface RoleAttempt {
@@ -779,6 +827,64 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
       const scopedSnapshot = await attemptAs("shipwithali_application",
         `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; select snapshot_data->>'privateMarker' as marker from portability.owner_exports where export_id = '${CONFIGURATION_EXPORT_FIXTURE_ID}'`);
       expect(scopedSnapshot.rows.at(-1)?.["marker"]).toBe("owner-export-snapshot-private");
+    });
+  }
+
+  if (contentExportSchema) {
+    it("publishes the purpose-fenced Content export read boundary with no source writes", async () => {
+      const admin = adminClient();
+      await admin.connect();
+      try {
+        const policies = await admin.query(
+          `select schemaname, tablename, policyname, roles, cmd, qual
+             from pg_policies
+            where schemaname in ('content', 'taxonomy')
+              and 'shipwithali_worker' = any(roles)
+            order by schemaname, tablename, policyname`,
+        );
+        const workerPolicies = policies.rows;
+        const actualPolicies = workerPolicies.map((row) => [
+          row["tablename"], row["policyname"], row["cmd"], String(row["roles"]),
+        ]);
+        const expectedPolicies = CONTENT_EXPORT_READ_POLICIES.map(([table, policy, command, roles]) => [table, policy, command, roles]);
+        expect(actualPolicies).toHaveLength(expectedPolicies.length);
+        expect(actualPolicies).toEqual(expect.arrayContaining(expectedPolicies));
+        expect(workerPolicies.every((row) => typeof row["qual"] === "string" &&
+          String(row["qual"]).includes("owner_export_scope_is_valid"))).toBe(true);
+
+        const tables = await admin.query(
+          `select n.nspname || '.' || c.relname as table_name, c.relrowsecurity, c.relforcerowsecurity,
+                  has_table_privilege('shipwithali_worker', c.oid, 'select') as can_read,
+                  has_table_privilege('shipwithali_worker', c.oid, 'insert') as can_insert,
+                  has_table_privilege('shipwithali_worker', c.oid, 'update') as can_update,
+                  has_table_privilege('shipwithali_worker', c.oid, 'delete') as can_delete
+             from pg_class c join pg_namespace n on n.oid = c.relnamespace
+            where (n.nspname = 'content' and c.relname = any($1::text[]))
+               or (n.nspname = 'taxonomy' and c.relname = 'roots')
+            order by n.nspname, c.relname`,
+          [CONTENT_EXPORT_READ_POLICIES.filter(([table]) => table !== "roots").map(([table]) => table)],
+        );
+        expect(tables.rows).toHaveLength(CONTENT_EXPORT_READ_POLICIES.length);
+        expect(tables.rows.every((row) => row["relrowsecurity"] === true && row["relforcerowsecurity"] === true &&
+          row["can_read"] === true && row["can_insert"] === false && row["can_update"] === false &&
+          row["can_delete"] === false)).toBe(true);
+
+        const scopeFunction = await admin.query(
+          `select p.prosecdef as security_definer,
+                  has_function_privilege('shipwithali_worker', p.oid, 'execute') as worker_execute,
+                  has_function_privilege('shipwithali_application', p.oid, 'execute') as application_execute,
+                  has_function_privilege('shipwithali_backup', p.oid, 'execute') as backup_execute
+             from pg_proc p
+            where p.oid = to_regprocedure('content.owner_export_scope_is_valid(uuid)')`,
+        );
+        expect(scopeFunction.rows).toHaveLength(1);
+        expect(scopeFunction.rows[0]?.["security_definer"]).toBe(false);
+        expect(scopeFunction.rows[0]?.["worker_execute"]).toBe(true);
+        expect(scopeFunction.rows[0]?.["application_execute"]).toBe(false);
+        expect(scopeFunction.rows[0]?.["backup_execute"]).toBe(false);
+      } finally {
+        await admin.end();
+      }
     });
   }
 

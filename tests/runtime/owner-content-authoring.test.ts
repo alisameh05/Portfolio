@@ -70,6 +70,9 @@ function createHarness() {
       }
       return { ok: true, value: record };
     },
+    async readOwnerExportSnapshot() {
+      return { ok: true as const, value: { capturedAt: "2030-01-01T00:00:00.000Z", records: [] } };
+    },
     async correctCandidateSlug(input) {
       const record = records.get(input.contentId);
       if (!record) return { ok: false as const, error: { kind: "not_found" as const, code: "CONTENT_NOT_FOUND" } };

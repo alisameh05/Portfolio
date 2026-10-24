@@ -41,7 +41,7 @@ import type {
   PersistedOwnerExport,
 } from "../application/owner-export-store.js";
 import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportPackageManifest } from "../application/service.js";
-import type { OwnerExportConfigurationSnapshot } from "../application/owner-export-package.js";
+import type { OwnerExportAssemblySnapshot, OwnerExportConfigurationSnapshot } from "../application/owner-export-package.js";
 import type { TransactionContext } from "../../../runtime/ports.js";
 
 export const EXPORT_STATUS_VALUES: readonly ExportStatus[] = [
@@ -108,7 +108,7 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
   const expiresAt = toIso(row.expires_at);
   const candidateContentLength = row.candidate_content_length === null ? undefined : Number(row.candidate_content_length);
   const artifactContentLength = row.artifact_content_length === null ? undefined : Number(row.artifact_content_length);
-  let snapshot: OwnerExportConfigurationSnapshot | undefined;
+  let snapshot: OwnerExportAssemblySnapshot | undefined;
   if (row.snapshot_data !== null) {
     if (typeof row.snapshot_data !== "object" || Array.isArray(row.snapshot_data) ||
         snapshotId.value === undefined || snapshotCapturedAt === undefined ||
@@ -116,15 +116,25 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
       throw new PostgresInfrastructureError();
     }
     const data = row.snapshot_data as Record<string, unknown>;
-    const capabilities = data["capabilities"];
-    if (data["snapshotId"] !== snapshotId.value || data["capturedAt"] !== snapshotCapturedAt ||
-        !capabilities || typeof capabilities !== "object" || Array.isArray(capabilities) ||
-        typeof (capabilities as Record<string, unknown>)["currentCvAvailable"] !== "boolean" ||
-        typeof (capabilities as Record<string, unknown>)["externalLinksAvailable"] !== "boolean" ||
-        typeof (capabilities as Record<string, unknown>)["globalProjectCtaAvailable"] !== "boolean") {
-      throw new PostgresInfrastructureError();
+    if (data["snapshotId"] !== snapshotId.value || data["capturedAt"] !== snapshotCapturedAt) throw new PostgresInfrastructureError();
+    if (data["kind"] === "owner-export-snapshot-v1") {
+      if (!Array.isArray(data["includedScopes"]) || data["includedScopes"].length < 1 ||
+          data["includedScopes"].some((scope) => scope !== "portfolio-content" && scope !== "portfolio-configuration") ||
+          data["content"] !== undefined && (!data["content"] || typeof data["content"] !== "object" || !Array.isArray((data["content"] as Record<string, unknown>)["records"])) ||
+          data["configuration"] !== undefined && (!data["configuration"] || typeof data["configuration"] !== "object")) {
+        throw new PostgresInfrastructureError();
+      }
+      snapshot = data as unknown as OwnerExportAssemblySnapshot;
+    } else {
+      const capabilities = data["capabilities"];
+      if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities) ||
+          typeof (capabilities as Record<string, unknown>)["currentCvAvailable"] !== "boolean" ||
+          typeof (capabilities as Record<string, unknown>)["externalLinksAvailable"] !== "boolean" ||
+          typeof (capabilities as Record<string, unknown>)["globalProjectCtaAvailable"] !== "boolean") {
+        throw new PostgresInfrastructureError();
+      }
+      snapshot = data as unknown as OwnerExportConfigurationSnapshot;
     }
-    snapshot = data as unknown as OwnerExportConfigurationSnapshot;
   }
   for (const digest of [row.candidate_sha256, row.artifact_sha256]) {
     if (digest !== null && !/^[a-f0-9]{64}$/.test(digest)) throw new PostgresInfrastructureError();
@@ -255,7 +265,9 @@ export function createPostgresOwnerExportStore(
           update portability.owner_exports
              set snapshot_id = ${input.snapshot.snapshotId}::uuid,
                  snapshot_captured_at = ${input.snapshot.capturedAt}::timestamptz,
-                 configuration_version = ${input.snapshot.configurationVersion},
+                 configuration_version = ${"kind" in input.snapshot
+                   ? input.snapshot.configuration?.configurationVersion ?? null
+                   : input.snapshot.configurationVersion},
                  snapshot_data = ${JSON.stringify(input.snapshot)}::jsonb
            where export_id = ${input.exportId}::uuid
              and status = 'building' and snapshot_id is null and snapshot_data is null

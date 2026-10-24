@@ -1,0 +1,729 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shipwithali:owner-export-schema:portfolio-content:1.2",
+  "title": "Portable portfolio content record 1.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scope",
+    "value"
+  ],
+  "properties": {
+    "scope": {
+      "const": "portfolio-content"
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contentId",
+        "contentType",
+        "lifecycle",
+        "aggregateVersion",
+        "candidateSlug",
+        "firstPublishedAt",
+        "projectStatus",
+        "featured",
+        "revisions",
+        "publications",
+        "publicationHistory",
+        "lifecycleHistory",
+        "publicRouteIdentity",
+        "publicRoute",
+        "routeHistory",
+        "relatedProjectIds",
+        "relationshipHistory",
+        "taxonomyValueIds",
+        "taxonomyAssignments",
+        "mediaAssetIds",
+        "evidenceItems",
+        "publicDiscoveryOrder"
+      ],
+      "properties": {
+        "contentId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "contentType": {
+          "enum": [
+            "project",
+            "achievement",
+            "testimonial"
+          ]
+        },
+        "lifecycle": {
+          "enum": [
+            "draft",
+            "published",
+            "hidden",
+            "archived"
+          ]
+        },
+        "projectStatus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/projectStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "featured": {
+          "type": "boolean"
+        },
+        "revisions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/revision"
+          }
+        },
+        "publicRouteIdentity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/stableId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "routeHistory": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/routeRedirect"
+          }
+        },
+        "relatedProjectIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "taxonomyValueIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "mediaAssetIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "evidenceItems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceItem"
+          }
+        },
+        "aggregateVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "candidateSlug": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 120
+        },
+        "firstPublishedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+        },
+        "publications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/publication"
+          }
+        },
+        "publicationHistory": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/publicationHistory"
+          }
+        },
+        "lifecycleHistory": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lifecycleHistory"
+          }
+        },
+        "publicRoute": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/publicRoute"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relationshipHistory": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/relationshipHistory"
+          }
+        },
+        "taxonomyAssignments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/taxonomyAssignment"
+          }
+        },
+        "publicDiscoveryOrder": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/discoveryOrder"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revisionId",
+        "locale",
+        "sequence",
+        "title",
+        "summary",
+        "body",
+        "reviewed",
+        "currentlyPublished",
+        "aggregateVersion",
+        "savedAt",
+        "payload",
+        "reviews"
+      ],
+      "properties": {
+        "revisionId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "locale": {
+          "enum": [
+            "en",
+            "ar"
+          ]
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50000
+        },
+        "reviewed": {
+          "type": "boolean"
+        },
+        "currentlyPublished": {
+          "type": "boolean"
+        },
+        "aggregateVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "savedAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "contentType",
+            "locale",
+            "title",
+            "summary",
+            "body"
+          ],
+          "properties": {
+            "contentType": {
+              "enum": [
+                "project",
+                "achievement",
+                "testimonial"
+              ]
+            },
+            "locale": {
+              "enum": [
+                "en",
+                "ar"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        },
+        "reviews": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/review"
+          }
+        }
+      }
+    },
+    "routeRedirect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fromSlug",
+        "toSlug"
+      ],
+      "properties": {
+        "fromSlug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "toSlug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        }
+      }
+    },
+    "evidenceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim",
+        "state",
+        "supportingArtifactIds"
+      ],
+      "properties": {
+        "claim": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "state": {
+          "enum": [
+            "unreviewed",
+            "supported",
+            "unsupported"
+          ]
+        },
+        "supportingArtifactIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "mediaAssetId": {
+          "$ref": "#/$defs/stableId"
+        }
+      }
+    },
+    "projectStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valueId",
+        "label",
+        "state"
+      ],
+      "properties": {
+        "valueId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "state": {
+          "enum": [
+            "active",
+            "retired"
+          ]
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewId",
+        "revisionId",
+        "contentId",
+        "contentType",
+        "locale",
+        "snapshotHash",
+        "evidenceVersion",
+        "reviewerId",
+        "reviewSequence",
+        "decision",
+        "findings",
+        "reviewedAt"
+      ],
+      "properties": {
+        "reviewId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "revisionId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "contentId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "contentType": {
+          "enum": [
+            "project",
+            "achievement",
+            "testimonial"
+          ]
+        },
+        "locale": {
+          "enum": [
+            "en",
+            "ar"
+          ]
+        },
+        "snapshotHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "evidenceVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reviewerId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "reviewSequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "decision": {
+          "enum": [
+            "accepted",
+            "rejected"
+          ]
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reviewedAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "locale",
+        "revisionId",
+        "reviewId",
+        "publicationSequence",
+        "publishedAt"
+      ],
+      "properties": {
+        "locale": {
+          "enum": [
+            "en",
+            "ar"
+          ]
+        },
+        "revisionId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "reviewId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "publicationSequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "publishedAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "publicationHistory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "locale",
+        "sequence",
+        "revisionId",
+        "reviewId",
+        "publishedAt"
+      ],
+      "properties": {
+        "locale": {
+          "enum": [
+            "en",
+            "ar"
+          ]
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "revisionId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "reviewId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "publishedAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "lifecycleHistory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "previousLifecycle",
+        "lifecycle",
+        "aggregateVersion",
+        "reason",
+        "changedAt"
+      ],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "previousLifecycle": {
+          "enum": [
+            "draft",
+            "published",
+            "hidden",
+            "archived"
+          ]
+        },
+        "lifecycle": {
+          "enum": [
+            "published",
+            "hidden",
+            "archived"
+          ]
+        },
+        "aggregateVersion": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "changedAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "routeReservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slug",
+        "isCurrent",
+        "reservedAt"
+      ],
+      "properties": {
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "isCurrent": {
+          "type": "boolean"
+        },
+        "reservedAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "routeEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "fromSlug",
+        "toSlug",
+        "changedAt"
+      ],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fromSlug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "toSlug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "changedAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "publicRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "canonicalSlug",
+        "firstPublishedAt",
+        "reservations",
+        "history"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/stableId"
+        },
+        "canonicalSlug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "firstPublishedAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+        },
+        "reservations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/routeReservation"
+          }
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/routeEvent"
+          }
+        }
+      }
+    },
+    "relationshipHistory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "leftProjectId",
+        "rightProjectId",
+        "sequence",
+        "initiatingProjectId",
+        "relatedProjectId",
+        "occurredAt"
+      ],
+      "properties": {
+        "leftProjectId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "rightProjectId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "initiatingProjectId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "relatedProjectId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "occurredAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "taxonomyAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taxonomyId",
+        "kind",
+        "valueId"
+      ],
+      "properties": {
+        "taxonomyId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "kind": {
+          "enum": [
+            "category",
+            "ai-ml-domain",
+            "technology",
+            "project-type"
+          ]
+        },
+        "valueId": {
+          "$ref": "#/$defs/stableId"
+        }
+      }
+    },
+    "discoveryOrder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "firstPublishedAt",
+        "tieBreaker"
+      ],
+      "properties": {
+        "firstPublishedAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+        },
+        "tieBreaker": {
+          "const": "content-id-desc"
+        }
+      }
+    }
+  }
+}

@@ -261,23 +261,22 @@ export async function initializeDatabaseRuntime(
         if (runtimeKind === "worker") {
           const [
             { createOwnerExportAssemblyService },
-            { createPortfolioConfigurationExportSnapshotReader },
             { createPostgresPortfolioSettingsRepository },
-            { createOwnerExportConfigurationSnapshotReader },
+            { createPostgresContentAuthoringRepository },
+            { createOwnerExportSnapshotReader },
           ] = await Promise.all([
             import("../modules/portability-operations/application/owner-export-assembly.js"),
-            import("../modules/portfolio-configuration/application/settings-service.js"),
             import("../modules/portfolio-configuration/adapters/postgres-settings.js"),
-            import("../runtime/adapters/owner-export-configuration-snapshot.js"),
+            import("../modules/content-publishing/adapters/postgres-authoring.js"),
+            import("../runtime/adapters/owner-export-snapshot.js"),
           ]);
           ownerExportAssembly = createOwnerExportAssemblyService({
             operations,
             exports: ownerExportStore,
-            snapshots: createOwnerExportConfigurationSnapshotReader({
-              configuration: createPortfolioConfigurationExportSnapshotReader({
-                repository: createPostgresPortfolioSettingsRepository(),
-                transactions: operations.transactions,
-              }),
+            snapshots: createOwnerExportSnapshotReader({
+              configuration: createPostgresPortfolioSettingsRepository(),
+              content: createPostgresContentAuthoringRepository(),
+              transactions: operations.transactions,
               capabilities: {
                 async read(scope) {
                   if (!env["SUPABASE_URL"] || !env["SUPABASE_SERVICE_ROLE_KEY"]) {

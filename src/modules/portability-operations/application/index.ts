@@ -88,12 +88,16 @@ export {
   type OwnerExportAssemblyDependencies,
   type OwnerExportAssemblyRunResult,
   type OwnerExportConfigurationSnapshotReaderPort,
+  type OwnerExportSnapshotReaderPort,
   type OwnerExportObjectStoragePort,
 } from "./owner-export-assembly.js";
 export {
   buildConfigurationOwnerExportPackage,
+  buildSelectedOwnerExportPackage,
   type BuiltOwnerExportPackage,
   type OwnerExportConfigurationSnapshot,
+  type OwnerExportSelectedSnapshot,
+  type OwnerExportAssemblySnapshot,
 } from "./owner-export-package.js";
 export type {
   OwnerExportStorePort,

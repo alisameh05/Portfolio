@@ -507,7 +507,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "has_table_privilege('authenticated', 'content.revision_reviews', 'select') authenticated_read, " +
       "has_table_privilege('shipwithali_worker', 'content.revision_reviews', 'select') worker_read",
     );
-    expect(grants.rows[0]).toEqual({ anon_read: false, authenticated_read: false, worker_read: false });
+    expect(grants.rows[0]).toEqual({ anon_read: false, authenticated_read: false, worker_read: true });
   }, 30_000);
 
   it("rolls back the aggregate version, review, idempotency receipt, and event when review outbox append fails", async () => {
@@ -1862,15 +1862,15 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "has_table_privilege('shipwithali_application', 'content.public_route_history', 'select') app_route_history, " +
       "has_table_privilege('shipwithali_application', 'content.public_route_history', 'insert') app_route_history_insert",
     );
-    expect(grants.rows[0]).toEqual({ anon_root: false, anon_revision: false, authenticated_root: false, worker_revision: false,
+    expect(grants.rows[0]).toEqual({ anon_root: false, anon_revision: false, authenticated_root: false, worker_revision: true,
       backup_root: false, anon_projection: false, anon_testimonial_projection: false, authenticated_testimonial_publication: false,
-      worker_testimonial_history: false, backup_testimonial_projection: false, app_testimonial_projection: true,
+      worker_testimonial_history: true, backup_testimonial_projection: false, app_testimonial_projection: true,
       app_testimonial_quote_update: true, anon_discovery_projection: false, app_route_slug_update: true,
       anon_achievement_projection: false, authenticated_achievement_projection: false,
       worker_achievement_projection: false, backup_achievement_projection: false,
-      anon_lifecycle_history: false, authenticated_lifecycle_history: false, worker_lifecycle_history: false, backup_lifecycle_history: false,
+      anon_lifecycle_history: false, authenticated_lifecycle_history: false, worker_lifecycle_history: true, backup_lifecycle_history: false,
       app_lifecycle_read: true, app_lifecycle_insert: true, app_lifecycle_update: false, app_lifecycle_delete: false,
-      authenticated_routes: false, worker_publication: false, app_routes: true, app_reservations: true,
+      authenticated_routes: false, worker_publication: true, app_routes: true, app_reservations: true,
       app_reservation_current_update: true, app_route_history: true, app_route_history_insert: true });
     const lifecycleRls = await admin.query(
       "select relrowsecurity, relforcerowsecurity from pg_class where oid = 'content.lifecycle_history'::regclass",
@@ -1934,7 +1934,7 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
       "has_table_privilege('shipwithali_application', 'content.project_relationship_views', 'select') app_view, " +
       "has_table_privilege('shipwithali_application', 'content.project_relationship_views', 'insert') app_view_insert, " +
       "has_table_privilege('shipwithali_application', 'content.project_relationship_views', 'update') app_view_update");
-    expect(access.rows[0]).toEqual({ anon_pair: false, authenticated_view: false, worker_history: false,
+    expect(access.rows[0]).toEqual({ anon_pair: false, authenticated_view: false, worker_history: true,
       app_view: true, app_view_insert: true, app_view_update: false });
     const rls = await admin.query("select relrowsecurity, relforcerowsecurity from pg_class where oid = 'content.project_relationship_views'::regclass");
     expect(rls.rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });

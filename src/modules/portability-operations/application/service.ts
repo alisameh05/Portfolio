@@ -47,6 +47,17 @@ export interface OwnerExportEntryDescriptor<TScope extends ExportScope = ExportS
   readonly recordCount: number;
 }
 
+export interface OwnerExportContentEntryDescriptor {
+  readonly path: "records/portfolio-content.ndjson";
+  readonly scope: "portfolio-content";
+  readonly mediaType: "application/x-ndjson";
+  readonly recordSchema: "urn:shipwithali:owner-export-schema:portfolio-content:1.2";
+  readonly schemaPath: "schemas/portfolio-content.schema.json";
+  readonly schemaVersion: "1.2";
+  readonly digest: string;
+  readonly recordCount: number;
+}
+
 export interface OwnerExportEntryDescriptorV1_0<TScope extends ExportScope = ExportScope> {
   readonly path: string;
   readonly scope: TScope;
@@ -135,7 +146,13 @@ export interface OwnerExportPackageManifestV1_2 extends Omit<OwnerExportPackageM
   readonly schemaVersion: "1.2";
 }
 
-export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2;
+/** Package 1.3 adds the complete Content record schema while retaining v1.1 records for other selected scopes. */
+export interface OwnerExportPackageManifestV1_3 extends Omit<OwnerExportPackageManifestV1_1, "schemaVersion" | "entries"> {
+  readonly schemaVersion: "1.3";
+  readonly entries: readonly (OwnerExportEntryDescriptor | OwnerExportContentEntryDescriptor)[];
+}
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3;
 
 interface OwnerExportViewBase {
   readonly exportId: StableId<"OwnerExport">;
