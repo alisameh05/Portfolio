@@ -42,15 +42,17 @@ import {
   type OwnerExportTransitionInput,
 } from "../../src/modules/portability-operations/index.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
+import { createPostgresContentAuthoringRepository } from "../../src/modules/content-publishing/adapters/postgres-authoring.js";
 import { createPortfolioConfigurationExportSnapshotReader } from "../../src/modules/portfolio-configuration/index.js";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
 import { createSystemIdGenerator, type StableIdGenerator } from "../../src/runtime/ports.js";
 import { createStableId, parseIdempotencyKey, parseStableId, type OwnerActor, type StableId } from "../../src/shared/domain/index.js";
 import { createOwnerExportConfigurationSnapshotReader } from "../../src/runtime/adapters/owner-export-configuration-snapshot.js";
+import { createOwnerExportSnapshotReader } from "../../src/runtime/adapters/owner-export-snapshot.js";
 import { createSupabaseOwnerExportStorage } from "../../src/runtime/adapters/supabase-owner-export-storage.js";
 import { createPostgresOwnerMediaExportSnapshotReader } from "../../src/modules/media/adapters/postgres-owner-export-snapshot.js";
 import type { PortfolioSettings } from "../../src/modules/portfolio-configuration/domain/index.js";
-import type { OwnerExportConfigurationSnapshot } from "../../src/modules/portability-operations/application/owner-export-package.js";
+import type { OwnerExportConfigurationSnapshot, OwnerExportMediaObjectReaderPort } from "../../src/modules/portability-operations/application/owner-export-package.js";
 import { validateOwnerExportZip } from "../../scripts/owner-export/validator.mjs";
 
 const APPLICATION_URL = process.env["PHASE8_OWNER_EXPORT_APPLICATION_URL"];
@@ -63,6 +65,9 @@ const ownerId = createStableId("Owner");
 const actor: OwnerActor = { kind: "owner", ownerId, sessionId: "phase8-owner-export-test-session" };
 const FOREIGN_OWNER_ID = createStableId("Owner");
 const FOREIGN_PORTFOLIO_ID = createStableId("Portfolio");
+const mediaHistoryScope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+const mediaReadyScope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+const TEST_OWNER_IDS = [ownerId, FOREIGN_OWNER_ID, mediaHistoryScope.ownerId, mediaReadyScope.ownerId];
 const OPERATION_SCOPE = `portability.owner-export-request:${portfolioId}`;
 let now = "2030-10-23T09:00:00.000Z";
 const advance = () => {
@@ -371,6 +376,55 @@ function configurationSettings(contactLabel: string, mediaAssetId?: StableId<"Me
   };
 }
 
+async function seedAcceptedMediaExportFixture(scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> }) {
+  const settingsRepository = createPostgresPortfolioSettingsRepository();
+  const settings = await application!.transactions.run((context) => settingsRepository.getSettings(scope, context));
+  if (!settings.ok) {
+    const provisioned = await application!.transactions.run((context) => settingsRepository.provisionSettings(scope, {
+      ...configurationSettings("Media export"), portfolioId: scope.portfolioId,
+    }, context));
+    if (!provisioned.ok) throw new Error("PHASE8_MEDIA_EXPORT_SETTINGS_REQUIRED");
+  }
+
+  const mediaId = createStableId("MediaAsset");
+  const sourceObjectId = createStableId("MediaObject");
+  const outputObjectId = createStableId("MediaObject");
+  const uploadIntentId = createStableId("MediaUploadIntent");
+  const attemptId = createStableId("MediaProcessingAttempt");
+  const decisionId = createStableId("MediaDecision");
+  const originalBytes = new TextEncoder().encode("phase8-original-pdf");
+  const mediaBytes = new TextEncoder().encode("phase8-accepted-pdf");
+  const inputDigest = createHash("sha256").update(originalBytes).digest("hex");
+  const outputDigest = createHash("sha256").update(mediaBytes).digest("hex");
+  await admin!.query(
+    "insert into media.assets (media_id, portfolio_id, owner_id, kind, original_file_name, declared_media_type, declared_byte_length, declared_sha256) values ($1, $2, $3, 'image', 'private-owner-filename.png', 'image/png', $4, $5)",
+    [mediaId, scope.portfolioId, scope.ownerId, originalBytes.byteLength, inputDigest],
+  );
+  await admin!.query(
+    "insert into media.upload_intents (upload_intent_id, media_id, media_object_id, portfolio_id, owner_id, expires_at) values ($1, $2, $3, $4, $5, $6)",
+    [uploadIntentId, mediaId, sourceObjectId, scope.portfolioId, scope.ownerId, now],
+  );
+  await admin!.query(
+    "insert into media.processed_objects (object_id, portfolio_id, owner_id, media_id, source_object_id, sha256, byte_length, mime_type, object_version) values ($1, $2, $3, $4, $5, $6, $7, 'image/webp', $6)",
+    [outputObjectId, scope.portfolioId, scope.ownerId, mediaId, sourceObjectId, outputDigest, mediaBytes.byteLength],
+  );
+  await admin!.query(
+    "insert into media.processing_attempts (attempt_id, portfolio_id, owner_id, media_id, input_object_id, input_sha256, detected_mime_type, detected_byte_length, result, output_object_id, output_sha256, scanner_version, processor_version, policy_version, finding_codes, started_at, finished_at) values ($1, $2, $3, $4, $5, $6, 'image/png', $7, 'passed', $8, $9, 'fixture-scanner-v1', 'fixture-processor-v1', 'image-webp-variants-v1', '[]'::jsonb, $10, $10)",
+    [attemptId, scope.portfolioId, scope.ownerId, mediaId, sourceObjectId, inputDigest, originalBytes.byteLength, outputObjectId, outputDigest, now],
+  );
+  await admin!.query(
+    "insert into media.processing_states (media_id, portfolio_id, owner_id, aggregate_version, latest_attempt_id) values ($1, $2, $3, 3, $4)",
+    [mediaId, scope.portfolioId, scope.ownerId, attemptId],
+  );
+  await admin!.query(
+    "insert into media.decision_history (decision_id, portfolio_id, owner_id, media_id, aggregate_version, decision, processing_attempt_id, input_object_id, input_sha256, detected_mime_type, detected_byte_length, scanner_version, processor_version, processing_policy_version, sealed_outputs, accessibility, ownership_attested_by, ownership_attested_at, public_suitability_attested_by, public_suitability_attested_at, decided_by, decided_at) values ($1, $2, $3, $4, 3, 'accepted', $5, $6, $7, 'image/png', $8, 'fixture-scanner-v1', 'fixture-processor-v1', 'image-webp-variants-v1', $9::jsonb, $10::jsonb, $3, $11, $3, $11, $3, $11)",
+    [decisionId, scope.portfolioId, scope.ownerId, mediaId, attemptId, sourceObjectId, inputDigest, originalBytes.byteLength,
+      JSON.stringify([{ objectId: outputObjectId, sha256: outputDigest, byteLength: mediaBytes.byteLength, mimeType: "image/webp", objectVersion: outputDigest, variantName: "display" }]),
+      JSON.stringify({ kind: "decorative-image" }), now],
+  );
+  return { mediaId, sourceObjectId, outputObjectId, uploadIntentId, originalBytes, mediaBytes, inputDigest, outputDigest };
+}
+
 function storedConfigurationSnapshotReader(input: {
   readonly mutateConfigurationAfterCapture?: () => Promise<void>;
 }) {
@@ -404,12 +458,18 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     // The runner shares one disposable cluster across suites; the suite leaves
     // its exact rows removed before yielding the database.
     try {
-      await admin?.query("delete from portability.owner_exports where owner_id = any($1::uuid[])", [[ownerId, FOREIGN_OWNER_ID]]);
-      await admin?.query("delete from portfolio_config.contact_channels where portfolio_id in (select portfolio_id from portfolio_config.settings where owner_id = any($1::uuid[]))", [[ownerId, FOREIGN_OWNER_ID]]);
-      await admin?.query("delete from taxonomy.roots where portfolio_id in (select portfolio_id from portfolio_config.settings where owner_id = any($1::uuid[]))", [[ownerId, FOREIGN_OWNER_ID]]);
-      await admin?.query("update portfolio_config.settings set profile_media_asset_id = null where owner_id = any($1::uuid[])", [[ownerId, FOREIGN_OWNER_ID]]);
-      await admin?.query("delete from media.assets where owner_id = any($1::uuid[])", [[ownerId, FOREIGN_OWNER_ID]]);
-      await admin?.query("delete from portfolio_config.settings where owner_id = any($1::uuid[])", [[ownerId, FOREIGN_OWNER_ID]]);
+      await admin?.query("delete from portability.owner_exports where owner_id = any($1::uuid[])", [TEST_OWNER_IDS]);
+      await admin?.query("delete from portfolio_config.contact_channels where portfolio_id in (select portfolio_id from portfolio_config.settings where owner_id = any($1::uuid[]))", [TEST_OWNER_IDS]);
+      await admin?.query("delete from taxonomy.roots where portfolio_id in (select portfolio_id from portfolio_config.settings where owner_id = any($1::uuid[]))", [TEST_OWNER_IDS]);
+      await admin?.query("update portfolio_config.settings set profile_media_asset_id = null where owner_id = any($1::uuid[])", [TEST_OWNER_IDS]);
+      await admin?.query("delete from media.rejection_history where owner_id = any($1::uuid[])", [TEST_OWNER_IDS]);
+      await admin?.query("delete from media.decision_history where owner_id = any($1::uuid[])", [TEST_OWNER_IDS]);
+      await admin?.query("delete from media.processing_states where owner_id = any($1::uuid[])", [TEST_OWNER_IDS]);
+      await admin?.query("delete from media.processing_attempts where owner_id = any($1::uuid[])", [TEST_OWNER_IDS]);
+      await admin?.query("delete from media.processed_objects where owner_id = any($1::uuid[])", [TEST_OWNER_IDS]);
+      await admin?.query("delete from media.upload_intents where owner_id = any($1::uuid[])", [TEST_OWNER_IDS]);
+      await admin?.query("delete from media.assets where owner_id = any($1::uuid[])", [TEST_OWNER_IDS]);
+      await admin?.query("delete from portfolio_config.settings where owner_id = any($1::uuid[])", [TEST_OWNER_IDS]);
       await admin?.query("delete from operations.jobs where job_type = 'portability.owner-export-assembly.v1'");
       await admin?.query("delete from operations.idempotency_records where operation_scope = $1", [OPERATION_SCOPE]);
       await admin?.query("delete from operations.idempotency_records where operation_scope like 'portability.owner-export-request:%'");
@@ -525,50 +585,8 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
   });
 
   it("#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", async () => {
-    const scope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
-    const settingsRepository = createPostgresPortfolioSettingsRepository();
-    const settings = await application!.transactions.run((context) => settingsRepository.getSettings(scope, context));
-    if (!settings.ok) {
-      const provisioned = await application!.transactions.run((context) => settingsRepository.provisionSettings(scope, {
-        ...configurationSettings("Media export"), portfolioId: scope.portfolioId,
-      }, context));
-      expect(provisioned.ok).toBe(true);
-    }
-
-    const mediaId = createStableId("MediaAsset");
-    const sourceObjectId = createStableId("MediaObject");
-    const outputObjectId = createStableId("MediaObject");
-    const attemptId = createStableId("MediaProcessingAttempt");
-    const decisionId = createStableId("MediaDecision");
-    const mediaBytes = new TextEncoder().encode("phase8-accepted-pdf");
-    const inputDigest = createHash("sha256").update("phase8-original-pdf").digest("hex");
-    const outputDigest = createHash("sha256").update(mediaBytes).digest("hex");
-    await admin!.query(
-      "insert into media.assets (media_id, portfolio_id, owner_id, kind, original_file_name, declared_media_type, declared_byte_length, declared_sha256) values ($1, $2, $3, 'image', 'private-owner-filename.png', 'image/png', $4, $5)",
-      [mediaId, scope.portfolioId, scope.ownerId, mediaBytes.byteLength, inputDigest],
-    );
-    await admin!.query(
-      "insert into media.upload_intents (upload_intent_id, media_id, media_object_id, portfolio_id, owner_id, expires_at) values ($1, $2, $3, $4, $5, $6)",
-      [createStableId("MediaUploadIntent"), mediaId, sourceObjectId, scope.portfolioId, scope.ownerId, now],
-    );
-    await admin!.query(
-      "insert into media.processed_objects (object_id, portfolio_id, owner_id, media_id, source_object_id, sha256, byte_length, mime_type, object_version) values ($1, $2, $3, $4, $5, $6, $7, 'image/webp', $6)",
-      [outputObjectId, scope.portfolioId, scope.ownerId, mediaId, sourceObjectId, outputDigest, mediaBytes.byteLength],
-    );
-    await admin!.query(
-      "insert into media.processing_attempts (attempt_id, portfolio_id, owner_id, media_id, input_object_id, input_sha256, detected_mime_type, detected_byte_length, result, output_object_id, output_sha256, scanner_version, processor_version, policy_version, finding_codes, started_at, finished_at) values ($1, $2, $3, $4, $5, $6, 'image/png', $7, 'passed', $8, $9, 'fixture-scanner-v1', 'fixture-processor-v1', 'image-webp-variants-v1', '[]'::jsonb, $10, $10)",
-      [attemptId, scope.portfolioId, scope.ownerId, mediaId, sourceObjectId, inputDigest, mediaBytes.byteLength, outputObjectId, outputDigest, now],
-    );
-    await admin!.query(
-      "insert into media.processing_states (media_id, portfolio_id, owner_id, aggregate_version, latest_attempt_id) values ($1, $2, $3, 3, $4)",
-      [mediaId, scope.portfolioId, scope.ownerId, attemptId],
-    );
-    await admin!.query(
-      "insert into media.decision_history (decision_id, portfolio_id, owner_id, media_id, aggregate_version, decision, processing_attempt_id, input_object_id, input_sha256, detected_mime_type, detected_byte_length, scanner_version, processor_version, processing_policy_version, sealed_outputs, accessibility, ownership_attested_by, ownership_attested_at, public_suitability_attested_by, public_suitability_attested_at, decided_by, decided_at) values ($1, $2, $3, $4, 3, 'accepted', $5, $6, $7, 'image/png', $8, 'fixture-scanner-v1', 'fixture-processor-v1', 'image-webp-variants-v1', $9::jsonb, $10::jsonb, $3, $11, $3, $11, $3, $11)",
-      [decisionId, scope.portfolioId, scope.ownerId, mediaId, attemptId, sourceObjectId, inputDigest, mediaBytes.byteLength,
-        JSON.stringify([{ objectId: outputObjectId, sha256: outputDigest, byteLength: mediaBytes.byteLength, mimeType: "image/webp", objectVersion: outputDigest, variantName: "display" }]),
-        JSON.stringify({ kind: "decorative-image" }), now],
-    );
+    const scope = mediaHistoryScope;
+    const { mediaId, sourceObjectId, outputObjectId, mediaBytes, inputDigest, outputDigest } = await seedAcceptedMediaExportFixture(scope);
 
     const snapshotReader = createPostgresOwnerMediaExportSnapshotReader({ database: worker!.database, transactions: worker!.transactions });
     const captured = await worker!.transactions.run((context) => snapshotReader.readOwnerMediaExportSnapshot(scope, context), { isolationLevel: "repeatable read" });
@@ -644,6 +662,77 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
         .rejects.toMatchObject({ code: "42501" });
     } finally {
       await rejectionPrivateField.end();
+    }
+  });
+
+  it("#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL", async () => {
+    const scope = mediaReadyScope;
+    const { mediaId, sourceObjectId, outputObjectId, originalBytes, mediaBytes } = await seedAcceptedMediaExportFixture(scope);
+    const mediaSnapshotReader = createPostgresOwnerMediaExportSnapshotReader({ database: worker!.database, transactions: worker!.transactions });
+    const snapshots = createOwnerExportSnapshotReader({
+      configuration: createPostgresPortfolioSettingsRepository(),
+      content: createPostgresContentAuthoringRepository(),
+      media: mediaSnapshotReader,
+      transactions: worker!.transactions,
+      capabilities: { async read() { return { currentCvAvailable: false, externalLinksAvailable: false }; } },
+    });
+    const bytesByObjectId = new Map([[sourceObjectId, originalBytes], [outputObjectId, mediaBytes]]);
+    const mediaObjects: OwnerExportMediaObjectReaderPort = {
+      async readMediaExportObject(input) {
+        const bytes = bytesByObjectId.get(input.objectId);
+        if (bytes === undefined) throw new Error("PHASE8_MEDIA_EXPORT_FIXTURE_OBJECT_MISSING");
+        return { async *[Symbol.asyncIterator]() { yield bytes; } };
+      },
+    };
+    const objectServer = await startIsolatedObjectStorage();
+    try {
+      const storage = createSupabaseOwnerExportStorage({
+        storageUrl: objectServer.baseUrl,
+        serviceRoleKey: "phase8-isolated-storage-key",
+      });
+      const mediaActor: OwnerActor = { kind: "owner", ownerId: scope.ownerId, sessionId: "phase8-media-export-ready" };
+      const primary = composeService(application!, { objectRead: storage });
+      const workerOperations = createPostgresOperationsPersistence(worker!.database, { now: () => now });
+      const workerStore = createPostgresOwnerExportStore(worker!.database, { outbox: workerOperations.outbox });
+      const assembly = createOwnerExportAssemblyService({
+        operations: workerOperations,
+        exports: workerStore,
+        snapshots,
+        mediaObjects,
+        storage,
+        clock: { now: () => now },
+        ids: createSystemIdGenerator(),
+      });
+      const request = await primary.service.requestOwnerExport({
+        actor: mediaActor,
+        portfolioId: scope.portfolioId,
+        idempotencyKey: key("phase8-media-export-persisted-reload-001"),
+        includedScopes: ["media-metadata"],
+      });
+      expect(request.ok).toBe(true);
+      if (!request.ok) return;
+
+      const assembled = await assembly.runOwnerExportAssembly({ workerId: "phase8-media-export-ready-worker" });
+      expect(assembled).toMatchObject({ ok: true, value: { claimed: 1, completed: 1, retried: 0, failed: 0 } });
+      const persisted = await workerStore.findOwnerExport({ exportId: request.value.exportId, ...scope });
+      expect(persisted).toMatchObject({
+        status: "ready",
+        includedScopes: ["media-metadata"],
+        schemaVersion: "1.5",
+        snapshot: {
+          kind: "owner-export-snapshot-v1",
+          includedScopes: ["media-metadata"],
+          media: { records: [expect.objectContaining({ mediaId })], assets: expect.arrayContaining([
+            expect.objectContaining({ mediaId, objectId: sourceObjectId, source: "original" }),
+            expect.objectContaining({ mediaId, objectId: outputObjectId, source: "variant" }),
+          ]) },
+        },
+        candidateArtifactId: expect.any(String),
+        candidateSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        candidateContentLength: expect.any(Number),
+      });
+    } finally {
+      await new Promise<void>((resolve) => objectServer.server.close(() => resolve()));
     }
   });
 

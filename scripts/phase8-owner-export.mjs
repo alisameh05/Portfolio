@@ -81,7 +81,7 @@ try {
   const acceptanceFiles = ["tests/phase8/owner-export-requests.test.ts", "tests/phase8/owner-export-adapter.test.ts",
     "tests/phase8/owner-export-postgres.test.ts", "tests/phase8/owner-export-assembly.test.ts", "tests/phase8/owner-export-content.test.ts", "tests/phase8/owner-export-content-postgres.test.ts",
     "tests/phase8/owner-export-media-package.test.ts", "tests/runtime/supabase-media-export-storage.test.ts"];
-    const expectedTests = 66;
+    const expectedTests = 67;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -111,10 +111,10 @@ try {
   }
     criterionTests = [
       { criterion: "AC01", tests: ["#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", "AC01–AC08 captures all retained facts, races consistently, and validates independent content-only and combined packages"] },
-      { criterion: "AC02", tests: ["#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", "packages accepted bytes, deduplicates shared digests, and passes the independent validator", "streams the exact upload-intent-scoped original from the private candidate bucket"] },
-      { criterion: "AC03", tests: ["accepts every nonempty non-Media subset and standalone Media in canonical order", "packages accepted bytes, deduplicates shared digests, and passes the independent validator"] },
+      { criterion: "AC02", tests: ["#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL", "packages accepted bytes, deduplicates shared digests, and passes the independent validator", "streams the exact upload-intent-scoped original from the private candidate bucket"] },
+      { criterion: "AC03", tests: ["#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL", "accepts every nonempty non-Media subset and standalone Media in canonical order", "packages accepted bytes, deduplicates shared digests, and passes the independent validator"] },
       { criterion: "AC04", tests: ["#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", "records rejected bytes as excluded without reading or declaring any object"] },
-      { criterion: "AC05", tests: ["fails closed for missing required accepted bytes", "fails closed for same-length replacement required accepted bytes", "rejects missing, redirected, changed, and wrong-length objects", "AC03/04/05: retries capture, lost upload, and verification faults without publishing partial readiness"] },
+      { criterion: "AC05", tests: ["#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL", "fails closed for missing required accepted bytes", "fails closed for same-length replacement required accepted bytes", "rejects missing, redirected, changed, and wrong-length objects", "AC03/04/05: retries capture, lost upload, and verification faults without publishing partial readiness"] },
       { criterion: "AC06", tests: ["#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", "AC01–AC08 captures all retained facts, races consistently, and validates independent content-only and combined packages"] },
       { criterion: "AC07", tests: ["rejects an accepted object above the 50 MiB per-object bound before opening Storage", "rejects packages whose unique assets exceed the validator's 512-member limit", "AC03/04/05: retries capture, lost upload, and verification faults without publishing partial readiness", "streams the exact upload-intent-scoped original from the private candidate bucket"] },
       { criterion: "AC08", tests: ["#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", "packages accepted bytes, deduplicates shared digests, and passes the independent validator"] },

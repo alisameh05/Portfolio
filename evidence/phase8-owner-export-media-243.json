@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "ticket": 243,
-  "runId": "22c8c522-0d2a-46c3-a6d1-01095b6edb4c",
-  "startedAt": "2026-10-24T17:55:18.246Z",
-  "completedAt": "2026-10-24T17:56:14.644Z",
-  "sourceRevision": "823765c5904cbae1d7f52bc7a3ad8c132a98421e",
-  "sourceTreeSha256": "9330eb0ea38317eac969877c3fdeeb3dddcde335626537a7190131f7eb1b6cd6",
+  "runId": "a5775c3c-6afd-4e15-b426-0fe41e34e922",
+  "startedAt": "2026-10-24T18:11:46.970Z",
+  "completedAt": "2026-10-24T18:12:48.457Z",
+  "sourceRevision": "61ab4ebaa116cc63f5682cb0437ddba2f8de23bb",
+  "sourceTreeSha256": "4f46f38f7c1ce35c83fcd408061608e4f2898086b0a8c3ae8ef9ff913993e0b6",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -239,7 +239,7 @@
   },
   "required": {
     "success": true,
-    "passed": 51,
+    "passed": 52,
     "failed": 0,
     "skipped": 0,
     "todo": 0,
@@ -287,6 +287,10 @@
     },
     {
       "title": "#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields",
+      "status": "passed"
+    },
+    {
+      "title": "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL",
       "status": "passed"
     },
     {
@@ -497,6 +501,10 @@
           "status": "passed"
         },
         {
+          "title": "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL",
+          "status": "passed"
+        },
+        {
           "title": "packages accepted bytes, deduplicates shared digests, and passes the independent validator",
           "status": "passed"
         },
@@ -509,6 +517,10 @@
     {
       "criterion": "AC03",
       "executedTests": [
+        {
+          "title": "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL",
+          "status": "passed"
+        },
         {
           "title": "accepts every nonempty non-Media subset and standalone Media in canonical order",
           "status": "passed"
@@ -535,6 +547,10 @@
     {
       "criterion": "AC05",
       "executedTests": [
+        {
+          "title": "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL",
+          "status": "passed"
+        },
         {
           "title": "fails closed for missing required accepted bytes",
           "status": "passed"
