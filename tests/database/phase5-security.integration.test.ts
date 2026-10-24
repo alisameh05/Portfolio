@@ -28,6 +28,8 @@ const privateReviewFinding = "Private review proof 7a10e2";
 const STAGE_PATH = process.env["PHASE5_SECURITY_STAGE_PATH"];
 const contentExportEnabled = (process.env["PHASE_DATABASE_CAPABILITIES"] ?? declaredCapabilities().join(","))
   .split(",").map((capability) => capability.trim()).includes("portability.content_export");
+const taxonomyExportEnabled = (process.env["PHASE_DATABASE_CAPABILITIES"] ?? declaredCapabilities().join(","))
+  .split(",").map((capability) => capability.trim()).includes("portability.taxonomy_export");
 
 function roleIdentifier(name: string): string {
   if (!/^phase5_security_[a-z0-9_]+$/.test(name)) throw new Error("PHASE5_SECURITY_ROLE_INVALID");
@@ -273,7 +275,7 @@ describeDatabase("Phase 5 restricted-principal and migration security against Po
          and grantee in ('PUBLIC', 'anon', 'authenticated', 'shipwithali_worker', 'shipwithali_backup')
        order by table_schema, grantee, table_name, privilege_type
     `);
-    const exportTables = [
+    const exportTables = contentExportEnabled ? [
       ["content", "items"], ["content", "project_status_values"], ["content", "revisions"],
       ["content", "revision_reviews"], ["content", "language_publications"],
       ["content", "testimonial_language_publications"], ["content", "publication_history"],
@@ -282,13 +284,17 @@ describeDatabase("Phase 5 restricted-principal and migration security against Po
       ["content", "public_route_history"], ["content", "project_relationship_views"],
       ["content", "project_relationship_history"], ["content", "project_taxonomy_assignments"],
       ["taxonomy", "roots"],
-    ];
-    expect(grants.rows).toEqual(contentExportEnabled ? exportTables
+    ] : [];
+    if (taxonomyExportEnabled) exportTables.push(
+      ["content", "project_taxonomy_assignment_history"],
+      ["taxonomy", "taxonomy_values"], ["taxonomy", "value_history"],
+    );
+    expect(grants.rows).toEqual(exportTables
       .sort(([leftSchema, leftTable], [rightSchema, rightTable]) =>
         `${leftSchema}.${leftTable}`.localeCompare(`${rightSchema}.${rightTable}`))
       .map(([table_schema, table_name]) => ({
         table_schema, table_name, grantee: "shipwithali_worker", privilege_type: "SELECT", is_grantable: "NO",
-      })) : []);
+      })));
   });
 
   it("limits the application login to its configured Owner and Portfolio and keeps migration access off runtime credentials", async () => {
