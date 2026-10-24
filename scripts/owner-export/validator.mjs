@@ -745,10 +745,13 @@ function verifyTaxonomySnapshotFacts(records, contentRecords, includedScopes) {
   const projects = new Map((contentRecords ?? []).map(record => [record.value.contentId, record.value]));
   const selectedContent = includedScopes.includes("portfolio-content");
   const globalValueIds = new Set();
+  const taxonomyKinds = new Map();
+  const currentAssignmentsByProject = new Map();
   const assignmentSequences = new Map();
   for (const record of records) {
     const value = record.value;
     require(stable(value.taxonomyId) && Number.isSafeInteger(value.aggregateVersion) && value.aggregateVersion >= 1);
+    taxonomyKinds.set(value.taxonomyId, value.kind);
     const valuesById = new Map();
     for (let index = 0; index < value.values.length; index += 1) {
       const item = value.values[index];
@@ -809,7 +812,12 @@ function verifyTaxonomySnapshotFacts(records, contentRecords, includedScopes) {
         previousAssignment.targetId === assignment.targetId && previousAssignment.taxonomyValueId < assignment.taxonomyValueId);
       previousAssignment = assignment;
       assignments.add(key);
-      if (selectedContent) require(projects.get(assignment.targetId)?.contentType === "project");
+      if (selectedContent) {
+        require(projects.get(assignment.targetId)?.contentType === "project");
+        const projectAssignments = currentAssignmentsByProject.get(assignment.targetId) ?? new Set();
+        projectAssignments.add(`${value.taxonomyId}|${assignment.taxonomyValueId}`);
+        currentAssignmentsByProject.set(assignment.targetId, projectAssignments);
+      }
     }
     let previousHistory;
     for (const assignment of value.assignmentHistory) {
@@ -830,7 +838,25 @@ function verifyTaxonomySnapshotFacts(records, contentRecords, includedScopes) {
     for (let index = 0; index < sequences.length; index += 1) require(sequences[index] === index + 1);
   }
   if (selectedContent) {
-    for (const project of projects.values()) for (const valueId of project.taxonomyValueIds) require(globalValueIds.has(valueId));
+    for (const project of projects.values()) {
+      if (project.contentType !== "project") continue;
+      const projectAssignments = new Set();
+      for (const assignment of project.taxonomyAssignments) {
+        require(object(assignment) && stable(assignment.taxonomyId) && stable(assignment.valueId) &&
+          taxonomyKinds.get(assignment.taxonomyId) === assignment.kind && globalValueIds.has(assignment.valueId));
+        const key = `${assignment.taxonomyId}|${assignment.valueId}`;
+        require(!projectAssignments.has(key));
+        projectAssignments.add(key);
+      }
+      const taxonomyAssignments = currentAssignmentsByProject.get(project.contentId) ?? new Set();
+      require(projectAssignments.size === taxonomyAssignments.size &&
+        [...projectAssignments].every(key => taxonomyAssignments.has(key)));
+
+      const assignmentValueIds = new Set([...projectAssignments].map(key => key.slice(key.lastIndexOf("|") + 1)));
+      const projectedValueIds = new Set(project.taxonomyValueIds);
+      require(project.taxonomyValueIds.length === projectedValueIds.size && assignmentValueIds.size === projectedValueIds.size &&
+        [...assignmentValueIds].every(valueId => projectedValueIds.has(valueId)));
+    }
   }
 }
 

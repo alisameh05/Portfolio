@@ -159,6 +159,19 @@ async function rebuild(entries: Map<string, Uint8Array>): Promise<Uint8Array> {
 interface MutableTaxonomyManifest extends Record<string, unknown> {
   digest: string;
   entries: { scope: string; recordCount: number; digest: string }[];
+  dependencies: TaxonomyManifest["dependencies"][number][];
+}
+
+interface MutableTaxonomyRecord {
+  taxonomyId: string;
+  aggregateVersion: number;
+  kind: string;
+  values: { valueId: string; name: string; state: string; valueVersion: number; mergedIntoValueId?: string }[];
+  evolutionHistory: {
+    valueId: string; transitionSequence: number; action: string; previousName: string | null;
+    name: string; state: string; changedAt: string; mergedIntoValueId?: string;
+  }[];
+  assignments: { targetId: string; taxonomyValueId: string; assignedAt: string }[];
 }
 
 function rewriteManifest(entries: Map<string, Uint8Array>, edit: (manifest: MutableTaxonomyManifest) => void): void {
@@ -166,6 +179,31 @@ function rewriteManifest(entries: Map<string, Uint8Array>, edit: (manifest: Muta
   edit(manifest);
   manifest.digest = createHash("sha256").update(canonical(manifest)).digest("hex");
   entries.set("manifest.json", new TextEncoder().encode(`${JSON.stringify(manifest)}\n`));
+}
+
+function rewriteTaxonomyRecord(
+  entries: Map<string, Uint8Array>,
+  edit: (record: MutableTaxonomyRecord) => void,
+  additionalDependencies: TaxonomyManifest["dependencies"][number][] = [],
+): void {
+  const recordPath = "records/taxonomy.ndjson";
+  const record = JSON.parse(new TextDecoder().decode(entries.get(recordPath)!)) as { value: MutableTaxonomyRecord };
+  edit(record.value);
+  const recordBytes = new TextEncoder().encode(`${JSON.stringify(record)}\n`);
+  entries.set(recordPath, recordBytes);
+  rewriteManifest(entries, (manifest) => {
+    const descriptor = manifest.entries.find((entry) => entry.scope === "taxonomy")!;
+    descriptor.digest = createHash("sha256").update(recordBytes).digest("hex");
+    manifest.dependencies.push(...additionalDependencies);
+    const scopeOrder = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "moderation-history", "analytics-reports", "portfolio-configuration"];
+    const compareText = (left: string, right: string) => left < right ? -1 : left > right ? 1 : 0;
+    manifest.dependencies.sort((left, right) =>
+      scopeOrder.indexOf(left.sourceScope) - scopeOrder.indexOf(right.sourceScope) ||
+      compareText(left.sourceId, right.sourceId) ||
+      scopeOrder.indexOf(left.targetScope) - scopeOrder.indexOf(right.targetScope) ||
+      compareText(left.targetId, right.targetId),
+    );
+  });
 }
 
 describe("Phase 8 #242 taxonomy export package", () => {
@@ -203,6 +241,35 @@ describe("Phase 8 #242 taxonomy export package", () => {
     expect(fullResult.includedScopes).toEqual(["portfolio-content", "taxonomy"]);
     expect(fullResult.manifest.dependencies.filter((edge: { targetScope: string }) => edge.targetScope === "portfolio-content")
       .every((edge: { disposition: string }) => edge.disposition === "included")).toBe(true);
+  });
+
+  it("AC04 rejects missing or extra current taxonomy assignments in combined Content packages", async () => {
+    const built = await buildSelectedOwnerExportPackage({
+      exportId: id("507") as never, snapshot: snapshot(["portfolio-content", "taxonomy"]),
+    });
+    const original = await bytesOf(built.content);
+    expect(() => validateTaxonomyZip(original)).not.toThrow();
+
+    const missing = unzipStored(original);
+    rewriteTaxonomyRecord(missing, (record) => { record.assignments = []; });
+    const missingBytes = await rebuild(missing);
+    expect(() => validateTaxonomyZip(missingBytes)).toThrow(/TAXONOMY_SNAPSHOT_FACTS_INVALID/);
+
+    const extra = unzipStored(original);
+    const extraValueId = id("104");
+    rewriteTaxonomyRecord(extra, (record) => {
+      record.aggregateVersion += 1;
+      record.values.push({ valueId: extraValueId, name: "Unassigned", state: "active", valueVersion: 1 });
+      record.evolutionHistory.push({
+        valueId: extraValueId, transitionSequence: 1, action: "created", previousName: null,
+        name: "Unassigned", state: "active", changedAt: at,
+      });
+      record.assignments.push({ targetId: projectId, taxonomyValueId: extraValueId, assignedAt: at });
+    }, [{
+      sourceScope: "taxonomy", sourceId: taxonomyId, targetScope: "taxonomy", targetId: extraValueId, disposition: "included",
+    }]);
+    const extraBytes = await rebuild(extra);
+    expect(() => validateTaxonomyZip(extraBytes)).toThrow(/TAXONOMY_SNAPSHOT_FACTS_INVALID/);
   });
 
   it("AC05 declares a selected empty taxonomy as a zero-byte entry and rejects dangling merge mappings", async () => {
