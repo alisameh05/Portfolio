@@ -5,6 +5,7 @@ import type { TransactionRunner } from "../ports.js";
 import type { OwnerExportConfigurationSnapshot, OwnerExportSelectedSnapshot } from "../../modules/portability-operations/application/owner-export-package.js";
 import type { OwnerExportSnapshotReaderPort } from "../../modules/portability-operations/application/owner-export-assembly.js";
 import type { OwnerExportAssemblySnapshot } from "../../modules/portability-operations/application/owner-export-package.js";
+import type { TaxonomyOwnerExportSnapshotReader } from "../../modules/taxonomy-discovery/application/taxonomy-export.js";
 
 export interface OwnerExportCapabilityFactsReader {
   read(scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> }): Promise<{
@@ -108,6 +109,7 @@ function portableContentRecord(source: ContentOwnerExportRecord): Readonly<Recor
 export function createOwnerExportSnapshotReader(input: {
   readonly configuration: Pick<PortfolioSettingsRepository, "getSettingsSnapshot">;
   readonly content: Pick<ContentAuthoringRepository, "readOwnerExportSnapshot">;
+  readonly taxonomy?: TaxonomyOwnerExportSnapshotReader;
   readonly transactions: TransactionRunner;
   readonly capabilities: OwnerExportCapabilityFactsReader;
 }): OwnerExportSnapshotReaderPort {
@@ -115,10 +117,14 @@ export function createOwnerExportSnapshotReader(input: {
     async capture(request): Promise<Result<OwnerExportAssemblySnapshot, Rejection>> {
       const scopes = request.includedScopes;
       const hasContent = scopes.includes("portfolio-content");
+      const hasTaxonomy = scopes.includes("taxonomy");
       const hasConfiguration = scopes.includes("portfolio-configuration");
-      if (!hasContent && !hasConfiguration || scopes.some((scope) => scope !== "portfolio-content" && scope !== "portfolio-configuration")) {
+      const canonicalScopes = ["portfolio-content", "taxonomy", "portfolio-configuration"].filter((scope) => scopes.includes(scope));
+      if (canonicalScopes.length !== scopes.length || canonicalScopes.some((scope, index) => scopes[index] !== scope) ||
+          !hasContent && !hasTaxonomy && !hasConfiguration) {
         return err({ kind: "validation", code: "OWNER_EXPORT_SCOPE_UNSUPPORTED" });
       }
+      if (hasTaxonomy && input.taxonomy === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_TAXONOMY_UNAVAILABLE" });
       try {
         const captured = await input.transactions.run(async (transaction) => {
           const settings = hasConfiguration
@@ -129,11 +135,21 @@ export function createOwnerExportSnapshotReader(input: {
             ? await input.content.readOwnerExportSnapshot({ portfolioId: request.portfolioId, ownerId: request.ownerId }, transaction)
             : undefined;
           if (content !== undefined && !content.ok) throw new Error("OWNER_EXPORT_CONTENT_UNAVAILABLE");
-          const capturedAt = settings?.ok ? settings.value.capturedAt : content?.ok ? content.value.capturedAt : undefined;
-          if (capturedAt === undefined || settings?.ok && settings.value.capturedAt !== capturedAt || content?.ok && content.value.capturedAt !== capturedAt) {
+          const taxonomy = hasTaxonomy
+            ? await input.taxonomy!.readOwnerExportSnapshot({ portfolioId: request.portfolioId, ownerId: request.ownerId }, transaction)
+            : undefined;
+          if (taxonomy !== undefined && !taxonomy.ok) throw new Error("OWNER_EXPORT_TAXONOMY_UNAVAILABLE");
+          const capturedAt = settings?.ok ? settings.value.capturedAt : content?.ok ? content.value.capturedAt : taxonomy?.ok ? taxonomy.value.capturedAt : undefined;
+          if (capturedAt === undefined || settings?.ok && settings.value.capturedAt !== capturedAt ||
+              content?.ok && content.value.capturedAt !== capturedAt || taxonomy?.ok && taxonomy.value.capturedAt !== capturedAt) {
             throw new Error("OWNER_EXPORT_SNAPSHOT_TIME_MISMATCH");
           }
-          return { capturedAt, settings: settings?.ok ? settings.value.settings : null, content: content?.ok ? content.value : undefined };
+          return {
+            capturedAt,
+            settings: settings?.ok ? settings.value.settings : null,
+            content: content?.ok ? content.value : undefined,
+            taxonomy: taxonomy?.ok ? taxonomy.value : undefined,
+          };
         }, { isolationLevel: "repeatable read" });
         let configuration: OwnerExportConfigurationSnapshot | undefined;
         if (hasConfiguration) {
@@ -149,7 +165,7 @@ export function createOwnerExportSnapshotReader(input: {
             },
           };
         }
-        if (!hasContent && configuration !== undefined) return ok(configuration);
+        if (!hasContent && !hasTaxonomy && configuration !== undefined) return ok(configuration);
         return ok({
           kind: "owner-export-snapshot-v1",
           snapshotId: request.snapshotId,
@@ -157,6 +173,18 @@ export function createOwnerExportSnapshotReader(input: {
           includedScopes: scopes as OwnerExportSelectedSnapshot["includedScopes"],
           ...(configuration === undefined ? {} : { configuration }),
           ...(captured.content === undefined ? {} : { content: { records: captured.content.records.map((record) => ({ contentId: record.contentId, value: portableContentRecord(record) })) } }),
+          ...(captured.taxonomy === undefined ? {} : { taxonomy: { records: captured.taxonomy.taxonomies.map((record) => ({
+            taxonomyId: record.taxonomyId,
+            value: {
+              taxonomyId: record.taxonomyId,
+              aggregateVersion: record.aggregateVersion,
+              kind: record.kind,
+              values: record.values,
+              evolutionHistory: record.evolutionHistory,
+              assignments: record.assignments,
+              assignmentHistory: record.assignmentHistory,
+            },
+          })) } }),
         });
       } catch {
         return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_SNAPSHOT_UNAVAILABLE" });

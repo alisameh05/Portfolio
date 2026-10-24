@@ -144,6 +144,24 @@ const CONTENT_EXPORT_READ_POLICIES: ReadonlyArray<readonly [string, string, stri
   ["roots", "taxonomy_roots_worker_owner_export", "SELECT", "{shipwithali_worker}"],
 ];
 
+const TAXONOMY_EXPORT_READ_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
+  ["roots", "taxonomy_roots_worker_taxonomy_export", "SELECT", "{shipwithali_worker}"],
+  ["taxonomy_values", "taxonomy_values_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["value_history", "taxonomy_value_history_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+  ["project_taxonomy_assignment_history", "project_taxonomy_assignment_history_worker_owner_export", "SELECT", "{shipwithali_worker}"],
+];
+
+const TAXONOMY_EXPORT_MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+  ["shipwithali_worker", "select taxonomy roots in taxonomy export purpose",
+    `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; set local shipwithali.worker_purpose = 'taxonomy.owner-export'; select count(*) from taxonomy.roots`, true],
+  ["shipwithali_worker", "select taxonomy values in taxonomy export purpose",
+    `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; set local shipwithali.worker_purpose = 'taxonomy.owner-export'; select count(*) from taxonomy.taxonomy_values`, true],
+  ["shipwithali_worker", "select taxonomy history in taxonomy export purpose",
+    `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; set local shipwithali.worker_purpose = 'taxonomy.owner-export'; select count(*) from taxonomy.value_history`, true],
+  ["shipwithali_worker", "update taxonomy values", "update taxonomy.taxonomy_values set label = label where false", false],
+  ["shipwithali_worker", "insert taxonomy history", "insert into taxonomy.value_history (portfolio_id,taxonomy_id,value_id,transition_sequence,action,previous_label,label,state,aggregate_version) values ('018f4f7d-5000-7000-8000-000000000290','01890f3e-7b2f-7cc0-98cf-5a2890378ef8','018f4f7d-5000-7000-8000-000000000294',1,'created',null,'Probe','active',1)", false],
+];
+
 const CONFIGURATION_EXPORT_OUTBOX_POLICY: ReadonlyArray<readonly [string, string, string, string]> = [
   ["outbox_events", "owner_export_produced_outbox_worker_insert", "INSERT", "{shipwithali_worker}"],
 ];
@@ -189,6 +207,7 @@ let retryRecoverySchema = false;
 let portabilityExportSchema = false;
 let configurationExportSchema = false;
 let contentExportSchema = false;
+let taxonomyExportSchema = false;
 if (DATABASE_URL !== undefined) {
    const declared = (process.env["PHASE_DATABASE_CAPABILITIES"] ?? declaredCapabilities().join(","))
     .split(",").map((value) => value.trim()).filter(Boolean);
@@ -264,6 +283,22 @@ if (DATABASE_URL !== undefined) {
           ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:portability.content_export"
           : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:portability.content_export",
       );
+    }
+    const taxonomyPolicies = await era.query(
+      `select count(*)::int as policy_count,
+              to_regprocedure('taxonomy.owner_export_scope_is_valid(uuid)') is not null as has_scope_function
+         from pg_policies
+        where (schemaname = 'taxonomy' and policyname = any($1::text[]))
+           or (schemaname = 'content' and policyname = any($2::text[]))`,
+      [TAXONOMY_EXPORT_READ_POLICIES.filter(([, policy]) => policy !== "project_taxonomy_assignment_history_worker_owner_export").map(([, policy]) => policy),
+        TAXONOMY_EXPORT_READ_POLICIES.filter(([, policy]) => policy === "project_taxonomy_assignment_history_worker_owner_export").map(([, policy]) => policy)],
+    );
+    taxonomyExportSchema = Number(taxonomyPolicies.rows[0]?.["policy_count"] ?? 0) === TAXONOMY_EXPORT_READ_POLICIES.length &&
+      taxonomyPolicies.rows[0]?.["has_scope_function"] === true;
+    if (declared.includes("portability.taxonomy_export") !== taxonomyExportSchema) {
+      throw new Error(declared.includes("portability.taxonomy_export")
+        ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:portability.taxonomy_export"
+        : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:portability.taxonomy_export");
     }
   } finally {
     await era.end();
@@ -436,6 +471,7 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
   ...(portabilityExportSchema ? PORTABILITY_EXPORT_MATRIX : []),
   ...(configurationExportSchema ? CONFIGURATION_EXPORT_MATRIX : []),
   ...(contentExportSchema ? CONTENT_EXPORT_MATRIX : []),
+  ...(taxonomyExportSchema ? TAXONOMY_EXPORT_MATRIX : []),
 ];
 
 interface RoleAttempt {
@@ -839,14 +875,18 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
           `select schemaname, tablename, policyname, roles, cmd, qual
              from pg_policies
             where schemaname in ('content', 'taxonomy')
-              and 'shipwithali_worker' = any(roles)
+              and policyname = any($1::text[])
             order by schemaname, tablename, policyname`,
+          [...CONTENT_EXPORT_READ_POLICIES.map(([, policy]) => policy), ...(taxonomyExportSchema ? TAXONOMY_EXPORT_READ_POLICIES.map(([, policy]) => policy) : [])],
         );
         const workerPolicies = policies.rows;
         const actualPolicies = workerPolicies.map((row) => [
           row["tablename"], row["policyname"], row["cmd"], String(row["roles"]),
         ]);
-        const expectedPolicies = CONTENT_EXPORT_READ_POLICIES.map(([table, policy, command, roles]) => [table, policy, command, roles]);
+        const expectedPolicies = [
+          ...CONTENT_EXPORT_READ_POLICIES,
+          ...(taxonomyExportSchema ? TAXONOMY_EXPORT_READ_POLICIES : []),
+        ].map(([table, policy, command, roles]) => [table, policy, command, roles]);
         expect(actualPolicies).toHaveLength(expectedPolicies.length);
         expect(actualPolicies).toEqual(expect.arrayContaining(expectedPolicies));
         expect(workerPolicies.every((row) => typeof row["qual"] === "string" &&
@@ -859,12 +899,19 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
                   has_table_privilege('shipwithali_worker', c.oid, 'update') as can_update,
                   has_table_privilege('shipwithali_worker', c.oid, 'delete') as can_delete
              from pg_class c join pg_namespace n on n.oid = c.relnamespace
-            where (n.nspname = 'content' and c.relname = any($1::text[]))
-               or (n.nspname = 'taxonomy' and c.relname = 'roots')
+             where (n.nspname = 'content' and c.relname = any($1::text[]))
+               or (n.nspname = 'taxonomy' and c.relname = any($2::text[]))
             order by n.nspname, c.relname`,
-          [CONTENT_EXPORT_READ_POLICIES.filter(([table]) => table !== "roots").map(([table]) => table)],
+          [[...CONTENT_EXPORT_READ_POLICIES.filter(([table]) => table !== "roots").map(([table]) => table),
+            ...(taxonomyExportSchema ? ["project_taxonomy_assignment_history"] : [])],
+            taxonomyExportSchema ? [...new Set(TAXONOMY_EXPORT_READ_POLICIES.filter(([, policy]) => policy !== "project_taxonomy_assignment_history_worker_owner_export").map(([table]) => table))] : ["roots"]],
         );
-        expect(tables.rows).toHaveLength(CONTENT_EXPORT_READ_POLICIES.length);
+        const expectedTableCount = new Set([
+          ...CONTENT_EXPORT_READ_POLICIES.filter(([table]) => table !== "roots").map(([table]) => `content.${table}`),
+          ...(taxonomyExportSchema ? ["content.project_taxonomy_assignment_history"] : []),
+          ...(taxonomyExportSchema ? TAXONOMY_EXPORT_READ_POLICIES.filter(([, policy]) => policy !== "project_taxonomy_assignment_history_worker_owner_export").map(([table]) => `taxonomy.${table}`) : ["taxonomy.roots"]),
+        ]).size;
+        expect(tables.rows).toHaveLength(expectedTableCount);
         expect(tables.rows.every((row) => row["relrowsecurity"] === true && row["relforcerowsecurity"] === true &&
           row["can_read"] === true && row["can_insert"] === false && row["can_update"] === false &&
           row["can_delete"] === false)).toBe(true);
@@ -882,6 +929,21 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
         expect(scopeFunction.rows[0]?.["worker_execute"]).toBe(true);
         expect(scopeFunction.rows[0]?.["application_execute"]).toBe(false);
         expect(scopeFunction.rows[0]?.["backup_execute"]).toBe(false);
+        if (taxonomyExportSchema) {
+          const taxonomyFunction = await admin.query(
+            `select p.prosecdef as security_definer,
+                    has_function_privilege('shipwithali_worker', p.oid, 'execute') as worker_execute,
+                    has_function_privilege('shipwithali_application', p.oid, 'execute') as application_execute,
+                    has_function_privilege('shipwithali_backup', p.oid, 'execute') as backup_execute
+               from pg_proc p
+              where p.oid = to_regprocedure('taxonomy.owner_export_scope_is_valid(uuid)')`,
+          );
+          expect(taxonomyFunction.rows).toHaveLength(1);
+          expect(taxonomyFunction.rows[0]?.["security_definer"]).toBe(false);
+          expect(taxonomyFunction.rows[0]?.["worker_execute"]).toBe(true);
+          expect(taxonomyFunction.rows[0]?.["application_execute"]).toBe(false);
+          expect(taxonomyFunction.rows[0]?.["backup_execute"]).toBe(false);
+        }
       } finally {
         await admin.end();
       }

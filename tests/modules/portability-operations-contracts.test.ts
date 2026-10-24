@@ -83,7 +83,7 @@ function page(recordCount: number): OwnerExportSnapshotPage<"taxonomy"> {
 
 describe("Portability and Operations public contracts", () => {
   it("names the current versioned Owner export artifact", () => {
-    expect(OWNER_EXPORT_ARTIFACT_FILENAME).toBe("shipwithali-owner-export-1.3.zip");
+    expect(OWNER_EXPORT_ARTIFACT_FILENAME).toBe("shipwithali-owner-export-1.4.zip");
   });
 
   it("exposes only the seven declared export scopes", () => {

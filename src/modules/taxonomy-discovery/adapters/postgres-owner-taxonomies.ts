@@ -1,9 +1,13 @@
 import { sql } from "kysely";
-import { err, type Rejection, type Result, type StableId } from "../../../shared/domain/index.js";
+import { err, ok, type Rejection, type Result, type StableId } from "../../../shared/domain/index.js";
 import type { TaxonomyOwnerRepository, TaxonomyOwnerScope, TaxonomyKind, TaxonomyEvolutionResult } from "../application/owner-taxonomies.js";
 import type { TransactionContext } from "../../../runtime/ports.js";
 import { PostgresInfrastructureError, resolvePostgresTransaction } from "../../../shared/adapters/postgres/runtime.js";
 import type { ContentTaxonomyAssignmentsPort } from "../../content-publishing/index.js";
+import type { TaxonomyOwnerExportTaxonomyFacts } from "../application/taxonomy-export.js";
+import { parseStableId } from "../../../shared/domain/index.js";
+
+const MAX_TAXONOMY_EXPORT_ROWS = 100_000;
 
 // The shared transaction runner bounds lock waits at 5s and statements at 15s.
 // Keep merges synchronous and capped; lock timeout/deadlock failures abort the
@@ -117,7 +121,7 @@ export function createPostgresTaxonomyOwnerRepository(): TaxonomyOwnerRepository
           aggregate_version, actor_id, reason, changed_at
         ) values (
           ${input.scope.portfolioId}::uuid, ${taxonomyId}::uuid, ${input.valueId}::uuid, ${nextSequence},
-          ${action}, ${action === "renamed" ? value.label : value.label}, ${nextLabel}, ${nextState},
+          ${action}, ${value.label}, ${nextLabel}, ${nextState},
           ${nextRoot.aggregate_version}, ${input.actorId}::uuid, ${action === "retired" ? (input.reason ?? null) : null}, ${changedAt}::timestamptz
         )
       `.execute(executor);
@@ -141,6 +145,118 @@ export function createPostgresTaxonomyOwnerRepository(): TaxonomyOwnerRepository
     }
   }
   return {
+    async readOwnerTaxonomiesForExport(scope, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await sql`select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
+                         set_config('shipwithali.owner_id', ${scope.ownerId}, true),
+                         set_config('shipwithali.worker_purpose', 'taxonomy.owner-export', true)`.execute(executor);
+        const captured = await sql<{ captured_at: Date | string }>`select transaction_timestamp() as captured_at`.execute(executor);
+        const roots = await sql<{ taxonomy_id: string; aggregate_version: number; kind: string }>`
+          select taxonomy_id::text, aggregate_version, kind
+            from taxonomy.roots
+           where portfolio_id = ${scope.portfolioId}::uuid
+           order by taxonomy_id
+           limit ${MAX_TAXONOMY_EXPORT_ROWS + 1}
+        `.execute(executor);
+        const values = await sql<{
+          taxonomy_id: string; value_id: string; label: string; state: string;
+          value_version: number; merged_into_value_id: string | null;
+        }>`
+          select taxonomy_id::text, value_id::text, label, state, aggregate_version as value_version,
+                 merged_into_value_id::text
+            from taxonomy.taxonomy_values
+           where portfolio_id = ${scope.portfolioId}::uuid
+           order by taxonomy_id, value_id
+           limit ${MAX_TAXONOMY_EXPORT_ROWS + 1}
+        `.execute(executor);
+        const history = await sql<{
+          taxonomy_id: string; value_id: string; transition_sequence: number; action: string;
+          previous_label: string | null; label: string; state: string;
+          changed_at: Date | string;
+        }>`
+          select taxonomy_id::text, value_id::text, transition_sequence, action, previous_label, label, state,
+                 changed_at
+            from taxonomy.value_history
+           where portfolio_id = ${scope.portfolioId}::uuid
+           order by taxonomy_id, value_id, transition_sequence
+           limit ${MAX_TAXONOMY_EXPORT_ROWS + 1}
+        `.execute(executor);
+        if (captured.rows[0] === undefined || roots.rows.length > MAX_TAXONOMY_EXPORT_ROWS ||
+            values.rows.length > MAX_TAXONOMY_EXPORT_ROWS || history.rows.length > MAX_TAXONOMY_EXPORT_ROWS) {
+          return err({ kind: "temporarily_unavailable", code: "TAXONOMY_EXPORT_LIMIT_EXCEEDED" });
+        }
+        const capturedAtValue = captured.rows[0].captured_at;
+        const capturedAt = capturedAtValue instanceof Date ? capturedAtValue.toISOString() : new Date(capturedAtValue).toISOString();
+        if (!Number.isFinite(Date.parse(capturedAt))) throw new PostgresInfrastructureError();
+        const parsedRoots = roots.rows.map((row) => {
+          const taxonomyId = parseStableId("Taxonomy", row.taxonomy_id);
+          if (!taxonomyId.ok || !validKind(row.kind) || !Number.isSafeInteger(row.aggregate_version) || row.aggregate_version < 1) {
+            throw new PostgresInfrastructureError();
+          }
+          return { taxonomyId: taxonomyId.value, aggregateVersion: row.aggregate_version, kind: row.kind };
+        });
+        const parsedValues = values.rows.map((row) => {
+          const taxonomyId = parseStableId("Taxonomy", row.taxonomy_id);
+          const valueId = parseStableId("TaxonomyValue", row.value_id);
+          const mergedIntoValueId = row.merged_into_value_id === null ? undefined : parseStableId("TaxonomyValue", row.merged_into_value_id);
+          if (!taxonomyId.ok || !valueId.ok || mergedIntoValueId !== undefined && !mergedIntoValueId.ok ||
+              !Number.isSafeInteger(row.value_version) || row.value_version < 1 ||
+              row.state !== "active" && row.state !== "retired" && row.state !== "merged" ||
+              (row.state === "merged") !== (mergedIntoValueId !== undefined)) throw new PostgresInfrastructureError();
+          return {
+            taxonomyId: taxonomyId.value,
+            value: {
+              valueId: valueId.value, name: row.label, state: row.state,
+              valueVersion: row.value_version,
+              ...(mergedIntoValueId === undefined ? {} : { mergedIntoValueId: mergedIntoValueId.value }),
+            } as const,
+          };
+        });
+        const parsedHistory = history.rows.map((row) => {
+          const taxonomyId = parseStableId("Taxonomy", row.taxonomy_id);
+          const valueId = parseStableId("TaxonomyValue", row.value_id);
+          if (!taxonomyId.ok || !valueId.ok || !Number.isSafeInteger(row.transition_sequence) || row.transition_sequence < 1 ||
+              row.action !== "created" && row.action !== "renamed" && row.action !== "retired" && row.action !== "merged" ||
+              row.state !== "active" && row.state !== "retired" && row.state !== "merged") throw new PostgresInfrastructureError();
+          const changedAtValue = row.changed_at;
+          const changedAt = changedAtValue instanceof Date ? changedAtValue.toISOString() : new Date(changedAtValue).toISOString();
+          if (!Number.isFinite(Date.parse(changedAt))) throw new PostgresInfrastructureError();
+          return {
+            taxonomyId: taxonomyId.value,
+            history: {
+              valueId: valueId.value,
+              transitionSequence: row.transition_sequence,
+              action: row.action,
+              previousName: row.previous_label,
+              name: row.label,
+              state: row.state,
+              changedAt,
+            } as const,
+          };
+        });
+        const mergedTargetsByValueId = new Map(parsedValues.map((entry) => [entry.value.valueId, entry.value.mergedIntoValueId]));
+        const taxonomies: TaxonomyOwnerExportTaxonomyFacts[] = parsedRoots.map((root) => ({
+          ...root,
+          values: parsedValues.filter((entry) => entry.taxonomyId === root.taxonomyId).map((entry) => entry.value),
+          evolutionHistory: parsedHistory.filter((entry) => entry.taxonomyId === root.taxonomyId).map((entry) => {
+            const mergedIntoValueId = mergedTargetsByValueId.get(entry.history.valueId);
+            return {
+              ...entry.history,
+              ...(entry.history.action === "merged" && mergedIntoValueId !== undefined ? { mergedIntoValueId } : {}),
+            };
+          }),
+        }));
+        if (parsedValues.some((entry) => !parsedRoots.some((root) => root.taxonomyId === entry.taxonomyId)) ||
+            parsedHistory.some((entry) => !parsedRoots.some((root) => root.taxonomyId === entry.taxonomyId))) {
+          throw new PostgresInfrastructureError();
+        }
+        return ok({ capturedAt, taxonomies });
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
   async getOwnerTaxonomy(input, context) {
       const executor = resolvePostgresTransaction(context);
       try {
@@ -223,7 +339,8 @@ export function createPostgresTaxonomyOwnerRepository(): TaxonomyOwnerRepository
         if (!Number.isFinite(Date.parse(createdAt))) throw new PostgresInfrastructureError();
         await sql`
           insert into taxonomy.value_history (
-            portfolio_id, taxonomy_id, value_id, transition_sequence, action, previous_label, label, state, aggregate_version, changed_at
+            portfolio_id, taxonomy_id, value_id, transition_sequence, action, previous_label, label, state,
+            aggregate_version, changed_at
           ) values (${input.scope.portfolioId}::uuid, ${input.taxonomyId}::uuid, ${input.valueId}::uuid, 1,
                     'created', null, ${input.name}, 'active', 1, ${createdAt}::timestamptz)
         `.execute(executor);

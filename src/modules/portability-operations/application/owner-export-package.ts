@@ -8,9 +8,11 @@ import type {
   OwnerExportPackageManifestV1_2,
   OwnerExportPackageManifestV1_3,
   OwnerExportContentEntryDescriptor,
+  OwnerExportTaxonomyEntryDescriptor,
   OwnerExportDependencyDescriptor,
   OwnerExportPackageManifest,
   OwnerExportSchemaDescriptor,
+  OwnerExportPackageManifestV1_4,
 } from "./service.js";
 import { MAX_OWNER_EXPORT_ARTIFACT_BYTES } from "./service.js";
 
@@ -37,9 +39,10 @@ export interface OwnerExportSelectedSnapshot {
   readonly kind: "owner-export-snapshot-v1";
   readonly snapshotId: StableId<"OwnerExportArtifact">;
   readonly capturedAt: string;
-  readonly includedScopes: readonly ("portfolio-content" | "portfolio-configuration")[];
+  readonly includedScopes: readonly ("portfolio-content" | "taxonomy" | "portfolio-configuration")[];
   readonly configuration?: OwnerExportConfigurationSnapshot;
   readonly content?: { readonly records: readonly { readonly contentId: string; readonly value: Readonly<Record<string, unknown>> }[] };
+  readonly taxonomy?: { readonly records: readonly { readonly taxonomyId: string; readonly value: Readonly<Record<string, unknown>> }[] };
 }
 
 export type OwnerExportAssemblySnapshot = OwnerExportConfigurationSnapshot | OwnerExportSelectedSnapshot;
@@ -222,6 +225,10 @@ function readPinnedContentSchema(path: string): Uint8Array {
   return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.2", path));
 }
 
+function readPinnedTaxonomySchema(path: string): Uint8Array {
+  return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.3", path));
+}
+
 /**
  * Builds a configuration-only package. The 1.2 manifest minor uses immutable
  * v1.1 record/schema URIs and carries the source aggregate version and captured
@@ -323,9 +330,9 @@ function collectMediaIds(value: unknown, output: Set<string>): void {
 }
 
 function expectedDependencies(
-  values: readonly { readonly scope: "portfolio-content" | "portfolio-configuration"; readonly value: Readonly<Record<string, unknown>> }[],
+  values: readonly { readonly scope: "portfolio-content" | "taxonomy" | "portfolio-configuration"; readonly value: Readonly<Record<string, unknown>> }[],
   includedScopes: readonly string[],
-): OwnerExportPackageManifestV1_3["dependencies"] {
+): OwnerExportDependencyDescriptor[] {
   const included = new Set(includedScopes);
   const idsByScope = new Map<string, Set<string>>();
   for (const record of values) {
@@ -338,8 +345,8 @@ function expectedDependencies(
     walk(record.value);
     idsByScope.set(record.scope, ids);
   }
-  const rows = new Map<string, { sourceScope: "portfolio-content" | "portfolio-configuration"; sourceId: string; targetScope: OwnerExportDependencyDescriptor["targetScope"]; targetId: string }>();
-  const add = (sourceScope: "portfolio-content" | "portfolio-configuration", sourceId: string, targetScope: OwnerExportDependencyDescriptor["targetScope"], targetId: string) => {
+  const rows = new Map<string, { sourceScope: "portfolio-content" | "taxonomy" | "portfolio-configuration"; sourceId: string; targetScope: OwnerExportDependencyDescriptor["targetScope"]; targetId: string }>();
+  const add = (sourceScope: "portfolio-content" | "taxonomy" | "portfolio-configuration", sourceId: string, targetScope: OwnerExportDependencyDescriptor["targetScope"], targetId: string) => {
     rows.set([sourceScope, sourceId, targetScope, targetId].join("|"), { sourceScope, sourceId, targetScope, targetId });
   };
   for (const record of values) {
@@ -352,6 +359,30 @@ function expectedDependencies(
       collectMediaIds(value["evidenceItems"], mediaIds);
       collectMediaIds(value["revisions"], mediaIds);
       for (const id of mediaIds) add(record.scope, String(value["contentId"]), "media-metadata", id);
+    } else if (record.scope === "taxonomy") {
+      const taxonomyId = String(value["taxonomyId"]);
+      const assignments = value["assignments"];
+      const assignmentHistory = value["assignmentHistory"];
+      const values = value["values"];
+      const evolutionHistory = value["evolutionHistory"];
+      if (Array.isArray(assignments)) for (const assignment of assignments) if (assignment !== null && typeof assignment === "object") {
+        const row = assignment as Record<string, unknown>;
+        if (typeof row["targetId"] === "string") add(record.scope, taxonomyId, "portfolio-content", row["targetId"]);
+        if (typeof row["taxonomyValueId"] === "string") add(record.scope, taxonomyId, "taxonomy", row["taxonomyValueId"]);
+      }
+      if (Array.isArray(assignmentHistory)) for (const assignment of assignmentHistory) if (assignment !== null && typeof assignment === "object") {
+        const row = assignment as Record<string, unknown>;
+        if (typeof row["targetId"] === "string") add(record.scope, taxonomyId, "portfolio-content", row["targetId"]);
+        if (typeof row["taxonomyValueId"] === "string") add(record.scope, taxonomyId, "taxonomy", row["taxonomyValueId"]);
+      }
+      if (Array.isArray(values)) for (const item of values) if (item !== null && typeof item === "object") {
+        const row = item as Record<string, unknown>;
+        if (typeof row["mergedIntoValueId"] === "string") add(record.scope, taxonomyId, "taxonomy", row["mergedIntoValueId"]);
+      }
+      if (Array.isArray(evolutionHistory)) for (const item of evolutionHistory) if (item !== null && typeof item === "object") {
+        const row = item as Record<string, unknown>;
+        if (typeof row["mergedIntoValueId"] === "string") add(record.scope, taxonomyId, "taxonomy", row["mergedIntoValueId"]);
+      }
     } else {
       const profile = value["profile"];
       if (profile !== null && typeof profile === "object" && typeof (profile as Record<string, unknown>)["mediaAssetId"] === "string") {
@@ -374,15 +405,154 @@ function expectedDependencies(
     });
 }
 
+async function buildTaxonomyOwnerExportPackage(input: {
+  readonly exportId: StableId<"OwnerExport">;
+  readonly snapshot: OwnerExportSelectedSnapshot;
+}): Promise<BuiltOwnerExportPackage> {
+  const { snapshot } = input;
+  const hasContent = snapshot.includedScopes.includes("portfolio-content");
+  const hasConfiguration = snapshot.includedScopes.includes("portfolio-configuration");
+  const canonicalScopes = ["portfolio-content", "taxonomy", "portfolio-configuration"]
+    .filter((scope) => snapshot.includedScopes.includes(scope as OwnerExportSelectedSnapshot["includedScopes"][number]));
+  if (canonicalScopes.length !== snapshot.includedScopes.length ||
+      canonicalScopes.some((scope, index) => snapshot.includedScopes[index] !== scope) ||
+      !snapshot.includedScopes.includes("taxonomy") || hasContent !== (snapshot.content !== undefined) ||
+      hasConfiguration !== (snapshot.configuration !== undefined) || snapshot.taxonomy === undefined) {
+    throw new TypeError("OWNER_EXPORT_TAXONOMY_SNAPSHOT_INVALID");
+  }
+  const manifestSchema = readPinnedTaxonomySchema("manifest.schema.json");
+  const taxonomySchema = readPinnedTaxonomySchema("taxonomy.schema.json");
+  const contentSchema = hasContent ? readPinnedContentSchema("portfolio-content.schema.json") : undefined;
+  const configurationSchema = hasConfiguration ? readPinnedSchema("portfolio-configuration.schema.json") : undefined;
+  const contentValues = snapshot.content?.records.map((record) => record.value) ?? [];
+  const taxonomyValues = snapshot.taxonomy.records.map((record) => record.value);
+  if (contentValues.some((value) => typeof value["contentId"] !== "string") ||
+      taxonomyValues.some((value) => typeof value["taxonomyId"] !== "string")) throw new TypeError("OWNER_EXPORT_TAXONOMY_RECORD_INVALID");
+  const orderedContent = [...contentValues].sort((left, right) => compareCodePoints(String(left["contentId"]), String(right["contentId"])));
+  const orderedTaxonomy = [...taxonomyValues].sort((left, right) => compareCodePoints(String(left["taxonomyId"]), String(right["taxonomyId"])));
+  const contentIds = new Map(orderedContent.map((value) => [String(value["contentId"]), value]));
+  const taxonomyValuesById = new Map<string, Record<string, unknown>>();
+  for (const taxonomy of orderedTaxonomy) {
+    if (!Array.isArray(taxonomy["values"]) || !Array.isArray(taxonomy["assignments"]) ||
+        !Array.isArray(taxonomy["assignmentHistory"]) || !Array.isArray(taxonomy["evolutionHistory"])) {
+      throw new TypeError("OWNER_EXPORT_TAXONOMY_RECORD_INVALID");
+    }
+    for (const item of taxonomy["values"]) {
+      if (item === null || typeof item !== "object" || typeof (item as Record<string, unknown>)["valueId"] !== "string") {
+        throw new TypeError("OWNER_EXPORT_TAXONOMY_VALUE_INVALID");
+      }
+      const valueId = String((item as Record<string, unknown>)["valueId"]);
+      if (taxonomyValuesById.has(valueId)) throw new TypeError("OWNER_EXPORT_TAXONOMY_VALUE_DUPLICATE");
+      taxonomyValuesById.set(valueId, taxonomy);
+    }
+  }
+  if (hasContent) {
+    for (const content of orderedContent) {
+      if (!Array.isArray(content["taxonomyValueIds"]) || content["taxonomyValueIds"].some((valueId) => !taxonomyValuesById.has(String(valueId)))) {
+        throw new TypeError("OWNER_EXPORT_TAXONOMY_CONTENT_REFERENCE_DANGLING");
+      }
+    }
+  }
+  for (const taxonomy of orderedTaxonomy) {
+    const assignments = [...(taxonomy["assignments"] as readonly unknown[]), ...(taxonomy["assignmentHistory"] as readonly unknown[])];
+    for (const assignment of assignments) {
+      if (assignment === null || typeof assignment !== "object") throw new TypeError("OWNER_EXPORT_TAXONOMY_ASSIGNMENT_INVALID");
+      const row = assignment as Record<string, unknown>;
+      if (typeof row["taxonomyValueId"] !== "string" || taxonomyValuesById.get(row["taxonomyValueId"]) !== taxonomy) {
+        throw new TypeError("OWNER_EXPORT_TAXONOMY_ASSIGNMENT_DANGLING");
+      }
+      if (hasContent) {
+        const target = typeof row["targetId"] === "string" ? contentIds.get(row["targetId"]) : undefined;
+        if (target?.["contentType"] !== "project") throw new TypeError("OWNER_EXPORT_TAXONOMY_PROJECT_REFERENCE_DANGLING");
+      }
+    }
+  }
+  const contentBytes = orderedContent.length === 0 ? new Uint8Array() : utf8.encode(
+    `${orderedContent.map((value) => canonicalJson({ scope: "portfolio-content", value })).join("\n")}\n`,
+  );
+  const taxonomyBytes = orderedTaxonomy.length === 0 ? new Uint8Array() : utf8.encode(
+    `${orderedTaxonomy.map((value) => canonicalJson({ scope: "taxonomy", value })).join("\n")}\n`,
+  );
+  const settings = snapshot.configuration?.settings;
+  const configurationValues = settings === undefined || settings === null ? [] : [{
+    profile: settings.profile,
+    contactChannels: { channels: settings.contactChannels },
+    projectCta: settings.globalCta,
+  }];
+  const configurationBytes = configurationValues.length === 0 ? new Uint8Array() : utf8.encode(
+    `${canonicalJson({ scope: "portfolio-configuration", value: configurationValues[0] })}\n`,
+  );
+  const entries: (OwnerExportContentEntryDescriptor | OwnerExportTaxonomyEntryDescriptor | OwnerExportEntryDescriptor)[] = [];
+  if (hasContent) entries.push({
+    path: "records/portfolio-content.ndjson", scope: "portfolio-content", mediaType: "application/x-ndjson",
+    recordSchema: "urn:shipwithali:owner-export-schema:portfolio-content:1.2", schemaPath: "schemas/portfolio-content.schema.json",
+    schemaVersion: "1.2", digest: sha256(contentBytes), recordCount: orderedContent.length,
+  });
+  entries.push({
+    path: "records/taxonomy.ndjson", scope: "taxonomy", mediaType: "application/x-ndjson",
+    recordSchema: "urn:shipwithali:owner-export-schema:taxonomy:1.2", schemaPath: "schemas/taxonomy.schema.json",
+    schemaVersion: "1.2", digest: sha256(taxonomyBytes), recordCount: orderedTaxonomy.length,
+  });
+  if (hasConfiguration) entries.push({
+    path: "records/portfolio-configuration.ndjson", scope: "portfolio-configuration", mediaType: "application/x-ndjson",
+    recordSchema: "urn:shipwithali:owner-export-schema:portfolio-configuration:1.1", schemaPath: "schemas/portfolio-configuration.schema.json",
+    schemaVersion: "1.1", digest: sha256(configurationBytes), recordCount: configurationValues.length,
+  });
+  const schemas: OwnerExportSchemaDescriptor[] = [
+    { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.3", schemaVersion: "1.3", digest: sha256(manifestSchema) },
+  ];
+  if (hasContent) schemas.push({
+    kind: "record", scope: "portfolio-content", path: "schemas/portfolio-content.schema.json",
+    schemaUri: "urn:shipwithali:owner-export-schema:portfolio-content:1.2", schemaVersion: "1.2", digest: sha256(contentSchema!),
+  });
+  schemas.push({ kind: "record", scope: "taxonomy", path: "schemas/taxonomy.schema.json",
+    schemaUri: "urn:shipwithali:owner-export-schema:taxonomy:1.2", schemaVersion: "1.2", digest: sha256(taxonomySchema) });
+  if (hasConfiguration) schemas.push({ kind: "record", scope: "portfolio-configuration", path: "schemas/portfolio-configuration.schema.json",
+    schemaUri: "urn:shipwithali:owner-export-schema:portfolio-configuration:1.1", schemaVersion: "1.1", digest: sha256(configurationSchema!) });
+  const recordsForDependencies = [
+    ...orderedContent.map((value) => ({ scope: "portfolio-content" as const, value })),
+    ...orderedTaxonomy.map((value) => ({ scope: "taxonomy" as const, value })),
+    ...configurationValues.map((value) => ({ scope: "portfolio-configuration" as const, value: value as Readonly<Record<string, unknown>> })),
+  ];
+  const dependencies = expectedDependencies(recordsForDependencies, snapshot.includedScopes);
+  const manifest = {
+    packageFormat: "shipwithali-owner-export" as const, schemaVersion: "1.4" as const, exportId: input.exportId,
+    snapshot: { snapshotId: snapshot.snapshotId, capturedAt: snapshot.capturedAt, consistency: "transactional" as const },
+    createdAt: snapshot.capturedAt, algorithm: "sha-256" as const, digest: "0".repeat(64),
+    requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"] as const,
+    includedScopes: [...snapshot.includedScopes], publicEventDataCoverage: { mode: "excluded" as const }, dependencies,
+    exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"] as const,
+    entries, schemas, assets: [], extensions: { taxonomySnapshot: { identity: "stable", evolutionHistory: "complete", assignmentHistory: "complete" } },
+  } satisfies OwnerExportPackageManifestV1_4;
+  const digest = sha256(utf8.encode(canonicalJson(manifest, true)));
+  const completeManifest = { ...manifest, digest };
+  const manifestBytes = utf8.encode(`${JSON.stringify(completeManifest)}\n`);
+  const zipEntries: StoredOwnerExportZipEntry[] = [
+    fixedBytesMember("manifest.json", manifestBytes), fixedBytesMember("schemas/manifest.schema.json", manifestSchema),
+  ];
+  if (hasContent) zipEntries.push(fixedBytesMember("schemas/portfolio-content.schema.json", contentSchema!));
+  zipEntries.push(fixedBytesMember("schemas/taxonomy.schema.json", taxonomySchema));
+  if (hasConfiguration) zipEntries.push(fixedBytesMember("schemas/portfolio-configuration.schema.json", configurationSchema!));
+  if (hasContent) zipEntries.push(fixedBytesMember("records/portfolio-content.ndjson", contentBytes));
+  zipEntries.push(fixedBytesMember("records/taxonomy.ndjson", taxonomyBytes));
+  if (hasConfiguration) zipEntries.push(fixedBytesMember("records/portfolio-configuration.ndjson", configurationBytes));
+  const archive = createStoredOwnerExportZip(zipEntries);
+  const integrity = await measureOwnerExportStream(archive.content);
+  if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
+}
+
 /** Builds the content package v1.3 without changing the meaning of any v1.1 record. */
 export async function buildSelectedOwnerExportPackage(input: {
   readonly exportId: StableId<"OwnerExport">;
   readonly snapshot: OwnerExportSelectedSnapshot;
 }): Promise<BuiltOwnerExportPackage> {
   const { snapshot } = input;
-  if (snapshot.kind !== "owner-export-snapshot-v1" || !snapshot.includedScopes.includes("portfolio-content") || snapshot.content === undefined) {
+  if (snapshot.kind !== "owner-export-snapshot-v1") {
     throw new TypeError("OWNER_EXPORT_CONTENT_SNAPSHOT_INVALID");
   }
+  if (snapshot.includedScopes.includes("taxonomy")) return buildTaxonomyOwnerExportPackage(input);
+  if (!snapshot.includedScopes.includes("portfolio-content") || snapshot.content === undefined) throw new TypeError("OWNER_EXPORT_CONTENT_SNAPSHOT_INVALID");
   const hasConfiguration = snapshot.includedScopes.includes("portfolio-configuration");
   if (hasConfiguration !== (snapshot.configuration !== undefined)) throw new TypeError("OWNER_EXPORT_SCOPE_SNAPSHOT_INCOMPLETE");
   const manifestSchema = readPinnedContentSchema("manifest.schema.json");

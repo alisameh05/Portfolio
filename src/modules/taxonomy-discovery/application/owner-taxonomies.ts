@@ -4,6 +4,7 @@ import { createSystemClock, createSystemIdGenerator } from "../../../runtime/por
 import { hashCanonicalRequest, type CanonicalValue } from "../../../shared/application/idempotency.js";
 import type { OperationsPersistencePorts, SafeResultEnvelope } from "../../portability-operations/index.js";
 import type { ContentTaxonomyAssignmentsPort } from "../../content-publishing/index.js";
+import type { TaxonomyOwnerExportRepository } from "./taxonomy-export.js";
 
 export type TaxonomyKind = "category" | "ai-ml-domain" | "technology" | "project-type";
 export interface TaxonomyValueView {
@@ -37,7 +38,7 @@ export interface TaxonomyOwnerScope {
   readonly portfolioId: StableId<"Portfolio">;
   readonly ownerId: StableId<"Owner">;
 }
-export interface TaxonomyOwnerRepository {
+export interface TaxonomyOwnerRepository extends TaxonomyOwnerExportRepository {
   getOwnerTaxonomy(input: { readonly taxonomyId: StableId<"Taxonomy">; readonly scope: TaxonomyOwnerScope }, context: TransactionContext): Promise<Result<Omit<OwnerTaxonomyView, "assignmentHistory">, Rejection>>;
   createValue(input: { readonly taxonomyId: StableId<"Taxonomy">; readonly valueId: StableId<"TaxonomyValue">; readonly name: string; readonly expectedVersion: number; readonly scope: TaxonomyOwnerScope }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
   renameValue(input: { readonly valueId: StableId<"TaxonomyValue">; readonly name: string; readonly expectedVersion: number; readonly actorId: StableId<"Owner">; readonly scope: TaxonomyOwnerScope }, context: TransactionContext): Promise<Result<TaxonomyEvolutionResult, Rejection>>;

@@ -69,7 +69,7 @@ import type {
 } from "./owner-export-store.js";
 import type { OwnerExportObjectReadPort } from "./service.js";
 
-export const OWNER_EXPORT_SCHEMA_VERSION = "1.3";
+export const OWNER_EXPORT_SCHEMA_VERSION = "1.4";
 function artifactFilename(schemaVersion: string): string {
   return `shipwithali-owner-export-${schemaVersion}.zip`;
 }
@@ -202,7 +202,7 @@ export function createOwnerExportService(
     }
     const idempotencyKey = parseIdempotencyKey(command.idempotencyKey);
     if (!idempotencyKey.ok) return idempotencyKey;
-    const schemaVersion = scopes.value.includes("portfolio-content") ? "1.3" : "1.2";
+    const schemaVersion = scopes.value.includes("taxonomy") ? "1.4" : scopes.value.includes("portfolio-content") ? "1.3" : "1.2";
     const requestHash = await hashCanonicalRequest({
       operation: "owner-export-request",
       schemaVersion,
@@ -453,9 +453,15 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const manifestVersion = value["schemaVersion"];
   const scopes = value["includedScopes"];
   const entries = value["entries"];
+  const recordVersion = (scope: unknown) => {
+    if (manifestVersion === "1.0") return "1.0";
+    const usesVersion12 = ((manifestVersion === "1.3" || manifestVersion === "1.4") && scope === "portfolio-content") ||
+      (manifestVersion === "1.4" && scope === "taxonomy");
+    return usesVersion12 ? "1.2" : "1.1";
+  };
   const commonShape = (
     value["packageFormat"] === "shipwithali-owner-export" &&
-    ["1.0", "1.1", "1.2", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
+    ["1.0", "1.1", "1.2", "1.3", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
     typeof value["createdAt"] === "string" &&
     Number.isFinite(Date.parse(value["createdAt"] as string)) &&
     value["algorithm"] === "sha-256" &&
@@ -470,9 +476,9 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
       (OWNER_EXPORT_SCOPES as readonly string[]).includes(entry["scope"] as string) &&
       ["application/x-ndjson", "application/json"].includes(entry["mediaType"] as string) &&
       typeof entry["recordSchema"] === "string" &&
-      entry["recordSchema"] === `urn:shipwithali:owner-export-schema:${String(entry["scope"])}:${manifestVersion === "1.3" && entry["scope"] === "portfolio-content" ? "1.2" : manifestVersion === "1.0" ? "1.0" : "1.1"}` &&
+      entry["recordSchema"] === `urn:shipwithali:owner-export-schema:${String(entry["scope"])}:${recordVersion(entry["scope"])}` &&
       entry["schemaPath"] === `schemas/${String(entry["scope"])}.schema.json` &&
-      entry["schemaVersion"] === (manifestVersion === "1.3" && entry["scope"] === "portfolio-content" ? "1.2" : manifestVersion === "1.0" ? "1.0" : "1.1") &&
+      entry["schemaVersion"] === recordVersion(entry["scope"]) &&
       typeof entry["digest"] === "string" && /^[a-f0-9]{64}$/.test(entry["digest"] as string) &&
       Number.isSafeInteger(entry["recordCount"]) && (entry["recordCount"] as number) >= 0)
   );
@@ -490,7 +496,7 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const snapshot = value["snapshot"];
   const stableId = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   return (
-    ["1.1", "1.2", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
+    ["1.1", "1.2", "1.3", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
     typeof value["exportId"] === "string" && stableId.test(value["exportId"]) &&
     isRecord(snapshot) && typeof snapshot["snapshotId"] === "string" && stableId.test(snapshot["snapshotId"]) &&
     typeof snapshot["capturedAt"] === "string" && Number.isFinite(Date.parse(snapshot["capturedAt"])) &&

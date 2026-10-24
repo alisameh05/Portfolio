@@ -53,6 +53,17 @@ export type {
   PublicDiscoveryReadResult,
 } from "./application/index.js";
 export { createTaxonomyOwnerService, createPublicDiscoveryService } from "./application/index.js";
+export {
+  createTaxonomyOwnerExportSnapshotReader,
+  type TaxonomyOwnerExportKind,
+  type TaxonomyOwnerExportState,
+  type TaxonomyOwnerExportScope,
+  type TaxonomyOwnerExportTaxonomyFacts,
+  type TaxonomyOwnerExportRepository,
+  type TaxonomyOwnerExportRecord,
+  type TaxonomyOwnerExportSnapshot,
+  type TaxonomyOwnerExportSnapshotReader,
+} from "./application/index.js";
 
 export type { TaxonomyRepositoryPort } from "./ports/index.js";
 export { createPostgresProjectDiscoveryProjectionWriter } from "./adapters/index.js";

@@ -118,8 +118,11 @@ async function verifyArtifact(
 }
 
 function isSupportedScopeSelection(scopes: readonly string[]): boolean {
-  return (scopes.length === 1 && (scopes[0] === "portfolio-configuration" || scopes[0] === "portfolio-content")) ||
-    (scopes.length === 2 && scopes[0] === "portfolio-content" && scopes[1] === "portfolio-configuration");
+  const supportedOrder = ["portfolio-content", "taxonomy", "portfolio-configuration"];
+  const canonical = supportedOrder.filter((scope) => scopes.includes(scope));
+  return canonical.length === scopes.length && canonical.every((scope, index) => scopes[index] === scope) &&
+    (scopes.includes("portfolio-content") || scopes.includes("taxonomy") ||
+      scopes.length === 1 && scopes[0] === "portfolio-configuration");
 }
 
 function sameScopes(left: readonly string[], right: readonly string[]): boolean {
@@ -127,7 +130,7 @@ function sameScopes(left: readonly string[], right: readonly string[]): boolean 
 }
 
 /**
- * Resumable leased worker for content and configuration export slices. Snapshot
+ * Resumable leased worker for content, taxonomy, and configuration export slices. Snapshot
  * and candidate checkpoints are write-once; external Storage work happens
  * outside database transactions, then readiness and queue completion commit
  * together under the current lease token.
