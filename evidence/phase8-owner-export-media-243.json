@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "ticket": 243,
-  "runId": "a5775c3c-6afd-4e15-b426-0fe41e34e922",
-  "startedAt": "2026-10-24T18:11:46.970Z",
-  "completedAt": "2026-10-24T18:12:48.457Z",
-  "sourceRevision": "61ab4ebaa116cc63f5682cb0437ddba2f8de23bb",
-  "sourceTreeSha256": "4f46f38f7c1ce35c83fcd408061608e4f2898086b0a8c3ae8ef9ff913993e0b6",
+  "runId": "4f42e283-a52f-422f-a7ce-e38c241c4178",
+  "startedAt": "2026-10-24T18:18:30.412Z",
+  "completedAt": "2026-10-24T18:19:23.000Z",
+  "sourceRevision": "f70e8a3e7f30cbd29d8c71c963d4139319ab4675",
+  "sourceTreeSha256": "c1adbf793a4f09e9d2423af3944d978f0823596455a413805a5b7d69bafe84d0",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {

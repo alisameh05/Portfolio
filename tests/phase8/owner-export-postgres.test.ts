@@ -676,7 +676,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       transactions: worker!.transactions,
       capabilities: { async read() { return { currentCvAvailable: false, externalLinksAvailable: false }; } },
     });
-    const bytesByObjectId = new Map([[sourceObjectId, originalBytes], [outputObjectId, mediaBytes]]);
+    const bytesByObjectId = new Map<string, Uint8Array>([[sourceObjectId, originalBytes], [outputObjectId, mediaBytes]]);
     const mediaObjects: OwnerExportMediaObjectReaderPort = {
       async readMediaExportObject(input) {
         const bytes = bytesByObjectId.get(input.objectId);
