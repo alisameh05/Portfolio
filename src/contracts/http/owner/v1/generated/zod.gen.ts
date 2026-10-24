@@ -972,9 +972,104 @@ export const zOwnerExportPackageManifestV11 = z.strictObject({
     extensions: z.record(z.unknown()).optional()
 });
 
+/**
+ * Standalone Media package entry using the immutable Media v1.2 record schema.
+ */
+export const zOwnerExportMediaEntryDescriptorV12 = z.strictObject({
+    path: z.literal('records/media-metadata.ndjson'),
+    scope: z.literal('media-metadata'),
+    mediaType: z.literal('application/x-ndjson'),
+    recordSchema: z.literal('urn:shipwithali:owner-export-schema:media-metadata:1.2'),
+    schemaPath: z.literal('schemas/media-metadata.schema.json'),
+    schemaVersion: z.literal('1.2'),
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    recordCount: z.number().int().gte(0)
+});
+
+export const zOwnerExportManifestSchemaDescriptorV14 = z.strictObject({
+    kind: z.literal('manifest'),
+    path: z.literal('schemas/manifest.schema.json'),
+    schemaUri: z.literal('urn:shipwithali:owner-export-schema:manifest:1.4'),
+    schemaVersion: z.literal('1.4'),
+    digest: z.string().regex(/^[a-f0-9]{64}$/)
+});
+
+export const zOwnerExportMediaRecordSchemaDescriptorV12 = z.strictObject({
+    kind: z.literal('record'),
+    path: z.literal('schemas/media-metadata.schema.json'),
+    scope: z.literal('media-metadata'),
+    schemaUri: z.literal('urn:shipwithali:owner-export-schema:media-metadata:1.2'),
+    schemaVersion: z.literal('1.2'),
+    digest: z.string().regex(/^[a-f0-9]{64}$/)
+});
+
+export const zOwnerExportSchemaDescriptorV15 = z.union([
+    zOwnerExportManifestSchemaDescriptorV14,
+    zOwnerExportMediaRecordSchemaDescriptorV12
+]);
+
+/**
+ * Accepted Media object stored once at its content-addressed SHA-256 path.
+ */
+export const zOwnerExportMediaAssetDescriptorV15 = z.strictObject({
+    path: z.string().regex(/^assets\/media-metadata\/sha256\/[a-f0-9]{64}$/),
+    scope: z.literal('media-metadata'),
+    assetId: zStableId,
+    mediaType: z.enum([
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'video/mp4',
+        'video/webm'
+    ]),
+    byteLength: z.number().int().gte(1).lte(52428800),
+    digest: z.string().regex(/^[a-f0-9]{64}$/)
+});
+
+/**
+ * Manifest 1.5 is the standalone Media export carrying the Media v1.2 records and verified content-addressed bytes.
+ */
+export const zOwnerExportPackageManifestV15 = z.strictObject({
+    packageFormat: z.literal('shipwithali-owner-export'),
+    schemaVersion: z.literal('1.5'),
+    exportId: zStableId,
+    snapshot: z.strictObject({
+        snapshotId: zStableId,
+        capturedAt: z.string().datetime(),
+        consistency: z.literal('transactional')
+    }),
+    createdAt: z.string().datetime(),
+    algorithm: z.literal('sha-256'),
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    requiredFeatures: z.tuple([
+        z.literal('asset-integrity-v1'),
+        z.literal('dependency-coverage-v1'),
+        z.literal('record-integrity-v1'),
+        z.literal('schema-integrity-v1'),
+        z.literal('snapshot-identity-v1')
+    ]),
+    includedScopes: z.tuple([z.literal('media-metadata')]),
+    publicEventDataCoverage: zPublicEventDataCoverage,
+    dependencies: z.array(zOwnerExportDependencyDescriptor),
+    exclusions: z.tuple([
+        z.literal('raw-public-event-data'),
+        z.literal('functional-visitor-identities'),
+        z.literal('measurement-visitor-identities'),
+        z.literal('sessions'),
+        z.literal('credentials'),
+        z.literal('lab-entries')
+    ]),
+    entries: z.tuple([zOwnerExportMediaEntryDescriptorV12]),
+    schemas: z.tuple([zOwnerExportSchemaDescriptorV15, zOwnerExportSchemaDescriptorV15]),
+    assets: z.array(zOwnerExportMediaAssetDescriptorV15).max(508),
+    extensions: z.record(z.unknown()).optional()
+});
+
 export const zOwnerExportPackageManifest = z.union([
     zOwnerExportPackageManifestV10,
-    zOwnerExportPackageManifestV11
+    zOwnerExportPackageManifestV11,
+    zOwnerExportPackageManifestV15
 ]);
 
 /**

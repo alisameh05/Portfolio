@@ -1,0 +1,463 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shipwithali:owner-export-schema:manifest:1.4",
+  "title": "ShipWithAli Owner export manifest 1.4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "packageFormat",
+    "schemaVersion",
+    "exportId",
+    "snapshot",
+    "createdAt",
+    "algorithm",
+    "digest",
+    "requiredFeatures",
+    "includedScopes",
+    "publicEventDataCoverage",
+    "dependencies",
+    "exclusions",
+    "entries",
+    "schemas",
+    "assets"
+  ],
+  "properties": {
+    "packageFormat": {
+      "const": "shipwithali-owner-export"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.(?:[1-9][0-9]*)$"
+    },
+    "exportId": {
+      "$ref": "#/$defs/stableId"
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshotId",
+        "capturedAt",
+        "consistency"
+      ],
+      "properties": {
+        "snapshotId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "capturedAt": {
+          "$ref": "#/$defs/utcInstant"
+        },
+        "consistency": {
+          "const": "transactional"
+        }
+      }
+    },
+    "createdAt": {
+      "$ref": "#/$defs/utcInstant"
+    },
+    "algorithm": {
+      "const": "sha-256"
+    },
+    "digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "requiredFeatures": {
+      "const": [
+        "asset-integrity-v1",
+        "dependency-coverage-v1",
+        "record-integrity-v1",
+        "schema-integrity-v1",
+        "snapshot-identity-v1"
+      ]
+    },
+    "includedScopes": {
+      "$ref": "#/$defs/scopeList"
+    },
+    "publicEventDataCoverage": {
+      "const": {
+        "mode": "excluded"
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dependency"
+      }
+    },
+    "exclusions": {
+      "const": [
+        "raw-public-event-data",
+        "functional-visitor-identities",
+        "measurement-visitor-identities",
+        "sessions",
+        "credentials",
+        "lab-entries"
+      ]
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "schemas": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "$ref": "#/$defs/schemaEntry"
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/asset"
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "scope": {
+      "enum": [
+        "portfolio-content",
+        "taxonomy",
+        "media-metadata",
+        "cv-metadata",
+        "moderation-history",
+        "analytics-reports",
+        "portfolio-configuration"
+      ]
+    },
+    "scopeList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/scope"
+      }
+    },
+    "stableId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "utcInstant": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "scope",
+        "mediaType",
+        "recordSchema",
+        "schemaPath",
+        "schemaVersion",
+        "digest",
+        "recordCount"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^records/[a-z0-9-]+\\.(?:json|ndjson)$"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "mediaType": {
+          "enum": [
+            "application/json",
+            "application/x-ndjson"
+          ]
+        },
+        "recordSchema": {
+          "type": "string",
+          "pattern": "^urn:shipwithali:owner-export-schema:[a-z0-9-]+:1\\.[12]$"
+        },
+        "schemaPath": {
+          "type": "string",
+          "pattern": "^schemas/[a-z0-9-]+\\.schema\\.json$"
+        },
+        "schemaVersion": {
+          "enum": [
+            "1.1",
+            "1.2"
+          ]
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "recordCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "schemaEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "path",
+        "schemaUri",
+        "schemaVersion",
+        "digest"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "manifest",
+            "record"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^schemas/[a-z0-9-]+\\.schema\\.json$"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "schemaUri": {
+          "type": "string",
+          "pattern": "^urn:shipwithali:owner-export-schema:[a-z0-9-]+:1\\.[0-9]+$"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "manifest"
+            },
+            "path": {
+              "const": "schemas/manifest.schema.json"
+            },
+            "schemaUri": {
+              "const": "urn:shipwithali:owner-export-schema:manifest:1.4"
+            },
+            "schemaVersion": {
+              "const": "1.4"
+            }
+          },
+          "not": {
+            "properties": {
+              "scope": true
+            },
+            "required": [
+              "scope"
+            ]
+          }
+        },
+        {
+          "required": [
+            "scope"
+          ],
+          "properties": {
+            "kind": {
+              "const": "record"
+            },
+            "schemaUri": {
+              "type": "string",
+              "pattern": "^urn:shipwithali:owner-export-schema:[a-z0-9-]+:1\\.1$"
+            },
+            "schemaVersion": {
+              "const": "1.1"
+            }
+          }
+        },
+        {
+          "required": [
+            "scope"
+          ],
+          "properties": {
+            "kind": {
+              "const": "record"
+            },
+            "scope": {
+              "const": "portfolio-content"
+            },
+            "schemaUri": {
+              "const": "urn:shipwithali:owner-export-schema:portfolio-content:1.2"
+            },
+            "schemaVersion": {
+              "const": "1.2"
+            }
+          }
+        },
+        {
+          "required": [
+            "scope"
+          ],
+          "properties": {
+            "kind": {
+              "const": "record"
+            },
+            "scope": {
+              "const": "taxonomy"
+            },
+            "schemaUri": {
+              "const": "urn:shipwithali:owner-export-schema:taxonomy:1.2"
+            },
+            "schemaVersion": {
+              "const": "1.2"
+            }
+          }
+        },
+        {
+          "required": [
+            "scope"
+          ],
+          "properties": {
+            "kind": {
+              "const": "record"
+            },
+            "scope": {
+              "const": "media-metadata"
+            },
+            "schemaUri": {
+              "const": "urn:shipwithali:owner-export-schema:media-metadata:1.2"
+            },
+            "schemaVersion": {
+              "const": "1.2"
+            }
+          }
+        }
+      ]
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceScope",
+        "sourceId",
+        "targetScope",
+        "targetId",
+        "disposition"
+      ],
+      "properties": {
+        "sourceScope": {
+          "$ref": "#/$defs/scope"
+        },
+        "sourceId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "targetScope": {
+          "$ref": "#/$defs/scope"
+        },
+        "targetId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "disposition": {
+          "enum": [
+            "included",
+            "omitted"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "scope-not-selected",
+            "not-retained",
+            "unsupported-variant",
+            "external-destination"
+          ]
+        }
+      },
+      "if": {
+        "properties": {
+          "disposition": {
+            "const": "omitted"
+          }
+        },
+        "required": [
+          "disposition"
+        ]
+      },
+      "then": {
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "enum": [
+              "scope-not-selected",
+              "not-retained",
+              "unsupported-variant",
+              "external-destination"
+            ]
+          }
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "reason"
+          ]
+        }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "scope",
+        "assetId",
+        "mediaType",
+        "byteLength",
+        "digest"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?:assets/media-metadata/sha256/[a-f0-9]{64}|assets/cv-metadata/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"
+        },
+        "scope": {
+          "enum": [
+            "media-metadata",
+            "cv-metadata"
+          ]
+        },
+        "assetId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "mediaType": {
+          "enum": [
+            "application/pdf",
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "video/mp4",
+            "video/webm"
+          ]
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "variantName": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,32}$"
+        }
+      }
+    }
+  }
+}

@@ -276,6 +276,7 @@ describe("Owner v1 contract", () => {
     expect(document.components.schemas["OwnerExportPackageManifest"]?.["oneOf"]).toEqual([
       { $ref: "#/components/schemas/OwnerExportPackageManifestV1_0" },
       { $ref: "#/components/schemas/OwnerExportPackageManifestV1_1" },
+      { $ref: "#/components/schemas/OwnerExportPackageManifestV1_5" },
     ]);
     expect(document.components.schemas["OwnerExportPackageManifestV1_0"]).toMatchObject({
       required: expect.arrayContaining(["includedScopes", "publicEventDataCoverage", "entries"]),
@@ -283,6 +284,10 @@ describe("Owner v1 contract", () => {
     });
     expect(document.components.schemas["OwnerExportPackageManifestV1_1"]).toMatchObject({
       required: expect.arrayContaining(["requiredFeatures", "schemas", "assets"]),
+      additionalProperties: false,
+    });
+    expect(document.components.schemas["OwnerExportPackageManifestV1_5"]).toMatchObject({
+      required: expect.arrayContaining(["includedScopes", "entries", "schemas", "assets"]),
       additionalProperties: false,
     });
   });

@@ -470,6 +470,7 @@ export interface ContentAuthoringRepository {
   create(input: CreateContentPersistenceInput, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
   get(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext, revisionHistoryLimit?: number): Promise<Result<ContentAuthoringRecord, Rejection>>;
   readOwnerExportSnapshot(scope: ContentAuthoringScope, context: TransactionContext): Promise<Result<ContentOwnerExportSnapshot, Rejection>>;
+  readOwnerExportMediaLocales(input: { readonly mediaAssetIds: readonly StableId<"MediaAsset">[]; readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<readonly { readonly mediaAssetId: StableId<"MediaAsset">; readonly locales: readonly SupportedLocale[] }[], Rejection>>;
   correctCandidateSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
   changePublicSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number; readonly previousSlug: string; readonly routeIdentity: StableId<"PublicRoute"> }, Rejection>>;
   relateProjects(input: RelateProjectsInput, context: TransactionContext): Promise<Result<RelateProjectsResult, Rejection>>;

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -82,6 +82,17 @@ test("CV evidence requires recorded execution of every T09 criterion", () => {
   const failed = structuredClone(counts);
   failed.cvScenarios[0].status = "failed";
   assert.equal(phase6CvScenarioProof(failed), false);
+});
+
+test("focused Media gates select the real baseline processing scenario", () => {
+  const source = readFileSync(new URL("../database/media-upload-intent.integration.test.ts", import.meta.url), "utf8");
+  const runner = readFileSync(new URL("../../scripts/phase6-verification.mjs", import.meta.url), "utf8");
+  const titles = [...source.matchAll(/scenario\("baseline", "([^"]+)"/gu)].map((match) => match[1]);
+  const patterns = [...runner.matchAll(/testArgs\.push\("-t", "([^"]*processes PDF candidates[^"]*)"\)/gu)].map((match) => match[1]);
+  assert.ok(patterns.length >= 6, "expected the focused PDF, image, delivery, CV and acceptance selectors");
+  for (const pattern of patterns) {
+    assert.ok(titles.some((title) => new RegExp(pattern, "u").test(title)), `missing baseline processing scenario for ${pattern}`);
+  }
 });
 
 test("the complete real integration gate rejects skipped, missing, failed, and partial test reports", () => {

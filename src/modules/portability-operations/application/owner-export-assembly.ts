@@ -2,10 +2,10 @@ import { createHash } from "node:crypto";
 import { err, ok, parseStableId, type Rejection, type Result, type StableId } from "@shared/domain";
 import type { OperationsPersistencePorts, SafeErrorCode } from "./persistence.js";
 import { parseSafeErrorCode } from "./persistence.js";
-import type { Clock, StableIdGenerator } from "../../../runtime/ports.js";
+import type { Clock, StableIdGenerator, TransactionContext } from "../../../runtime/ports.js";
 import type { OwnerExportStorePort, PersistedOwnerExport } from "./owner-export-store.js";
 import type { OwnerExportAssemblySnapshot } from "./owner-export-package.js";
-import { buildConfigurationOwnerExportPackage, buildSelectedOwnerExportPackage } from "./owner-export-package.js";
+import { buildConfigurationOwnerExportPackage, buildMediaOwnerExportPackage, buildSelectedOwnerExportPackage, type OwnerExportMediaObjectReaderPort } from "./owner-export-package.js";
 import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportObjectReadPort } from "./service.js";
 import { OWNER_EXPORT_RETENTION_SECONDS, applyGuardedOwnerExportTransition } from "./owner-export-service.js";
 import { calculateJobRetryDelayMilliseconds } from "./retry-policy.js";
@@ -24,6 +24,12 @@ export interface OwnerExportSnapshotReaderPort {
     readonly snapshotId: StableId<"OwnerExportArtifact">;
     readonly includedScopes: readonly string[];
   }): Promise<Result<OwnerExportAssemblySnapshot, Rejection>>;
+  revalidateMediaForReady?(input: {
+    readonly snapshot: OwnerExportAssemblySnapshot;
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly ownerId: StableId<"Owner">;
+    readonly context: TransactionContext;
+  }): Promise<boolean>;
 }
 
 /** @deprecated Use the scope-aware reader port; retained for #240 adapter callers. */
@@ -45,6 +51,7 @@ export interface OwnerExportAssemblyDependencies {
   readonly exports: OwnerExportStorePort;
   readonly snapshots: OwnerExportSnapshotReaderPort;
   readonly storage: OwnerExportObjectStoragePort;
+  readonly mediaObjects?: OwnerExportMediaObjectReaderPort;
   readonly clock: Clock;
   readonly ids: StableIdGenerator;
   readonly random?: () => number;
@@ -120,6 +127,7 @@ async function verifyArtifact(
 function isSupportedScopeSelection(scopes: readonly string[]): boolean {
   const supportedOrder = ["portfolio-content", "taxonomy", "portfolio-configuration"];
   const canonical = supportedOrder.filter((scope) => scopes.includes(scope));
+  if (scopes.length === 1 && scopes[0] === "media-metadata") return true;
   return canonical.length === scopes.length && canonical.every((scope, index) => scopes[index] === scope) &&
     (scopes.includes("portfolio-content") || scopes.includes("taxonomy") ||
       scopes.length === 1 && scopes[0] === "portfolio-configuration");
@@ -231,7 +239,11 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         snapshot = captured.value;
       }
 
-      const built = snapshot !== null && typeof snapshot === "object" && "kind" in snapshot
+      const built = snapshot !== null && typeof snapshot === "object" && "kind" in snapshot &&
+        snapshot.includedScopes.length === 1 && snapshot.includedScopes[0] === "media-metadata"
+        ? deps.mediaObjects === undefined ? (() => { throw new Error("OWNER_EXPORT_MEDIA_STORAGE_UNAVAILABLE"); })()
+          : await buildMediaOwnerExportPackage({ exportId: record.exportId, portfolioId: parsed.portfolioId, snapshot, objects: deps.mediaObjects })
+        : snapshot !== null && typeof snapshot === "object" && "kind" in snapshot
         ? await buildSelectedOwnerExportPackage({ exportId: record.exportId, snapshot })
         : await buildConfigurationOwnerExportPackage({ exportId: record.exportId, snapshot });
       if (record.candidateArtifactId === undefined || record.candidateSha256 === undefined || record.candidateContentLength === undefined) {
@@ -286,6 +298,8 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         actingJobId: jobId.value,
         integrityManifest: built.manifest,
         artifactId,
+        ...(record.includedScopes.includes("media-metadata") ? { precondition: (context: TransactionContext) =>
+          deps.snapshots.revalidateMediaForReady?.({ snapshot, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId, context }) ?? Promise.resolve(false) } : {}),
       });
       return completed.ok && completed.value === "applied" ? "completed" : "stale";
     } catch {

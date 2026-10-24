@@ -959,7 +959,100 @@ export type OwnerExportPackageManifestV11 = {
     };
 };
 
-export type OwnerExportPackageManifest = OwnerExportPackageManifestV10 | OwnerExportPackageManifestV11;
+/**
+ * Standalone Media package entry using the immutable Media v1.2 record schema.
+ */
+export type OwnerExportMediaEntryDescriptorV12 = {
+    path: 'records/media-metadata.ndjson';
+    scope: 'media-metadata';
+    mediaType: 'application/x-ndjson';
+    recordSchema: 'urn:shipwithali:owner-export-schema:media-metadata:1.2';
+    schemaPath: 'schemas/media-metadata.schema.json';
+    schemaVersion: '1.2';
+    digest: string;
+    recordCount: number;
+};
+
+export type OwnerExportManifestSchemaDescriptorV14 = {
+    kind: 'manifest';
+    path: 'schemas/manifest.schema.json';
+    schemaUri: 'urn:shipwithali:owner-export-schema:manifest:1.4';
+    schemaVersion: '1.4';
+    digest: string;
+};
+
+export type OwnerExportMediaRecordSchemaDescriptorV12 = {
+    kind: 'record';
+    path: 'schemas/media-metadata.schema.json';
+    scope: 'media-metadata';
+    schemaUri: 'urn:shipwithali:owner-export-schema:media-metadata:1.2';
+    schemaVersion: '1.2';
+    digest: string;
+};
+
+export type OwnerExportSchemaDescriptorV15 = OwnerExportManifestSchemaDescriptorV14 | OwnerExportMediaRecordSchemaDescriptorV12;
+
+/**
+ * Accepted Media object stored once at its content-addressed SHA-256 path.
+ */
+export type OwnerExportMediaAssetDescriptorV15 = {
+    path: string;
+    scope: 'media-metadata';
+    assetId: StableId;
+    mediaType: 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp' | 'video/mp4' | 'video/webm';
+    byteLength: number;
+    digest: string;
+};
+
+/**
+ * Manifest 1.5 is the standalone Media export carrying the Media v1.2 records and verified content-addressed bytes.
+ */
+export type OwnerExportPackageManifestV15 = {
+    packageFormat: 'shipwithali-owner-export';
+    schemaVersion: '1.5';
+    exportId: StableId;
+    snapshot: {
+        snapshotId: StableId;
+        capturedAt: string;
+        consistency: 'transactional';
+    };
+    createdAt: string;
+    algorithm: 'sha-256';
+    digest: string;
+    requiredFeatures: [
+        'asset-integrity-v1',
+        'dependency-coverage-v1',
+        'record-integrity-v1',
+        'schema-integrity-v1',
+        'snapshot-identity-v1'
+    ];
+    includedScopes: [
+        'media-metadata'
+    ];
+    publicEventDataCoverage: PublicEventDataCoverage;
+    dependencies: Array<OwnerExportDependencyDescriptor>;
+    exclusions: [
+        'raw-public-event-data',
+        'functional-visitor-identities',
+        'measurement-visitor-identities',
+        'sessions',
+        'credentials',
+        'lab-entries'
+    ];
+    entries: [
+        OwnerExportMediaEntryDescriptorV12
+    ];
+    schemas: [
+        OwnerExportSchemaDescriptorV15,
+        OwnerExportSchemaDescriptorV15
+    ];
+    assets: Array<OwnerExportMediaAssetDescriptorV15>;
+    extensions?: {
+        [key: string]: unknown;
+    };
+};
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV10 | OwnerExportPackageManifestV11 | OwnerExportPackageManifestV15;
 
 /**
  * A completed versioned domain artifact, never a database dump or provider backup.

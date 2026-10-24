@@ -9,9 +9,9 @@
  * written once and never repointed — while a changed request meaning under the
  * same key conflicts without durable effects (AC03, AC04).
  *
- * Scope selection accepts every nonempty unique subset of the seven
- * documented domains. Order is normalized to the declared canonical order
- * before hashing, so any permutation of one selection carries identical
+ * Scope selection accepts every nonempty unique non-Media subset plus Media
+ * as a standalone package. Order is normalized to the declared canonical
+ * order before hashing, so any permutation of one supported selection carries identical
  * canonical meaning (AC01). Unknown, duplicate, or empty selections, malformed
  * identities, and invalid idempotency keys are rejected before durable
  * effects (AC02).
@@ -69,7 +69,7 @@ import type {
 } from "./owner-export-store.js";
 import type { OwnerExportObjectReadPort } from "./service.js";
 
-export const OWNER_EXPORT_SCHEMA_VERSION = "1.4";
+export const OWNER_EXPORT_SCHEMA_VERSION = "1.5";
 function artifactFilename(schemaVersion: string): string {
   return `shipwithali-owner-export-${schemaVersion}.zip`;
 }
@@ -119,6 +119,11 @@ export function canonicalizeOwnerExportScopes(
   }
   if (seen.size === 0) {
     return err({ kind: "validation", code: "OWNER_EXPORT_SCOPES_EMPTY" });
+  }
+  // Media's current portable byte contract is deliberately a standalone
+  // package. Reject mixed requests before reserving an export or job.
+  if (seen.has("media-metadata") && seen.size !== 1) {
+    return err({ kind: "validation", code: "OWNER_EXPORT_SCOPE_UNSUPPORTED" });
   }
   const canonical = OWNER_EXPORT_SCOPES.filter((scope) => seen.has(scope));
   return ok([...canonical] as ExportScope[]);
@@ -202,7 +207,7 @@ export function createOwnerExportService(
     }
     const idempotencyKey = parseIdempotencyKey(command.idempotencyKey);
     if (!idempotencyKey.ok) return idempotencyKey;
-    const schemaVersion = scopes.value.includes("taxonomy") ? "1.4" : scopes.value.includes("portfolio-content") ? "1.3" : "1.2";
+    const schemaVersion = scopes.value.includes("media-metadata") ? "1.5" : scopes.value.includes("taxonomy") ? "1.4" : scopes.value.includes("portfolio-content") ? "1.3" : "1.2";
     const requestHash = await hashCanonicalRequest({
       operation: "owner-export-request",
       schemaVersion,
@@ -455,13 +460,14 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const entries = value["entries"];
   const recordVersion = (scope: unknown) => {
     if (manifestVersion === "1.0") return "1.0";
+    if (manifestVersion === "1.5" && scope === "media-metadata") return "1.2";
     const usesVersion12 = ((manifestVersion === "1.3" || manifestVersion === "1.4") && scope === "portfolio-content") ||
       (manifestVersion === "1.4" && scope === "taxonomy");
     return usesVersion12 ? "1.2" : "1.1";
   };
   const commonShape = (
     value["packageFormat"] === "shipwithali-owner-export" &&
-    ["1.0", "1.1", "1.2", "1.3", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
+    ["1.0", "1.1", "1.2", "1.3", "1.4", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
     typeof value["createdAt"] === "string" &&
     Number.isFinite(Date.parse(value["createdAt"] as string)) &&
     value["algorithm"] === "sha-256" &&
@@ -496,7 +502,7 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const snapshot = value["snapshot"];
   const stableId = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   return (
-    ["1.1", "1.2", "1.3", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
+    ["1.1", "1.2", "1.3", "1.4", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
     typeof value["exportId"] === "string" && stableId.test(value["exportId"]) &&
     isRecord(snapshot) && typeof snapshot["snapshotId"] === "string" && stableId.test(snapshot["snapshotId"]) &&
     typeof snapshot["capturedAt"] === "string" && Number.isFinite(Date.parse(snapshot["capturedAt"])) &&
@@ -535,6 +541,9 @@ export function validateOwnerExportTransition(
     return err({ kind: "validation", code: "OWNER_EXPORT_TRANSITION_EXPIRY_INVALID" });
   }
   if (input.expiresAt !== undefined && input.toStatus !== "ready") {
+    return err({ kind: "validation", code: "OWNER_EXPORT_TRANSITION_METADATA_UNEXPECTED" });
+  }
+  if (input.precondition !== undefined && input.toStatus !== "ready") {
     return err({ kind: "validation", code: "OWNER_EXPORT_TRANSITION_METADATA_UNEXPECTED" });
   }
   if (!parseStableId("Job", input.actingJobId).ok) {

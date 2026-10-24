@@ -41,6 +41,7 @@ import { createPostgresMediaRejectionRepository } from "../../src/modules/media/
 import type { OwnerMediaAccessibility } from "../../src/modules/media/application/owner-contracts.js";
 import { createSupabaseMediaUploadTargetAdapter } from "../../src/runtime/adapters/supabase-media-upload-target.js";
 import { createSupabaseMediaProcessingStorage } from "../../src/runtime/adapters/supabase-media-processing-storage.js";
+import { createSupabaseMediaExportStorage } from "../../src/runtime/adapters/supabase-media-export-storage.js";
 import { createSupabaseCurrentCvDelivery } from "../../src/runtime/adapters/supabase-current-cv-delivery.js";
 import { createCurrentCvDeliveryService } from "../../src/modules/cv-portfolio/application/current-delivery.js";
 import { createPostgresRuntimeDatabase, resolvePostgresTransaction } from "../../src/shared/adapters/postgres/runtime.js";
@@ -1848,6 +1849,35 @@ describeReal(group === "baseline"
         const accepted = await acceptAndVerify(image.mediaId as StableId<"MediaAsset">,
           imageMimeType === "image/jpeg" ? { kind: "decorative-image" } : { kind: "described-image", altText: `A ${imageMimeType} image` },
           imageMimeType.replace("/", "-"));
+        const sourceObject = await admin.query<{ readonly media_object_id: string }>(
+          "select media_object_id::text from media.upload_intents where upload_intent_id = $1::uuid and media_id = $2::uuid",
+          [image.uploadIntentId, image.mediaId],
+        );
+        expect(sourceObject.rowCount).toBe(1);
+        const exportStorage = createSupabaseMediaExportStorage({ storageUrl: STORAGE_URL!, serviceRoleKey: SERVICE_ROLE_KEY! });
+        const collectExportStream = async (stream: AsyncIterable<Uint8Array>) => {
+          const chunks: Buffer[] = [];
+          for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+          return Buffer.concat(chunks);
+        };
+        const originalBytes = await collectExportStream(await exportStorage.readMediaExportObject({
+          portfolioId, mediaId: image.mediaId, objectId: sourceObject.rows[0]!.media_object_id,
+          source: "original", uploadIntentId: image.uploadIntentId, mediaType: imageMimeType,
+          expectedLength: imageBytes.byteLength, expectedSha256: imageSha,
+        }));
+        expect(originalBytes).toEqual(Buffer.from(imageBytes));
+        const anonymousOriginal = await storageRequest(
+          `/storage/v1/object/media-candidates/candidate/${portfolioId}/${image.mediaId}/${image.uploadIntentId}/${sourceObject.rows[0]!.media_object_id}`,
+          { headers: headers(ANON_KEY!) },
+        );
+        expect(anonymousOriginal.status).toBeGreaterThanOrEqual(400);
+        for (const variant of persistedVariants.rows) {
+          const exported = await collectExportStream(await exportStorage.readMediaExportObject({
+            portfolioId, mediaId: image.mediaId, objectId: variant.object_id, source: "variant", mediaType: "image/webp",
+            expectedLength: Number(variant.byte_length), expectedSha256: variant.sha256,
+          }));
+          expect(createHash("sha256").update(exported).digest("hex")).toBe(variant.sha256);
+        }
         const scansBeforeReprocess = scannerExecutions;
         const afterAcceptance = await mediaProcessing.record({ ...imageCommand, expectedVersion: 3,
           idempotencyKey: `phase6-image-post-accept-${randomBytes(8).toString("hex")}` as never });

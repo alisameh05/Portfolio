@@ -191,6 +191,54 @@ describe("generated portable Owner export manifest validator", () => {
     expect(zOwnerExportPackageManifest.safeParse({ ...manifest, schemas: [] }).success).toBe(false);
     expect(zOwnerExportPackageManifest.safeParse(readyExport.integrityManifest).success).toBe(true);
   });
+
+  it("accepts the standalone Media v1.5 manifest descriptors and rejects legacy asset paths", () => {
+    const originalDigest = "a".repeat(64);
+    const variantDigest = "b".repeat(64);
+    const mediaManifest = {
+      packageFormat: "shipwithali-owner-export",
+      schemaVersion: "1.5",
+      exportId: ids.export,
+      snapshot: { snapshotId: ids.export, capturedAt: "2026-10-24T10:00:00Z", consistency: "transactional" },
+      createdAt: "2026-10-24T10:00:00Z",
+      algorithm: "sha-256",
+      digest,
+      requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"],
+      includedScopes: ["media-metadata"],
+      publicEventDataCoverage: { mode: "excluded" },
+      dependencies: [],
+      exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"],
+      entries: [{
+        path: "records/media-metadata.ndjson",
+        scope: "media-metadata",
+        mediaType: "application/x-ndjson",
+        recordSchema: "urn:shipwithali:owner-export-schema:media-metadata:1.2",
+        schemaPath: "schemas/media-metadata.schema.json",
+        schemaVersion: "1.2",
+        digest,
+        recordCount: 1,
+      }],
+      schemas: [
+        { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.4", schemaVersion: "1.4", digest },
+        { kind: "record", scope: "media-metadata", path: "schemas/media-metadata.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:media-metadata:1.2", schemaVersion: "1.2", digest },
+      ],
+      assets: [
+        { path: `assets/media-metadata/sha256/${originalDigest}`, scope: "media-metadata", assetId: ids.media, mediaType: "image/jpeg", byteLength: 4, digest: originalDigest },
+        { path: `assets/media-metadata/sha256/${variantDigest}`, scope: "media-metadata", assetId: ids.media, mediaType: "image/webp", byteLength: 5, digest: variantDigest },
+      ],
+      extensions: { mediaSnapshot: { byteReferences: "sha256-content-addressed" } },
+    };
+
+    expect(zOwnerExportPackageManifest.safeParse(mediaManifest).success).toBe(true);
+    expect(zOwnerExportPackageManifest.safeParse({
+      ...mediaManifest,
+      assets: mediaManifest.assets.map((asset, index) => index === 0 ? { ...asset, path: `assets/media-metadata/${ids.media}` } : asset),
+    }).success).toBe(false);
+    expect(zOwnerExportPackageManifest.safeParse({
+      ...mediaManifest,
+      schemas: mediaManifest.schemas.map((schema) => schema.kind === "manifest" ? { ...schema, schemaVersion: "1.1" } : schema),
+    }).success).toBe(false);
+  });
 });
 
 describe("generated Owner Portability validators", () => {

@@ -172,7 +172,7 @@ test("canonical operations expectations bind complete row operations to reviewed
 });
 
 test("capabilities are declared per checkpoint, never learned from a database", () => {
-  assert.deepEqual(declaredCapabilities().toSorted(), ["measurement.events", "operations.bounded_retries", "portability.configuration_export", "portability.content_export", "portability.owner_export_requests", "portability.taxonomy_export"]);
+  assert.deepEqual(declaredCapabilities().toSorted(), ["measurement.events", "operations.bounded_retries", "portability.configuration_export", "portability.content_export", "portability.media_export", "portability.owner_export_requests", "portability.taxonomy_export"]);
   assert.deepEqual(capabilitiesForMigrations(
     ["20261023100000_build_configuration_owner_exports.sql"],
     [],
