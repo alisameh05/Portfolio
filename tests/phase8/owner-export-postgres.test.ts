@@ -651,7 +651,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       clock: { now: () => now },
       ids: createSystemIdGenerator(),
     });
-    const request = await primary.service.requestOwnerExport(command(["taxonomy"], "phase8-config-export-unsupported-001"));
+    const request = await primary.service.requestOwnerExport(command(["unknown-scope"], "phase8-config-export-unsupported-001"));
     expect(request.ok).toBe(true);
     if (!request.ok) return;
     expect(await assembly.runOwnerExportAssembly({ workerId: "phase8-config-unsupported-worker" }))
