@@ -69,7 +69,7 @@ try {
   if (testedSource !== initialSource) throw new Error("PHASE8_OWNER_EXPORT_TAXONOMY_SOURCE_CHANGED_BEFORE_ACCEPTANCE");
   stage = "acceptance";
   const acceptanceFiles = ["tests/phase8/owner-export-taxonomy.test.ts", "tests/phase8/owner-export-taxonomy-postgres.test.ts"];
-  const expectedTests = 5;
+  const expectedTests = 6;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
