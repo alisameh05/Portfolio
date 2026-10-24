@@ -4,6 +4,29 @@ import { buildSelectedOwnerExportPackage, createStoredOwnerExportZip, type Owner
 import { isManifestShape } from "../../src/modules/portability-operations/application/owner-export-service.js";
 import { validateOwnerExportZip } from "../../scripts/owner-export/validator.mjs";
 
+interface TaxonomyManifest {
+  readonly schemaVersion: string;
+  readonly entries: readonly { readonly scope: string; readonly recordCount: number; readonly digest: string }[];
+  readonly dependencies: readonly {
+    readonly sourceScope: string;
+    readonly sourceId: string;
+    readonly targetScope: string;
+    readonly targetId: string;
+    readonly disposition: "included" | "omitted";
+    readonly reason?: string;
+  }[];
+}
+
+interface TaxonomyValidation {
+  readonly includedScopes: readonly string[];
+  readonly recordCounts: Readonly<Record<string, number>>;
+  readonly manifest: TaxonomyManifest;
+}
+
+function validateTaxonomyZip(bytes: Uint8Array): TaxonomyValidation {
+  return validateOwnerExportZip(bytes) as unknown as TaxonomyValidation;
+}
+
 const at = "2030-10-24T10:00:00.000Z";
 const id = (suffix: string) => `018f4f7d-5000-7000-8000-000000000${suffix}`;
 const taxonomyId = "01890f3e-7b2f-7cc0-98cf-5a2890378ef8";
@@ -133,8 +156,13 @@ async function rebuild(entries: Map<string, Uint8Array>): Promise<Uint8Array> {
   return bytesOf(zip.content);
 }
 
-function rewriteManifest(entries: Map<string, Uint8Array>, edit: (manifest: Record<string, any>) => void): void {
-  const manifest = JSON.parse(new TextDecoder().decode(entries.get("manifest.json")!)) as Record<string, any>;
+interface MutableTaxonomyManifest extends Record<string, unknown> {
+  digest: string;
+  entries: { scope: string; recordCount: number; digest: string }[];
+}
+
+function rewriteManifest(entries: Map<string, Uint8Array>, edit: (manifest: MutableTaxonomyManifest) => void): void {
+  const manifest = JSON.parse(new TextDecoder().decode(entries.get("manifest.json")!)) as MutableTaxonomyManifest;
   edit(manifest);
   manifest.digest = createHash("sha256").update(canonical(manifest)).digest("hex");
   entries.set("manifest.json", new TextEncoder().encode(`${JSON.stringify(manifest)}\n`));
@@ -145,7 +173,7 @@ describe("Phase 8 #242 taxonomy export package", () => {
     const built = await buildSelectedOwnerExportPackage({ exportId: id("501") as never, snapshot: snapshot(["taxonomy"]) });
     const archive = await bytesOf(built.content);
     expect(isManifestShape(built.manifest)).toBe(true);
-    const checked = validateOwnerExportZip(archive);
+    const checked = validateTaxonomyZip(archive);
     expect(checked.manifest.schemaVersion).toBe("1.4");
     expect(checked.recordCounts).toEqual({ taxonomy: 1 });
     const recordBytes = unzipStored(archive).get("records/taxonomy.ndjson")!;
@@ -162,7 +190,7 @@ describe("Phase 8 #242 taxonomy export package", () => {
   it("AC04 declares Project dependencies without widening taxonomy-only selection and resolves them in full packages", async () => {
     const taxonomyOnly = await buildSelectedOwnerExportPackage({ exportId: id("502") as never, snapshot: snapshot(["taxonomy"]) });
     const onlyBytes = await bytesOf(taxonomyOnly.content);
-    const only = validateOwnerExportZip(onlyBytes);
+    const only = validateTaxonomyZip(onlyBytes);
     expect(only.includedScopes).toEqual(["taxonomy"]);
     expect(only.manifest.entries.map((entry: { scope: string }) => entry.scope)).toEqual(["taxonomy"]);
     expect(only.manifest.dependencies.filter((edge: { targetScope: string }) => edge.targetScope === "portfolio-content")
@@ -171,7 +199,7 @@ describe("Phase 8 #242 taxonomy export package", () => {
     const full = await buildSelectedOwnerExportPackage({
       exportId: id("503") as never, snapshot: snapshot(["portfolio-content", "taxonomy"]),
     });
-    const fullResult = validateOwnerExportZip(await bytesOf(full.content));
+    const fullResult = validateTaxonomyZip(await bytesOf(full.content));
     expect(fullResult.includedScopes).toEqual(["portfolio-content", "taxonomy"]);
     expect(fullResult.manifest.dependencies.filter((edge: { targetScope: string }) => edge.targetScope === "portfolio-content")
       .every((edge: { disposition: string }) => edge.disposition === "included")).toBe(true);
@@ -183,7 +211,7 @@ describe("Phase 8 #242 taxonomy export package", () => {
       snapshot: { ...snapshot(["taxonomy"]), taxonomy: { records: [] } },
     });
     const emptyBytes = await bytesOf(empty.content);
-    expect(validateOwnerExportZip(emptyBytes).recordCounts).toEqual({ taxonomy: 0 });
+    expect(validateTaxonomyZip(emptyBytes).recordCounts).toEqual({ taxonomy: 0 });
     expect(unzipStored(emptyBytes).get("records/taxonomy.ndjson")).toHaveLength(0);
 
     const dangling = taxonomyRecord();
@@ -194,11 +222,11 @@ describe("Phase 8 #242 taxonomy export package", () => {
     record.value.values[0].mergedIntoValueId = id("999");
     entries.set("records/taxonomy.ndjson", new TextEncoder().encode(`${JSON.stringify(record)}\n`));
     rewriteManifest(entries, (manifest) => {
-      const descriptor = manifest.entries.find((entry: { scope: string }) => entry.scope === "taxonomy");
+      const descriptor = manifest.entries.find((entry) => entry.scope === "taxonomy")!;
       descriptor.digest = createHash("sha256").update(entries.get("records/taxonomy.ndjson")!).digest("hex");
     });
     const danglingBytes = await rebuild(entries);
-    expect(() => validateOwnerExportZip(danglingBytes)).toThrow(/TAXONOMY_SNAPSHOT_FACTS_INVALID/);
+    expect(() => validateTaxonomyZip(danglingBytes)).toThrow(/TAXONOMY_SNAPSHOT_FACTS_INVALID/);
   });
 
   it("AC05 rejects record-count, schema-byte, and archive-integrity corruption", async () => {
@@ -206,17 +234,18 @@ describe("Phase 8 #242 taxonomy export package", () => {
     const source = unzipStored(await bytesOf(built.content));
 
     const countCorruption = new Map(source);
-    rewriteManifest(countCorruption, (manifest) => { manifest.entries[0].recordCount += 1; });
+    rewriteManifest(countCorruption, (manifest) => { manifest.entries[0]!.recordCount += 1; });
     const countBytes = await rebuild(countCorruption);
-    expect(() => validateOwnerExportZip(countBytes)).toThrow(/ENTRY_COUNT_MISMATCH/);
+    expect(() => validateTaxonomyZip(countBytes)).toThrow(/ENTRY_COUNT_MISMATCH/);
 
     const schemaCorruption = new Map(source);
     schemaCorruption.set("schemas/taxonomy.schema.json", new TextEncoder().encode("{}\n"));
     const schemaBytes = await rebuild(schemaCorruption);
-    expect(() => validateOwnerExportZip(schemaBytes)).toThrow();
+    expect(() => validateTaxonomyZip(schemaBytes)).toThrow();
 
     const hashCorruption = await bytesOf(built.content);
-    hashCorruption[hashCorruption.length - 12] ^= 0xff;
-    expect(() => validateOwnerExportZip(hashCorruption)).toThrow();
+    const corruptionOffset = hashCorruption.length - 12;
+    hashCorruption[corruptionOffset] = hashCorruption[corruptionOffset]! ^ 0xff;
+    expect(() => validateTaxonomyZip(hashCorruption)).toThrow();
   });
 });

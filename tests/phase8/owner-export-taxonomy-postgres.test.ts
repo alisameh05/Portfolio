@@ -8,7 +8,7 @@ import { createPostgresContentTaxonomyExportAssignmentReader } from "../../src/m
 import { createPostgresProjectDiscoveryProjectionWriter } from "../../src/modules/taxonomy-discovery/adapters/postgres-project-discovery.js";
 import { createPostgresTaxonomyOwnerRepository } from "../../src/modules/taxonomy-discovery/adapters/postgres-owner-taxonomies.js";
 import { createTaxonomyOwnerService } from "../../src/modules/taxonomy-discovery/application/owner-taxonomies.js";
-import { createTaxonomyOwnerExportSnapshotReader } from "../../src/modules/taxonomy-discovery/application/taxonomy-export.js";
+import { createTaxonomyOwnerExportSnapshotReader, type TaxonomyOwnerExportRecord } from "../../src/modules/taxonomy-discovery/application/taxonomy-export.js";
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import { createPortfolioSettingsService } from "../../src/modules/portfolio-configuration/application/settings-service.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
@@ -19,6 +19,31 @@ import { createSystemIdGenerator } from "../../src/runtime/ports.js";
 import { createOwnerExportSnapshotReader } from "../../src/runtime/adapters/owner-export-snapshot.js";
 import { buildSelectedOwnerExportPackage, type OwnerExportSelectedSnapshot } from "../../src/modules/portability-operations/application/owner-export-package.js";
 import { validateOwnerExportZip } from "../../scripts/owner-export/validator.mjs";
+
+interface TaxonomyManifest {
+  readonly entries: readonly { readonly scope: string; readonly recordCount: number; readonly digest: string }[];
+  readonly dependencies: readonly {
+    readonly sourceScope: string;
+    readonly sourceId: string;
+    readonly targetScope: string;
+    readonly targetId: string;
+    readonly disposition: "included" | "omitted";
+    readonly reason?: string;
+  }[];
+}
+
+interface TaxonomyValidation {
+  readonly includedScopes: readonly string[];
+  readonly manifest: TaxonomyManifest;
+}
+
+function validateTaxonomyZip(bytes: Uint8Array): TaxonomyValidation {
+  return validateOwnerExportZip(bytes) as unknown as TaxonomyValidation;
+}
+
+function taxonomyRecord(value: Readonly<Record<string, unknown>>): TaxonomyOwnerExportRecord {
+  return value as unknown as TaxonomyOwnerExportRecord;
+}
 
 const APPLICATION_URL = process.env["PHASE8_OWNER_EXPORT_APPLICATION_URL"];
 const WORKER_URL = process.env["PHASE8_OWNER_EXPORT_WORKER_URL"];
@@ -203,15 +228,16 @@ describe.runIf(enabled)("Phase 8 #242 real taxonomy export fixture", () => {
       if (!merged.ok) throw new Error("PHASE8_OWNER_TAXONOMY_MERGE_FAILED:" + merged.error.code);
       releaseAssignments();
       const beforeMerge = await beforeMergePromise;
-      const beforeTaxonomy = beforeMerge.taxonomy!.records.find((record) => record.taxonomyId === rootId)!.value;
+      const beforeTaxonomy = taxonomyRecord(beforeMerge.taxonomy!.records.find((record) => record.taxonomyId === rootId)!.value);
       expect(beforeTaxonomy.aggregateVersion).toBe(retiredResult.value.aggregateVersion);
       expect(beforeTaxonomy.values.find((item) => item.valueId === source.valueId)?.state).toBe("active");
       expect(beforeTaxonomy.assignments).toEqual(expect.arrayContaining([expect.objectContaining({ targetId: projectId, taxonomyValueId: source.valueId })]));
       expect(beforeTaxonomy.evolutionHistory.some((event) => event.action === "merged")).toBe(false);
 
       const taxonomyOnly = await capture(["taxonomy"]);
-      const taxRecord = taxonomyOnly.taxonomy!.records.find((record) => record.taxonomyId === rootId)!.value;
-      expect(taxonomyOnly.taxonomy!.records.map((record) => record.value.kind).sort()).toEqual(["ai-ml-domain", "category", "project-type", "technology"]);
+      const taxRecords = taxonomyOnly.taxonomy!.records.map((record) => taxonomyRecord(record.value));
+      const taxRecord = taxRecords.find((record) => record.taxonomyId === rootId)!;
+      expect(taxRecords.map((record) => record.kind).sort()).toEqual(["ai-ml-domain", "category", "project-type", "technology"]);
       expect(taxRecord.values.find((item) => item.valueId === source.valueId)).toMatchObject({ state: "merged", name: "Service Layer", mergedIntoValueId: target.valueId });
       expect(taxRecord.values.find((item) => item.valueId === retired.valueId)).toMatchObject({ state: "retired", name: "Legacy" });
       expect(taxRecord.evolutionHistory.filter((event) => event.valueId === source.valueId).map((event) => event.action)).toEqual(["created", "renamed", "merged"]);
@@ -223,7 +249,7 @@ describe.runIf(enabled)("Phase 8 #242 real taxonomy export fixture", () => {
       expect(taxRecord.assignmentHistory.map((entry) => entry.taxonomyValueId)).toEqual([source.valueId, target.valueId]);
 
       const taxPackage = await buildSelectedOwnerExportPackage({ exportId: createStableId("OwnerExport"), snapshot: taxonomyOnly as OwnerExportSelectedSnapshot });
-      const taxValidation = validateOwnerExportZip(await archiveBytes(taxPackage.content));
+      const taxValidation = validateTaxonomyZip(await archiveBytes(taxPackage.content));
       expect(taxValidation.includedScopes).toEqual(["taxonomy"]);
       expect(taxValidation.manifest.entries).toHaveLength(1);
       expect(taxValidation.manifest.dependencies).toEqual(expect.arrayContaining([
@@ -232,7 +258,7 @@ describe.runIf(enabled)("Phase 8 #242 real taxonomy export fixture", () => {
 
       const full = await capture(["portfolio-content", "taxonomy"]);
       const fullPackage = await buildSelectedOwnerExportPackage({ exportId: createStableId("OwnerExport"), snapshot: full as OwnerExportSelectedSnapshot });
-      const fullValidation = validateOwnerExportZip(await archiveBytes(fullPackage.content));
+      const fullValidation = validateTaxonomyZip(await archiveBytes(fullPackage.content));
       expect(fullValidation.includedScopes).toEqual(["portfolio-content", "taxonomy"]);
       expect(fullValidation.manifest.dependencies.filter((edge) => edge.targetScope === "portfolio-content")
         .every((edge) => edge.disposition === "included")).toBe(true);
