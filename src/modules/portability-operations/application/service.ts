@@ -69,6 +69,17 @@ export interface OwnerExportTaxonomyEntryDescriptor {
   readonly recordCount: number;
 }
 
+export interface OwnerExportMediaEntryDescriptor {
+  readonly path: "records/media-metadata.ndjson";
+  readonly scope: "media-metadata";
+  readonly mediaType: "application/x-ndjson";
+  readonly recordSchema: "urn:shipwithali:owner-export-schema:media-metadata:1.2";
+  readonly schemaPath: "schemas/media-metadata.schema.json";
+  readonly schemaVersion: "1.2";
+  readonly digest: string;
+  readonly recordCount: number;
+}
+
 export interface OwnerExportEntryDescriptorV1_0<TScope extends ExportScope = ExportScope> {
   readonly path: string;
   readonly scope: TScope;
@@ -107,9 +118,10 @@ export interface OwnerExportAssetDescriptor {
   readonly path: string;
   readonly scope: "media-metadata" | "cv-metadata";
   readonly assetId: string;
-  readonly mediaType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp" | "video/mp4";
+  readonly mediaType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp" | "video/mp4" | "video/webm";
   readonly byteLength: number;
   readonly digest: string;
+  readonly variantName?: string;
 }
 
 export interface OwnerExportDependencyDescriptor {
@@ -169,7 +181,13 @@ export interface OwnerExportPackageManifestV1_4 extends Omit<OwnerExportPackageM
   readonly entries: readonly (OwnerExportEntryDescriptor | OwnerExportContentEntryDescriptor | OwnerExportTaxonomyEntryDescriptor)[];
 }
 
-export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3 | OwnerExportPackageManifestV1_4;
+/** Media package 1.5 pins complete Media acceptance records and verified bytes. */
+export interface OwnerExportPackageManifestV1_5 extends Omit<OwnerExportPackageManifestV1_1, "schemaVersion" | "entries"> {
+  readonly schemaVersion: "1.5";
+  readonly entries: readonly (OwnerExportEntryDescriptor | OwnerExportContentEntryDescriptor | OwnerExportTaxonomyEntryDescriptor | OwnerExportMediaEntryDescriptor)[];
+}
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3 | OwnerExportPackageManifestV1_4 | OwnerExportPackageManifestV1_5;
 
 interface OwnerExportViewBase {
   readonly exportId: StableId<"OwnerExport">;
@@ -545,12 +563,84 @@ function isPortableMediaProcessing(value: unknown): boolean {
     Array.isArray(value["findings"]) && value["findings"].length <= 50 &&
     value["findings"].every((finding) => isBoundedString(finding, 1, 200)) && isPortableUtcInstant(value["recordedAt"]);
 }
+function isPortableMediaProcessingV1_2(value: unknown): boolean {
+  return hasOnlyKeys(value, ["result", "detectedMediaType", "detectedByteLength", "sha256", "findings", "recordedAt"]) &&
+    hasRequiredKeys(value, ["result", "detectedMediaType", "detectedByteLength", "sha256", "findings", "recordedAt"]) &&
+    ["passed", "failed"].includes(String(value["result"])) && isBoundedString(value["detectedMediaType"], 1, 80) &&
+    Number.isSafeInteger(value["detectedByteLength"]) && Number(value["detectedByteLength"]) >= 0 &&
+    typeof value["sha256"] === "string" && /^[a-f0-9]{64}$/.test(value["sha256"]) &&
+    Array.isArray(value["findings"]) && value["findings"].length <= 16 && value["findings"].every((finding) => isBoundedString(finding, 1, 80) && /^[A-Z0-9_]+$/.test(finding)) &&
+    isPortableUtcInstant(value["recordedAt"]);
+}
 function isPortableMediaDecision(value: unknown): boolean {
   return hasOnlyKeys(value, ["decision", "decidedAt", "reason"]) && hasRequiredKeys(value, ["decision", "decidedAt"]) &&
     ["accepted", "rejected"].includes(String(value["decision"])) && isPortableUtcInstant(value["decidedAt"]) &&
     (value["reason"] === undefined || isBoundedString(value["reason"], 1, 500));
 }
+function isPortableMediaAssetReference(value: unknown): boolean {
+  return hasOnlyKeys(value, ["variantName", "mediaType", "byteLength", "digest", "portableReference", "width", "height", "codec"]) &&
+    hasRequiredKeys(value, ["variantName", "mediaType", "byteLength", "digest", "portableReference"]) &&
+    isBoundedString(value["variantName"], 1, 32) &&
+    ["application/pdf", "image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"].includes(String(value["mediaType"])) &&
+    Number.isSafeInteger(value["byteLength"]) && Number(value["byteLength"]) >= 1 && Number(value["byteLength"]) <= 50 * 1024 * 1024 &&
+    typeof value["digest"] === "string" && /^[a-f0-9]{64}$/.test(value["digest"]) &&
+    typeof value["portableReference"] === "string" && value["portableReference"] === `assets/media-metadata/sha256/${value["digest"]}` &&
+    (value["width"] === undefined || Number.isSafeInteger(value["width"]) && Number(value["width"]) > 0) &&
+    (value["height"] === undefined || Number.isSafeInteger(value["height"]) && Number(value["height"]) > 0) &&
+    (value["codec"] === undefined || isBoundedString(value["codec"], 2, 16));
+}
+function isPortableMediaAcceptanceVariant(value: unknown): boolean {
+  const keys = ["variantName", "mediaType", "byteLength", "digest", "byteCoverage", "portableReference", "width", "height", "codec"];
+  return hasOnlyKeys(value, keys) && hasRequiredKeys(value, ["variantName", "mediaType", "byteLength", "digest", "byteCoverage"]) &&
+    isBoundedString(value["variantName"], 1, 32) && ["application/pdf", "image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"].includes(String(value["mediaType"])) &&
+    Number.isSafeInteger(value["byteLength"]) && Number(value["byteLength"]) >= 1 && Number(value["byteLength"]) <= 50 * 1024 * 1024 &&
+    typeof value["digest"] === "string" && /^[a-f0-9]{64}$/.test(value["digest"]) &&
+    ["included", "excluded"].includes(String(value["byteCoverage"])) &&
+    (value["byteCoverage"] === "included" ? value["portableReference"] === `assets/media-metadata/sha256/${value["digest"]}` : value["portableReference"] === undefined) &&
+    (value["width"] === undefined || Number.isSafeInteger(value["width"]) && Number(value["width"]) > 0) &&
+    (value["height"] === undefined || Number.isSafeInteger(value["height"]) && Number(value["height"]) > 0) &&
+    (value["codec"] === undefined || isBoundedString(value["codec"], 2, 16));
+}
+function isPortableMediaAcceptance(value: unknown): boolean {
+  return hasOnlyKeys(value, ["aggregateVersion", "decidedAt", "inputSha256", "detectedMediaType", "detectedByteLength", "scannerVersion", "processorVersion", "processingPolicyVersion", "accessibilityMetadata", "byteCoverage", "variants"]) &&
+    hasRequiredKeys(value, ["aggregateVersion", "decidedAt", "inputSha256", "detectedMediaType", "detectedByteLength", "scannerVersion", "processorVersion", "processingPolicyVersion", "accessibilityMetadata", "byteCoverage", "variants"]) &&
+    Number.isSafeInteger(value["aggregateVersion"]) && Number(value["aggregateVersion"]) > 1 &&
+    isPortableUtcInstant(value["decidedAt"]) && typeof value["inputSha256"] === "string" && /^[a-f0-9]{64}$/.test(value["inputSha256"]) &&
+    typeof value["detectedMediaType"] === "string" && Number.isSafeInteger(value["detectedByteLength"]) && Number(value["detectedByteLength"]) > 0 &&
+    isBoundedString(value["scannerVersion"], 1, 160) && isBoundedString(value["processorVersion"], 1, 160) &&
+    isBoundedString(value["processingPolicyVersion"], 1, 160) &&
+    isPortableMediaAccessibility(value["accessibilityMetadata"]) && ["included", "excluded"].includes(String(value["byteCoverage"])) &&
+    Array.isArray(value["variants"]) && value["variants"].length >= 1 && value["variants"].length <= 9 && value["variants"].every(isPortableMediaAcceptanceVariant) &&
+    value["variants"].every((variant) => variant["byteCoverage"] === value["byteCoverage"]);
+}
+function isSafeMediaMetadataExportV1_2(value: unknown): boolean {
+  const keys = ["mediaId", "aggregateVersion", "kind", "state", "locales", "accessibilityMetadata", "processingHistory", "decisionHistory", "acceptanceHistory", "processingHistoryTruncated", "decisionHistoryTruncated", "acceptanceHistoryTruncated", "publicationState", "publicationEligibility", "portableAssets", "byteCoverage", "byteExclusionReason"];
+  const required = ["mediaId", "aggregateVersion", "kind", "state", "locales", "accessibilityMetadata", "processingHistory", "decisionHistory", "acceptanceHistory", "processingHistoryTruncated", "decisionHistoryTruncated", "acceptanceHistoryTruncated", "publicationState", "publicationEligibility", "portableAssets", "byteCoverage"];
+  return hasOnlyKeys(value, keys) && hasRequiredKeys(value, required) && isPortableStableId(value["mediaId"]) &&
+    Number.isSafeInteger(value["aggregateVersion"]) && Number(value["aggregateVersion"]) >= 1 &&
+    ["image", "video", "document"].includes(String(value["kind"])) &&
+    ["upload-pending", "processing", "processed", "accepted", "rejected"].includes(String(value["state"])) &&
+    Array.isArray(value["locales"]) && value["locales"].every((locale) => locale === "en" || locale === "ar") && new Set(value["locales"]).size === value["locales"].length &&
+    (value["accessibilityMetadata"] === null || isPortableMediaAccessibility(value["accessibilityMetadata"])) &&
+    Array.isArray(value["processingHistory"]) && value["processingHistory"].length <= 100 && value["processingHistory"].every(isPortableMediaProcessingV1_2) &&
+    Array.isArray(value["decisionHistory"]) && value["decisionHistory"].length <= 100 && value["decisionHistory"].every(isPortableMediaDecision) &&
+    Array.isArray(value["acceptanceHistory"]) && value["acceptanceHistory"].length <= 100 && value["acceptanceHistory"].every(isPortableMediaAcceptance) &&
+    (value["processingHistoryTruncated"] === undefined || typeof value["processingHistoryTruncated"] === "boolean") &&
+    (value["decisionHistoryTruncated"] === undefined || typeof value["decisionHistoryTruncated"] === "boolean") &&
+    (value["acceptanceHistoryTruncated"] === undefined || typeof value["acceptanceHistoryTruncated"] === "boolean") &&
+    (value["processingHistoryTruncated"] !== true || value["processingHistory"].length === 100) &&
+    (value["decisionHistoryTruncated"] !== true || value["decisionHistory"].length === 100) &&
+    (value["acceptanceHistoryTruncated"] !== true || value["acceptanceHistory"].length === 100) &&
+    ["private", "accepted", "published", "withdrawn"].includes(String(value["publicationState"])) &&
+    ["eligible", "ineligible"].includes(String(value["publicationEligibility"])) &&
+    ["included", "excluded"].includes(String(value["byteCoverage"])) &&
+    Array.isArray(value["portableAssets"]) && value["portableAssets"].every(isPortableMediaAssetReference) &&
+    (value["state"] === "accepted" ? value["byteCoverage"] === "included" && value["portableAssets"].length > 0 && value["byteExclusionReason"] === undefined :
+      value["byteCoverage"] === "excluded" && value["portableAssets"].length === 0 && value["publicationEligibility"] === "ineligible" &&
+      value["byteExclusionReason"] === (value["state"] === "rejected" ? "rejected-or-withdrawn" : "not-accepted"));
+}
 function isSafeMediaMetadataExportValue(value: unknown): boolean {
+  if (isRecord(value) && "aggregateVersion" in value) return isSafeMediaMetadataExportV1_2(value);
   const keys = ["mediaId", "kind", "state", "accessibilityMetadata", "processingHistory", "decisionHistory", "processingHistoryTruncated", "decisionHistoryTruncated", "publicationState", "portableReference"];
   const required = ["mediaId", "kind", "state", "accessibilityMetadata", "processingHistory", "decisionHistory", "publicationState"];
   const mediaReference = /^assets\/media-metadata\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -565,9 +655,9 @@ function isSafeMediaMetadataExportValue(value: unknown): boolean {
     (value["processingHistoryTruncated"] !== true || value["processingHistory"].length === 100) &&
     (value["decisionHistoryTruncated"] !== true || value["decisionHistory"].length === 100) &&
     ["private", "accepted", "published", "withdrawn"].includes(String(value["publicationState"])) &&
-    (value["portableReference"] === undefined ||
-      typeof value["portableReference"] === "string" && mediaReference.test(value["portableReference"]) && value["state"] === "accepted");
+    (value["portableReference"] === undefined || typeof value["portableReference"] === "string" && mediaReference.test(value["portableReference"]) && value["state"] === "accepted");
 }
+export function isSafeOwnerExportMediaMetadataV1_2(value: unknown): boolean { return isSafeMediaMetadataExportV1_2(value); }
 function isPortableCvVersion(value: unknown): boolean {
   const reference = /^assets\/cv-metadata\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   return hasOnlyKeys(value, ["versionId", "mediaId", "locale", "portableReference", "label", "state", "isCurrent"]) &&

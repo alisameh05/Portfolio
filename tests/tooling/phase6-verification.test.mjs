@@ -91,7 +91,7 @@ test("the complete real integration gate rejects skipped, missing, failed, and p
       "commits a scoped candidate and replays the same encrypted target without re-signing",
       "allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes",
       "rolls back a failed candidate commit and idempotently removes its expired private orphan",
-      "processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+      "processes PDF and real image assets, then verifies #243 original and variant export streams through private Storage",
       "issues bounded delivery only for current published-locale and profile Media uses",
       "processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg",
       "rejects accepted Media safely and serializes with current usage changes",

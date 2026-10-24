@@ -267,6 +267,8 @@ export async function initializeDatabaseRuntime(
             { createPostgresContentTaxonomyExportAssignmentReader },
             { createTaxonomyOwnerExportSnapshotReader },
             { createOwnerExportSnapshotReader },
+            { createPostgresOwnerMediaExportSnapshotReader },
+            { createSupabaseMediaExportStorage },
           ] = await Promise.all([
             import("../modules/portability-operations/application/owner-export-assembly.js"),
             import("../modules/portfolio-configuration/adapters/postgres-settings.js"),
@@ -275,7 +277,15 @@ export async function initializeDatabaseRuntime(
             import("../modules/content-publishing/adapters/postgres-taxonomy-export-reader.js"),
             import("../modules/taxonomy-discovery/application/taxonomy-export.js"),
             import("../runtime/adapters/owner-export-snapshot.js"),
+            import("../modules/media/adapters/postgres-owner-export-snapshot.js"),
+            import("../runtime/adapters/supabase-media-export-storage.js"),
           ]);
+          const mediaObjects = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
+            ? createSupabaseMediaExportStorage({
+              storageUrl: env["SUPABASE_URL"], serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
+              ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+            })
+            : undefined;
           ownerExportAssembly = createOwnerExportAssemblyService({
             operations,
             exports: ownerExportStore,
@@ -286,6 +296,7 @@ export async function initializeDatabaseRuntime(
                 repository: createPostgresTaxonomyOwnerRepository(),
                 assignments: createPostgresContentTaxonomyExportAssignmentReader(),
               }),
+              media: createPostgresOwnerMediaExportSnapshotReader({ database: database.database, transactions: operations.transactions }),
               transactions: operations.transactions,
               capabilities: {
                 async read(scope) {
@@ -336,6 +347,7 @@ export async function initializeDatabaseRuntime(
               },
             }),
             storage: ownerExportStorage ?? unavailableOwnerExportStorage,
+            ...(mediaObjects === undefined ? {} : { mediaObjects }),
             clock: createSystemClock(),
             ids: createSystemIdGenerator(),
           });

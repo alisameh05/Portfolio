@@ -52,7 +52,7 @@ const RUN_MEDIA_ACCEPTANCE = MEDIA_ACCEPTANCE_ONLY || MEDIA_DELIVERY_ONLY || MED
 const RUN_TIMEOUT = 180_000;
 
 const PHASE6_MEDIA_CV_TEST_NAMES = Object.freeze([
-  "processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
+  "processes PDF and real image assets, then verifies #243 original and variant export streams through private Storage",
   "issues bounded delivery only for current published-locale and profile Media uses",
   "processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg",
   "rejects accepted Media safely and serializes with current usage changes",

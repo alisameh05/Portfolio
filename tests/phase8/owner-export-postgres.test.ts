@@ -27,6 +27,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { createHash, randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
+import { sql } from "kysely";
 
 import { createPostgresOwnerExportStore } from "../../src/modules/portability-operations/adapters/postgres-owner-export-store.js";
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
@@ -47,6 +48,7 @@ import { createSystemIdGenerator, type StableIdGenerator } from "../../src/runti
 import { createStableId, parseIdempotencyKey, parseStableId, type OwnerActor, type StableId } from "../../src/shared/domain/index.js";
 import { createOwnerExportConfigurationSnapshotReader } from "../../src/runtime/adapters/owner-export-configuration-snapshot.js";
 import { createSupabaseOwnerExportStorage } from "../../src/runtime/adapters/supabase-owner-export-storage.js";
+import { createPostgresOwnerMediaExportSnapshotReader } from "../../src/modules/media/adapters/postgres-owner-export-snapshot.js";
 import type { PortfolioSettings } from "../../src/modules/portfolio-configuration/domain/index.js";
 import type { OwnerExportConfigurationSnapshot } from "../../src/modules/portability-operations/application/owner-export-package.js";
 import { validateOwnerExportZip } from "../../scripts/owner-export/validator.mjs";
@@ -519,6 +521,129 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       expect(objectServer.requests.filter((entry) => entry.startsWith("POST "))).toHaveLength(1);
     } finally {
       await new Promise<void>((resolve) => objectServer.server.close(() => resolve()));
+    }
+  });
+
+  it("#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", async () => {
+    const scope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+    const settingsRepository = createPostgresPortfolioSettingsRepository();
+    const settings = await application!.transactions.run((context) => settingsRepository.getSettings(scope, context));
+    if (!settings.ok) {
+      const provisioned = await application!.transactions.run((context) => settingsRepository.provisionSettings(scope, {
+        ...configurationSettings("Media export"), portfolioId: scope.portfolioId,
+      }, context));
+      expect(provisioned.ok).toBe(true);
+    }
+
+    const mediaId = createStableId("MediaAsset");
+    const sourceObjectId = createStableId("MediaObject");
+    const outputObjectId = createStableId("MediaObject");
+    const attemptId = createStableId("MediaProcessingAttempt");
+    const decisionId = createStableId("MediaDecision");
+    const mediaBytes = new TextEncoder().encode("phase8-accepted-pdf");
+    const inputDigest = createHash("sha256").update("phase8-original-pdf").digest("hex");
+    const outputDigest = createHash("sha256").update(mediaBytes).digest("hex");
+    await admin!.query(
+      "insert into media.assets (media_id, portfolio_id, owner_id, kind, original_file_name, declared_media_type, declared_byte_length, declared_sha256) values ($1, $2, $3, 'image', 'private-owner-filename.png', 'image/png', $4, $5)",
+      [mediaId, scope.portfolioId, scope.ownerId, mediaBytes.byteLength, inputDigest],
+    );
+    await admin!.query(
+      "insert into media.upload_intents (upload_intent_id, media_id, media_object_id, portfolio_id, owner_id, expires_at) values ($1, $2, $3, $4, $5, $6)",
+      [createStableId("MediaUploadIntent"), mediaId, sourceObjectId, scope.portfolioId, scope.ownerId, now],
+    );
+    await admin!.query(
+      "insert into media.processed_objects (object_id, portfolio_id, owner_id, media_id, source_object_id, sha256, byte_length, mime_type, object_version) values ($1, $2, $3, $4, $5, $6, $7, 'image/webp', $6)",
+      [outputObjectId, scope.portfolioId, scope.ownerId, mediaId, sourceObjectId, outputDigest, mediaBytes.byteLength],
+    );
+    await admin!.query(
+      "insert into media.processing_attempts (attempt_id, portfolio_id, owner_id, media_id, input_object_id, input_sha256, detected_mime_type, detected_byte_length, result, output_object_id, output_sha256, scanner_version, processor_version, policy_version, finding_codes, started_at, finished_at) values ($1, $2, $3, $4, $5, $6, 'image/png', $7, 'passed', $8, $9, 'fixture-scanner-v1', 'fixture-processor-v1', 'image-webp-variants-v1', '[]'::jsonb, $10, $10)",
+      [attemptId, scope.portfolioId, scope.ownerId, mediaId, sourceObjectId, inputDigest, mediaBytes.byteLength, outputObjectId, outputDigest, now],
+    );
+    await admin!.query(
+      "insert into media.processing_states (media_id, portfolio_id, owner_id, aggregate_version, latest_attempt_id) values ($1, $2, $3, 3, $4)",
+      [mediaId, scope.portfolioId, scope.ownerId, attemptId],
+    );
+    await admin!.query(
+      "insert into media.decision_history (decision_id, portfolio_id, owner_id, media_id, aggregate_version, decision, processing_attempt_id, input_object_id, input_sha256, detected_mime_type, detected_byte_length, scanner_version, processor_version, processing_policy_version, sealed_outputs, accessibility, ownership_attested_by, ownership_attested_at, public_suitability_attested_by, public_suitability_attested_at, decided_by, decided_at) values ($1, $2, $3, $4, 3, 'accepted', $5, $6, $7, 'image/png', $8, 'fixture-scanner-v1', 'fixture-processor-v1', 'image-webp-variants-v1', $9::jsonb, $10::jsonb, $3, $11, $3, $11, $3, $11)",
+      [decisionId, scope.portfolioId, scope.ownerId, mediaId, attemptId, sourceObjectId, inputDigest, mediaBytes.byteLength,
+        JSON.stringify([{ objectId: outputObjectId, sha256: outputDigest, byteLength: mediaBytes.byteLength, mimeType: "image/webp", objectVersion: outputDigest, variantName: "display" }]),
+        JSON.stringify({ kind: "decorative-image" }), now],
+    );
+
+    const snapshotReader = createPostgresOwnerMediaExportSnapshotReader({ database: worker!.database, transactions: worker!.transactions });
+    const captured = await worker!.transactions.run((context) => snapshotReader.readOwnerMediaExportSnapshot(scope, context), { isolationLevel: "repeatable read" });
+    expect(captured).toMatchObject({ ok: true });
+    if (!captured.ok) return;
+    expect(captured.value.records).toHaveLength(1);
+    const outsideScope = await worker!.transactions.run((context) => snapshotReader.readOwnerMediaExportSnapshot({
+      portfolioId: createStableId("Portfolio"), ownerId: scope.ownerId,
+    }, context));
+    expect(outsideScope).toMatchObject({ ok: true, value: { records: [], assets: [] } });
+    expect(captured.value.records[0]).toMatchObject({
+      mediaId,
+      value: expect.objectContaining({
+        aggregateVersion: 3,
+        state: "accepted",
+        publicationEligibility: "eligible",
+        byteCoverage: "included",
+        acceptanceHistory: [expect.objectContaining({ aggregateVersion: 3, byteCoverage: "included" })],
+        portableAssets: expect.arrayContaining([
+          expect.objectContaining({ variantName: "original", digest: inputDigest, mediaType: "image/png" }),
+          expect.objectContaining({ variantName: "display", digest: outputDigest, mediaType: "image/webp", byteLength: mediaBytes.byteLength }),
+        ]),
+      }),
+    });
+    expect(JSON.stringify(captured.value.records)).not.toContain("private-owner-filename.png");
+    expect(JSON.stringify(captured.value.records)).not.toContain(outputObjectId);
+    expect(captured.value.assets).toHaveLength(2);
+    expect(captured.value.assets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ mediaId, objectId: outputObjectId, source: "variant", sha256: outputDigest }),
+      expect.objectContaining({ mediaId, objectId: sourceObjectId, source: "original", uploadIntentId: expect.any(String), sha256: inputDigest }),
+    ]));
+    expect(JSON.stringify(captured.value.records[0]?.value)).not.toContain(sourceObjectId);
+    expect(JSON.stringify(captured.value.records[0]?.value)).not.toContain("uploadIntentId");
+    const acceptedVersions = new Map<StableId<"MediaAsset">, number>([[mediaId, 3]]);
+    const acceptedStillCurrent = await worker!.transactions.run((context) =>
+      snapshotReader.revalidateOwnerMediaExportSnapshot(scope, acceptedVersions, context));
+    expect(acceptedStillCurrent).toEqual({ ok: true, value: true });
+
+    const restricted = new Client({ connectionString: WORKER_URL });
+    await restricted.connect();
+    try {
+      await restricted.query("select set_config('shipwithali.portfolio_id', $1, false), set_config('shipwithali.owner_id', $2, false), set_config('shipwithali.worker_purpose', 'media.owner-export', false)", [scope.portfolioId, scope.ownerId]);
+      await expect(restricted.query("select original_file_name from media.assets where media_id = $1", [mediaId]))
+        .rejects.toMatchObject({ code: "42501" });
+      await expect(restricted.query("update media.assets set kind = 'video' where media_id = $1", [mediaId]))
+        .rejects.toMatchObject({ code: "42501" });
+    } finally {
+      await restricted.end();
+    }
+    await admin!.query("update media.processing_states set aggregate_version = 4 where media_id = $1", [mediaId]);
+    await admin!.query(
+      "insert into media.rejection_history (rejection_id, portfolio_id, owner_id, media_id, aggregate_version, private_reason, rejected_by, rejected_at) values ($1, $2, $3, $4, 4, 'private owner-only rejection rationale', $3, $5)",
+      [createStableId("MediaRejection"), scope.portfolioId, scope.ownerId, mediaId, now],
+    );
+    const afterRejection = await worker!.transactions.run((context) =>
+      snapshotReader.revalidateOwnerMediaExportSnapshot(scope, acceptedVersions, context));
+    expect(afterRejection).toEqual({ ok: true, value: false });
+    const rejected = await worker!.transactions.run((context) => snapshotReader.readOwnerMediaExportSnapshot(scope, context));
+    expect(rejected).toMatchObject({ ok: true, value: { assets: [] } });
+    if (!rejected.ok) return;
+    const rejectedRecord = rejected.value.records.find((record) => record.mediaId === mediaId);
+    expect(rejectedRecord?.value).toMatchObject({
+      state: "rejected", publicationState: "withdrawn", publicationEligibility: "ineligible",
+      byteCoverage: "excluded", byteExclusionReason: "rejected-or-withdrawn", portableAssets: [],
+      decisionHistory: expect.arrayContaining([expect.objectContaining({ decision: "rejected", reason: "OWNER_REJECTED" })]),
+    });
+    expect(JSON.stringify(rejected.value.records)).not.toContain("private owner-only rejection rationale");
+    const rejectionPrivateField = new Client({ connectionString: WORKER_URL });
+    await rejectionPrivateField.connect();
+    try {
+      await rejectionPrivateField.query("select set_config('shipwithali.portfolio_id', $1, false), set_config('shipwithali.owner_id', $2, false), set_config('shipwithali.worker_purpose', 'media.owner-export', false)", [scope.portfolioId, scope.ownerId]);
+      await expect(rejectionPrivateField.query("select private_reason from media.rejection_history where media_id = $1", [mediaId]))
+        .rejects.toMatchObject({ code: "42501" });
+    } finally {
+      await rejectionPrivateField.end();
     }
   });
 

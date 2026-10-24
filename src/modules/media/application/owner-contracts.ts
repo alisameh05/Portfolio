@@ -92,6 +92,43 @@ export interface OwnerMediaAggregateView {
   readonly decisionHistoryTruncated?: boolean;
 }
 
+/** Complete Media-owned metadata needed for a portable Media export. Storage identities stay private to assembly. */
+export interface OwnerMediaExportAsset {
+  readonly mediaId: StableId<"MediaAsset">;
+  readonly objectId: StableId<"MediaObject">;
+  /** Private assembly hint for the immutable source object or an accepted output variant. */
+  readonly source: "original" | "variant";
+  /** Required only for the original upload's provider path; never serialized into the export. */
+  readonly uploadIntentId?: StableId<"MediaUploadIntent">;
+  readonly variantName: string;
+  readonly mediaType: string;
+  readonly byteLength: number;
+  readonly sha256: string;
+}
+
+export interface OwnerMediaExportRecord {
+  readonly mediaId: StableId<"MediaAsset">;
+  readonly value: Readonly<Record<string, unknown>>;
+}
+
+export interface OwnerMediaExportSnapshot {
+  readonly capturedAt: string;
+  readonly records: readonly OwnerMediaExportRecord[];
+  readonly assets: readonly OwnerMediaExportAsset[];
+}
+
+export interface OwnerMediaExportSnapshotReaderPort {
+  readOwnerMediaExportSnapshot(
+    scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> },
+    context: TransactionContext,
+  ): Promise<Result<OwnerMediaExportSnapshot, Rejection>>;
+  revalidateOwnerMediaExportSnapshot(
+    scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> },
+    mediaVersions: ReadonlyMap<StableId<"MediaAsset">, number>,
+    context?: TransactionContext,
+  ): Promise<Result<boolean, Rejection>>;
+}
+
 export interface OwnerMediaUploadIntentView {
   readonly mediaId: StableId<string>;
   readonly aggregateVersion: 1;

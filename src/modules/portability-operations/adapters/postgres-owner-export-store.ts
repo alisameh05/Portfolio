@@ -325,6 +325,7 @@ export function createPostgresOwnerExportStore(
         })) {
           return { ok: true as const, value: { kind: "stale" as const } };
         }
+        if (input.precondition !== undefined && !await input.precondition(context)) throw new PostgresInfrastructureError();
         const result = await sql<ExportRow>`
           update portability.owner_exports
              set status = ${input.toStatus},

@@ -77,12 +77,23 @@ describe.runIf(enabled)("Phase 8 #241 real Content module export fixture", () =>
     const operations = createPostgresOperationsPersistence(application.database);
     const repository = createPostgresContentAuthoringRepository();
     const discovery = createPostgresProjectDiscoveryProjectionWriter();
+    const projectMediaAssetId = createStableId("MediaAsset");
     const content = createContentAuthoringService({
       repository,
       operations,
       scope,
       discoveryProjection: discovery,
       taxonomyAssignments: discovery,
+      mediaAcceptance: {
+        async getAcceptanceFacts(query) {
+          return { ok: true, value: {
+            consistencyVersion: "phase8-owner-export-media-fixture-v1",
+            facts: query.mediaAssetIds.map((mediaAssetId) => ({
+              mediaAssetId, ownerId: scope.ownerId, accepted: true, safe: true, suitable: true, accessible: true, version: 1,
+            })),
+          } };
+        },
+      },
       clock,
     });
     const fixtureAggregateIds: string[] = [];
@@ -126,7 +137,8 @@ describe.runIf(enabled)("Phase 8 #241 real Content module export fixture", () =>
         },
         evidence: {
           claims: [{ claimId: createStableId("EvidenceClaim"), text: "The supporting demo shows this workflow.", artifactIds: [artifactId] }],
-          artifacts: [{ id: artifactId, title: "Project demo", destinationUrl: "https://example.test/demo" }],
+          artifacts: [{ id: artifactId, title: "Project demo", destinationUrl: "https://example.test/demo",
+            ...(prefix === "phase8-content-route-a" ? { mediaAssetId: projectMediaAssetId } : {}) }],
         },
         externalLinks: [{ id: createStableId("ExternalLink"), label: "English demo", destination: "https://example.test/en", isAvailableInArabic: false }],
       };
@@ -334,6 +346,10 @@ describe.runIf(enabled)("Phase 8 #241 real Content module export fixture", () =>
       if (!arabic.ok) throw new Error("PHASE8_OWNER_EXPORT_AR_PUBLISH_FAILED:" + arabic.error.code);
       arabicPublishedAt = arabic.value.publishedAt;
       projectA.version = arabic.value.aggregateVersion;
+      const mediaLocales = await worker.transactions.run((transaction) => repository.readOwnerExportMediaLocales({
+        mediaAssetIds: [projectMediaAssetId], scope,
+      }, transaction), { isolationLevel: "repeatable read" });
+      expect(mediaLocales).toMatchObject({ ok: true, value: [{ mediaAssetId: projectMediaAssetId, locales: ["ar", "en"] }] });
       for (const [index, slug] of ["route-b", "route-c"].entries()) {
         const changed = await content.changePublicSlug({
           actor, projectId: projectA.contentId as never, expectedVersion: projectA.version, newSlug: slug,
@@ -509,6 +525,7 @@ describe.runIf(enabled)("Phase 8 #241 real Content module export fixture", () =>
           relatedProjectId: expect.any(String), sequence: 1,
         })]),
         taxonomyAssignments: [{ taxonomyId, kind: "technology", valueId: taxonomyValue.valueId }],
+        mediaAssetIds: [projectMediaAssetId],
         evidenceItems: [expect.objectContaining({ claim: "The supporting demo shows this workflow." })],
       });
       const projectRevisions = projectRecord?.["revisions"] as Array<{
@@ -550,6 +567,7 @@ describe.runIf(enabled)("Phase 8 #241 real Content module export fixture", () =>
       expect(contentDependencies).toEqual(expect.arrayContaining([
         expect.objectContaining({ sourceScope: "portfolio-content", sourceId: projectA.contentId, targetScope: "portfolio-content", targetId: projectB.contentId, disposition: "included" }),
         expect.objectContaining({ sourceScope: "portfolio-content", sourceId: projectA.contentId, targetScope: "taxonomy", targetId: taxonomyValue.valueId, disposition: "omitted", reason: "scope-not-selected" }),
+        expect.objectContaining({ sourceScope: "portfolio-content", sourceId: projectA.contentId, targetScope: "media-metadata", targetId: projectMediaAssetId, disposition: "omitted", reason: "scope-not-selected" }),
       ]));
 
       const combined = await capture(["portfolio-content", "portfolio-configuration"]);
@@ -565,6 +583,7 @@ describe.runIf(enabled)("Phase 8 #241 real Content module export fixture", () =>
       const combinedDependencies = (combinedValidation.manifest as unknown as { dependencies: Array<Record<string, unknown>> }).dependencies;
       expect(combinedDependencies).toEqual(expect.arrayContaining([
         expect.objectContaining({ sourceScope: "portfolio-content", targetScope: "taxonomy", targetId: taxonomyValue.valueId, disposition: "omitted", reason: "scope-not-selected" }),
+        expect.objectContaining({ sourceScope: "portfolio-content", sourceId: projectA.contentId, targetScope: "media-metadata", targetId: projectMediaAssetId, disposition: "omitted", reason: "scope-not-selected" }),
       ]));
 
       expect(await queryContentCount(scope.portfolioId, scope.ownerId, "content.owner-export")).toBe(5);

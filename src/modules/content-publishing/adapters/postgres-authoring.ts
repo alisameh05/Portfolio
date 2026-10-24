@@ -589,6 +589,51 @@ export function createPostgresContentAuthoringRepository(): ContentAuthoringRepo
         throw new PostgresInfrastructureError();
       }
     },
+    async readOwnerExportMediaLocales(input, context) {
+      const executor = resolvePostgresTransaction(context);
+      try {
+        await sql`select set_config('shipwithali.portfolio_id', ${input.scope.portfolioId}, true),
+                         set_config('shipwithali.owner_id', ${input.scope.ownerId}, true),
+                         set_config('shipwithali.worker_purpose', 'content.owner-export', true)`.execute(executor);
+        const requested = [...new Set(input.mediaAssetIds)].sort();
+        if (requested.length === 0) return { ok: true, value: [] };
+        const rows = await sql<{ media_asset_id: string; locales: string[] }>`
+          with requested(media_asset_id) as (
+            select unnest(${requested}::uuid[])
+          )
+          select requested.media_asset_id::text as media_asset_id,
+                 coalesce(array_agg(distinct visible.locale order by visible.locale)
+                   filter (where visible.locale is not null), '{}'::text[]) as locales
+            from requested
+            left join lateral (
+              select publication.locale
+                from content.language_publications publication
+                join content.items item on item.content_id = publication.content_id
+                  and item.portfolio_id = publication.portfolio_id and item.content_type = publication.content_type
+                  and item.lifecycle = 'published'
+                join content.revisions revision on revision.revision_id = publication.revision_id
+                  and revision.content_id = publication.content_id and revision.portfolio_id = publication.portfolio_id
+                  and revision.locale = publication.locale
+               where publication.portfolio_id = ${input.scope.portfolioId}::uuid
+                 and publication.content_type in ('project', 'achievement')
+                 and revision.content_type in ('project', 'achievement')
+                 and revision.payload #> '{evidence,artifacts}' @>
+                   jsonb_build_array(jsonb_build_object('mediaAssetId', requested.media_asset_id::text))
+            ) visible on true
+           group by requested.media_asset_id
+           order by requested.media_asset_id
+        `.execute(executor);
+        if (rows.rows.length !== requested.length || rows.rows.some((row) => !Array.isArray(row.locales) ||
+            row.locales.some((locale) => locale !== 'en' && locale !== 'ar'))) throw new PostgresInfrastructureError();
+        return { ok: true, value: rows.rows.map((row) => ({
+          mediaAssetId: row.media_asset_id as StableId<"MediaAsset">,
+          locales: row.locales as SupportedLocale[],
+        })) };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        return { ok: false, error: { kind: "temporarily_unavailable", code: "CONTENT_MEDIA_USAGE_UNAVAILABLE" } };
+      }
+    },
     async projectExists(projectId, scope, context) {
       const executor = resolvePostgresTransaction(context);
       try {
