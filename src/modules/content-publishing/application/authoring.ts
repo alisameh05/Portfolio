@@ -142,6 +142,56 @@ export interface ContentAuthoringPublicationHistory {
   readonly publishedAt: string;
 }
 
+/** Complete owner-private Content facts captured for a portable export. */
+export interface ContentOwnerExportSnapshot {
+  readonly capturedAt: string;
+  readonly records: readonly ContentOwnerExportRecord[];
+}
+
+export interface ContentOwnerExportRecord {
+  readonly contentId: StableId<string>;
+  readonly contentType: ContentKind;
+  readonly lifecycle: "draft" | "published" | "hidden" | "archived";
+  readonly aggregateVersion: number;
+  readonly candidateSlug: string | null;
+  readonly firstPublishedAt: string | null;
+  readonly projectStatus: { readonly valueId: StableId<"ProjectStatusValue">; readonly label: string; readonly state: "active" | "retired" } | null;
+  readonly featured: boolean;
+  readonly revisions: readonly {
+    readonly revisionId: StableId<"Revision">;
+    readonly locale: SupportedLocale;
+    readonly sequence: number;
+    readonly aggregateVersion: number;
+    readonly savedAt: string;
+    readonly payload: CreateDraftPayload;
+    readonly reviews: readonly ContentAuthoringReview[];
+  }[];
+  readonly publications: readonly {
+    readonly locale: SupportedLocale;
+    readonly revisionId: StableId<"Revision">;
+    readonly reviewId: StableId<"ContentReview">;
+    readonly publicationSequence: number;
+    readonly publishedAt: string;
+  }[];
+  readonly publicationHistory: readonly ContentAuthoringPublicationHistory[];
+  readonly lifecycleHistory: readonly {
+    readonly sequence: number; readonly previousLifecycle: string; readonly lifecycle: string;
+    readonly aggregateVersion: number; readonly reason: string | null; readonly changedAt: string;
+  }[];
+  readonly publicRoute: null | {
+    readonly identity: StableId<"PublicRoute">; readonly canonicalSlug: string; readonly firstPublishedAt: string;
+    readonly reservations: readonly { readonly slug: string; readonly isCurrent: boolean; readonly reservedAt: string }[];
+    readonly history: readonly { readonly sequence: number; readonly fromSlug: string; readonly toSlug: string; readonly changedAt: string }[];
+  };
+  readonly relatedProjectIds: readonly StableId<"Project">[];
+  readonly relationshipHistory: readonly {
+    readonly leftProjectId: StableId<"Project">; readonly rightProjectId: StableId<"Project">;
+    readonly sequence: number; readonly initiatingProjectId: StableId<"Project">;
+    readonly relatedProjectId: StableId<"Project">; readonly occurredAt: string;
+  }[];
+  readonly taxonomyAssignments: readonly { readonly taxonomyId: StableId<"Taxonomy">; readonly kind: string; readonly valueId: StableId<"TaxonomyValue"> }[];
+}
+
 export interface ChangeContentLifecycleInput {
   readonly contentId: StableId<string>;
   readonly scope: ContentAuthoringScope;
@@ -419,6 +469,7 @@ export interface ContentAuthoringRepository {
   getPublicProjectMediaUse(input: GetPublicProjectMediaUseQuery & { readonly scope: ContentAuthoringScope }, context: TransactionContext): Promise<Result<boolean, Rejection>>;
   create(input: CreateContentPersistenceInput, context: TransactionContext): Promise<Result<ContentAuthoringRecord, Rejection>>;
   get(contentId: StableId<string>, scope: ContentAuthoringScope, context: TransactionContext, revisionHistoryLimit?: number): Promise<Result<ContentAuthoringRecord, Rejection>>;
+  readOwnerExportSnapshot(scope: ContentAuthoringScope, context: TransactionContext): Promise<Result<ContentOwnerExportSnapshot, Rejection>>;
   correctCandidateSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number }, Rejection>>;
   changePublicSlug(input: { readonly contentId: StableId<string>; readonly scope: ContentAuthoringScope; readonly expectedVersion: number; readonly slug: string }, context: TransactionContext): Promise<Result<{ readonly aggregateVersion: number; readonly previousSlug: string; readonly routeIdentity: StableId<"PublicRoute"> }, Rejection>>;
   relateProjects(input: RelateProjectsInput, context: TransactionContext): Promise<Result<RelateProjectsResult, Rejection>>;

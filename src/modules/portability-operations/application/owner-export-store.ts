@@ -6,7 +6,7 @@ import type {
 import type { TransactionContext } from "../../../runtime/ports.js";
 import type { ExportStatus, ExportScope } from "../domain/index.js";
 import type { OwnerExportPackageManifest } from "./service.js";
-import type { OwnerExportConfigurationSnapshot } from "./owner-export-package.js";
+import type { OwnerExportAssemblySnapshot } from "./owner-export-package.js";
 import type { SafeErrorCode } from "./persistence.js";
 
 /** Durable five-state identity and lifecycle facts for one Owner export request. */
@@ -27,7 +27,7 @@ export interface PersistedOwnerExport {
   readonly failureCode?: SafeErrorCode;
   readonly integrityManifest?: OwnerExportPackageManifest;
   readonly artifactId?: StableId<"OwnerExportArtifact">;
-  readonly snapshot?: OwnerExportConfigurationSnapshot;
+  readonly snapshot?: OwnerExportAssemblySnapshot;
   readonly candidateArtifactId?: StableId<"OwnerExportArtifact">;
   readonly candidateSha256?: string;
   readonly candidateContentLength?: number;
@@ -87,7 +87,7 @@ export interface OwnerExportStorePort {
     readonly exportId: StableId<"OwnerExport">;
     readonly actingJobId: StableId<"Job">;
     readonly leaseToken: string;
-    readonly snapshot: OwnerExportConfigurationSnapshot;
+    readonly snapshot: OwnerExportAssemblySnapshot;
   }): Promise<Result<"saved" | "stale", Rejection>>;
   saveOwnerExportCandidate(input: {
     readonly exportId: StableId<"OwnerExport">;

@@ -382,9 +382,11 @@ function readLocalSchema(relativePath) {
 
 const localManifest10 = readLocalSchema("v1.0/manifest.schema.json");
 const localManifest11 = readLocalSchema("v1.1/manifest.schema.json");
+const localManifest12 = readLocalSchema("v1.2/manifest.schema.json");
 const manifestValidators = new Map([
   ["1.0", ajv.compile(localManifest10.schema)],
   ["1.1", ajv.compile(localManifest11.schema)],
+  ["1.3", ajv.compile(localManifest12.schema)],
 ]);
 function readLocalRecordSchemas(schemaVersion) {
   return new Map(SCOPES.map((scope) => {
@@ -396,8 +398,16 @@ function readLocalRecordSchemas(schemaVersion) {
 }
 const localRecordSchemas10 = readLocalRecordSchemas("1.0");
 const localRecordSchemas11 = readLocalRecordSchemas("1.1");
+const localRecordSchemas12 = new Map(localRecordSchemas11);
+{
+  const scope = "portfolio-content";
+  const source = readLocalSchema("v1.2/portfolio-content.schema.json");
+  const expectedUri = `urn:shipwithali:owner-export-schema:${scope}:1.2`;
+  if (source.schema.$id !== expectedUri) throw new Error(`invalid local schema identity for ${scope}`);
+  localRecordSchemas12.set(scope, { ...source, validate: ajv.compile(source.schema), uri: expectedUri });
+}
 function recordSchemasForVersion(version) {
-  return version === "1.0" ? localRecordSchemas10 : localRecordSchemas11;
+  return version === "1.0" ? localRecordSchemas10 : version === "1.3" ? localRecordSchemas12 : localRecordSchemas11;
 }
 
 function object(value) {
@@ -410,6 +420,7 @@ function supportedManifestVersion(manifest) {
   const [major, minor] = version.split(".").map(Number);
   if (major !== 1) fail("PACKAGE_VERSION_MAJOR_UNSUPPORTED");
   if (minor === 0) return "1.0";
+  if (minor === 3) return "1.3";
   if (minor === undefined || minor < 1) fail("PACKAGE_VERSION_MINOR_UNSUPPORTED");
   return "1.1";
 }
@@ -430,7 +441,7 @@ function validateSchema(validator, value, code) {
 function validateEntryDescriptor(entry, version) {
   if (!object(entry) || !SCOPE_SET.has(entry.scope)) fail("PACKAGE_ENTRY_DESCRIPTOR_INVALID");
   const extension = entry.mediaType === "application/x-ndjson" ? "ndjson" : entry.mediaType === "application/json" ? "json" : "";
-  const schemaVersion = version === "1.0" ? "1.0" : "1.1";
+  const schemaVersion = version === "1.0" ? "1.0" : version === "1.3" && entry.scope === "portfolio-content" ? "1.2" : "1.1";
   const schema = recordSchemasForVersion(version).get(entry.scope);
   if (
     extension === "" || entry.path !== `records/${entry.scope}.${extension}` ||
@@ -453,16 +464,19 @@ function verifySchemaEntries(manifest, version, entryMap) {
   const schemaDescriptors = version === "1.0" ? undefined : manifest.schemas;
   const expectedDescriptors = [];
   if (version !== "1.0") {
+    const manifestSchema = version === "1.3" ? localManifest12 : localManifest11;
+    const manifestSchemaVersion = version === "1.3" ? "1.2" : "1.1";
     expectedDescriptors.push({
-      kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.1",
-      schemaVersion: "1.1", digest: sha256(localManifest11.bytes), source: localManifest11,
+      kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: `urn:shipwithali:owner-export-schema:manifest:${manifestSchemaVersion}`,
+      schemaVersion: manifestSchemaVersion, digest: sha256(manifestSchema.bytes), source: manifestSchema,
     });
   }
   for (const scope of usedScopes) {
     const source = localRecordSchemas.get(scope);
+    const recordVersion = version === "1.3" && scope === "portfolio-content" ? "1.2" : schemaVersion;
     expectedDescriptors.push({
       kind: "record", scope, path: `schemas/${scope}.schema.json`, schemaUri: source.uri,
-      schemaVersion, digest: sha256(source.bytes), source,
+      schemaVersion: recordVersion, digest: sha256(source.bytes), source,
     });
   }
   if (version !== "1.0") {
@@ -622,6 +636,93 @@ function verifyRecordOrdering(scope, records, version) {
         }
       }
     }
+  }
+}
+
+function verifyContentSnapshotFacts(records) {
+  const require = condition => { if (!condition) fail("CONTENT_SNAPSHOT_FACTS_INVALID"); };
+  const stable = value => typeof value === "string" && STABLE_ID_PATTERN.test(value);
+  const utc = value => typeof value === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?Z$/.test(value);
+  for (const record of records) {
+    const value = record.value;
+    const revisionsByLocale = new Map([["en", []], ["ar", []]]);
+    const revisionById = new Map();
+    for (const revision of value.revisions) {
+      require(revisionsByLocale.has(revision.locale) && !revisionById.has(revision.revisionId) && utc(revision.savedAt));
+      const stream = revisionsByLocale.get(revision.locale);
+      require(revision.sequence === stream.length + 1);
+      require(revision.payload.contentType === value.contentType && revision.payload.locale === revision.locale &&
+        revision.payload.title === revision.title && revision.payload.summary === revision.summary && revision.payload.body === revision.body);
+      let previousReviewSequence = 0;
+      const reviewIds = new Set();
+      for (const review of revision.reviews) {
+        require(review.revisionId === revision.revisionId && review.contentId === value.contentId &&
+          review.contentType === value.contentType && review.locale === revision.locale && review.reviewSequence === previousReviewSequence + 1 &&
+          !reviewIds.has(review.reviewId) && utc(review.reviewedAt));
+        previousReviewSequence = review.reviewSequence;
+        reviewIds.add(review.reviewId);
+      }
+      stream.push(revision);
+      revisionById.set(revision.revisionId, revision);
+    }
+    const historiesByLocale = new Map([["en", []], ["ar", []]]);
+    for (const publication of value.publicationHistory) {
+      const history = historiesByLocale.get(publication.locale);
+      require(history !== undefined && publication.sequence === history.length + 1 && utc(publication.publishedAt));
+      const revision = revisionById.get(publication.revisionId);
+      require(revision !== undefined && revision.locale === publication.locale &&
+        revision.reviews.some(review => review.reviewId === publication.reviewId && review.decision === "accepted"));
+      history.push(publication);
+    }
+    const currentByLocale = new Map();
+    for (const publication of value.publications) {
+      require(!currentByLocale.has(publication.locale) && utc(publication.publishedAt));
+      const history = historiesByLocale.get(publication.locale);
+      const latest = history?.at(-1);
+      require(latest !== undefined && latest.sequence === publication.publicationSequence && latest.revisionId === publication.revisionId &&
+        latest.reviewId === publication.reviewId && latest.publishedAt === publication.publishedAt);
+      const revision = revisionById.get(publication.revisionId);
+      require(revision !== undefined && revision.locale === publication.locale &&
+        revision.reviews.some(review => review.reviewId === publication.reviewId && review.decision === "accepted"));
+      currentByLocale.set(publication.locale, publication);
+    }
+    for (const revision of value.revisions) {
+      require(revision.currentlyPublished === (currentByLocale.get(revision.locale)?.revisionId === revision.revisionId));
+    }
+    let previousLifecycle;
+    let sequence = 0;
+    for (const entry of value.lifecycleHistory) {
+      sequence += 1;
+      require(entry.sequence === sequence && (previousLifecycle === undefined || entry.previousLifecycle === previousLifecycle));
+      previousLifecycle = entry.lifecycle;
+    }
+    require(value.lifecycleHistory.length === 0 || previousLifecycle === value.lifecycle);
+    if (value.publicRoute === null) {
+      require(value.publicRouteIdentity === null && value.routeHistory.length === 0 &&
+        (value.contentType !== "project" || value.lifecycle === "draft" && value.firstPublishedAt === null));
+    } else {
+      const route = value.publicRoute;
+      require(value.contentType === "project" && value.publicRouteIdentity === route.identity && stable(route.identity) &&
+        value.firstPublishedAt === route.firstPublishedAt && route.reservations.length > 0 && utc(route.firstPublishedAt));
+      const current = route.reservations.filter(reservation => reservation.isCurrent);
+      require(current.length === 1 && current[0].slug === route.canonicalSlug);
+      for (let index = 0; index < route.history.length; index += 1) {
+        const event = route.history[index];
+        require(event.sequence === index + 1 && event.fromSlug !== event.toSlug && utc(event.changedAt));
+        if (index > 0) require(route.history[index - 1].toSlug === event.fromSlug);
+      }
+      if (route.history.length > 0) require(route.history.at(-1).toSlug === route.canonicalSlug);
+      const reserved = new Set(route.reservations.map(reservation => reservation.slug));
+      require(reserved.size === route.reservations.length && route.history.every(event => reserved.has(event.fromSlug) && reserved.has(event.toSlug)));
+      require(value.routeHistory.length === route.reservations.filter(reservation => !reservation.isCurrent).length &&
+        value.routeHistory.every(redirect => reserved.has(redirect.fromSlug) && redirect.toSlug === route.canonicalSlug));
+    }
+    if (value.firstPublishedAt === null) require(value.publicDiscoveryOrder === null);
+    else require(utc(value.firstPublishedAt) && value.publicDiscoveryOrder?.firstPublishedAt === value.firstPublishedAt &&
+      value.publicDiscoveryOrder?.tieBreaker === "content-id-desc");
+    require(value.relationshipHistory.every(entry => stable(entry.leftProjectId) && stable(entry.rightProjectId) &&
+      entry.leftProjectId < entry.rightProjectId && entry.sequence > 0 && utc(entry.occurredAt)));
+    require(value.taxonomyAssignments.every(assignment => stable(assignment.taxonomyId) && stable(assignment.valueId)));
   }
 }
 
@@ -837,6 +938,8 @@ export function validateOwnerExportZip(input) {
   validateSchema(validator, manifest, "PACKAGE_MANIFEST_INVALID");
   if (ownerExportManifestDigest(manifest) !== manifest.digest) fail("MANIFEST_DIGEST_MISMATCH");
   const includedScopes = verifyManifestSemantics(manifest, version);
+  if (version === "1.3" && (includedScopes.some(scope => !["portfolio-content", "portfolio-configuration"].includes(scope)) ||
+      !includedScopes.includes("portfolio-content"))) fail("PACKAGE_SCOPE_UNSUPPORTED");
   const descriptors = verifySchemaEntries(manifest, version, entryMap);
   const recordsByScope = new Map();
   const recordCounts = {};
@@ -847,6 +950,7 @@ export function validateOwnerExportZip(input) {
     recordsByScope.set(descriptor.scope, records);
     recordCounts[descriptor.scope] = records.length;
   }
+  if (version === "1.3") verifyContentSnapshotFacts(recordsByScope.get("portfolio-content"));
   const assets = verifyAssets(manifest, version, entryMap, recordsByScope);
   const dependencies = verifyDependencies(manifest, version, recordsByScope);
 

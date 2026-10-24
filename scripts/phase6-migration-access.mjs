@@ -9,6 +9,7 @@ import { Client, Pool } from "pg";
 import { isolatedPhase6Config, phase6StorageIntegrationProof, phase6PdfFixture, scrubPhase6Environment } from "./phase6-verification-support.mjs";
 import { getPhase6SourceIdentity } from "./phase6-verification-support.mjs";
 import { migrationSha256 } from "./migration-checksum.mjs";
+import { capabilitiesForMigrations } from "./phase-contract-registry.mjs";
 import { initializeLocalMigrationProject, removeOwnedMigrationNetwork, withLocalMigrationExecutor } from "./local-migration-bootstrap.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
@@ -161,9 +162,13 @@ export function phase6DefinerFunctionProof(row) {
     ["anon_execute", "authenticated_execute", "service_role_execute", "application_execute", "backup_execute"].every(key => row[key] === false);
 }
 
-export function phase6WorkerSchemaProof(rows) {
+export function phase6WorkerSchemaProof(rows, migrationFiles = []) {
+  const approvedSchemas = ["operations", "measurement", "interaction", "portability", "portfolio_config"];
+  if (capabilitiesForMigrations(migrationFiles).includes("portability.content_export")) {
+    approvedSchemas.push("content", "taxonomy");
+  }
   return Array.isArray(rows) && rows.filter(row => row.role_name === "shipwithali_worker").every(row =>
-    row.create === false && (row.usage === false || row.usage === true && ["operations", "measurement", "interaction", "portability", "portfolio_config"].includes(row.schema_name)));
+    row.create === false && (row.usage === false || row.usage === true && approvedSchemas.includes(row.schema_name)));
 }
 
 async function queryRows(client, sql) { return (await client.query(sql)).rows; }
@@ -209,7 +214,10 @@ export async function catalogSnapshot(connectionString) {
     if (privileges.rows.some((row) => row.role_name === "service_role" && (row.usage || row.create)) ||
         grants.rows.some((row) => row.grantee === "service_role")) throw new Error("PHASE6_SERVICE_ROLE_DATABASE_SHORTCUT_FOUND");
     if (grants.rows.some((row) => row.grantee === "shipwithali_backup" && row.privilege_type !== "SELECT")) throw new Error("PHASE6_BACKUP_WRITE_GRANT_FOUND");
-    if (!phase6WorkerSchemaProof(privileges.rows)) throw new Error("PHASE6_WORKER_SCHEMA_GRANT_TOO_BROAD");
+    const installedVersions = new Set(versions.rows.map(({ version }) => version));
+    const installedMigrations = readdirSync(join(ROOT, "supabase", "migrations"))
+      .filter(file => installedVersions.has(file.slice(0, 14)));
+    if (!phase6WorkerSchemaProof(privileges.rows, installedMigrations)) throw new Error("PHASE6_WORKER_SCHEMA_GRANT_TOO_BROAD");
     if (privileges.rows.some((row) => row.role_name === "shipwithali_application" && row.create)) throw new Error("PHASE6_APPLICATION_SCHEMA_CREATE_GRANT_FOUND");
     if (grants.rows.some((row) => row.grantee === "shipwithali_application" && ["TRUNCATE", "REFERENCES", "TRIGGER"].includes(row.privilege_type))) throw new Error("PHASE6_APPLICATION_TABLE_GRANT_TOO_BROAD");
     const actualApplicationGrants = grants.rows.filter((row) => row.grantee === "shipwithali_application" && ["media", "cv_portfolio"].includes(row.schema))

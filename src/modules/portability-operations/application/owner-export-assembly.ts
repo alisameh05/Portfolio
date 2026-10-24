@@ -4,8 +4,8 @@ import type { OperationsPersistencePorts, SafeErrorCode } from "./persistence.js
 import { parseSafeErrorCode } from "./persistence.js";
 import type { Clock, StableIdGenerator } from "../../../runtime/ports.js";
 import type { OwnerExportStorePort, PersistedOwnerExport } from "./owner-export-store.js";
-import type { OwnerExportConfigurationSnapshot } from "./owner-export-package.js";
-import { buildConfigurationOwnerExportPackage } from "./owner-export-package.js";
+import type { OwnerExportAssemblySnapshot } from "./owner-export-package.js";
+import { buildConfigurationOwnerExportPackage, buildSelectedOwnerExportPackage } from "./owner-export-package.js";
 import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportObjectReadPort } from "./service.js";
 import { OWNER_EXPORT_RETENTION_SECONDS, applyGuardedOwnerExportTransition } from "./owner-export-service.js";
 import { calculateJobRetryDelayMilliseconds } from "./retry-policy.js";
@@ -17,13 +17,17 @@ const PERMANENT_FAILURE = parseSafeErrorCode("OWNER_EXPORT_ASSEMBLY_FAILED");
 const UNSUPPORTED_SCOPE = parseSafeErrorCode("OWNER_EXPORT_SCOPE_UNSUPPORTED");
 const INVALID_JOB = parseSafeErrorCode("OWNER_EXPORT_JOB_INVALID");
 
-export interface OwnerExportConfigurationSnapshotReaderPort {
+export interface OwnerExportSnapshotReaderPort {
   capture(input: {
     readonly portfolioId: StableId<"Portfolio">;
     readonly ownerId: StableId<"Owner">;
     readonly snapshotId: StableId<"OwnerExportArtifact">;
-  }): Promise<Result<OwnerExportConfigurationSnapshot, Rejection>>;
+    readonly includedScopes: readonly string[];
+  }): Promise<Result<OwnerExportAssemblySnapshot, Rejection>>;
 }
+
+/** @deprecated Use the scope-aware reader port; retained for #240 adapter callers. */
+export type OwnerExportConfigurationSnapshotReaderPort = OwnerExportSnapshotReaderPort;
 
 export interface OwnerExportObjectStoragePort extends OwnerExportObjectReadPort {
   writeOwnerExport(input: {
@@ -39,7 +43,7 @@ export interface OwnerExportObjectStoragePort extends OwnerExportObjectReadPort 
 export interface OwnerExportAssemblyDependencies {
   readonly operations: Pick<OperationsPersistencePorts, "jobs">;
   readonly exports: OwnerExportStorePort;
-  readonly snapshots: OwnerExportConfigurationSnapshotReaderPort;
+  readonly snapshots: OwnerExportSnapshotReaderPort;
   readonly storage: OwnerExportObjectStoragePort;
   readonly clock: Clock;
   readonly ids: StableIdGenerator;
@@ -113,8 +117,9 @@ async function verifyArtifact(
   return total === contentLength && digest.digest("hex") === expectedSha256;
 }
 
-function isConfigurationOnly(scopes: readonly string[]): boolean {
-  return scopes.length === 1 && scopes[0] === "portfolio-configuration";
+function isSupportedScopeSelection(scopes: readonly string[]): boolean {
+  return (scopes.length === 1 && (scopes[0] === "portfolio-configuration" || scopes[0] === "portfolio-content")) ||
+    (scopes.length === 2 && scopes[0] === "portfolio-content" && scopes[1] === "portfolio-configuration");
 }
 
 function sameScopes(left: readonly string[], right: readonly string[]): boolean {
@@ -122,7 +127,7 @@ function sameScopes(left: readonly string[], right: readonly string[]): boolean 
 }
 
 /**
- * Resumable leased worker for the supported configuration export slice. Snapshot
+ * Resumable leased worker for content and configuration export slices. Snapshot
  * and candidate checkpoints are write-once; external Storage work happens
  * outside database transactions, then readiness and queue completion commit
  * together under the current lease token.
@@ -182,7 +187,7 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
     if (!sameScopes(parsed.includedScopes, record.includedScopes)) {
       return failExport(record, { jobId: jobId.value, leaseToken: job.leaseToken }, INVALID_JOB);
     }
-    if (!isConfigurationOnly(record.includedScopes)) {
+    if (!isSupportedScopeSelection(record.includedScopes)) {
       const failed = await failExport(record, { jobId: jobId.value, leaseToken: job.leaseToken }, UNSUPPORTED_SCOPE);
       return failed;
     }
@@ -210,6 +215,7 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
           portfolioId: parsed.portfolioId,
           ownerId: parsed.ownerId,
           snapshotId: snapshotId.value,
+          includedScopes: record.includedScopes,
         });
         if (!captured.ok) throw new Error("OWNER_EXPORT_SNAPSHOT_UNAVAILABLE");
         const saved = await deps.exports.saveOwnerExportSnapshot({
@@ -222,7 +228,9 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         snapshot = captured.value;
       }
 
-      const built = await buildConfigurationOwnerExportPackage({ exportId: record.exportId, snapshot });
+      const built = snapshot !== null && typeof snapshot === "object" && "kind" in snapshot
+        ? await buildSelectedOwnerExportPackage({ exportId: record.exportId, snapshot })
+        : await buildConfigurationOwnerExportPackage({ exportId: record.exportId, snapshot });
       if (record.candidateArtifactId === undefined || record.candidateSha256 === undefined || record.candidateContentLength === undefined) {
         const candidateArtifactId = parseStableId("OwnerExportArtifact", deps.ids.generate("OwnerExportArtifact"));
         if (!candidateArtifactId.ok) throw new Error("OWNER_EXPORT_ARTIFACT_ID_INVALID");
@@ -269,7 +277,9 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         expectedAggregateVersion: record.aggregateVersion,
         leaseToken: job.leaseToken,
         transitionedAt: completedAt,
-        expiresAt: effectiveExpiry(completedAt, snapshot.policyExpiresAt),
+        expiresAt: effectiveExpiry(completedAt, "kind" in snapshot
+          ? snapshot.configuration?.policyExpiresAt
+          : snapshot.policyExpiresAt),
         actingJobId: jobId.value,
         integrityManifest: built.manifest,
         artifactId,

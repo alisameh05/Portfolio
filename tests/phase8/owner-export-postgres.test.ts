@@ -34,7 +34,6 @@ import {
   applyGuardedOwnerExportTransition,
   createOwnerExportAssemblyService,
   createOwnerExportService,
-  OWNER_EXPORT_SCHEMA_VERSION,
   parseSafeErrorCode,
   type OwnerExportPackageManifest,
   type OwnerExportObjectReadPort,
@@ -484,7 +483,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       const persisted = await workerStore.findOwnerExport({ exportId: request.value.exportId, ...scope });
       expect(persisted).toMatchObject({
         status: "ready",
-        schemaVersion: OWNER_EXPORT_SCHEMA_VERSION,
+        schemaVersion: "1.2",
         snapshot: {
           configurationVersion: 2,
           settings: { profile: { mediaAssetId: profileMediaAssetId }, contactChannels: [{ label: "Email v1" }] },

@@ -6,6 +6,10 @@ import type { PortfolioSettings } from "@shared/domain";
 import type {
   OwnerExportEntryDescriptor,
   OwnerExportPackageManifestV1_2,
+  OwnerExportPackageManifestV1_3,
+  OwnerExportContentEntryDescriptor,
+  OwnerExportDependencyDescriptor,
+  OwnerExportPackageManifest,
   OwnerExportSchemaDescriptor,
 } from "./service.js";
 import { MAX_OWNER_EXPORT_ARTIFACT_BYTES } from "./service.js";
@@ -28,10 +32,22 @@ export interface OwnerExportConfigurationSnapshot {
   readonly policyExpiresAt?: string;
 }
 
+/** New immutable checkpoint shape used when a selected scope set is captured together. */
+export interface OwnerExportSelectedSnapshot {
+  readonly kind: "owner-export-snapshot-v1";
+  readonly snapshotId: StableId<"OwnerExportArtifact">;
+  readonly capturedAt: string;
+  readonly includedScopes: readonly ("portfolio-content" | "portfolio-configuration")[];
+  readonly configuration?: OwnerExportConfigurationSnapshot;
+  readonly content?: { readonly records: readonly { readonly contentId: string; readonly value: Readonly<Record<string, unknown>> }[] };
+}
+
+export type OwnerExportAssemblySnapshot = OwnerExportConfigurationSnapshot | OwnerExportSelectedSnapshot;
+
 export interface BuiltOwnerExportPackage {
   readonly contentLength: number;
   readonly sha256: string;
-  readonly manifest: OwnerExportPackageManifestV1_2;
+  readonly manifest: OwnerExportPackageManifest;
   readonly content: AsyncIterable<Uint8Array>;
 }
 
@@ -202,6 +218,10 @@ function readPinnedSchema(path: string): Uint8Array {
   return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.1", path));
 }
 
+function readPinnedContentSchema(path: string): Uint8Array {
+  return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.2", path));
+}
+
 /**
  * Builds a configuration-only package. The 1.2 manifest minor uses immutable
  * v1.1 record/schema URIs and carries the source aggregate version and captured
@@ -283,6 +303,157 @@ export async function buildConfigurationOwnerExportPackage(input: {
     fixedBytesMember("schemas/portfolio-configuration.schema.json", recordSchema),
     fixedBytesMember(entry.path, recordBytes),
   ];
+  const archive = createStoredOwnerExportZip(zipEntries);
+  const integrity = await measureOwnerExportStream(archive.content);
+  if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
+}
+
+function sortedUnique(values: readonly string[]): string[] {
+  return [...new Set(values)].sort(compareCodePoints);
+}
+
+function collectMediaIds(value: unknown, output: Set<string>): void {
+  if (Array.isArray(value)) { for (const item of value) collectMediaIds(item, output); return; }
+  if (value === null || typeof value !== "object") return;
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (key === "mediaAssetId" && typeof nested === "string") output.add(nested);
+    else collectMediaIds(nested, output);
+  }
+}
+
+function expectedDependencies(
+  values: readonly { readonly scope: "portfolio-content" | "portfolio-configuration"; readonly value: Readonly<Record<string, unknown>> }[],
+  includedScopes: readonly string[],
+): OwnerExportPackageManifestV1_3["dependencies"] {
+  const included = new Set(includedScopes);
+  const idsByScope = new Map<string, Set<string>>();
+  for (const record of values) {
+    const ids = idsByScope.get(record.scope) ?? new Set<string>();
+    const walk = (value: unknown): void => {
+      if (typeof value === "string") ids.add(value);
+      else if (Array.isArray(value)) value.forEach(walk);
+      else if (value !== null && typeof value === "object") Object.values(value as Record<string, unknown>).forEach(walk);
+    };
+    walk(record.value);
+    idsByScope.set(record.scope, ids);
+  }
+  const rows = new Map<string, { sourceScope: "portfolio-content" | "portfolio-configuration"; sourceId: string; targetScope: OwnerExportDependencyDescriptor["targetScope"]; targetId: string }>();
+  const add = (sourceScope: "portfolio-content" | "portfolio-configuration", sourceId: string, targetScope: OwnerExportDependencyDescriptor["targetScope"], targetId: string) => {
+    rows.set([sourceScope, sourceId, targetScope, targetId].join("|"), { sourceScope, sourceId, targetScope, targetId });
+  };
+  for (const record of values) {
+    const value = record.value;
+    if (record.scope === "portfolio-content") {
+      if (Array.isArray(value["relatedProjectIds"])) for (const id of value["relatedProjectIds"]) if (typeof id === "string") add(record.scope, String(value["contentId"]), "portfolio-content", id);
+      if (Array.isArray(value["taxonomyValueIds"])) for (const id of value["taxonomyValueIds"]) if (typeof id === "string") add(record.scope, String(value["contentId"]), "taxonomy", id);
+      if (Array.isArray(value["mediaAssetIds"])) for (const id of value["mediaAssetIds"]) if (typeof id === "string") add(record.scope, String(value["contentId"]), "media-metadata", id);
+      const mediaIds = new Set<string>();
+      collectMediaIds(value["evidenceItems"], mediaIds);
+      collectMediaIds(value["revisions"], mediaIds);
+      for (const id of mediaIds) add(record.scope, String(value["contentId"]), "media-metadata", id);
+    } else {
+      const profile = value["profile"];
+      if (profile !== null && typeof profile === "object" && typeof (profile as Record<string, unknown>)["mediaAssetId"] === "string") {
+        const mediaId = (profile as Record<string, string>)["mediaAssetId"]!;
+        add(record.scope, mediaId, "media-metadata", mediaId);
+      }
+    }
+  }
+  const compare = (left: string, right: string) => compareCodePoints(left, right);
+  const scopeOrder = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "moderation-history", "analytics-reports", "portfolio-configuration"];
+  return [...rows.values()].sort((left, right) =>
+    scopeOrder.indexOf(left.sourceScope) - scopeOrder.indexOf(right.sourceScope) || compare(left.sourceId, right.sourceId) ||
+    scopeOrder.indexOf(left.targetScope) - scopeOrder.indexOf(right.targetScope) || compare(left.targetId, right.targetId))
+    .map((row) => {
+      const targetExists = idsByScope.get(row.targetScope)?.has(row.targetId) === true;
+      const selected = included.has(row.targetScope);
+      return targetExists && selected
+        ? { ...row, disposition: "included" as const }
+        : { ...row, disposition: "omitted" as const, reason: selected ? "not-retained" as const : "scope-not-selected" as const };
+    });
+}
+
+/** Builds the content package v1.3 without changing the meaning of any v1.1 record. */
+export async function buildSelectedOwnerExportPackage(input: {
+  readonly exportId: StableId<"OwnerExport">;
+  readonly snapshot: OwnerExportSelectedSnapshot;
+}): Promise<BuiltOwnerExportPackage> {
+  const { snapshot } = input;
+  if (snapshot.kind !== "owner-export-snapshot-v1" || !snapshot.includedScopes.includes("portfolio-content") || snapshot.content === undefined) {
+    throw new TypeError("OWNER_EXPORT_CONTENT_SNAPSHOT_INVALID");
+  }
+  const hasConfiguration = snapshot.includedScopes.includes("portfolio-configuration");
+  if (hasConfiguration !== (snapshot.configuration !== undefined)) throw new TypeError("OWNER_EXPORT_SCOPE_SNAPSHOT_INCOMPLETE");
+  const manifestSchema = readPinnedContentSchema("manifest.schema.json");
+  const contentSchema = readPinnedContentSchema("portfolio-content.schema.json");
+  const configurationSchema = hasConfiguration ? readPinnedSchema("portfolio-configuration.schema.json") : undefined;
+  const contentValues = snapshot.content.records.map((record) => record.value);
+  if (contentValues.some((value) => value["contentId"] === undefined)) throw new TypeError("OWNER_EXPORT_CONTENT_RECORD_INVALID");
+  const orderedContent = [...contentValues].sort((left, right) => compareCodePoints(String(left["contentId"]), String(right["contentId"])));
+  const contentBytes = orderedContent.length === 0 ? new Uint8Array() : utf8.encode(
+    `${orderedContent.map((value) => canonicalJson({ scope: "portfolio-content", value })).join("\n")}\n`,
+  );
+  let configurationBytes = new Uint8Array();
+  let configurationRecords: Readonly<Record<string, unknown>>[] = [];
+  if (snapshot.configuration?.settings !== undefined && snapshot.configuration.settings !== null) {
+    const settings = snapshot.configuration.settings;
+    configurationRecords = [{
+      profile: settings.profile,
+      contactChannels: { channels: settings.contactChannels },
+      projectCta: settings.globalCta,
+    }];
+    configurationBytes = utf8.encode(`${canonicalJson({ scope: "portfolio-configuration", value: configurationRecords[0] })}\n`);
+  }
+  const contentEntry: OwnerExportContentEntryDescriptor = {
+    path: "records/portfolio-content.ndjson", scope: "portfolio-content", mediaType: "application/x-ndjson",
+    recordSchema: "urn:shipwithali:owner-export-schema:portfolio-content:1.2",
+    schemaPath: "schemas/portfolio-content.schema.json", schemaVersion: "1.2", digest: sha256(contentBytes), recordCount: orderedContent.length,
+  };
+  const entries: (OwnerExportContentEntryDescriptor | OwnerExportEntryDescriptor)[] = [contentEntry];
+  if (hasConfiguration) {
+    const settings = snapshot.configuration?.settings;
+    entries.push({
+      path: "records/portfolio-configuration.ndjson", scope: "portfolio-configuration", mediaType: "application/x-ndjson",
+      recordSchema: RECORD_SCHEMA_URI.replace("manifest", "portfolio-configuration") as OwnerExportEntryDescriptor["recordSchema"],
+      schemaPath: "schemas/portfolio-configuration.schema.json", schemaVersion: "1.1", digest: sha256(configurationBytes),
+      recordCount: configurationRecords.length,
+    });
+    void settings;
+  }
+  const schemas: OwnerExportSchemaDescriptor[] = [
+    { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.2", schemaVersion: "1.2", digest: sha256(manifestSchema) },
+    { kind: "record", scope: "portfolio-content", path: "schemas/portfolio-content.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:portfolio-content:1.2", schemaVersion: "1.2", digest: sha256(contentSchema) },
+  ];
+  if (configurationSchema !== undefined) schemas.push({
+    kind: "record", scope: "portfolio-configuration", path: "schemas/portfolio-configuration.schema.json",
+    schemaUri: RECORD_SCHEMA_URI.replace("manifest", "portfolio-configuration"), schemaVersion: "1.1", digest: sha256(configurationSchema),
+  });
+  const recordsForDependencies = [
+    ...orderedContent.map((value) => ({ scope: "portfolio-content" as const, value })),
+    ...configurationRecords.map((value) => ({ scope: "portfolio-configuration" as const, value })),
+  ];
+  const dependencies = expectedDependencies(recordsForDependencies, snapshot.includedScopes);
+  const manifest = {
+    packageFormat: "shipwithali-owner-export" as const, schemaVersion: "1.3" as const, exportId: input.exportId,
+    snapshot: { snapshotId: snapshot.snapshotId, capturedAt: snapshot.capturedAt, consistency: "transactional" as const },
+    createdAt: snapshot.capturedAt, algorithm: "sha-256" as const, digest: "0".repeat(64),
+    requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"] as const,
+    includedScopes: [...snapshot.includedScopes], publicEventDataCoverage: { mode: "excluded" as const }, dependencies,
+    exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"] as const,
+    entries, schemas, assets: [],
+    extensions: { contentSnapshot: { discoveryOrder: "first-published-at-desc-content-id-desc", privateLifecyclesIncluded: true } },
+  } satisfies OwnerExportPackageManifestV1_3;
+  const digest = sha256(utf8.encode(canonicalJson(manifest, true)));
+  const completeManifest = { ...manifest, digest };
+  const manifestBytes = utf8.encode(`${JSON.stringify(completeManifest)}\n`);
+  const zipEntries: StoredOwnerExportZipEntry[] = [
+    fixedBytesMember("manifest.json", manifestBytes), fixedBytesMember("schemas/manifest.schema.json", manifestSchema),
+    fixedBytesMember("schemas/portfolio-content.schema.json", contentSchema),
+  ];
+  if (configurationSchema !== undefined) zipEntries.push(fixedBytesMember("schemas/portfolio-configuration.schema.json", configurationSchema));
+  zipEntries.push(fixedBytesMember(contentEntry.path, contentBytes));
+  if (hasConfiguration) zipEntries.push(fixedBytesMember("records/portfolio-configuration.ndjson", configurationBytes));
   const archive = createStoredOwnerExportZip(zipEntries);
   const integrity = await measureOwnerExportStream(archive.content);
   if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");

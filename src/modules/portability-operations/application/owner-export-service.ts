@@ -69,7 +69,7 @@ import type {
 } from "./owner-export-store.js";
 import type { OwnerExportObjectReadPort } from "./service.js";
 
-export const OWNER_EXPORT_SCHEMA_VERSION = "1.2";
+export const OWNER_EXPORT_SCHEMA_VERSION = "1.3";
 function artifactFilename(schemaVersion: string): string {
   return `shipwithali-owner-export-${schemaVersion}.zip`;
 }
@@ -202,9 +202,10 @@ export function createOwnerExportService(
     }
     const idempotencyKey = parseIdempotencyKey(command.idempotencyKey);
     if (!idempotencyKey.ok) return idempotencyKey;
+    const schemaVersion = scopes.value.includes("portfolio-content") ? "1.3" : "1.2";
     const requestHash = await hashCanonicalRequest({
       operation: "owner-export-request",
-      schemaVersion: OWNER_EXPORT_SCHEMA_VERSION,
+      schemaVersion,
       includedScopes: scopes.value,
     });
     const actorScope = await hashCanonicalRequest({
@@ -233,7 +234,7 @@ export function createOwnerExportService(
             portfolioId: command.portfolioId,
             ownerId: command.actor.ownerId,
             includedScopes: scopes.value,
-            schemaVersion: OWNER_EXPORT_SCHEMA_VERSION,
+            schemaVersion,
             requestedAt,
           }, context);
           await operations.jobs.enqueue(context, {
@@ -254,7 +255,7 @@ export function createOwnerExportService(
             exportId,
             outcome: "owner-export-requested",
             state: "requested",
-            schemaVersion: OWNER_EXPORT_SCHEMA_VERSION,
+            schemaVersion,
             requestedAt,
           };
         },
@@ -449,12 +450,12 @@ const TRANSITION_METADATA: Record<ExportStatus, readonly ("failureCode" | "integ
 
 export function isManifestShape(value: unknown): value is OwnerExportPackageManifest {
   if (!isRecord(value)) return false;
-  const entrySchemaVersion = value["schemaVersion"] === "1.0" ? "1.0" : "1.1";
+  const manifestVersion = value["schemaVersion"];
   const scopes = value["includedScopes"];
   const entries = value["entries"];
   const commonShape = (
     value["packageFormat"] === "shipwithali-owner-export" &&
-    ["1.0", "1.1", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
+    ["1.0", "1.1", "1.2", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
     typeof value["createdAt"] === "string" &&
     Number.isFinite(Date.parse(value["createdAt"] as string)) &&
     value["algorithm"] === "sha-256" &&
@@ -469,9 +470,9 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
       (OWNER_EXPORT_SCOPES as readonly string[]).includes(entry["scope"] as string) &&
       ["application/x-ndjson", "application/json"].includes(entry["mediaType"] as string) &&
       typeof entry["recordSchema"] === "string" &&
-      entry["recordSchema"] === `urn:shipwithali:owner-export-schema:${String(entry["scope"])}:${entrySchemaVersion}` &&
+      entry["recordSchema"] === `urn:shipwithali:owner-export-schema:${String(entry["scope"])}:${manifestVersion === "1.3" && entry["scope"] === "portfolio-content" ? "1.2" : manifestVersion === "1.0" ? "1.0" : "1.1"}` &&
       entry["schemaPath"] === `schemas/${String(entry["scope"])}.schema.json` &&
-      entry["schemaVersion"] === entrySchemaVersion &&
+      entry["schemaVersion"] === (manifestVersion === "1.3" && entry["scope"] === "portfolio-content" ? "1.2" : manifestVersion === "1.0" ? "1.0" : "1.1") &&
       typeof entry["digest"] === "string" && /^[a-f0-9]{64}$/.test(entry["digest"] as string) &&
       Number.isSafeInteger(entry["recordCount"]) && (entry["recordCount"] as number) >= 0)
   );
@@ -489,7 +490,7 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const snapshot = value["snapshot"];
   const stableId = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   return (
-    ["1.1", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
+    ["1.1", "1.2", OWNER_EXPORT_SCHEMA_VERSION].includes(value["schemaVersion"] as string) &&
     typeof value["exportId"] === "string" && stableId.test(value["exportId"]) &&
     isRecord(snapshot) && typeof snapshot["snapshotId"] === "string" && stableId.test(snapshot["snapshotId"]) &&
     typeof snapshot["capturedAt"] === "string" && Number.isFinite(Date.parse(snapshot["capturedAt"])) &&
