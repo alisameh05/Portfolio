@@ -877,7 +877,8 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
             where schemaname in ('content', 'taxonomy')
               and policyname = any($1::text[])
             order by schemaname, tablename, policyname`,
-          [...CONTENT_EXPORT_READ_POLICIES.map(([, policy]) => policy), ...(taxonomyExportSchema ? TAXONOMY_EXPORT_READ_POLICIES.map(([, policy]) => policy) : [])],
+          [[...CONTENT_EXPORT_READ_POLICIES.map(([, policy]) => policy),
+            ...(taxonomyExportSchema ? TAXONOMY_EXPORT_READ_POLICIES.map(([, policy]) => policy) : [])]],
         );
         const workerPolicies = policies.rows;
         const actualPolicies = workerPolicies.map((row) => [
