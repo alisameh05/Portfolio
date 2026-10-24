@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
+import { createOwnerExportMediaObjectReader } from "../../src/bootstrap/composition-root.js";
 import { createSupabaseMediaExportStorage } from "../../src/runtime/adapters/supabase-media-export-storage.js";
 
 const source = new TextEncoder().encode("accepted-private-media-bytes");
@@ -59,6 +60,24 @@ describe("Supabase private Media export storage", () => {
     expect(url.pathname).toBe(`/storage/v1/object/media-candidates/candidate/${input.portfolioId}/${input.mediaId}/${uploadIntentId}/${input.objectId}`);
     expect(init?.redirect).toBe("manual");
     expect(url.pathname).not.toContain("sign/");
+  });
+
+  it("composes the configured candidate bucket for original Media export reads", async () => {
+    const uploadIntentId = "018f0f3e-7b91-7cc2-a3b4-c5d6e7f80913";
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(source, {
+      status: 200, headers: { "content-length": String(source.byteLength) },
+    }));
+    const storage = createOwnerExportMediaObjectReader({
+      SUPABASE_URL: "https://storage.example.test",
+      SUPABASE_SERVICE_ROLE_KEY: "private-storage-key",
+      MEDIA_CANDIDATE_BUCKET: "portfolio-media-candidates",
+      MEDIA_PROCESSED_BUCKET: "portfolio-media-processed",
+    }, (options) => createSupabaseMediaExportStorage({ ...options, fetcher }));
+
+    expect(storage).toBeDefined();
+    expect(await collect(await storage!.readMediaExportObject({ ...input, source: "original", uploadIntentId, mediaType: "image/png" }))).toEqual(source);
+    const [url] = fetcher.mock.calls[0] as [URL, RequestInit];
+    expect(url.pathname).toBe(`/storage/v1/object/portfolio-media-candidates/candidate/${input.portfolioId}/${input.mediaId}/${uploadIntentId}/${input.objectId}`);
   });
 
   it("cancels the private Storage response when a consumer stops before verification", async () => {

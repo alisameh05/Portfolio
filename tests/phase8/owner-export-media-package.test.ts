@@ -187,7 +187,7 @@ describe("Issue #243 Media-only portable packages", () => {
           const body = input.source === "original" ? originalBytes : bytes;
           const count = (readCounts.get(input.objectId) ?? 0) + 1;
           readCounts.set(input.objectId, count);
-          const replacement = body.slice(); replacement[0] ^= 1;
+          const replacement = body.slice(); replacement[0] = (replacement[0] ?? 0) ^ 1;
           const response = count === 1 ? body : replacement;
           return { async *[Symbol.asyncIterator]() { yield response; } };
         },

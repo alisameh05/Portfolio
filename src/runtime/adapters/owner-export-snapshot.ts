@@ -8,6 +8,15 @@ import type { OwnerExportAssemblySnapshot } from "../../modules/portability-oper
 import type { TaxonomyOwnerExportSnapshotReader } from "../../modules/taxonomy-discovery/application/taxonomy-export.js";
 import type { OwnerMediaExportSnapshotReaderPort } from "../../modules/media/application/owner-contracts.js";
 
+type OwnerExportMediaType = NonNullable<OwnerExportSelectedSnapshot["media"]>["assets"][number]["mediaType"];
+const OWNER_EXPORT_MEDIA_TYPES: readonly OwnerExportMediaType[] = [
+  "application/pdf", "image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm",
+];
+
+function isOwnerExportMediaType(value: string): value is OwnerExportMediaType {
+  return OWNER_EXPORT_MEDIA_TYPES.includes(value as OwnerExportMediaType);
+}
+
 export interface OwnerExportCapabilityFactsReader {
   read(scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> }): Promise<{
     readonly currentCvAvailable: boolean; readonly externalLinksAvailable: boolean;
@@ -109,7 +118,7 @@ function portableContentRecord(source: ContentOwnerExportRecord): Readonly<Recor
 /** Captures all selected source-owned facts in one repeatable-read transaction. */
 export function createOwnerExportSnapshotReader(input: {
   readonly configuration: Pick<PortfolioSettingsRepository, "getSettingsSnapshot">;
-  readonly content: Pick<ContentAuthoringRepository, "readOwnerExportSnapshot">;
+  readonly content: Pick<ContentAuthoringRepository, "readOwnerExportSnapshot" | "readOwnerExportMediaLocales">;
   readonly taxonomy?: TaxonomyOwnerExportSnapshotReader;
   readonly media?: OwnerMediaExportSnapshotReaderPort;
   readonly transactions: TransactionRunner;
@@ -219,17 +228,20 @@ export function createOwnerExportSnapshotReader(input: {
           })) } }),
           ...(captured.media === undefined ? {} : { media: {
             records: mediaRecords!.map((record) => ({ mediaId: record.mediaId, value: record.value })),
-            assets: captured.media.assets.map((asset) => ({
-              path: `assets/media-metadata/sha256/${asset.sha256}`,
-              mediaId: asset.mediaId,
-              variantName: asset.variantName,
-              mediaType: asset.mediaType,
-              byteLength: asset.byteLength,
-              digest: asset.sha256,
-              objectId: asset.objectId,
-              source: asset.source,
-              ...(asset.uploadIntentId === undefined ? {} : { uploadIntentId: asset.uploadIntentId }),
-            })),
+            assets: captured.media.assets.map((asset) => {
+              if (!isOwnerExportMediaType(asset.mediaType)) throw new Error("OWNER_EXPORT_MEDIA_TYPE_UNSUPPORTED");
+              return {
+                path: `assets/media-metadata/sha256/${asset.sha256}`,
+                mediaId: asset.mediaId,
+                variantName: asset.variantName,
+                mediaType: asset.mediaType,
+                byteLength: asset.byteLength,
+                digest: asset.sha256,
+                objectId: asset.objectId,
+                source: asset.source,
+                ...(asset.uploadIntentId === undefined ? {} : { uploadIntentId: asset.uploadIntentId }),
+              };
+            }),
           } }),
         });
       } catch {

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "ticket": 243,
-  "runId": "b5ab8d30-a1f8-49ee-9b86-f019b6b39161",
-  "startedAt": "2026-10-24T17:42:35.591Z",
-  "completedAt": "2026-10-24T17:43:20.912Z",
-  "sourceRevision": "4be55b930b3793eb890c942d03766c5be08c9a4a",
-  "sourceTreeSha256": "2994b50f4a53076e5e03703365f2bb21c0b947ac826c6c690d58a1e8568a04d6",
+  "runId": "22c8c522-0d2a-46c3-a6d1-01095b6edb4c",
+  "startedAt": "2026-10-24T17:55:18.246Z",
+  "completedAt": "2026-10-24T17:56:14.644Z",
+  "sourceRevision": "823765c5904cbae1d7f52bc7a3ad8c132a98421e",
+  "sourceTreeSha256": "9330eb0ea38317eac969877c3fdeeb3dddcde335626537a7190131f7eb1b6cd6",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -239,7 +239,7 @@
   },
   "required": {
     "success": true,
-    "passed": 50,
+    "passed": 51,
     "failed": 0,
     "skipped": 0,
     "todo": 0,
@@ -439,6 +439,10 @@
     },
     {
       "title": "streams the exact upload-intent-scoped original from the private candidate bucket",
+      "status": "passed"
+    },
+    {
+      "title": "composes the configured candidate bucket for original Media export reads",
       "status": "passed"
     },
     {

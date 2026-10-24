@@ -196,6 +196,27 @@ function parseDatabaseUrl(raw: string | undefined): string {
   return raw;
 }
 
+/** Worker Media exports use the configured private buckets, matching upload and processing adapters. */
+export function createOwnerExportMediaObjectReader<T>(
+  env: RuntimeConfigEnv,
+  createStorage: (options: {
+    readonly storageUrl: string;
+    readonly serviceRoleKey: string;
+    readonly candidateBucket?: string;
+    readonly processedBucket?: string;
+  }) => T,
+): T | undefined {
+  const storageUrl = env["SUPABASE_URL"];
+  const serviceRoleKey = env["SUPABASE_SERVICE_ROLE_KEY"];
+  if (!storageUrl || !serviceRoleKey) return undefined;
+  return createStorage({
+    storageUrl,
+    serviceRoleKey,
+    ...(env["MEDIA_CANDIDATE_BUCKET"] === undefined ? {} : { candidateBucket: env["MEDIA_CANDIDATE_BUCKET"] }),
+    ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+  });
+}
+
 /** Production database-enabled composition for application and worker processes. */
 export async function initializeDatabaseRuntime(
   env: RuntimeConfigEnv,
@@ -280,12 +301,7 @@ export async function initializeDatabaseRuntime(
             import("../modules/media/adapters/postgres-owner-export-snapshot.js"),
             import("../runtime/adapters/supabase-media-export-storage.js"),
           ]);
-          const mediaObjects = env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]
-            ? createSupabaseMediaExportStorage({
-              storageUrl: env["SUPABASE_URL"], serviceRoleKey: env["SUPABASE_SERVICE_ROLE_KEY"],
-              ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
-            })
-            : undefined;
+          const mediaObjects = createOwnerExportMediaObjectReader(env, createSupabaseMediaExportStorage);
           ownerExportAssembly = createOwnerExportAssemblyService({
             operations,
             exports: ownerExportStore,

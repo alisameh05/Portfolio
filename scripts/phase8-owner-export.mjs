@@ -81,7 +81,7 @@ try {
   const acceptanceFiles = ["tests/phase8/owner-export-requests.test.ts", "tests/phase8/owner-export-adapter.test.ts",
     "tests/phase8/owner-export-postgres.test.ts", "tests/phase8/owner-export-assembly.test.ts", "tests/phase8/owner-export-content.test.ts", "tests/phase8/owner-export-content-postgres.test.ts",
     "tests/phase8/owner-export-media-package.test.ts", "tests/runtime/supabase-media-export-storage.test.ts"];
-    const expectedTests = 65;
+    const expectedTests = 66;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
