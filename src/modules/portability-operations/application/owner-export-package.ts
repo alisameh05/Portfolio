@@ -13,7 +13,11 @@ import type {
   OwnerExportPackageManifest,
   OwnerExportSchemaDescriptor,
   OwnerExportPackageManifestV1_4,
+  OwnerExportPackageManifestV1_5,
+  OwnerExportAssetDescriptor,
+  OwnerExportMediaEntryDescriptor,
 } from "./service.js";
+import { isSafeOwnerExportMediaMetadataV1_2 } from "./service.js";
 import { MAX_OWNER_EXPORT_ARTIFACT_BYTES } from "./service.js";
 
 const utf8 = new TextEncoder();
@@ -39,10 +43,35 @@ export interface OwnerExportSelectedSnapshot {
   readonly kind: "owner-export-snapshot-v1";
   readonly snapshotId: StableId<"OwnerExportArtifact">;
   readonly capturedAt: string;
-  readonly includedScopes: readonly ("portfolio-content" | "taxonomy" | "portfolio-configuration")[];
+  readonly includedScopes: readonly ("portfolio-content" | "taxonomy" | "media-metadata" | "portfolio-configuration")[];
   readonly configuration?: OwnerExportConfigurationSnapshot;
   readonly content?: { readonly records: readonly { readonly contentId: string; readonly value: Readonly<Record<string, unknown>> }[] };
   readonly taxonomy?: { readonly records: readonly { readonly taxonomyId: string; readonly value: Readonly<Record<string, unknown>> }[] };
+  readonly media?: OwnerExportMediaSnapshot;
+}
+
+export interface OwnerExportMediaAssetSnapshot {
+  readonly path: string;
+  readonly mediaId: string;
+  readonly variantName: string;
+  readonly mediaType: OwnerExportAssetDescriptor["mediaType"];
+  readonly byteLength: number;
+  readonly digest: string;
+  /** Opaque Media-owned object identity, retained only in the private assembly checkpoint. */
+  readonly objectId: string;
+  /** Private source kind used to locate the bytes; it is never included in portable records. */
+  readonly source: "original" | "variant";
+  /** Present only for candidate originals, whose Storage path is upload-intent scoped. */
+  readonly uploadIntentId?: string;
+}
+
+export interface OwnerExportMediaSnapshot {
+  readonly records: readonly { readonly mediaId: string; readonly value: Readonly<Record<string, unknown>> }[];
+  readonly assets: readonly OwnerExportMediaAssetSnapshot[];
+}
+
+export interface OwnerExportMediaObjectReaderPort {
+  readMediaExportObject(input: { readonly portfolioId: StableId<"Portfolio">; readonly mediaId: string; readonly objectId: string; readonly source: "original" | "variant"; readonly uploadIntentId?: string; readonly mediaType: OwnerExportAssetDescriptor["mediaType"]; readonly expectedLength: number; readonly expectedSha256: string }): Promise<AsyncIterable<Uint8Array>>;
 }
 
 export type OwnerExportAssemblySnapshot = OwnerExportConfigurationSnapshot | OwnerExportSelectedSnapshot;
@@ -143,6 +172,7 @@ export interface StoredOwnerExportZipEntry {
   readonly name: string;
   readonly contentLength: number;
   readonly crc32: number;
+  readonly sha256?: string;
   readonly content: () => AsyncIterable<Uint8Array>;
 }
 
@@ -191,13 +221,18 @@ export function createStoredOwnerExportZip(entries: readonly StoredOwnerExportZi
         yield local;
         let memberLength = 0;
         let memberCrc = 0xffffffff;
+        const memberDigest = entry.sha256 === undefined ? undefined : createHash("sha256");
         for await (const chunk of entry.content()) {
           memberLength += chunk.byteLength;
           if (memberLength > entry.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_MEMBER_LENGTH_MISMATCH");
           memberCrc = updateCrc32(memberCrc, chunk);
+          memberDigest?.update(chunk);
           yield chunk;
         }
         if (memberLength !== entry.contentLength || ((memberCrc ^ 0xffffffff) >>> 0) !== (entry.crc32 >>> 0)) {
+          throw new RangeError("OWNER_EXPORT_ZIP_MEMBER_INTEGRITY_MISMATCH");
+        }
+        if (entry.sha256 !== undefined && memberDigest!.digest("hex") !== entry.sha256) {
           throw new RangeError("OWNER_EXPORT_ZIP_MEMBER_INTEGRITY_MISMATCH");
         }
       }
@@ -223,6 +258,10 @@ function readPinnedSchema(path: string): Uint8Array {
 
 function readPinnedContentSchema(path: string): Uint8Array {
   return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.2", path));
+}
+
+function readPinnedMediaSchema(path: string): Uint8Array {
+  return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.4", path));
 }
 
 function readPinnedTaxonomySchema(path: string): Uint8Array {
@@ -403,6 +442,137 @@ function expectedDependencies(
         ? { ...row, disposition: "included" as const }
         : { ...row, disposition: "omitted" as const, reason: selected ? "not-retained" as const : "scope-not-selected" as const };
     });
+}
+
+const MAX_PORTABLE_MEDIA_OBJECT_BYTES = 50 * 1024 * 1024;
+// manifest/schema 1.4 and the independent validator cap archives at 512 members;
+// a Media archive uses four fixed members, leaving at most 508 unique byte objects.
+const MAX_MEDIA_EXPORT_ASSETS = 508;
+
+function buildMediaRecordBytes(records: readonly { readonly mediaId: string; readonly value: Readonly<Record<string, unknown>> }[]): Uint8Array {
+  return records.length === 0 ? new Uint8Array() : utf8.encode(
+    `${records.map((record) => canonicalJson({ scope: "media-metadata", value: record.value })).join("\n")}\n`,
+  );
+}
+
+/** Builds the Media-only v1.5 slice, re-reading each immutable object after measuring it. */
+export async function buildMediaOwnerExportPackage(input: {
+  readonly exportId: StableId<"OwnerExport">;
+  readonly portfolioId: StableId<"Portfolio">;
+  readonly snapshot: OwnerExportSelectedSnapshot;
+  readonly objects: OwnerExportMediaObjectReaderPort;
+}): Promise<BuiltOwnerExportPackage> {
+  const { snapshot } = input;
+  if (snapshot.kind !== "owner-export-snapshot-v1" || snapshot.includedScopes.length !== 1 ||
+      snapshot.includedScopes[0] !== "media-metadata" || snapshot.media === undefined) {
+    throw new TypeError("OWNER_EXPORT_MEDIA_SNAPSHOT_INVALID");
+  }
+  const orderedRecords = [...snapshot.media.records].sort((left, right) => compareCodePoints(left.mediaId, right.mediaId));
+  if (orderedRecords.some((record, index) => !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(record.mediaId) ||
+      record.value["mediaId"] !== record.mediaId || !isSafeOwnerExportMediaMetadataV1_2(record.value) ||
+      index > 0 && orderedRecords[index - 1]!.mediaId === record.mediaId)) {
+    throw new TypeError("OWNER_EXPORT_MEDIA_RECORD_INVALID");
+  }
+  const recordIds = new Set(orderedRecords.map((record) => record.mediaId));
+  const objectsByPath = new Map<string, typeof snapshot.media.assets[number]>();
+  for (const asset of snapshot.media.assets) {
+    if (!recordIds.has(asset.mediaId) || asset.path !== `assets/media-metadata/sha256/${asset.digest}` ||
+        !/^[a-f0-9]{64}$/.test(asset.digest) || !Number.isSafeInteger(asset.byteLength) || asset.byteLength < 1 ||
+        asset.byteLength > MAX_PORTABLE_MEDIA_OBJECT_BYTES || !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(asset.objectId) ||
+        asset.source !== "original" && asset.source !== "variant" ||
+        asset.source === "original" && !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(asset.uploadIntentId ?? "") ||
+        asset.source === "variant" && asset.uploadIntentId !== undefined) {
+      throw new TypeError("OWNER_EXPORT_MEDIA_ASSET_INVALID");
+    }
+    const existing = objectsByPath.get(asset.path);
+    if (existing !== undefined && (existing.digest !== asset.digest || existing.byteLength !== asset.byteLength || existing.mediaType !== asset.mediaType)) {
+      throw new TypeError("OWNER_EXPORT_MEDIA_ASSET_CONFLICT");
+    }
+    if (existing === undefined || compareCodePoints(asset.mediaId, existing.mediaId) < 0 ||
+        asset.mediaId === existing.mediaId && compareCodePoints(asset.variantName, existing.variantName) < 0) {
+      objectsByPath.set(asset.path, asset);
+    }
+  }
+  const assets = [...objectsByPath.values()].sort((left, right) => compareCodePoints(left.path, right.path));
+  if (assets.length > MAX_MEDIA_EXPORT_ASSETS) throw new RangeError("OWNER_EXPORT_MEDIA_ENTRY_COUNT_LIMIT");
+  const referencedPaths = new Set<string>();
+  for (const record of orderedRecords) {
+    const portableAssets = record.value["portableAssets"];
+    if (!Array.isArray(portableAssets) || portableAssets.some((item) => item === null || typeof item !== "object" ||
+        typeof (item as Record<string, unknown>)["portableReference"] !== "string")) {
+      throw new TypeError("OWNER_EXPORT_MEDIA_REFERENCE_INVALID");
+    }
+    for (const item of portableAssets as readonly Record<string, unknown>[]) {
+      const reference = item["portableReference"];
+      const asset = typeof reference === "string" ? objectsByPath.get(reference) : undefined;
+      if (asset === undefined || item["digest"] !== asset.digest || item["byteLength"] !== asset.byteLength || item["mediaType"] !== asset.mediaType) {
+        throw new TypeError("OWNER_EXPORT_MEDIA_REFERENCE_INVALID");
+      }
+      referencedPaths.add(reference as string);
+    }
+  }
+  if (referencedPaths.size !== objectsByPath.size) throw new TypeError("OWNER_EXPORT_MEDIA_REFERENCE_INVALID");
+
+  const mediaSchema = readPinnedMediaSchema("media-metadata.schema.json");
+  const manifestSchema = readPinnedMediaSchema("manifest.schema.json");
+  const mediaBytes = buildMediaRecordBytes(orderedRecords);
+  const entry: OwnerExportMediaEntryDescriptor = {
+    path: "records/media-metadata.ndjson", scope: "media-metadata", mediaType: "application/x-ndjson",
+    recordSchema: "urn:shipwithali:owner-export-schema:media-metadata:1.2", schemaPath: "schemas/media-metadata.schema.json",
+    schemaVersion: "1.2", digest: sha256(mediaBytes), recordCount: orderedRecords.length,
+  };
+  const descriptors: OwnerExportAssetDescriptor[] = assets.map((asset) => ({
+    path: asset.path, scope: "media-metadata", assetId: asset.mediaId,
+    mediaType: asset.mediaType, byteLength: asset.byteLength, digest: asset.digest,
+  }));
+  const schemaDescriptors: OwnerExportSchemaDescriptor[] = [
+    { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.4", schemaVersion: "1.4", digest: sha256(manifestSchema) },
+    { kind: "record", scope: "media-metadata", path: "schemas/media-metadata.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:media-metadata:1.2", schemaVersion: "1.2", digest: sha256(mediaSchema) },
+  ];
+  const manifest = {
+    packageFormat: "shipwithali-owner-export" as const, schemaVersion: "1.5" as const, exportId: input.exportId,
+    snapshot: { snapshotId: snapshot.snapshotId, capturedAt: snapshot.capturedAt, consistency: "transactional" as const },
+    createdAt: snapshot.capturedAt, algorithm: "sha-256" as const, digest: "0".repeat(64),
+    requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"] as const,
+    includedScopes: ["media-metadata"] as const, publicEventDataCoverage: { mode: "excluded" as const },
+    dependencies: [],
+    exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"] as const,
+    entries: [entry], schemas: schemaDescriptors, assets: descriptors,
+    extensions: { mediaSnapshot: { acceptanceHistory: "retained-with-explicit-truncation", byteReferences: "sha256-content-addressed", publicationEligibility: "descriptive-only" } },
+  } satisfies OwnerExportPackageManifestV1_5;
+  const digest = sha256(utf8.encode(canonicalJson(manifest, true)));
+  const completeManifest = { ...manifest, digest };
+  const manifestBytes = utf8.encode(`${JSON.stringify(completeManifest)}\n`);
+  const zipEntries: StoredOwnerExportZipEntry[] = [
+    fixedBytesMember("manifest.json", manifestBytes), fixedBytesMember("schemas/manifest.schema.json", manifestSchema),
+    fixedBytesMember("schemas/media-metadata.schema.json", mediaSchema), fixedBytesMember(entry.path, mediaBytes),
+  ];
+  for (const asset of assets) {
+    const firstRead = await input.objects.readMediaExportObject({
+      portfolioId: input.portfolioId, mediaId: asset.mediaId, objectId: asset.objectId,
+      source: asset.source, ...(asset.uploadIntentId === undefined ? {} : { uploadIntentId: asset.uploadIntentId }),
+      mediaType: asset.mediaType, expectedLength: asset.byteLength, expectedSha256: asset.digest,
+    });
+    const measured = await measureOwnerExportStream(firstRead);
+    if (measured.contentLength !== asset.byteLength || measured.sha256 !== asset.digest) {
+      throw new TypeError("OWNER_EXPORT_MEDIA_OBJECT_INTEGRITY_MISMATCH");
+    }
+    zipEntries.push({
+      name: asset.path, contentLength: measured.contentLength, crc32: measured.crc32, sha256: asset.digest,
+      content: async function* () {
+        const source = await input.objects.readMediaExportObject({
+          portfolioId: input.portfolioId, mediaId: asset.mediaId, objectId: asset.objectId,
+          source: asset.source, ...(asset.uploadIntentId === undefined ? {} : { uploadIntentId: asset.uploadIntentId }),
+          mediaType: asset.mediaType, expectedLength: asset.byteLength, expectedSha256: asset.digest,
+        });
+        yield* source;
+      },
+    });
+  }
+  const archive = createStoredOwnerExportZip(zipEntries);
+  const integrity = await measureOwnerExportStream(archive.content);
+  if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
 }
 
 async function buildTaxonomyOwnerExportPackage(input: {

@@ -7,8 +7,8 @@
  * acceptance lives in `owner-export-postgres.test.ts`.
  *
  * Criteria covered here:
- * - AC01: every nonempty unique subset of the seven declared scopes is
- *   accepted, and any permutation of one selection carries the identical
+ * - AC01: every nonempty non-Media subset and the standalone Media scope is
+ *   accepted, and any permutation of a supported selection carries the identical
  *   canonical meaning — identical canonical array and identical canonical
  *   request hash inside the reservation.
  * - AC02: malformed, unknown, duplicated, and empty selections, malformed
@@ -186,10 +186,15 @@ function* subsets(values: readonly string[]): Generator<readonly string[]> {
   }
 }
 
+function ownerExportSelections(): readonly (readonly string[])[] {
+  const nonMedia = OWNER_EXPORT_SCOPES.filter((scope) => scope !== "media-metadata");
+  return [...subsets(nonMedia), ["media-metadata"]];
+}
+
 describe("AC01: canonical Owner export scope selection and hashing", () => {
-  it("accepts every nonempty subset in canonical declared order", () => {
+  it("accepts every nonempty non-Media subset and standalone Media in canonical order", () => {
     let counted = 0;
-    for (const subset of subsets(OWNER_EXPORT_SCOPES)) {
+    for (const subset of ownerExportSelections()) {
       const canonical = canonicalizeOwnerExportScopes(subset);
       expect(canonical.ok, subset.join(",")).toBe(true);
       if (!canonical.ok) return;
@@ -197,11 +202,11 @@ describe("AC01: canonical Owner export scope selection and hashing", () => {
         .toEqual(OWNER_EXPORT_SCOPES.filter((scope) => subset.includes(scope)));
       counted += 1;
     }
-    expect(counted).toBe(127);
+    expect(counted).toBe(64);
   });
 
   it("normalizes every permutation of one selection to identical canonical meaning", () => {
-    for (const subset of subsets(OWNER_EXPORT_SCOPES)) {
+    for (const subset of ownerExportSelections()) {
       const canonical = canonicalizeOwnerExportScopes(subset);
       expect(canonical.ok).toBe(true);
       for (const permutation of permutations(subset)) {
@@ -216,9 +221,9 @@ describe("AC01: canonical Owner export scope selection and hashing", () => {
   it("hashes the canonical order, so permutations reuse the same reservation meaning", async () => {
     const { service, fakeOperations } = makeService();
     let subsetIndex = 0;
-    for (const subset of subsets(OWNER_EXPORT_SCOPES)) {
+    for (const subset of ownerExportSelections()) {
       subsetIndex += 1;
-      const schemaVersion = subset.includes("taxonomy") ? "1.4" : subset.includes("portfolio-content") ? "1.3" : "1.2";
+      const schemaVersion = subset.includes("media-metadata") ? "1.5" : subset.includes("taxonomy") ? "1.4" : subset.includes("portfolio-content") ? "1.3" : "1.2";
       const expectedHash = await hashCanonicalRequest({
         operation: "owner-export-request",
         schemaVersion,
@@ -236,7 +241,7 @@ describe("AC01: canonical Owner export scope selection and hashing", () => {
     const original = await service.requestOwnerExport(requestCommand(["taxonomy", "portfolio-content"] as ExportScope[], "phase8-permutation-key"));
     const replayed = await service.requestOwnerExport(requestCommand(["portfolio-content", "taxonomy"] as ExportScope[], "phase8-permutation-key"));
     expect(replayed).toEqual(original);
-    expect(fakeOperations.executed).toHaveLength(128);
+    expect(fakeOperations.executed).toHaveLength(65);
   });
 
   it("rejects the empty selection without durable effects", async () => {
@@ -257,6 +262,7 @@ describe("AC02: input validation precedes every durable effect", () => {
     ["duplicate scope", { includedScopes: ["taxonomy", "taxonomy"] as unknown }],
     ["unknown scope", { includedScopes: ["taxonomy", "portfolio-settings"] as unknown }],
     ["invalid member type", { includedScopes: ["taxonomy", 7] as unknown }],
+    ["mixed Media selection", { includedScopes: ["media-metadata", "portfolio-content"] as unknown }],
     ["malformed portfolio identity", { portfolioId: "not-a-uuid" }],
     ["malformed owner identity", { ownerId: "also-not-a-uuid" }],
     ["empty idempotency key", { idempotencyKey: "" }],
@@ -318,7 +324,7 @@ describe("AC03 (service slice): one receipt, one export, one assembly job", () =
       portfolioId: PORTFOLIO_ID,
       ownerId: OWNER_ID,
       includedScopes: SCOPES,
-      schemaVersion: OWNER_EXPORT_SCHEMA_VERSION,
+      schemaVersion: "1.4",
     });
     expect(fakeOperations.enqueued).toHaveLength(1);
     const job = fakeOperations.enqueued[0];

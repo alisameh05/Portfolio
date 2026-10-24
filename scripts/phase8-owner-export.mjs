@@ -11,7 +11,7 @@ const root = process.cwd();
 const runId = randomUUID();
 const startedAt = new Date().toISOString();
 const initialSource = workingTreeSourceSha256();
-const scope = "All repository migrations on disposable native PostgreSQL; restricted application and worker roles; existing configuration-only request-to-ready recovery scenarios; Content-owned full-history snapshot capture for Draft, Published, Hidden, and Archived Projects, Achievements, and Testimonials; independent English and Arabic revision/review/publication histories and exact current pointers; durable route identities, reservations, redirects, and discovery tie ordering; repeatable-read source capture; content-only and combined-scope package contents with omitted dependency declarations; independent offline schema/hash/count/domain validation; owner and purpose fenced worker reads with no Content writes; unsupported scopes failing safely; private/no-store download headers; role/RLS matrix enforcement.";
+const scope = "Issue #241 Owner export PostgreSQL/Content acceptance plus Issue #243 standalone Media acceptance history, accepted original and variant byte integrity, and purpose-bound Worker RLS; restricted application and worker roles; disposable native PostgreSQL; independent offline package validation; PR CI exercises the production export adapter against real private Storage.";
 const discoveredBin = process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" :
   spawnSync("pg_config", ["--bindir"], { encoding: "utf8", timeout: 5_000 }).stdout?.trim();
 const bin = process.env.PHASE8_OWNER_EXPORT_POSTGRES_BIN ?? discoveredBin ?? "";
@@ -34,18 +34,20 @@ const data = join(temp, "data");
 const reportPath = resolve("artifacts/phase8-owner-exports-vitest.json");
 const roleReportPath = resolve("artifacts/phase8-owner-exports-rls-vitest.json");
 const evidencePath = resolve("evidence/phase8-owner-exports-241.json");
+const mediaEvidencePath = resolve("evidence/phase8-owner-export-media-243.json");
 mkdirSync(temp, { recursive: true });
 mkdirSync("artifacts", { recursive: true });
 rmSync(reportPath, { force: true });
 rmSync(roleReportPath, { force: true });
 rmSync(evidencePath, { force: true });
+rmSync(mediaEvidencePath, { force: true });
 const port = await new Promise((resolvePort, reject) => {
   const server = createServer(); server.once("error", reject);
   server.listen(0, "127.0.0.1", () => { const value = server.address().port; server.close(() => resolvePort(value)); });
 });
 const adminUrl = `postgres://postgres@127.0.0.1:${port}/postgres`;
 const admin = new Client({ connectionString: adminUrl });
-let started = false, connected = false, cleanup = false, stage = "runtime", result;
+let started = false, connected = false, cleanup = false, stage = "runtime", result, criterionTests, assertionByTitle;
 try {
   run(process.execPath, ["scripts/validation-environment.mjs"]);
   const postgresVersion = run(exe("postgres"), ["--version"]).trim();
@@ -77,8 +79,9 @@ try {
   if (testedSource !== initialSource) throw new Error("PHASE8_OWNER_EXPORT_SOURCE_CHANGED_BEFORE_ACCEPTANCE");
   stage = "acceptance";
   const acceptanceFiles = ["tests/phase8/owner-export-requests.test.ts", "tests/phase8/owner-export-adapter.test.ts",
-    "tests/phase8/owner-export-postgres.test.ts", "tests/phase8/owner-export-assembly.test.ts", "tests/phase8/owner-export-content.test.ts", "tests/phase8/owner-export-content-postgres.test.ts"];
-  const expectedTests = 52;
+    "tests/phase8/owner-export-postgres.test.ts", "tests/phase8/owner-export-assembly.test.ts", "tests/phase8/owner-export-content.test.ts", "tests/phase8/owner-export-content-postgres.test.ts",
+    "tests/phase8/owner-export-media-package.test.ts", "tests/runtime/supabase-media-export-storage.test.ts"];
+    const expectedTests = 67;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -98,6 +101,31 @@ try {
     throw new Error("PHASE8_OWNER_EXPORT_RLS_ACCEPTANCE_INCOMPLETE");
   }
   if (workingTreeSourceSha256() !== testedSource) throw new Error("PHASE8_OWNER_EXPORT_SOURCE_CHANGED_DURING_ACCEPTANCE");
+    const mediaSourceFiles = ["tests/phase8/owner-export-postgres.test.ts", "tests/phase8/owner-export-content-postgres.test.ts",
+      "tests/phase8/owner-export-requests.test.ts",
+    "tests/phase8/owner-export-media-package.test.ts", "tests/runtime/supabase-media-export-storage.test.ts"];
+  const mediaSuites = tests.testResults.filter(suite => mediaSourceFiles.some(file => suite.name.replace(/\\/g, "/").endsWith(file)));
+  const mediaAssertions = mediaSuites.flatMap(suite => suite.assertionResults ?? []);
+  if (mediaAssertions.length === 0 || mediaAssertions.some(assertion => assertion.status !== "passed")) {
+    throw new Error("PHASE8_OWNER_EXPORT_MEDIA_ASSERTIONS_INVALID");
+  }
+    criterionTests = [
+      { criterion: "AC01", tests: ["#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", "AC01–AC08 captures all retained facts, races consistently, and validates independent content-only and combined packages"] },
+      { criterion: "AC02", tests: ["#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL", "packages accepted bytes, deduplicates shared digests, and passes the independent validator", "streams the exact upload-intent-scoped original from the private candidate bucket"] },
+      { criterion: "AC03", tests: ["#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL", "accepts every nonempty non-Media subset and standalone Media in canonical order", "packages accepted bytes, deduplicates shared digests, and passes the independent validator"] },
+      { criterion: "AC04", tests: ["#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", "records rejected bytes as excluded without reading or declaring any object"] },
+      { criterion: "AC05", tests: ["#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL", "fails closed for missing required accepted bytes", "fails closed for same-length replacement required accepted bytes", "rejects missing, redirected, changed, and wrong-length objects", "AC03/04/05: retries capture, lost upload, and verification faults without publishing partial readiness"] },
+      { criterion: "AC06", tests: ["#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", "AC01–AC08 captures all retained facts, races consistently, and validates independent content-only and combined packages"] },
+      { criterion: "AC07", tests: ["rejects an accepted object above the 50 MiB per-object bound before opening Storage", "rejects packages whose unique assets exceed the validator's 512-member limit", "AC03/04/05: retries capture, lost upload, and verification faults without publishing partial readiness", "streams the exact upload-intent-scoped original from the private candidate bucket"] },
+      { criterion: "AC08", tests: ["#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields", "packages accepted bytes, deduplicates shared digests, and passes the independent validator"] },
+    ];
+    const allAssertions = tests.testResults.flatMap(suite => suite.assertionResults ?? []);
+    assertionByTitle = new Map(allAssertions.map(assertion => [assertion.title, assertion.status]));
+    for (const criterion of criterionTests) {
+      if (criterion.tests.some(title => assertionByTitle.get(title) !== "passed")) {
+        throw new Error(`PHASE8_OWNER_EXPORT_MEDIA_CRITERION_EVIDENCE_MISSING:${criterion.criterion}`);
+      }
+    }
   result = {
     ticket: 241, runId, startedAt, sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(), sourceTreeSha256: testedSource, postgresVersion,
     migrations: migrations.map(name => ({ name, sha256: createHash("sha256").update(readFileSync(join("supabase/migrations", name))).digest("hex") })),
@@ -107,6 +135,11 @@ try {
     roleMatrix: { success: roleMatrix.success, passed: roleMatrix.numPassedTests,
       failed: roleMatrix.numFailedTests, skipped: roleMatrix.numPendingTests, todo: roleMatrix.numTodoTests },
     assertions: assertions.map(assertion => ({ title: assertion.title, status: assertion.status })),
+    mediaAcceptance: {
+      suites: mediaSuites.map(suite => suite.name.replace(root, "").replace(/\\/g, "/").replace(/^\//, "")),
+      passed: mediaAssertions.length,
+      assertions: mediaAssertions.map(assertion => ({ title: assertion.title, status: assertion.status })),
+    },
     databaseRoles: ["owner_export_application_runtime", "shipwithali_application", "owner_export_worker_runtime",
       "shipwithali_worker", "anon", "authenticated"],
     criteria: ["AC01", "AC02", "AC03", "AC04", "AC05", "AC06", "AC07", "AC08"],
@@ -143,6 +176,25 @@ try {
     mkdirSync("evidence", { recursive: true });
     result.completedAt = new Date().toISOString();
     writeFileSync(evidencePath, `${JSON.stringify({ ...result, cleanup }, null, 2)}\n`);
+    const mediaEvidence = {
+      schemaVersion: 1, ticket: 243, runId, startedAt, completedAt: result.completedAt,
+      sourceRevision: result.sourceRevision, sourceTreeSha256: result.sourceTreeSha256, postgresVersion: result.postgresVersion,
+      migrations: result.migrations, tools: result.tools,
+      required: { success: true, passed: result.mediaAcceptance.passed, failed: 0, skipped: 0, todo: 0, failedSuites: 0 },
+      roleMatrix: result.roleMatrix,
+      assertions: result.mediaAcceptance.assertions,
+      suites: result.mediaAcceptance.suites,
+      criteria: ["AC01", "AC02", "AC03", "AC04", "AC05", "AC06", "AC07", "AC08"],
+      criterionEvidence: criterionTests.map(criterion => ({ criterion: criterion.criterion,
+        executedTests: criterion.tests.map(title => ({ title, status: assertionByTitle.get(title) })) })),
+      hostedEvidence: [{ check: "Phase 6 real Media PostgreSQL and private Storage integration, including #243 original/variant export reads and anonymous denials",
+        status: "required-in-pr-ci" }],
+      reproduction: "npm run setup:validation; npm run validation:ready; npm run phase8:focus:exports",
+      scope: "Media-only acceptance history and current Content locale use; accepted original and variant bytes with digest verification; content-addressed deduplication; missing and same-length changed-byte failure; rejected-byte exclusion; independent offline validation; purpose-bound Worker RLS and private-column/write denials. Hosted Phase 6 CI verifies the production Storage adapter against real private Supabase Storage and anonymous denials.",
+      cleanup,
+    };
+    writeFileSync(mediaEvidencePath, `${JSON.stringify(mediaEvidence, null, 2)}\n`);
+    console.log(JSON.stringify({ evidence: mediaEvidencePath, assertions: mediaEvidence.required.passed, cleanup }));
     console.log(JSON.stringify({ evidence: evidencePath, cleanup }));
   }
 }

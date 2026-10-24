@@ -166,6 +166,17 @@ test("catalog proof admits content export schemas only after the declared migrat
   }
 });
 
+test("catalog proof admits Media export schema only after its declared migration", () => {
+  const migration = "20261024140000_read_media_for_owner_exports.sql";
+  const row = { role_name: "shipwithali_worker", schema_name: "media", usage: true, create: false };
+  assert.equal(phase6WorkerSchemaProof([row], [migration]), true);
+  assert.equal(phase6WorkerSchemaProof([row], []), false);
+  assert.equal(phase6WorkerSchemaProof([{ ...row, create: true }], [migration]), false);
+  for (const schema_name of ["cv_portfolio", "identity_access"]) {
+    assert.equal(phase6WorkerSchemaProof([{ ...row, schema_name }], [migration]), false);
+  }
+});
+
 test("catalog proof permits only approved Worker schemas and forbids unapproved domains or DDL", () => {
   for (const schema_name of ["operations", "measurement", "interaction", "portability", "portfolio_config"]) {
     assert.equal(phase6WorkerSchemaProof([{ role_name: "shipwithali_worker", schema_name, usage: true, create: false }]), true);

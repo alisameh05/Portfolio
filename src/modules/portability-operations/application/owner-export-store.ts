@@ -64,6 +64,8 @@ export interface OwnerExportTransitionInput {
   readonly integrityManifest?: OwnerExportPackageManifest;
   readonly artifactId?: StableId<"OwnerExportArtifact">;
   readonly expiresAt?: string;
+  /** Internal readiness fence run in the same transaction as the ready transition. */
+  readonly precondition?: (context: TransactionContext) => Promise<boolean>;
 }
 
 /**

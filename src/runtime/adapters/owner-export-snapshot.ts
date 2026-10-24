@@ -1,4 +1,4 @@
-import { err, ok, type Rejection, type Result, type StableId } from "@shared/domain";
+import { err, ok, parseStableId, type Rejection, type Result, type StableId } from "@shared/domain";
 import type { PortfolioSettingsRepository } from "../../modules/portfolio-configuration/application/settings-service.js";
 import type { ContentOwnerExportRecord, ContentAuthoringRepository } from "../../modules/content-publishing/application/authoring.js";
 import type { TransactionRunner } from "../ports.js";
@@ -6,6 +6,16 @@ import type { OwnerExportConfigurationSnapshot, OwnerExportSelectedSnapshot } fr
 import type { OwnerExportSnapshotReaderPort } from "../../modules/portability-operations/application/owner-export-assembly.js";
 import type { OwnerExportAssemblySnapshot } from "../../modules/portability-operations/application/owner-export-package.js";
 import type { TaxonomyOwnerExportSnapshotReader } from "../../modules/taxonomy-discovery/application/taxonomy-export.js";
+import type { OwnerMediaExportSnapshotReaderPort } from "../../modules/media/application/owner-contracts.js";
+
+type OwnerExportMediaType = NonNullable<OwnerExportSelectedSnapshot["media"]>["assets"][number]["mediaType"];
+const OWNER_EXPORT_MEDIA_TYPES: readonly OwnerExportMediaType[] = [
+  "application/pdf", "image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm",
+];
+
+function isOwnerExportMediaType(value: string): value is OwnerExportMediaType {
+  return OWNER_EXPORT_MEDIA_TYPES.includes(value as OwnerExportMediaType);
+}
 
 export interface OwnerExportCapabilityFactsReader {
   read(scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> }): Promise<{
@@ -108,8 +118,9 @@ function portableContentRecord(source: ContentOwnerExportRecord): Readonly<Recor
 /** Captures all selected source-owned facts in one repeatable-read transaction. */
 export function createOwnerExportSnapshotReader(input: {
   readonly configuration: Pick<PortfolioSettingsRepository, "getSettingsSnapshot">;
-  readonly content: Pick<ContentAuthoringRepository, "readOwnerExportSnapshot">;
+  readonly content: Pick<ContentAuthoringRepository, "readOwnerExportSnapshot" | "readOwnerExportMediaLocales">;
   readonly taxonomy?: TaxonomyOwnerExportSnapshotReader;
+  readonly media?: OwnerMediaExportSnapshotReaderPort;
   readonly transactions: TransactionRunner;
   readonly capabilities: OwnerExportCapabilityFactsReader;
 }): OwnerExportSnapshotReaderPort {
@@ -118,13 +129,15 @@ export function createOwnerExportSnapshotReader(input: {
       const scopes = request.includedScopes;
       const hasContent = scopes.includes("portfolio-content");
       const hasTaxonomy = scopes.includes("taxonomy");
+      const hasMedia = scopes.includes("media-metadata");
       const hasConfiguration = scopes.includes("portfolio-configuration");
-      const canonicalScopes = ["portfolio-content", "taxonomy", "portfolio-configuration"].filter((scope) => scopes.includes(scope));
+      const canonicalScopes = ["portfolio-content", "taxonomy", "media-metadata", "portfolio-configuration"].filter((scope) => scopes.includes(scope));
       if (canonicalScopes.length !== scopes.length || canonicalScopes.some((scope, index) => scopes[index] !== scope) ||
-          !hasContent && !hasTaxonomy && !hasConfiguration) {
+          !hasContent && !hasTaxonomy && !hasMedia && !hasConfiguration) {
         return err({ kind: "validation", code: "OWNER_EXPORT_SCOPE_UNSUPPORTED" });
       }
       if (hasTaxonomy && input.taxonomy === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_TAXONOMY_UNAVAILABLE" });
+      if (hasMedia && input.media === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_MEDIA_UNAVAILABLE" });
       try {
         const captured = await input.transactions.run(async (transaction) => {
           const settings = hasConfiguration
@@ -139,9 +152,21 @@ export function createOwnerExportSnapshotReader(input: {
             ? await input.taxonomy!.readOwnerExportSnapshot({ portfolioId: request.portfolioId, ownerId: request.ownerId }, transaction)
             : undefined;
           if (taxonomy !== undefined && !taxonomy.ok) throw new Error("OWNER_EXPORT_TAXONOMY_UNAVAILABLE");
-          const capturedAt = settings?.ok ? settings.value.capturedAt : content?.ok ? content.value.capturedAt : taxonomy?.ok ? taxonomy.value.capturedAt : undefined;
+          const media = hasMedia
+            ? await input.media!.readOwnerMediaExportSnapshot({ portfolioId: request.portfolioId, ownerId: request.ownerId }, transaction)
+            : undefined;
+          if (media !== undefined && !media.ok) throw new Error("OWNER_EXPORT_MEDIA_UNAVAILABLE");
+          const mediaLocales = media?.ok
+            ? await input.content.readOwnerExportMediaLocales({
+              mediaAssetIds: media.value.records.map((record) => record.mediaId),
+              scope: { portfolioId: request.portfolioId, ownerId: request.ownerId },
+            }, transaction)
+            : undefined;
+          if (mediaLocales !== undefined && !mediaLocales.ok) throw new Error("OWNER_EXPORT_MEDIA_LOCALES_UNAVAILABLE");
+          const capturedAt = settings?.ok ? settings.value.capturedAt : content?.ok ? content.value.capturedAt : taxonomy?.ok ? taxonomy.value.capturedAt : media?.ok ? media.value.capturedAt : undefined;
           if (capturedAt === undefined || settings?.ok && settings.value.capturedAt !== capturedAt ||
-              content?.ok && content.value.capturedAt !== capturedAt || taxonomy?.ok && taxonomy.value.capturedAt !== capturedAt) {
+              content?.ok && content.value.capturedAt !== capturedAt || taxonomy?.ok && taxonomy.value.capturedAt !== capturedAt ||
+              media?.ok && media.value.capturedAt !== capturedAt) {
             throw new Error("OWNER_EXPORT_SNAPSHOT_TIME_MISMATCH");
           }
           return {
@@ -149,6 +174,8 @@ export function createOwnerExportSnapshotReader(input: {
             settings: settings?.ok ? settings.value.settings : null,
             content: content?.ok ? content.value : undefined,
             taxonomy: taxonomy?.ok ? taxonomy.value : undefined,
+            media: media?.ok ? media.value : undefined,
+            mediaLocales: mediaLocales?.ok ? mediaLocales.value : undefined,
           };
         }, { isolationLevel: "repeatable read" });
         let configuration: OwnerExportConfigurationSnapshot | undefined;
@@ -165,7 +192,21 @@ export function createOwnerExportSnapshotReader(input: {
             },
           };
         }
-        if (!hasContent && !hasTaxonomy && configuration !== undefined) return ok(configuration);
+        if (!hasContent && !hasTaxonomy && !hasMedia && configuration !== undefined) return ok(configuration);
+        const localesByMedia = new Map((captured.mediaLocales ?? []).map((fact) => [fact.mediaAssetId, fact.locales]));
+        const mediaRecords = captured.media?.records.map((record) => {
+          const locales = localesByMedia.get(record.mediaId) ?? [];
+          const currentState = record.value["state"];
+          if (locales.length > 0 && record.value["publicationEligibility"] !== "eligible") throw new Error("OWNER_EXPORT_MEDIA_USAGE_INELIGIBLE");
+          return {
+            ...record,
+            value: {
+              ...record.value,
+              locales,
+              publicationState: currentState === "rejected" ? "withdrawn" : currentState === "accepted" && locales.length > 0 ? "published" : record.value["publicationState"],
+            },
+          };
+        });
         return ok({
           kind: "owner-export-snapshot-v1",
           snapshotId: request.snapshotId,
@@ -185,10 +226,40 @@ export function createOwnerExportSnapshotReader(input: {
               assignmentHistory: record.assignmentHistory,
             },
           })) } }),
+          ...(captured.media === undefined ? {} : { media: {
+            records: mediaRecords!.map((record) => ({ mediaId: record.mediaId, value: record.value })),
+            assets: captured.media.assets.map((asset) => {
+              if (!isOwnerExportMediaType(asset.mediaType)) throw new Error("OWNER_EXPORT_MEDIA_TYPE_UNSUPPORTED");
+              return {
+                path: `assets/media-metadata/sha256/${asset.sha256}`,
+                mediaId: asset.mediaId,
+                variantName: asset.variantName,
+                mediaType: asset.mediaType,
+                byteLength: asset.byteLength,
+                digest: asset.sha256,
+                objectId: asset.objectId,
+                source: asset.source,
+                ...(asset.uploadIntentId === undefined ? {} : { uploadIntentId: asset.uploadIntentId }),
+              };
+            }),
+          } }),
         });
       } catch {
         return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_SNAPSHOT_UNAVAILABLE" });
       }
+    },
+    async revalidateMediaForReady({ snapshot, portfolioId, ownerId, context }) {
+      if (input.media === undefined || !("kind" in snapshot) || snapshot.media === undefined) return false;
+      const versions = new Map<StableId<"MediaAsset">, number>();
+      for (const record of snapshot.media.records) {
+        if (record.value["state"] !== "accepted" || record.value["byteCoverage"] !== "included") continue;
+        if (typeof record.value["aggregateVersion"] !== "number" || !Number.isSafeInteger(record.value["aggregateVersion"])) return false;
+        const mediaId = parseStableId("MediaAsset", record.mediaId);
+        if (!mediaId.ok) return false;
+        versions.set(mediaId.value, record.value["aggregateVersion"]);
+      }
+      const result = await input.media.revalidateOwnerMediaExportSnapshot({ portfolioId, ownerId }, versions, context);
+      return result.ok && result.value;
     },
   };
 }

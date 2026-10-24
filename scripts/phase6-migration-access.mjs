@@ -167,6 +167,9 @@ export function phase6WorkerSchemaProof(rows, migrationFiles = []) {
   if (capabilitiesForMigrations(migrationFiles).includes("portability.content_export")) {
     approvedSchemas.push("content", "taxonomy");
   }
+  if (capabilitiesForMigrations(migrationFiles).includes("portability.media_export")) {
+    approvedSchemas.push("media");
+  }
   return Array.isArray(rows) && rows.filter(row => row.role_name === "shipwithali_worker").every(row =>
     row.create === false && (row.usage === false || row.usage === true && approvedSchemas.includes(row.schema_name)));
 }

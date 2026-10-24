@@ -196,6 +196,27 @@ function parseDatabaseUrl(raw: string | undefined): string {
   return raw;
 }
 
+/** Worker Media exports use the configured private buckets, matching upload and processing adapters. */
+export function createOwnerExportMediaObjectReader<T>(
+  env: RuntimeConfigEnv,
+  createStorage: (options: {
+    readonly storageUrl: string;
+    readonly serviceRoleKey: string;
+    readonly candidateBucket?: string;
+    readonly processedBucket?: string;
+  }) => T,
+): T | undefined {
+  const storageUrl = env["SUPABASE_URL"];
+  const serviceRoleKey = env["SUPABASE_SERVICE_ROLE_KEY"];
+  if (!storageUrl || !serviceRoleKey) return undefined;
+  return createStorage({
+    storageUrl,
+    serviceRoleKey,
+    ...(env["MEDIA_CANDIDATE_BUCKET"] === undefined ? {} : { candidateBucket: env["MEDIA_CANDIDATE_BUCKET"] }),
+    ...(env["MEDIA_PROCESSED_BUCKET"] === undefined ? {} : { processedBucket: env["MEDIA_PROCESSED_BUCKET"] }),
+  });
+}
+
 /** Production database-enabled composition for application and worker processes. */
 export async function initializeDatabaseRuntime(
   env: RuntimeConfigEnv,
@@ -267,6 +288,8 @@ export async function initializeDatabaseRuntime(
             { createPostgresContentTaxonomyExportAssignmentReader },
             { createTaxonomyOwnerExportSnapshotReader },
             { createOwnerExportSnapshotReader },
+            { createPostgresOwnerMediaExportSnapshotReader },
+            { createSupabaseMediaExportStorage },
           ] = await Promise.all([
             import("../modules/portability-operations/application/owner-export-assembly.js"),
             import("../modules/portfolio-configuration/adapters/postgres-settings.js"),
@@ -275,7 +298,10 @@ export async function initializeDatabaseRuntime(
             import("../modules/content-publishing/adapters/postgres-taxonomy-export-reader.js"),
             import("../modules/taxonomy-discovery/application/taxonomy-export.js"),
             import("../runtime/adapters/owner-export-snapshot.js"),
+            import("../modules/media/adapters/postgres-owner-export-snapshot.js"),
+            import("../runtime/adapters/supabase-media-export-storage.js"),
           ]);
+          const mediaObjects = createOwnerExportMediaObjectReader(env, createSupabaseMediaExportStorage);
           ownerExportAssembly = createOwnerExportAssemblyService({
             operations,
             exports: ownerExportStore,
@@ -286,6 +312,7 @@ export async function initializeDatabaseRuntime(
                 repository: createPostgresTaxonomyOwnerRepository(),
                 assignments: createPostgresContentTaxonomyExportAssignmentReader(),
               }),
+              media: createPostgresOwnerMediaExportSnapshotReader({ database: database.database, transactions: operations.transactions }),
               transactions: operations.transactions,
               capabilities: {
                 async read(scope) {
@@ -336,6 +363,7 @@ export async function initializeDatabaseRuntime(
               },
             }),
             storage: ownerExportStorage ?? unavailableOwnerExportStorage,
+            ...(mediaObjects === undefined ? {} : { mediaObjects }),
             clock: createSystemClock(),
             ids: createSystemIdGenerator(),
           });
