@@ -626,8 +626,7 @@ describe.runIf(enabled)("Phase 8 #241 real Content module export fixture", () =>
           Number(idempotencyRemaining.rows[0]?.["count"] ?? -1), Number(outboxRemaining.rows[0]?.["count"] ?? -1),
         );
         cleanupSucceeded = fixtureCounts.every((count) => count === 0);
-        if (!cleanupSucceeded) throw new Error("PHASE8_OWNER_EXPORT_FIXTURE_CLEANUP_FAILED");
-        await admin.query("commit");
+        if (cleanupSucceeded) await admin.query("commit");
       } finally {
         if (!cleanupSucceeded) await admin.query("rollback").catch(() => undefined);
         await application.resource.close();

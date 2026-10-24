@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import { sql } from "kysely";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { declaredCapabilities } from "../../scripts/phase-contract-registry.mjs";
 import {
   getOperationsPersistence,
   getPhase5OwnerApplicationServices,
@@ -25,6 +26,8 @@ const describeDatabase = DATABASE_URL === undefined ? describe.skip : describe;
 const secretDraftTitle = "Private Security Draft 594d1c";
 const privateReviewFinding = "Private review proof 7a10e2";
 const STAGE_PATH = process.env["PHASE5_SECURITY_STAGE_PATH"];
+const contentExportEnabled = (process.env["PHASE_DATABASE_CAPABILITIES"] ?? declaredCapabilities().join(","))
+  .split(",").map((capability) => capability.trim()).includes("portability.content_export");
 
 function roleIdentifier(name: string): string {
   if (!/^phase5_security_[a-z0-9_]+$/.test(name)) throw new Error("PHASE5_SECURITY_ROLE_INVALID");
@@ -243,9 +246,16 @@ describeDatabase("Phase 5 restricted-principal and migration security against Po
       const probe = new Client({ connectionString: restrictedLogins.get(role)! });
       await probe.connect();
       try {
-        await expect(probe.query("select content_id from content.items")).rejects.toMatchObject({ code: "42501" });
-        await expect(probe.query("select revision_id from content.revisions")).rejects.toMatchObject({ code: "42501" });
-        await expect(probe.query("select review_id from content.revision_reviews")).rejects.toMatchObject({ code: "42501" });
+        for (const [table, column] of [["items", "content_id"], ["revisions", "revision_id"], ["revision_reviews", "review_id"]]) {
+          const read = probe.query(`select ${column} from content.${table}`);
+          if (role === "shipwithali_worker" && contentExportEnabled) {
+            // The export capability grants SELECT, but unscoped direct reads
+            // must still reveal no private rows through forced RLS.
+            expect((await read).rows).toEqual([]);
+          } else {
+            await expect(read).rejects.toMatchObject({ code: "42501" });
+          }
+        }
         await expect(probe.query("select content_id from content.public_project_locales")).rejects.toMatchObject({ code: "42501" });
         await expect(probe.query("select content_id from taxonomy.project_discovery_locales")).rejects.toMatchObject({ code: "42501" });
         await expect(probe.query("insert into content.items(content_id, portfolio_id, content_type) values ($1, $2, 'project')", [privateContentId, scope.portfolioId]))
@@ -257,13 +267,28 @@ describeDatabase("Phase 5 restricted-principal and migration security against Po
     const views = await admin.query(`select viewname from pg_views where schemaname = 'public_read' order by viewname`);
     expect(views.rows).toEqual([]);
     const grants = await admin.query(`
-      select grantee, table_name, privilege_type
+      select table_schema, grantee, table_name, privilege_type, is_grantable
         from information_schema.role_table_grants
        where table_schema in ('content', 'taxonomy')
          and grantee in ('PUBLIC', 'anon', 'authenticated', 'shipwithali_worker', 'shipwithali_backup')
-       order by grantee, table_name, privilege_type
+       order by table_schema, grantee, table_name, privilege_type
     `);
-    expect(grants.rows).toEqual([]);
+    const exportTables = [
+      ["content", "items"], ["content", "project_status_values"], ["content", "revisions"],
+      ["content", "revision_reviews"], ["content", "language_publications"],
+      ["content", "testimonial_language_publications"], ["content", "publication_history"],
+      ["content", "testimonial_publication_history"], ["content", "lifecycle_history"],
+      ["content", "public_routes"], ["content", "public_route_reservations"],
+      ["content", "public_route_history"], ["content", "project_relationship_views"],
+      ["content", "project_relationship_history"], ["content", "project_taxonomy_assignments"],
+      ["taxonomy", "roots"],
+    ];
+    expect(grants.rows).toEqual(contentExportEnabled ? exportTables
+      .sort(([leftSchema, leftTable], [rightSchema, rightTable]) =>
+        `${leftSchema}.${leftTable}`.localeCompare(`${rightSchema}.${rightTable}`))
+      .map(([table_schema, table_name]) => ({
+        table_schema, table_name, grantee: "shipwithali_worker", privilege_type: "SELECT", is_grantable: "NO",
+      })) : []);
   });
 
   it("limits the application login to its configured Owner and Portfolio and keeps migration access off runtime credentials", async () => {

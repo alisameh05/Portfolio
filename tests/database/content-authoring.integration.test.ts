@@ -2285,7 +2285,9 @@ describeDatabase("Content authoring production PostgreSQL invariants", () => {
         ),
       ).join(", "),
     );
-    expect(Object.values(restrictedGrants.rows[0] as Record<string, boolean>).every((allowed) => !allowed)).toBe(true);
+    // Only worker SELECT on status values (table 0, role 2) is granted for export.
+    expect(Object.entries(restrictedGrants.rows[0] as Record<string, boolean>)
+      .every(([privilege, allowed]) => allowed === (privilege === "t0_r2"))).toBe(true);
   }, 30_000);
 
   it("keeps the status registry within the strict Owner list response limit", async () => {

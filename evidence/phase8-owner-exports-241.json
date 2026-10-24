@@ -1,9 +1,9 @@
 {
   "ticket": 241,
-  "runId": "da9f0912-e28a-4f97-880a-acbeb3044d9a",
-  "startedAt": "2026-10-24T02:08:37.365Z",
-  "sourceRevision": "2bee37db126a67a997a7cb125b00e7e34c0a7485",
-  "sourceTreeSha256": "0f251f961a230860ce378b7a037619a24b81cf27256b1c6fbf83d574080c8a3e",
+  "runId": "bb875344-aebd-43fc-804a-e24fab8a8c74",
+  "startedAt": "2026-10-24T06:47:47.266Z",
+  "sourceRevision": "179c9b7d945c2577c9fab932ee7471d3c14bdf69",
+  "sourceTreeSha256": "18a3c4c37b76cdc6330f1cc877f08715b192ad18181f200c8b947a86e53beb2f",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -472,6 +472,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase8:focus:exports",
   "scope": "All repository migrations on disposable native PostgreSQL; restricted application and worker roles; existing configuration-only request-to-ready recovery scenarios; Content-owned full-history snapshot capture for Draft, Published, Hidden, and Archived Projects, Achievements, and Testimonials; independent English and Arabic revision/review/publication histories and exact current pointers; durable route identities, reservations, redirects, and discovery tie ordering; repeatable-read source capture; content-only and combined-scope package contents with omitted dependency declarations; independent offline schema/hash/count/domain validation; owner and purpose fenced worker reads with no Content writes; unsupported scopes failing safely; private/no-store download headers; role/RLS matrix enforcement.",
-  "completedAt": "2026-10-24T02:09:12.516Z",
+  "completedAt": "2026-10-24T06:48:39.516Z",
   "cleanup": true
 }
