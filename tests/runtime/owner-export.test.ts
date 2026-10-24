@@ -266,6 +266,62 @@ describe("Owner export status retrieval (#32)", () => {
     { ...baseView, state: "expired", completedAt: "2026-10-18T00:01:00.000Z", expiredAt: "2026-10-19T00:01:00.000Z", expiresAt: "2026-10-19T00:01:00.000Z", integrityManifest: exportManifest, downloadAvailable: false },
   ];
 
+  it("returns a ready Media v1.5 export with original and variant asset descriptors", async () => {
+    const mediaManifest: OwnerExportPackageManifest = {
+      packageFormat: "shipwithali-owner-export",
+      schemaVersion: "1.5",
+      exportId: EXPORT_ID,
+      snapshot: { snapshotId: EXPORT_ID, capturedAt: "2026-10-24T00:00:00.000Z", consistency: "transactional" },
+      createdAt: "2026-10-24T00:00:00.000Z",
+      algorithm: "sha-256",
+      digest: "a".repeat(64),
+      requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"],
+      includedScopes: ["media-metadata"],
+      publicEventDataCoverage: { mode: "excluded" },
+      dependencies: [],
+      exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"],
+      entries: [{
+        path: "records/media-metadata.ndjson",
+        scope: "media-metadata",
+        mediaType: "application/x-ndjson",
+        recordSchema: "urn:shipwithali:owner-export-schema:media-metadata:1.2",
+        schemaPath: "schemas/media-metadata.schema.json",
+        schemaVersion: "1.2",
+        digest: "b".repeat(64),
+        recordCount: 1,
+      }],
+      schemas: [
+        { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.4", schemaVersion: "1.4", digest: "c".repeat(64) },
+        { kind: "record", scope: "media-metadata", path: "schemas/media-metadata.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:media-metadata:1.2", schemaVersion: "1.2", digest: "d".repeat(64) },
+      ],
+      assets: [
+        { path: `assets/media-metadata/sha256/${"e".repeat(64)}`, scope: "media-metadata", assetId: EXPORT_ID, mediaType: "image/jpeg", byteLength: 4, digest: "e".repeat(64) },
+        { path: `assets/media-metadata/sha256/${"f".repeat(64)}`, scope: "media-metadata", assetId: EXPORT_ID, mediaType: "image/webp", byteLength: 5, digest: "f".repeat(64) },
+      ],
+      extensions: { mediaSnapshot: { byteReferences: "sha256-content-addressed" } },
+    };
+    const view: OwnerExportView = {
+      ...baseView,
+      state: "ready",
+      schemaVersion: "1.5",
+      includedScopes: ["media-metadata"],
+      completedAt: "2026-10-24T00:01:00.000Z",
+      expiresAt: "2026-10-31T00:01:00.000Z",
+      integrityManifest: mediaManifest,
+      downloadAvailable: true,
+    };
+    const response = await handleGetOwnerExport(
+      getRequest(),
+      { exportId: EXPORT_ID },
+      ownerExportDeps(ownerExportServiceForView(view)),
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(zGetOwnerExportResponse.safeParse(body).success).toBe(true);
+    expect(body).toEqual(view);
+  });
+
   it.each(lifecycleViews)("preserves the accepted $state status view", async (view) => {
     const response = await handleGetOwnerExport(
       getRequest(),

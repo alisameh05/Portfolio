@@ -619,6 +619,20 @@ schemas:
       schemaVersion: { type: string, const: '1.1' }
       digest: { type: string, pattern: '^[a-f0-9]{64}$' }
       recordCount: { type: integer, minimum: 0 }
+  OwnerExportMediaEntryDescriptorV1_2:
+    type: object
+    description: Standalone Media package entry using the immutable Media v1.2 record schema.
+    additionalProperties: false
+    required: [path, scope, mediaType, recordSchema, schemaPath, schemaVersion, digest, recordCount]
+    properties:
+      path: { type: string, const: records/media-metadata.ndjson }
+      scope: { type: string, const: media-metadata }
+      mediaType: { type: string, const: application/x-ndjson }
+      recordSchema: { type: string, const: 'urn:shipwithali:owner-export-schema:media-metadata:1.2' }
+      schemaPath: { type: string, const: schemas/media-metadata.schema.json }
+      schemaVersion: { type: string, const: '1.2' }
+      digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+      recordCount: { type: integer, minimum: 0 }
   OwnerExportManifestSchemaDescriptor:
     type: object
     additionalProperties: false
@@ -686,6 +700,43 @@ schemas:
       assetId: { $ref: ./common.yaml#/schemas/StableId }
       mediaType: { type: string, enum: [application/pdf, image/jpeg, image/png, image/webp, video/mp4] }
       byteLength: { type: integer, minimum: 1, maximum: 9007199254740991 }
+      digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+  OwnerExportManifestSchemaDescriptorV1_4:
+    type: object
+    additionalProperties: false
+    required: [kind, path, schemaUri, schemaVersion, digest]
+    properties:
+      kind: { type: string, const: manifest }
+      path: { type: string, const: schemas/manifest.schema.json }
+      schemaUri: { type: string, const: 'urn:shipwithali:owner-export-schema:manifest:1.4' }
+      schemaVersion: { type: string, const: '1.4' }
+      digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+  OwnerExportMediaRecordSchemaDescriptorV1_2:
+    type: object
+    additionalProperties: false
+    required: [kind, path, scope, schemaUri, schemaVersion, digest]
+    properties:
+      kind: { type: string, const: record }
+      path: { type: string, const: schemas/media-metadata.schema.json }
+      scope: { type: string, const: media-metadata }
+      schemaUri: { type: string, const: 'urn:shipwithali:owner-export-schema:media-metadata:1.2' }
+      schemaVersion: { type: string, const: '1.2' }
+      digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+  OwnerExportSchemaDescriptorV1_5:
+    oneOf:
+      - { $ref: '#/schemas/OwnerExportManifestSchemaDescriptorV1_4' }
+      - { $ref: '#/schemas/OwnerExportMediaRecordSchemaDescriptorV1_2' }
+  OwnerExportMediaAssetDescriptorV1_5:
+    type: object
+    description: Accepted Media object stored once at its content-addressed SHA-256 path.
+    additionalProperties: false
+    required: [path, scope, assetId, mediaType, byteLength, digest]
+    properties:
+      path: { type: string, pattern: '^assets/media-metadata/sha256/[a-f0-9]{64}$' }
+      scope: { type: string, const: media-metadata }
+      assetId: { $ref: ./common.yaml#/schemas/StableId }
+      mediaType: { type: string, enum: [application/pdf, image/jpeg, image/png, image/webp, video/mp4, video/webm] }
+      byteLength: { type: integer, minimum: 1, maximum: 52428800 }
       digest: { type: string, pattern: '^[a-f0-9]{64}$' }
   OwnerExportPackageManifestV1_0:
     type: object
@@ -758,10 +809,61 @@ schemas:
       extensions:
         type: object
         additionalProperties: true
+  OwnerExportPackageManifestV1_5:
+    type: object
+    description: Manifest 1.5 is the standalone Media export carrying the Media v1.2 records and verified content-addressed bytes.
+    additionalProperties: false
+    required: [packageFormat, schemaVersion, exportId, snapshot, createdAt, algorithm, digest, requiredFeatures, includedScopes, publicEventDataCoverage, dependencies, exclusions, entries, schemas, assets]
+    properties:
+      packageFormat: { type: string, const: shipwithali-owner-export }
+      schemaVersion: { type: string, const: '1.5' }
+      exportId: { $ref: ./common.yaml#/schemas/StableId }
+      snapshot:
+        type: object
+        additionalProperties: false
+        required: [snapshotId, capturedAt, consistency]
+        properties:
+          snapshotId: { $ref: ./common.yaml#/schemas/StableId }
+          capturedAt: { type: string, format: date-time }
+          consistency: { type: string, const: transactional }
+      createdAt: { type: string, format: date-time }
+      algorithm: { type: string, const: sha-256 }
+      digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+      requiredFeatures:
+        type: array
+        const: [asset-integrity-v1, dependency-coverage-v1, record-integrity-v1, schema-integrity-v1, snapshot-identity-v1]
+      includedScopes:
+        type: array
+        const: [media-metadata]
+      publicEventDataCoverage: { $ref: '#/schemas/PublicEventDataCoverage' }
+      dependencies:
+        type: array
+        items: { $ref: '#/schemas/OwnerExportDependencyDescriptor' }
+      exclusions:
+        type: array
+        const: [raw-public-event-data, functional-visitor-identities, measurement-visitor-identities, sessions, credentials, lab-entries]
+      entries:
+        type: array
+        minItems: 1
+        maxItems: 1
+        items: { $ref: '#/schemas/OwnerExportMediaEntryDescriptorV1_2' }
+      schemas:
+        type: array
+        minItems: 2
+        maxItems: 2
+        items: { $ref: '#/schemas/OwnerExportSchemaDescriptorV1_5' }
+      assets:
+        type: array
+        maxItems: 508
+        items: { $ref: '#/schemas/OwnerExportMediaAssetDescriptorV1_5' }
+      extensions:
+        type: object
+        additionalProperties: true
   OwnerExportPackageManifest:
     oneOf:
       - { $ref: '#/schemas/OwnerExportPackageManifestV1_0' }
       - { $ref: '#/schemas/OwnerExportPackageManifestV1_1' }
+      - { $ref: '#/schemas/OwnerExportPackageManifestV1_5' }
   RequestedOwnerExportView:
     type: object
     additionalProperties: false
