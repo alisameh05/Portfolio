@@ -13,7 +13,7 @@ function fieldDefined(content: string, field: string): boolean {
 
 describe("Phase 4 #79: Identity and Configuration contract reconciliation", () => {
   it("uses handwritten provider-neutral profile DTOs matching transport", () => {
-    const domain = src("src/modules/portfolio-configuration/domain/types.ts");
+    const domain = src("src/shared/domain/portfolio-settings.ts");
     expect(fieldDefined(domain, "displayName")).toBe(true);
     expect(fieldDefined(domain, "headline")).toBe(true);
     expect(fieldDefined(domain, "bio")).toBe(true);
@@ -23,7 +23,7 @@ describe("Phase 4 #79: Identity and Configuration contract reconciliation", () =
   });
 
   it("uses the committed channel enum and ordered locale-aware channel semantics", () => {
-    const domain = src("src/modules/portfolio-configuration/domain/types.ts");
+    const domain = src("src/shared/domain/portfolio-settings.ts");
     for (const value of ['"linkedin"', '"whatsapp"', '"instagram"', '"phone"', '"email"', '"other"']) {
       expect(domain.includes(value)).toBe(true);
     }
@@ -36,7 +36,7 @@ describe("Phase 4 #79: Identity and Configuration contract reconciliation", () =
   });
 
   it("keeps CTA label, destination, and unavailableFallback as text", () => {
-    const domain = src("src/modules/portfolio-configuration/domain/types.ts");
+    const domain = src("src/shared/domain/portfolio-settings.ts");
     expect(fieldDefined(domain, "unavailableFallback")).toBe(true);
     expect(fieldDefined(domain, "fallbackDestination")).toBe(false);
     expect(fieldDefined(domain, "isEnabled")).toBe(false);
@@ -45,7 +45,7 @@ describe("Phase 4 #79: Identity and Configuration contract reconciliation", () =
 
   it("matches transport schemas without losing contracted data", () => {
     const transport = src("openapi/owner-v1/components/configuration.yaml");
-    const domain = src("src/modules/portfolio-configuration/domain/types.ts");
+    const domain = src("src/shared/domain/portfolio-settings.ts");
     for (const token of ["displayName", "headline", "bio", "availableLocales", "unavailableFallback"]) {
       expect(transport.includes(token)).toBe(true);
       expect(domain.includes(token)).toBe(true);
@@ -67,10 +67,15 @@ describe("Phase 4 #79: Identity and Configuration contract reconciliation", () =
   it("exposes Owner settings and narrow locale-aware public views, no generic patch", () => {
     const app = src("src/modules/portfolio-configuration/application/service.ts");
     const domain = src("src/modules/portfolio-configuration/domain/types.ts");
+    const sharedDomain = src("src/shared/domain/portfolio-settings.ts");
     expect(app.includes("GetPortfolioSettingsQuery")).toBe(true);
     expect(app.includes("GetPublicConfigurationQuery")).toBe(true);
+    expect(domain).toContain('from "@shared/domain"');
+    for (const type of ["PortfolioProfile", "ContactChannel", "GlobalProjectCta", "PortfolioSettings", "OwnerPortfolioSettingsView", "SupportedLocale"]) {
+      expect(domain.includes(type)).toBe(true);
+    }
     expect(domain.includes("PublicPortfolioConfigurationView")).toBe(true);
-    expect(domain.includes("OwnerPortfolioSettingsView")).toBe(true);
+    expect(sharedDomain.includes("OwnerPortfolioSettingsView")).toBe(true);
     expect(app).not.toMatch(/GenericPatch|generic.*patch|PatchPortfolio/i);
   });
 
@@ -103,6 +108,7 @@ describe("Phase 4 #79: Identity and Configuration contract reconciliation", () =
   it("keeps generated, provider, and database types out of domain/application", () => {
     const files = [
       "src/modules/portfolio-configuration/domain/types.ts",
+      "src/shared/domain/portfolio-settings.ts",
       "src/modules/portfolio-configuration/application/service.ts",
       "src/modules/portfolio-configuration/ports/repository.ts",
       "src/modules/identity-access/domain/types.ts",

@@ -2,6 +2,7 @@
 import {
   composeOperationsBoundary,
   PHASE4_RELEASE_BOUNDARY,
+  PHASE_DECLARED_ADDITIVE_MIGRATIONS,
   PHASE5_MIGRATION_COMPATIBILITY,
   PHASE5_MIGRATION_FIRST,
   PHASE5_MIGRATION_LAST,
@@ -29,6 +30,8 @@ const CAPABILITY_ROLES = [
 ];
 const SETTINGS_SCOPE_PREDICATE = "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))";
 const CHANNEL_SCOPE_PREDICATE = "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND (EXISTS ( SELECT 1 FROM portfolio_config.settings settings WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = current_setting('shipwithali.owner_id'::text, true))))))";
+const CONFIGURATION_EXPORT_SETTINGS_SCOPE_PREDICATE = "(((portfolio_id)::text = nullif(current_setting('shipwithali.portfolio_id'::text, true), ''::text)) AND ((owner_id)::text = nullif(current_setting('shipwithali.owner_id'::text, true), ''::text)))";
+const CONFIGURATION_EXPORT_CHANNEL_SCOPE_PREDICATE = "(((portfolio_id)::text = nullif(current_setting('shipwithali.portfolio_id'::text, true), ''::text)) AND (EXISTS ( SELECT 1 FROM portfolio_config.settings settings WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = nullif(current_setting('shipwithali.owner_id'::text, true), ''::text))))))";
 const PHASE4_APPLICATION_POLICIES = new Map([
   ["identity_access.owner_links", [
     ["owner_links_application_select_policy", "SELECT", "{shipwithali_application}", "true"],
@@ -45,6 +48,14 @@ const PHASE4_APPLICATION_POLICIES = new Map([
     ["portfolio_channels_application_select", "SELECT", "{shipwithali_application}", CHANNEL_SCOPE_PREDICATE],
     ["portfolio_channels_application_insert", "INSERT", "{shipwithali_application}", CHANNEL_SCOPE_PREDICATE],
     ["portfolio_channels_application_delete", "DELETE", "{shipwithali_application}", CHANNEL_SCOPE_PREDICATE],
+  ]],
+]);
+const CONFIGURATION_EXPORT_WORKER_POLICIES = new Map([
+  ["portfolio_config.settings", [
+    ["portfolio_settings_worker_export_select", "SELECT", "{shipwithali_worker}", CONFIGURATION_EXPORT_SETTINGS_SCOPE_PREDICATE],
+  ]],
+  ["portfolio_config.contact_channels", [
+    ["portfolio_channels_worker_export_select", "SELECT", "{shipwithali_worker}", CONFIGURATION_EXPORT_CHANNEL_SCOPE_PREDICATE],
   ]],
 ]);
 
@@ -142,6 +153,9 @@ export function assertPhase4SnapshotsEquivalent(clean, upgrade) {
 }
 
 export function assertPhase4ApplicationRls(snapshot) {
+  const configurationExportApplied = snapshot.migrationLedger?.some((migration) =>
+    migration.name === "build_configuration_owner_exports",
+  ) === true;
   const tables = new Map(
     snapshot.objects.filter((object) => object.kind === "r")
       .map((object) => [`${object.schema}.${object.name}`, object]),
@@ -154,7 +168,11 @@ export function assertPhase4ApplicationRls(snapshot) {
     const policies = snapshot.policies.filter((policy) =>
       `${policy.schema}.${policy.tableName}` === name,
     );
-    const expected = PHASE4_APPLICATION_POLICIES.get(name);
+    const baseExpected = PHASE4_APPLICATION_POLICIES.get(name);
+    const expected = baseExpected === undefined ? undefined : [
+      ...baseExpected,
+      ...(configurationExportApplied ? CONFIGURATION_EXPORT_WORKER_POLICIES.get(name) ?? [] : []),
+    ];
     const byName = new Map(policies.map((policy) => [policy.name, policy]));
     if (expected === undefined || policies.length !== expected.length || byName.size !== expected.length ||
       expected.some(([policyName, command, roles, scope]) => {
@@ -176,7 +194,13 @@ export function assertPhase4ApplicationRls(snapshot) {
   const publicGrants = snapshot.grants.filter((grant) =>
     APPLICATION_SCHEMAS.includes(grant.schema) &&
     ["PUBLIC", "anon", "authenticated", "shipwithali_worker"].includes(grant.grantee) &&
-    (grant.objectType === "n" || grant.privilege !== "USAGE"),
+    (grant.objectType === "n" || grant.privilege !== "USAGE") &&
+    !(configurationExportApplied && grant.schema === "portfolio_config" &&
+      grant.grantee === "shipwithali_worker" && grant.grantable !== true && (
+        (grant.objectType === "n" && grant.object === "portfolio_config" && grant.privilege === "USAGE") ||
+        (grant.objectType === "r" && ["settings", "contact_channels"].includes(grant.object) &&
+          grant.privilege === "SELECT")
+      )),
   );
   if (publicGrants.length > 0) throw new Error("PHASE4_APPLICATION_GRANT_EXPOSURE");
   const unauthorizedBackupGrants = snapshot.grants.filter((grant) =>
@@ -531,6 +555,20 @@ export function assertPhase3OperationsContractPreserved(phase3, upgraded, {
   }
   const expected = phase3OperationsContract(phase3);
   const actual = phase3OperationsContract(upgraded);
+  const appliedMigrationNames = new Set((upgraded.migrationLedger ?? []).map((migration) => migration.name));
+  const declaredAdditions = PHASE_DECLARED_ADDITIVE_MIGRATIONS
+    .filter((migration) => appliedMigrationNames.has(migration.migration.slice(15, -4)))
+    .flatMap((migration) => migration.operationsAdditions ?? []);
+  for (const addition of declaredAdditions) {
+    const rows = actual[addition.category];
+    if (!Array.isArray(rows)) throw new Error(`PHASE3_OPERATIONS_CONTRACT_CATEGORY_UNKNOWN:${addition.category}`);
+    const index = rows.findIndex((row) => catalogIdentity(addition.category, row) === addition.identity);
+    if (index === -1) failPreservation("PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_MISSING", addition.category, addition.identity);
+    const actualFields = Object.fromEntries(Object.keys(addition.expected).map((field) => [field, rows[index][field]]));
+    const difference = firstDifference(addition.expected, actualFields);
+    if (difference !== null) failPreservation("PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_ALTERED", addition.category, addition.identity, difference);
+    rows.splice(index, 1);
+  }
   assertUniqueOperationsRows(expected, "baseline");
   assertUniqueOperationsRows(actual, "candidate");
   const boundary = composeOperationsBoundary(transformations, phase3.postgresMajor);

@@ -17,6 +17,7 @@ import {
   type TransactionContext,
   type TransactionRollback,
   type TransactionRunner,
+  type TransactionRunOptions,
 } from "../../../runtime/ports.js";
 import { InputValidationError } from "@shared/domain";
 import type { DB } from "./database.generated.js";
@@ -67,9 +68,10 @@ export function createPostgresTransactionRunner(
       callback: (
         context: TransactionContext,
       ) => Promise<T | TransactionRollback<T>> | T | TransactionRollback<T>,
+      options: TransactionRunOptions = {},
     ): Promise<T> {
       try {
-        return await database.transaction().setIsolationLevel("read committed").execute(
+        return await database.transaction().setIsolationLevel(options.isolationLevel ?? "read committed").execute(
           async (transaction) => {
             await sql`set local lock_timeout = '5s'`.execute(transaction);
             await sql`set local statement_timeout = '15s'`.execute(transaction);

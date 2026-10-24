@@ -10,6 +10,8 @@ import { err, ok, parseStableId } from "@shared/domain";
 import type { SafeErrorCode, LeasedJobRecord } from "./persistence.js";
 import { OWNER_EXPORT_SCOPES, type ExportScope, type ScopedWorkerPurpose } from "../domain/index.js";
 
+export const OWNER_EXPORT_ASSEMBLY_JOB_TYPE = "portability.owner-export-assembly.v1";
+
 export interface OwnerExportAuthorizationContext {
   readonly actor: OwnerActor;
   readonly portfolioId: StableId<"Portfolio">;
@@ -128,7 +130,12 @@ export interface OwnerExportPackageManifestV1_1 extends OwnerExportPackageManife
   readonly extensions?: Readonly<Record<string, unknown>>;
 }
 
-export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1;
+/** Additive 1.2 manifest minor; record meanings remain pinned to v1.1 URIs. */
+export interface OwnerExportPackageManifestV1_2 extends Omit<OwnerExportPackageManifestV1_1, "schemaVersion"> {
+  readonly schemaVersion: "1.2";
+}
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2;
 
 interface OwnerExportViewBase {
   readonly exportId: StableId<"OwnerExport">;
@@ -146,6 +153,7 @@ export type OwnerExportView =
   | (OwnerExportViewBase & {
       readonly state: "ready";
       readonly completedAt: string;
+      readonly expiresAt: string;
       readonly integrityManifest: OwnerExportPackageManifest;
       readonly downloadAvailable: true;
     })
@@ -159,6 +167,7 @@ export type OwnerExportView =
       readonly state: "expired";
       readonly completedAt: string;
       readonly expiredAt: string;
+      readonly expiresAt: string;
       readonly integrityManifest: OwnerExportPackageManifest;
       readonly downloadAvailable: false;
     });
@@ -703,6 +712,8 @@ export interface OwnerExportObjectReadRequest {
   readonly portfolioId: StableId<"Portfolio">;
   readonly exportId: StableId<"OwnerExport">;
   readonly artifactId: StableId<"OwnerExportArtifact">;
+  readonly expectedSha256: string;
+  readonly expectedContentLength: number;
 }
 
 export interface OwnerExportObjectRead {
@@ -711,7 +722,8 @@ export interface OwnerExportObjectRead {
   readonly content: AsyncIterable<Uint8Array>;
 }
 
-export const MAX_OWNER_EXPORT_ARTIFACT_BYTES = 25_000_000;
+/** Must remain aligned with the independently published ZIP validator bound. */
+export const MAX_OWNER_EXPORT_ARTIFACT_BYTES = 64 * 1024 * 1024;
 
 export function validateOwnerExportObjectRead(
   value: OwnerExportObjectRead,

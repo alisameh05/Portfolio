@@ -25,8 +25,8 @@ import {
 import {
   PHASE_DATABASE_CHECKPOINTS,
   DECLARED_CAPABILITIES_VARIABLE,
-  PHASE_DATABASE_TRANSFORMATIONS,
   PHASE5_MIGRATION_COMPATIBILITY,
+  capabilitiesForMigrations,
   declaredCapabilities,
   capabilitiesForCheckpoint,
   resolveMigrationClassifications,
@@ -469,10 +469,7 @@ export async function main() {
     existingFiles: new Set(PHASE_DATABASE_CHECKPOINTS.flatMap((checkpoint) => checkpoint.suites.map((suite) => suite.file))
       .filter((file) => existsSync(join(ROOT, file)))),
   });
-  const capabilitiesForFiles = (files) => declaredCapabilities().filter((capability) => {
-    const transformation = PHASE_DATABASE_TRANSFORMATIONS.find((entry) => entry.capability === capability);
-    return transformation !== undefined && files.includes(transformation.migration);
-  });
+  const capabilitiesForFiles = (files) => capabilitiesForMigrations(files);
   const upgradeCheckpointCapabilities = capabilitiesForFiles(upgradeBaselineFiles);
   const currentCheckpointCapabilities = capabilitiesForFiles(migrations.files);
   if (JSON.stringify(currentCheckpointCapabilities) !== JSON.stringify(declaredCapabilities())) {

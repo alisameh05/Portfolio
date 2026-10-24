@@ -3395,6 +3395,7 @@
                       "schemaVersion": "1.1",
                       "requestedAt": "2026-10-23T10:00:00Z",
                       "completedAt": "2026-10-23T10:01:00Z",
+                      "expiresAt": "2026-10-30T10:01:00Z",
                       "includedScopes": [
                         "analytics-reports"
                       ],
@@ -7175,6 +7176,7 @@
           "schemaVersion",
           "requestedAt",
           "completedAt",
+          "expiresAt",
           "includedScopes",
           "publicEventDataCoverage",
           "integrityManifest",
@@ -7199,6 +7201,11 @@
           "completedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Effective artifact expiry after policy and default retention are applied."
           },
           "includedScopes": {
             "type": "array",
@@ -7285,6 +7292,7 @@
           "requestedAt",
           "completedAt",
           "expiredAt",
+          "expiresAt",
           "includedScopes",
           "publicEventDataCoverage",
           "integrityManifest",
@@ -7313,6 +7321,11 @@
           "expiredAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Effective artifact expiry after policy and default retention are applied."
           },
           "includedScopes": {
             "type": "array",

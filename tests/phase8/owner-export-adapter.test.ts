@@ -80,6 +80,8 @@ function scopedStore(persisted: readonly PersistedOwnerExport[]): OwnerExportSto
         row.portfolioId === input.portfolioId &&
         row.ownerId === input.ownerId) ?? null;
     },
+    async saveOwnerExportSnapshot() { return { ok: true as const, value: "stale" as const }; },
+    async saveOwnerExportCandidate() { return { ok: true as const, value: "stale" as const }; },
     async applyOwnerExportTransition() {
       return { ok: true as const, value: { kind: "stale" as const } };
     },
@@ -123,6 +125,7 @@ function serviceWithForeignReadyExport(): { service: OwnerExportApplicationServi
     includedScopes: ["portfolio-content"],
     status: "ready",
     schemaVersion: OWNER_EXPORT_SCHEMA_VERSION,
+    aggregateVersion: 3,
     requestedAt: "2026-10-23T08:00:00.000Z",
     completedAt: "2026-10-23T08:01:00.000Z",
     integrityManifest: {
@@ -145,6 +148,9 @@ function serviceWithForeignReadyExport(): { service: OwnerExportApplicationServi
       }],
     },
     artifactId: PERSISTED_ARTIFACT_ID,
+    artifactSha256: "c".repeat(64),
+    artifactContentLength: 42,
+    expiresAt: "2026-10-30T08:01:00.000Z",
   }];
   return { service: serviceForStore(scopedStore(persisted)), exportId };
 }

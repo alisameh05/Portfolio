@@ -118,6 +118,24 @@ export function createPostgresPortfolioSettingsRepository(
       }
     },
 
+    async getSettingsSnapshot(scope: PortfolioScope, context: TransactionContext) {
+      try {
+        const settings = await this.getSettings(scope, context);
+        if (!settings.ok && settings.error.kind !== "not_found") return settings;
+        const timestamp = await sql<{ captured_at: Date | string }>`
+          select transaction_timestamp() as captured_at
+        `.execute(resolvePostgresTransaction(context));
+        const instant = timestamp.rows[0]?.captured_at;
+        if (instant === undefined) throw new PostgresInfrastructureError();
+        const capturedAt = instant instanceof Date ? instant.toISOString() : new Date(instant).toISOString();
+        if (!Number.isFinite(Date.parse(capturedAt))) throw new PostgresInfrastructureError();
+        return { ok: true as const, value: { settings: settings.ok ? settings.value : null, capturedAt } };
+      } catch (error) {
+        if (error instanceof PostgresInfrastructureError) throw error;
+        throw new PostgresInfrastructureError();
+      }
+    },
+
     async provisionSettings(
       scope: PortfolioScope,
       settings: PortfolioSettings,

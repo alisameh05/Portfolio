@@ -154,6 +154,51 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
   Object.freeze({ migration: "20261017142000_revoke_public_aggregate_guard_execution.sql", ticket: 203, capability: "measurement.aggregate_privacy" }),
   Object.freeze({ migration: "20261018172500_bound_job_retries_and_incidents.sql", ticket: 237, capability: "operations.bounded_retries" }),
   Object.freeze({ migration: "20261023090000_reserve_owner_export_requests.sql", ticket: 238, capability: "portability.owner_export_requests" }),
+  Object.freeze({
+    migration: "20261023100000_build_configuration_owner_exports.sql",
+    migrationSha256: "3b2525935b8e8e1c83c64d1fe28ca0af60f6534cde53627bcb012059ce992966",
+    ticket: 240,
+    capability: "portability.configuration_export",
+    includeInDeclaredCapabilities: true,
+    operationsAdditions: Object.freeze([
+      Object.freeze({
+        category: "policies",
+        identity: "operations.outbox_events.owner_export_produced_outbox_worker_insert",
+        expected: Object.freeze({
+          schema: "operations",
+          tableName: "outbox_events",
+          name: "owner_export_produced_outbox_worker_insert",
+          permissive: "permissive",
+          roles: "{shipwithali_worker}",
+          command: "INSERT",
+          usingPredicate: "",
+        }),
+      }),
+      Object.freeze({
+        category: "grants",
+        identity: "operations.outbox_events.r.shipwithali_worker:shipwithali_migration:INSERT",
+        expected: Object.freeze({
+          schema: "operations",
+          object: "outbox_events",
+          objectType: "r",
+          grantee: "shipwithali_worker",
+          grantor: "shipwithali_migration",
+          privilege: "INSERT",
+          grantable: false,
+        }),
+      }),
+      Object.freeze({
+        category: "indexes",
+        identity: "operations.outbox_events.owner_export_produced_outbox_once",
+        expected: Object.freeze({
+          schema: "operations",
+          table: "outbox_events",
+          name: "owner_export_produced_outbox_once",
+          definition: "CREATE UNIQUE INDEX owner_export_produced_outbox_once ON operations.outbox_events USING btree (aggregate_id, aggregate_version) WHERE (event_type = 'portability.export_produced.v1'::text)",
+        }),
+      }),
+    ]),
+  }),
 ]);
 
 // Historical checkpoints and their paired database checks. A suite whose
@@ -241,13 +286,35 @@ export function composeOperationsBoundary(transformations = PHASE_DATABASE_TRANS
   return Object.freeze({ operations: Object.freeze(operations.map(Object.freeze)) });
 }
 
-export function declaredCapabilities(transformations = PHASE_DATABASE_TRANSFORMATIONS) {
+export function declaredCapabilities(
+  transformations = PHASE_DATABASE_TRANSFORMATIONS,
+  additiveMigrations = PHASE_DECLARED_ADDITIVE_MIGRATIONS,
+) {
   const capabilities = [];
   for (const transformation of transformations) {
     if (typeof transformation.capability === "string" && transformation.capability.length > 0 &&
       !capabilities.includes(transformation.capability)) capabilities.push(transformation.capability);
   }
+  for (const migration of additiveMigrations) {
+    if (migration.includeInDeclaredCapabilities === true && typeof migration.capability === "string" &&
+      migration.capability.length > 0 && !capabilities.includes(migration.capability)) {
+      capabilities.push(migration.capability);
+    }
+  }
   return Object.freeze(capabilities);
+}
+
+export function capabilitiesForMigrations(
+  migrationFiles,
+  transformations = PHASE_DATABASE_TRANSFORMATIONS,
+  additiveMigrations = PHASE_DECLARED_ADDITIVE_MIGRATIONS,
+) {
+  const files = new Set(migrationFiles);
+  const capabilities = declaredCapabilities(transformations, additiveMigrations);
+  return Object.freeze(capabilities.filter((capability) =>
+    transformations.some((entry) => entry.capability === capability && files.has(entry.migration)) ||
+    additiveMigrations.some((entry) => entry.includeInDeclaredCapabilities === true &&
+      entry.capability === capability && files.has(entry.migration))));
 }
 
 // Classifies every migration file exactly once, in declared registry order.
@@ -304,7 +371,12 @@ export function resolveMigrationClassifications(migrationFiles, {
       if (additiveMigrations.filter((entry) => entry.migration === file).length !== 1) {
         throw new Error(`PHASE_CONTRACT_MIGRATION_DUPLICATE_DECLARATION:${file}`);
       }
-      classifications.set(file, { kind: "declared-additive", additive: additiveMigrations.find((entry) => entry.migration === file) });
+      const additive = additiveMigrations.find((entry) => entry.migration === file);
+      if (additive.migrationSha256 && migrationContents instanceof Map) {
+        const actual = migrationContents.has(file) ? migrationSha256(migrationContents.get(file)) : null;
+        if (actual !== additive.migrationSha256) throw new Error(`PHASE_CONTRACT_ADDITIVE_CHECKSUM_MISMATCH:${file}`);
+      }
+      classifications.set(file, { kind: "declared-additive", additive });
       continue;
     }
     throw new Error(`PHASE_CONTRACT_MIGRATION_UNDECLARED:${file}`);

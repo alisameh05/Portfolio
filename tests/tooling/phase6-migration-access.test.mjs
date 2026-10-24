@@ -150,11 +150,11 @@ test("catalog proof permits only the reviewed Phase 7 Worker retention definers"
   }
 });
 
-test("catalog proof permits documented Worker schemas and forbids domain access or DDL", () => {
-  for (const schema_name of ["operations", "measurement", "interaction"]) {
+test("catalog proof permits only approved Worker schemas and forbids unapproved domains or DDL", () => {
+  for (const schema_name of ["operations", "measurement", "interaction", "portability", "portfolio_config"]) {
     assert.equal(phase6WorkerSchemaProof([{ role_name: "shipwithali_worker", schema_name, usage: true, create: false }]), true);
   }
-  for (const schema_name of ["media", "cv_portfolio", "content"]) {
+  for (const schema_name of ["media", "cv_portfolio", "content", "identity_access"]) {
     assert.equal(phase6WorkerSchemaProof([{ role_name: "shipwithali_worker", schema_name, usage: true, create: false }]), false);
   }
   assert.equal(phase6WorkerSchemaProof([{ role_name: "shipwithali_worker", schema_name: "operations", usage: true, create: true }]), false);

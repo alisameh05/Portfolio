@@ -53,6 +53,10 @@ const RETRY_RECOVERY_POLICIES: ReadonlyArray<readonly [string, string, string, s
 ];
 
 const PORTABILITY_EXPORT_UUID = "018f4f7d-5000-7000-8000-000000000170";
+const CONFIGURATION_EXPORT_PORTFOLIO = "018f4f7d-5000-7000-8000-000000000290";
+const CONFIGURATION_EXPORT_OWNER = "018f4f7d-5000-7000-8000-000000000291";
+const CONFIGURATION_EXPORT_FIXTURE_ID = "018f4f7d-5000-7000-8000-000000000292";
+const CONFIGURATION_EXPORT_SNAPSHOT_ID = "018f4f7d-5000-7000-8000-000000000293";
 
 const PORTABILITY_EXPORT_OWNER_SETTINGS = `set local shipwithali.owner_id = '${PORTABILITY_EXPORT_UUID}';`;
 const PORTABILITY_EXPORT_OTHER_SETTINGS = `set local shipwithali.owner_id = '018f4f7d-5000-7000-8000-000000000271';`;
@@ -116,6 +120,29 @@ const PORTABILITY_EXPORT_POLICIES: ReadonlyArray<readonly [string, string, strin
   ["owner_exports", "owner_exports_worker_update_policy", "UPDATE", "{shipwithali_worker}"],
 ];
 
+const CONFIGURATION_EXPORT_READ_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
+  ["settings", "portfolio_settings_worker_export_select", "SELECT", "{shipwithali_worker}"],
+  ["contact_channels", "portfolio_channels_worker_export_select", "SELECT", "{shipwithali_worker}"],
+];
+
+const CONFIGURATION_EXPORT_OUTBOX_POLICY: ReadonlyArray<readonly [string, string, string, string]> = [
+  ["outbox_events", "owner_export_produced_outbox_worker_insert", "INSERT", "{shipwithali_worker}"],
+];
+
+const CONFIGURATION_EXPORT_MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+  ["shipwithali_worker", "insert produced event for unready export",
+    "insert into operations.outbox_events (event_id, event_type, schema_version, aggregate_id, aggregate_version, payload, correlation_id, causation_id, occurred_at, available_at) " +
+    "values ('018f4f7d-5000-7000-8000-000000000291', 'portability.export_produced.v1', 1, '018f4f7d-5000-7000-8000-000000000292', 2, " +
+    "jsonb_build_object('exportId', '018f4f7d-5000-7000-8000-000000000292', 'manifest', jsonb_build_object('schemaVersion', '1.0', 'exportId', '018f4f7d-5000-7000-8000-000000000292', 'checksumSha256', repeat('a', 64), 'recordCounts', '{}'::jsonb)), " +
+    "'018f4f7d-5000-7000-8000-000000000292', '018f4f7d-5000-7000-8000-000000000293', transaction_timestamp(), transaction_timestamp())", false],
+  ["anon", "select configuration settings", "select count(*) from portfolio_config.settings", false],
+  ["authenticated", "select configuration settings", "select count(*) from portfolio_config.settings", false],
+  ["shipwithali_worker", "select configuration settings", `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; select count(*) from portfolio_config.settings`, true],
+  ["shipwithali_worker", "select Contact channels", `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; select count(*) from portfolio_config.contact_channels`, true],
+  ["shipwithali_worker", "update configuration settings", "update portfolio_config.settings set version = version where false", false],
+  ["shipwithali_worker", "insert Contact channel", "insert into portfolio_config.contact_channels (portfolio_id, position, channel, label, destination, available_locales) values ('018f4f7d-5000-7000-8000-000000000290', 9, 'email', 'Email', 'owner@example.test', '[\"en\"]'::jsonb)", false],
+];
+
 /** The scoped assembly-job policy reviewed for #238 in operations.jobs. */
 const OWNER_EXPORT_JOB_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
   ["jobs", "owner_export_jobs_application_insert", "INSERT", "{shipwithali_application}"],
@@ -131,6 +158,7 @@ const OWNER_EXPORT_JOB_POLICIES: ReadonlyArray<readonly [string, string, string,
  */
 let retryRecoverySchema = false;
 let portabilityExportSchema = false;
+let configurationExportSchema = false;
 if (DATABASE_URL !== undefined) {
    const declared = (process.env["PHASE_DATABASE_CAPABILITIES"] ?? declaredCapabilities().join(","))
     .split(",").map((value) => value.trim()).filter(Boolean);
@@ -175,6 +203,19 @@ if (DATABASE_URL !== undefined) {
         declared.includes("portability.owner_export_requests")
           ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:portability.owner_export_requests"
           : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:portability.owner_export_requests",
+      );
+    }
+    const configurationPolicies = await era.query(
+      `select count(*)::int as count from pg_policies
+        where schemaname = 'portfolio_config'
+          and policyname in ('portfolio_settings_worker_export_select', 'portfolio_channels_worker_export_select')`,
+    );
+    configurationExportSchema = Number(configurationPolicies.rows[0]?.["count"] ?? 0) === 2;
+    if (declared.includes("portability.configuration_export") !== configurationExportSchema) {
+      throw new Error(
+        declared.includes("portability.configuration_export")
+          ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:portability.configuration_export"
+          : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:portability.configuration_export",
       );
     }
   } finally {
@@ -346,6 +387,7 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
   ...BASE_MATRIX,
   ...(retryRecoverySchema ? RETRY_RECOVERY_MATRIX : []),
   ...(portabilityExportSchema ? PORTABILITY_EXPORT_MATRIX : []),
+  ...(configurationExportSchema ? CONFIGURATION_EXPORT_MATRIX : []),
 ];
 
 interface RoleAttempt {
@@ -401,8 +443,9 @@ async function attemptAs(role: string | null, statement: string): Promise<RoleAt
     let allowed = true;
     let rows: Array<Record<string, unknown>> = [];
     try {
-      const result = await probe.query(statement);
-      rows = result.rows as Array<Record<string, unknown>>;
+      const results = await probe.query(statement);
+      const result = Array.isArray(results) ? results.at(-1) : results;
+      rows = (result?.rows ?? []) as Array<Record<string, unknown>>;
     } catch {
       allowed = false;
     }
@@ -493,6 +536,33 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
       ) {
         throw new Error("ROLE_MATRIX_SETUP_FAILED");
       }
+      if (configurationExportSchema) {
+        await admin.query("delete from portability.owner_exports where export_id = $1", [CONFIGURATION_EXPORT_FIXTURE_ID]);
+        await admin.query("delete from portfolio_config.contact_channels where portfolio_id = $1", [CONFIGURATION_EXPORT_PORTFOLIO]);
+        await admin.query("delete from taxonomy.roots where portfolio_id = $1", [CONFIGURATION_EXPORT_PORTFOLIO]);
+        await admin.query("delete from portfolio_config.settings where portfolio_id = $1", [CONFIGURATION_EXPORT_PORTFOLIO]);
+        await admin.query(
+          `insert into portfolio_config.settings (
+             portfolio_id, owner_id, display_name, headline, bio,
+             global_cta_label, global_cta_destination, global_cta_unavailable_fallback
+           ) values ($1, $2, 'RLS fixture', 'Worker read test', 'Synthetic profile fixture',
+             'Contact', 'https://example.test/contact', 'Unavailable')`,
+          [CONFIGURATION_EXPORT_PORTFOLIO, CONFIGURATION_EXPORT_OWNER],
+        );
+        await admin.query(
+          `insert into portfolio_config.contact_channels (portfolio_id, position, channel, label, destination, available_locales)
+           values ($1, 0, 'email', 'Email', 'owner@example.test', '["en"]'::jsonb)`,
+          [CONFIGURATION_EXPORT_PORTFOLIO],
+        );
+        await admin.query(
+          `insert into portability.owner_exports (
+             export_id, portfolio_id, owner_id, included_scopes, status, schema_version, requested_at,
+             snapshot_id, snapshot_captured_at, configuration_version, snapshot_data
+           ) values ($1, $2, $3, array['portfolio-content'], 'requested', '1.0', transaction_timestamp(),
+             $4, transaction_timestamp(), 1, jsonb_build_object('privateMarker', 'owner-export-snapshot-private'))`,
+          [CONFIGURATION_EXPORT_FIXTURE_ID, CONFIGURATION_EXPORT_PORTFOLIO, CONFIGURATION_EXPORT_OWNER, CONFIGURATION_EXPORT_SNAPSHOT_ID],
+        );
+      }
     } catch {
       throw new Error("ROLE_MATRIX_SETUP_FAILED");
     } finally {
@@ -504,6 +574,12 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
     const admin = adminClient();
     await admin.connect();
     try {
+      if (configurationExportSchema) {
+        await admin.query("delete from portability.owner_exports where export_id = $1", [CONFIGURATION_EXPORT_FIXTURE_ID]);
+        await admin.query("delete from portfolio_config.contact_channels where portfolio_id = $1", [CONFIGURATION_EXPORT_PORTFOLIO]);
+        await admin.query("delete from taxonomy.roots where portfolio_id = $1", [CONFIGURATION_EXPORT_PORTFOLIO]);
+        await admin.query("delete from portfolio_config.settings where portfolio_id = $1", [CONFIGURATION_EXPORT_PORTFOLIO]);
+      }
       await admin.query("set role shipwithali_migration");
       await admin.query("drop table if exists operations.__phase3_role_probe");
       await admin.query("drop sequence if exists operations.__phase3_role_probe_sequence");
@@ -664,11 +740,47 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
         ["outbox_events", "outbox_application_insert_policy", "INSERT", "{shipwithali_application}"],
         ["outbox_events", "outbox_worker_select_policy", "SELECT", "{shipwithali_worker}"],
         ["outbox_events", "outbox_worker_update_policy", "UPDATE", "{shipwithali_worker}"],
+        ...(configurationExportSchema ? CONFIGURATION_EXPORT_OUTBOX_POLICY : []),
       ]);
     } finally {
       await admin.end();
     }
   });
+
+  if (configurationExportSchema) {
+    it("publishes the configuration-only worker read boundary and scopes both tables by Owner and Portfolio", async () => {
+      const admin = adminClient();
+      await admin.connect();
+      try {
+        const policies = await admin.query(
+          `select tablename, policyname, roles, cmd
+             from pg_policies
+            where schemaname = 'portfolio_config'
+              and policyname in ('portfolio_settings_worker_export_select', 'portfolio_channels_worker_export_select')
+            order by policyname`,
+        );
+        expect(policies.rows.map((row) => [row["tablename"], row["policyname"], row["cmd"], String(row["roles"])]))
+          .toEqual([...CONFIGURATION_EXPORT_READ_POLICIES].sort((left, right) => left[1].localeCompare(right[1])));
+      } finally {
+        await admin.end();
+      }
+      const allowed = await attemptAs("shipwithali_worker",
+        `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; select count(*)::int as count from portfolio_config.settings`);
+      expect(allowed.rows.at(-1)?.["count"]).toBe(1);
+      const wrongOwner = await attemptAs("shipwithali_worker",
+        `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${PORTABILITY_EXPORT_UUID}'; select count(*)::int as count from portfolio_config.settings`);
+      expect(wrongOwner.rows.at(-1)?.["count"]).toBe(0);
+      const wrongPortfolio = await attemptAs("shipwithali_worker",
+        `set local shipwithali.portfolio_id = '${PORTABILITY_EXPORT_UUID}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; select count(*)::int as count from portfolio_config.contact_channels`);
+      expect(wrongPortfolio.rows.at(-1)?.["count"]).toBe(0);
+      const unscopedSnapshot = await attemptAs("shipwithali_application",
+        `select count(*)::int as count from portability.owner_exports where export_id = '${CONFIGURATION_EXPORT_FIXTURE_ID}'`);
+      expect(unscopedSnapshot.rows.at(-1)?.["count"]).toBe(0);
+      const scopedSnapshot = await attemptAs("shipwithali_application",
+        `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; select snapshot_data->>'privateMarker' as marker from portability.owner_exports where export_id = '${CONFIGURATION_EXPORT_FIXTURE_ID}'`);
+      expect(scopedSnapshot.rows.at(-1)?.["marker"]).toBe("owner-export-snapshot-private");
+    });
+  }
 
   if (portabilityExportSchema) {
     it("publishes the declared portability owner-export policies (#238)", async () => {

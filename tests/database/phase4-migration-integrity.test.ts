@@ -181,6 +181,8 @@ describe("Phase 4 migration integrity", () => {
   it("requires forced RLS and the intended policy roles and scope on every Phase 4 application table", () => {
     const settingsScope = "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND ((owner_id)::text = current_setting('shipwithali.owner_id'::text, true)))";
     const channelsScope = "(((portfolio_id)::text = current_setting('shipwithali.portfolio_id'::text, true)) AND (EXISTS ( SELECT 1 FROM portfolio_config.settings settings WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = current_setting('shipwithali.owner_id'::text, true))))))";
+    const workerSettingsScope = "(((portfolio_id)::text = nullif(current_setting('shipwithali.portfolio_id'::text, true), ''::text)) AND ((owner_id)::text = nullif(current_setting('shipwithali.owner_id'::text, true), ''::text)))";
+    const workerChannelsScope = "(((portfolio_id)::text = nullif(current_setting('shipwithali.portfolio_id'::text, true), ''::text)) AND (EXISTS ( SELECT 1 FROM portfolio_config.settings settings WHERE ((settings.portfolio_id = contact_channels.portfolio_id) AND ((settings.owner_id)::text = nullif(current_setting('shipwithali.owner_id'::text, true), ''::text))))))";
     const policyData = [
       ["identity_access", "owner_links", "owner_links_application_select_policy", "SELECT", "{shipwithali_application}", "true", ""],
       ["identity_access", "owner_links", "owner_links_application_insert_policy", "INSERT", "{shipwithali_application}", "", "true"],
@@ -232,6 +234,32 @@ describe("Phase 4 migration integrity", () => {
     expect(() => assertPhase4ApplicationRls({
       ...snapshot,
       grants: [{ schema: "portfolio_config", grantee: "shipwithali_worker", privilege: "SELECT", objectType: "r" }],
+    })).toThrow("PHASE4_APPLICATION_GRANT_EXPOSURE");
+
+    const configurationExportSnapshot = {
+      ...snapshot,
+      migrationLedger: [{ version: "20261023100000", name: "build_configuration_owner_exports" }],
+      policies: [
+        ...snapshot.policies,
+        { schema: "portfolio_config", tableName: "settings", name: "portfolio_settings_worker_export_select", command: "SELECT", roles: "{shipwithali_worker}", permissive: "permissive", usingPredicate: workerSettingsScope, withCheck: "" },
+        { schema: "portfolio_config", tableName: "contact_channels", name: "portfolio_channels_worker_export_select", command: "SELECT", roles: "{shipwithali_worker}", permissive: "permissive", usingPredicate: workerChannelsScope, withCheck: "" },
+      ],
+      grants: [
+        { schema: "portfolio_config", object: "portfolio_config", objectType: "n", grantee: "shipwithali_worker", privilege: "USAGE" },
+        { schema: "portfolio_config", object: "settings", objectType: "r", grantee: "shipwithali_worker", privilege: "SELECT" },
+        { schema: "portfolio_config", object: "contact_channels", objectType: "r", grantee: "shipwithali_worker", privilege: "SELECT" },
+      ],
+    };
+    expect(() => assertPhase4ApplicationRls(configurationExportSnapshot)).not.toThrow();
+    expect(() => assertPhase4ApplicationRls({
+      ...configurationExportSnapshot,
+      grants: [...configurationExportSnapshot.grants,
+        { schema: "portfolio_config", object: "settings", objectType: "r", grantee: "shipwithali_worker", privilege: "UPDATE" }],
+    })).toThrow("PHASE4_APPLICATION_GRANT_EXPOSURE");
+    expect(() => assertPhase4ApplicationRls({
+      ...configurationExportSnapshot,
+      grants: [...configurationExportSnapshot.grants,
+        { schema: "portfolio_config", object: "portfolio_config", objectType: "n", grantee: "shipwithali_worker", privilege: "CREATE" }],
     })).toThrow("PHASE4_APPLICATION_GRANT_EXPOSURE");
   });
 

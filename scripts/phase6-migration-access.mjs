@@ -163,7 +163,7 @@ export function phase6DefinerFunctionProof(row) {
 
 export function phase6WorkerSchemaProof(rows) {
   return Array.isArray(rows) && rows.filter(row => row.role_name === "shipwithali_worker").every(row =>
-    row.create === false && (row.usage === false || row.usage === true && ["operations", "measurement", "interaction"].includes(row.schema_name)));
+    row.create === false && (row.usage === false || row.usage === true && ["operations", "measurement", "interaction", "portability", "portfolio_config"].includes(row.schema_name)));
 }
 
 async function queryRows(client, sql) { return (await client.query(sql)).rows; }

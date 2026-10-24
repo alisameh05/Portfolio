@@ -60,6 +60,7 @@ export:
                   schemaVersion: '1.1'
                   requestedAt: '2026-10-23T10:00:00Z'
                   completedAt: '2026-10-23T10:01:00Z'
+                  expiresAt: '2026-10-30T10:01:00Z'
                   includedScopes: [analytics-reports]
                   publicEventDataCoverage: { mode: excluded }
                   integrityManifest:

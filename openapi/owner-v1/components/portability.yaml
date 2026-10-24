@@ -798,13 +798,14 @@ schemas:
     type: object
     description: A completed versioned domain artifact, never a database dump or provider backup.
     additionalProperties: false
-    required: [exportId, state, schemaVersion, requestedAt, completedAt, includedScopes, publicEventDataCoverage, integrityManifest, downloadAvailable]
+    required: [exportId, state, schemaVersion, requestedAt, completedAt, expiresAt, includedScopes, publicEventDataCoverage, integrityManifest, downloadAvailable]
     properties:
       exportId: { $ref: ./common.yaml#/schemas/StableId }
       state: { type: string, const: ready }
       schemaVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+$' }
       requestedAt: { type: string, format: date-time }
       completedAt: { type: string, format: date-time }
+      expiresAt: { type: string, format: date-time, description: Effective artifact expiry after policy and default retention are applied. }
       includedScopes:
         type: array
         minItems: 1
@@ -834,7 +835,7 @@ schemas:
   ExpiredOwnerExportView:
     type: object
     additionalProperties: false
-    required: [exportId, state, schemaVersion, requestedAt, completedAt, expiredAt, includedScopes, publicEventDataCoverage, integrityManifest, downloadAvailable]
+    required: [exportId, state, schemaVersion, requestedAt, completedAt, expiredAt, expiresAt, includedScopes, publicEventDataCoverage, integrityManifest, downloadAvailable]
     properties:
       exportId: { $ref: ./common.yaml#/schemas/StableId }
       state: { type: string, const: expired }
@@ -842,6 +843,7 @@ schemas:
       requestedAt: { type: string, format: date-time }
       completedAt: { type: string, format: date-time }
       expiredAt: { type: string, format: date-time }
+      expiresAt: { type: string, format: date-time, description: Effective artifact expiry after policy and default retention are applied. }
       includedScopes:
         type: array
         minItems: 1
