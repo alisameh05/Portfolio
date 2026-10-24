@@ -150,6 +150,22 @@ test("catalog proof permits only the reviewed Phase 7 Worker retention definers"
   }
 });
 
+test("catalog proof admits content export schemas only after the declared migration", () => {
+  const migration = "20261024120000_read_content_for_owner_exports.sql";
+  for (const schema_name of ["content", "taxonomy"]) {
+    const row = { role_name: "shipwithali_worker", schema_name, usage: true, create: false };
+    assert.equal(phase6WorkerSchemaProof([row], [migration]), true);
+    assert.equal(phase6WorkerSchemaProof([row], []), false);
+    assert.equal(phase6WorkerSchemaProof([row], ["20261023100000_build_configuration_owner_exports.sql"]), false);
+    assert.equal(phase6WorkerSchemaProof([{ ...row, create: true }], [migration]), false);
+  }
+  for (const schema_name of ["media", "cv_portfolio", "identity_access"]) {
+    assert.equal(phase6WorkerSchemaProof([
+      { role_name: "shipwithali_worker", schema_name, usage: true, create: false },
+    ], [migration]), false);
+  }
+});
+
 test("catalog proof permits only approved Worker schemas and forbids unapproved domains or DDL", () => {
   for (const schema_name of ["operations", "measurement", "interaction", "portability", "portfolio_config"]) {
     assert.equal(phase6WorkerSchemaProof([{ role_name: "shipwithali_worker", schema_name, usage: true, create: false }]), true);
