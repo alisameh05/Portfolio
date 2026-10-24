@@ -98,7 +98,32 @@ test("migration fixtures preserve valid accepted-PDF history, scoped access and 
       assert.notEqual(row.version_id, plans.portableObject.mediaId);
     } finally { await client.end(); }
     stage = "RESTRICTED_PRINCIPALS";
-    assert.equal((await privilegeMatrix(sourceStatus.DB_URL)).executionCount, 17);
+    assert.equal((await privilegeMatrix(sourceStatus.DB_URL)).executionCount, 26);
+    stage = "WORKER_EXPORT_BOUNDARY_REJECTION";
+    const workerGrantProbe = new Client({ connectionString: sourceStatus.DB_URL }); await workerGrantProbe.connect();
+    try {
+      for (const [grant, revoke, code] of [
+        ["create policy phase6_unscoped_worker_probe on media.assets for select to shipwithali_worker using (true)",
+          "drop policy phase6_unscoped_worker_probe on media.assets", "PHASE6_WORKER_DOMAIN_READ_ALLOWED"],
+        ["create policy phase6_wrong_purpose_probe on media.assets for select to shipwithali_worker using (nullif(current_setting('shipwithali.owner_id',true),'') is not null)",
+          "drop policy phase6_wrong_purpose_probe on media.assets", "PHASE6_WORKER_MEDIA_EXPORT_SCOPE_LEAK"],
+        ["grant select(original_file_name) on media.assets to shipwithali_worker",
+          "revoke select(original_file_name) on media.assets from shipwithali_worker", "PHASE6_WORKER_MEDIA_EXPORT_PRIVILEGE_TOO_BROAD"],
+        ["grant select(private_reason) on media.rejection_history to shipwithali_worker",
+          "revoke select(private_reason) on media.rejection_history from shipwithali_worker", "PHASE6_WORKER_MEDIA_EXPORT_PRIVILEGE_TOO_BROAD"],
+        ["grant update on media.assets to shipwithali_worker",
+          "revoke update on media.assets from shipwithali_worker", "PHASE6_WORKER_MEDIA_EXPORT_PRIVILEGE_TOO_BROAD"],
+        ["grant usage on schema cv_portfolio to shipwithali_worker",
+          "revoke usage on schema cv_portfolio from shipwithali_worker", "PHASE6_WORKER_DOMAIN_ACCESS_TOO_BROAD"],
+        ["grant create on schema media to shipwithali_worker",
+          "revoke create on schema media from shipwithali_worker", "PHASE6_WORKER_DOMAIN_ACCESS_TOO_BROAD"],
+      ]) {
+        await workerGrantProbe.query(grant);
+        try { await assert.rejects(privilegeMatrix(sourceStatus.DB_URL), { message: code }); }
+        finally { await workerGrantProbe.query(revoke); }
+      }
+    } finally { await workerGrantProbe.end(); }
+    assert.equal((await privilegeMatrix(sourceStatus.DB_URL)).executionCount, 26);
     stage = "START_TARGET";
     const target = makeProject("fixture-target", basePort + 20, migrations); projects.push(target);
     const targetStatus = await startProject(target);

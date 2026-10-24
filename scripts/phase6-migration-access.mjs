@@ -174,6 +174,12 @@ export function phase6WorkerSchemaProof(rows, migrationFiles = []) {
     row.create === false && (row.usage === false || row.usage === true && approvedSchemas.includes(row.schema_name)));
 }
 
+function installedMigrationFiles(versions) {
+  const installedVersions = new Set(versions.map(({ version }) => version));
+  return readdirSync(join(ROOT, "supabase", "migrations"))
+    .filter(file => installedVersions.has(file.slice(0, 14)));
+}
+
 async function queryRows(client, sql) { return (await client.query(sql)).rows; }
 
 export function phase6StorageDefaultDenyProof(tables, policies) {
@@ -217,9 +223,7 @@ export async function catalogSnapshot(connectionString) {
     if (privileges.rows.some((row) => row.role_name === "service_role" && (row.usage || row.create)) ||
         grants.rows.some((row) => row.grantee === "service_role")) throw new Error("PHASE6_SERVICE_ROLE_DATABASE_SHORTCUT_FOUND");
     if (grants.rows.some((row) => row.grantee === "shipwithali_backup" && row.privilege_type !== "SELECT")) throw new Error("PHASE6_BACKUP_WRITE_GRANT_FOUND");
-    const installedVersions = new Set(versions.rows.map(({ version }) => version));
-    const installedMigrations = readdirSync(join(ROOT, "supabase", "migrations"))
-      .filter(file => installedVersions.has(file.slice(0, 14)));
+    const installedMigrations = installedMigrationFiles(versions.rows);
     if (!phase6WorkerSchemaProof(privileges.rows, installedMigrations)) throw new Error("PHASE6_WORKER_SCHEMA_GRANT_TOO_BROAD");
     if (privileges.rows.some((row) => row.role_name === "shipwithali_application" && row.create)) throw new Error("PHASE6_APPLICATION_SCHEMA_CREATE_GRANT_FOUND");
     if (grants.rows.some((row) => row.grantee === "shipwithali_application" && ["TRUNCATE", "REFERENCES", "TRIGGER"].includes(row.privilege_type))) throw new Error("PHASE6_APPLICATION_TABLE_GRANT_TOO_BROAD");
@@ -373,8 +377,11 @@ export async function privilegeMatrix(connectionString) {
     if (!mediaUpdateDenied || !cvDeleteDenied || !objectMutationDenied || !acceptanceMutationDenied || !activationMutationDenied) throw new Error("PHASE6_RESTRICTED_WRITE_ALLOWED");
     const denied = await probe.query("select has_table_privilege(current_user,'media.assets','UPDATE') as update_media, has_table_privilege(current_user,'cv_portfolio.versions','DELETE') as delete_cv, has_schema_privilege('anon','media','USAGE') as anon_media, has_schema_privilege('authenticated','cv_portfolio','USAGE') as authenticated_cv");
     if (Object.values(denied.rows[0]).some(Boolean)) throw new Error("PHASE6_RESTRICTED_ROLE_GRANT_TOO_BROAD");
-    const worker = await admin.query("select has_schema_privilege('shipwithali_worker','media','USAGE') as media, has_schema_privilege('shipwithali_worker','cv_portfolio','USAGE') as cv");
-    if (worker.rows[0].media || worker.rows[0].cv) throw new Error("PHASE6_WORKER_DOMAIN_ACCESS_TOO_BROAD");
+    const versions = await admin.query("select version from supabase_migrations.schema_migrations order by version");
+    const installedMigrations = installedMigrationFiles(versions.rows);
+    const mediaExportEnabled = capabilitiesForMigrations(installedMigrations).includes("portability.media_export");
+    const worker = await admin.query("select 'shipwithali_worker' as role_name, schema_name, has_schema_privilege('shipwithali_worker',schema_name,'USAGE') as usage, has_schema_privilege('shipwithali_worker',schema_name,'CREATE') as create from unnest(ARRAY['media','cv_portfolio']) schema_name");
+    if (!phase6WorkerSchemaProof(worker.rows, installedMigrations)) throw new Error("PHASE6_WORKER_DOMAIN_ACCESS_TOO_BROAD");
     const workerUrl = new URL(connectionString); workerUrl.username = workerLogin; workerUrl.password = workerPassword;
     workerPool = new Pool({ connectionString: workerUrl.toString(), max: 1 });
     workerProbe = await workerPool.connect();
@@ -386,21 +393,52 @@ export async function privilegeMatrix(connectionString) {
     if (allowedWorkerQuery.rows[0]?.count !== 1) throw new Error("PHASE6_WORKER_ALLOWED_OPERATION_READ_FAILED");
     await workerProbe.query("savepoint domain_denial");
     let workerDomainDenied = false;
-    try { await workerProbe.query("select count(*) from media.assets"); }
+    try {
+      const unscoped = await workerProbe.query("select media_id from media.assets");
+      workerDomainDenied = mediaExportEnabled && unscoped.rowCount === 0;
+    }
     catch (error) { workerDomainDenied = error?.code === "42501"; }
     await workerProbe.query("rollback to savepoint domain_denial");
     if (!workerDomainDenied) throw new Error("PHASE6_WORKER_DOMAIN_READ_ALLOWED");
+    if (mediaExportEnabled) {
+      for (const [portfolioId, ownerId, purpose] of [
+        [scopeA.portfolioId, scopeA.ownerId, ""],
+        [scopeA.portfolioId, scopeA.ownerId, "content.owner-export"],
+        [scopeA.portfolioId, scopeB.ownerId, "media.owner-export"],
+        [scopeB.portfolioId, scopeA.ownerId, "media.owner-export"],
+      ]) {
+        await workerProbe.query("select set_config('shipwithali.portfolio_id',$1,true),set_config('shipwithali.owner_id',$2,true),set_config('shipwithali.worker_purpose',$3,true)", [portfolioId, ownerId, purpose]);
+        const forbidden = await workerProbe.query("select media_id from media.assets");
+        if (forbidden.rowCount !== 0) throw new Error("PHASE6_WORKER_MEDIA_EXPORT_SCOPE_LEAK");
+      }
+      await workerProbe.query("select set_config('shipwithali.portfolio_id',$1,true),set_config('shipwithali.owner_id',$2,true),set_config('shipwithali.worker_purpose','media.owner-export',true)", [scopeA.portfolioId, scopeA.ownerId]);
+      const exported = await workerProbe.query("select media_id from media.assets where media_id=$1::uuid", [stableId(5000)]);
+      if (exported.rowCount !== 1) throw new Error("PHASE6_WORKER_MEDIA_EXPORT_READ_FAILED");
+      for (const sql of [
+        "select original_file_name from media.assets",
+        "select private_reason from media.rejection_history",
+        "update media.assets set kind='video'",
+        "select version_id from cv_portfolio.versions",
+      ]) {
+        await workerProbe.query("savepoint export_denial");
+        let denied = false;
+        try { await workerProbe.query(sql); } catch (error) { denied = error?.code === "42501"; }
+        await workerProbe.query("rollback to savepoint export_denial");
+        if (!denied) throw new Error("PHASE6_WORKER_MEDIA_EXPORT_PRIVILEGE_TOO_BROAD");
+      }
+    }
     await workerProbe.query("commit");
     workerProbe.release(); workerProbe = undefined; workerProbe = await workerPool.connect();
     await workerProbe.query("begin");
-    const workerReset = await workerProbe.query("select pg_backend_pid()::int as pid,nullif(current_setting('shipwithali.worker_id',true),'') as worker_scope,nullif(current_setting('shipwithali.portfolio_id',true),'') as portfolio_scope,nullif(current_setting('shipwithali.owner_id',true),'') as owner_scope");
+    const workerReset = await workerProbe.query("select pg_backend_pid()::int as pid,nullif(current_setting('shipwithali.worker_id',true),'') as worker_scope,nullif(current_setting('shipwithali.portfolio_id',true),'') as portfolio_scope,nullif(current_setting('shipwithali.owner_id',true),'') as owner_scope,nullif(current_setting('shipwithali.worker_purpose',true),'') as worker_purpose");
     if (workerReset.rows[0].pid !== workerBackend.rows[0].pid || workerReset.rows[0].worker_scope !== null ||
-        workerReset.rows[0].portfolio_scope !== null || workerReset.rows[0].owner_scope !== null) throw new Error("PHASE6_WORKER_POOL_SCOPE_NOT_CLEARED");
+        workerReset.rows[0].portfolio_scope !== null || workerReset.rows[0].owner_scope !== null ||
+        workerReset.rows[0].worker_purpose !== null) throw new Error("PHASE6_WORKER_POOL_SCOPE_NOT_CLEARED");
     await workerProbe.query("commit");
-    return { executionCount: 17, principals: ["disposable LOGIN member of shipwithali_application", "disposable LOGIN member of shipwithali_worker"],
+    return { executionCount: mediaExportEnabled ? 26 : 17, principals: ["disposable LOGIN member of shipwithali_application", "disposable LOGIN member of shipwithali_worker"],
       ownerScope: "same-owner row visible; wrong portfolio and owner hidden", pooledConnection: "single application pool connection reused across Owners with transaction-local scope cleared at commit; worker pool connection reused after work with both worker and Owner scope cleared",
-      allowed: ["application reads only its configured Owner scope", "worker reads operations outbox"],
-      forbidden: ["media asset identity update (executed and denied)", "processed object snapshot update (executed and denied)", "CV version delete (executed and denied)", "CV acceptance history delete (executed and denied)", "CV activation history delete (executed and denied)", "anonymous Media schema access", "authenticated CV schema access", "worker Media/CV schema access"] };
+      allowed: ["application reads only its configured Owner scope", "worker reads operations outbox", ...(mediaExportEnabled ? ["worker reads Media export columns only under its declared purpose and Owner scope"] : [])],
+      forbidden: ["media asset identity update (executed and denied)", "processed object snapshot update (executed and denied)", "CV version delete (executed and denied)", "CV acceptance history delete (executed and denied)", "CV activation history delete (executed and denied)", "anonymous Media schema access", "authenticated CV schema access", "worker CV schema access", mediaExportEnabled ? "worker unscoped, wrong-purpose and cross-Owner Media reads, private fields and writes" : "worker Media schema access"] };
   } finally {
     probe?.release();
     workerProbe?.release();
