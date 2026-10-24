@@ -1719,7 +1719,7 @@ describeReal(group === "baseline"
     await admin.query(`drop function media.${functionName}()`);
   });
 
-  scenario("baseline", "processes PDF and real image assets, then verifies #243 original and variant export streams through private Storage", async () => {
+  scenario("baseline", "processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors", async () => {
     appNow = Date.now();
     const updatePrivileges = await admin.query(`
       select has_column_privilege('shipwithali_application', 'media.processing_states', 'media_id', 'UPDATE') as state_identity,

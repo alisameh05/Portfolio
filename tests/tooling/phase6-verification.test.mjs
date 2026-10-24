@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -84,6 +84,17 @@ test("CV evidence requires recorded execution of every T09 criterion", () => {
   assert.equal(phase6CvScenarioProof(failed), false);
 });
 
+test("focused Media gates select the real baseline processing scenario", () => {
+  const source = readFileSync(new URL("../database/media-upload-intent.integration.test.ts", import.meta.url), "utf8");
+  const runner = readFileSync(new URL("../../scripts/phase6-verification.mjs", import.meta.url), "utf8");
+  const titles = [...source.matchAll(/scenario\("baseline", "([^"]+)"/gu)].map((match) => match[1]);
+  const patterns = [...runner.matchAll(/testArgs\.push\("-t", "([^"]*processes PDF candidates[^"]*)"\)/gu)].map((match) => match[1]);
+  assert.ok(patterns.length >= 6, "expected the focused PDF, image, delivery, CV and acceptance selectors");
+  for (const pattern of patterns) {
+    assert.ok(titles.some((title) => new RegExp(pattern, "u").test(title)), `missing baseline processing scenario for ${pattern}`);
+  }
+});
+
 test("the complete real integration gate rejects skipped, missing, failed, and partial test reports", () => {
   const report = {
     success: true, numTotalTests: 7, numPassedTests: 7, numFailedTests: 0, numFailedTestSuites: 0, numPendingTests: 0,
@@ -91,7 +102,7 @@ test("the complete real integration gate rejects skipped, missing, failed, and p
       "commits a scoped candidate and replays the same encrypted target without re-signing",
       "allows the exact scoped signed upload and denies anonymous and non-Owner Storage reads/writes",
       "rolls back a failed candidate commit and idempotently removes its expired private orphan",
-      "processes PDF and real image assets, then verifies #243 original and variant export streams through private Storage",
+      "processes PDF candidates and real PNG JPEG WebP images through PostgreSQL, private Storage, ClamAV and trusted processors",
       "issues bounded delivery only for current published-locale and profile Media uses",
       "processes MP4 and WebM candidates with real PostgreSQL, private Storage, ClamAV and FFmpeg",
       "rejects accepted Media safely and serializes with current usage changes",
