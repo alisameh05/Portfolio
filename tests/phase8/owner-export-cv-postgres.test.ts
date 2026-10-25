@@ -104,10 +104,17 @@ describe.runIf(Boolean(WORKER_URL && APPLICATION_URL && ADMIN_URL))("Issue #244 
 
   afterAll(async () => {
     try {
-      await admin?.query("delete from cv_portfolio.activation_history where portfolio_id = $1", [portfolioId]);
-      await admin?.query("delete from cv_portfolio.acceptance_history where portfolio_id = $1", [portfolioId]);
-      await admin?.query("delete from cv_portfolio.versions where portfolio_id = $1", [portfolioId]);
-      await admin?.query("delete from cv_portfolio.portfolios where portfolio_id = $1", [portfolioId]);
+      await admin?.query("begin");
+      try {
+        await admin?.query("delete from cv_portfolio.activation_history where portfolio_id = $1", [portfolioId]);
+        await admin?.query("delete from cv_portfolio.acceptance_history where portfolio_id = $1", [portfolioId]);
+        await admin?.query("delete from cv_portfolio.versions where portfolio_id = $1", [portfolioId]);
+        await admin?.query("delete from cv_portfolio.portfolios where portfolio_id = $1", [portfolioId]);
+        await admin?.query("commit");
+      } catch (error) {
+        await admin?.query("rollback");
+        throw error;
+      }
       await admin?.query("delete from media.rejection_history where owner_id = $1", [ownerId]);
       await admin?.query("delete from media.decision_history where owner_id = $1", [ownerId]);
       await admin?.query("delete from media.processing_states where owner_id = $1", [ownerId]);
