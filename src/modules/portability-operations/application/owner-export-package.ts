@@ -58,8 +58,13 @@ export interface OwnerExportSelectedSnapshot {
   readonly cv?: OwnerCvExportSnapshot;
   /** Exact accepted PDF output objects required by retained CV versions. */
   readonly cvAssets?: readonly OwnerExportMediaAssetSnapshot[];
-  /** Retained portable Feedback facts; source identities and audit fields stay private to this checkpoint. */
+  /** Eligible Feedback values in memory for assembly; never persisted in a checkpoint. */
   readonly moderation?: { readonly records: readonly { readonly feedbackId: string; readonly value: Readonly<Record<string, unknown>> }[] };
+  /** Durable comparison and invalidation facts contain no Feedback text or decision reasons. */
+  readonly moderationCheckpoint?: {
+    readonly recordsDigest: string;
+    readonly dependencies: readonly { readonly feedbackId: string; readonly projectId: string }[];
+  };
 }
 
 export interface OwnerExportMediaAssetSnapshot {
@@ -122,6 +127,31 @@ function canonicalJson(value: unknown, omitRootDigest = false): string {
   const object = value as Record<string, unknown>;
   const keys = Object.keys(object).filter((key) => !(omitRootDigest && key === "digest")).sort(compareCodePoints);
   return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(",")}}`;
+}
+
+function moderationCheckpoint(records: NonNullable<OwnerExportSelectedSnapshot["moderation"]>["records"]): NonNullable<OwnerExportSelectedSnapshot["moderationCheckpoint"]> {
+  if (records.some(record => !isSafeOwnerExportModerationMetadataV1_2(record.value) || record.feedbackId !== record.value["feedbackId"])) {
+    throw new TypeError("OWNER_EXPORT_MODERATION_CHECKPOINT_INVALID");
+  }
+  return {
+    recordsDigest: sha256(canonicalJson(records)),
+    dependencies: records.map(record => ({ feedbackId: record.feedbackId, projectId: String(record.value["projectId"]) })),
+  };
+}
+
+/** Durable retries must not create an independent, unbounded Feedback text store. */
+export function checkpointOwnerExportSnapshot(snapshot: OwnerExportAssemblySnapshot): OwnerExportAssemblySnapshot {
+  if (!("kind" in snapshot) || snapshot.moderation === undefined) return snapshot;
+  const { moderation, ...rest } = snapshot;
+  return { ...rest, moderationCheckpoint: moderationCheckpoint(moderation.records) };
+}
+
+export function matchesOwnerExportModerationFacts(snapshot: OwnerExportSelectedSnapshot,
+  records: NonNullable<OwnerExportSelectedSnapshot["moderation"]>["records"]): boolean {
+  if (snapshot.moderationCheckpoint !== undefined) {
+    return canonicalJson(snapshot.moderationCheckpoint) === canonicalJson(moderationCheckpoint(records));
+  }
+  return snapshot.moderation !== undefined && canonicalJson(snapshot.moderation.records) === canonicalJson(records);
 }
 
 const crcTable = (() => {

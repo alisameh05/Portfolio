@@ -53,6 +53,8 @@ The validator accepts additive `1.x` minors when they preserve those exact requi
 
 For JSON fields, `null` means the source explicitly represented no value. An omitted optional property makes no claim about the source value and must not be converted to `null` or a fabricated default. There is no universal redaction sentinel. Sensitive values are omitted under their scope contract and recorded through the fixed package exclusions; if a required field cannot be safely represented, that record cannot be emitted as a valid record. These rules prevent consumers from confusing redaction with an actual domain value.
 
+Durable Moderation assembly checkpoints retain only a digest of the captured portable facts and Feedback-to-Project dependency IDs. Names, paragraphs, and decision reasons remain in memory during assembly and in the private export artifact; they are never copied into `snapshot_data`, including failed builds. A resumed build re-reads currently eligible Feedback through its owning module and restores values only when their digest and dependencies still match. Source deletion, erasure, expiry, or edits prevent restoration and download; temporary source-read failures remain retryable. Artifact expiry and byte deletion remain the separate export invalidation and orphan-reconciliation workflow (#247).
+
 ## Ordering and references
 
 Ordering is part of the format:

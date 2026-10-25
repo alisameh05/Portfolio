@@ -5,7 +5,7 @@ import {
   projectFeedbackOwnerExportSnapshot,
 } from "../../src/modules/interaction-moderation/application/owner-export.js";
 import { pendingFeedbackExpiryAt, suppressedFeedbackExpiryAt } from "../../src/modules/interaction-moderation/application/retention.js";
-import { buildSelectedOwnerExportPackage, createStoredOwnerExportZip, type OwnerExportSelectedSnapshot, type StoredOwnerExportZipEntry } from "../../src/modules/portability-operations/application/owner-export-package.js";
+import { buildSelectedOwnerExportPackage, checkpointOwnerExportSnapshot, matchesOwnerExportModerationFacts, createStoredOwnerExportZip, type OwnerExportSelectedSnapshot, type StoredOwnerExportZipEntry } from "../../src/modules/portability-operations/application/owner-export-package.js";
 import { validateOwnerExportZip } from "../../scripts/owner-export/validator.mjs";
 import { createOwnerExportService } from "../../src/modules/portability-operations/application/owner-export-service.js";
 import { createHash } from "node:crypto";
@@ -118,6 +118,28 @@ function zipMember(name: string, content: Uint8Array): StoredOwnerExportZipEntry
 }
 
 describe("Phase 8 #245 retention-aware Moderation export", () => {
+  it("AC07 durable Moderation checkpoints contain only comparison and dependency facts", () => {
+    const projection = projectFeedbackOwnerExportSnapshot({ capturedAt: "2026-02-01T12:00:00.000Z", records: [feedback({
+      state: "approved", decisions: [{ sequence: 1, decision: "approved", reason: "PRIVATE_REASON_SENTINEL", decidedAt: submittedAt }],
+    })] });
+    const captured = moderationSnapshot(projection.capturedAt, projection.records);
+    // The former direct serialization copied private values into durable storage.
+    expect(JSON.stringify(captured).includes("PRIVATE_TEXT_SENTINEL")).toBe(true);
+    const persisted = checkpointOwnerExportSnapshot(captured);
+    if (!("kind" in persisted)) throw new Error("OWNER_EXPORT_TEST_CHECKPOINT_INVALID");
+    expect(persisted.moderation).toBeUndefined();
+    for (const marker of ["PRIVATE_NAME_SENTINEL", "PRIVATE_TEXT_SENTINEL", "PRIVATE_REASON_SENTINEL"]) {
+      expect(JSON.stringify(persisted).includes(marker)).toBe(false);
+    }
+    expect(persisted.moderationCheckpoint?.dependencies).toEqual([{ feedbackId: id("1"), projectId }]);
+    expect(matchesOwnerExportModerationFacts(persisted, projection.records)).toBe(true);
+    expect(matchesOwnerExportModerationFacts(persisted, [])).toBe(false);
+    expect(matchesOwnerExportModerationFacts({ ...persisted, moderationCheckpoint: {
+      recordsDigest: persisted.moderationCheckpoint!.recordsDigest, dependencies: [],
+    } }, projection.records)).toBe(false);
+    expect(captured.moderation?.records).toEqual(projection.records);
+  });
+
   it("AC04 compares portable facts independently of object key order but preserves history order", () => {
     const source = { capturedAt: "2026-02-01T12:00:00.000Z", records: [feedback({ state: "suppressed", decisions: [
       { sequence: 1, decision: "approved", reason: "Approval", decidedAt: submittedAt },

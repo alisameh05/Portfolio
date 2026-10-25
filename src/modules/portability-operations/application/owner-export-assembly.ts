@@ -19,6 +19,12 @@ const UNSUPPORTED_SCOPE = parseSafeErrorCode("OWNER_EXPORT_SCOPE_UNSUPPORTED");
 const INVALID_JOB = parseSafeErrorCode("OWNER_EXPORT_JOB_INVALID");
 
 export interface OwnerExportSnapshotReaderPort {
+  /** Restores volatile values only while current source facts match the durable digest. */
+  restoreModerationSnapshot?(input: {
+    readonly snapshot: OwnerExportAssemblySnapshot;
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly ownerId: StableId<"Owner">;
+  }): Promise<Result<OwnerExportAssemblySnapshot, Rejection>>;
   capture(input: {
     readonly portfolioId: StableId<"Portfolio">;
     readonly ownerId: StableId<"Owner">;
@@ -255,6 +261,14 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         snapshot = captured.value;
       }
 
+      if ("kind" in snapshot && snapshot.moderationCheckpoint !== undefined) {
+        const restored = await deps.snapshots.restoreModerationSnapshot?.({ snapshot, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId });
+        if (restored !== undefined && !restored.ok && restored.error.code === "OWNER_EXPORT_MODERATION_CHANGED") {
+          return await failExport(record, { jobId: jobId.value, leaseToken: job.leaseToken }, PERMANENT_FAILURE);
+        }
+        if (restored === undefined || !restored.ok) throw new Error("OWNER_EXPORT_MODERATION_UNAVAILABLE");
+        snapshot = restored.value;
+      }
       const built = snapshot !== null && typeof snapshot === "object" && "kind" in snapshot && snapshot.includedScopes.includes("cv-metadata")
         ? deps.mediaObjects === undefined ? (() => { throw new Error("OWNER_EXPORT_MEDIA_STORAGE_UNAVAILABLE"); })()
           : await buildCvOwnerExportPackage({ exportId: record.exportId, portfolioId: parsed.portfolioId, snapshot, objects: deps.mediaObjects })

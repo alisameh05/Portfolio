@@ -250,11 +250,12 @@ export async function initializeDatabaseRuntime(
         const database = createPostgresRuntimeDatabase(databaseUrl);
         const operations = createPostgresOperationsPersistence(database.database);
         const [{ createPostgresOwnerExportStore }, { createOwnerExportService }, { createPostgresFeedbackOwnerExportSnapshotReader },
-          { matchesFeedbackOwnerExportSnapshot }] = await Promise.all([
+          { projectFeedbackOwnerExportSnapshot }, { matchesOwnerExportModerationFacts }] = await Promise.all([
           import("../modules/portability-operations/adapters/postgres-owner-export-store.js"),
           import("../modules/portability-operations/application/owner-export-service.js"),
           import("../modules/interaction-moderation/adapters/postgres-owner-export.js"),
           import("../modules/interaction-moderation/application/owner-export.js"),
+          import("../modules/portability-operations/application/owner-export-package.js"),
         ]);
         const moderationExportReader = createPostgresFeedbackOwnerExportSnapshotReader();
         const ownerExportStore = createPostgresOwnerExportStore(database.database, { outbox: operations.outbox });
@@ -282,10 +283,10 @@ export async function initializeDatabaseRuntime(
           ids: createSystemIdGenerator(),
           ...(ownerExportStorage === undefined ? {} : { objectRead: ownerExportStorage }),
           revalidateModerationForDownload: async ({ snapshot, portfolioId, ownerId }) => {
-            if (!("kind" in snapshot) || snapshot.moderation === undefined) return false;
+            if (!("kind" in snapshot)) return false;
             return database.transactions.run(async transaction => {
               const current = await moderationExportReader.readOwnerExportSnapshot({ portfolioId, ownerId }, transaction);
-              return matchesFeedbackOwnerExportSnapshot(snapshot.moderation!.records, current);
+              return matchesOwnerExportModerationFacts(snapshot, projectFeedbackOwnerExportSnapshot(current).records);
             }, { isolationLevel: "repeatable read" });
           },
         });

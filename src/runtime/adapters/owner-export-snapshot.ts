@@ -2,13 +2,13 @@ import { err, ok, parseStableId, type Rejection, type Result, type StableId } fr
 import type { PortfolioSettingsRepository } from "../../modules/portfolio-configuration/application/settings-service.js";
 import type { ContentOwnerExportRecord, ContentAuthoringRepository } from "../../modules/content-publishing/application/authoring.js";
 import type { TransactionRunner } from "../ports.js";
-import type { OwnerExportConfigurationSnapshot, OwnerExportSelectedSnapshot } from "../../modules/portability-operations/application/owner-export-package.js";
+import { matchesOwnerExportModerationFacts, type OwnerExportConfigurationSnapshot, type OwnerExportSelectedSnapshot } from "../../modules/portability-operations/application/owner-export-package.js";
 import type { OwnerExportSnapshotReaderPort } from "../../modules/portability-operations/application/owner-export-assembly.js";
 import type { OwnerExportAssemblySnapshot } from "../../modules/portability-operations/application/owner-export-package.js";
 import type { TaxonomyOwnerExportSnapshotReader } from "../../modules/taxonomy-discovery/application/taxonomy-export.js";
 import type { OwnerMediaExportSnapshotReaderPort } from "../../modules/media/application/owner-contracts.js";
 import type { OwnerCvExportSnapshotReaderPort } from "../../modules/cv-portfolio/index.js";
-import { matchesFeedbackOwnerExportSnapshot, projectFeedbackOwnerExportSnapshot, type FeedbackOwnerExportSnapshotReaderPort } from "../../modules/interaction-moderation/application/owner-export.js";
+import { projectFeedbackOwnerExportSnapshot, type FeedbackOwnerExportSnapshotReaderPort } from "../../modules/interaction-moderation/application/owner-export.js";
 
 type OwnerExportMediaType = NonNullable<OwnerExportSelectedSnapshot["media"]>["assets"][number]["mediaType"];
 const OWNER_EXPORT_MEDIA_TYPES: readonly OwnerExportMediaType[] = [
@@ -357,10 +357,25 @@ export function createOwnerExportSnapshotReader(input: {
       const result = await input.media.revalidateOwnerMediaExportSnapshot({ portfolioId, ownerId }, versions, context);
       return result.ok && result.value;
     },
+    async restoreModerationSnapshot({ snapshot, portfolioId, ownerId }) {
+      if (!("kind" in snapshot) || snapshot.moderationCheckpoint === undefined || input.moderation === undefined) {
+        return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_MODERATION_UNAVAILABLE" });
+      }
+      try {
+        return await input.transactions.run(async transaction => {
+          const current = projectFeedbackOwnerExportSnapshot(await input.moderation!.readOwnerExportSnapshot({ portfolioId, ownerId }, transaction));
+          if (!matchesOwnerExportModerationFacts(snapshot, current.records)) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_MODERATION_CHANGED" });
+          const { moderationCheckpoint: _checkpoint, ...rest } = snapshot;
+          return ok({ ...rest, moderation: { records: current.records } });
+        }, { isolationLevel: "repeatable read" });
+      } catch {
+        return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_MODERATION_UNAVAILABLE" });
+      }
+    },
     async revalidateModerationForReady({ snapshot, portfolioId, ownerId, context }) {
-      if (input.moderation === undefined || !("kind" in snapshot) || !snapshot.includedScopes.includes("moderation-history") || snapshot.moderation === undefined) return false;
+      if (input.moderation === undefined || !("kind" in snapshot) || !snapshot.includedScopes.includes("moderation-history")) return false;
       const current = await input.moderation.readOwnerExportSnapshot({ portfolioId, ownerId }, context);
-      return matchesFeedbackOwnerExportSnapshot(snapshot.moderation.records, current);
+      return matchesOwnerExportModerationFacts(snapshot, projectFeedbackOwnerExportSnapshot(current).records);
     },
   };
 }

@@ -117,7 +117,7 @@ try {
     "tests/phase8/owner-export-media-package.test.ts", "tests/runtime/supabase-media-export-storage.test.ts",
     "tests/phase8/owner-export-cv-package.test.ts", "tests/phase8/owner-export-cv-postgres.test.ts",
     "tests/phase8/owner-export-moderation.test.ts", "tests/phase8/owner-export-moderation-postgres.test.ts"];
-  const expectedTests = 96;
+  const expectedTests = 98;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -219,8 +219,9 @@ try {
     { criterion: "AC03", tests: ["AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects"] },
     { criterion: "AC04", tests: ["AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
       "AC04 compares portable facts independently of object key order but preserves history order",
-      "AC01/AC04 resumes 'Moderation only' from real JSONB checkpoints and downloads unchanged facts",
-      "AC01/AC04 resumes 'Moderation with configuration' from real JSONB checkpoints and downloads unchanged facts",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Moderation only' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Moderation with configuration' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Failed Moderation build' through source retention",
       "AC04 denies a ready private ZIP when the current retained Feedback no longer matches its snapshot",
       "AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages"] },
     { criterion: "AC05", tests: ["AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages",
@@ -229,6 +230,8 @@ try {
     { criterion: "AC06", tests: ["AC06 grants direct reads only to the matching Owner and exact worker purpose",
       "AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts"] },
     { criterion: "AC07", tests: ["AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts",
+      "AC07 durable Moderation checkpoints contain only comparison and dependency facts",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Failed Moderation build' through source retention",
       "sends every success response with the private no-store headers"] },
     { criterion: "AC08", tests: ["AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages"] },
   ];

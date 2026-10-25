@@ -40,8 +40,8 @@ import type {
   OwnerExportTransitionOutcome,
   PersistedOwnerExport,
 } from "../application/owner-export-store.js";
-import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, isSafeOwnerExportModerationMetadataV1_2, type OwnerExportPackageManifest } from "../application/service.js";
-import type { OwnerExportAssemblySnapshot, OwnerExportConfigurationSnapshot } from "../application/owner-export-package.js";
+import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportPackageManifest } from "../application/service.js";
+import { checkpointOwnerExportSnapshot, type OwnerExportAssemblySnapshot, type OwnerExportConfigurationSnapshot } from "../application/owner-export-package.js";
 import type { TransactionContext } from "../../../runtime/ports.js";
 
 export const EXPORT_STATUS_VALUES: readonly ExportStatus[] = [
@@ -79,6 +79,25 @@ interface ExportRow {
 function toIso(value: Date | string | null): string | undefined {
   if (value === null) return undefined;
   return value instanceof Date ? value.toISOString() : value;
+}
+
+function validModerationCheckpoint(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const checkpoint = value as Record<string, unknown>;
+  if (Object.keys(checkpoint).sort().join(",") !== "dependencies,recordsDigest" ||
+      typeof checkpoint["recordsDigest"] !== "string" || !/^[a-f0-9]{64}$/.test(checkpoint["recordsDigest"]) ||
+      !Array.isArray(checkpoint["dependencies"])) return false;
+  const ids = new Set<string>();
+  return checkpoint["dependencies"].every((value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const dependency = value as Record<string, unknown>;
+    const feedbackId = dependency["feedbackId"], projectId = dependency["projectId"];
+    if (Object.keys(dependency).sort().join(",") !== "feedbackId,projectId" ||
+        typeof feedbackId !== "string" || !parseStableId("Feedback", feedbackId).ok || ids.has(feedbackId) ||
+        typeof projectId !== "string" || !parseStableId("Project", projectId).ok) return false;
+    ids.add(feedbackId);
+    return true;
+  });
 }
 
 function parseRow(row: ExportRow): PersistedOwnerExport {
@@ -120,16 +139,9 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
     if (data["kind"] === "owner-export-snapshot-v1") {
       if (!Array.isArray(data["includedScopes"]) || data["includedScopes"].length < 1 ||
           data["includedScopes"].some((scope) => scope !== "portfolio-content" && scope !== "taxonomy" && scope !== "media-metadata" && scope !== "cv-metadata" && scope !== "moderation-history" && scope !== "portfolio-configuration") ||
-          data["includedScopes"].includes("moderation-history") !== (data["moderation"] !== undefined) ||
-          data["moderation"] !== undefined && (!data["moderation"] || typeof data["moderation"] !== "object" || Array.isArray(data["moderation"]) ||
-            !Array.isArray((data["moderation"] as Record<string, unknown>)["records"]) ||
-            ((data["moderation"] as Record<string, unknown>)["records"] as unknown[]).some((record) => {
-              if (!record || typeof record !== "object" || Array.isArray(record)) return true;
-              const row = record as Record<string, unknown>;
-              const value = row["value"];
-              return !isSafeOwnerExportModerationMetadataV1_2(value) ||
-                row["feedbackId"] !== (value as Record<string, unknown>)["feedbackId"];
-            })) ||
+          data["moderation"] !== undefined ||
+          data["includedScopes"].includes("moderation-history") !== (data["moderationCheckpoint"] !== undefined) ||
+          data["moderationCheckpoint"] !== undefined && !validModerationCheckpoint(data["moderationCheckpoint"]) ||
           data["includedScopes"].includes("portfolio-content") !== (data["content"] !== undefined) ||
           data["includedScopes"].includes("taxonomy") !== (data["taxonomy"] !== undefined) ||
           data["includedScopes"].includes("media-metadata") !== (data["media"] !== undefined) ||
@@ -292,7 +304,7 @@ export function createPostgresOwnerExportStore(
                  configuration_version = ${"kind" in input.snapshot
                    ? input.snapshot.configuration?.configurationVersion ?? null
                    : input.snapshot.configurationVersion},
-                 snapshot_data = ${JSON.stringify(input.snapshot)}::jsonb
+                 snapshot_data = ${JSON.stringify(checkpointOwnerExportSnapshot(input.snapshot))}::jsonb
            where export_id = ${input.exportId}::uuid
              and status = 'building' and snapshot_id is null and snapshot_data is null
         `.execute(executor);
