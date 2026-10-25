@@ -29,3 +29,11 @@ export { createOwnerCvApplicationService } from "./owner-service.js";
 export type { AcceptCvPortfolioVersionInput, ActivateCvPortfolioVersionInput, CvPortfolioRepositoryPort, GetCurrentCvMediaUsageInput, RegisterCvPortfolioVersionInput } from "./repository.js";
 export { createCurrentCvDeliveryService } from "./current-delivery.js";
 export type { CurrentCvSnapshotRepositoryPort, CurrentCvObjectDeliveryPort, CurrentCvDeliveryService } from "./current-delivery.js";
+export type {
+  OwnerCvAcceptedMediaSnapshot,
+  OwnerCvExportVersion,
+  OwnerCvExportAcceptance,
+  OwnerCvExportActivation,
+  OwnerCvExportSnapshot,
+  OwnerCvExportSnapshotReaderPort,
+} from "./owner-export-snapshot.js";

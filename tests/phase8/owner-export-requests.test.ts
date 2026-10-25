@@ -7,8 +7,8 @@
  * acceptance lives in `owner-export-postgres.test.ts`.
  *
  * Criteria covered here:
- * - AC01: every nonempty non-Media subset and the standalone Media scope is
- *   accepted, and any permutation of a supported selection carries the identical
+ * - AC01: supported subsets, standalone Media, and CV with Media are accepted;
+ *   any permutation of a supported selection carries the identical
  *   canonical meaning — identical canonical array and identical canonical
  *   request hash inside the reservation.
  * - AC02: malformed, unknown, duplicated, and empty selections, malformed
@@ -187,12 +187,12 @@ function* subsets(values: readonly string[]): Generator<readonly string[]> {
 }
 
 function ownerExportSelections(): readonly (readonly string[])[] {
-  const nonMedia = OWNER_EXPORT_SCOPES.filter((scope) => scope !== "media-metadata");
-  return [...subsets(nonMedia), ["media-metadata"]];
+  const independent = OWNER_EXPORT_SCOPES.filter((scope) => scope !== "media-metadata" && scope !== "cv-metadata");
+  return [...subsets(independent), ["cv-metadata"], ["media-metadata"], ["media-metadata", "cv-metadata"]];
 }
 
 describe("AC01: canonical Owner export scope selection and hashing", () => {
-  it("accepts every nonempty non-Media subset and standalone Media in canonical order", () => {
+  it("accepts supported selections including CV-only and CV with Media in canonical order", () => {
     let counted = 0;
     for (const subset of ownerExportSelections()) {
       const canonical = canonicalizeOwnerExportScopes(subset);
@@ -202,7 +202,7 @@ describe("AC01: canonical Owner export scope selection and hashing", () => {
         .toEqual(OWNER_EXPORT_SCOPES.filter((scope) => subset.includes(scope)));
       counted += 1;
     }
-    expect(counted).toBe(64);
+    expect(counted).toBe(34);
   });
 
   it("normalizes every permutation of one selection to identical canonical meaning", () => {
@@ -223,7 +223,7 @@ describe("AC01: canonical Owner export scope selection and hashing", () => {
     let subsetIndex = 0;
     for (const subset of ownerExportSelections()) {
       subsetIndex += 1;
-      const schemaVersion = subset.includes("media-metadata") ? "1.5" : subset.includes("taxonomy") ? "1.4" : subset.includes("portfolio-content") ? "1.3" : "1.2";
+      const schemaVersion = subset.includes("cv-metadata") ? "1.6" : subset.includes("media-metadata") ? "1.5" : subset.includes("taxonomy") ? "1.4" : subset.includes("portfolio-content") ? "1.3" : "1.2";
       const expectedHash = await hashCanonicalRequest({
         operation: "owner-export-request",
         schemaVersion,
@@ -241,7 +241,7 @@ describe("AC01: canonical Owner export scope selection and hashing", () => {
     const original = await service.requestOwnerExport(requestCommand(["taxonomy", "portfolio-content"] as ExportScope[], "phase8-permutation-key"));
     const replayed = await service.requestOwnerExport(requestCommand(["portfolio-content", "taxonomy"] as ExportScope[], "phase8-permutation-key"));
     expect(replayed).toEqual(original);
-    expect(fakeOperations.executed).toHaveLength(65);
+    expect(fakeOperations.executed).toHaveLength(35);
   });
 
   it("rejects the empty selection without durable effects", async () => {
@@ -263,6 +263,7 @@ describe("AC02: input validation precedes every durable effect", () => {
     ["unknown scope", { includedScopes: ["taxonomy", "portfolio-settings"] as unknown }],
     ["invalid member type", { includedScopes: ["taxonomy", 7] as unknown }],
     ["mixed Media selection", { includedScopes: ["media-metadata", "portfolio-content"] as unknown }],
+    ["unsupported CV combination", { includedScopes: ["cv-metadata", "portfolio-content"] as unknown }],
     ["malformed portfolio identity", { portfolioId: "not-a-uuid" }],
     ["malformed owner identity", { ownerId: "also-not-a-uuid" }],
     ["empty idempotency key", { idempotencyKey: "" }],

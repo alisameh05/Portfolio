@@ -119,10 +119,17 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
     if (data["snapshotId"] !== snapshotId.value || data["capturedAt"] !== snapshotCapturedAt) throw new PostgresInfrastructureError();
     if (data["kind"] === "owner-export-snapshot-v1") {
       if (!Array.isArray(data["includedScopes"]) || data["includedScopes"].length < 1 ||
-          data["includedScopes"].some((scope) => scope !== "portfolio-content" && scope !== "taxonomy" && scope !== "media-metadata" && scope !== "portfolio-configuration") ||
+          data["includedScopes"].some((scope) => scope !== "portfolio-content" && scope !== "taxonomy" && scope !== "media-metadata" && scope !== "cv-metadata" && scope !== "portfolio-configuration") ||
           data["includedScopes"].includes("portfolio-content") !== (data["content"] !== undefined) ||
           data["includedScopes"].includes("taxonomy") !== (data["taxonomy"] !== undefined) ||
           data["includedScopes"].includes("media-metadata") !== (data["media"] !== undefined) ||
+          data["includedScopes"].includes("cv-metadata") !== (data["cv"] !== undefined) ||
+          data["includedScopes"].includes("cv-metadata") !== (data["cvAssets"] !== undefined) ||
+          data["cv"] !== undefined && (!data["cv"] || typeof data["cv"] !== "object" || Array.isArray(data["cv"]) ||
+            !Array.isArray((data["cv"] as Record<string, unknown>)["versions"]) ||
+            !Array.isArray((data["cv"] as Record<string, unknown>)["acceptanceHistory"]) ||
+            !Array.isArray((data["cv"] as Record<string, unknown>)["activationHistory"])) ||
+          data["cvAssets"] !== undefined && (!Array.isArray(data["cvAssets"]) || data["cvAssets"].some((asset) => asset === null || typeof asset !== "object" || Array.isArray(asset))) ||
           data["includedScopes"].includes("portfolio-configuration") !== (data["configuration"] !== undefined) ||
           data["content"] !== undefined && (!data["content"] || typeof data["content"] !== "object" || !Array.isArray((data["content"] as Record<string, unknown>)["records"])) ||
           data["taxonomy"] !== undefined && (!data["taxonomy"] || typeof data["taxonomy"] !== "object" || !Array.isArray((data["taxonomy"] as Record<string, unknown>)["records"])) ||

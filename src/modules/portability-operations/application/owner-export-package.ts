@@ -14,11 +14,14 @@ import type {
   OwnerExportSchemaDescriptor,
   OwnerExportPackageManifestV1_4,
   OwnerExportPackageManifestV1_5,
+  OwnerExportPackageManifestV1_6,
   OwnerExportAssetDescriptor,
   OwnerExportMediaEntryDescriptor,
+  OwnerExportCvEntryDescriptor,
 } from "./service.js";
-import { isSafeOwnerExportMediaMetadataV1_2 } from "./service.js";
+import { isSafeOwnerExportCvMetadataV1_2, isSafeOwnerExportMediaMetadataV1_2 } from "./service.js";
 import { MAX_OWNER_EXPORT_ARTIFACT_BYTES } from "./service.js";
+import type { OwnerCvExportSnapshot } from "../../cv-portfolio/index.js";
 
 const utf8 = new TextEncoder();
 const RECORD_SCHEMA_URI = "urn:shipwithali:owner-export-schema:portfolio-configuration:1.1";
@@ -43,11 +46,15 @@ export interface OwnerExportSelectedSnapshot {
   readonly kind: "owner-export-snapshot-v1";
   readonly snapshotId: StableId<"OwnerExportArtifact">;
   readonly capturedAt: string;
-  readonly includedScopes: readonly ("portfolio-content" | "taxonomy" | "media-metadata" | "portfolio-configuration")[];
+  readonly includedScopes: readonly ("portfolio-content" | "taxonomy" | "media-metadata" | "cv-metadata" | "portfolio-configuration")[];
   readonly configuration?: OwnerExportConfigurationSnapshot;
   readonly content?: { readonly records: readonly { readonly contentId: string; readonly value: Readonly<Record<string, unknown>> }[] };
   readonly taxonomy?: { readonly records: readonly { readonly taxonomyId: string; readonly value: Readonly<Record<string, unknown>> }[] };
   readonly media?: OwnerExportMediaSnapshot;
+  /** CV facts and exact Media bindings are private to the assembly checkpoint. */
+  readonly cv?: OwnerCvExportSnapshot;
+  /** Exact accepted PDF output objects required by retained CV versions. */
+  readonly cvAssets?: readonly OwnerExportMediaAssetSnapshot[];
 }
 
 export interface OwnerExportMediaAssetSnapshot {
@@ -63,6 +70,9 @@ export interface OwnerExportMediaAssetSnapshot {
   readonly source: "original" | "variant";
   /** Present only for candidate originals, whose Storage path is upload-intent scoped. */
   readonly uploadIntentId?: string;
+  readonly assetVersion?: number;
+  readonly decisionId?: string;
+  readonly objectVersion?: string;
 }
 
 export interface OwnerExportMediaSnapshot {
@@ -262,6 +272,10 @@ function readPinnedContentSchema(path: string): Uint8Array {
 
 function readPinnedMediaSchema(path: string): Uint8Array {
   return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.4", path));
+}
+
+function readPinnedCvSchema(path: string): Uint8Array {
+  return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.2", path));
 }
 
 function readPinnedTaxonomySchema(path: string): Uint8Array {
@@ -573,6 +587,201 @@ export async function buildMediaOwnerExportPackage(input: {
   const integrity = await measureOwnerExportStream(archive.content);
   if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
   return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
+}
+
+/** Builds CV v1.6 with exact accepted Media PDF bytes, retaining source-owned lifecycle identities. */
+export async function buildCvOwnerExportPackage(input: {
+  readonly exportId: StableId<"OwnerExport">;
+  readonly portfolioId: StableId<"Portfolio">;
+  readonly snapshot: OwnerExportSelectedSnapshot;
+  readonly objects: OwnerExportMediaObjectReaderPort;
+}): Promise<BuiltOwnerExportPackage> {
+  const { snapshot } = input;
+  const hasMedia = snapshot.includedScopes.includes("media-metadata");
+  const expectedScopes = hasMedia ? ["media-metadata", "cv-metadata"] : ["cv-metadata"];
+  if (snapshot.kind !== "owner-export-snapshot-v1" || !sameStringArray(snapshot.includedScopes, expectedScopes) ||
+      snapshot.cv === undefined || snapshot.cvAssets === undefined ||
+      hasMedia !== (snapshot.media !== undefined) || snapshot.configuration !== undefined || snapshot.content !== undefined || snapshot.taxonomy !== undefined) {
+    throw new TypeError("OWNER_EXPORT_CV_SNAPSHOT_INVALID");
+  }
+  const cv = snapshot.cv;
+  const currentCount = cv.versions.filter((version) => version.isCurrent).length;
+  if ((cv.currentVersionId === null && currentCount !== 0) || (cv.currentVersionId !== null && currentCount !== 1) ||
+      cv.currentVersionId !== null && !cv.versions.some((version) => version.versionId === cv.currentVersionId && version.isCurrent && version.state === "accepted")) {
+    throw new TypeError("OWNER_EXPORT_CV_CURRENT_POINTER_INVALID");
+  }
+  const acceptedAssets = new Map<string, OwnerExportMediaAssetSnapshot>();
+  for (const asset of snapshot.cvAssets) {
+    if (asset.source !== "variant" || asset.mediaType !== "application/pdf" || asset.uploadIntentId !== undefined ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(asset.mediaId) ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(asset.objectId) ||
+        !Number.isSafeInteger(asset.assetVersion) || (asset.assetVersion ?? 0) < 1 ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(asset.decisionId ?? "") ||
+        typeof asset.objectVersion !== "string" || asset.objectVersion.length < 1 || asset.objectVersion.length > 255 ||
+        !/^[a-f0-9]{64}$/.test(asset.digest) || asset.objectVersion !== asset.digest ||
+        !Number.isSafeInteger(asset.byteLength) || asset.byteLength < 1 || asset.byteLength > MAX_PORTABLE_MEDIA_OBJECT_BYTES ||
+        asset.path !== `assets/media-metadata/sha256/${asset.digest}`) {
+      throw new TypeError("OWNER_EXPORT_CV_ASSET_INVALID");
+    }
+    const key = `${asset.mediaId}|${asset.objectId}|${asset.digest}`;
+    const existing = acceptedAssets.get(key);
+    if (existing !== undefined && (existing.byteLength !== asset.byteLength || existing.objectVersion !== asset.objectVersion ||
+        existing.assetVersion !== asset.assetVersion || existing.decisionId !== asset.decisionId)) {
+      throw new TypeError("OWNER_EXPORT_CV_ASSET_CONFLICT");
+    }
+    acceptedAssets.set(key, asset);
+  }
+  const versionAssets = new Map<string, OwnerExportMediaAssetSnapshot>();
+  const versions = [...cv.versions].sort((left, right) => right.versionNumber - left.versionNumber || compareCodePoints(left.versionId, right.versionId));
+  for (const version of versions) {
+    if (version.state === "registered") {
+      if (version.acceptedAt !== undefined || version.acceptedMediaSnapshot !== undefined) throw new TypeError("OWNER_EXPORT_CV_VERSION_INVALID");
+      continue;
+    }
+    const binding = version.acceptedMediaSnapshot;
+    if (version.acceptedAt === undefined || binding === undefined) throw new TypeError("OWNER_EXPORT_CV_VERSION_INVALID");
+    const asset = [...acceptedAssets.values()].find((candidate) => candidate.mediaId === version.mediaId &&
+      candidate.objectId === binding.mediaObjectId && candidate.assetVersion === binding.mediaAssetVersion &&
+      candidate.decisionId === binding.mediaDecisionId && candidate.digest === binding.sha256 &&
+      candidate.objectVersion === binding.objectVersion);
+    if (asset === undefined) throw new TypeError("OWNER_EXPORT_CV_REQUIRED_BYTES_MISSING");
+    versionAssets.set(version.versionId, asset);
+  }
+  const referencedAcceptedAssetKeys = new Set([...versionAssets.values()].map((asset) => `${asset.mediaId}|${asset.objectId}|${asset.digest}`));
+  if (referencedAcceptedAssetKeys.size !== acceptedAssets.size || [...acceptedAssets.keys()].some((key) => !referencedAcceptedAssetKeys.has(key))) {
+    throw new TypeError("OWNER_EXPORT_CV_ASSET_UNREFERENCED");
+  }
+  const cvValue = {
+    aggregateVersion: cv.aggregateVersion,
+    currentVersionId: cv.currentVersionId,
+    versions: versions.map((version) => ({
+      versionId: version.versionId,
+      mediaId: version.mediaId,
+      versionNumber: version.versionNumber,
+      locale: version.locale,
+      registeredAt: version.registeredAt,
+      ...(version.acceptedAt === undefined ? {} : { acceptedAt: version.acceptedAt }),
+      ...(version.state === "accepted" ? { portableReference: versionAssets.get(version.versionId)!.path } : {}),
+      label: version.label,
+      state: version.state,
+      isCurrent: version.isCurrent,
+    })),
+    versionsTruncated: cv.versionsTruncated,
+    acceptanceHistory: cv.acceptanceHistory.map((entry) => ({ approvalId: entry.approvalId, versionId: entry.versionId, acceptedAt: entry.acceptedAt })),
+    acceptanceHistoryTruncated: cv.acceptanceHistoryTruncated,
+    activationHistory: cv.activationHistory.map((entry) => ({ activationId: entry.activationId, versionId: entry.versionId, activatedAt: entry.activatedAt })),
+    activationHistoryTruncated: cv.activationHistoryTruncated,
+  };
+  if (!isSafeOwnerExportCvMetadataV1_2(cvValue)) throw new TypeError("OWNER_EXPORT_CV_RECORD_INVALID");
+  const cvBytes = utf8.encode(`${canonicalJson({ scope: "cv-metadata", value: cvValue })}\n`);
+  const cvSchema = readPinnedCvSchema("cv-metadata.schema.json");
+  const manifestSchema = readPinnedMediaSchema("manifest.schema.json");
+  const mediaRecords = hasMedia ? [...snapshot.media!.records].sort((left, right) => compareCodePoints(left.mediaId, right.mediaId)) : [];
+  if (hasMedia && mediaRecords.some((record, index) => record.value["mediaId"] !== record.mediaId ||
+      !isSafeOwnerExportMediaMetadataV1_2(record.value) || index > 0 && mediaRecords[index - 1]!.mediaId === record.mediaId)) {
+    throw new TypeError("OWNER_EXPORT_MEDIA_RECORD_INVALID");
+  }
+  const allAssets = [...(snapshot.media?.assets ?? []), ...snapshot.cvAssets];
+  const objectsByPath = new Map<string, OwnerExportMediaAssetSnapshot>();
+  for (const asset of allAssets) {
+    if (asset.path !== `assets/media-metadata/sha256/${asset.digest}` || !/^[a-f0-9]{64}$/.test(asset.digest) ||
+        !Number.isSafeInteger(asset.byteLength) || asset.byteLength < 1 || asset.byteLength > MAX_PORTABLE_MEDIA_OBJECT_BYTES ||
+        !/^[0-9a-f-]{36}$/.test(asset.objectId) || (asset.source !== "original" && asset.source !== "variant") ||
+        asset.source === "original" && !/^[0-9a-f-]{36}$/.test(asset.uploadIntentId ?? "") ||
+        asset.source === "variant" && asset.uploadIntentId !== undefined) throw new TypeError("OWNER_EXPORT_CV_ASSET_INVALID");
+    const existing = objectsByPath.get(asset.path);
+    if (existing !== undefined && (existing.digest !== asset.digest || existing.byteLength !== asset.byteLength || existing.mediaType !== asset.mediaType)) {
+      throw new TypeError("OWNER_EXPORT_CV_ASSET_CONFLICT");
+    }
+    if (existing === undefined || compareCodePoints(asset.mediaId, existing.mediaId) < 0 ||
+        asset.mediaId === existing.mediaId && compareCodePoints(asset.variantName, existing.variantName) < 0) objectsByPath.set(asset.path, asset);
+  }
+  const assets = [...objectsByPath.values()].sort((left, right) => compareCodePoints(left.path, right.path));
+  if (assets.length > MAX_MEDIA_EXPORT_ASSETS - (hasMedia ? 2 : 0)) throw new RangeError("OWNER_EXPORT_MEDIA_ENTRY_COUNT_LIMIT");
+  const referencedPaths = new Set<string>();
+  for (const version of cvValue.versions) if (version.portableReference !== undefined) referencedPaths.add(version.portableReference);
+  for (const record of mediaRecords) {
+    const portableAssets = record.value["portableAssets"];
+    if (!Array.isArray(portableAssets)) throw new TypeError("OWNER_EXPORT_MEDIA_REFERENCE_INVALID");
+    for (const value of portableAssets) {
+      if (value === null || typeof value !== "object") throw new TypeError("OWNER_EXPORT_MEDIA_REFERENCE_INVALID");
+      const ref = (value as Record<string, unknown>)["portableReference"];
+      const asset = typeof ref === "string" ? objectsByPath.get(ref) : undefined;
+      if (asset === undefined || (value as Record<string, unknown>)["digest"] !== asset.digest ||
+          (value as Record<string, unknown>)["byteLength"] !== asset.byteLength || (value as Record<string, unknown>)["mediaType"] !== asset.mediaType) {
+        throw new TypeError("OWNER_EXPORT_MEDIA_REFERENCE_INVALID");
+      }
+      referencedPaths.add(ref as string);
+    }
+  }
+  if (referencedPaths.size !== objectsByPath.size || assets.some((asset) => !referencedPaths.has(asset.path))) throw new TypeError("OWNER_EXPORT_MEDIA_REFERENCE_INVALID");
+  const cvEntry: OwnerExportCvEntryDescriptor = { path: "records/cv-metadata.ndjson", scope: "cv-metadata", mediaType: "application/x-ndjson",
+    recordSchema: "urn:shipwithali:owner-export-schema:cv-metadata:1.2", schemaPath: "schemas/cv-metadata.schema.json", schemaVersion: "1.2", digest: sha256(cvBytes), recordCount: 1 };
+  const entries: (OwnerExportCvEntryDescriptor | OwnerExportMediaEntryDescriptor)[] = [];
+  let mediaBytes: Uint8Array | undefined;
+  if (hasMedia) {
+    mediaBytes = buildMediaRecordBytes(mediaRecords);
+    entries.push({ path: "records/media-metadata.ndjson", scope: "media-metadata", mediaType: "application/x-ndjson",
+      recordSchema: "urn:shipwithali:owner-export-schema:media-metadata:1.2", schemaPath: "schemas/media-metadata.schema.json", schemaVersion: "1.2",
+      digest: sha256(mediaBytes), recordCount: mediaRecords.length });
+  }
+  entries.push(cvEntry);
+  const descriptors: OwnerExportAssetDescriptor[] = assets.map((asset) => ({ path: asset.path, scope: "media-metadata", assetId: asset.mediaId,
+    mediaType: asset.mediaType, byteLength: asset.byteLength, digest: asset.digest, ...(asset.variantName === "original" ? {} : { variantName: asset.variantName }) }));
+  const schemas: OwnerExportSchemaDescriptor[] = [
+    { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.4", schemaVersion: "1.4", digest: sha256(manifestSchema) },
+  ];
+  if (hasMedia) schemas.push({ kind: "record", scope: "media-metadata", path: "schemas/media-metadata.schema.json",
+    schemaUri: "urn:shipwithali:owner-export-schema:media-metadata:1.2", schemaVersion: "1.2", digest: sha256(readPinnedMediaSchema("media-metadata.schema.json")) });
+  schemas.push({ kind: "record", scope: "cv-metadata", path: "schemas/cv-metadata.schema.json",
+    schemaUri: "urn:shipwithali:owner-export-schema:cv-metadata:1.2", schemaVersion: "1.2", digest: sha256(cvSchema) });
+  const mediaIds = new Set(mediaRecords.map((record) => record.mediaId));
+  const dependencies = versions.map((version) => ({ sourceScope: "cv-metadata" as const, sourceId: version.versionId,
+    targetScope: "media-metadata" as const, targetId: version.mediaId,
+    disposition: hasMedia && mediaIds.has(version.mediaId) ? "included" as const : "omitted" as const,
+    ...(hasMedia && mediaIds.has(version.mediaId) ? {} : { reason: hasMedia ? "not-retained" as const : "scope-not-selected" as const }),
+  })).sort((left, right) => compareCodePoints(left.sourceId, right.sourceId) || compareCodePoints(left.targetId, right.targetId));
+  const manifest = {
+    packageFormat: "shipwithali-owner-export" as const, schemaVersion: "1.6" as const, exportId: input.exportId,
+    snapshot: { snapshotId: snapshot.snapshotId, capturedAt: snapshot.capturedAt, consistency: "transactional" as const },
+    createdAt: snapshot.capturedAt, algorithm: "sha-256" as const, digest: "0".repeat(64),
+    requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"] as const,
+    includedScopes: [...snapshot.includedScopes], publicEventDataCoverage: { mode: "excluded" as const }, dependencies,
+    exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"] as const,
+    entries, schemas, assets: descriptors, extensions: { cvSnapshot: { acceptanceHistory: "retained-with-explicit-truncation", activationHistory: "retained-with-explicit-truncation", byteReferences: "sha256-content-addressed" } },
+  } satisfies OwnerExportPackageManifestV1_6;
+  const digest = sha256(utf8.encode(canonicalJson(manifest, true)));
+  const completeManifest = { ...manifest, digest };
+  const manifestBytes = utf8.encode(`${JSON.stringify(completeManifest)}\n`);
+  const zipEntries: StoredOwnerExportZipEntry[] = [fixedBytesMember("manifest.json", manifestBytes), fixedBytesMember("schemas/manifest.schema.json", manifestSchema)];
+  if (hasMedia) {
+    zipEntries.push(fixedBytesMember("schemas/media-metadata.schema.json", readPinnedMediaSchema("media-metadata.schema.json")));
+  }
+  zipEntries.push(fixedBytesMember("schemas/cv-metadata.schema.json", cvSchema));
+  if (hasMedia) zipEntries.push(fixedBytesMember("records/media-metadata.ndjson", mediaBytes!));
+  zipEntries.push(fixedBytesMember(cvEntry.path, cvBytes));
+  for (const asset of assets) {
+    const firstRead = await input.objects.readMediaExportObject({ portfolioId: input.portfolioId, mediaId: asset.mediaId,
+      objectId: asset.objectId, source: asset.source, ...(asset.uploadIntentId === undefined ? {} : { uploadIntentId: asset.uploadIntentId }),
+      mediaType: asset.mediaType, expectedLength: asset.byteLength, expectedSha256: asset.digest });
+    const measured = await measureOwnerExportStream(firstRead);
+    if (measured.contentLength !== asset.byteLength || measured.sha256 !== asset.digest) throw new TypeError("OWNER_EXPORT_CV_OBJECT_INTEGRITY_MISMATCH");
+    zipEntries.push({ name: asset.path, contentLength: measured.contentLength, crc32: measured.crc32, sha256: asset.digest,
+      content: async function* () {
+        const source = await input.objects.readMediaExportObject({ portfolioId: input.portfolioId, mediaId: asset.mediaId, objectId: asset.objectId,
+          source: asset.source, ...(asset.uploadIntentId === undefined ? {} : { uploadIntentId: asset.uploadIntentId }),
+          mediaType: asset.mediaType, expectedLength: asset.byteLength, expectedSha256: asset.digest });
+        yield* source;
+      } });
+  }
+  const archive = createStoredOwnerExportZip(zipEntries);
+  const integrity = await measureOwnerExportStream(archive.content);
+  if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
+}
+
+function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 async function buildTaxonomyOwnerExportPackage(input: {

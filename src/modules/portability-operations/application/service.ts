@@ -80,6 +80,17 @@ export interface OwnerExportMediaEntryDescriptor {
   readonly recordCount: number;
 }
 
+export interface OwnerExportCvEntryDescriptor {
+  readonly path: "records/cv-metadata.ndjson";
+  readonly scope: "cv-metadata";
+  readonly mediaType: "application/x-ndjson";
+  readonly recordSchema: "urn:shipwithali:owner-export-schema:cv-metadata:1.2";
+  readonly schemaPath: "schemas/cv-metadata.schema.json";
+  readonly schemaVersion: "1.2";
+  readonly digest: string;
+  readonly recordCount: number;
+}
+
 export interface OwnerExportEntryDescriptorV1_0<TScope extends ExportScope = ExportScope> {
   readonly path: string;
   readonly scope: TScope;
@@ -187,7 +198,13 @@ export interface OwnerExportPackageManifestV1_5 extends Omit<OwnerExportPackageM
   readonly entries: readonly (OwnerExportEntryDescriptor | OwnerExportContentEntryDescriptor | OwnerExportTaxonomyEntryDescriptor | OwnerExportMediaEntryDescriptor)[];
 }
 
-export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3 | OwnerExportPackageManifestV1_4 | OwnerExportPackageManifestV1_5;
+/** CV packages bind retained lifecycle facts to the exact verified Media PDF bytes. */
+export interface OwnerExportPackageManifestV1_6 extends Omit<OwnerExportPackageManifestV1_1, "schemaVersion" | "entries"> {
+  readonly schemaVersion: "1.6";
+  readonly entries: readonly (OwnerExportEntryDescriptor | OwnerExportContentEntryDescriptor | OwnerExportTaxonomyEntryDescriptor | OwnerExportMediaEntryDescriptor | OwnerExportCvEntryDescriptor)[];
+}
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3 | OwnerExportPackageManifestV1_4 | OwnerExportPackageManifestV1_5 | OwnerExportPackageManifestV1_6;
 
 interface OwnerExportViewBase {
   readonly exportId: StableId<"OwnerExport">;
@@ -341,7 +358,13 @@ type PortableCvVersion = {
   readonly state: "registered" | "accepted";
   readonly isCurrent: boolean;
 };
+type PortableCvVersionV1_2 = {
+  readonly versionId: string; readonly mediaId: string; readonly versionNumber: number; readonly locale: "en";
+  readonly registeredAt: string; readonly acceptedAt?: string; readonly portableReference?: string;
+  readonly label: string; readonly state: "registered" | "accepted"; readonly isCurrent: boolean;
+};
 type PortableCvActivation = { readonly versionId: string; readonly activatedAt: string };
+type PortableCvActivationV1_2 = { readonly activationId: string; readonly versionId: string; readonly activatedAt: string };
 type PortableModerationDecision = {
   readonly decision: "approved" | "rejected" | "suppressed";
   readonly reason: string;
@@ -671,6 +694,48 @@ function isPortableCvActivation(value: unknown): boolean {
   return hasOnlyKeys(value, ["versionId", "activatedAt"]) && hasRequiredKeys(value, ["versionId", "activatedAt"]) &&
     isPortableStableId(value["versionId"]) && isPortableUtcInstant(value["activatedAt"]);
 }
+function isPortableCvVersionV1_2(value: unknown): value is PortableCvVersionV1_2 {
+  const reference = /^assets\/media-metadata\/sha256\/[a-f0-9]{64}$/;
+  return hasOnlyKeys(value, ["versionId", "mediaId", "versionNumber", "locale", "registeredAt", "acceptedAt", "portableReference", "label", "state", "isCurrent"]) &&
+    hasRequiredKeys(value, ["versionId", "mediaId", "versionNumber", "locale", "registeredAt", "label", "state", "isCurrent"]) &&
+    isPortableStableId(value["versionId"]) && isPortableStableId(value["mediaId"]) &&
+    Number.isSafeInteger(value["versionNumber"]) && Number(value["versionNumber"]) > 0 && value["locale"] === "en" &&
+    isPortableUtcInstant(value["registeredAt"]) &&
+    (value["acceptedAt"] === undefined || isPortableUtcInstant(value["acceptedAt"])) &&
+    (value["portableReference"] === undefined || typeof value["portableReference"] === "string" && reference.test(value["portableReference"]) && value["state"] === "accepted") &&
+    isBoundedString(value["label"], 1, 120) && ["registered", "accepted"].includes(String(value["state"])) &&
+    (value["state"] === "accepted" ? value["portableReference"] !== undefined && value["acceptedAt"] !== undefined : value["portableReference"] === undefined && value["acceptedAt"] === undefined) &&
+    typeof value["isCurrent"] === "boolean";
+}
+function isPortableCvAcceptance(value: unknown): boolean {
+  return hasOnlyKeys(value, ["approvalId", "versionId", "acceptedAt"]) && hasRequiredKeys(value, ["approvalId", "versionId", "acceptedAt"]) &&
+    isPortableStableId(value["approvalId"]) && isPortableStableId(value["versionId"]) && isPortableUtcInstant(value["acceptedAt"]);
+}
+function isPortableCvActivationV1_2(value: unknown): value is PortableCvActivationV1_2 {
+  return hasOnlyKeys(value, ["activationId", "versionId", "activatedAt"]) && hasRequiredKeys(value, ["activationId", "versionId", "activatedAt"]) &&
+    isPortableStableId(value["activationId"]) && isPortableStableId(value["versionId"]) && isPortableUtcInstant(value["activatedAt"]);
+}
+function isSafeCvMetadataExportV1_2(value: unknown): boolean {
+  const keys = ["aggregateVersion", "currentVersionId", "versions", "versionsTruncated", "acceptanceHistory", "acceptanceHistoryTruncated", "activationHistory", "activationHistoryTruncated"];
+  const required = ["aggregateVersion", "currentVersionId", "versions", "versionsTruncated", "acceptanceHistory", "acceptanceHistoryTruncated", "activationHistory", "activationHistoryTruncated"];
+  if (!hasOnlyKeys(value, keys) || !hasRequiredKeys(value, required) || !Number.isSafeInteger(value["aggregateVersion"]) ||
+      Number(value["aggregateVersion"]) < 1 || !(value["currentVersionId"] === null || isPortableStableId(value["currentVersionId"])) ||
+      !Array.isArray(value["versions"]) || value["versions"].length > 100 || !value["versions"].every(isPortableCvVersionV1_2) ||
+      new Set(value["versions"].map((version) => version.versionId)).size !== value["versions"].length ||
+      !Array.isArray(value["acceptanceHistory"]) || value["acceptanceHistory"].length > 100 || !value["acceptanceHistory"].every(isPortableCvAcceptance) ||
+      new Set(value["acceptanceHistory"].map((entry) => entry.approvalId)).size !== value["acceptanceHistory"].length ||
+      !Array.isArray(value["activationHistory"]) || value["activationHistory"].length > 100 || !value["activationHistory"].every(isPortableCvActivationV1_2) ||
+      new Set(value["activationHistory"].map((entry) => entry.activationId)).size !== value["activationHistory"].length ||
+      typeof value["versionsTruncated"] !== "boolean" || typeof value["acceptanceHistoryTruncated"] !== "boolean" || typeof value["activationHistoryTruncated"] !== "boolean" ||
+      value["versionsTruncated"] && value["versions"].length !== 100 ||
+      value["acceptanceHistoryTruncated"] && value["acceptanceHistory"].length !== 100 ||
+      value["activationHistoryTruncated"] && value["activationHistory"].length !== 100) return false;
+  const currentVersions = value["versions"].filter((version) => version.isCurrent);
+  return value["currentVersionId"] === null
+    ? currentVersions.length === 0
+    : currentVersions.length === 1 && currentVersions[0]?.versionId === value["currentVersionId"] && currentVersions[0]?.state === "accepted";
+}
+export function isSafeOwnerExportCvMetadataV1_2(value: unknown): boolean { return isSafeCvMetadataExportV1_2(value); }
 function isSafeCvMetadataExportValue(value: unknown): boolean {
   const keys = ["aggregateVersion", "currentVersionId", "versions", "versionsTruncated", "activationHistory", "activationHistoryTruncated"];
   const required = ["aggregateVersion", "currentVersionId", "versions", "activationHistory"];

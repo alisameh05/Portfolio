@@ -29,7 +29,15 @@ export type {
   RegisterCvPortfolioVersionInput,
 } from "./application/index.js";
 export type { CurrentCvSnapshotRepositoryPort, CurrentCvObjectDeliveryPort, CurrentCvDeliveryService } from "./application/index.js";
-export { createPostgresCvPortfolioRepository, createPostgresCurrentCvSnapshotRepository } from "./adapters/index.js";
+export type {
+  OwnerCvAcceptedMediaSnapshot,
+  OwnerCvExportVersion,
+  OwnerCvExportAcceptance,
+  OwnerCvExportActivation,
+  OwnerCvExportSnapshot,
+  OwnerCvExportSnapshotReaderPort,
+} from "./application/index.js";
+export { createPostgresCvPortfolioRepository, createPostgresCurrentCvSnapshotRepository, createPostgresOwnerCvExportSnapshotReader } from "./adapters/index.js";
 
 export type {
   GetOwnerCvPortfolioQuery,

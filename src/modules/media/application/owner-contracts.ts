@@ -104,6 +104,10 @@ export interface OwnerMediaExportAsset {
   readonly mediaType: string;
   readonly byteLength: number;
   readonly sha256: string;
+  /** Private binding facts used when CV asks for one exact accepted PDF snapshot. */
+  readonly assetVersion?: number;
+  readonly decisionId?: StableId<"MediaDecision">;
+  readonly objectVersion?: string;
 }
 
 export interface OwnerMediaExportRecord {
@@ -121,6 +125,7 @@ export interface OwnerMediaExportSnapshotReaderPort {
   readOwnerMediaExportSnapshot(
     scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> },
     context: TransactionContext,
+    mediaAssetIds?: readonly StableId<"MediaAsset">[],
   ): Promise<Result<OwnerMediaExportSnapshot, Rejection>>;
   revalidateOwnerMediaExportSnapshot(
     scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> },
