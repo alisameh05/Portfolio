@@ -43,6 +43,7 @@ import type {
 import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportPackageManifest } from "../application/service.js";
 import { checkpointOwnerExportSnapshot, type OwnerExportAssemblySnapshot, type OwnerExportConfigurationSnapshot } from "../application/owner-export-package.js";
 import type { TransactionContext } from "../../../runtime/ports.js";
+import type { OwnerExportModerationArtifactsPort } from "../application/owner-export-cleanup.js";
 
 export const EXPORT_STATUS_VALUES: readonly ExportStatus[] = [
   "requested", "building", "ready", "failed", "expired",
@@ -74,6 +75,8 @@ interface ExportRow {
   artifact_content_length: number | string | null;
   expires_at: Date | string | null;
   aggregate_version: number;
+  artifact_revoked_at: Date | string | null;
+  artifact_deleted_at: Date | string | null;
 }
 
 function toIso(value: Date | string | null): string | undefined {
@@ -201,13 +204,16 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
     ...(row.artifact_sha256 === null ? {} : { artifactSha256: row.artifact_sha256 }),
     ...(artifactContentLength === undefined ? {} : { artifactContentLength }),
     ...(expiresAt === undefined ? {} : { expiresAt }),
+    ...(row.artifact_revoked_at == null ? {} : { artifactRevokedAt: toIso(row.artifact_revoked_at)! }),
+    ...(row.artifact_deleted_at == null ? {} : { artifactDeletedAt: toIso(row.artifact_deleted_at)! }),
   };
 }
 
 const EXPORT_COLUMNS = sql.raw(`export_id, portfolio_id, owner_id, included_scopes, status, schema_version,
   requested_at, started_at, completed_at, failed_at, expired_at, failure_code, manifest, artifact_id,
   snapshot_id, snapshot_captured_at, configuration_version, snapshot_data, candidate_artifact_id,
-  candidate_sha256, candidate_content_length, artifact_sha256, artifact_content_length, expires_at, aggregate_version`);
+  candidate_sha256, candidate_content_length, artifact_sha256, artifact_content_length, expires_at, aggregate_version,
+  artifact_revoked_at, artifact_deleted_at`);
 
 export interface PostgresOwnerExportStoreOptions {
   readonly outbox: OutboxPersistencePort;
@@ -216,7 +222,7 @@ export interface PostgresOwnerExportStoreOptions {
 export function createPostgresOwnerExportStore(
   database: Kysely<DB>,
   options: PostgresOwnerExportStoreOptions,
-): OwnerExportStorePort {
+): OwnerExportStorePort & OwnerExportModerationArtifactsPort {
   const { outbox } = options;
   const transactions = createPostgresTransactionRunner(database);
 
@@ -446,5 +452,68 @@ export function createPostgresOwnerExportStore(
     });
   }
 
-  return { reserveOwnerExport, findOwnerExport, saveOwnerExportSnapshot, saveOwnerExportCandidate, applyOwnerExportTransition };
+  const artifacts: OwnerExportModerationArtifactsPort = {
+    async uploadCandidate(input, upload) {
+      return transactions.run(async context => {
+        const executor = resolvePostgresTransaction(context);
+        if (!await lockCurrentLease(executor, input)) return false;
+        const locked = await sql`select export_id from portability.owner_exports
+          where export_id = ${input.exportId}::uuid and portfolio_id = ${input.portfolioId}::uuid
+            and candidate_artifact_id = ${input.artifactId}::uuid and status = 'building'
+            and artifact_revoked_at is null for update`.execute(executor);
+        if (locked.rows.length !== 1) return false;
+        // Retain this row lock across the bounded Storage write/verification.
+        // Cleanup cannot acknowledge deletion while an earlier upload is live.
+        return upload();
+      });
+    },
+    async listModerationCleanup(input) {
+      return transactions.run(async context => {
+        const result = await sql<ExportRow>`select ${EXPORT_COLUMNS} from portability.owner_exports
+          where portfolio_id = ${input.portfolioId}::uuid and owner_id = ${input.ownerId}::uuid
+            and included_scopes @> array['moderation-history']::text[]
+            and candidate_artifact_id is not null and artifact_deleted_at is null
+            and (${input.after ?? null}::uuid is null or export_id > ${input.after ?? null}::uuid)
+          order by export_id limit ${input.limit}`.execute(resolvePostgresTransaction(context));
+        return result.rows.map(parseRow);
+      });
+    },
+    async revokeModerationArtifact(input) {
+      return transactions.run(async context => {
+        const executor = resolvePostgresTransaction(context);
+        const locked = await sql<ExportRow>`select ${EXPORT_COLUMNS} from portability.owner_exports
+          where export_id = ${input.exportId}::uuid and portfolio_id = ${input.portfolioId}::uuid
+            and owner_id = ${input.ownerId}::uuid and included_scopes @> array['moderation-history']::text[]
+            and candidate_artifact_id is not null and artifact_deleted_at is null for update`.execute(executor);
+        const row = locked.rows[0];
+        if (row === undefined) return null;
+        const record = parseRow(row);
+        if (record.artifactRevokedAt !== undefined) return record;
+        const policyExpiry = record.snapshot !== undefined && 'kind' in record.snapshot ? record.snapshot.policyExpiresAt : undefined;
+        const deadline = record.expiresAt ?? policyExpiry;
+        if (record.status !== 'failed' && record.status !== 'expired' &&
+            (deadline === undefined || Date.parse(input.now) < Date.parse(deadline)) && await input.stillEligible(record, context)) return null;
+        // Only module-owned rows change. The five-state lifecycle is retained;
+        // queue redelivery observes a terminal record and cannot resurrect it.
+        const updated = await sql<ExportRow>`update portability.owner_exports set
+          artifact_revoked_at = ${input.now}::timestamptz,
+          status = case when status = 'ready' then 'expired' when status = 'building' then 'failed' else status end,
+          expired_at = case when status = 'ready' then ${input.now}::timestamptz else expired_at end,
+          failed_at = case when status = 'building' then ${input.now}::timestamptz else failed_at end,
+          failure_code = case when status = 'building' then 'OWNER_EXPORT_MODERATION_CHANGED' else failure_code end,
+          aggregate_version = aggregate_version + 1
+          where export_id = ${input.exportId}::uuid returning ${EXPORT_COLUMNS}`.execute(executor);
+        return updated.rows[0] === undefined ? null : parseRow(updated.rows[0]);
+      });
+    },
+    async markModerationArtifactDeleted(input) {
+      await transactions.run(async context => {
+        await sql`update portability.owner_exports set artifact_deleted_at = greatest(clock_timestamp(), artifact_revoked_at)
+          where export_id = ${input.exportId}::uuid and portfolio_id = ${input.portfolioId}::uuid
+            and candidate_artifact_id = ${input.artifactId}::uuid and artifact_revoked_at is not null
+            and artifact_deleted_at is null and status in ('failed', 'expired')`.execute(resolvePostgresTransaction(context));
+      });
+    },
+  };
+  return { reserveOwnerExport, findOwnerExport, saveOwnerExportSnapshot, saveOwnerExportCandidate, applyOwnerExportTransition, ...artifacts };
 }

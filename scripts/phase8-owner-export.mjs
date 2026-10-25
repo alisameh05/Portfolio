@@ -8,6 +8,11 @@ import { Client } from "pg";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 
+if (process.argv.includes("--with-storage")) {
+  await import("./phase8-owner-export-storage.mjs");
+  process.exit(process.exitCode ?? 0);
+}
+
 const root = process.cwd();
 const runId = randomUUID();
 const startedAt = new Date().toISOString();
@@ -117,7 +122,7 @@ try {
     "tests/phase8/owner-export-media-package.test.ts", "tests/runtime/supabase-media-export-storage.test.ts",
     "tests/phase8/owner-export-cv-package.test.ts", "tests/phase8/owner-export-cv-postgres.test.ts",
     "tests/phase8/owner-export-moderation.test.ts", "tests/phase8/owner-export-moderation-postgres.test.ts"];
-  const expectedTests = 98;
+  const expectedTests = 103;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -222,6 +227,10 @@ try {
       "AC01/AC04 retains privacy-safe checkpoints for 'Moderation only' through source retention",
       "AC01/AC04 retains privacy-safe checkpoints for 'Moderation with configuration' through source retention",
       "AC01/AC04 retains privacy-safe checkpoints for 'Failed Moderation build' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Failed Moderation finalization' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Earlier source erasure' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Upload racing cleanup' through source retention",
       "AC04 denies a ready private ZIP when the current retained Feedback no longer matches its snapshot",
       "AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages"] },
     { criterion: "AC05", tests: ["AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages",
@@ -358,6 +367,9 @@ try {
         executedTests: criterion.tests.map(title => ({ title, status: assertionByTitle.get(title) })) })),
       hostedEvidence: [{ check: "Phase 8 Owner export transport acceptance: authenticated private/no-store download and stable scoped routes",
         artifact: "phase8-owner-export-245", suites: ["tests/phase8/owner-export-adapter.test.ts"], status: "passed-in-phase8-pr-ci" }],
+      artifactDeletion: { realStorage: Boolean(process.env.PHASE8_OWNER_EXPORT_STORAGE_URL),
+        scenarios: ["ready", "failed upload response", "failed finalization", "earlier erasure", "exact deadline", "upload fence", "deletion outage and restart"],
+        reproduction: "npm run phase8:focus:exports -- --with-storage" },
       reproduction: "npm run setup:validation; npm run validation:ready; npm run phase8:focus:exports",
       scope: "Interactions-owned Feedback and moderation decision export; exact 90-day and clamped 12-calendar-month retention; hidden/archived Project inclusion; pre-ready/download rechecks; truthful erased audit schema 1.2; Owner/purpose-bound RLS; private ZIP/no-store transport; marker-free telemetry/jobs and independently validated empty/partial-reference packages.",
       cleanup,

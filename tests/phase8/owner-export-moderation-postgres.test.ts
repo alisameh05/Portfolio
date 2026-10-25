@@ -22,6 +22,8 @@ import { createSystemIdGenerator } from "../../src/runtime/ports.js";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
 import { createStableId, parseIdempotencyKey, ok, err, type StableId } from "../../src/shared/domain/index.js";
 import { validateOwnerExportZip } from "../../scripts/owner-export/validator.mjs";
+import { createOwnerExportModerationCleanupService, type OwnerExportObjectDeletePort } from "../../src/modules/portability-operations/application/owner-export-cleanup.js";
+import { createSupabaseOwnerExportStorage } from "../../src/runtime/adapters/supabase-owner-export-storage.js";
 
 const APPLICATION_URL = process.env["PHASE8_OWNER_EXPORT_APPLICATION_URL"];
 const WORKER_URL = process.env["PHASE8_OWNER_EXPORT_WORKER_URL"];
@@ -73,6 +75,9 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
   const application = createPostgresRuntimeDatabase(APPLICATION_URL!);
   const worker = createPostgresRuntimeDatabase(WORKER_URL!);
   const reader = createPostgresFeedbackOwnerExportSnapshotReader();
+  const storageUrl = process.env["PHASE8_OWNER_EXPORT_STORAGE_URL"];
+  const realStorage = storageUrl === undefined ? undefined : createSupabaseOwnerExportStorage({ storageUrl,
+    serviceRoleKey: process.env["PHASE8_OWNER_EXPORT_STORAGE_KEY"]! });
   let portfolioId: StableId<"Portfolio">;
   let ownerId: StableId<"Owner">;
 
@@ -176,7 +181,18 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
     }
   }
 
-  beforeAll(async () => { await admin.connect(); });
+  beforeAll(async () => {
+    await admin.connect();
+    if (storageUrl !== undefined) {
+      const url = new URL(storageUrl);
+      if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port !== '56321') throw new Error('PHASE8_STORAGE_NOT_ISOLATED');
+      const response = await fetch(new URL('/storage/v1/bucket', url), { method: 'POST',
+        headers: { apikey: process.env["PHASE8_OWNER_EXPORT_STORAGE_KEY"]!,
+          authorization: `Bearer ${process.env["PHASE8_OWNER_EXPORT_STORAGE_KEY"]!}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ id: 'owner-exports', name: 'owner-exports', public: false }) });
+      if (!response.ok) throw new Error('PHASE8_STORAGE_BUCKET_FAILED');
+    }
+  });
   afterAll(async () => {
     if (portfolioId !== undefined) await cleanFixtures();
     await admin.end();
@@ -391,17 +407,24 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
     { selection: "Moderation only", includedScopes: ["moderation-history"] as const, terminalFailure: false },
     { selection: "Moderation with configuration", includedScopes: ["moderation-history", "portfolio-configuration"] as const, terminalFailure: false },
     { selection: "Failed Moderation build", includedScopes: ["moderation-history"] as const, terminalFailure: true },
-  ])("AC01/AC04 retains privacy-safe checkpoints for $selection through source retention", async ({ includedScopes, terminalFailure }) => {
+    { selection: "Failed Moderation finalization", includedScopes: ["moderation-history"] as const, terminalFailure: true, failFinalization: true },
+    { selection: "Earlier source erasure", includedScopes: ["moderation-history"] as const, terminalFailure: false, earlierErasure: true },
+    { selection: "Exact Feedback deadline", includedScopes: ["moderation-history"] as const, terminalFailure: false, deadlineOnly: true },
+    { selection: "Upload racing cleanup", includedScopes: ["moderation-history"] as const, terminalFailure: false, raceUpload: true },
+  ])("AC01/AC04 retains privacy-safe checkpoints for $selection through source retention", async ({ includedScopes, terminalFailure, failFinalization = false, earlierErasure = false, deadlineOnly = false, raceUpload = false }) => {
     await seedPortfolio();
     const projectId = await insertProject("hidden");
     const feedbackId = await insertFeedback({ state: "approved", projectId,
       submittedAt: new Date(Date.now() - DAY_MS).toISOString(), decision: "approved",
       decisionAt: new Date(Date.now() - DAY_MS / 2).toISOString() });
     const pendingId = await insertFeedback({ state: "pending", projectId, submittedAt: new Date(Date.now() - DAY_MS).toISOString() });
+    const suppressionAt = new Date(Date.now() - DAY_MS);
+    if (deadlineOnly) { suppressionAt.setUTCFullYear(suppressionAt.getUTCFullYear() - 1); suppressionAt.setUTCDate(suppressionAt.getUTCDate() + 3); }
     const suppressedId = await insertFeedback({ state: "suppressed", projectId,
-      submittedAt: new Date(Date.now() - 2 * DAY_MS).toISOString(), decision: "suppressed",
-      approvalAt: new Date(Date.now() - 1.5 * DAY_MS).toISOString(), decisionAt: new Date(Date.now() - DAY_MS).toISOString() });
-    const clock = { now: () => new Date().toISOString() };
+      submittedAt: new Date(suppressionAt.getTime() - DAY_MS).toISOString(), decision: "suppressed",
+      approvalAt: new Date(suppressionAt.getTime() - DAY_MS / 2).toISOString(), decisionAt: suppressionAt.toISOString() });
+    let nowOverride: string | undefined;
+    const clock = { now: () => nowOverride ?? new Date().toISOString() };
     const ids = createSystemIdGenerator();
     const applicationOperations = createPostgresOperationsPersistence(application.database, clock);
     const applicationStore = createPostgresOwnerExportStore(application.database, { outbox: applicationOperations.outbox });
@@ -416,16 +439,37 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
     let restores = 0;
     let writes = 0;
     let stored = new Uint8Array();
+    let deleteCalls = 0;
+    let exportIdentity: { portfolioId: StableId<"Portfolio">; exportId: StableId<"OwnerExport">; artifactId: StableId<"OwnerExportArtifact"> } | undefined;
     const storage: OwnerExportObjectStoragePort = {
       async writeOwnerExport(input) {
-        if (++writes === 1) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" });
-        stored = new Uint8Array(await archiveBytes(input.content));
+        exportIdentity = input;
+        if (realStorage !== undefined) {
+          const result = await realStorage.writeOwnerExport(input);
+          if (!result.ok) return result;
+        } else stored = new Uint8Array(await archiveBytes(input.content));
+        // A lost upload response leaves real bytes despite an unsuccessful build.
+        if (++writes === 1 && !failFinalization) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" });
         return ok(undefined);
       },
-      async readOwnerExport() { return ok({ contentLength: stored.byteLength,
+      async readOwnerExport(input) {
+        if (realStorage !== undefined) return realStorage.readOwnerExport(input);
+        if (stored.byteLength === 0) return err({ kind: 'temporarily_unavailable', code: 'OWNER_EXPORT_ARTIFACT_UNAVAILABLE' });
+        return ok({ contentLength: stored.byteLength,
         sha256: createHash("sha256").update(stored).digest("hex"),
         content: { async *[Symbol.asyncIterator]() { yield stored; } } }); },
     };
+    const deletion: OwnerExportObjectDeletePort = { async deleteOwnerExport(input) {
+      const revoked = await applicationStore.findOwnerExport({ ...input, ownerId });
+      expect(revoked?.artifactRevokedAt).toBeDefined();
+      expect(['failed', 'expired']).toContain(revoked?.status);
+      // Revocation commits first; Storage outage cannot undo access denial.
+      if (++deleteCalls === 1) return err({ kind: 'temporarily_unavailable', code: 'OWNER_EXPORT_ARTIFACT_UNAVAILABLE' });
+      if (realStorage !== undefined) return realStorage.deleteOwnerExport(input);
+      stored = new Uint8Array(); return ok(undefined);
+    } };
+    const cleanup = () => createOwnerExportModerationCleanupService({ scope: { portfolioId, ownerId },
+      artifacts: workerStore, storage: deletion, snapshots, clock });
     const service = createOwnerExportService({
       operations: applicationOperations, exports: applicationStore, clock, ids, objectRead: storage,
       revalidateModerationForDownload: async ({ snapshot, portfolioId, ownerId }) => {
@@ -436,7 +480,11 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
       },
     });
     const assembly = createOwnerExportAssemblyService({
-      operations: workerOperations, exports: workerStore, clock, ids, storage, random: () => 0,
+      operations: workerOperations, exports: failFinalization ? { ...workerStore,
+        async applyOwnerExportTransition(input) {
+          if (input.toStatus === 'ready') throw new Error('SYNTHETIC_FINALIZATION_FAILURE');
+          return workerStore.applyOwnerExportTransition(input);
+        } } : workerStore, artifacts: workerStore, clock, ids, storage, random: () => 0,
       snapshots: { ...snapshots, async capture(input) { captures++; return snapshots.capture(input); },
         async restoreModerationSnapshot(input) {
           if (++restores === 1) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_MODERATION_UNAVAILABLE" });
@@ -461,6 +509,14 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
             dependencies: expect.arrayContaining([{ feedbackId, projectId }, { feedbackId: pendingId, projectId }, { feedbackId: suppressedId, projectId }]) },
           ...(includedScopes.length === 2 ? { configuration: { settings: { profile: { displayName: "Owner" } } } } : {}) } });
       if (checkpoint?.snapshot === undefined || !("kind" in checkpoint.snapshot) || checkpoint.snapshot.moderationCheckpoint === undefined) throw new Error("PHASE8_FEEDBACK_EXPORT_CHECKPOINT_MISSING");
+      expect(await workerStore.listModerationCleanup({ portfolioId, ownerId: createStableId('Owner'), limit: 25 })).toEqual([]);
+      expect(await workerStore.revokeModerationArtifact({ ...scope, ownerId: createStableId('Owner'), now: clock.now(),
+        stillEligible: async () => false })).toBeNull();
+      if (storageUrl !== undefined) {
+        const direct = await fetch(new URL(`/storage/v1/object/owner-exports/${portfolioId}/${scope.exportId}/${checkpoint.candidateArtifactId}.zip`, storageUrl));
+        expect(direct.ok).toBe(false);
+        await direct.body?.cancel();
+      }
       const assertPrivateMarkersAbsent = async () => {
         const result = await admin.query("select snapshot_data::text as checkpoint from portability.owner_exports where export_id=$1", [scope.exportId]);
         const persisted = String(result.rows[0]?.checkpoint);
@@ -469,6 +525,15 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
         }
       };
       const retainSource = async () => {
+        if (deadlineOnly) {
+          const cutoff = checkpoint.snapshot!.policyExpiresAt!;
+          nowOverride = new Date(Date.parse(cutoff) - 1).toISOString();
+          expect(await cleanup().runOwnerExportCleanup()).toMatchObject({ ok: true, value: { deleted: 0, pending: 0 } });
+          nowOverride = cutoff;
+        } else if (earlierErasure) {
+          await admin.query('update interaction.moderation_decisions set reason=null,owner_id=null where feedback_id=$1', [suppressedId]);
+          await admin.query('update interaction.feedback set author_name=null,paragraph=null,text_erased_at=clock_timestamp() where feedback_id=$1', [suppressedId]);
+        } else {
         const retention = createPostgresFeedbackRetentionRepository();
         const input = { portfolioId, jobId: createStableId("Job"), batchSize: 25 as const,
           now: new Date(Date.now() + 367 * DAY_MS).toISOString() };
@@ -482,13 +547,64 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
         expect((await admin.query("select author_name,paragraph from interaction.feedback where feedback_id=$1", [suppressedId])).rows)
           .toEqual([{ author_name: null, paragraph: null }]);
         expect((await admin.query("select count(*)::int as count from interaction.moderation_decisions where feedback_id=$1 and (reason is not null or owner_id is not null)", [suppressedId])).rows[0]?.count).toBe(0);
+        }
         await assertPrivateMarkersAbsent();
-        expect(await worker.transactions.run(context => snapshots.revalidateModerationForReady!({ snapshot: checkpoint.snapshot!, portfolioId, ownerId, context }))).toBe(false);
-        expect(await snapshots.restoreModerationSnapshot!({ snapshot: checkpoint.snapshot!, portfolioId, ownerId })).toMatchObject({ ok: false });
+        if (!deadlineOnly) {
+          expect(await worker.transactions.run(context => snapshots.revalidateModerationForReady!({ snapshot: checkpoint.snapshot!, portfolioId, ownerId, context }))).toBe(false);
+          expect(await snapshots.restoreModerationSnapshot!({ snapshot: checkpoint.snapshot!, portfolioId, ownerId })).toMatchObject({ ok: false });
+        }
         expect(await service.downloadOwnerExport({ actor, ...scope })).toMatchObject({ ok: false });
+        expect(exportIdentity).toBeDefined();
+        // The first delete fails after durable revocation. Reconstructing the
+        // service simulates restart; it retries from persisted state.
+        expect(await cleanup().runOwnerExportCleanup({ limit: 1 })).toMatchObject({ ok: true, value: { pending: 1, deleted: 0, incomplete: true } });
+        const revoked = await workerStore.findOwnerExport(scope);
+        expect(revoked?.artifactRevokedAt).toBeDefined();
+        expect(revoked?.artifactDeletedAt).toBeUndefined();
+        expect(await service.downloadOwnerExport({ actor, ...scope })).toMatchObject({ ok: false });
+        expect(await cleanup().runOwnerExportCleanup()).toMatchObject({ ok: true, value: { deleted: 1, pending: 0 } });
+        expect((await workerStore.findOwnerExport(scope))?.artifactDeletedAt).toBeDefined();
+        expect(await storage.readOwnerExport({ ...exportIdentity!, expectedContentLength: checkpoint.candidateContentLength!,
+          expectedSha256: checkpoint.candidateSha256! })).toMatchObject({ ok: false });
+        expect(await cleanup().runOwnerExportCleanup()).toMatchObject({ ok: true, value: { scanned: 0, deleted: 0 } });
       };
       await assertPrivateMarkersAbsent();
       if (terminalFailure) { await retainSource(); return; }
+      if (raceUpload) {
+        await admin.query("update operations.jobs set available_at=clock_timestamp()-interval '1 second' where payload->>'exportId'=$1", [scope.exportId]);
+        const [lease] = await workerOperations.jobs.claimDue({ workerId: 'phase8-cleanup-race', now: clock.now(), leaseDurationSeconds: 300,
+          limit: 1, jobTypes: ['portability.owner-export-assembly.v1'] });
+        if (lease === undefined) throw new Error('PHASE8_CLEANUP_RACE_LEASE_MISSING');
+        const jobId = createStableId('Job');
+        const racingJobId = { ...lease, jobId: lease.jobId as typeof jobId };
+        const identity = { ...exportIdentity!, actingJobId: racingJobId.jobId, leaseToken: lease.leaseToken };
+        const original = await storage.readOwnerExport({ ...identity, expectedContentLength: checkpoint.candidateContentLength!, expectedSha256: checkpoint.candidateSha256! });
+        if (!original.ok) throw new Error('PHASE8_CLEANUP_RACE_BYTES_MISSING');
+        const bytes = await archiveBytes(original.value.content);
+        let release!: () => void, signal!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        const started = new Promise<void>(resolve => { signal = resolve; });
+        const uploading = workerStore.uploadCandidate(identity, async () => {
+          signal(); await gate;
+          if (realStorage !== undefined) return (await realStorage.writeOwnerExport({ ...identity,
+            contentLength: bytes.byteLength, sha256: checkpoint.candidateSha256!,
+            content: { async *[Symbol.asyncIterator]() { yield bytes; } } })).ok;
+          stored = new Uint8Array(bytes); return true;
+        });
+        await started;
+        const retaining = retainSource();
+        try { await waitForRoleLock(admin, 'owner_export_worker_runtime'); }
+        finally { release(); }
+        expect(await uploading).toBe(true);
+        await retaining;
+        let lateWrites = 0;
+        expect(await workerStore.uploadCandidate(identity, async () => { lateWrites++; return true; })).toBe(false);
+        expect(lateWrites).toBe(0);
+        expect(await workerStore.applyOwnerExportTransition({ exportId: scope.exportId, fromStatus: 'building', toStatus: 'ready',
+          expectedAggregateVersion: checkpoint.aggregateVersion, actingJobId: racingJobId.jobId, leaseToken: lease.leaseToken,
+          transitionedAt: clock.now(), artifactId: identity.artifactId })).toMatchObject({ ok: true, value: { kind: 'stale' } });
+        return;
+      }
       expect(await worker.transactions.run(context => snapshots.revalidateModerationForReady!({
         snapshot: checkpoint.snapshot!, portfolioId, ownerId, context,
       }))).toBe(true);
@@ -502,6 +618,7 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
       expect(captures).toBe(1);
       const ready = await applicationStore.findOwnerExport(scope);
       expect(ready).toMatchObject({ status: "ready", schemaVersion: "1.7", candidateArtifactId: checkpoint.candidateArtifactId });
+      expect(await cleanup().runOwnerExportCleanup()).toMatchObject({ ok: true, value: { deleted: 0, pending: 0 } });
       const download = await service.downloadOwnerExport({ actor, ...scope });
       expect(download.ok).toBe(true);
       if (!download.ok) throw new Error("PHASE8_FEEDBACK_EXPORT_DOWNLOAD_FAILED");
@@ -518,11 +635,18 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
         await expect(applicationStore.findOwnerExport(scope)).rejects.toThrow();
       }
       await admin.query("update portability.owner_exports set snapshot_data=$2::jsonb where export_id=$1", [scope.exportId, JSON.stringify(checkpoint.snapshot)]);
-      await admin.query("update interaction.feedback set paragraph='Changed retained feedback' where feedback_id=$1", [feedbackId]);
-      expect(await service.downloadOwnerExport({ actor, ...scope })).toMatchObject({ ok: false });
+      if (!deadlineOnly && !earlierErasure) {
+        await admin.query("update interaction.feedback set paragraph='Changed retained feedback' where feedback_id=$1", [feedbackId]);
+        expect(await service.downloadOwnerExport({ actor, ...scope })).toMatchObject({ ok: false });
+      }
       await retainSource();
     } finally {
-      await cleanFixtures();
+      try {
+        if (realStorage !== undefined && exportIdentity !== undefined) {
+          const removed = await realStorage.deleteOwnerExport(exportIdentity);
+          expect(removed.ok, 'PHASE8_STORAGE_FIXTURE_CLEANUP_FAILED').toBe(true);
+        }
+      } finally { await cleanFixtures(); }
     }
   });
 

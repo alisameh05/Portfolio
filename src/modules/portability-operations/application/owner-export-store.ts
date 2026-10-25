@@ -34,6 +34,8 @@ export interface PersistedOwnerExport {
   readonly artifactSha256?: string;
   readonly artifactContentLength?: number;
   readonly expiresAt?: string;
+  readonly artifactRevokedAt?: string;
+  readonly artifactDeletedAt?: string;
 }
 
 export interface OwnerExportReservationInput {

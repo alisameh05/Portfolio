@@ -269,6 +269,9 @@ export async function initializeDatabaseRuntime(
           });
         }
         const unavailableOwnerExportStorage = {
+          async deleteOwnerExport() {
+            return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
+          },
           async writeOwnerExport() {
             return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
           },
@@ -304,6 +307,7 @@ export async function initializeDatabaseRuntime(
             { createPostgresOwnerCvExportSnapshotReader },
             { createPostgresFeedbackOwnerExportSnapshotReader },
             { createSupabaseMediaExportStorage },
+            { createOwnerExportModerationCleanupService },
           ] = await Promise.all([
             import("../modules/portability-operations/application/owner-export-assembly.js"),
             import("../modules/portfolio-configuration/adapters/postgres-settings.js"),
@@ -316,12 +320,10 @@ export async function initializeDatabaseRuntime(
             import("../modules/cv-portfolio/adapters/postgres-owner-export-snapshot.js"),
             import("../modules/interaction-moderation/adapters/postgres-owner-export.js"),
             import("../runtime/adapters/supabase-media-export-storage.js"),
+            import("../modules/portability-operations/application/owner-export-cleanup.js"),
           ]);
           const mediaObjects = createOwnerExportMediaObjectReader(env, createSupabaseMediaExportStorage);
-          ownerExportAssembly = createOwnerExportAssemblyService({
-            operations,
-            exports: ownerExportStore,
-            snapshots: createOwnerExportSnapshotReader({
+          const exportSnapshots = createOwnerExportSnapshotReader({
               configuration: createPostgresPortfolioSettingsRepository(),
               content: createPostgresContentAuthoringRepository(),
               taxonomy: createTaxonomyOwnerExportSnapshotReader({
@@ -379,7 +381,19 @@ export async function initializeDatabaseRuntime(
                   };
                 },
               },
-            }),
+            });
+          if (!configuredScope?.portfolioId.ok || !configuredScope.ownerId.ok) throw new Error("OWNER_EXPORT_SCOPE_UNAVAILABLE");
+          const exportCleanup = createOwnerExportModerationCleanupService({
+            scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
+            artifacts: ownerExportStore, snapshots: exportSnapshots,
+            storage: ownerExportStorage ?? unavailableOwnerExportStorage, clock: createSystemClock(),
+          });
+          ownerExportAssembly = createOwnerExportAssemblyService({
+            operations,
+            exports: ownerExportStore,
+            snapshots: exportSnapshots,
+            artifacts: ownerExportStore,
+            cleanup: exportCleanup,
             storage: ownerExportStorage ?? unavailableOwnerExportStorage,
             ...(mediaObjects === undefined ? {} : { mediaObjects }),
             clock: createSystemClock(),

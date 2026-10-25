@@ -36,7 +36,7 @@ jobs:
       - run: npm run test:setup
       - run: npm run typecheck
       - name: Require Phase 8 Owner export, Issue #243 Media, and Issue #245 Moderation acceptance with zero skips
-        run: npm run phase8:focus:exports
+        run: npm run phase8:focus:exports -- --with-storage
       - name: Require Issue #242 taxonomy PostgreSQL acceptance with zero skips
         id: taxonomy-acceptance
         run: npm run phase8:focus:taxonomy

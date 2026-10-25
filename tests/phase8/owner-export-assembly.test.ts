@@ -15,6 +15,23 @@ const stableId = (tail: string) => `0196a1b2-7c3d-7e11-9f22-${tail.padStart(12, 
 const portfolioId = stableId("1") as PortfolioSettings["portfolioId"];
 const exportId = stableId("2") as Parameters<typeof buildConfigurationOwnerExportPackage>[0]["exportId"];
 
+it("deletes only the exact owned ZIP through Storage and reports retryable deletion failures", async () => {
+  let calls = 0;
+  const identity = { portfolioId, exportId, artifactId: stableId("3") as OwnerExportConfigurationSnapshot["snapshotId"] };
+  const storage = createSupabaseOwnerExportStorage({ storageUrl: 'http://127.0.0.1:54321', serviceRoleKey: 'synthetic-key',
+    fetcher: async (url, init) => {
+      expect(String(url)).toBe('http://127.0.0.1:54321/storage/v1/object/owner-exports');
+      expect(init?.method).toBe('DELETE');
+      expect(JSON.parse(String(init?.body))).toEqual({ prefixes: [`${portfolioId}/${exportId}/${identity.artifactId}.zip`] });
+      return ++calls === 1 ? new Response(null, { status: 503 }) : new Response('[]', { status: 200 });
+    } });
+  expect(await storage.deleteOwnerExport({ ...identity, artifactId: '../source' as typeof identity.artifactId })).toMatchObject({ ok: false });
+  expect(calls).toBe(0);
+  expect(await storage.deleteOwnerExport(identity)).toMatchObject({ ok: false, error: { kind: 'temporarily_unavailable' } });
+  expect(await storage.deleteOwnerExport(identity)).toMatchObject({ ok: true });
+  expect(await storage.deleteOwnerExport(identity)).toMatchObject({ ok: true });
+});
+
 function snapshot(settings: PortfolioSettings | null, version: number | null): OwnerExportConfigurationSnapshot {
   return {
     snapshotId: stableId("3") as OwnerExportConfigurationSnapshot["snapshotId"],

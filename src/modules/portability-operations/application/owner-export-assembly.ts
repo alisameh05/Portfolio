@@ -9,6 +9,7 @@ import { buildConfigurationOwnerExportPackage, buildCvOwnerExportPackage, buildM
 import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportObjectReadPort } from "./service.js";
 import { OWNER_EXPORT_RETENTION_SECONDS, applyGuardedOwnerExportTransition } from "./owner-export-service.js";
 import { calculateJobRetryDelayMilliseconds } from "./retry-policy.js";
+import type { OwnerExportModerationArtifactsPort, createOwnerExportModerationCleanupService } from "./owner-export-cleanup.js";
 
 const LEASE_DURATION_SECONDS = 300;
 const CLAIM_LIMIT = 10;
@@ -68,9 +69,12 @@ export interface OwnerExportAssemblyDependencies {
   readonly clock: Clock;
   readonly ids: StableIdGenerator;
   readonly random?: () => number;
+  readonly artifacts?: OwnerExportModerationArtifactsPort;
+  readonly cleanup?: ReturnType<typeof createOwnerExportModerationCleanupService>;
 }
 
 export interface OwnerExportAssemblyRunResult {
+  readonly cleanup?: { readonly scanned: number; readonly deleted: number; readonly pending: number; readonly incomplete: boolean };
   readonly claimed: number;
   readonly completed: number;
   readonly retried: number;
@@ -156,9 +160,9 @@ function sameScopes(left: readonly string[], right: readonly string[]): boolean 
 
 /**
  * Resumable leased worker for content, taxonomy, configuration, and moderation export slices. Snapshot
- * and candidate checkpoints are write-once; external Storage work happens
- * outside database transactions, then readiness and queue completion commit
- * together under the current lease token.
+ * and candidate checkpoints are write-once. Moderation uploads hold a bounded
+ * lifecycle fence shared with cleanup; other Storage work runs outside database
+ * transactions. Readiness and queue completion commit under the current lease.
  */
 export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDependencies) {
   async function failExport(
@@ -297,26 +301,36 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
       if (record.candidateArtifactId === undefined || record.candidateSha256 !== built.sha256 ||
           record.candidateContentLength !== built.contentLength) throw new Error("OWNER_EXPORT_CANDIDATE_MISMATCH");
       const artifactId = record.candidateArtifactId;
-      const stored = await deps.storage.writeOwnerExport({
-        portfolioId: parsed.portfolioId,
-        exportId: record.exportId,
-        artifactId,
-        content: built.content,
-        contentLength: built.contentLength,
-        sha256: built.sha256,
-      });
-      if (!stored.ok) throw new Error("OWNER_EXPORT_STORAGE_WRITE_FAILED");
-      const read = await deps.storage.readOwnerExport({
-        portfolioId: parsed.portfolioId,
-        exportId: record.exportId,
-        artifactId,
-        expectedSha256: record.candidateSha256!,
-        expectedContentLength: record.candidateContentLength!,
-      });
-      if (!read.ok || read.value.contentLength !== built.contentLength ||
-          !await verifyArtifact(read.value.content, built.contentLength, built.sha256)) {
-        throw new Error("OWNER_EXPORT_STORAGE_VERIFY_FAILED");
-      }
+      const uploadRecord = record;
+      const upload = async () => {
+        const stored = await deps.storage.writeOwnerExport({
+          portfolioId: parsed.portfolioId,
+          exportId: uploadRecord.exportId,
+          artifactId,
+          content: built.content,
+          contentLength: built.contentLength,
+          sha256: built.sha256,
+        });
+        if (!stored.ok) throw new Error("OWNER_EXPORT_STORAGE_WRITE_FAILED");
+        const read = await deps.storage.readOwnerExport({
+          portfolioId: parsed.portfolioId,
+          exportId: uploadRecord.exportId,
+          artifactId,
+          expectedSha256: uploadRecord.candidateSha256!,
+          expectedContentLength: uploadRecord.candidateContentLength!,
+        });
+        if (!read.ok || read.value.contentLength !== built.contentLength ||
+            !await verifyArtifact(read.value.content, built.contentLength, built.sha256)) {
+          throw new Error("OWNER_EXPORT_STORAGE_VERIFY_FAILED");
+        }
+        return true;
+      };
+      if (record.includedScopes.includes("moderation-history")) {
+        if (deps.artifacts === undefined) throw new Error("OWNER_EXPORT_UPLOAD_FENCE_UNAVAILABLE");
+        const uploaded = await deps.artifacts.uploadCandidate({ portfolioId: parsed.portfolioId,
+          exportId: record.exportId, artifactId, actingJobId: jobId.value, leaseToken: job.leaseToken }, upload);
+        if (!uploaded) return "stale";
+      } else await upload();
       const completedAt = deps.clock.now();
       const completed = await applyGuardedOwnerExportTransition(deps.exports, {
         exportId: record.exportId,
@@ -352,12 +366,26 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
     }
   }
 
+  let cleanupCursor: StableId<"OwnerExport"> | undefined;
   return {
+    async runOwnerExportCleanup() {
+      if (deps.cleanup === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_CLEANUP_UNAVAILABLE" } as const);
+      const result = await deps.cleanup.runOwnerExportCleanup(cleanupCursor === undefined ? {} : { after: cleanupCursor });
+      if (result.ok) cleanupCursor = result.value.nextCursor;
+      return result;
+    },
     async runOwnerExportAssembly(input: { readonly workerId: string }): Promise<Result<OwnerExportAssemblyRunResult, Rejection>> {
       if (!/^[A-Za-z0-9._:-]{1,128}$/.test(input.workerId)) {
         return err({ kind: "validation", code: "OWNER_EXPORT_WORKER_CONTEXT_INVALID" });
       }
       try {
+        let cleanup: OwnerExportAssemblyRunResult["cleanup"];
+        if (deps.cleanup !== undefined) {
+          const cleaned = await deps.cleanup.runOwnerExportCleanup(cleanupCursor === undefined ? {} : { after: cleanupCursor });
+          if (!cleaned.ok) return cleaned;
+          cleanupCursor = cleaned.value.nextCursor;
+          cleanup = cleaned.value;
+        }
         const jobs = await deps.operations.jobs.claimDue({
           workerId: input.workerId,
           now: deps.clock.now(),
@@ -373,7 +401,7 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
           else if (result === "failed") counts.failed += 1;
           else counts.staleLeases += 1;
         }
-        return ok(counts);
+        return ok({ ...counts, ...(cleanup === undefined ? {} : { cleanup }) });
       } catch {
         return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_ASSEMBLY_UNAVAILABLE" });
       }
