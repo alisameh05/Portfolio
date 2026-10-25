@@ -5,7 +5,7 @@ import { parseSafeErrorCode } from "./persistence.js";
 import type { Clock, StableIdGenerator, TransactionContext } from "../../../runtime/ports.js";
 import type { OwnerExportStorePort, PersistedOwnerExport } from "./owner-export-store.js";
 import type { OwnerExportAssemblySnapshot } from "./owner-export-package.js";
-import { buildConfigurationOwnerExportPackage, buildMediaOwnerExportPackage, buildSelectedOwnerExportPackage, type OwnerExportMediaObjectReaderPort } from "./owner-export-package.js";
+import { buildConfigurationOwnerExportPackage, buildCvOwnerExportPackage, buildMediaOwnerExportPackage, buildSelectedOwnerExportPackage, type OwnerExportMediaObjectReaderPort } from "./owner-export-package.js";
 import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportObjectReadPort } from "./service.js";
 import { OWNER_EXPORT_RETENTION_SECONDS, applyGuardedOwnerExportTransition } from "./owner-export-service.js";
 import { calculateJobRetryDelayMilliseconds } from "./retry-policy.js";
@@ -14,6 +14,7 @@ const LEASE_DURATION_SECONDS = 300;
 const CLAIM_LIMIT = 10;
 const RETRY_FAILURE = parseSafeErrorCode("OWNER_EXPORT_ASSEMBLY_RETRY");
 const PERMANENT_FAILURE = parseSafeErrorCode("OWNER_EXPORT_ASSEMBLY_FAILED");
+const CV_HISTORY_LIMIT_EXCEEDED = parseSafeErrorCode("OWNER_EXPORT_CV_HISTORY_LIMIT_EXCEEDED");
 const UNSUPPORTED_SCOPE = parseSafeErrorCode("OWNER_EXPORT_SCOPE_UNSUPPORTED");
 const INVALID_JOB = parseSafeErrorCode("OWNER_EXPORT_JOB_INVALID");
 
@@ -125,9 +126,13 @@ async function verifyArtifact(
 }
 
 function isSupportedScopeSelection(scopes: readonly string[]): boolean {
-  const supportedOrder = ["portfolio-content", "taxonomy", "portfolio-configuration"];
+  const supportedOrder = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "portfolio-configuration"];
   const canonical = supportedOrder.filter((scope) => scopes.includes(scope));
   if (scopes.length === 1 && scopes[0] === "media-metadata") return true;
+  if (scopes.includes("cv-metadata")) {
+    return sameScopes(scopes, ["cv-metadata"]) || sameScopes(scopes, ["media-metadata", "cv-metadata"]);
+  }
+  if (scopes.includes("media-metadata")) return false;
   return canonical.length === scopes.length && canonical.every((scope, index) => scopes[index] === scope) &&
     (scopes.includes("portfolio-content") || scopes.includes("taxonomy") ||
       scopes.length === 1 && scopes[0] === "portfolio-configuration");
@@ -228,7 +233,12 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
           snapshotId: snapshotId.value,
           includedScopes: record.includedScopes,
         });
-        if (!captured.ok) throw new Error("OWNER_EXPORT_SNAPSHOT_UNAVAILABLE");
+        if (!captured.ok) {
+          if (captured.error.code === CV_HISTORY_LIMIT_EXCEEDED) {
+            return await failExport(record, { jobId: jobId.value, leaseToken: job.leaseToken }, CV_HISTORY_LIMIT_EXCEEDED);
+          }
+          throw new Error("OWNER_EXPORT_SNAPSHOT_UNAVAILABLE");
+        }
         const saved = await deps.exports.saveOwnerExportSnapshot({
           exportId: record.exportId,
           actingJobId: jobId.value,
@@ -239,7 +249,10 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         snapshot = captured.value;
       }
 
-      const built = snapshot !== null && typeof snapshot === "object" && "kind" in snapshot &&
+      const built = snapshot !== null && typeof snapshot === "object" && "kind" in snapshot && snapshot.includedScopes.includes("cv-metadata")
+        ? deps.mediaObjects === undefined ? (() => { throw new Error("OWNER_EXPORT_MEDIA_STORAGE_UNAVAILABLE"); })()
+          : await buildCvOwnerExportPackage({ exportId: record.exportId, portfolioId: parsed.portfolioId, snapshot, objects: deps.mediaObjects })
+        : snapshot !== null && typeof snapshot === "object" && "kind" in snapshot &&
         snapshot.includedScopes.length === 1 && snapshot.includedScopes[0] === "media-metadata"
         ? deps.mediaObjects === undefined ? (() => { throw new Error("OWNER_EXPORT_MEDIA_STORAGE_UNAVAILABLE"); })()
           : await buildMediaOwnerExportPackage({ exportId: record.exportId, portfolioId: parsed.portfolioId, snapshot, objects: deps.mediaObjects })
@@ -298,12 +311,15 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         actingJobId: jobId.value,
         integrityManifest: built.manifest,
         artifactId,
-        ...(record.includedScopes.includes("media-metadata") ? { precondition: (context: TransactionContext) =>
+        ...(record.includedScopes.includes("media-metadata") || record.includedScopes.includes("cv-metadata") ? { precondition: (context: TransactionContext) =>
           deps.snapshots.revalidateMediaForReady?.({ snapshot, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId, context }) ?? Promise.resolve(false) } : {}),
       });
       return completed.ok && completed.value === "applied" ? "completed" : "stale";
-    } catch {
+    } catch (error) {
       if (record === null) return "stale";
+      if (error instanceof Error && error.message === "OWNER_EXPORT_CV_HISTORY_LIMIT_EXCEEDED") {
+        return await failExport(record, { jobId: jobId.value, leaseToken: job.leaseToken }, CV_HISTORY_LIMIT_EXCEEDED);
+      }
       if (job.attemptCount >= 5) {
         const failed = await failExport(record, { jobId: jobId.value, leaseToken: job.leaseToken }, PERMANENT_FAILURE);
         return failed;

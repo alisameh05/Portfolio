@@ -849,30 +849,14 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     }
   });
 
-  it("AC09: fails an unsupported requested scope without manufacturing a ready package", async () => {
+  it("AC09: rejects an unsupported requested scope without manufacturing a ready package", async () => {
     const primary = composeService(application!);
-    const workerOperations = createPostgresOperationsPersistence(worker!.database, { now: () => now });
-    const workerStore = createPostgresOwnerExportStore(worker!.database, { outbox: workerOperations.outbox });
-    let storageCalls = 0;
-    const assembly = createOwnerExportAssemblyService({
-      operations: workerOperations,
-      exports: workerStore,
-      snapshots: { async capture() { throw new Error("unsupported selection must not capture"); } },
-      storage: {
-        async writeOwnerExport() { storageCalls += 1; return { ok: true as const, value: undefined }; },
-        async readOwnerExport() { storageCalls += 1; return { ok: false as const, error: { kind: "temporarily_unavailable" as const, code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } }; },
-      },
-      clock: { now: () => now },
-      ids: createSystemIdGenerator(),
-    });
-    const request = await primary.service.requestOwnerExport(command(["cv-metadata"], "phase8-config-export-unsupported-001"));
-    expect(request.ok).toBe(true);
-    if (!request.ok) return;
-    expect(await assembly.runOwnerExportAssembly({ workerId: "phase8-config-unsupported-worker" }))
-      .toMatchObject({ ok: true, value: { claimed: 1, failed: 1, completed: 0 } });
-    expect(await workerStore.findOwnerExport({ exportId: request.value.exportId, portfolioId, ownerId }))
-      .toMatchObject({ status: "failed", failureCode: "OWNER_EXPORT_SCOPE_UNSUPPORTED" });
-    expect(storageCalls).toBe(0);
+    const exportsBefore = await ownerExportCount();
+    const jobsBefore = await assemblyJobCount();
+    const request = await primary.service.requestOwnerExport(command(["portfolio-content", "cv-metadata"], "phase8-config-export-unsupported-001"));
+    expect(request).toMatchObject({ ok: false, error: { kind: "validation", code: "OWNER_EXPORT_SCOPE_UNSUPPORTED" } });
+    expect(await ownerExportCount()).toBe(exportsBefore);
+    expect(await assemblyJobCount()).toBe(jobsBefore);
   });
 
   it("AC03: commits exact concurrent requests once and replays the original receipt to both", async () => {

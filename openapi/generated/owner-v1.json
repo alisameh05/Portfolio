@@ -7464,6 +7464,289 @@
           }
         }
       },
+      "OwnerExportCvEntryDescriptorV1_2": {
+        "type": "object",
+        "description": "CV entry using the immutable CV v1.2 record schema.",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "scope",
+          "mediaType",
+          "recordSchema",
+          "schemaPath",
+          "schemaVersion",
+          "digest",
+          "recordCount"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "const": "records/cv-metadata.ndjson"
+          },
+          "scope": {
+            "type": "string",
+            "const": "cv-metadata"
+          },
+          "mediaType": {
+            "type": "string",
+            "const": "application/x-ndjson"
+          },
+          "recordSchema": {
+            "type": "string",
+            "const": "urn:shipwithali:owner-export-schema:cv-metadata:1.2"
+          },
+          "schemaPath": {
+            "type": "string",
+            "const": "schemas/cv-metadata.schema.json"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "const": "1.2"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "recordCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "OwnerExportManifestSchemaDescriptorV1_5": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "path",
+          "schemaUri",
+          "schemaVersion",
+          "digest"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "manifest"
+          },
+          "path": {
+            "type": "string",
+            "const": "schemas/manifest.schema.json"
+          },
+          "schemaUri": {
+            "type": "string",
+            "const": "urn:shipwithali:owner-export-schema:manifest:1.5"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "const": "1.5"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "OwnerExportCvRecordSchemaDescriptorV1_2": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "path",
+          "scope",
+          "schemaUri",
+          "schemaVersion",
+          "digest"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "record"
+          },
+          "path": {
+            "type": "string",
+            "const": "schemas/cv-metadata.schema.json"
+          },
+          "scope": {
+            "type": "string",
+            "const": "cv-metadata"
+          },
+          "schemaUri": {
+            "type": "string",
+            "const": "urn:shipwithali:owner-export-schema:cv-metadata:1.2"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "const": "1.2"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "OwnerExportSchemaDescriptorV1_6": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/OwnerExportManifestSchemaDescriptorV1_5"
+          },
+          {
+            "$ref": "#/components/schemas/OwnerExportMediaRecordSchemaDescriptorV1_2"
+          },
+          {
+            "$ref": "#/components/schemas/OwnerExportCvRecordSchemaDescriptorV1_2"
+          }
+        ]
+      },
+      "OwnerExportPackageManifestV1_6": {
+        "type": "object",
+        "description": "Manifest 1.6 preserves retained CV history and binds accepted CV versions to exact verified Media PDF bytes.",
+        "additionalProperties": false,
+        "required": [
+          "packageFormat",
+          "schemaVersion",
+          "exportId",
+          "snapshot",
+          "createdAt",
+          "algorithm",
+          "digest",
+          "requiredFeatures",
+          "includedScopes",
+          "publicEventDataCoverage",
+          "dependencies",
+          "exclusions",
+          "entries",
+          "schemas",
+          "assets"
+        ],
+        "properties": {
+          "packageFormat": {
+            "type": "string",
+            "const": "shipwithali-owner-export"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "const": "1.6"
+          },
+          "exportId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "snapshot": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "snapshotId",
+              "capturedAt",
+              "consistency"
+            ],
+            "properties": {
+              "snapshotId": {
+                "$ref": "#/components/schemas/StableId"
+              },
+              "capturedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "consistency": {
+                "type": "string",
+                "const": "transactional"
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "algorithm": {
+            "type": "string",
+            "const": "sha-256"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "requiredFeatures": {
+            "type": "array",
+            "const": [
+              "asset-integrity-v1",
+              "dependency-coverage-v1",
+              "record-integrity-v1",
+              "schema-integrity-v1",
+              "snapshot-identity-v1"
+            ]
+          },
+          "includedScopes": {
+            "oneOf": [
+              {
+                "type": "array",
+                "const": [
+                  "cv-metadata"
+                ]
+              },
+              {
+                "type": "array",
+                "const": [
+                  "media-metadata",
+                  "cv-metadata"
+                ]
+              }
+            ]
+          },
+          "publicEventDataCoverage": {
+            "$ref": "#/components/schemas/PublicEventDataCoverage"
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportDependencyDescriptor"
+            }
+          },
+          "exclusions": {
+            "type": "array",
+            "const": [
+              "raw-public-event-data",
+              "functional-visitor-identities",
+              "measurement-visitor-identities",
+              "sessions",
+              "credentials",
+              "lab-entries"
+            ]
+          },
+          "entries": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/OwnerExportMediaEntryDescriptorV1_2"
+                },
+                {
+                  "$ref": "#/components/schemas/OwnerExportCvEntryDescriptorV1_2"
+                }
+              ]
+            }
+          },
+          "schemas": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportSchemaDescriptorV1_6"
+            }
+          },
+          "assets": {
+            "type": "array",
+            "maxItems": 508,
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportMediaAssetDescriptorV1_5"
+            }
+          },
+          "extensions": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
       "OwnerExportPackageManifest": {
         "oneOf": [
           {
@@ -7474,6 +7757,9 @@
           },
           {
             "$ref": "#/components/schemas/OwnerExportPackageManifestV1_5"
+          },
+          {
+            "$ref": "#/components/schemas/OwnerExportPackageManifestV1_6"
           }
         ]
       },

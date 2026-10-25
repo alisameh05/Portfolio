@@ -45,6 +45,8 @@ interface AcceptanceRow {
 }
 interface OutputRow {
   readonly media_id: string;
+  readonly aggregate_version: number | string;
+  readonly decision_id: string;
   readonly object_id: string;
   readonly variant_name: string;
   readonly mime_type: string;
@@ -57,8 +59,11 @@ interface OutputRow {
 }
 interface OriginalRow {
   readonly media_id: string;
+  readonly aggregate_version: number | string;
+  readonly decision_id: string;
   readonly object_id: string;
   readonly upload_intent_id: string;
+  readonly object_version: string;
   readonly detected_mime_type: string;
   readonly detected_byte_length: number | string;
   readonly input_sha256: string;
@@ -117,7 +122,7 @@ export function createPostgresOwnerMediaExportSnapshotReader(input: {
   readonly transactions: TransactionRunner;
 }): OwnerMediaExportSnapshotReaderPort {
   return {
-    async readOwnerMediaExportSnapshot(scope, context): Promise<Result<OwnerMediaExportSnapshot, Rejection>> {
+    async readOwnerMediaExportSnapshot(scope, context, selectedMediaAssetIds): Promise<Result<OwnerMediaExportSnapshot, Rejection>> {
       const executor = resolvePostgresTransaction(context);
       try {
         await sql`select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
@@ -127,6 +132,8 @@ export function createPostgresOwnerMediaExportSnapshotReader(input: {
         const stamp = await sql<{ captured_at: Date | string }>`select transaction_timestamp() as captured_at`.execute(executor);
         const capturedAt = stamp.rows[0]?.captured_at;
         if (capturedAt === undefined) throw new PostgresInfrastructureError();
+        const selectedIds = selectedMediaAssetIds === undefined ? undefined : [...new Set(selectedMediaAssetIds)];
+        if (selectedIds !== undefined && selectedIds.length === 0) return ok({ capturedAt: iso(capturedAt), records: [], assets: [] });
         const assets = await sql<AssetRow>`
           select a.media_id::text as media_id, a.kind,
                  coalesce(state.aggregate_version, a.aggregate_version) as aggregate_version,
@@ -149,6 +156,7 @@ export function createPostgresOwnerMediaExportSnapshotReader(input: {
             left join media.processing_states state on state.media_id = a.media_id
               and state.portfolio_id = a.portfolio_id and state.owner_id = a.owner_id
            where a.portfolio_id = ${scope.portfolioId}::uuid and a.owner_id = ${scope.ownerId}::uuid
+             ${selectedIds === undefined ? sql`` : sql`and a.media_id = any(${selectedIds}::uuid[])`}
            order by a.media_id limit ${MAX_MEDIA_EXPORT_ROWS + 1}
         `.execute(executor);
         if (assets.rows.length > MAX_MEDIA_EXPORT_ROWS) throw new PostgresInfrastructureError();
@@ -202,7 +210,7 @@ export function createPostgresOwnerMediaExportSnapshotReader(input: {
         const outputRows = await sql<OutputRow>`
           with latest_accepted as (
             select distinct on (decision.media_id) decision.media_id, decision.portfolio_id, decision.owner_id,
-                   decision.aggregate_version, decision.sealed_outputs
+                   decision.decision_id, decision.aggregate_version, decision.sealed_outputs
               from media.decision_history decision
               join media.processing_states state on state.media_id = decision.media_id
                 and state.portfolio_id = decision.portfolio_id and state.owner_id = decision.owner_id
@@ -211,7 +219,8 @@ export function createPostgresOwnerMediaExportSnapshotReader(input: {
                and decision.media_id = any(${ids}::uuid[]) and decision.decision = 'accepted'
              order by decision.media_id, decision.aggregate_version desc
           )
-          select accepted.media_id::text, object.object_id::text,
+          select accepted.media_id::text, accepted.aggregate_version, accepted.decision_id::text as decision_id,
+                 object.object_id::text,
                  sealed.value->>'variantName' as variant_name, object.mime_type as mime_type,
                  object.sha256, object.byte_length, object.object_version,
                  coalesce(video.width, image.width) as width,
@@ -226,8 +235,10 @@ export function createPostgresOwnerMediaExportSnapshotReader(input: {
             left join media.processing_attempt_variants image on image.object_id = object.object_id and image.media_id = object.media_id
            order by accepted.media_id, sealed.value->>'variantName'
         `.execute(executor);
+        // Accepted originals live in candidate storage; their accepted digest is the content-version binding.
         const originalRows = await sql<OriginalRow>`
-          select decision.media_id::text, decision.input_object_id::text as object_id,
+          select decision.media_id::text, decision.aggregate_version, decision.decision_id::text as decision_id,
+                 decision.input_object_id::text as object_id, decision.input_sha256 as object_version,
                  upload.upload_intent_id::text, decision.detected_mime_type,
                  decision.detected_byte_length, decision.input_sha256
             from media.decision_history decision
@@ -275,10 +286,15 @@ export function createPostgresOwnerMediaExportSnapshotReader(input: {
             if (!objectId.ok || !uploadIntentId.ok || !/^[a-f0-9]{64}$/.test(sha256) || byteLength > 50 * 1024 * 1024) {
               throw new PostgresInfrastructureError();
             }
+            const decisionId = parseStableId("MediaDecision", currentOriginal.decision_id);
+            if (!decisionId.ok) throw new PostgresInfrastructureError();
             const type = mediaType(currentOriginal.detected_mime_type);
             const reference = `assets/media-metadata/sha256/${sha256}`;
             const original = { mediaId: mediaId.value, objectId: objectId.value, source: "original" as const,
-              uploadIntentId: uploadIntentId.value, variantName: "original", mediaType: type, byteLength, sha256 };
+              uploadIntentId: uploadIntentId.value, variantName: "original", mediaType: type, byteLength, sha256,
+              assetVersion: integer(currentOriginal.aggregate_version, 1),
+              decisionId: decisionId.value,
+              objectVersion: currentOriginal.object_version };
             portableAssets.push(original);
             const portable = { variantName: "original", mediaType: type, byteLength, digest: sha256, portableReference: reference };
             return { portable, acceptance: { ...portable, byteCoverage: "included" as const } };
@@ -289,11 +305,16 @@ export function createPostgresOwnerMediaExportSnapshotReader(input: {
             const byteLength = integer(row.byte_length, 1);
             if (!objectId.ok || !/^[a-f0-9]{64}$/.test(sha256) || row.object_version !== sha256 ||
                 !/^[a-z0-9-]{1,32}$/.test(row.variant_name)) throw new PostgresInfrastructureError();
+            const decisionId = parseStableId("MediaDecision", row.decision_id);
+            if (!decisionId.ok) throw new PostgresInfrastructureError();
             const type = mediaType(row.mime_type);
             if (byteLength > 50 * 1024 * 1024) throw new PostgresInfrastructureError();
             const ref = `assets/media-metadata/sha256/${sha256}`;
             portableAssets.push({ mediaId: mediaId.value, objectId: objectId.value, source: "variant",
-              variantName: row.variant_name, mediaType: type, byteLength, sha256 });
+              variantName: row.variant_name, mediaType: type, byteLength, sha256,
+              assetVersion: integer(row.aggregate_version, 1),
+              decisionId: decisionId.value,
+              objectVersion: row.object_version });
             return { variantName: row.variant_name, mediaType: type, byteLength, digest: sha256, portableReference: ref,
               ...(row.width === null ? {} : { width: integer(row.width, 1) }),
               ...(row.height === null ? {} : { height: integer(row.height, 1) }),

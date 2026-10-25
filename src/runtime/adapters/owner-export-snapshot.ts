@@ -7,6 +7,7 @@ import type { OwnerExportSnapshotReaderPort } from "../../modules/portability-op
 import type { OwnerExportAssemblySnapshot } from "../../modules/portability-operations/application/owner-export-package.js";
 import type { TaxonomyOwnerExportSnapshotReader } from "../../modules/taxonomy-discovery/application/taxonomy-export.js";
 import type { OwnerMediaExportSnapshotReaderPort } from "../../modules/media/application/owner-contracts.js";
+import type { OwnerCvExportSnapshotReaderPort } from "../../modules/cv-portfolio/index.js";
 
 type OwnerExportMediaType = NonNullable<OwnerExportSelectedSnapshot["media"]>["assets"][number]["mediaType"];
 const OWNER_EXPORT_MEDIA_TYPES: readonly OwnerExportMediaType[] = [
@@ -121,6 +122,7 @@ export function createOwnerExportSnapshotReader(input: {
   readonly content: Pick<ContentAuthoringRepository, "readOwnerExportSnapshot" | "readOwnerExportMediaLocales">;
   readonly taxonomy?: TaxonomyOwnerExportSnapshotReader;
   readonly media?: OwnerMediaExportSnapshotReaderPort;
+  readonly cv?: OwnerCvExportSnapshotReaderPort;
   readonly transactions: TransactionRunner;
   readonly capabilities: OwnerExportCapabilityFactsReader;
 }): OwnerExportSnapshotReaderPort {
@@ -130,14 +132,18 @@ export function createOwnerExportSnapshotReader(input: {
       const hasContent = scopes.includes("portfolio-content");
       const hasTaxonomy = scopes.includes("taxonomy");
       const hasMedia = scopes.includes("media-metadata");
+      const hasCv = scopes.includes("cv-metadata");
       const hasConfiguration = scopes.includes("portfolio-configuration");
-      const canonicalScopes = ["portfolio-content", "taxonomy", "media-metadata", "portfolio-configuration"].filter((scope) => scopes.includes(scope));
+      const canonicalScopes = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "portfolio-configuration"].filter((scope) => scopes.includes(scope));
       if (canonicalScopes.length !== scopes.length || canonicalScopes.some((scope, index) => scopes[index] !== scope) ||
-          !hasContent && !hasTaxonomy && !hasMedia && !hasConfiguration) {
+          (!hasContent && !hasTaxonomy && !hasMedia && !hasCv && !hasConfiguration) ||
+          (hasCv && scopes.length !== 1 && !(scopes.length === 2 && hasMedia)) ||
+          (hasMedia && scopes.length !== 1 && !(scopes.length === 2 && hasCv))) {
         return err({ kind: "validation", code: "OWNER_EXPORT_SCOPE_UNSUPPORTED" });
       }
       if (hasTaxonomy && input.taxonomy === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_TAXONOMY_UNAVAILABLE" });
       if (hasMedia && input.media === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_MEDIA_UNAVAILABLE" });
+      if (hasCv && input.cv === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_CV_UNAVAILABLE" });
       try {
         const captured = await input.transactions.run(async (transaction) => {
           const settings = hasConfiguration
@@ -152,20 +158,33 @@ export function createOwnerExportSnapshotReader(input: {
             ? await input.taxonomy!.readOwnerExportSnapshot({ portfolioId: request.portfolioId, ownerId: request.ownerId }, transaction)
             : undefined;
           if (taxonomy !== undefined && !taxonomy.ok) throw new Error("OWNER_EXPORT_TAXONOMY_UNAVAILABLE");
-          const media = hasMedia
-            ? await input.media!.readOwnerMediaExportSnapshot({ portfolioId: request.portfolioId, ownerId: request.ownerId }, transaction)
+          const cv = hasCv
+            ? await input.cv!.readOwnerCvExportSnapshot({ portfolioId: request.portfolioId, ownerId: request.ownerId }, transaction)
+            : undefined;
+          if (cv !== undefined && !cv.ok) {
+            if (cv.error.code === "CV_EXPORT_HISTORY_LIMIT_EXCEEDED") return { cvHistoryLimitExceeded: true as const };
+            throw new Error("OWNER_EXPORT_CV_UNAVAILABLE");
+          }
+          const acceptedCvMediaIds = cv?.ok
+            ? [...new Set(cv.value.versions.filter((version) => version.state === "accepted").map((version) => version.mediaId))]
+            : [];
+          const media = hasMedia || acceptedCvMediaIds.length > 0
+            ? await input.media!.readOwnerMediaExportSnapshot(
+              { portfolioId: request.portfolioId, ownerId: request.ownerId }, transaction,
+              hasMedia ? undefined : acceptedCvMediaIds,
+            )
             : undefined;
           if (media !== undefined && !media.ok) throw new Error("OWNER_EXPORT_MEDIA_UNAVAILABLE");
-          const mediaLocales = media?.ok
+          const mediaLocales = hasMedia && media?.ok
             ? await input.content.readOwnerExportMediaLocales({
               mediaAssetIds: media.value.records.map((record) => record.mediaId),
               scope: { portfolioId: request.portfolioId, ownerId: request.ownerId },
             }, transaction)
             : undefined;
           if (mediaLocales !== undefined && !mediaLocales.ok) throw new Error("OWNER_EXPORT_MEDIA_LOCALES_UNAVAILABLE");
-          const capturedAt = settings?.ok ? settings.value.capturedAt : content?.ok ? content.value.capturedAt : taxonomy?.ok ? taxonomy.value.capturedAt : media?.ok ? media.value.capturedAt : undefined;
+          const capturedAt = settings?.ok ? settings.value.capturedAt : content?.ok ? content.value.capturedAt : taxonomy?.ok ? taxonomy.value.capturedAt : cv?.ok ? cv.value.capturedAt : media?.ok ? media.value.capturedAt : undefined;
           if (capturedAt === undefined || settings?.ok && settings.value.capturedAt !== capturedAt ||
-              content?.ok && content.value.capturedAt !== capturedAt || taxonomy?.ok && taxonomy.value.capturedAt !== capturedAt ||
+              content?.ok && content.value.capturedAt !== capturedAt || taxonomy?.ok && taxonomy.value.capturedAt !== capturedAt || cv?.ok && cv.value.capturedAt !== capturedAt ||
               media?.ok && media.value.capturedAt !== capturedAt) {
             throw new Error("OWNER_EXPORT_SNAPSHOT_TIME_MISMATCH");
           }
@@ -174,10 +193,15 @@ export function createOwnerExportSnapshotReader(input: {
             settings: settings?.ok ? settings.value.settings : null,
             content: content?.ok ? content.value : undefined,
             taxonomy: taxonomy?.ok ? taxonomy.value : undefined,
-            media: media?.ok ? media.value : undefined,
+            media: hasMedia && media?.ok ? media.value : undefined,
+            cv: cv?.ok ? cv.value : undefined,
+            cvMedia: media?.ok ? media.value : undefined,
             mediaLocales: mediaLocales?.ok ? mediaLocales.value : undefined,
           };
         }, { isolationLevel: "repeatable read" });
+        if ("cvHistoryLimitExceeded" in captured) {
+          return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_CV_HISTORY_LIMIT_EXCEEDED" });
+        }
         let configuration: OwnerExportConfigurationSnapshot | undefined;
         if (hasConfiguration) {
           const capabilityFacts = await input.capabilities.read({ portfolioId: request.portfolioId, ownerId: request.ownerId });
@@ -192,7 +216,7 @@ export function createOwnerExportSnapshotReader(input: {
             },
           };
         }
-        if (!hasContent && !hasTaxonomy && !hasMedia && configuration !== undefined) return ok(configuration);
+        if (!hasContent && !hasTaxonomy && !hasMedia && !hasCv && configuration !== undefined) return ok(configuration);
         const localesByMedia = new Map((captured.mediaLocales ?? []).map((fact) => [fact.mediaAssetId, fact.locales]));
         const mediaRecords = captured.media?.records.map((record) => {
           const locales = localesByMedia.get(record.mediaId) ?? [];
@@ -207,6 +231,36 @@ export function createOwnerExportSnapshotReader(input: {
             },
           };
         });
+        const cvAssets = captured.cv === undefined ? undefined : captured.cv.versions
+          .filter((version) => version.state === "accepted")
+          .map((version) => {
+            const binding = version.acceptedMediaSnapshot;
+            const media = captured.cvMedia;
+            if (binding === undefined || media === undefined) throw new Error("OWNER_EXPORT_CV_MEDIA_BYTES_MISSING");
+            const mediaRecord = media.records.find((record) => record.mediaId === version.mediaId);
+            if (mediaRecord === undefined || mediaRecord.value["kind"] !== "document" || mediaRecord.value["state"] !== "accepted" ||
+                mediaRecord.value["publicationEligibility"] !== "eligible" || Number(mediaRecord.value["aggregateVersion"]) !== binding.mediaAssetVersion) {
+              throw new Error("OWNER_EXPORT_CV_MEDIA_INELIGIBLE");
+            }
+            const asset = media.assets.find((candidate) => candidate.mediaId === version.mediaId && candidate.source === "variant" &&
+              candidate.objectId === binding.mediaObjectId && candidate.assetVersion === binding.mediaAssetVersion &&
+              candidate.decisionId === binding.mediaDecisionId && candidate.sha256 === binding.sha256 &&
+              candidate.objectVersion === binding.objectVersion && candidate.mediaType === "application/pdf");
+            if (asset === undefined) throw new Error("OWNER_EXPORT_CV_MEDIA_SNAPSHOT_MISMATCH");
+            return {
+              path: `assets/media-metadata/sha256/${binding.sha256}`,
+              mediaId: asset.mediaId,
+              variantName: asset.variantName,
+              mediaType: "application/pdf" as const,
+              byteLength: asset.byteLength,
+              digest: binding.sha256,
+              objectId: binding.mediaObjectId,
+              source: "variant" as const,
+              assetVersion: binding.mediaAssetVersion,
+              decisionId: binding.mediaDecisionId,
+              objectVersion: binding.objectVersion,
+            };
+          });
         return ok({
           kind: "owner-export-snapshot-v1",
           snapshotId: request.snapshotId,
@@ -240,23 +294,52 @@ export function createOwnerExportSnapshotReader(input: {
                 objectId: asset.objectId,
                 source: asset.source,
                 ...(asset.uploadIntentId === undefined ? {} : { uploadIntentId: asset.uploadIntentId }),
+                ...(asset.assetVersion === undefined ? {} : { assetVersion: asset.assetVersion }),
+                ...(asset.decisionId === undefined ? {} : { decisionId: asset.decisionId }),
+                ...(asset.objectVersion === undefined ? {} : { objectVersion: asset.objectVersion }),
               };
             }),
           } }),
+          ...(captured.cv === undefined ? {} : { cv: captured.cv, cvAssets: cvAssets!.map((asset) => ({
+            path: `assets/media-metadata/sha256/${asset.digest}`,
+            mediaId: asset.mediaId,
+            variantName: asset.variantName,
+            mediaType: asset.mediaType,
+            byteLength: asset.byteLength,
+            digest: asset.digest,
+            objectId: asset.objectId,
+            source: asset.source,
+            assetVersion: asset.assetVersion,
+            decisionId: asset.decisionId,
+            objectVersion: asset.objectVersion,
+          })) }),
         });
-      } catch {
+      } catch (error) {
         return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_SNAPSHOT_UNAVAILABLE" });
       }
     },
     async revalidateMediaForReady({ snapshot, portfolioId, ownerId, context }) {
-      if (input.media === undefined || !("kind" in snapshot) || snapshot.media === undefined) return false;
+      if (input.media === undefined || !("kind" in snapshot)) return false;
       const versions = new Map<StableId<"MediaAsset">, number>();
-      for (const record of snapshot.media.records) {
-        if (record.value["state"] !== "accepted" || record.value["byteCoverage"] !== "included") continue;
-        if (typeof record.value["aggregateVersion"] !== "number" || !Number.isSafeInteger(record.value["aggregateVersion"])) return false;
-        const mediaId = parseStableId("MediaAsset", record.mediaId);
-        if (!mediaId.ok) return false;
-        versions.set(mediaId.value, record.value["aggregateVersion"]);
+      if (snapshot.media !== undefined) {
+        for (const record of snapshot.media.records) {
+          if (record.value["state"] !== "accepted" || record.value["byteCoverage"] !== "included") continue;
+          if (typeof record.value["aggregateVersion"] !== "number" || !Number.isSafeInteger(record.value["aggregateVersion"])) return false;
+          const mediaId = parseStableId("MediaAsset", record.mediaId);
+          if (!mediaId.ok) return false;
+          versions.set(mediaId.value, record.value["aggregateVersion"]);
+        }
+      }
+      if (snapshot.cv !== undefined) {
+        for (const version of snapshot.cv.versions) {
+          if (version.state !== "accepted") continue;
+          if (version.acceptedMediaSnapshot === undefined) return false;
+          const mediaId = version.mediaId;
+          const versionNumber = version.acceptedMediaSnapshot.mediaAssetVersion;
+          const existing = versions.get(mediaId);
+          if (existing !== undefined && existing !== versionNumber) return false;
+          versions.set(mediaId, versionNumber);
+        }
       }
       const result = await input.media.revalidateOwnerMediaExportSnapshot({ portfolioId, ownerId }, versions, context);
       return result.ok && result.value;

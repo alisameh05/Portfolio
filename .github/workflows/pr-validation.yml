@@ -56,6 +56,14 @@ jobs:
           path: evidence/phase8-owner-export-media-243.json
           if-no-files-found: warn
           retention-days: 14
+      - name: Publish sanitized Issue #244 CV export acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase8-owner-export-cv-244
+          path: evidence/phase8-owner-export-cv-244.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Publish sanitized Issue #242 taxonomy acceptance evidence
         if: always() && steps.taxonomy-acceptance.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

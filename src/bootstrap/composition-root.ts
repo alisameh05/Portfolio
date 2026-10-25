@@ -289,6 +289,7 @@ export async function initializeDatabaseRuntime(
             { createTaxonomyOwnerExportSnapshotReader },
             { createOwnerExportSnapshotReader },
             { createPostgresOwnerMediaExportSnapshotReader },
+            { createPostgresOwnerCvExportSnapshotReader },
             { createSupabaseMediaExportStorage },
           ] = await Promise.all([
             import("../modules/portability-operations/application/owner-export-assembly.js"),
@@ -299,6 +300,7 @@ export async function initializeDatabaseRuntime(
             import("../modules/taxonomy-discovery/application/taxonomy-export.js"),
             import("../runtime/adapters/owner-export-snapshot.js"),
             import("../modules/media/adapters/postgres-owner-export-snapshot.js"),
+            import("../modules/cv-portfolio/adapters/postgres-owner-export-snapshot.js"),
             import("../runtime/adapters/supabase-media-export-storage.js"),
           ]);
           const mediaObjects = createOwnerExportMediaObjectReader(env, createSupabaseMediaExportStorage);
@@ -313,6 +315,7 @@ export async function initializeDatabaseRuntime(
                 assignments: createPostgresContentTaxonomyExportAssignmentReader(),
               }),
               media: createPostgresOwnerMediaExportSnapshotReader({ database: database.database, transactions: operations.transactions }),
+              cv: createPostgresOwnerCvExportSnapshotReader(),
               transactions: operations.transactions,
               capabilities: {
                 async read(scope) {

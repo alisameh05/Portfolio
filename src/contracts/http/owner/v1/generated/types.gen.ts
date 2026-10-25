@@ -1052,7 +1052,86 @@ export type OwnerExportPackageManifestV15 = {
     };
 };
 
-export type OwnerExportPackageManifest = OwnerExportPackageManifestV10 | OwnerExportPackageManifestV11 | OwnerExportPackageManifestV15;
+/**
+ * CV entry using the immutable CV v1.2 record schema.
+ */
+export type OwnerExportCvEntryDescriptorV12 = {
+    path: 'records/cv-metadata.ndjson';
+    scope: 'cv-metadata';
+    mediaType: 'application/x-ndjson';
+    recordSchema: 'urn:shipwithali:owner-export-schema:cv-metadata:1.2';
+    schemaPath: 'schemas/cv-metadata.schema.json';
+    schemaVersion: '1.2';
+    digest: string;
+    recordCount: number;
+};
+
+export type OwnerExportManifestSchemaDescriptorV15 = {
+    kind: 'manifest';
+    path: 'schemas/manifest.schema.json';
+    schemaUri: 'urn:shipwithali:owner-export-schema:manifest:1.5';
+    schemaVersion: '1.5';
+    digest: string;
+};
+
+export type OwnerExportCvRecordSchemaDescriptorV12 = {
+    kind: 'record';
+    path: 'schemas/cv-metadata.schema.json';
+    scope: 'cv-metadata';
+    schemaUri: 'urn:shipwithali:owner-export-schema:cv-metadata:1.2';
+    schemaVersion: '1.2';
+    digest: string;
+};
+
+export type OwnerExportSchemaDescriptorV16 = OwnerExportManifestSchemaDescriptorV15 | OwnerExportMediaRecordSchemaDescriptorV12 | OwnerExportCvRecordSchemaDescriptorV12;
+
+/**
+ * Manifest 1.6 preserves retained CV history and binds accepted CV versions to exact verified Media PDF bytes.
+ */
+export type OwnerExportPackageManifestV16 = {
+    packageFormat: 'shipwithali-owner-export';
+    schemaVersion: '1.6';
+    exportId: StableId;
+    snapshot: {
+        snapshotId: StableId;
+        capturedAt: string;
+        consistency: 'transactional';
+    };
+    createdAt: string;
+    algorithm: 'sha-256';
+    digest: string;
+    requiredFeatures: [
+        'asset-integrity-v1',
+        'dependency-coverage-v1',
+        'record-integrity-v1',
+        'schema-integrity-v1',
+        'snapshot-identity-v1'
+    ];
+    includedScopes: [
+        'cv-metadata'
+    ] | [
+        'media-metadata',
+        'cv-metadata'
+    ];
+    publicEventDataCoverage: PublicEventDataCoverage;
+    dependencies: Array<OwnerExportDependencyDescriptor>;
+    exclusions: [
+        'raw-public-event-data',
+        'functional-visitor-identities',
+        'measurement-visitor-identities',
+        'sessions',
+        'credentials',
+        'lab-entries'
+    ];
+    entries: Array<OwnerExportMediaEntryDescriptorV12 | OwnerExportCvEntryDescriptorV12>;
+    schemas: Array<OwnerExportSchemaDescriptorV16>;
+    assets: Array<OwnerExportMediaAssetDescriptorV15>;
+    extensions?: {
+        [key: string]: unknown;
+    };
+};
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV10 | OwnerExportPackageManifestV11 | OwnerExportPackageManifestV15 | OwnerExportPackageManifestV16;
 
 /**
  * A completed versioned domain artifact, never a database dump or provider backup.
