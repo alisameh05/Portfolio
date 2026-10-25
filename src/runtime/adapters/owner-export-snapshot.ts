@@ -18,8 +18,6 @@ function isOwnerExportMediaType(value: string): value is OwnerExportMediaType {
   return OWNER_EXPORT_MEDIA_TYPES.includes(value as OwnerExportMediaType);
 }
 
-class OwnerExportCvHistoryLimitExceeded extends Error {}
-
 export interface OwnerExportCapabilityFactsReader {
   read(scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> }): Promise<{
     readonly currentCvAvailable: boolean; readonly externalLinksAvailable: boolean;
@@ -164,7 +162,7 @@ export function createOwnerExportSnapshotReader(input: {
             ? await input.cv!.readOwnerCvExportSnapshot({ portfolioId: request.portfolioId, ownerId: request.ownerId }, transaction)
             : undefined;
           if (cv !== undefined && !cv.ok) {
-            if (cv.error.code === "CV_EXPORT_HISTORY_LIMIT_EXCEEDED") throw new OwnerExportCvHistoryLimitExceeded();
+            if (cv.error.code === "CV_EXPORT_HISTORY_LIMIT_EXCEEDED") return { cvHistoryLimitExceeded: true as const };
             throw new Error("OWNER_EXPORT_CV_UNAVAILABLE");
           }
           const acceptedCvMediaIds = cv?.ok
@@ -201,6 +199,9 @@ export function createOwnerExportSnapshotReader(input: {
             mediaLocales: mediaLocales?.ok ? mediaLocales.value : undefined,
           };
         }, { isolationLevel: "repeatable read" });
+        if ("cvHistoryLimitExceeded" in captured) {
+          return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_CV_HISTORY_LIMIT_EXCEEDED" });
+        }
         let configuration: OwnerExportConfigurationSnapshot | undefined;
         if (hasConfiguration) {
           const capabilityFacts = await input.capabilities.read({ portfolioId: request.portfolioId, ownerId: request.ownerId });
@@ -314,9 +315,6 @@ export function createOwnerExportSnapshotReader(input: {
           })) }),
         });
       } catch (error) {
-        if (error instanceof OwnerExportCvHistoryLimitExceeded) {
-          return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_CV_HISTORY_LIMIT_EXCEEDED" });
-        }
         return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_SNAPSHOT_UNAVAILABLE" });
       }
     },

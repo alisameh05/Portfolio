@@ -276,7 +276,7 @@ describe("Issue #244 CV export package 1.6", () => {
     };
     record.value["currentVersionId"] = priorCvVersionId;
     const mismatchedCurrent = await rewriteCvRecord(archive, record);
-    expect(() => validateOwnerExportZip(mismatchedCurrent)).toThrow("CV_SNAPSHOT_FACTS_INVALID");
+    expect(() => validateOwnerExportZip(mismatchedCurrent)).toThrow("PACKAGE_RECORD_CURRENT_CV_INVALID");
 
     const validRecord = JSON.parse(new TextDecoder().decode(storedEntry(archive, "records/cv-metadata.ndjson"))) as {
       scope: string;
@@ -285,7 +285,7 @@ describe("Issue #244 CV export package 1.6", () => {
     const activations = validRecord.value["activationHistory"] as Array<Record<string, unknown>>;
     validRecord.value["activationHistory"] = [...activations].reverse();
     const reversedActivations = await rewriteCvRecord(archive, validRecord);
-    expect(() => validateOwnerExportZip(reversedActivations)).toThrow("CV_SNAPSHOT_FACTS_INVALID");
+    expect(() => validateOwnerExportZip(reversedActivations)).toThrow("PACKAGE_RECORD_ORDER_INVALID");
   });
 
   it.each(["versionsTruncated", "acceptanceHistoryTruncated", "activationHistoryTruncated"] as const)(
