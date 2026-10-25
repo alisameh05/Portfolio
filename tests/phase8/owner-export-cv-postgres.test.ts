@@ -118,6 +118,7 @@ describe.runIf(Boolean(WORKER_URL && APPLICATION_URL && ADMIN_URL))("Issue #244 
   });
 
   afterAll(async () => {
+    let cleanupFailure: Error | undefined;
     try {
       lifecycleStep = "cleanup-begin";
       await admin?.query("begin");
@@ -154,18 +155,18 @@ describe.runIf(Boolean(WORKER_URL && APPLICATION_URL && ADMIN_URL))("Issue #244 
       await admin?.query("delete from portfolio_config.settings where portfolio_id = $1", [portfolioId]);
       lifecycleStep = "cleanup-complete";
     } catch (error) {
-      throw lifecycleFailure(lifecycleStep, error);
-    } finally {
-      const closeFailures: Error[] = [];
-      lifecycleStep = "close-worker";
-      try { await worker?.resource.close(); } catch (error) { closeFailures.push(lifecycleFailure(lifecycleStep, error)); }
-      lifecycleStep = "close-application";
-      try { await application?.resource.close(); } catch (error) { closeFailures.push(lifecycleFailure(lifecycleStep, error)); }
-      lifecycleStep = "close-admin";
-      try { await admin?.end(); } catch (error) { closeFailures.push(lifecycleFailure(lifecycleStep, error)); }
-      const closeFailure = closeFailures[0];
-      if (closeFailure !== undefined) throw closeFailure;
+      cleanupFailure = lifecycleFailure(lifecycleStep, error);
     }
+    const closeFailures: Error[] = [];
+    lifecycleStep = "close-worker";
+    try { await worker?.resource.close(); } catch (error) { closeFailures.push(lifecycleFailure(lifecycleStep, error)); }
+    lifecycleStep = "close-application";
+    try { await application?.resource.close(); } catch (error) { closeFailures.push(lifecycleFailure(lifecycleStep, error)); }
+    lifecycleStep = "close-admin";
+    try { await admin?.end(); } catch (error) { closeFailures.push(lifecycleFailure(lifecycleStep, error)); }
+    if (cleanupFailure !== undefined) throw cleanupFailure;
+    const closeFailure = closeFailures[0];
+    if (closeFailure !== undefined) throw closeFailure;
   });
 
   it("reads only the scoped CV projection and denies unrelated purpose, private columns, writes, and anonymous access", async () => {
