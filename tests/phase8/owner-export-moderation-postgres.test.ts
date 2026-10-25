@@ -3,6 +3,7 @@ import { Client } from "pg";
 import { createHash } from "node:crypto";
 import { sql } from "kysely";
 import { createPostgresContentAuthoringRepository } from "../../src/modules/content-publishing/adapters/postgres-authoring.js";
+import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createPostgresProjectInteractionFacts } from "../../src/modules/content-publishing/adapters/postgres-interaction-facts.js";
 import { createPostgresModerationRepository } from "../../src/modules/interaction-moderation/adapters/postgres-moderation.js";
 import { createPostgresFeedbackOwnerExportSnapshotReader } from "../../src/modules/interaction-moderation/adapters/postgres-owner-export.js";
@@ -386,7 +387,10 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
     }
   });
 
-  it("AC01/AC04 resumes a Moderation export from real JSONB snapshot and candidate checkpoints and downloads unchanged facts", async () => {
+  it.each([
+    { selection: "Moderation only", includedScopes: ["moderation-history"] as const },
+    { selection: "Moderation with configuration", includedScopes: ["moderation-history", "portfolio-configuration"] as const },
+  ])("AC01/AC04 resumes $selection from real JSONB checkpoints and downloads unchanged facts", async ({ includedScopes }) => {
     await seedPortfolio();
     const projectId = await insertProject("hidden");
     const feedbackId = await insertFeedback({ state: "approved", projectId,
@@ -399,7 +403,7 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
     const workerOperations = createPostgresOperationsPersistence(worker.database, clock);
     const workerStore = createPostgresOwnerExportStore(worker.database, { outbox: workerOperations.outbox });
     const snapshots = createOwnerExportSnapshotReader({
-      configuration: {} as never, content: createPostgresContentAuthoringRepository(), moderation: reader,
+      configuration: createPostgresPortfolioSettingsRepository(), content: createPostgresContentAuthoringRepository(), moderation: reader,
       transactions: worker.transactions,
       capabilities: { async read() { return { currentCvAvailable: false, externalLinksAvailable: false }; } },
     });
@@ -433,7 +437,7 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
     const key = parseIdempotencyKey("phase8-moderation-persisted-reload-001");
     if (!key.ok) throw new Error("PHASE8_FEEDBACK_EXPORT_KEY_INVALID");
     try {
-      const requested = await service.requestOwnerExport({ actor, portfolioId, includedScopes: ["moderation-history"], idempotencyKey: key.value });
+      const requested = await service.requestOwnerExport({ actor, portfolioId, includedScopes, idempotencyKey: key.value });
       expect(requested.ok).toBe(true);
       if (!requested.ok) throw new Error("PHASE8_FEEDBACK_EXPORT_REQUEST_FAILED");
       const scope = { exportId: requested.value.exportId, portfolioId, ownerId };
@@ -441,7 +445,9 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
         .toMatchObject({ ok: true, value: { claimed: 1, retried: 1, completed: 0 } });
       const checkpoint = await workerStore.findOwnerExport(scope);
       expect(checkpoint).toMatchObject({ status: "building", candidateArtifactId: expect.any(String),
-        snapshot: { moderation: { records: [expect.objectContaining({ feedbackId })] } } });
+        snapshot: { kind: "owner-export-snapshot-v1", includedScopes,
+          moderation: { records: [expect.objectContaining({ feedbackId })] },
+          ...(includedScopes.length === 2 ? { configuration: { settings: { profile: { displayName: "Owner" } } } } : {}) } });
       if (checkpoint?.snapshot === undefined || !("kind" in checkpoint.snapshot) || checkpoint.snapshot.moderation === undefined) throw new Error("PHASE8_FEEDBACK_EXPORT_CHECKPOINT_MISSING");
       expect(await worker.transactions.run(context => snapshots.revalidateModerationForReady!({
         snapshot: checkpoint.snapshot!, portfolioId, ownerId, context,
@@ -455,7 +461,10 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
       const download = await service.downloadOwnerExport({ actor, ...scope });
       expect(download.ok).toBe(true);
       if (!download.ok) throw new Error("PHASE8_FEEDBACK_EXPORT_DOWNLOAD_FAILED");
-      expect(validateOwnerExportZip(await archiveBytes(download.value.content)).recordCounts["moderation-history"]).toBe(1);
+      const validated = validateOwnerExportZip(await archiveBytes(download.value.content));
+      expect(validated.includedScopes).toEqual(includedScopes);
+      expect(validated.recordCounts["moderation-history"]).toBe(1);
+      if (includedScopes.length === 2) expect(validated.recordCounts["portfolio-configuration"]).toBe(1);
 
       // The checkpoint parser must reject scope/shape drift before exposing persisted facts.
       for (const moderation of [null, [], {}, { records: {} }, { records: [null] },

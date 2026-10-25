@@ -224,7 +224,7 @@ export function createOwnerExportSnapshotReader(input: {
             },
           };
         }
-        if (!hasContent && !hasTaxonomy && !hasMedia && !hasCv && configuration !== undefined) return ok(configuration);
+        if (!hasContent && !hasTaxonomy && !hasMedia && !hasCv && !hasModeration && configuration !== undefined) return ok(configuration);
         const localesByMedia = new Map((captured.mediaLocales ?? []).map((fact) => [fact.mediaAssetId, fact.locales]));
         const mediaRecords = captured.media?.records.map((record) => {
           const locales = localesByMedia.get(record.mediaId) ?? [];
