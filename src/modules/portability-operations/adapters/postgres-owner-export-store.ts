@@ -40,7 +40,7 @@ import type {
   OwnerExportTransitionOutcome,
   PersistedOwnerExport,
 } from "../application/owner-export-store.js";
-import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportPackageManifest } from "../application/service.js";
+import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, isSafeOwnerExportModerationMetadataV1_2, type OwnerExportPackageManifest } from "../application/service.js";
 import type { OwnerExportAssemblySnapshot, OwnerExportConfigurationSnapshot } from "../application/owner-export-package.js";
 import type { TransactionContext } from "../../../runtime/ports.js";
 
@@ -119,7 +119,17 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
     if (data["snapshotId"] !== snapshotId.value || data["capturedAt"] !== snapshotCapturedAt) throw new PostgresInfrastructureError();
     if (data["kind"] === "owner-export-snapshot-v1") {
       if (!Array.isArray(data["includedScopes"]) || data["includedScopes"].length < 1 ||
-          data["includedScopes"].some((scope) => scope !== "portfolio-content" && scope !== "taxonomy" && scope !== "media-metadata" && scope !== "cv-metadata" && scope !== "portfolio-configuration") ||
+          data["includedScopes"].some((scope) => scope !== "portfolio-content" && scope !== "taxonomy" && scope !== "media-metadata" && scope !== "cv-metadata" && scope !== "moderation-history" && scope !== "portfolio-configuration") ||
+          data["includedScopes"].includes("moderation-history") !== (data["moderation"] !== undefined) ||
+          data["moderation"] !== undefined && (!data["moderation"] || typeof data["moderation"] !== "object" || Array.isArray(data["moderation"]) ||
+            !Array.isArray((data["moderation"] as Record<string, unknown>)["records"]) ||
+            ((data["moderation"] as Record<string, unknown>)["records"] as unknown[]).some((record) => {
+              if (!record || typeof record !== "object" || Array.isArray(record)) return true;
+              const row = record as Record<string, unknown>;
+              const value = row["value"];
+              return !isSafeOwnerExportModerationMetadataV1_2(value) ||
+                row["feedbackId"] !== (value as Record<string, unknown>)["feedbackId"];
+            })) ||
           data["includedScopes"].includes("portfolio-content") !== (data["content"] !== undefined) ||
           data["includedScopes"].includes("taxonomy") !== (data["taxonomy"] !== undefined) ||
           data["includedScopes"].includes("media-metadata") !== (data["media"] !== undefined) ||

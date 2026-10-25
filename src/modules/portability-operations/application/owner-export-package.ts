@@ -933,13 +933,16 @@ async function buildTaxonomyOwnerExportPackage(input: {
   ];
   const dependencies = expectedDependencies(recordsForDependencies, snapshot.includedScopes);
   const manifest = {
-    packageFormat: "shipwithali-owner-export" as const, schemaVersion: hasModeration ? "1.7" as const : "1.4" as const, exportId: input.exportId,
+    packageFormat: "shipwithali-owner-export" as const, ...(hasModeration ? { schemaVersion: "1.7" as const, entries } : {
+      schemaVersion: "1.4" as const,
+      entries: entries.filter((entry): entry is Exclude<typeof entry, OwnerExportModerationEntryDescriptor> => entry.scope !== "moderation-history"),
+    }), exportId: input.exportId,
     snapshot: { snapshotId: snapshot.snapshotId, capturedAt: snapshot.capturedAt, consistency: "transactional" as const },
     createdAt: snapshot.capturedAt, algorithm: "sha-256" as const, digest: "0".repeat(64),
     requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"] as const,
     includedScopes: [...snapshot.includedScopes], publicEventDataCoverage: { mode: "excluded" as const }, dependencies,
     exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"] as const,
-    entries, schemas, assets: [], extensions: { taxonomySnapshot: { identity: "stable", evolutionHistory: "complete", assignmentHistory: "complete" } },
+    schemas, assets: [], extensions: { taxonomySnapshot: { identity: "stable", evolutionHistory: "complete", assignmentHistory: "complete" } },
   } satisfies OwnerExportPackageManifestV1_4 | OwnerExportPackageManifestV1_7;
   const digest = sha256(utf8.encode(canonicalJson(manifest, true)));
   const completeManifest = { ...manifest, digest };
@@ -1128,13 +1131,16 @@ export async function buildSelectedOwnerExportPackage(input: {
   ];
   const dependencies = expectedDependencies(recordsForDependencies, snapshot.includedScopes);
   const manifest = {
-    packageFormat: "shipwithali-owner-export" as const, schemaVersion: hasModeration ? "1.7" as const : "1.3" as const, exportId: input.exportId,
+    packageFormat: "shipwithali-owner-export" as const, ...(hasModeration ? { schemaVersion: "1.7" as const, entries } : {
+      schemaVersion: "1.3" as const,
+      entries: entries.filter((entry): entry is Exclude<typeof entry, OwnerExportModerationEntryDescriptor> => entry.scope !== "moderation-history"),
+    }), exportId: input.exportId,
     snapshot: { snapshotId: snapshot.snapshotId, capturedAt: snapshot.capturedAt, consistency: "transactional" as const },
     createdAt: snapshot.capturedAt, algorithm: "sha-256" as const, digest: "0".repeat(64),
     requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"] as const,
     includedScopes: [...snapshot.includedScopes], publicEventDataCoverage: { mode: "excluded" as const }, dependencies,
     exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"] as const,
-    entries, schemas, assets: [],
+    schemas, assets: [],
     extensions: { contentSnapshot: { discoveryOrder: "first-published-at-desc-content-id-desc", privateLifecyclesIncluded: true } },
   } satisfies OwnerExportPackageManifestV1_3 | OwnerExportPackageManifestV1_7;
   const digest = sha256(utf8.encode(canonicalJson(manifest, true)));

@@ -29,17 +29,17 @@
       "allOf": [
         {
           "if": { "properties": { "textDisposition": { "const": "retained" } } },
-          "then": { "required": ["authorName", "paragraph"] },
-          "else": { "not": { "anyOf": [{ "required": ["authorName"] }, { "required": ["paragraph"] }] } }
+          "then": { "properties": { "authorName": {}, "paragraph": {} }, "required": ["authorName", "paragraph"] },
+          "else": { "properties": { "authorName": false, "paragraph": false } }
         },
         {
           "if": { "properties": { "state": { "const": "pending" } } },
-          "then": { "properties": { "decisionHistory": { "maxItems": 0 } } },
-          "else": { "properties": { "decisionHistory": { "minItems": 1 } } }
+          "then": { "properties": { "decisionHistory": { "type": "array", "maxItems": 0 } } },
+          "else": { "properties": { "decisionHistory": { "type": "array", "minItems": 1 } } }
         },
         {
           "if": { "properties": { "textDisposition": { "const": "erased" } }, "required": ["textDisposition"] },
-          "then": { "properties": { "decisionHistory": { "items": { "not": { "required": ["reason"] } } } } }
+          "then": { "properties": { "decisionHistory": { "type": "array", "items": { "type": "object", "properties": { "reason": false } } } } }
         }
       ]
     }

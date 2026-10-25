@@ -43,7 +43,10 @@ export function createPostgresFeedbackOwnerExportSnapshotReader(): FeedbackOwner
       await sql`select set_config('shipwithali.portfolio_id', ${scope.portfolioId}, true),
         set_config('shipwithali.owner_id', ${scope.ownerId}, true),
         set_config('shipwithali.feedback_access', 'owner-export', true),
-        set_config('shipwithali.worker_purpose', 'interaction.owner-export', true)`.execute(db);
+        set_config('shipwithali.worker_purpose', 'interaction.owner-export', true),
+        -- SET LOCAL leaves this custom setting empty on pooled connections.
+        -- The existing retention SELECT policy may still evaluate its cast.
+        set_config('shipwithali.retention_now', transaction_timestamp()::text, true)`.execute(db);
       const captured = await sql<CapturedAtRow>`select transaction_timestamp() as captured_at`.execute(db);
       const capturedAtValue = captured.rows[0]?.captured_at;
       if (capturedAtValue === undefined) throw new Error("FEEDBACK_OWNER_EXPORT_CAPTURE_TIME_MISSING");

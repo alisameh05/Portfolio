@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
-  pendingFeedbackExpiryAt,
+  matchesFeedbackOwnerExportSnapshot,
   projectFeedbackOwnerExportSnapshot,
-  suppressedFeedbackExpiryAt,
 } from "../../src/modules/interaction-moderation/application/owner-export.js";
+import { pendingFeedbackExpiryAt, suppressedFeedbackExpiryAt } from "../../src/modules/interaction-moderation/application/retention.js";
 import { buildSelectedOwnerExportPackage, createStoredOwnerExportZip, type OwnerExportSelectedSnapshot, type StoredOwnerExportZipEntry } from "../../src/modules/portability-operations/application/owner-export-package.js";
 import { validateOwnerExportZip } from "../../scripts/owner-export/validator.mjs";
 import { createOwnerExportService } from "../../src/modules/portability-operations/application/owner-export-service.js";
@@ -118,6 +118,24 @@ function zipMember(name: string, content: Uint8Array): StoredOwnerExportZipEntry
 }
 
 describe("Phase 8 #245 retention-aware Moderation export", () => {
+  it("AC04 compares portable facts independently of object key order but preserves history order", () => {
+    const source = { capturedAt: "2026-02-01T12:00:00.000Z", records: [feedback({ state: "suppressed", decisions: [
+      { sequence: 1, decision: "approved", reason: "Approval", decidedAt: submittedAt },
+      { sequence: 2, decision: "suppressed", reason: "Suppression", decidedAt: "2026-02-01T00:00:00.000Z" },
+    ] })] };
+    const expected = projectFeedbackOwnerExportSnapshot(source).records;
+    const reordered = JSON.parse(JSON.stringify(expected), (_key, value: unknown) => {
+      if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+      return Object.fromEntries(Object.entries(value).reverse());
+    }) as typeof expected;
+    expect(JSON.stringify(reordered)).not.toBe(JSON.stringify(expected));
+    expect(matchesFeedbackOwnerExportSnapshot(reordered, source)).toBe(true);
+    expect(matchesFeedbackOwnerExportSnapshot([{ ...reordered[0]!, value: { ...reordered[0]!.value, paragraph: "Changed" } }], source)).toBe(false);
+    expect(matchesFeedbackOwnerExportSnapshot([{ ...reordered[0]!, value: { ...reordered[0]!.value,
+      decisionHistory: [...reordered[0]!.value.decisionHistory].reverse() } }], source)).toBe(false);
+    expect(matchesFeedbackOwnerExportSnapshot([], source)).toBe(false);
+  });
+
   it("AC02 applies the exact 90-day pending and rejected boundaries, including stale rows", () => {
     const pending = feedback();
     const rejected = feedback({ feedbackId: id("2") as never, state: "rejected", decisions: [
@@ -195,7 +213,8 @@ describe("Phase 8 #245 retention-aware Moderation export", () => {
     expect(checkedOnly.manifest.schemaVersion).toBe("1.7");
     expect(checkedOnly.manifest.includedScopes).toEqual(["moderation-history"]);
     expect(checkedOnly.manifest.entries[0]).toMatchObject({ scope: "moderation-history", schemaVersion: "1.2", recordCount: 2 });
-    expect(checkedOnly.manifest.dependencies).toMatchObject([{ sourceScope: "moderation-history", targetScope: "portfolio-content", disposition: "omitted", reason: "scope-not-selected" }]);
+    expect(checkedOnly.manifest.dependencies).toEqual(projection.records.map(record => ({ sourceId: record.feedbackId,
+      sourceScope: "moderation-history", targetId: projectId, targetScope: "portfolio-content", disposition: "omitted", reason: "scope-not-selected" })));
     const portableRecords = new TextDecoder().decode(zipEntry(onlyBytes, "records/moderation-history.ndjson"))
       .trim().split("\n").map(line => JSON.parse(line) as { value: Record<string, unknown> });
     expect(portableRecords[0]?.value).toHaveProperty("authorName", "PRIVATE_NAME_SENTINEL");
@@ -215,9 +234,8 @@ describe("Phase 8 #245 retention-aware Moderation export", () => {
     });
     const checkedPartialProject = validateOwnerExportZip(await bytes(partialProject.content));
     expect(checkedPartialProject.manifest.includedScopes).toEqual(["portfolio-content", "moderation-history"]);
-    expect(checkedPartialProject.manifest.dependencies).toMatchObject([
-      { sourceScope: "moderation-history", targetScope: "portfolio-content", disposition: "omitted", reason: "not-retained" },
-    ]);
+    expect(checkedPartialProject.manifest.dependencies).toEqual(projection.records.map(record => ({ sourceId: record.feedbackId,
+      sourceScope: "moderation-history", targetId: projectId, targetScope: "portfolio-content", disposition: "omitted", reason: "not-retained" })));
 
     const empty = await buildSelectedOwnerExportPackage({
       exportId: id("206") as never,

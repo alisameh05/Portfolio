@@ -1,4 +1,5 @@
 import type { StableId } from "@shared/domain";
+import { isDeepStrictEqual } from "node:util";
 import type { TransactionContext } from "../../../runtime/ports.js";
 import { pendingFeedbackExpiryAt, suppressedFeedbackExpiryAt } from "./retention.js";
 
@@ -27,7 +28,7 @@ export interface FeedbackOwnerExportSourceSnapshot {
   readonly records: readonly FeedbackOwnerExportSourceRecord[];
 }
 
-export interface FeedbackOwnerExportValue {
+export type FeedbackOwnerExportValue = {
   readonly feedbackId: string;
   readonly projectId: string;
   readonly locale: "en" | "ar";
@@ -43,7 +44,7 @@ export interface FeedbackOwnerExportValue {
     readonly reason?: string;
     readonly decidedAt: string;
   }[];
-}
+};
 
 export interface FeedbackOwnerExportSnapshot {
   readonly capturedAt: string;
@@ -119,10 +120,10 @@ export function projectFeedbackOwnerExportSnapshot(source: FeedbackOwnerExportSo
 
 /** Returns false when retention, deletion, or a source edit changed the portable facts after capture. */
 export function matchesFeedbackOwnerExportSnapshot(
-  expected: FeedbackOwnerExportSnapshot["records"],
+  expected: readonly { readonly feedbackId: string; readonly value: Readonly<Record<string, unknown>> }[],
   source: FeedbackOwnerExportSourceSnapshot,
 ): boolean {
-  return JSON.stringify(projectFeedbackOwnerExportSnapshot(source).records) === JSON.stringify(expected);
+  return isDeepStrictEqual(projectFeedbackOwnerExportSnapshot(source).records, expected);
 }
 
 export interface FeedbackOwnerExportSnapshotReaderPort {

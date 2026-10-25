@@ -117,7 +117,7 @@ try {
     "tests/phase8/owner-export-media-package.test.ts", "tests/runtime/supabase-media-export-storage.test.ts",
     "tests/phase8/owner-export-cv-package.test.ts", "tests/phase8/owner-export-cv-postgres.test.ts",
     "tests/phase8/owner-export-moderation.test.ts", "tests/phase8/owner-export-moderation-postgres.test.ts"];
-  const expectedTests = 93;
+  const expectedTests = 95;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -218,6 +218,8 @@ try {
       "AC02 clamps 12 calendar months at month end and strips text and reasons at the exact deadline"] },
     { criterion: "AC03", tests: ["AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects"] },
     { criterion: "AC04", tests: ["AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
+      "AC04 compares portable facts independently of object key order but preserves history order",
+      "AC01/AC04 resumes a Moderation export from real JSONB snapshot and candidate checkpoints and downloads unchanged facts",
       "AC04 denies a ready private ZIP when the current retained Feedback no longer matches its snapshot",
       "AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages"] },
     { criterion: "AC05", tests: ["AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages",
