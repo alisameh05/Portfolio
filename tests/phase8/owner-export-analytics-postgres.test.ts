@@ -7,7 +7,12 @@ import { createPostgresDailyAggregateRepository } from "../../src/modules/measur
 import { createPostgresOwnerAnalyticsExportSnapshotReader } from "../../src/modules/measurement/adapters/postgres-owner-analytics-export.js";
 import { createOwnerExportSnapshotReader } from "../../src/runtime/adapters/owner-export-snapshot.js";
 import { createPostgresRuntimeDatabase, resolvePostgresTransaction } from "../../src/shared/adapters/postgres/runtime.js";
-import { createStableId, type StableId } from "../../src/shared/domain/index.js";
+import { createStableId, ok, parseIdempotencyKey, type StableId } from "../../src/shared/domain/index.js";
+import { createSystemIdGenerator } from "../../src/runtime/ports.js";
+import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
+import { createPostgresOwnerExportStore } from "../../src/modules/portability-operations/adapters/postgres-owner-export-store.js";
+import { createOwnerExportService, isManifestShape } from "../../src/modules/portability-operations/application/owner-export-service.js";
+import { createOwnerExportAssemblyService, type OwnerExportObjectStoragePort } from "../../src/modules/portability-operations/application/owner-export-assembly.js";
 import { buildSelectedOwnerExportPackage, type OwnerExportSelectedSnapshot } from "../../src/modules/portability-operations/application/owner-export-package.js";
 import { validateOwnerExportZip } from "../../scripts/owner-export/validator.mjs";
 import { sql } from "kysely";
@@ -33,6 +38,7 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
     const admin = new Client({ connectionString: ADMIN_URL });
     await admin.connect();
     const worker = createPostgresRuntimeDatabase(WORKER_URL);
+    const application = createPostgresRuntimeDatabase(APPLICATION_URL);
     const portfolioId = createStableId("Portfolio");
     const ownerId = createStableId("Owner");
     const availableGoalId = createStableId("AnalyticsGoal");
@@ -144,6 +150,10 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
       const archive = Buffer.from(await archiveBytes(built.content));
       const validation = validateOwnerExportZip(archive);
       expect(validation.manifest.schemaVersion).toBe("1.8");
+      expect(isManifestShape(built.manifest)).toBe(true);
+      expect(isManifestShape({ ...built.manifest, includedScopes: ["analytics-reports", "portfolio-configuration"] })).toBe(false);
+      expect(isManifestShape({ ...built.manifest, entries: built.manifest.entries.map(entry => ({ ...entry,
+        schemaVersion: "1.1", recordSchema: "urn:shipwithali:owner-export-schema:analytics-reports:1.1" })) })).toBe(false);
       expect(validation.includedScopes).toEqual(["analytics-reports"]);
       expect(validation.recordCounts["analytics-reports"]).toBe(3);
       expect(validation.dependencyCount).toBe(4);
@@ -152,6 +162,51 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
       expect(archive.includes(Buffer.from("consent_revision"))).toBe(false);
       expect(archive.includes(Buffer.from("activation_id"))).toBe(false);
       expect(archive.includes(Buffer.from("provider-session-secret"))).toBe(false);
+
+      // Exercise the production request, lease, capture, upload and ready path.
+      const clock = { now: () => capturedInstant };
+      const ids = createSystemIdGenerator();
+      const appOperations = createPostgresOperationsPersistence(application.database, clock);
+      const appStore = createPostgresOwnerExportStore(application.database, { outbox: appOperations.outbox });
+      const exportService = createOwnerExportService({ operations: appOperations, exports: appStore, clock, ids });
+      const key = parseIdempotencyKey(createStableId("Key"));
+      if (!key.ok) throw new Error("PHASE8_ANALYTICS_REQUEST_KEY_INVALID");
+      const request = await exportService.requestOwnerExport({ portfolioId,
+        actor: { kind: "owner", ownerId, sessionId: "analytics-assembly-test" },
+        idempotencyKey: key.value, includedScopes: ["analytics-reports"] });
+      expect(request.ok).toBe(true);
+      if (!request.ok) throw new Error("PHASE8_ANALYTICS_REQUEST_FAILED");
+      expect(await appStore.findOwnerExport({ portfolioId, ownerId, exportId: request.value.exportId }))
+        .toMatchObject({ status: "requested", schemaVersion: "1.8" });
+      let storedBytes: Uint8Array = new Uint8Array();
+      const storage: OwnerExportObjectStoragePort = {
+        async writeOwnerExport(input) { storedBytes = await archiveBytes(input.content); return ok(undefined); },
+        async readOwnerExport(input) {
+          return ok({ content: (async function* () { yield storedBytes; })(),
+            contentLength: storedBytes.byteLength, sha256: input.expectedSha256 });
+        },
+      };
+      const workerOperations = createPostgresOperationsPersistence(worker.database, clock);
+      const workerStore = createPostgresOwnerExportStore(worker.database, { outbox: workerOperations.outbox });
+      const assembly = createOwnerExportAssemblyService({ operations: workerOperations, exports: workerStore,
+        snapshots: reader, storage, clock, ids });
+      const assembled = await assembly.runOwnerExportAssembly({ workerId: "analytics-assembly-test" });
+      expect(assembled, JSON.stringify(assembled))
+        .toMatchObject({ ok: true, value: { claimed: 1, completed: 1, failed: 0, retried: 0 } });
+      expect(await workerStore.findOwnerExport({ portfolioId, ownerId, exportId: request.value.exportId }))
+        .toMatchObject({ status: "ready", schemaVersion: "1.8", integrityManifest: { includedScopes: ["analytics-reports"] } });
+      expect(validateOwnerExportZip(storedBytes).recordCounts["analytics-reports"]).toBe(3);
+
+      const mixedKey = parseIdempotencyKey(createStableId("Key"));
+      if (!mixedKey.ok) throw new Error("PHASE8_ANALYTICS_REQUEST_KEY_INVALID");
+      const mixed = await exportService.requestOwnerExport({ portfolioId,
+        actor: { kind: "owner", ownerId, sessionId: "analytics-assembly-test" },
+        idempotencyKey: mixedKey.value, includedScopes: ["analytics-reports", "portfolio-configuration"] });
+      if (!mixed.ok) throw new Error("PHASE8_ANALYTICS_MIXED_REQUEST_FAILED");
+      expect(await assembly.runOwnerExportAssembly({ workerId: "analytics-assembly-test" }))
+        .toMatchObject({ ok: true, value: { claimed: 1, completed: 0, failed: 1, retried: 0 } });
+      expect(await workerStore.findOwnerExport({ portfolioId, ownerId, exportId: mixed.value.exportId }))
+        .toMatchObject({ status: "failed", failureCode: "OWNER_EXPORT_SCOPE_UNSUPPORTED" });
 
       const privilege = await admin.query(`select
         has_table_privilege('shipwithali_worker','measurement.analytics_goals','INSERT') as goal_insert,
@@ -268,6 +323,7 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
           await admin.query("delete from portfolio_config.settings where portfolio_id=$1", [portfolioId]);
         }
       } finally {
+        await application.resource.close();
         await worker.database.destroy();
         await admin.end();
       }

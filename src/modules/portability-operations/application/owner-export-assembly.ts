@@ -142,6 +142,7 @@ async function verifyArtifact(
 }
 
 function isSupportedScopeSelection(scopes: readonly string[]): boolean {
+  if (scopes.includes("analytics-reports")) return sameScopes(scopes, ["analytics-reports"]);
   const supportedOrder = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "moderation-history", "portfolio-configuration"];
   const canonical = supportedOrder.filter((scope) => scopes.includes(scope));
   if (scopes.length === 1 && scopes[0] === "media-metadata") return true;

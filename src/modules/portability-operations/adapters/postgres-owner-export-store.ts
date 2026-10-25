@@ -141,12 +141,13 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
     if (data["snapshotId"] !== snapshotId.value || data["capturedAt"] !== snapshotCapturedAt) throw new PostgresInfrastructureError();
     if (data["kind"] === "owner-export-snapshot-v1") {
       if (!Array.isArray(data["includedScopes"]) || data["includedScopes"].length < 1 ||
-          data["includedScopes"].some((scope) => scope !== "portfolio-content" && scope !== "taxonomy" && scope !== "media-metadata" && scope !== "cv-metadata" && scope !== "moderation-history" && scope !== "portfolio-configuration") ||
+          data["includedScopes"].some((scope) => scope !== "portfolio-content" && scope !== "taxonomy" && scope !== "media-metadata" && scope !== "cv-metadata" && scope !== "moderation-history" && scope !== "analytics-reports" && scope !== "portfolio-configuration") ||
           data["moderation"] !== undefined ||
           data["includedScopes"].includes("moderation-history") !== (data["moderationCheckpoint"] !== undefined) ||
           data["moderationCheckpoint"] !== undefined && !validModerationCheckpoint(data["moderationCheckpoint"]) ||
           data["includedScopes"].includes("portfolio-content") !== (data["content"] !== undefined) ||
           data["includedScopes"].includes("taxonomy") !== (data["taxonomy"] !== undefined) ||
+          data["includedScopes"].includes("analytics-reports") !== (data["analytics"] !== undefined) ||
           data["includedScopes"].includes("media-metadata") !== (data["media"] !== undefined) ||
           data["includedScopes"].includes("cv-metadata") !== (data["cv"] !== undefined) ||
           data["includedScopes"].includes("cv-metadata") !== (data["cvAssets"] !== undefined) ||
@@ -158,6 +159,8 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
           data["includedScopes"].includes("portfolio-configuration") !== (data["configuration"] !== undefined) ||
           data["content"] !== undefined && (!data["content"] || typeof data["content"] !== "object" || !Array.isArray((data["content"] as Record<string, unknown>)["records"])) ||
           data["taxonomy"] !== undefined && (!data["taxonomy"] || typeof data["taxonomy"] !== "object" || !Array.isArray((data["taxonomy"] as Record<string, unknown>)["records"])) ||
+          data["analytics"] !== undefined && (!data["analytics"] || typeof data["analytics"] !== "object" || Array.isArray(data["analytics"]) ||
+            !Array.isArray((data["analytics"] as Record<string, unknown>)["records"])) ||
           data["media"] !== undefined && (!data["media"] || typeof data["media"] !== "object" || Array.isArray(data["media"]) ||
             !Array.isArray((data["media"] as Record<string, unknown>)["records"]) || !Array.isArray((data["media"] as Record<string, unknown>)["assets"])) ||
           data["configuration"] !== undefined && (!data["configuration"] || typeof data["configuration"] !== "object")) {
