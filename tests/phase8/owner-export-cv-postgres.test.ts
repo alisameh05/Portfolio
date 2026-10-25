@@ -85,7 +85,7 @@ async function seedAcceptedMedia(input: { readonly mediaId: string; readonly por
     mediaObjectId: outputObjectId, sha256: outputDigest, objectVersion: outputDigest };
 }
 
-describe("Issue #244 CV export PostgreSQL permissions", () => {
+describe.runIf(Boolean(WORKER_URL && APPLICATION_URL && ADMIN_URL))("Issue #244 CV export PostgreSQL permissions", () => {
   beforeAll(async () => {
     if (ADMIN_URL === undefined || WORKER_URL === undefined || APPLICATION_URL === undefined) throw new Error("PHASE8_OWNER_EXPORT_DATABASE_REQUIRED");
     admin = new Client({ connectionString: ADMIN_URL });
@@ -103,9 +103,24 @@ describe("Issue #244 CV export PostgreSQL permissions", () => {
   });
 
   afterAll(async () => {
-    await worker?.destroy();
-    await application?.destroy();
-    await admin?.end();
+    try {
+      await admin?.query("delete from cv_portfolio.activation_history where portfolio_id = $1", [portfolioId]);
+      await admin?.query("delete from cv_portfolio.acceptance_history where portfolio_id = $1", [portfolioId]);
+      await admin?.query("delete from cv_portfolio.versions where portfolio_id = $1", [portfolioId]);
+      await admin?.query("delete from cv_portfolio.portfolios where portfolio_id = $1", [portfolioId]);
+      await admin?.query("delete from media.rejection_history where owner_id = $1", [ownerId]);
+      await admin?.query("delete from media.decision_history where owner_id = $1", [ownerId]);
+      await admin?.query("delete from media.processing_states where owner_id = $1", [ownerId]);
+      await admin?.query("delete from media.processing_attempts where owner_id = $1", [ownerId]);
+      await admin?.query("delete from media.processed_objects where owner_id = $1", [ownerId]);
+      await admin?.query("delete from media.upload_intents where owner_id = $1", [ownerId]);
+      await admin?.query("delete from media.assets where owner_id = $1", [ownerId]);
+      await admin?.query("delete from portfolio_config.settings where portfolio_id = $1", [portfolioId]);
+    } finally {
+      await worker?.resource.close();
+      await application?.resource.close();
+      await admin?.end();
+    }
   });
 
   it("reads only the scoped CV projection and denies unrelated purpose, private columns, writes, and anonymous access", async () => {
@@ -261,7 +276,7 @@ describe("Issue #244 CV export PostgreSQL permissions", () => {
 
     const captured = await capturePromise;
     expect(captured.ok).toBe(true);
-    if (!captured.ok || captured.value.kind !== "owner-export-snapshot-v1") throw new Error("PHASE8_CV_EXPORT_CAPTURE_FAILED");
+    if (!captured.ok || !("kind" in captured.value) || captured.value.kind !== "owner-export-snapshot-v1") throw new Error("PHASE8_CV_EXPORT_CAPTURE_FAILED");
     expect(captured.value).toMatchObject({
       includedScopes: ["cv-metadata"],
       cv: { currentVersionId: firstVersionId, activationHistory: [{ versionId: firstVersionId }] },
