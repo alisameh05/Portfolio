@@ -235,9 +235,10 @@ export function createPostgresOwnerMediaExportSnapshotReader(input: {
             left join media.processing_attempt_variants image on image.object_id = object.object_id and image.media_id = object.media_id
            order by accepted.media_id, sealed.value->>'variantName'
         `.execute(executor);
+        // Accepted originals live in candidate storage; their accepted digest is the content-version binding.
         const originalRows = await sql<OriginalRow>`
           select decision.media_id::text, decision.aggregate_version, decision.decision_id::text as decision_id,
-                 decision.input_object_id::text as object_id, object.object_version,
+                 decision.input_object_id::text as object_id, decision.input_sha256 as object_version,
                  upload.upload_intent_id::text, decision.detected_mime_type,
                  decision.detected_byte_length, decision.input_sha256
             from media.decision_history decision
@@ -247,9 +248,6 @@ export function createPostgresOwnerMediaExportSnapshotReader(input: {
             left join media.upload_intents upload on upload.media_id = decision.media_id
               and upload.portfolio_id = decision.portfolio_id and upload.owner_id = decision.owner_id
               and upload.media_object_id = decision.input_object_id
-            join media.processed_objects object on object.object_id = decision.input_object_id
-              and object.media_id = decision.media_id and object.portfolio_id = decision.portfolio_id
-              and object.owner_id = decision.owner_id
            where decision.portfolio_id = ${scope.portfolioId}::uuid and decision.owner_id = ${scope.ownerId}::uuid
              and decision.media_id = any(${ids}::uuid[]) and decision.decision = 'accepted'
            order by decision.media_id

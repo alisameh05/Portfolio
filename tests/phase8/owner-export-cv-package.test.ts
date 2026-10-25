@@ -44,7 +44,8 @@ function cvAsset(overrides: Record<string, unknown> = {}) {
 
 function acceptedMediaRecord() {
   const portableAsset = { variantName: "document", mediaType: "application/pdf", byteLength: pdf.byteLength,
-    digest, byteCoverage: "included", portableReference: reference };
+    digest, portableReference: reference };
+  const acceptedVariant = { ...portableAsset, byteCoverage: "included" };
   return {
     mediaId,
     value: {
@@ -56,7 +57,7 @@ function acceptedMediaRecord() {
         detectedMediaType: "application/pdf", detectedByteLength: pdf.byteLength, scannerVersion: "scanner-v1",
         processorVersion: "processor-v1", processingPolicyVersion: "pdf-policy-v1",
         accessibilityMetadata: { kind: "document", summary: "Current accessible PDF." }, byteCoverage: "included",
-        variants: [portableAsset] }],
+        variants: [acceptedVariant] }],
       acceptanceHistoryTruncated: false, publicationState: "accepted", publicationEligibility: "eligible",
       portableAssets: [portableAsset], byteCoverage: "included",
     } as const,

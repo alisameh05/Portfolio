@@ -336,6 +336,25 @@
               "const": "1.2"
             }
           }
+        },
+        {
+          "required": [
+            "scope"
+          ],
+          "properties": {
+            "kind": {
+              "const": "record"
+            },
+            "scope": {
+              "const": "cv-metadata"
+            },
+            "schemaUri": {
+              "const": "urn:shipwithali:owner-export-schema:cv-metadata:1.2"
+            },
+            "schemaVersion": {
+              "const": "1.2"
+            }
+          }
         }
       ]
     },
