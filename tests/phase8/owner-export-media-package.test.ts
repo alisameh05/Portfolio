@@ -152,10 +152,12 @@ describe("Issue #243 Media-only portable packages", () => {
     });
     const archive = await collect(built.content);
     const validated = validateOwnerExportZip(archive);
-    const manifest = validated.manifest as unknown as { schemaVersion: string; includedScopes: string[]; assets: Array<{ path: string; assetId: string }> };
+    const manifest = validated.manifest as unknown as { schemaVersion: string; includedScopes: string[];
+      schemas: Array<{ schemaUri: string; schemaVersion: string }>; assets: Array<{ path: string; assetId: string }> };
     const recordText = new TextDecoder().decode(zipEntry(archive, "records/media-metadata.ndjson"));
 
     expect(manifest).toMatchObject({ schemaVersion: "1.5", includedScopes: ["media-metadata"] });
+    expect(manifest.schemas[0]).toMatchObject({ schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.4", schemaVersion: "1.4" });
     expect(validated.recordCounts).toEqual({ "media-metadata": 2 });
     expect(manifest.assets).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: reference, assetId: lowerMediaId, scope: "media-metadata",

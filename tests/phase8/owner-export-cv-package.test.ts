@@ -224,7 +224,9 @@ describe("Issue #244 CV export package 1.6", () => {
     const archive = await collect(built.content);
     const validated = validateOwnerExportZip(archive);
     const record = JSON.parse(new TextDecoder().decode(storedEntry(archive, "records/cv-metadata.ndjson"))) as { value: Record<string, unknown> };
-    expect(validated.manifest).toMatchObject({ schemaVersion: "1.6", includedScopes: ["cv-metadata"], assets: [{ path: reference, scope: "media-metadata" }] });
+    expect(validated.manifest).toMatchObject({ schemaVersion: "1.6", includedScopes: ["cv-metadata"],
+      schemas: [expect.objectContaining({ schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.5", schemaVersion: "1.5" })],
+      assets: [{ path: reference, scope: "media-metadata" }] });
     expect(record.value).toMatchObject({ currentVersionId: cvVersionId,
       versions: [
         { versionId: cvVersionId, mediaId, versionNumber: 2, registeredAt: "2026-10-20T09:00:00.000Z", acceptedAt: timestamp, portableReference: reference, isCurrent: true },

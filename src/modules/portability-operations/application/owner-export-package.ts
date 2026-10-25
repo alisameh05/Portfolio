@@ -274,6 +274,10 @@ function readPinnedMediaSchema(path: string): Uint8Array {
   return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.4", path));
 }
 
+function readPinnedCvManifestSchema(): Uint8Array {
+  return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.5", "manifest.schema.json"));
+}
+
 function readPinnedCvSchema(path: string): Uint8Array {
   return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.2", path));
 }
@@ -675,7 +679,7 @@ export async function buildCvOwnerExportPackage(input: {
   if (!isSafeOwnerExportCvMetadataV1_2(cvValue)) throw new TypeError("OWNER_EXPORT_CV_RECORD_INVALID");
   const cvBytes = utf8.encode(`${canonicalJson({ scope: "cv-metadata", value: cvValue })}\n`);
   const cvSchema = readPinnedCvSchema("cv-metadata.schema.json");
-  const manifestSchema = readPinnedMediaSchema("manifest.schema.json");
+  const manifestSchema = readPinnedCvManifestSchema();
   const mediaRecords = hasMedia ? [...snapshot.media!.records].sort((left, right) => compareCodePoints(left.mediaId, right.mediaId)) : [];
   if (hasMedia && mediaRecords.some((record, index) => record.value["mediaId"] !== record.mediaId ||
       !isSafeOwnerExportMediaMetadataV1_2(record.value) || index > 0 && mediaRecords[index - 1]!.mediaId === record.mediaId)) {
@@ -729,7 +733,7 @@ export async function buildCvOwnerExportPackage(input: {
   const descriptors: OwnerExportAssetDescriptor[] = assets.map((asset) => ({ path: asset.path, scope: "media-metadata", assetId: asset.mediaId,
     mediaType: asset.mediaType, byteLength: asset.byteLength, digest: asset.digest, ...(asset.variantName === "original" ? {} : { variantName: asset.variantName }) }));
   const schemas: OwnerExportSchemaDescriptor[] = [
-    { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.4", schemaVersion: "1.4", digest: sha256(manifestSchema) },
+    { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.5", schemaVersion: "1.5", digest: sha256(manifestSchema) },
   ];
   if (hasMedia) schemas.push({ kind: "record", scope: "media-metadata", path: "schemas/media-metadata.schema.json",
     schemaUri: "urn:shipwithali:owner-export-schema:media-metadata:1.2", schemaVersion: "1.2", digest: sha256(readPinnedMediaSchema("media-metadata.schema.json")) });

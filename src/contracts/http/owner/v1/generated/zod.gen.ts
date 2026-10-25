@@ -1066,10 +1066,90 @@ export const zOwnerExportPackageManifestV15 = z.strictObject({
     extensions: z.record(z.unknown()).optional()
 });
 
+/**
+ * CV entry using the immutable CV v1.2 record schema.
+ */
+export const zOwnerExportCvEntryDescriptorV12 = z.strictObject({
+    path: z.literal('records/cv-metadata.ndjson'),
+    scope: z.literal('cv-metadata'),
+    mediaType: z.literal('application/x-ndjson'),
+    recordSchema: z.literal('urn:shipwithali:owner-export-schema:cv-metadata:1.2'),
+    schemaPath: z.literal('schemas/cv-metadata.schema.json'),
+    schemaVersion: z.literal('1.2'),
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    recordCount: z.number().int().gte(0)
+});
+
+export const zOwnerExportManifestSchemaDescriptorV15 = z.strictObject({
+    kind: z.literal('manifest'),
+    path: z.literal('schemas/manifest.schema.json'),
+    schemaUri: z.literal('urn:shipwithali:owner-export-schema:manifest:1.5'),
+    schemaVersion: z.literal('1.5'),
+    digest: z.string().regex(/^[a-f0-9]{64}$/)
+});
+
+export const zOwnerExportCvRecordSchemaDescriptorV12 = z.strictObject({
+    kind: z.literal('record'),
+    path: z.literal('schemas/cv-metadata.schema.json'),
+    scope: z.literal('cv-metadata'),
+    schemaUri: z.literal('urn:shipwithali:owner-export-schema:cv-metadata:1.2'),
+    schemaVersion: z.literal('1.2'),
+    digest: z.string().regex(/^[a-f0-9]{64}$/)
+});
+
+export const zOwnerExportSchemaDescriptorV16 = z.union([
+    zOwnerExportManifestSchemaDescriptorV15,
+    zOwnerExportMediaRecordSchemaDescriptorV12,
+    zOwnerExportCvRecordSchemaDescriptorV12
+]);
+
+/**
+ * Manifest 1.6 preserves retained CV history and binds accepted CV versions to exact verified Media PDF bytes.
+ */
+export const zOwnerExportPackageManifestV16 = z.strictObject({
+    packageFormat: z.literal('shipwithali-owner-export'),
+    schemaVersion: z.literal('1.6'),
+    exportId: zStableId,
+    snapshot: z.strictObject({
+        snapshotId: zStableId,
+        capturedAt: z.string().datetime(),
+        consistency: z.literal('transactional')
+    }),
+    createdAt: z.string().datetime(),
+    algorithm: z.literal('sha-256'),
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    requiredFeatures: z.tuple([
+        z.literal('asset-integrity-v1'),
+        z.literal('dependency-coverage-v1'),
+        z.literal('record-integrity-v1'),
+        z.literal('schema-integrity-v1'),
+        z.literal('snapshot-identity-v1')
+    ]),
+    includedScopes: z.union([
+        z.tuple([z.literal('cv-metadata')]),
+        z.tuple([z.literal('media-metadata'), z.literal('cv-metadata')])
+    ]),
+    publicEventDataCoverage: zPublicEventDataCoverage,
+    dependencies: z.array(zOwnerExportDependencyDescriptor),
+    exclusions: z.tuple([
+        z.literal('raw-public-event-data'),
+        z.literal('functional-visitor-identities'),
+        z.literal('measurement-visitor-identities'),
+        z.literal('sessions'),
+        z.literal('credentials'),
+        z.literal('lab-entries')
+    ]),
+    entries: z.array(z.union([zOwnerExportMediaEntryDescriptorV12, zOwnerExportCvEntryDescriptorV12])).min(1).max(2),
+    schemas: z.array(zOwnerExportSchemaDescriptorV16).min(2).max(3),
+    assets: z.array(zOwnerExportMediaAssetDescriptorV15).max(508),
+    extensions: z.record(z.unknown()).optional()
+});
+
 export const zOwnerExportPackageManifest = z.union([
     zOwnerExportPackageManifestV10,
     zOwnerExportPackageManifestV11,
-    zOwnerExportPackageManifestV15
+    zOwnerExportPackageManifestV15,
+    zOwnerExportPackageManifestV16
 ]);
 
 /**

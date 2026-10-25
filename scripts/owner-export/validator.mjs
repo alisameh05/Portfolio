@@ -386,13 +386,14 @@ const localManifest11 = readLocalSchema("v1.1/manifest.schema.json");
 const localManifest12 = readLocalSchema("v1.2/manifest.schema.json");
 const localManifest13 = readLocalSchema("v1.3/manifest.schema.json");
 const localManifest14 = readLocalSchema("v1.4/manifest.schema.json");
+const localManifest15 = readLocalSchema("v1.5/manifest.schema.json");
 const manifestValidators = new Map([
   ["1.0", ajv.compile(localManifest10.schema)],
   ["1.1", ajv.compile(localManifest11.schema)],
   ["1.3", ajv.compile(localManifest12.schema)],
   ["1.4", ajv.compile(localManifest13.schema)],
   ["1.5", ajv.compile(localManifest14.schema)],
-  ["1.6", ajv.compile(localManifest14.schema)],
+  ["1.6", ajv.compile(localManifest15.schema)],
 ]);
 function readLocalRecordSchemas(schemaVersion) {
   return new Map(SCOPES.map((scope) => {
@@ -492,8 +493,8 @@ function verifySchemaEntries(manifest, version, entryMap) {
   const schemaDescriptors = version === "1.0" ? undefined : manifest.schemas;
   const expectedDescriptors = [];
   if (version !== "1.0") {
-    const manifestSchema = version === "1.5" || version === "1.6" ? localManifest14 : version === "1.4" ? localManifest13 : version === "1.3" ? localManifest12 : localManifest11;
-    const manifestSchemaVersion = version === "1.5" || version === "1.6" ? "1.4" : version === "1.4" ? "1.3" : version === "1.3" ? "1.2" : "1.1";
+    const manifestSchema = version === "1.6" ? localManifest15 : version === "1.5" ? localManifest14 : version === "1.4" ? localManifest13 : version === "1.3" ? localManifest12 : localManifest11;
+    const manifestSchemaVersion = version === "1.6" ? "1.5" : version === "1.5" ? "1.4" : version === "1.4" ? "1.3" : version === "1.3" ? "1.2" : "1.1";
     expectedDescriptors.push({
       kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: `urn:shipwithali:owner-export-schema:manifest:${manifestSchemaVersion}`,
       schemaVersion: manifestSchemaVersion, digest: sha256(manifestSchema.bytes), source: manifestSchema,
