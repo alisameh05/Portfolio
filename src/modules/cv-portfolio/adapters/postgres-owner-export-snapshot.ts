@@ -5,6 +5,7 @@ import { PostgresInfrastructureError, resolvePostgresTransaction } from "../../.
 import type {
   OwnerCvExportSnapshot,
   OwnerCvExportSnapshotReaderPort,
+  OwnerCvExportVersion,
 } from "../application/owner-export-snapshot.js";
 
 const HISTORY_LIMIT = 100;
@@ -164,11 +165,11 @@ export function createPostgresOwnerCvExportSnapshotReader(): OwnerCvExportSnapsh
 
         const acceptanceByVersion = new Map(versionAcceptances.rows.map((row) => [row.version_id, row]));
         const versions = retainedVersions.map((row) => {
-          const state = row.state;
+          const state: OwnerCvExportVersion["state"] | null = row.state === "registered" ? "registered" : row.state === "accepted" ? "accepted" : null;
           const versionId = stableId("CvVersion", row.version_id);
           const mediaId = stableId("MediaAsset", row.media_id);
           const isCurrent = currentVersionId === versionId;
-          if (row.locale !== "en" || (state !== "registered" && state !== "accepted") || row.is_current !== isCurrent) {
+          if (row.locale !== "en" || state === null || row.is_current !== isCurrent) {
             throw new PostgresInfrastructureError();
           }
           const acceptedMediaSnapshot = mediaSnapshot(row);
