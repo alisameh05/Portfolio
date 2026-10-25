@@ -164,11 +164,15 @@ export function phase6DefinerFunctionProof(row) {
 
 export function phase6WorkerSchemaProof(rows, migrationFiles = []) {
   const approvedSchemas = ["operations", "measurement", "interaction", "portability", "portfolio_config"];
-  if (capabilitiesForMigrations(migrationFiles).includes("portability.content_export")) {
+  const capabilities = capabilitiesForMigrations(migrationFiles);
+  if (capabilities.includes("portability.content_export")) {
     approvedSchemas.push("content", "taxonomy");
   }
-  if (capabilitiesForMigrations(migrationFiles).includes("portability.media_export")) {
+  if (capabilities.includes("portability.media_export")) {
     approvedSchemas.push("media");
+  }
+  if (capabilities.includes("portability.cv_export")) {
+    approvedSchemas.push("cv_portfolio");
   }
   return Array.isArray(rows) && rows.filter(row => row.role_name === "shipwithali_worker").every(row =>
     row.create === false && (row.usage === false || row.usage === true && approvedSchemas.includes(row.schema_name)));
@@ -379,7 +383,9 @@ export async function privilegeMatrix(connectionString) {
     if (Object.values(denied.rows[0]).some(Boolean)) throw new Error("PHASE6_RESTRICTED_ROLE_GRANT_TOO_BROAD");
     const versions = await admin.query("select version from supabase_migrations.schema_migrations order by version");
     const installedMigrations = installedMigrationFiles(versions.rows);
-    const mediaExportEnabled = capabilitiesForMigrations(installedMigrations).includes("portability.media_export");
+    const capabilities = capabilitiesForMigrations(installedMigrations);
+    const mediaExportEnabled = capabilities.includes("portability.media_export");
+    const cvExportEnabled = capabilities.includes("portability.cv_export");
     const worker = await admin.query("select 'shipwithali_worker' as role_name, schema_name, has_schema_privilege('shipwithali_worker',schema_name,'USAGE') as usage, has_schema_privilege('shipwithali_worker',schema_name,'CREATE') as create from unnest(ARRAY['media','cv_portfolio']) schema_name");
     if (!phase6WorkerSchemaProof(worker.rows, installedMigrations)) throw new Error("PHASE6_WORKER_DOMAIN_ACCESS_TOO_BROAD");
     const workerUrl = new URL(connectionString); workerUrl.username = workerLogin; workerUrl.password = workerPassword;
@@ -418,13 +424,49 @@ export async function privilegeMatrix(connectionString) {
         "select original_file_name from media.assets",
         "select private_reason from media.rejection_history",
         "update media.assets set kind='video'",
-        "select version_id from cv_portfolio.versions",
+        ...(!cvExportEnabled ? ["select version_id from cv_portfolio.versions"] : []),
       ]) {
         await workerProbe.query("savepoint export_denial");
         let denied = false;
         try { await workerProbe.query(sql); } catch (error) { denied = error?.code === "42501"; }
         await workerProbe.query("rollback to savepoint export_denial");
         if (!denied) throw new Error("PHASE6_WORKER_MEDIA_EXPORT_PRIVILEGE_TOO_BROAD");
+      }
+    }
+    if (cvExportEnabled) {
+      const cvReads = [
+        "select portfolio_id from cv_portfolio.portfolios",
+        "select version_id from cv_portfolio.versions",
+        "select approval_id from cv_portfolio.acceptance_history",
+        "select activation_id from cv_portfolio.activation_history",
+      ];
+      for (const [portfolioId, ownerId, purpose] of [
+        ["", "", ""],
+        [scopeA.portfolioId, scopeA.ownerId, ""],
+        [scopeA.portfolioId, scopeA.ownerId, "media.owner-export"],
+        [scopeA.portfolioId, scopeB.ownerId, "cv.owner-export"],
+        [scopeB.portfolioId, scopeA.ownerId, "cv.owner-export"],
+      ]) {
+        await workerProbe.query("select set_config('shipwithali.portfolio_id',$1,true),set_config('shipwithali.owner_id',$2,true),set_config('shipwithali.worker_purpose',$3,true)", [portfolioId, ownerId, purpose]);
+        for (const sql of cvReads) {
+          if ((await workerProbe.query(sql)).rowCount !== 0) throw new Error("PHASE6_WORKER_CV_EXPORT_SCOPE_LEAK");
+        }
+      }
+      await workerProbe.query("select set_config('shipwithali.portfolio_id',$1,true),set_config('shipwithali.owner_id',$2,true),set_config('shipwithali.worker_purpose','cv.owner-export',true)", [scopeA.portfolioId, scopeA.ownerId]);
+      for (const sql of cvReads) {
+        if ((await workerProbe.query(sql + " where portfolio_id=$1::uuid limit 1", [scopeA.portfolioId])).rowCount !== 1) throw new Error("PHASE6_WORKER_CV_EXPORT_READ_FAILED");
+      }
+      for (const sql of [
+        "select accepted_by from cv_portfolio.acceptance_history",
+        "select idempotency_key_hash from cv_portfolio.activation_commands",
+        "update cv_portfolio.versions set label='forbidden'",
+        "delete from cv_portfolio.activation_history",
+      ]) {
+        await workerProbe.query("savepoint cv_export_denial");
+        let denied = false;
+        try { await workerProbe.query(sql); } catch (error) { denied = error?.code === "42501"; }
+        await workerProbe.query("rollback to savepoint cv_export_denial");
+        if (!denied) throw new Error("PHASE6_WORKER_CV_EXPORT_PRIVILEGE_TOO_BROAD");
       }
     }
     await workerProbe.query("commit");
@@ -435,10 +477,12 @@ export async function privilegeMatrix(connectionString) {
         workerReset.rows[0].portfolio_scope !== null || workerReset.rows[0].owner_scope !== null ||
         workerReset.rows[0].worker_purpose !== null) throw new Error("PHASE6_WORKER_POOL_SCOPE_NOT_CLEARED");
     await workerProbe.query("commit");
-    return { executionCount: mediaExportEnabled ? 26 : 17, principals: ["disposable LOGIN member of shipwithali_application", "disposable LOGIN member of shipwithali_worker"],
+    // CV adds 20 scope denials, four reads and four privilege denials; with Media
+    // enabled it replaces the historical CV permission-error probe above.
+    return { executionCount: (mediaExportEnabled ? 26 : 17) + (cvExportEnabled ? 28 - Number(mediaExportEnabled) : 0), principals: ["disposable LOGIN member of shipwithali_application", "disposable LOGIN member of shipwithali_worker"],
       ownerScope: "same-owner row visible; wrong portfolio and owner hidden", pooledConnection: "single application pool connection reused across Owners with transaction-local scope cleared at commit; worker pool connection reused after work with both worker and Owner scope cleared",
-      allowed: ["application reads only its configured Owner scope", "worker reads operations outbox", ...(mediaExportEnabled ? ["worker reads Media export columns only under its declared purpose and Owner scope"] : [])],
-      forbidden: ["media asset identity update (executed and denied)", "processed object snapshot update (executed and denied)", "CV version delete (executed and denied)", "CV acceptance history delete (executed and denied)", "CV activation history delete (executed and denied)", "anonymous Media schema access", "authenticated CV schema access", "worker CV schema access", mediaExportEnabled ? "worker unscoped, wrong-purpose and cross-Owner Media reads, private fields and writes" : "worker Media schema access"] };
+      allowed: ["application reads only its configured Owner scope", "worker reads operations outbox", ...(mediaExportEnabled ? ["worker reads Media export columns only under its declared purpose and Owner scope"] : []), ...(cvExportEnabled ? ["worker reads CV export columns only under its declared purpose and Owner scope"] : [])],
+      forbidden: ["media asset identity update (executed and denied)", "processed object snapshot update (executed and denied)", "CV version delete (executed and denied)", "CV acceptance history delete (executed and denied)", "CV activation history delete (executed and denied)", "anonymous Media schema access", "authenticated CV schema access", cvExportEnabled ? "worker unscoped, wrong-purpose and cross-Owner CV reads, private fields and writes" : "worker CV schema access", mediaExportEnabled ? "worker unscoped, wrong-purpose and cross-Owner Media reads, private fields and writes" : "worker Media schema access"] };
   } finally {
     probe?.release();
     workerProbe?.release();
