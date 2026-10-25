@@ -206,9 +206,12 @@ try {
     for (const suite of report.testResults ?? []) {
       const failed = (suite.assertionResults ?? []).filter(assertion => assertion.status !== "passed");
       if (suite.status !== "passed" || failed.length > 0) {
-        const diagnostics = suite.message ?? suite.failureMessages ?? suite.errorMessage;
+        const diagnostics = [suite.message, suite.failureMessages, suite.errorMessage]
+          .flatMap(value => Array.isArray(value) ? value : [value])
+          .filter(value => typeof value === "string" && value.trim().length > 0)
+          .join("\n");
         console.error(JSON.stringify({ suite: suite.name.replace(root, ""), status: suite.status,
-          diagnostics: diagnostics === undefined ? undefined : safeDiagnostic(Array.isArray(diagnostics) ? diagnostics.join("\n") : diagnostics),
+          diagnostics: diagnostics.length === 0 ? "unavailable" : safeDiagnostic(diagnostics),
           assertions: failed.map(assertion => ({ title: assertion.title, status: assertion.status,
             failureMessages: assertion.failureMessages?.map(safeDiagnostic) })) }));
       }
