@@ -1,4 +1,5 @@
 export { createPostgresFeedbackRetentionRepository } from "./postgres-retention.js";
+export { createPostgresFeedbackOwnerExportSnapshotReader } from "./postgres-owner-export.js";
 import type { StableId, Result, Rejection } from "@shared/domain";
 import { err } from "@shared/domain";
 import type {

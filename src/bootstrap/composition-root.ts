@@ -249,10 +249,14 @@ export async function initializeDatabaseRuntime(
         }
         const database = createPostgresRuntimeDatabase(databaseUrl);
         const operations = createPostgresOperationsPersistence(database.database);
-        const [{ createPostgresOwnerExportStore }, { createOwnerExportService }] = await Promise.all([
+        const [{ createPostgresOwnerExportStore }, { createOwnerExportService }, { createPostgresFeedbackOwnerExportSnapshotReader },
+          { matchesFeedbackOwnerExportSnapshot }] = await Promise.all([
           import("../modules/portability-operations/adapters/postgres-owner-export-store.js"),
           import("../modules/portability-operations/application/owner-export-service.js"),
+          import("../modules/interaction-moderation/adapters/postgres-owner-export.js"),
+          import("../modules/interaction-moderation/application/owner-export.js"),
         ]);
+        const moderationExportReader = createPostgresFeedbackOwnerExportSnapshotReader();
         const ownerExportStore = createPostgresOwnerExportStore(database.database, { outbox: operations.outbox });
         let ownerExportStorage: Awaited<ReturnType<typeof import("../runtime/adapters/supabase-owner-export-storage.js").createSupabaseOwnerExportStorage>> | undefined;
         if (env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]) {
@@ -277,6 +281,13 @@ export async function initializeDatabaseRuntime(
           clock: createSystemClock(),
           ids: createSystemIdGenerator(),
           ...(ownerExportStorage === undefined ? {} : { objectRead: ownerExportStorage }),
+          revalidateModerationForDownload: async ({ snapshot, portfolioId, ownerId }) => {
+            if (!("kind" in snapshot) || snapshot.moderation === undefined) return false;
+            return database.transactions.run(async transaction => {
+              const current = await moderationExportReader.readOwnerExportSnapshot({ portfolioId, ownerId }, transaction);
+              return matchesFeedbackOwnerExportSnapshot(snapshot.moderation!.records, current);
+            }, { isolationLevel: "repeatable read" });
+          },
         });
         let ownerExportAssembly: ReturnType<typeof import("../modules/portability-operations/application/owner-export-assembly.js").createOwnerExportAssemblyService> | undefined;
         if (runtimeKind === "worker") {
@@ -290,6 +301,7 @@ export async function initializeDatabaseRuntime(
             { createOwnerExportSnapshotReader },
             { createPostgresOwnerMediaExportSnapshotReader },
             { createPostgresOwnerCvExportSnapshotReader },
+            { createPostgresFeedbackOwnerExportSnapshotReader },
             { createSupabaseMediaExportStorage },
           ] = await Promise.all([
             import("../modules/portability-operations/application/owner-export-assembly.js"),
@@ -301,6 +313,7 @@ export async function initializeDatabaseRuntime(
             import("../runtime/adapters/owner-export-snapshot.js"),
             import("../modules/media/adapters/postgres-owner-export-snapshot.js"),
             import("../modules/cv-portfolio/adapters/postgres-owner-export-snapshot.js"),
+            import("../modules/interaction-moderation/adapters/postgres-owner-export.js"),
             import("../runtime/adapters/supabase-media-export-storage.js"),
           ]);
           const mediaObjects = createOwnerExportMediaObjectReader(env, createSupabaseMediaExportStorage);
@@ -316,6 +329,7 @@ export async function initializeDatabaseRuntime(
               }),
               media: createPostgresOwnerMediaExportSnapshotReader({ database: database.database, transactions: operations.transactions }),
               cv: createPostgresOwnerCvExportSnapshotReader(),
+              moderation: createPostgresFeedbackOwnerExportSnapshotReader(),
               transactions: operations.transactions,
               capabilities: {
                 async read(scope) {

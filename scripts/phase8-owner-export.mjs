@@ -65,6 +65,7 @@ const regressionReportPath = resolve("artifacts/phase8-owner-export-cv-regressio
 const evidencePath = resolve("evidence/phase8-owner-exports-241.json");
 const mediaEvidencePath = resolve("evidence/phase8-owner-export-media-243.json");
 const cvEvidencePath = resolve("evidence/phase8-owner-export-cv-244.json");
+const moderationEvidencePath = resolve("evidence/phase8-owner-export-moderation-245.json");
 mkdirSync(temp, { recursive: true });
 mkdirSync("artifacts", { recursive: true });
 rmSync(reportPath, { force: true });
@@ -73,13 +74,14 @@ rmSync(regressionReportPath, { force: true });
 rmSync(evidencePath, { force: true });
 rmSync(mediaEvidencePath, { force: true });
 rmSync(cvEvidencePath, { force: true });
+rmSync(moderationEvidencePath, { force: true });
 const port = await new Promise((resolvePort, reject) => {
   const server = createServer(); server.once("error", reject);
   server.listen(0, "127.0.0.1", () => { const value = server.address().port; server.close(() => resolvePort(value)); });
 });
 const adminUrl = `postgres://postgres@127.0.0.1:${port}/postgres`;
 const admin = new Client({ connectionString: adminUrl });
-let started = false, connected = false, cleanup = false, stage = "runtime", result, criterionTests, cvCriterionTests, assertionByTitle, regressionAssertions;
+let started = false, connected = false, cleanup = false, stage = "runtime", result, criterionTests, cvCriterionTests, moderationCriterionTests, assertionByTitle, regressionAssertions;
 try {
   run(process.execPath, ["scripts/validation-environment.mjs"]);
   const postgresVersion = run(exe("postgres"), ["--version"]).trim();
@@ -113,8 +115,9 @@ try {
   const acceptanceFiles = ["tests/phase8/owner-export-requests.test.ts", "tests/phase8/owner-export-adapter.test.ts",
     "tests/phase8/owner-export-postgres.test.ts", "tests/phase8/owner-export-assembly.test.ts", "tests/phase8/owner-export-content.test.ts", "tests/phase8/owner-export-content-postgres.test.ts",
     "tests/phase8/owner-export-media-package.test.ts", "tests/runtime/supabase-media-export-storage.test.ts",
-    "tests/phase8/owner-export-cv-package.test.ts", "tests/phase8/owner-export-cv-postgres.test.ts"];
-  const expectedTests = 83;
+    "tests/phase8/owner-export-cv-package.test.ts", "tests/phase8/owner-export-cv-postgres.test.ts",
+    "tests/phase8/owner-export-moderation.test.ts", "tests/phase8/owner-export-moderation-postgres.test.ts"];
+  const expectedTests = 93;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -208,6 +211,29 @@ try {
       throw new Error(`PHASE8_OWNER_EXPORT_CV_CRITERION_EVIDENCE_MISSING:${criterion.criterion}`);
     }
   }
+  moderationCriterionTests = [
+    { criterion: "AC01", tests: ["AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts",
+      "AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages"] },
+    { criterion: "AC02", tests: ["AC02 applies the exact 90-day pending and rejected boundaries, including stale rows",
+      "AC02 clamps 12 calendar months at month end and strips text and reasons at the exact deadline"] },
+    { criterion: "AC03", tests: ["AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects"] },
+    { criterion: "AC04", tests: ["AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
+      "AC04 denies a ready private ZIP when the current retained Feedback no longer matches its snapshot",
+      "AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages"] },
+    { criterion: "AC05", tests: ["AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages",
+      "AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts",
+      "AC05 independently rejects erased audit rows that still retain decision reasons"] },
+    { criterion: "AC06", tests: ["AC06 grants direct reads only to the matching Owner and exact worker purpose",
+      "AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts"] },
+    { criterion: "AC07", tests: ["AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts",
+      "sends every success response with the private no-store headers"] },
+    { criterion: "AC08", tests: ["AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages"] },
+  ];
+  for (const criterion of moderationCriterionTests) {
+    if (criterion.tests.some(title => assertionByTitle.get(title) !== "passed")) {
+      throw new Error(`PHASE8_OWNER_EXPORT_MODERATION_CRITERION_EVIDENCE_MISSING:${criterion.criterion}`);
+    }
+  }
   result = {
     ticket: 241, runId, startedAt, sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(), sourceTreeSha256: testedSource, postgresVersion,
     migrations: migrations.map(name => ({ name, sha256: createHash("sha256").update(readFileSync(join("supabase/migrations", name))).digest("hex") })),
@@ -226,6 +252,14 @@ try {
       suites: cvSuites.map(suite => suite.name.replace(root, "").replace(/\\/g, "/").replace(/^\//, "")),
       passed: cvAssertions.length,
       assertions: cvAssertions.map(assertion => ({ title: assertion.title, status: assertion.status })),
+    },
+    moderationAcceptance: {
+      suites: tests.testResults.filter(suite => suite.name.replace(/\\/g, "/").endsWith("owner-export-moderation.test.ts") ||
+        suite.name.replace(/\\/g, "/").endsWith("owner-export-moderation-postgres.test.ts"))
+        .map(suite => suite.name.replace(root, "").replace(/\\/g, "/").replace(/^\//, "")),
+      passed: assertions.filter(assertion => moderationCriterionTests.some(criterion => criterion.tests.includes(assertion.title))).length,
+      assertions: assertions.filter(assertion => moderationCriterionTests.some(criterion => criterion.tests.includes(assertion.title)))
+        .map(assertion => ({ title: assertion.title, status: assertion.status })),
     },
     cvRegressionAcceptance: {
       suites: regressions.testResults.map(suite => suite.name.replace(root, "").replace(/\\/g, "/").replace(/^\//, "")),
@@ -304,6 +338,32 @@ try {
     };
     writeFileSync(cvEvidencePath, `${JSON.stringify(cvEvidence, null, 2)}\n`);
     console.log(JSON.stringify({ evidence: cvEvidencePath, assertions: cvEvidence.required.passed, cleanup }));
+    const moderationAssertions = result.moderationAcceptance.assertions;
+    const moderationEvidence = {
+      schemaVersion: 1, ticket: 245, runId, startedAt, completedAt: result.completedAt,
+      sourceRevision: result.sourceRevision, sourceTreeSha256: result.sourceTreeSha256, postgresVersion: result.postgresVersion,
+      migrations: result.migrations, tools: result.tools,
+      required: { success: true, passed: moderationAssertions.length, failed: 0, skipped: 0, todo: 0, failedSuites: 0 },
+      roleMatrix: result.roleMatrix,
+      assertions: moderationAssertions,
+      suites: result.moderationAcceptance.suites,
+      criteria: ["AC01", "AC02", "AC03", "AC04", "AC05", "AC06", "AC07", "AC08"],
+      criterionEvidence: moderationCriterionTests.map(criterion => ({ criterion: criterion.criterion,
+        executedTests: criterion.tests.map(title => ({ title, status: assertionByTitle.get(title) })) })),
+      hostedEvidence: [{ check: "Phase 8 Owner export transport acceptance: authenticated private/no-store download and stable scoped routes",
+        artifact: "phase8-owner-export-245", suites: ["tests/phase8/owner-export-adapter.test.ts"], status: "passed-in-phase8-pr-ci" }],
+      reproduction: "npm run setup:validation; npm run validation:ready; npm run phase8:focus:exports",
+      scope: "Interactions-owned Feedback and moderation decision export; exact 90-day and clamped 12-calendar-month retention; hidden/archived Project inclusion; pre-ready/download rechecks; truthful erased audit schema 1.2; Owner/purpose-bound RLS; private ZIP/no-store transport; marker-free telemetry/jobs and independently validated empty/partial-reference packages.",
+      cleanup,
+    };
+    const moderationEvidenceJson = JSON.stringify(moderationEvidence, null, 2);
+    if (/PRIVATE_(?:NAME|TEXT|REASON|APPROVAL_REASON)_SENTINEL/u.test(moderationEvidenceJson)) {
+      console.error("PHASE8_OWNER_EXPORT_MODERATION_EVIDENCE_CONTAINS_PRIVATE_MARKER");
+      process.exitCode = 1;
+    } else {
+      writeFileSync(moderationEvidencePath, `${moderationEvidenceJson}\n`);
+      console.log(JSON.stringify({ evidence: moderationEvidencePath, assertions: moderationEvidence.required.passed, cleanup }));
+    }
     console.log(JSON.stringify({ evidence: evidencePath, cleanup }));
   }
 }

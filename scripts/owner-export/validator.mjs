@@ -387,6 +387,7 @@ const localManifest12 = readLocalSchema("v1.2/manifest.schema.json");
 const localManifest13 = readLocalSchema("v1.3/manifest.schema.json");
 const localManifest14 = readLocalSchema("v1.4/manifest.schema.json");
 const localManifest15 = readLocalSchema("v1.5/manifest.schema.json");
+const localManifest16 = readLocalSchema("v1.6/manifest.schema.json");
 const manifestValidators = new Map([
   ["1.0", ajv.compile(localManifest10.schema)],
   ["1.1", ajv.compile(localManifest11.schema)],
@@ -394,6 +395,7 @@ const manifestValidators = new Map([
   ["1.4", ajv.compile(localManifest13.schema)],
   ["1.5", ajv.compile(localManifest14.schema)],
   ["1.6", ajv.compile(localManifest15.schema)],
+  ["1.7", ajv.compile(localManifest16.schema)],
 ]);
 function readLocalRecordSchemas(schemaVersion) {
   return new Map(SCOPES.map((scope) => {
@@ -430,8 +432,12 @@ const localRecordSchemas16 = new Map(localRecordSchemas15);
 const cvSchema16 = readLocalSchema("v1.2/cv-metadata.schema.json");
 if (cvSchema16.schema.$id !== "urn:shipwithali:owner-export-schema:cv-metadata:1.2") throw new Error("invalid local CV schema identity");
 localRecordSchemas16.set("cv-metadata", { ...cvSchema16, validate: ajv.compile(cvSchema16.schema), uri: cvSchema16.schema.$id });
+const localRecordSchemas17 = new Map(localRecordSchemas16);
+const moderationSchema17 = readLocalSchema("v1.2/moderation-history.schema.json");
+if (moderationSchema17.schema.$id !== "urn:shipwithali:owner-export-schema:moderation-history:1.2") throw new Error("invalid local Moderation schema identity");
+localRecordSchemas17.set("moderation-history", { ...moderationSchema17, validate: ajv.compile(moderationSchema17.schema), uri: moderationSchema17.schema.$id });
 function recordSchemasForVersion(version) {
-  return version === "1.0" ? localRecordSchemas10 : version === "1.3" ? localRecordSchemas13 : version === "1.4" ? localRecordSchemas12 : version === "1.5" ? localRecordSchemas15 : version === "1.6" ? localRecordSchemas16 : localRecordSchemas11;
+  return version === "1.0" ? localRecordSchemas10 : version === "1.3" ? localRecordSchemas13 : version === "1.4" ? localRecordSchemas12 : version === "1.5" ? localRecordSchemas15 : version === "1.6" ? localRecordSchemas16 : version === "1.7" ? localRecordSchemas17 : localRecordSchemas11;
 }
 
 function object(value) {
@@ -448,6 +454,7 @@ function supportedManifestVersion(manifest) {
   if (minor === 4) return "1.4";
   if (minor === 5) return "1.5";
   if (minor === 6) return "1.6";
+  if (minor === 7) return "1.7";
   if (minor === undefined || minor < 1) fail("PACKAGE_VERSION_MINOR_UNSUPPORTED");
   return "1.1";
 }
@@ -469,8 +476,9 @@ function validateEntryDescriptor(entry, version) {
   if (!object(entry) || !SCOPE_SET.has(entry.scope)) fail("PACKAGE_ENTRY_DESCRIPTOR_INVALID");
   const extension = entry.mediaType === "application/x-ndjson" ? "ndjson" : entry.mediaType === "application/json" ? "json" : "";
   const schemaVersion = version === "1.0" ? "1.0" :
-    (version === "1.3" || version === "1.4" || version === "1.5") && entry.scope === "portfolio-content" ||
-    (version === "1.4" || version === "1.5") && entry.scope === "taxonomy" || (version === "1.5" || version === "1.6") && entry.scope === "media-metadata" || version === "1.6" && entry.scope === "cv-metadata" ? "1.2" : "1.1";
+    (version === "1.3" || version === "1.4" || version === "1.5" || version === "1.7") && entry.scope === "portfolio-content" ||
+    (version === "1.4" || version === "1.5" || version === "1.7") && entry.scope === "taxonomy" || (version === "1.5" || version === "1.6" || version === "1.7") && entry.scope === "media-metadata" ||
+    (version === "1.6" || version === "1.7") && entry.scope === "cv-metadata" || version === "1.7" && entry.scope === "moderation-history" ? "1.2" : "1.1";
   const schema = recordSchemasForVersion(version).get(entry.scope);
   if (
     extension === "" || entry.path !== `records/${entry.scope}.${extension}` ||
@@ -493,8 +501,8 @@ function verifySchemaEntries(manifest, version, entryMap) {
   const schemaDescriptors = version === "1.0" ? undefined : manifest.schemas;
   const expectedDescriptors = [];
   if (version !== "1.0") {
-    const manifestSchema = version === "1.6" ? localManifest15 : version === "1.5" ? localManifest14 : version === "1.4" ? localManifest13 : version === "1.3" ? localManifest12 : localManifest11;
-    const manifestSchemaVersion = version === "1.6" ? "1.5" : version === "1.5" ? "1.4" : version === "1.4" ? "1.3" : version === "1.3" ? "1.2" : "1.1";
+    const manifestSchema = version === "1.7" ? localManifest16 : version === "1.6" ? localManifest15 : version === "1.5" ? localManifest14 : version === "1.4" ? localManifest13 : version === "1.3" ? localManifest12 : localManifest11;
+    const manifestSchemaVersion = version === "1.7" ? "1.6" : version === "1.6" ? "1.5" : version === "1.5" ? "1.4" : version === "1.4" ? "1.3" : version === "1.3" ? "1.2" : "1.1";
     expectedDescriptors.push({
       kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: `urn:shipwithali:owner-export-schema:manifest:${manifestSchemaVersion}`,
       schemaVersion: manifestSchemaVersion, digest: sha256(manifestSchema.bytes), source: manifestSchema,
@@ -502,8 +510,9 @@ function verifySchemaEntries(manifest, version, entryMap) {
   }
   for (const scope of usedScopes) {
     const source = localRecordSchemas.get(scope);
-    const recordVersion = (version === "1.3" || version === "1.4" || version === "1.5" || version === "1.6") && scope === "portfolio-content" ||
-      (version === "1.4" || version === "1.5") && scope === "taxonomy" || (version === "1.5" || version === "1.6") && scope === "media-metadata" || version === "1.6" && scope === "cv-metadata"
+    const recordVersion = (version === "1.3" || version === "1.4" || version === "1.5" || version === "1.6" || version === "1.7") && scope === "portfolio-content" ||
+      (version === "1.4" || version === "1.5" || version === "1.7") && scope === "taxonomy" || (version === "1.5" || version === "1.6" || version === "1.7") && scope === "media-metadata" ||
+      (version === "1.6" || version === "1.7") && scope === "cv-metadata" || version === "1.7" && scope === "moderation-history"
       ? "1.2" : schemaVersion;
     expectedDescriptors.push({
       kind: "record", scope, path: `schemas/${scope}.schema.json`, schemaUri: source.uri,
@@ -588,6 +597,35 @@ function compareUtcInstant(left, right) {
     : baseOrder;
 }
 
+function addUtcCalendarMonths(value, months) {
+  const date = new Date(Date.parse(value));
+  const originalDay = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCFullYear(date.getUTCFullYear() + Math.floor(months / 12));
+  date.setUTCMonth(date.getUTCMonth() + months % 12);
+  const finalDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  date.setUTCDate(Math.min(originalDay, finalDay));
+  return date.getTime();
+}
+
+function verifyModerationRetention(records, capturedAt) {
+  const captureTime = Date.parse(capturedAt);
+  for (const record of records) {
+    const value = record.value;
+    if ((value.state === "pending" || value.state === "rejected") &&
+        captureTime >= Date.parse(value.submittedAt) + 90 * 86_400_000) {
+      fail("PACKAGE_MODERATION_RETENTION_INVALID");
+    }
+    if (value.state === "suppressed") {
+      const lastDecision = value.decisionHistory.at(-1);
+      if (lastDecision === undefined || lastDecision.decision !== "suppressed") fail("PACKAGE_MODERATION_HISTORY_INVALID");
+      if (value.textDisposition === "retained" && captureTime >= addUtcCalendarMonths(lastDecision.decidedAt, 12)) {
+        fail("PACKAGE_MODERATION_RETENTION_INVALID");
+      }
+    }
+  }
+}
+
 function verifyRecordOrdering(scope, records, version) {
   const valueOf = (record) => version === "1.0" ? record : record.value;
   if (scope === "cv-metadata" || scope === "portfolio-configuration") {
@@ -635,8 +673,8 @@ function verifyRecordOrdering(scope, records, version) {
       }
       let previous;
       for (const activation of value.activationHistory) {
-        const previousKey = previous === undefined ? undefined : version === "1.6" ? previous.activationId : previous.versionId;
-        const activationKey = version === "1.6" ? activation.activationId : activation.versionId;
+        const previousKey = previous === undefined ? undefined : (version === "1.6" || version === "1.7") ? previous.activationId : previous.versionId;
+        const activationKey = (version === "1.6" || version === "1.7") ? activation.activationId : activation.versionId;
         if (previous !== undefined && (
           compareUtcInstant(previous.activatedAt, activation.activatedAt) < 0 ||
           compareUtcInstant(previous.activatedAt, activation.activatedAt) === 0 && previousKey < activationKey
@@ -667,6 +705,20 @@ function verifyRecordOrdering(scope, records, version) {
           compareUtcInstant(previous.periodStart, current.periodStart) === 0 && compareUtcInstant(previous.periodEnd, current.periodEnd) === 0 && previous.goalVersionId >= current.goalVersionId) {
           fail("PACKAGE_RECORD_ORDER_INVALID");
         }
+      }
+    }
+  } else if (scope === "moderation-history") {
+    for (const record of records) {
+      const value = valueOf(record);
+      const history = value.decisionHistory;
+      if (value.state === "pending" ? history.length !== 0 : history.length === 0 || history.at(-1).decision !== value.state) {
+        fail("PACKAGE_MODERATION_HISTORY_INVALID");
+      }
+      for (let index = 0; index < history.length; index += 1) {
+        if (history[index].sequence !== index + 1) fail("PACKAGE_MODERATION_HISTORY_INVALID");
+      }
+      if (value.textDisposition === "erased" && (Object.hasOwn(value, "authorName") || Object.hasOwn(value, "paragraph"))) {
+        fail("PACKAGE_MODERATION_ERASURE_INVALID");
       }
     }
   }
@@ -987,7 +1039,7 @@ function verifyAssets(manifest, version, entryMap, recordsByScope) {
   const assetPaths = new Set();
   let previousPath = "";
   for (const descriptor of assets) {
-    const mediaBytesPackage = (version === "1.5" || version === "1.6") && object(descriptor) && descriptor.scope === "media-metadata";
+    const mediaBytesPackage = (version === "1.5" || version === "1.6" || version === "1.7") && object(descriptor) && descriptor.scope === "media-metadata";
     const validPath = object(descriptor) && (mediaBytesPackage
       ? descriptor.path === `assets/media-metadata/sha256/${descriptor.digest}`
       : descriptor.path === `assets/${descriptor.scope}/${descriptor.assetId}`);
@@ -1010,7 +1062,7 @@ function verifyAssets(manifest, version, entryMap, recordsByScope) {
     const visit = (value) => {
       if (typeof value === "string" && value.startsWith("assets/")) {
         const expectedPrefix = `assets/${scope}/`;
-        const cvMediaReference = version === "1.6" && scope === "cv-metadata" && value.startsWith("assets/media-metadata/sha256/");
+        const cvMediaReference = (version === "1.6" || version === "1.7") && scope === "cv-metadata" && value.startsWith("assets/media-metadata/sha256/");
         if (!value.startsWith(expectedPrefix) && !cvMediaReference || !assetPaths.has(value)) fail("PACKAGE_ASSET_REFERENCE_INVALID");
         referencedAssetPaths.add(value);
       } else if (Array.isArray(value)) {
@@ -1022,7 +1074,7 @@ function verifyAssets(manifest, version, entryMap, recordsByScope) {
     records.forEach(visit);
   }
   if (referencedAssetPaths.size !== assetPaths.size) fail("PACKAGE_ASSET_REFERENCE_INVALID");
-  if (version === "1.5" || version === "1.6") {
+  if (version === "1.5" || version === "1.6" || version === "1.7") {
     const descriptors = new Map(assets.map((descriptor) => [descriptor.path, descriptor]));
     for (const record of recordsByScope.get("media-metadata") ?? []) {
       for (const portable of record.value.portableAssets) {
@@ -1034,7 +1086,7 @@ function verifyAssets(manifest, version, entryMap, recordsByScope) {
       }
     }
   }
-  if (version === "1.6") {
+  if (version === "1.6" || version === "1.7") {
     const descriptors = new Map(assets.map((descriptor) => [descriptor.path, descriptor]));
     for (const record of recordsByScope.get("cv-metadata") ?? []) {
       for (const versionRecord of record.value.versions) {
@@ -1191,7 +1243,7 @@ export function validateOwnerExportZip(input) {
   const manifest = parseJsonBytes(manifestBytes);
   if (!object(manifest) || manifest.packageFormat !== "shipwithali-owner-export") fail("PACKAGE_FORMAT_UNSUPPORTED");
   const version = supportedManifestVersion(manifest);
-  if (version !== "1.5" && version !== "1.6" && entries.some((entry) => entry.bytes.length > LIMITS.legacyEntryBytes)) fail("ENTRY_SIZE_LIMIT");
+  if (version !== "1.5" && version !== "1.6" && version !== "1.7" && entries.some((entry) => entry.bytes.length > LIMITS.legacyEntryBytes)) fail("ENTRY_SIZE_LIMIT");
   if (version !== "1.0") {
     checkRequiredFeatures(manifest);
     const requiredProperties = ["exportId", "snapshot", "dependencies", "exclusions", "schemas", "assets"];
@@ -1206,6 +1258,8 @@ export function validateOwnerExportZip(input) {
       !includedScopes.includes("portfolio-content"))) fail("PACKAGE_SCOPE_UNSUPPORTED");
   if (version === "1.4" && (includedScopes.some(scope => !["portfolio-content", "taxonomy", "portfolio-configuration"].includes(scope)) ||
       !includedScopes.includes("taxonomy"))) fail("PACKAGE_SCOPE_UNSUPPORTED");
+  if (version === "1.7" && (includedScopes.some(scope => !["portfolio-content", "taxonomy", "moderation-history", "portfolio-configuration"].includes(scope)) ||
+      !includedScopes.includes("moderation-history"))) fail("PACKAGE_SCOPE_UNSUPPORTED");
   if (version === "1.5" && (includedScopes.length !== 1 || includedScopes[0] !== "media-metadata")) fail("PACKAGE_SCOPE_UNSUPPORTED");
   if (version === "1.6" && (!includedScopes.includes("cv-metadata") || includedScopes.some((scope) => !["cv-metadata", "media-metadata"].includes(scope)))) fail("PACKAGE_SCOPE_UNSUPPORTED");
   const descriptors = verifySchemaEntries(manifest, version, entryMap);
@@ -1218,13 +1272,14 @@ export function validateOwnerExportZip(input) {
     recordsByScope.set(descriptor.scope, records);
     recordCounts[descriptor.scope] = records.length;
   }
-  if (version === "1.3" || version === "1.4" && includedScopes.includes("portfolio-content")) {
+  if (version === "1.3" || (version === "1.4" || version === "1.7") && includedScopes.includes("portfolio-content")) {
     verifyContentSnapshotFacts(recordsByScope.get("portfolio-content"));
   }
-  if (version === "1.4") verifyTaxonomySnapshotFacts(
+  if (version === "1.4" || version === "1.7" && includedScopes.includes("taxonomy")) verifyTaxonomySnapshotFacts(
     recordsByScope.get("taxonomy"), recordsByScope.get("portfolio-content"), includedScopes,
   );
   if (version === "1.6") verifyCvSnapshotFacts(recordsByScope.get("cv-metadata"));
+  if (version === "1.7") verifyModerationRetention(recordsByScope.get("moderation-history"), manifest.snapshot.capturedAt);
   const assets = verifyAssets(manifest, version, entryMap, recordsByScope);
   const dependencies = verifyDependencies(manifest, version, recordsByScope);
 

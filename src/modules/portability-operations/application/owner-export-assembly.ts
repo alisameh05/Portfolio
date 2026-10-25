@@ -31,6 +31,12 @@ export interface OwnerExportSnapshotReaderPort {
     readonly ownerId: StableId<"Owner">;
     readonly context: TransactionContext;
   }): Promise<boolean>;
+  revalidateModerationForReady?(input: {
+    readonly snapshot: OwnerExportAssemblySnapshot;
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly ownerId: StableId<"Owner">;
+    readonly context: TransactionContext;
+  }): Promise<boolean>;
 }
 
 /** @deprecated Use the scope-aware reader port; retained for #240 adapter callers. */
@@ -126,7 +132,7 @@ async function verifyArtifact(
 }
 
 function isSupportedScopeSelection(scopes: readonly string[]): boolean {
-  const supportedOrder = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "portfolio-configuration"];
+  const supportedOrder = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "moderation-history", "portfolio-configuration"];
   const canonical = supportedOrder.filter((scope) => scopes.includes(scope));
   if (scopes.length === 1 && scopes[0] === "media-metadata") return true;
   if (scopes.includes("cv-metadata")) {
@@ -135,7 +141,7 @@ function isSupportedScopeSelection(scopes: readonly string[]): boolean {
   if (scopes.includes("media-metadata")) return false;
   return canonical.length === scopes.length && canonical.every((scope, index) => scopes[index] === scope) &&
     (scopes.includes("portfolio-content") || scopes.includes("taxonomy") ||
-      scopes.length === 1 && scopes[0] === "portfolio-configuration");
+      scopes.includes("moderation-history") || scopes.length === 1 && scopes[0] === "portfolio-configuration");
 }
 
 function sameScopes(left: readonly string[], right: readonly string[]): boolean {
@@ -143,7 +149,7 @@ function sameScopes(left: readonly string[], right: readonly string[]): boolean 
 }
 
 /**
- * Resumable leased worker for content, taxonomy, and configuration export slices. Snapshot
+ * Resumable leased worker for content, taxonomy, configuration, and moderation export slices. Snapshot
  * and candidate checkpoints are write-once; external Storage work happens
  * outside database transactions, then readiness and queue completion commit
  * together under the current lease token.
@@ -306,13 +312,15 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         leaseToken: job.leaseToken,
         transitionedAt: completedAt,
         expiresAt: effectiveExpiry(completedAt, "kind" in snapshot
-          ? snapshot.configuration?.policyExpiresAt
+          ? snapshot.policyExpiresAt ?? snapshot.configuration?.policyExpiresAt
           : snapshot.policyExpiresAt),
         actingJobId: jobId.value,
         integrityManifest: built.manifest,
         artifactId,
         ...(record.includedScopes.includes("media-metadata") || record.includedScopes.includes("cv-metadata") ? { precondition: (context: TransactionContext) =>
           deps.snapshots.revalidateMediaForReady?.({ snapshot, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId, context }) ?? Promise.resolve(false) } : {}),
+        ...(record.includedScopes.includes("moderation-history") ? { precondition: (context: TransactionContext) =>
+          deps.snapshots.revalidateModerationForReady?.({ snapshot, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId, context }) ?? Promise.resolve(false) } : {}),
       });
       return completed.ok && completed.value === "applied" ? "completed" : "stale";
     } catch (error) {

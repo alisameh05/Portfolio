@@ -91,6 +91,17 @@ export interface OwnerExportCvEntryDescriptor {
   readonly recordCount: number;
 }
 
+export interface OwnerExportModerationEntryDescriptor {
+  readonly path: "records/moderation-history.ndjson";
+  readonly scope: "moderation-history";
+  readonly mediaType: "application/x-ndjson";
+  readonly recordSchema: "urn:shipwithali:owner-export-schema:moderation-history:1.2";
+  readonly schemaPath: "schemas/moderation-history.schema.json";
+  readonly schemaVersion: "1.2";
+  readonly digest: string;
+  readonly recordCount: number;
+}
+
 export interface OwnerExportEntryDescriptorV1_0<TScope extends ExportScope = ExportScope> {
   readonly path: string;
   readonly scope: TScope;
@@ -204,7 +215,14 @@ export interface OwnerExportPackageManifestV1_6 extends Omit<OwnerExportPackageM
   readonly entries: readonly (OwnerExportEntryDescriptor | OwnerExportContentEntryDescriptor | OwnerExportTaxonomyEntryDescriptor | OwnerExportMediaEntryDescriptor | OwnerExportCvEntryDescriptor)[];
 }
 
-export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3 | OwnerExportPackageManifestV1_4 | OwnerExportPackageManifestV1_5 | OwnerExportPackageManifestV1_6;
+/** Package 1.7 adds retention-aware Feedback and minimal Moderation audit records. */
+export interface OwnerExportPackageManifestV1_7 extends Omit<OwnerExportPackageManifestV1_6, "schemaVersion" | "entries"> {
+  readonly schemaVersion: "1.7";
+  readonly entries: readonly (OwnerExportEntryDescriptor | OwnerExportContentEntryDescriptor | OwnerExportTaxonomyEntryDescriptor |
+    OwnerExportMediaEntryDescriptor | OwnerExportCvEntryDescriptor | OwnerExportModerationEntryDescriptor)[];
+}
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3 | OwnerExportPackageManifestV1_4 | OwnerExportPackageManifestV1_5 | OwnerExportPackageManifestV1_6 | OwnerExportPackageManifestV1_7;
 
 interface OwnerExportViewBase {
   readonly exportId: StableId<"OwnerExport">;
@@ -366,8 +384,9 @@ type PortableCvVersionV1_2 = {
 type PortableCvActivation = { readonly versionId: string; readonly activatedAt: string };
 type PortableCvActivationV1_2 = { readonly activationId: string; readonly versionId: string; readonly activatedAt: string };
 type PortableModerationDecision = {
+  readonly sequence: number;
   readonly decision: "approved" | "rejected" | "suppressed";
-  readonly reason: string;
+  readonly reason?: string;
   readonly decidedAt: string;
 };
 type PortableProfile = {
@@ -418,7 +437,7 @@ type ExportRecordValueByScope = {
   readonly "moderation-history": {
     readonly feedbackId: string; readonly projectId: string; readonly locale: "en" | "ar"; readonly aggregateVersion: number;
     readonly state: "pending" | "approved" | "rejected" | "suppressed";
-    readonly authorName: string; readonly paragraph: string; readonly submittedAt: string;
+    readonly textDisposition: "retained" | "erased"; readonly authorName?: string; readonly paragraph?: string; readonly submittedAt: string;
     readonly decisionHistory: readonly PortableModerationDecision[];
   };
   readonly "analytics-reports": { readonly goal: AnalyticsExportGoal; readonly reports: readonly AnalyticsExportReport[] };
@@ -745,7 +764,7 @@ function isSafeCvMetadataExportValue(value: unknown): boolean {
     (value["activationHistoryTruncated"] === undefined || typeof value["activationHistoryTruncated"] === "boolean") &&
     (value["activationHistoryTruncated"] !== true || value["activationHistory"].length === 100);
 }
-function isPortableModerationDecision(value: unknown): boolean {
+function isPortableModerationDecisionV11(value: unknown): boolean {
   return hasOnlyKeys(value, ["decision", "reason", "decidedAt"]) && hasRequiredKeys(value, ["decision", "reason", "decidedAt"]) &&
     ["approved", "rejected", "suppressed"].includes(String(value["decision"])) &&
     isBoundedString(value["reason"], 1, 500) && isPortableUtcInstant(value["decidedAt"]);
@@ -757,7 +776,33 @@ function isSafeModerationHistoryExportValue(value: unknown): boolean {
     Number.isSafeInteger(value["aggregateVersion"]) && Number(value["aggregateVersion"]) >= 1 &&
     ["pending", "approved", "rejected", "suppressed"].includes(String(value["state"])) &&
     isBoundedString(value["authorName"], 1, 120) && isBoundedString(value["paragraph"], 1, 5_000) &&
-    isPortableUtcInstant(value["submittedAt"]) && Array.isArray(value["decisionHistory"]) && value["decisionHistory"].every(isPortableModerationDecision);
+    isPortableUtcInstant(value["submittedAt"]) && Array.isArray(value["decisionHistory"]) && value["decisionHistory"].every(isPortableModerationDecisionV11);
+}
+
+function isPortableModerationDecisionV12(value: unknown, expectedSequence: number): boolean {
+  return hasOnlyKeys(value, ["sequence", "decision", "reason", "decidedAt"]) &&
+    hasRequiredKeys(value, ["sequence", "decision", "decidedAt"]) && value["sequence"] === expectedSequence &&
+    Number.isSafeInteger(value["sequence"]) && ["approved", "rejected", "suppressed"].includes(String(value["decision"])) &&
+    (value["reason"] === undefined || isBoundedString(value["reason"], 1, 500)) && isPortableUtcInstant(value["decidedAt"]);
+}
+
+/** Public package v1.2 shape: erased text and absent reason facts stay absent. */
+export function isSafeOwnerExportModerationMetadataV1_2(value: unknown): boolean {
+  if (!hasOnlyKeys(value, ["feedbackId", "projectId", "locale", "aggregateVersion", "state", "textDisposition", "authorName", "paragraph", "submittedAt", "decisionHistory"]) ||
+      !hasRequiredKeys(value, ["feedbackId", "projectId", "locale", "aggregateVersion", "state", "textDisposition", "submittedAt", "decisionHistory"]) ||
+      !isPortableStableId(value["feedbackId"]) || !isPortableStableId(value["projectId"]) || !["en", "ar"].includes(String(value["locale"])) ||
+      !Number.isSafeInteger(value["aggregateVersion"]) || Number(value["aggregateVersion"]) < 1 ||
+      !["pending", "approved", "rejected", "suppressed"].includes(String(value["state"])) ||
+      !["retained", "erased"].includes(String(value["textDisposition"])) || !isPortableUtcInstant(value["submittedAt"]) ||
+      !Array.isArray(value["decisionHistory"]) || !value["decisionHistory"].every((decision, index) => isPortableModerationDecisionV12(decision, index + 1))) return false;
+  const retained = value["textDisposition"] === "retained";
+  if (retained !== (value["authorName"] !== undefined && value["paragraph"] !== undefined) ||
+      retained && (!isBoundedString(value["authorName"], 1, 120) || !isBoundedString(value["paragraph"], 1, 5_000)) ||
+      !retained && (value["authorName"] !== undefined || value["paragraph"] !== undefined)) return false;
+  if (!retained && (value["decisionHistory"] as readonly Record<string, unknown>[]).some((decision) => decision["reason"] !== undefined)) return false;
+  const history = value["decisionHistory"] as readonly { readonly decision: string }[];
+  const state = value["state"];
+  return state === "pending" ? history.length === 0 : history.at(-1)?.decision === state;
 }
 function isPortableProfile(value: unknown): boolean {
   return hasOnlyKeys(value, ["displayName", "headline", "bio", "mediaAssetId"]) && hasRequiredKeys(value, ["displayName", "headline", "bio"]) &&

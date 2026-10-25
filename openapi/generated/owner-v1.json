@@ -7747,6 +7747,530 @@
           }
         }
       },
+      "OwnerExportEntryDescriptorV1_7": {
+        "type": "object",
+        "description": "Record entry used by Moderation manifest 1.7 packages.",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "scope",
+          "mediaType",
+          "recordSchema",
+          "schemaPath",
+          "schemaVersion",
+          "digest",
+          "recordCount"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "enum": [
+              "records/portfolio-content.ndjson",
+              "records/taxonomy.ndjson",
+              "records/moderation-history.ndjson",
+              "records/portfolio-configuration.ndjson"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "portfolio-content",
+              "taxonomy",
+              "moderation-history",
+              "portfolio-configuration"
+            ]
+          },
+          "mediaType": {
+            "type": "string",
+            "const": "application/x-ndjson"
+          },
+          "recordSchema": {
+            "type": "string",
+            "enum": [
+              "urn:shipwithali:owner-export-schema:portfolio-content:1.2",
+              "urn:shipwithali:owner-export-schema:taxonomy:1.2",
+              "urn:shipwithali:owner-export-schema:moderation-history:1.2",
+              "urn:shipwithali:owner-export-schema:portfolio-configuration:1.1"
+            ]
+          },
+          "schemaPath": {
+            "type": "string",
+            "enum": [
+              "schemas/portfolio-content.schema.json",
+              "schemas/taxonomy.schema.json",
+              "schemas/moderation-history.schema.json",
+              "schemas/portfolio-configuration.schema.json"
+            ]
+          },
+          "schemaVersion": {
+            "type": "string",
+            "enum": [
+              "1.1",
+              "1.2"
+            ]
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "recordCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "scope": {
+                  "const": "portfolio-content"
+                }
+              },
+              "required": [
+                "scope"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "const": "records/portfolio-content.ndjson"
+                },
+                "recordSchema": {
+                  "const": "urn:shipwithali:owner-export-schema:portfolio-content:1.2"
+                },
+                "schemaPath": {
+                  "const": "schemas/portfolio-content.schema.json"
+                },
+                "schemaVersion": {
+                  "const": "1.2"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "scope": {
+                  "const": "taxonomy"
+                }
+              },
+              "required": [
+                "scope"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "const": "records/taxonomy.ndjson"
+                },
+                "recordSchema": {
+                  "const": "urn:shipwithali:owner-export-schema:taxonomy:1.2"
+                },
+                "schemaPath": {
+                  "const": "schemas/taxonomy.schema.json"
+                },
+                "schemaVersion": {
+                  "const": "1.2"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "scope": {
+                  "const": "moderation-history"
+                }
+              },
+              "required": [
+                "scope"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "const": "records/moderation-history.ndjson"
+                },
+                "recordSchema": {
+                  "const": "urn:shipwithali:owner-export-schema:moderation-history:1.2"
+                },
+                "schemaPath": {
+                  "const": "schemas/moderation-history.schema.json"
+                },
+                "schemaVersion": {
+                  "const": "1.2"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "scope": {
+                  "const": "portfolio-configuration"
+                }
+              },
+              "required": [
+                "scope"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "const": "records/portfolio-configuration.ndjson"
+                },
+                "recordSchema": {
+                  "const": "urn:shipwithali:owner-export-schema:portfolio-configuration:1.1"
+                },
+                "schemaPath": {
+                  "const": "schemas/portfolio-configuration.schema.json"
+                },
+                "schemaVersion": {
+                  "const": "1.1"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "OwnerExportManifestSchemaDescriptorV1_7": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "path",
+          "schemaUri",
+          "schemaVersion",
+          "digest"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "manifest"
+          },
+          "path": {
+            "type": "string",
+            "const": "schemas/manifest.schema.json"
+          },
+          "schemaUri": {
+            "type": "string",
+            "const": "urn:shipwithali:owner-export-schema:manifest:1.6"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "const": "1.6"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "OwnerExportRecordSchemaDescriptorV1_7": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "path",
+          "scope",
+          "schemaUri",
+          "schemaVersion",
+          "digest"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "record"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^schemas/(?:portfolio-content|taxonomy|moderation-history|portfolio-configuration)\\.schema\\.json$"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "portfolio-content",
+              "taxonomy",
+              "moderation-history",
+              "portfolio-configuration"
+            ]
+          },
+          "schemaUri": {
+            "type": "string",
+            "enum": [
+              "urn:shipwithali:owner-export-schema:portfolio-content:1.2",
+              "urn:shipwithali:owner-export-schema:taxonomy:1.2",
+              "urn:shipwithali:owner-export-schema:moderation-history:1.2",
+              "urn:shipwithali:owner-export-schema:portfolio-configuration:1.1"
+            ]
+          },
+          "schemaVersion": {
+            "type": "string",
+            "enum": [
+              "1.1",
+              "1.2"
+            ]
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "scope": {
+                  "const": "portfolio-content"
+                }
+              },
+              "required": [
+                "scope"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "const": "schemas/portfolio-content.schema.json"
+                },
+                "schemaUri": {
+                  "const": "urn:shipwithali:owner-export-schema:portfolio-content:1.2"
+                },
+                "schemaVersion": {
+                  "const": "1.2"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "scope": {
+                  "const": "taxonomy"
+                }
+              },
+              "required": [
+                "scope"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "const": "schemas/taxonomy.schema.json"
+                },
+                "schemaUri": {
+                  "const": "urn:shipwithali:owner-export-schema:taxonomy:1.2"
+                },
+                "schemaVersion": {
+                  "const": "1.2"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "scope": {
+                  "const": "moderation-history"
+                }
+              },
+              "required": [
+                "scope"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "const": "schemas/moderation-history.schema.json"
+                },
+                "schemaUri": {
+                  "const": "urn:shipwithali:owner-export-schema:moderation-history:1.2"
+                },
+                "schemaVersion": {
+                  "const": "1.2"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "scope": {
+                  "const": "portfolio-configuration"
+                }
+              },
+              "required": [
+                "scope"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "const": "schemas/portfolio-configuration.schema.json"
+                },
+                "schemaUri": {
+                  "const": "urn:shipwithali:owner-export-schema:portfolio-configuration:1.1"
+                },
+                "schemaVersion": {
+                  "const": "1.1"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "OwnerExportSchemaDescriptorV1_7": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/OwnerExportManifestSchemaDescriptorV1_7"
+          },
+          {
+            "$ref": "#/components/schemas/OwnerExportRecordSchemaDescriptorV1_7"
+          }
+        ]
+      },
+      "OwnerExportPackageManifestV1_7": {
+        "type": "object",
+        "description": "Manifest 1.7 adds retention-aware Feedback and truthful minimal Moderation audit records.",
+        "additionalProperties": false,
+        "required": [
+          "packageFormat",
+          "schemaVersion",
+          "exportId",
+          "snapshot",
+          "createdAt",
+          "algorithm",
+          "digest",
+          "requiredFeatures",
+          "includedScopes",
+          "publicEventDataCoverage",
+          "dependencies",
+          "exclusions",
+          "entries",
+          "schemas",
+          "assets"
+        ],
+        "properties": {
+          "packageFormat": {
+            "type": "string",
+            "const": "shipwithali-owner-export"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "const": "1.7"
+          },
+          "exportId": {
+            "$ref": "#/components/schemas/StableId"
+          },
+          "snapshot": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "snapshotId",
+              "capturedAt",
+              "consistency"
+            ],
+            "properties": {
+              "snapshotId": {
+                "$ref": "#/components/schemas/StableId"
+              },
+              "capturedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "consistency": {
+                "type": "string",
+                "const": "transactional"
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "algorithm": {
+            "type": "string",
+            "const": "sha-256"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "requiredFeatures": {
+            "type": "array",
+            "const": [
+              "asset-integrity-v1",
+              "dependency-coverage-v1",
+              "record-integrity-v1",
+              "schema-integrity-v1",
+              "snapshot-identity-v1"
+            ]
+          },
+          "includedScopes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true,
+            "contains": {
+              "type": "string",
+              "const": "moderation-history"
+            },
+            "items": {
+              "type": "string",
+              "enum": [
+                "portfolio-content",
+                "taxonomy",
+                "moderation-history",
+                "portfolio-configuration"
+              ]
+            }
+          },
+          "publicEventDataCoverage": {
+            "$ref": "#/components/schemas/PublicEventDataCoverage"
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportDependencyDescriptor"
+            }
+          },
+          "exclusions": {
+            "type": "array",
+            "const": [
+              "raw-public-event-data",
+              "functional-visitor-identities",
+              "measurement-visitor-identities",
+              "sessions",
+              "credentials",
+              "lab-entries"
+            ]
+          },
+          "entries": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportEntryDescriptorV1_7"
+            }
+          },
+          "schemas": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/OwnerExportSchemaDescriptorV1_7"
+            }
+          },
+          "assets": {
+            "type": "array",
+            "maxItems": 0
+          },
+          "extensions": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
       "OwnerExportPackageManifest": {
         "oneOf": [
           {
@@ -7760,6 +8284,9 @@
           },
           {
             "$ref": "#/components/schemas/OwnerExportPackageManifestV1_6"
+          },
+          {
+            "$ref": "#/components/schemas/OwnerExportPackageManifestV1_7"
           }
         ]
       },
