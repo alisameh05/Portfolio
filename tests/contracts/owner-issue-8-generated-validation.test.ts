@@ -268,6 +268,49 @@ describe("generated Owner Portability validators", () => {
     expect(zOwnerExportView.safeParse(readyExport).success).toBe(true);
   });
 
+  it("accepts retention-aware moderation manifest 1.7 in the existing Owner export view", () => {
+    const moderationManifest = {
+      packageFormat: "shipwithali-owner-export",
+      schemaVersion: "1.7",
+      exportId: ids.export,
+      snapshot: { snapshotId: ids.export, capturedAt: "2026-10-25T10:00:00Z", consistency: "transactional" },
+      createdAt: "2026-10-25T10:00:00Z",
+      algorithm: "sha-256",
+      digest,
+      requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"],
+      includedScopes: ["moderation-history"],
+      publicEventDataCoverage: { mode: "excluded" },
+      dependencies: [],
+      exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"],
+      entries: [{
+        path: "records/moderation-history.ndjson",
+        scope: "moderation-history",
+        mediaType: "application/x-ndjson",
+        recordSchema: "urn:shipwithali:owner-export-schema:moderation-history:1.2",
+        schemaPath: "schemas/moderation-history.schema.json",
+        schemaVersion: "1.2",
+        digest,
+        recordCount: 0,
+      }],
+      schemas: [
+        { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.6", schemaVersion: "1.6", digest },
+        { kind: "record", scope: "moderation-history", path: "schemas/moderation-history.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:moderation-history:1.2", schemaVersion: "1.2", digest },
+      ],
+      assets: [],
+      extensions: { moderationSnapshot: { retentionPolicy: "feedback-retention-v1", auditMode: "minimal-truthful" } },
+    } as const;
+    const response = {
+      ...readyExport,
+      schemaVersion: "1.7",
+      includedScopes: ["moderation-history"],
+      integrityManifest: moderationManifest,
+    };
+
+    expect(zOwnerExportPackageManifest.safeParse(moderationManifest).success).toBe(true);
+    expect(zOwnerExportView.safeParse(response).success).toBe(true);
+    expect(zOwnerExportPackageManifest.safeParse({ ...moderationManifest, assets: [{ path: "unexpected" }] }).success).toBe(false);
+  });
+
   it("validates portable records for every documented export scope", () => {
     const records = [
       {

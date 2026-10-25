@@ -248,6 +248,48 @@ function buildRepresentativePackage(options: {
   return createZip(options.reverseZipMembers ? [...zipEntries].reverse() : zipEntries);
 }
 
+function buildModerationPackage(version: "1.0" | "1.1" | "1.7", invalidHistory?: "sequence-gap" | "state-mismatch"): Buffer {
+  const recordVersion = version === "1.7" ? "1.2" : version;
+  const manifestVersion = version === "1.7" ? "1.6" : version;
+  const schema = readFileSync(`schemas/owner-export/v${recordVersion}/moderation-history.schema.json`);
+  const manifestSchema = readFileSync(`schemas/owner-export/v${manifestVersion}/manifest.schema.json`);
+  const value = {
+    feedbackId: stableId("021"), projectId: stableId("022"), locale: "en", aggregateVersion: 2,
+    state: "approved", authorName: "Legacy visitor", paragraph: "Retained Feedback",
+    submittedAt: "2026-10-22T10:00:00Z",
+    ...(version === "1.7" ? { textDisposition: "retained" } : {}),
+    decisionHistory: [{ decision: invalidHistory === "state-mismatch" ? "rejected" : "approved",
+      reason: "Owner decision", decidedAt: "2026-10-23T10:00:00Z",
+      ...(version === "1.7" ? { sequence: invalidHistory === "sequence-gap" ? 2 : 1 } : {}) }],
+  };
+  const record = Buffer.from(`${JSON.stringify(version === "1.0" ? { scope: "moderation-history", ...value } : { scope: "moderation-history", value })}\n`);
+  const descriptor = { path: "schemas/moderation-history.schema.json",
+    schemaUri: `urn:shipwithali:owner-export-schema:moderation-history:${recordVersion}`,
+    schemaVersion: recordVersion, digest: digest(schema) };
+  const manifest: Record<string, unknown> = {
+    packageFormat: "shipwithali-owner-export", schemaVersion: version, createdAt: "2026-10-23T10:01:00Z",
+    algorithm: "sha-256", digest: "", includedScopes: ["moderation-history"], publicEventDataCoverage: { mode: "excluded" },
+    entries: [{ path: "records/moderation-history.ndjson", scope: "moderation-history", mediaType: "application/x-ndjson",
+      recordSchema: descriptor.schemaUri, schemaPath: descriptor.path, schemaVersion: recordVersion, digest: digest(record), recordCount: 1 }],
+    ...(version === "1.0" ? {} : {
+      exportId: stableId("023"), snapshot: { snapshotId: stableId("024"), capturedAt: "2026-10-23T10:00:00Z", consistency: "transactional" },
+      requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"],
+      dependencies: [{ sourceScope: "moderation-history", sourceId: value.feedbackId, targetScope: "portfolio-content",
+        targetId: value.projectId, disposition: "omitted", reason: "scope-not-selected" }],
+      exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"],
+      schemas: [{ kind: "manifest", path: "schemas/manifest.schema.json",
+        schemaUri: `urn:shipwithali:owner-export-schema:manifest:${manifestVersion}`, schemaVersion: manifestVersion, digest: digest(manifestSchema) },
+      { kind: "record", scope: "moderation-history", ...descriptor }], assets: [],
+    }),
+  };
+  manifest["digest"] = digest(Buffer.from(independentCanonicalJson(manifest)));
+  return createZip([
+    { name: "manifest.json", bytes: Buffer.from(JSON.stringify(manifest)) },
+    ...(version === "1.0" ? [] : [{ name: "schemas/manifest.schema.json", bytes: manifestSchema }]),
+    { name: descriptor.path, bytes: schema }, { name: "records/moderation-history.ndjson", bytes: record },
+  ]);
+}
+
 function buildLegacyV1Package(): Buffer {
   const analyticsSchema = readFileSync("schemas/owner-export/v1.0/analytics-reports.schema.json");
   const record = Buffer.from(`${JSON.stringify({
@@ -314,6 +356,19 @@ describe("offline Owner export ZIP validation", () => {
       .toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     expect(result.dependencyCount).toBe(3);
     expect(result.verifiedAssetCount).toBe(2);
+  });
+
+  it.each(["1.0", "1.1"] as const)("validates a nonempty legacy %s Moderation ZIP without sequenced decisions", version => {
+    const result = validateOwnerExportZip(buildModerationPackage(version));
+    expect(result.manifest.schemaVersion).toBe(version);
+    expect(result.recordCounts["moderation-history"]).toBe(1);
+  });
+
+  it("enforces sequenced and state-consistent Moderation history for format 1.7", () => {
+    expect(validateOwnerExportZip(buildModerationPackage("1.7")).recordCounts["moderation-history"]).toBe(1);
+    for (const invalidHistory of ["sequence-gap", "state-mismatch"] as const) {
+      expect(() => validateOwnerExportZip(buildModerationPackage("1.7", invalidHistory))).toThrow("PACKAGE_MODERATION_HISTORY_INVALID");
+    }
   });
 
   it("retains the known 1.0 record meaning without inventing absent coverage", () => {

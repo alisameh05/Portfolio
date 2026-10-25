@@ -1145,11 +1145,122 @@ export const zOwnerExportPackageManifestV16 = z.strictObject({
     extensions: z.record(z.unknown()).optional()
 });
 
+/**
+ * Record entry used by Moderation manifest 1.7 packages.
+ */
+export const zOwnerExportEntryDescriptorV17 = z.intersection(z.unknown(), z.strictObject({
+    path: z.enum([
+        'records/portfolio-content.ndjson',
+        'records/taxonomy.ndjson',
+        'records/moderation-history.ndjson',
+        'records/portfolio-configuration.ndjson'
+    ]),
+    scope: z.enum([
+        'portfolio-content',
+        'taxonomy',
+        'moderation-history',
+        'portfolio-configuration'
+    ]),
+    mediaType: z.literal('application/x-ndjson'),
+    recordSchema: z.enum([
+        'urn:shipwithali:owner-export-schema:portfolio-content:1.2',
+        'urn:shipwithali:owner-export-schema:taxonomy:1.2',
+        'urn:shipwithali:owner-export-schema:moderation-history:1.2',
+        'urn:shipwithali:owner-export-schema:portfolio-configuration:1.1'
+    ]),
+    schemaPath: z.enum([
+        'schemas/portfolio-content.schema.json',
+        'schemas/taxonomy.schema.json',
+        'schemas/moderation-history.schema.json',
+        'schemas/portfolio-configuration.schema.json'
+    ]),
+    schemaVersion: z.enum(['1.1', '1.2']),
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    recordCount: z.number().int().gte(0)
+}));
+
+export const zOwnerExportManifestSchemaDescriptorV17 = z.strictObject({
+    kind: z.literal('manifest'),
+    path: z.literal('schemas/manifest.schema.json'),
+    schemaUri: z.literal('urn:shipwithali:owner-export-schema:manifest:1.6'),
+    schemaVersion: z.literal('1.6'),
+    digest: z.string().regex(/^[a-f0-9]{64}$/)
+});
+
+export const zOwnerExportRecordSchemaDescriptorV17 = z.intersection(z.unknown(), z.strictObject({
+    kind: z.literal('record'),
+    path: z.string().regex(/^schemas\/(?:portfolio-content|taxonomy|moderation-history|portfolio-configuration)\.schema\.json$/),
+    scope: z.enum([
+        'portfolio-content',
+        'taxonomy',
+        'moderation-history',
+        'portfolio-configuration'
+    ]),
+    schemaUri: z.enum([
+        'urn:shipwithali:owner-export-schema:portfolio-content:1.2',
+        'urn:shipwithali:owner-export-schema:taxonomy:1.2',
+        'urn:shipwithali:owner-export-schema:moderation-history:1.2',
+        'urn:shipwithali:owner-export-schema:portfolio-configuration:1.1'
+    ]),
+    schemaVersion: z.enum(['1.1', '1.2']),
+    digest: z.string().regex(/^[a-f0-9]{64}$/)
+}));
+
+export const zOwnerExportSchemaDescriptorV17 = z.union([
+    zOwnerExportManifestSchemaDescriptorV17,
+    zOwnerExportRecordSchemaDescriptorV17
+]);
+
+/**
+ * Manifest 1.7 adds retention-aware Feedback and truthful minimal Moderation audit records.
+ */
+export const zOwnerExportPackageManifestV17 = z.strictObject({
+    packageFormat: z.literal('shipwithali-owner-export'),
+    schemaVersion: z.literal('1.7'),
+    exportId: zStableId,
+    snapshot: z.strictObject({
+        snapshotId: zStableId,
+        capturedAt: z.string().datetime(),
+        consistency: z.literal('transactional')
+    }),
+    createdAt: z.string().datetime(),
+    algorithm: z.literal('sha-256'),
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    requiredFeatures: z.tuple([
+        z.literal('asset-integrity-v1'),
+        z.literal('dependency-coverage-v1'),
+        z.literal('record-integrity-v1'),
+        z.literal('schema-integrity-v1'),
+        z.literal('snapshot-identity-v1')
+    ]),
+    includedScopes: z.array(z.enum([
+        'portfolio-content',
+        'taxonomy',
+        'moderation-history',
+        'portfolio-configuration'
+    ])).min(1).max(4),
+    publicEventDataCoverage: zPublicEventDataCoverage,
+    dependencies: z.array(zOwnerExportDependencyDescriptor),
+    exclusions: z.tuple([
+        z.literal('raw-public-event-data'),
+        z.literal('functional-visitor-identities'),
+        z.literal('measurement-visitor-identities'),
+        z.literal('sessions'),
+        z.literal('credentials'),
+        z.literal('lab-entries')
+    ]),
+    entries: z.array(zOwnerExportEntryDescriptorV17).min(1).max(4),
+    schemas: z.array(zOwnerExportSchemaDescriptorV17).min(2).max(5),
+    assets: z.array(z.unknown()).max(0),
+    extensions: z.record(z.unknown()).optional()
+});
+
 export const zOwnerExportPackageManifest = z.union([
     zOwnerExportPackageManifestV10,
     zOwnerExportPackageManifestV11,
     zOwnerExportPackageManifestV15,
-    zOwnerExportPackageManifestV16
+    zOwnerExportPackageManifestV16,
+    zOwnerExportPackageManifestV17
 ]);
 
 /**

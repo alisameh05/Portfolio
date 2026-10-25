@@ -55,6 +55,8 @@ export type { FeedbackWorkCommand, FeedbackWorkService } from "./application/wor
 export { createFeedbackRetentionWorkService, pendingFeedbackExpiryAt, suppressedFeedbackExpiryAt } from "./application/retention.js";
 export type { FeedbackRetentionWorkDependencies } from "./application/retention.js";
 export type { FeedbackRetentionBatch, FeedbackRetentionRepositoryPort } from "./ports/retention.js";
+export { matchesFeedbackOwnerExportSnapshot, projectFeedbackOwnerExportSnapshot } from "./application/owner-export.js";
+export type { FeedbackOwnerExportSnapshot, FeedbackOwnerExportSnapshotReaderPort, FeedbackOwnerExportSourceRecord, FeedbackOwnerExportSourceSnapshot, FeedbackOwnerExportValue } from "./application/owner-export.js";
 export { createRatingApplicationService } from "./application/ratings.js";
 export type { RatingRepositoryPort } from "./application/ratings.js";
 export { createFeedbackApplicationService } from "./application/feedback.js";

@@ -120,6 +120,24 @@ const PORTABILITY_EXPORT_POLICIES: ReadonlyArray<readonly [string, string, strin
   ["owner_exports", "owner_exports_worker_update_policy", "UPDATE", "{shipwithali_worker}"],
 ];
 
+const FEEDBACK_EXPORT_MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+  ["anon", "select private feedback export identity", "select feedback_id from interaction.feedback where false", false],
+  ["authenticated", "select private moderation export identity", "select feedback_id from interaction.moderation_decisions where false", false],
+  ["shipwithali_application", "select Feedback through owner export seam", "select feedback_id from interaction.feedback where false", true],
+  ["shipwithali_application", "select Moderation through owner export seam", "select feedback_id from interaction.moderation_decisions where false", true],
+  ["shipwithali_worker", "select Feedback through worker export seam", "select feedback_id from interaction.feedback where false", true],
+  ["shipwithali_worker", "select Moderation through worker export seam", "select feedback_id from interaction.moderation_decisions where false", true],
+  ["shipwithali_backup", "select Feedback export identity", "select feedback_id from interaction.feedback where false", false],
+  ["shipwithali_backup", "select Moderation export identity", "select feedback_id from interaction.moderation_decisions where false", false],
+];
+
+const FEEDBACK_EXPORT_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
+  ["feedback", "feedback_owner_export_read", "SELECT", "{shipwithali_application}"],
+  ["moderation_decisions", "moderation_owner_export_read", "SELECT", "{shipwithali_application}"],
+  ["feedback", "feedback_worker_owner_export_read", "SELECT", "{shipwithali_worker}"],
+  ["moderation_decisions", "moderation_worker_owner_export_read", "SELECT", "{shipwithali_worker}"],
+];
+
 const CONFIGURATION_EXPORT_READ_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
   ["settings", "portfolio_settings_worker_export_select", "SELECT", "{shipwithali_worker}"],
   ["contact_channels", "portfolio_channels_worker_export_select", "SELECT", "{shipwithali_worker}"],
@@ -205,6 +223,7 @@ const OWNER_EXPORT_JOB_POLICIES: ReadonlyArray<readonly [string, string, string,
  */
 let retryRecoverySchema = false;
 let portabilityExportSchema = false;
+let feedbackExportSchema = false;
 let configurationExportSchema = false;
 let contentExportSchema = false;
 let taxonomyExportSchema = false;
@@ -253,6 +272,20 @@ if (DATABASE_URL !== undefined) {
           ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:portability.owner_export_requests"
           : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:portability.owner_export_requests",
       );
+    }
+    const feedbackExportPolicies = await era.query(
+      `select count(*)::int as policy_count,
+              to_regprocedure('interaction.owner_feedback_export_scope_is_valid(uuid)') is not null as has_scope_function
+         from pg_policies where schemaname = 'interaction'
+          and policyname in ('feedback_owner_export_read', 'moderation_owner_export_read',
+            'feedback_worker_owner_export_read', 'moderation_worker_owner_export_read')`,
+    );
+    feedbackExportSchema = Number(feedbackExportPolicies.rows[0]?.["policy_count"] ?? 0) === 4 &&
+      feedbackExportPolicies.rows[0]?.["has_scope_function"] === true;
+    if (declared.includes("portability.feedback_export") !== feedbackExportSchema) {
+      throw new Error(declared.includes("portability.feedback_export")
+        ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:portability.feedback_export"
+        : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:portability.feedback_export");
     }
     const configurationPolicies = await era.query(
       `select count(*)::int as count from pg_policies
@@ -472,6 +505,7 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
   ...(configurationExportSchema ? CONFIGURATION_EXPORT_MATRIX : []),
   ...(contentExportSchema ? CONTENT_EXPORT_MATRIX : []),
   ...(taxonomyExportSchema ? TAXONOMY_EXPORT_MATRIX : []),
+  ...(feedbackExportSchema ? FEEDBACK_EXPORT_MATRIX : []),
 ];
 
 interface RoleAttempt {
@@ -863,6 +897,33 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
       const scopedSnapshot = await attemptAs("shipwithali_application",
         `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; select snapshot_data->>'privateMarker' as marker from portability.owner_exports where export_id = '${CONFIGURATION_EXPORT_FIXTURE_ID}'`);
       expect(scopedSnapshot.rows.at(-1)?.["marker"]).toBe("owner-export-snapshot-private");
+    });
+  }
+
+  if (feedbackExportSchema) {
+    it("publishes the private Feedback and Moderation export boundary for the matching Owner and purpose only", async () => {
+      const admin = adminClient();
+      await admin.connect();
+      try {
+        const policies = await admin.query(
+          `select tablename, policyname, roles, cmd from pg_policies
+            where schemaname = 'interaction' and policyname = any($1::text[]) order by policyname`,
+          [FEEDBACK_EXPORT_POLICIES.map(([, policy]) => policy)],
+        );
+        expect(policies.rows.map((row) => [row["tablename"], row["policyname"], row["cmd"], String(row["roles"])]))
+          .toEqual([...FEEDBACK_EXPORT_POLICIES].sort((left, right) => left[1].localeCompare(right[1])));
+      } finally {
+        await admin.end();
+      }
+      const allowedWorker = await attemptAs("shipwithali_worker",
+        `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; set local shipwithali.worker_purpose = 'interaction.owner-export'; set local shipwithali.feedback_access = 'owner-export'; select count(feedback_id)::int as count from interaction.feedback`);
+      expect(allowedWorker.rows.at(-1)?.["count"]).toBe(0);
+      const wrongPurpose = await attemptAs("shipwithali_worker",
+        `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${CONFIGURATION_EXPORT_OWNER}'; set local shipwithali.worker_purpose = 'feedback.retention'; set local shipwithali.feedback_access = 'owner-export'; select count(feedback_id)::int as count from interaction.feedback`);
+      expect(wrongPurpose.rows.at(-1)?.["count"]).toBe(0);
+      const wrongOwner = await attemptAs("shipwithali_application",
+        `set local shipwithali.portfolio_id = '${CONFIGURATION_EXPORT_PORTFOLIO}'; set local shipwithali.owner_id = '${PORTABILITY_EXPORT_UUID}'; set local shipwithali.feedback_access = 'owner-export'; select count(feedback_id)::int as count from interaction.feedback`);
+      expect(wrongOwner.rows.at(-1)?.["count"]).toBe(0);
     });
   }
 

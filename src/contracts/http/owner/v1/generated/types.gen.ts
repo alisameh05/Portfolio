@@ -1131,7 +1131,81 @@ export type OwnerExportPackageManifestV16 = {
     };
 };
 
-export type OwnerExportPackageManifest = OwnerExportPackageManifestV10 | OwnerExportPackageManifestV11 | OwnerExportPackageManifestV15 | OwnerExportPackageManifestV16;
+/**
+ * Record entry used by Moderation manifest 1.7 packages.
+ */
+export type OwnerExportEntryDescriptorV17 = unknown & {
+    path: 'records/portfolio-content.ndjson' | 'records/taxonomy.ndjson' | 'records/moderation-history.ndjson' | 'records/portfolio-configuration.ndjson';
+    scope: 'portfolio-content' | 'taxonomy' | 'moderation-history' | 'portfolio-configuration';
+    mediaType: 'application/x-ndjson';
+    recordSchema: 'urn:shipwithali:owner-export-schema:portfolio-content:1.2' | 'urn:shipwithali:owner-export-schema:taxonomy:1.2' | 'urn:shipwithali:owner-export-schema:moderation-history:1.2' | 'urn:shipwithali:owner-export-schema:portfolio-configuration:1.1';
+    schemaPath: 'schemas/portfolio-content.schema.json' | 'schemas/taxonomy.schema.json' | 'schemas/moderation-history.schema.json' | 'schemas/portfolio-configuration.schema.json';
+    schemaVersion: '1.1' | '1.2';
+    digest: string;
+    recordCount: number;
+};
+
+export type OwnerExportManifestSchemaDescriptorV17 = {
+    kind: 'manifest';
+    path: 'schemas/manifest.schema.json';
+    schemaUri: 'urn:shipwithali:owner-export-schema:manifest:1.6';
+    schemaVersion: '1.6';
+    digest: string;
+};
+
+export type OwnerExportRecordSchemaDescriptorV17 = unknown & {
+    kind: 'record';
+    path: string;
+    scope: 'portfolio-content' | 'taxonomy' | 'moderation-history' | 'portfolio-configuration';
+    schemaUri: 'urn:shipwithali:owner-export-schema:portfolio-content:1.2' | 'urn:shipwithali:owner-export-schema:taxonomy:1.2' | 'urn:shipwithali:owner-export-schema:moderation-history:1.2' | 'urn:shipwithali:owner-export-schema:portfolio-configuration:1.1';
+    schemaVersion: '1.1' | '1.2';
+    digest: string;
+};
+
+export type OwnerExportSchemaDescriptorV17 = OwnerExportManifestSchemaDescriptorV17 | OwnerExportRecordSchemaDescriptorV17;
+
+/**
+ * Manifest 1.7 adds retention-aware Feedback and truthful minimal Moderation audit records.
+ */
+export type OwnerExportPackageManifestV17 = {
+    packageFormat: 'shipwithali-owner-export';
+    schemaVersion: '1.7';
+    exportId: StableId;
+    snapshot: {
+        snapshotId: StableId;
+        capturedAt: string;
+        consistency: 'transactional';
+    };
+    createdAt: string;
+    algorithm: 'sha-256';
+    digest: string;
+    requiredFeatures: [
+        'asset-integrity-v1',
+        'dependency-coverage-v1',
+        'record-integrity-v1',
+        'schema-integrity-v1',
+        'snapshot-identity-v1'
+    ];
+    includedScopes: Array<'portfolio-content' | 'taxonomy' | 'moderation-history' | 'portfolio-configuration'>;
+    publicEventDataCoverage: PublicEventDataCoverage;
+    dependencies: Array<OwnerExportDependencyDescriptor>;
+    exclusions: [
+        'raw-public-event-data',
+        'functional-visitor-identities',
+        'measurement-visitor-identities',
+        'sessions',
+        'credentials',
+        'lab-entries'
+    ];
+    entries: Array<OwnerExportEntryDescriptorV17>;
+    schemas: Array<OwnerExportSchemaDescriptorV17>;
+    assets: Array<unknown>;
+    extensions?: {
+        [key: string]: unknown;
+    };
+};
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV10 | OwnerExportPackageManifestV11 | OwnerExportPackageManifestV15 | OwnerExportPackageManifestV16 | OwnerExportPackageManifestV17;
 
 /**
  * A completed versioned domain artifact, never a database dump or provider backup.

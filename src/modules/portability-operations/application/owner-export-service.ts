@@ -68,8 +68,9 @@ import type {
   PersistedOwnerExport,
 } from "./owner-export-store.js";
 import type { OwnerExportObjectReadPort } from "./service.js";
+import type { OwnerExportAssemblySnapshot } from "./owner-export-package.js";
 
-export const OWNER_EXPORT_SCHEMA_VERSION = "1.6";
+export const OWNER_EXPORT_SCHEMA_VERSION = "1.7";
 function artifactFilename(schemaVersion: string): string {
   return `shipwithali-owner-export-${schemaVersion}.zip`;
 }
@@ -182,6 +183,12 @@ export interface OwnerExportServiceDependencies {
   readonly ids: StableIdGenerator;
   /** Optional bounded private artifact read seam for the download operation. */
   readonly objectRead?: OwnerExportObjectReadPort;
+  /** Moderation ZIPs are invalidated unless retained Feedback still matches at download time. */
+  readonly revalidateModerationForDownload?: (input: {
+    readonly snapshot: OwnerExportAssemblySnapshot;
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly ownerId: StableId<"Owner">;
+  }) => Promise<boolean>;
 }
 
 export function createOwnerExportService(
@@ -211,7 +218,7 @@ export function createOwnerExportService(
     }
     const idempotencyKey = parseIdempotencyKey(command.idempotencyKey);
     if (!idempotencyKey.ok) return idempotencyKey;
-    const schemaVersion = scopes.value.includes("cv-metadata") ? "1.6" : scopes.value.includes("media-metadata") ? "1.5" : scopes.value.includes("taxonomy") ? "1.4" : scopes.value.includes("portfolio-content") ? "1.3" : "1.2";
+    const schemaVersion = scopes.value.includes("moderation-history") ? "1.7" : scopes.value.includes("cv-metadata") ? "1.6" : scopes.value.includes("media-metadata") ? "1.5" : scopes.value.includes("taxonomy") ? "1.4" : scopes.value.includes("portfolio-content") ? "1.3" : "1.2";
     const requestHash = await hashCanonicalRequest({
       operation: "owner-export-request",
       schemaVersion,
@@ -407,6 +414,18 @@ export function createOwnerExportService(
     if (expiresAt === undefined || Date.parse(clock.now()) >= Date.parse(expiresAt)) {
       return { ok: false, error: { kind: "conflict", code: "OWNER_EXPORT_DOWNLOAD_EXPIRED" } };
     }
+    if (record.includedScopes.includes("moderation-history")) {
+      if (record.snapshot === undefined || !("kind" in record.snapshot) || dependencies.revalidateModerationForDownload === undefined) {
+        return { ok: false, error: { kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
+      }
+      try {
+        if (!await dependencies.revalidateModerationForDownload({ snapshot: record.snapshot, portfolioId: query.portfolioId, ownerId: query.actor.ownerId })) {
+          return { ok: false, error: { kind: "conflict", code: "OWNER_EXPORT_DOWNLOAD_EXPIRED" } };
+        }
+      } catch {
+        return { ok: false, error: { kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
+      }
+    }
     if (record.artifactSha256 === undefined || record.artifactContentLength === undefined) {
       return { ok: false, error: { kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
     }
@@ -464,15 +483,16 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const entries = value["entries"];
   const recordVersion = (scope: unknown) => {
     if (manifestVersion === "1.0") return "1.0";
-    if ((manifestVersion === "1.5" || manifestVersion === "1.6") && scope === "media-metadata") return "1.2";
-    if (manifestVersion === "1.6" && scope === "cv-metadata") return "1.2";
-    const usesVersion12 = ((manifestVersion === "1.3" || manifestVersion === "1.4") && scope === "portfolio-content") ||
-      (manifestVersion === "1.4" && scope === "taxonomy");
+    if ((manifestVersion === "1.5" || manifestVersion === "1.6" || manifestVersion === "1.7") && scope === "media-metadata") return "1.2";
+    if ((manifestVersion === "1.6" || manifestVersion === "1.7") && scope === "cv-metadata") return "1.2";
+    if (manifestVersion === "1.7" && scope === "moderation-history") return "1.2";
+    const usesVersion12 = ((manifestVersion === "1.3" || manifestVersion === "1.4" || manifestVersion === "1.7") && scope === "portfolio-content") ||
+      ((manifestVersion === "1.4" || manifestVersion === "1.7") && scope === "taxonomy");
     return usesVersion12 ? "1.2" : "1.1";
   };
   const commonShape = (
     value["packageFormat"] === "shipwithali-owner-export" &&
-    ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6"].includes(value["schemaVersion"] as string) &&
+    ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7"].includes(value["schemaVersion"] as string) &&
     typeof value["createdAt"] === "string" &&
     Number.isFinite(Date.parse(value["createdAt"] as string)) &&
     value["algorithm"] === "sha-256" &&
@@ -507,7 +527,7 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const snapshot = value["snapshot"];
   const stableId = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   return (
-    ["1.1", "1.2", "1.3", "1.4", "1.5", "1.6"].includes(value["schemaVersion"] as string) &&
+    ["1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7"].includes(value["schemaVersion"] as string) &&
     typeof value["exportId"] === "string" && stableId.test(value["exportId"]) &&
     isRecord(snapshot) && typeof snapshot["snapshotId"] === "string" && stableId.test(snapshot["snapshotId"]) &&
     typeof snapshot["capturedAt"] === "string" && Number.isFinite(Date.parse(snapshot["capturedAt"])) &&

@@ -278,6 +278,7 @@ describe("Owner v1 contract", () => {
       { $ref: "#/components/schemas/OwnerExportPackageManifestV1_1" },
       { $ref: "#/components/schemas/OwnerExportPackageManifestV1_5" },
       { $ref: "#/components/schemas/OwnerExportPackageManifestV1_6" },
+      { $ref: "#/components/schemas/OwnerExportPackageManifestV1_7" },
     ]);
     expect(document.components.schemas["OwnerExportPackageManifestV1_0"]).toMatchObject({
       required: expect.arrayContaining(["includedScopes", "publicEventDataCoverage", "entries"]),
@@ -294,6 +295,14 @@ describe("Owner v1 contract", () => {
     expect(document.components.schemas["OwnerExportPackageManifestV1_6"]).toMatchObject({
       required: expect.arrayContaining(["includedScopes", "entries", "schemas", "assets"]),
       additionalProperties: false,
+    });
+    expect(document.components.schemas["OwnerExportPackageManifestV1_7"]).toMatchObject({
+      required: expect.arrayContaining(["includedScopes", "entries", "schemas", "assets"]),
+      additionalProperties: false,
+      properties: {
+        schemaVersion: { const: "1.7" },
+        includedScopes: { contains: { const: "moderation-history" } },
+      },
     });
   });
 

@@ -9,6 +9,7 @@ import { buildConfigurationOwnerExportPackage, buildCvOwnerExportPackage, buildM
 import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportObjectReadPort } from "./service.js";
 import { OWNER_EXPORT_RETENTION_SECONDS, applyGuardedOwnerExportTransition } from "./owner-export-service.js";
 import { calculateJobRetryDelayMilliseconds } from "./retry-policy.js";
+import type { OwnerExportModerationArtifactsPort, createOwnerExportModerationCleanupService } from "./owner-export-cleanup.js";
 
 const LEASE_DURATION_SECONDS = 300;
 const CLAIM_LIMIT = 10;
@@ -19,6 +20,12 @@ const UNSUPPORTED_SCOPE = parseSafeErrorCode("OWNER_EXPORT_SCOPE_UNSUPPORTED");
 const INVALID_JOB = parseSafeErrorCode("OWNER_EXPORT_JOB_INVALID");
 
 export interface OwnerExportSnapshotReaderPort {
+  /** Restores volatile values only while current source facts match the durable digest. */
+  restoreModerationSnapshot?(input: {
+    readonly snapshot: OwnerExportAssemblySnapshot;
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly ownerId: StableId<"Owner">;
+  }): Promise<Result<OwnerExportAssemblySnapshot, Rejection>>;
   capture(input: {
     readonly portfolioId: StableId<"Portfolio">;
     readonly ownerId: StableId<"Owner">;
@@ -26,6 +33,12 @@ export interface OwnerExportSnapshotReaderPort {
     readonly includedScopes: readonly string[];
   }): Promise<Result<OwnerExportAssemblySnapshot, Rejection>>;
   revalidateMediaForReady?(input: {
+    readonly snapshot: OwnerExportAssemblySnapshot;
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly ownerId: StableId<"Owner">;
+    readonly context: TransactionContext;
+  }): Promise<boolean>;
+  revalidateModerationForReady?(input: {
     readonly snapshot: OwnerExportAssemblySnapshot;
     readonly portfolioId: StableId<"Portfolio">;
     readonly ownerId: StableId<"Owner">;
@@ -56,9 +69,12 @@ export interface OwnerExportAssemblyDependencies {
   readonly clock: Clock;
   readonly ids: StableIdGenerator;
   readonly random?: () => number;
+  readonly artifacts?: OwnerExportModerationArtifactsPort;
+  readonly cleanup?: ReturnType<typeof createOwnerExportModerationCleanupService>;
 }
 
 export interface OwnerExportAssemblyRunResult {
+  readonly cleanup?: { readonly scanned: number; readonly deleted: number; readonly pending: number; readonly incomplete: boolean };
   readonly claimed: number;
   readonly completed: number;
   readonly retried: number;
@@ -126,7 +142,7 @@ async function verifyArtifact(
 }
 
 function isSupportedScopeSelection(scopes: readonly string[]): boolean {
-  const supportedOrder = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "portfolio-configuration"];
+  const supportedOrder = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "moderation-history", "portfolio-configuration"];
   const canonical = supportedOrder.filter((scope) => scopes.includes(scope));
   if (scopes.length === 1 && scopes[0] === "media-metadata") return true;
   if (scopes.includes("cv-metadata")) {
@@ -135,7 +151,7 @@ function isSupportedScopeSelection(scopes: readonly string[]): boolean {
   if (scopes.includes("media-metadata")) return false;
   return canonical.length === scopes.length && canonical.every((scope, index) => scopes[index] === scope) &&
     (scopes.includes("portfolio-content") || scopes.includes("taxonomy") ||
-      scopes.length === 1 && scopes[0] === "portfolio-configuration");
+      scopes.includes("moderation-history") || scopes.length === 1 && scopes[0] === "portfolio-configuration");
 }
 
 function sameScopes(left: readonly string[], right: readonly string[]): boolean {
@@ -143,10 +159,10 @@ function sameScopes(left: readonly string[], right: readonly string[]): boolean 
 }
 
 /**
- * Resumable leased worker for content, taxonomy, and configuration export slices. Snapshot
- * and candidate checkpoints are write-once; external Storage work happens
- * outside database transactions, then readiness and queue completion commit
- * together under the current lease token.
+ * Resumable leased worker for content, taxonomy, configuration, and moderation export slices. Snapshot
+ * and candidate checkpoints are write-once. Moderation uploads hold a bounded
+ * lifecycle fence shared with cleanup; other Storage work runs outside database
+ * transactions. Readiness and queue completion commit under the current lease.
  */
 export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDependencies) {
   async function failExport(
@@ -249,6 +265,14 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         snapshot = captured.value;
       }
 
+      if ("kind" in snapshot && snapshot.moderationCheckpoint !== undefined) {
+        const restored = await deps.snapshots.restoreModerationSnapshot?.({ snapshot, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId });
+        if (restored !== undefined && !restored.ok && restored.error.code === "OWNER_EXPORT_MODERATION_CHANGED") {
+          return await failExport(record, { jobId: jobId.value, leaseToken: job.leaseToken }, PERMANENT_FAILURE);
+        }
+        if (restored === undefined || !restored.ok) throw new Error("OWNER_EXPORT_MODERATION_UNAVAILABLE");
+        snapshot = restored.value;
+      }
       const built = snapshot !== null && typeof snapshot === "object" && "kind" in snapshot && snapshot.includedScopes.includes("cv-metadata")
         ? deps.mediaObjects === undefined ? (() => { throw new Error("OWNER_EXPORT_MEDIA_STORAGE_UNAVAILABLE"); })()
           : await buildCvOwnerExportPackage({ exportId: record.exportId, portfolioId: parsed.portfolioId, snapshot, objects: deps.mediaObjects })
@@ -277,26 +301,36 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
       if (record.candidateArtifactId === undefined || record.candidateSha256 !== built.sha256 ||
           record.candidateContentLength !== built.contentLength) throw new Error("OWNER_EXPORT_CANDIDATE_MISMATCH");
       const artifactId = record.candidateArtifactId;
-      const stored = await deps.storage.writeOwnerExport({
-        portfolioId: parsed.portfolioId,
-        exportId: record.exportId,
-        artifactId,
-        content: built.content,
-        contentLength: built.contentLength,
-        sha256: built.sha256,
-      });
-      if (!stored.ok) throw new Error("OWNER_EXPORT_STORAGE_WRITE_FAILED");
-      const read = await deps.storage.readOwnerExport({
-        portfolioId: parsed.portfolioId,
-        exportId: record.exportId,
-        artifactId,
-        expectedSha256: record.candidateSha256!,
-        expectedContentLength: record.candidateContentLength!,
-      });
-      if (!read.ok || read.value.contentLength !== built.contentLength ||
-          !await verifyArtifact(read.value.content, built.contentLength, built.sha256)) {
-        throw new Error("OWNER_EXPORT_STORAGE_VERIFY_FAILED");
-      }
+      const uploadRecord = record;
+      const upload = async () => {
+        const stored = await deps.storage.writeOwnerExport({
+          portfolioId: parsed.portfolioId,
+          exportId: uploadRecord.exportId,
+          artifactId,
+          content: built.content,
+          contentLength: built.contentLength,
+          sha256: built.sha256,
+        });
+        if (!stored.ok) throw new Error("OWNER_EXPORT_STORAGE_WRITE_FAILED");
+        const read = await deps.storage.readOwnerExport({
+          portfolioId: parsed.portfolioId,
+          exportId: uploadRecord.exportId,
+          artifactId,
+          expectedSha256: uploadRecord.candidateSha256!,
+          expectedContentLength: uploadRecord.candidateContentLength!,
+        });
+        if (!read.ok || read.value.contentLength !== built.contentLength ||
+            !await verifyArtifact(read.value.content, built.contentLength, built.sha256)) {
+          throw new Error("OWNER_EXPORT_STORAGE_VERIFY_FAILED");
+        }
+        return true;
+      };
+      if (record.includedScopes.includes("moderation-history")) {
+        if (deps.artifacts === undefined) throw new Error("OWNER_EXPORT_UPLOAD_FENCE_UNAVAILABLE");
+        const uploaded = await deps.artifacts.uploadCandidate({ portfolioId: parsed.portfolioId,
+          exportId: record.exportId, artifactId, actingJobId: jobId.value, leaseToken: job.leaseToken }, upload);
+        if (!uploaded) return "stale";
+      } else await upload();
       const completedAt = deps.clock.now();
       const completed = await applyGuardedOwnerExportTransition(deps.exports, {
         exportId: record.exportId,
@@ -306,13 +340,15 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         leaseToken: job.leaseToken,
         transitionedAt: completedAt,
         expiresAt: effectiveExpiry(completedAt, "kind" in snapshot
-          ? snapshot.configuration?.policyExpiresAt
+          ? snapshot.policyExpiresAt ?? snapshot.configuration?.policyExpiresAt
           : snapshot.policyExpiresAt),
         actingJobId: jobId.value,
         integrityManifest: built.manifest,
         artifactId,
         ...(record.includedScopes.includes("media-metadata") || record.includedScopes.includes("cv-metadata") ? { precondition: (context: TransactionContext) =>
           deps.snapshots.revalidateMediaForReady?.({ snapshot, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId, context }) ?? Promise.resolve(false) } : {}),
+        ...(record.includedScopes.includes("moderation-history") ? { precondition: (context: TransactionContext) =>
+          deps.snapshots.revalidateModerationForReady?.({ snapshot, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId, context }) ?? Promise.resolve(false) } : {}),
       });
       return completed.ok && completed.value === "applied" ? "completed" : "stale";
     } catch (error) {
@@ -330,12 +366,26 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
     }
   }
 
+  let cleanupCursor: StableId<"OwnerExport"> | undefined;
   return {
+    async runOwnerExportCleanup() {
+      if (deps.cleanup === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_CLEANUP_UNAVAILABLE" } as const);
+      const result = await deps.cleanup.runOwnerExportCleanup(cleanupCursor === undefined ? {} : { after: cleanupCursor });
+      if (result.ok) cleanupCursor = result.value.nextCursor;
+      return result;
+    },
     async runOwnerExportAssembly(input: { readonly workerId: string }): Promise<Result<OwnerExportAssemblyRunResult, Rejection>> {
       if (!/^[A-Za-z0-9._:-]{1,128}$/.test(input.workerId)) {
         return err({ kind: "validation", code: "OWNER_EXPORT_WORKER_CONTEXT_INVALID" });
       }
       try {
+        let cleanup: OwnerExportAssemblyRunResult["cleanup"];
+        if (deps.cleanup !== undefined) {
+          const cleaned = await deps.cleanup.runOwnerExportCleanup(cleanupCursor === undefined ? {} : { after: cleanupCursor });
+          if (!cleaned.ok) return cleaned;
+          cleanupCursor = cleaned.value.nextCursor;
+          cleanup = cleaned.value;
+        }
         const jobs = await deps.operations.jobs.claimDue({
           workerId: input.workerId,
           now: deps.clock.now(),
@@ -351,7 +401,7 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
           else if (result === "failed") counts.failed += 1;
           else counts.staleLeases += 1;
         }
-        return ok(counts);
+        return ok({ ...counts, ...(cleanup === undefined ? {} : { cleanup }) });
       } catch {
         return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_ASSEMBLY_UNAVAILABLE" });
       }

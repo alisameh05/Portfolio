@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { err, ok, type Rejection, type Result, type StableId } from "@shared/domain";
+import { err, ok, parseStableId, type Rejection, type Result, type StableId } from "@shared/domain";
 import { MAX_OWNER_EXPORT_ARTIFACT_BYTES, type OwnerExportObjectReadPort, type OwnerExportObjectReadRequest } from "../../modules/portability-operations/application/service.js";
+import type { OwnerExportObjectDeletePort } from "../../modules/portability-operations/application/owner-export-cleanup.js";
 
 export interface OwnerExportObjectWritePort {
   writeOwnerExport(input: {
@@ -85,7 +86,7 @@ function toVerifiedReadableStream(
 }
 
 /** Private server-side Storage adapter; provider paths and credentials stay inside this closure. */
-export function createSupabaseOwnerExportStorage(options: SupabaseOwnerExportStorageOptions): OwnerExportObjectReadPort & OwnerExportObjectWritePort {
+export function createSupabaseOwnerExportStorage(options: SupabaseOwnerExportStorageOptions): OwnerExportObjectReadPort & OwnerExportObjectWritePort & OwnerExportObjectDeletePort {
   const base = new URL(options.storageUrl);
   if (base.protocol !== "https:" && !(base.protocol === "http:" && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(base.hostname))) {
     throw new TypeError("Owner export Storage must use HTTPS outside loopback.");
@@ -192,5 +193,22 @@ export function createSupabaseOwnerExportStorage(options: SupabaseOwnerExportSto
     }
   }
 
-  return { readOwnerExport, writeOwnerExport };
+  return { readOwnerExport, writeOwnerExport,
+    async deleteOwnerExport(input) {
+      if (!parseStableId("Portfolio", input.portfolioId).ok || !parseStableId("OwnerExport", input.exportId).ok ||
+          !parseStableId("OwnerExportArtifact", input.artifactId).ok) return err({ kind: "validation", code: "EXPORT_OBJECT_DELETE_INVALID" });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        // Use the Storage API: deleting metadata with SQL would orphan bytes.
+        const response = await fetcher(new URL(`/storage/v1/object/${encodeURIComponent(bucket)}`, base), {
+          method: "DELETE", signal: controller.signal, redirect: "error",
+          headers: { ...headers, "content-type": "application/json" },
+          body: JSON.stringify({ prefixes: [[input.portfolioId, input.exportId, `${input.artifactId}.zip`].join("/")] }),
+        });
+        return response.ok ? ok(undefined) : unavailable();
+      } catch { return unavailable(); }
+      finally { clearTimeout(timer); }
+    },
+  };
 }
