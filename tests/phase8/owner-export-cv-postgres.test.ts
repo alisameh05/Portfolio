@@ -35,6 +35,12 @@ let worker: ReturnType<typeof createPostgresRuntimeDatabase> | undefined;
 let application: ReturnType<typeof createPostgresRuntimeDatabase> | undefined;
 let lifecycleStep = "initialization";
 
+function lifecycleFailure(step: string, error: unknown): Error {
+  const code = error !== null && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[A-Z0-9]{5}$/.test(error.code)
+    ? error.code : "unknown";
+  return new Error(`PHASE8_CV_EXPORT_POSTGRES_${step.toUpperCase().replaceAll("-", "_")}_FAILED:${code}`);
+}
+
 async function seedAcceptedMedia(input: { readonly mediaId: string; readonly portfolioId: string; readonly ownerId: string }) {
   const uploadIntentId = createStableId("MediaUploadIntent");
   const sourceObjectId = createStableId("MediaObject");
@@ -107,9 +113,7 @@ describe.runIf(Boolean(WORKER_URL && APPLICATION_URL && ADMIN_URL))("Issue #244 
         [portfolioId, ownerId]);
       lifecycleStep = "ready";
     } catch (error) {
-      const code = error !== null && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[A-Z0-9]{5}$/.test(error.code)
-        ? error.code : "unknown";
-      throw new Error(`PHASE8_CV_EXPORT_POSTGRES_${lifecycleStep.toUpperCase().replaceAll("-", "_")}_FAILED:${code}`);
+      throw lifecycleFailure(lifecycleStep, error);
     }
   });
 
@@ -150,13 +154,17 @@ describe.runIf(Boolean(WORKER_URL && APPLICATION_URL && ADMIN_URL))("Issue #244 
       await admin?.query("delete from portfolio_config.settings where portfolio_id = $1", [portfolioId]);
       lifecycleStep = "cleanup-complete";
     } catch (error) {
-      const code = error !== null && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[A-Z0-9]{5}$/.test(error.code)
-        ? error.code : "unknown";
-      throw new Error(`PHASE8_CV_EXPORT_POSTGRES_${lifecycleStep.toUpperCase().replaceAll("-", "_")}_FAILED:${code}`);
+      throw lifecycleFailure(lifecycleStep, error);
     } finally {
-      await worker?.resource.close();
-      await application?.resource.close();
-      await admin?.end();
+      const closeFailures: Error[] = [];
+      lifecycleStep = "close-worker";
+      try { await worker?.resource.close(); } catch (error) { closeFailures.push(lifecycleFailure(lifecycleStep, error)); }
+      lifecycleStep = "close-application";
+      try { await application?.resource.close(); } catch (error) { closeFailures.push(lifecycleFailure(lifecycleStep, error)); }
+      lifecycleStep = "close-admin";
+      try { await admin?.end(); } catch (error) { closeFailures.push(lifecycleFailure(lifecycleStep, error)); }
+      const closeFailure = closeFailures[0];
+      if (closeFailure !== undefined) throw closeFailure;
     }
   });
 
