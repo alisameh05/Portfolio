@@ -122,6 +122,21 @@ try {
   if (!tests.success || tests.numFailedTestSuites !== 0 || tests.numFailedTests !== 0 || tests.numPendingTests !== 0 || tests.numTodoTests !== 0 ||
       tests.numPassedTests !== expectedTests || assertions.length !== expectedTests || tests.testResults.length !== acceptanceFiles.length ||
       tests.testResults.some(suite => suite.status !== "passed") || assertions.some(assertion => assertion.status !== "passed")) {
+    console.error(JSON.stringify({
+      stage: "acceptance-summary",
+      expectedSuiteCount: acceptanceFiles.length,
+      actualSuiteCount: tests.testResults.length,
+      expectedTestCount: expectedTests,
+      passedTestCount: tests.numPassedTests,
+      failedTestCount: tests.numFailedTests,
+      pendingTestCount: tests.numPendingTests,
+      todoTestCount: tests.numTodoTests,
+      assertionCount: assertions.length,
+      failedSuites: tests.testResults.filter(suite => suite.status !== "passed" ||
+        (suite.assertionResults ?? []).some(assertion => assertion.status !== "passed"))
+        .map(suite => safeVitestSuiteFailure(suite,
+          (suite.assertionResults ?? []).filter(assertion => assertion.status !== "passed"))),
+    }));
     throw new Error("PHASE8_OWNER_EXPORT_ACCEPTANCE_INCOMPLETE");
   }
   stage = "role-rls-acceptance";
