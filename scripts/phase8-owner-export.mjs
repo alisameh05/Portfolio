@@ -201,8 +201,19 @@ try {
   console.error(JSON.stringify({ stage, code: typeof error?.code === "string" && /^[A-Z0-9]{5}$/.test(error.code) ? error.code : "unavailable" }));
   try {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
-    for (const suite of report.testResults ?? []) console.error(JSON.stringify({ suite: suite.name.replace(root, ""), status: suite.status,
-      assertions: (suite.assertionResults ?? []).map(assertion => ({ title: assertion.title, status: assertion.status })) }));
+    const safeDiagnostic = value => String(value).replace(/postgres(?:ql)?:\/\/\S+/gi, "[database-url]")
+      .replaceAll(root, "[repository]").replace(/\r?\n/g, " | ").slice(-4_000);
+    for (const suite of report.testResults ?? []) {
+      const failed = (suite.assertionResults ?? []).filter(assertion => assertion.status !== "passed");
+      if (suite.status !== "passed" || failed.length > 0) {
+        const diagnostics = suite.message ?? suite.failureMessages ?? suite.errorMessage;
+        console.error(JSON.stringify({ suite: suite.name.replace(root, ""), status: suite.status,
+          diagnostics: diagnostics === undefined ? undefined : safeDiagnostic(Array.isArray(diagnostics) ? diagnostics.join("\n") : diagnostics),
+          assertions: failed.map(assertion => ({ title: assertion.title, status: assertion.status,
+            failureMessages: assertion.failureMessages?.map(safeDiagnostic) })) }));
+      }
+    }
+    if (report.failureMessage !== undefined) console.error(JSON.stringify({ reportFailure: safeDiagnostic(report.failureMessage) }));
   } catch { /* no test report exists */ }
   try {
     const report = JSON.parse(readFileSync(roleReportPath, "utf8"));
