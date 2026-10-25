@@ -34,8 +34,11 @@
             "allOf": [
               {
                 "if": { "properties": { "state": { "const": "accepted" } }, "required": ["state"] },
-                "then": { "required": ["acceptedAt", "portableReference"] },
-                "else": { "not": { "anyOf": [{ "required": ["acceptedAt"] }, { "required": ["portableReference"] }] } }
+                "then": { "type": "object", "properties": { "acceptedAt": {}, "portableReference": {} }, "required": ["acceptedAt", "portableReference"] },
+                "else": { "type": "object", "not": { "anyOf": [
+                  { "type": "object", "properties": { "acceptedAt": {} }, "required": ["acceptedAt"] },
+                  { "type": "object", "properties": { "portableReference": {} }, "required": ["portableReference"] }
+                ] } }
               }
             ]
           }
