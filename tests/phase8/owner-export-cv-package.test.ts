@@ -222,9 +222,8 @@ describe("Issue #244 CV export package 1.6", () => {
     const built = await buildCvOwnerExportPackage({ exportId: id("9") as never, portfolioId, snapshot: snapshot(), objects });
     const archive = await collect(built.content);
     const validated = validateOwnerExportZip(archive);
-    const manifest = validated.manifest as { schemaVersion: string; includedScopes: string[]; assets: readonly { path: string; scope: string }[] };
     const record = JSON.parse(new TextDecoder().decode(storedEntry(archive, "records/cv-metadata.ndjson"))) as { value: Record<string, unknown> };
-    expect(manifest).toMatchObject({ schemaVersion: "1.6", includedScopes: ["cv-metadata"], assets: [{ path: reference, scope: "media-metadata" }] });
+    expect(validated.manifest).toMatchObject({ schemaVersion: "1.6", includedScopes: ["cv-metadata"], assets: [{ path: reference, scope: "media-metadata" }] });
     expect(record.value).toMatchObject({ currentVersionId: cvVersionId,
       versions: [
         { versionId: cvVersionId, mediaId, versionNumber: 2, registeredAt: "2026-10-20T09:00:00.000Z", acceptedAt: timestamp, portableReference: reference, isCurrent: true },
@@ -312,8 +311,8 @@ describe("Issue #244 CV export package 1.6", () => {
       snapshot: snapshot({ combined: true }), objects: objectReader() });
     const archive = await collect(built.content);
     const validated = validateOwnerExportZip(archive);
-    const manifest = validated.manifest as { assets: readonly { path: string }[] };
-    expect(manifest.assets).toHaveLength(1);
+    const assets = "assets" in validated.manifest ? validated.manifest.assets : undefined;
+    expect(assets).toHaveLength(1);
     expect(validated.includedScopes).toEqual(["media-metadata", "cv-metadata"]);
     expect(validated.verifiedAssetCount).toBe(1);
     expect(storedEntry(archive, reference)).toEqual(pdf);

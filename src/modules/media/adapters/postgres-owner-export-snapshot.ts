@@ -288,13 +288,14 @@ export function createPostgresOwnerMediaExportSnapshotReader(input: {
             if (!objectId.ok || !uploadIntentId.ok || !/^[a-f0-9]{64}$/.test(sha256) || byteLength > 50 * 1024 * 1024) {
               throw new PostgresInfrastructureError();
             }
+            const decisionId = parseStableId("MediaDecision", currentOriginal.decision_id);
+            if (!decisionId.ok) throw new PostgresInfrastructureError();
             const type = mediaType(currentOriginal.detected_mime_type);
             const reference = `assets/media-metadata/sha256/${sha256}`;
             const original = { mediaId: mediaId.value, objectId: objectId.value, source: "original" as const,
               uploadIntentId: uploadIntentId.value, variantName: "original", mediaType: type, byteLength, sha256,
               assetVersion: integer(currentOriginal.aggregate_version, 1),
-              decisionId: parseStableId("MediaDecision", currentOriginal.decision_id).ok
-                ? parseStableId("MediaDecision", currentOriginal.decision_id).value : (() => { throw new PostgresInfrastructureError(); })(),
+              decisionId: decisionId.value,
               objectVersion: currentOriginal.object_version };
             portableAssets.push(original);
             const portable = { variantName: "original", mediaType: type, byteLength, digest: sha256, portableReference: reference };
@@ -306,14 +307,15 @@ export function createPostgresOwnerMediaExportSnapshotReader(input: {
             const byteLength = integer(row.byte_length, 1);
             if (!objectId.ok || !/^[a-f0-9]{64}$/.test(sha256) || row.object_version !== sha256 ||
                 !/^[a-z0-9-]{1,32}$/.test(row.variant_name)) throw new PostgresInfrastructureError();
+            const decisionId = parseStableId("MediaDecision", row.decision_id);
+            if (!decisionId.ok) throw new PostgresInfrastructureError();
             const type = mediaType(row.mime_type);
             if (byteLength > 50 * 1024 * 1024) throw new PostgresInfrastructureError();
             const ref = `assets/media-metadata/sha256/${sha256}`;
             portableAssets.push({ mediaId: mediaId.value, objectId: objectId.value, source: "variant",
               variantName: row.variant_name, mediaType: type, byteLength, sha256,
               assetVersion: integer(row.aggregate_version, 1),
-              decisionId: parseStableId("MediaDecision", row.decision_id).ok
-                ? parseStableId("MediaDecision", row.decision_id).value : (() => { throw new PostgresInfrastructureError(); })(),
+              decisionId: decisionId.value,
               objectVersion: row.object_version });
             return { variantName: row.variant_name, mediaType: type, byteLength, digest: sha256, portableReference: ref,
               ...(row.width === null ? {} : { width: integer(row.width, 1) }),

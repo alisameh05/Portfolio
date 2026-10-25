@@ -164,14 +164,15 @@ export function createPostgresOwnerCvExportSnapshotReader(): OwnerCvExportSnapsh
 
         const acceptanceByVersion = new Map(versionAcceptances.rows.map((row) => [row.version_id, row]));
         const versions = retainedVersions.map((row) => {
+          const state = row.state;
           const versionId = stableId("CvVersion", row.version_id);
           const mediaId = stableId("MediaAsset", row.media_id);
           const isCurrent = currentVersionId === versionId;
-          if (row.locale !== "en" || (row.state !== "registered" && row.state !== "accepted") || row.is_current !== isCurrent) {
+          if (row.locale !== "en" || (state !== "registered" && state !== "accepted") || row.is_current !== isCurrent) {
             throw new PostgresInfrastructureError();
           }
           const acceptedMediaSnapshot = mediaSnapshot(row);
-          if (row.state === "accepted") {
+          if (state === "accepted") {
             const approval = acceptanceByVersion.get(row.version_id);
             if (approval === undefined || !sameMediaSnapshot(acceptedMediaSnapshot, approval)) throw new PostgresInfrastructureError();
           } else if (acceptanceByVersion.has(row.version_id)) {
@@ -183,11 +184,11 @@ export function createPostgresOwnerCvExportSnapshotReader(): OwnerCvExportSnapsh
             mediaId,
             locale: "en" as const,
             label: row.label,
-            state: row.state,
+            state,
             isCurrent,
             versionNumber: integer(row.version_number),
             registeredAt: iso(row.registered_at),
-            ...(row.state === "accepted" ? { acceptedAt: iso(acceptance!.accepted_at), acceptedMediaSnapshot } : {}),
+            ...(state === "accepted" ? { acceptedAt: iso(acceptance!.accepted_at), acceptedMediaSnapshot } : {}),
           };
         });
         if (currentVersionId !== null && !versions.some((version) => version.versionId === currentVersionId && version.isCurrent && version.state === "accepted")) {

@@ -241,7 +241,19 @@ export function createOwnerExportSnapshotReader(input: {
               candidate.decisionId === binding.mediaDecisionId && candidate.sha256 === binding.sha256 &&
               candidate.objectVersion === binding.objectVersion && candidate.mediaType === "application/pdf");
             if (asset === undefined) throw new Error("OWNER_EXPORT_CV_MEDIA_SNAPSHOT_MISMATCH");
-            return asset;
+            return {
+              path: `assets/media-metadata/sha256/${binding.sha256}`,
+              mediaId: asset.mediaId,
+              variantName: asset.variantName,
+              mediaType: "application/pdf" as const,
+              byteLength: asset.byteLength,
+              digest: binding.sha256,
+              objectId: binding.mediaObjectId,
+              source: "variant" as const,
+              assetVersion: binding.mediaAssetVersion,
+              decisionId: binding.mediaDecisionId,
+              objectVersion: binding.objectVersion,
+            };
           });
         return ok({
           kind: "owner-export-snapshot-v1",
