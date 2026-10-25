@@ -18,6 +18,8 @@ function isOwnerExportMediaType(value: string): value is OwnerExportMediaType {
   return OWNER_EXPORT_MEDIA_TYPES.includes(value as OwnerExportMediaType);
 }
 
+class OwnerExportCvHistoryLimitExceeded extends Error {}
+
 export interface OwnerExportCapabilityFactsReader {
   read(scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> }): Promise<{
     readonly currentCvAvailable: boolean; readonly externalLinksAvailable: boolean;
@@ -161,7 +163,10 @@ export function createOwnerExportSnapshotReader(input: {
           const cv = hasCv
             ? await input.cv!.readOwnerCvExportSnapshot({ portfolioId: request.portfolioId, ownerId: request.ownerId }, transaction)
             : undefined;
-          if (cv !== undefined && !cv.ok) throw new Error("OWNER_EXPORT_CV_UNAVAILABLE");
+          if (cv !== undefined && !cv.ok) {
+            if (cv.error.code === "CV_EXPORT_HISTORY_LIMIT_EXCEEDED") throw new OwnerExportCvHistoryLimitExceeded();
+            throw new Error("OWNER_EXPORT_CV_UNAVAILABLE");
+          }
           const acceptedCvMediaIds = cv?.ok
             ? [...new Set(cv.value.versions.filter((version) => version.state === "accepted").map((version) => version.mediaId))]
             : [];
@@ -308,7 +313,10 @@ export function createOwnerExportSnapshotReader(input: {
             objectVersion: asset.objectVersion,
           })) }),
         });
-      } catch {
+      } catch (error) {
+        if (error instanceof OwnerExportCvHistoryLimitExceeded) {
+          return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_CV_HISTORY_LIMIT_EXCEEDED" });
+        }
         return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_SNAPSHOT_UNAVAILABLE" });
       }
     },

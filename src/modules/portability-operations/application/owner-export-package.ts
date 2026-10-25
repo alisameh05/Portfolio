@@ -609,6 +609,10 @@ export async function buildCvOwnerExportPackage(input: {
     throw new TypeError("OWNER_EXPORT_CV_SNAPSHOT_INVALID");
   }
   const cv = snapshot.cv;
+  if (cv.versionsTruncated || cv.acceptanceHistoryTruncated || cv.activationHistoryTruncated ||
+      cv.versions.length > 100 || cv.acceptanceHistory.length > 100 || cv.activationHistory.length > 100) {
+    throw new TypeError("OWNER_EXPORT_CV_HISTORY_LIMIT_EXCEEDED");
+  }
   const currentCount = cv.versions.filter((version) => version.isCurrent).length;
   if ((cv.currentVersionId === null && currentCount !== 0) || (cv.currentVersionId !== null && currentCount !== 1) ||
       cv.currentVersionId !== null && !cv.versions.some((version) => version.versionId === cv.currentVersionId && version.isCurrent && version.state === "accepted")) {
@@ -752,7 +756,7 @@ export async function buildCvOwnerExportPackage(input: {
     requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"] as const,
     includedScopes: [...snapshot.includedScopes], publicEventDataCoverage: { mode: "excluded" as const }, dependencies,
     exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"] as const,
-    entries, schemas, assets: descriptors, extensions: { cvSnapshot: { acceptanceHistory: "retained-with-explicit-truncation", activationHistory: "retained-with-explicit-truncation", byteReferences: "sha256-content-addressed" } },
+    entries, schemas, assets: descriptors, extensions: { cvSnapshot: { versionHistory: "complete-up-to-100-or-fail", acceptanceHistory: "complete-up-to-100-or-fail", activationHistory: "complete-up-to-100-or-fail", byteReferences: "sha256-content-addressed" } },
   } satisfies OwnerExportPackageManifestV1_6;
   const digest = sha256(utf8.encode(canonicalJson(manifest, true)));
   const completeManifest = { ...manifest, digest };

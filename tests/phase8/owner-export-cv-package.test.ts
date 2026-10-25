@@ -254,37 +254,58 @@ describe("Issue #244 CV export package 1.6", () => {
     expect(() => validateOwnerExportZip(tamperedArchive)).toThrow("CV_SNAPSHOT_FACTS_INVALID");
   });
 
-  it("rejects an omitted acceptance inside the retained history prefix after digest recomputation", async () => {
+  it("rejects an omitted acceptance from a complete retained history after digest recomputation", async () => {
     const built = await buildCvOwnerExportPackage({ exportId: id("9") as never, portfolioId, snapshot: snapshot(), objects: objectReader() });
     const archive = await collect(built.content);
     const truncatedValue = JSON.parse(new TextDecoder().decode(storedEntry(archive, "records/cv-metadata.ndjson"))) as {
       scope: string;
       value: Record<string, unknown>;
     };
-    const versions = truncatedValue.value["versions"] as Array<Record<string, unknown>>;
-    const currentVersion = versions.find((version) => version["isCurrent"] === true);
-    if (currentVersion === undefined) throw new Error("OWNER_EXPORT_CV_TEST_CURRENT_VERSION_MISSING");
-    currentVersion["acceptedAt"] = "2026-10-24T10:00:45.000Z";
-    truncatedValue.value["versions"] = [
-      ...versions,
-      ...Array.from({ length: 98 }, (_, index) => ({
-        versionId: id(String(500 + index)), mediaId, versionNumber: 100 - index, locale: "en",
-        registeredAt: "2026-10-01T00:00:00.000Z", label: "Retained historical registration", state: "registered", isCurrent: false,
-      })),
-    ].sort((left, right) => Number(right["versionNumber"]) - Number(left["versionNumber"]));
-    truncatedValue.value["versionsTruncated"] = true;
-    truncatedValue.value["acceptanceHistory"] = Array.from({ length: 100 }, (_, index) => ({
-      approvalId: id(String(700 + index)),
-      versionId: id(String(900 + index)),
-      acceptedAt: new Date(Date.UTC(2026, 9, 24, 10, 1, 39 - index)).toISOString(),
-    }));
-    truncatedValue.value["acceptanceHistoryTruncated"] = true;
-    const activations = truncatedValue.value["activationHistory"] as Array<Record<string, unknown>>;
-    const currentActivation = activations.find((activation) => activation["versionId"] === cvVersionId);
-    if (currentActivation === undefined) throw new Error("OWNER_EXPORT_CV_TEST_CURRENT_ACTIVATION_MISSING");
-    currentActivation["activatedAt"] = "2026-10-24T10:00:46.000Z";
-    const omittedRecentAcceptance = await rewriteCvRecord(archive, truncatedValue);
-    expect(() => validateOwnerExportZip(omittedRecentAcceptance)).toThrow("CV_SNAPSHOT_FACTS_INVALID");
+    const acceptances = truncatedValue.value["acceptanceHistory"] as Array<Record<string, unknown>>;
+    truncatedValue.value["acceptanceHistory"] = acceptances.slice(0, 1);
+    const omittedAcceptance = await rewriteCvRecord(archive, truncatedValue);
+    expect(() => validateOwnerExportZip(omittedAcceptance)).toThrow("CV_SNAPSHOT_FACTS_INVALID");
+  });
+
+  it("independently validates Current CV pointers and activation order", async () => {
+    const built = await buildCvOwnerExportPackage({ exportId: id("19") as never, portfolioId, snapshot: snapshot(), objects: objectReader() });
+    const archive = await collect(built.content);
+    const record = JSON.parse(new TextDecoder().decode(storedEntry(archive, "records/cv-metadata.ndjson"))) as {
+      scope: string;
+      value: Record<string, unknown>;
+    };
+    record.value["currentVersionId"] = priorCvVersionId;
+    const mismatchedCurrent = await rewriteCvRecord(archive, record);
+    expect(() => validateOwnerExportZip(mismatchedCurrent)).toThrow("CV_SNAPSHOT_FACTS_INVALID");
+
+    const validRecord = JSON.parse(new TextDecoder().decode(storedEntry(archive, "records/cv-metadata.ndjson"))) as {
+      scope: string;
+      value: Record<string, unknown>;
+    };
+    const activations = validRecord.value["activationHistory"] as Array<Record<string, unknown>>;
+    validRecord.value["activationHistory"] = [...activations].reverse();
+    const reversedActivations = await rewriteCvRecord(archive, validRecord);
+    expect(() => validateOwnerExportZip(reversedActivations)).toThrow("CV_SNAPSHOT_FACTS_INVALID");
+  });
+
+  it.each(["versionsTruncated", "acceptanceHistoryTruncated", "activationHistoryTruncated"] as const)(
+    "refuses a source snapshot that marks %s incomplete", async (historyFlag) => {
+      const cv = { ...acceptedCvSnapshot(), [historyFlag]: true } as NonNullable<OwnerExportSelectedSnapshot["cv"]>;
+      await expect(buildCvOwnerExportPackage({ exportId: id("17") as never, portfolioId,
+        snapshot: snapshot({ cv }), objects: objectReader() })).rejects.toThrow("OWNER_EXPORT_CV_HISTORY_LIMIT_EXCEEDED");
+    },
+  );
+
+  it("validator rejects archives that claim any CV history was truncated", async () => {
+    const built = await buildCvOwnerExportPackage({ exportId: id("18") as never, portfolioId, snapshot: snapshot(), objects: objectReader() });
+    const archive = await collect(built.content);
+    const record = JSON.parse(new TextDecoder().decode(storedEntry(archive, "records/cv-metadata.ndjson"))) as {
+      scope: string;
+      value: Record<string, unknown>;
+    };
+    record.value["activationHistoryTruncated"] = true;
+    const truncatedArchive = await rewriteCvRecord(archive, record);
+    expect(() => validateOwnerExportZip(truncatedArchive)).toThrow();
   });
 
   it("represents no Current CV with retained versions and no invented activation history", async () => {

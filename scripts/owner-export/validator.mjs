@@ -677,6 +677,7 @@ function verifyCvSnapshotFacts(records) {
   const require = condition => { if (!condition) fail("CV_SNAPSHOT_FACTS_INVALID"); };
   for (const record of records) {
     const value = record.value;
+    require(value.versionsTruncated === false && value.acceptanceHistoryTruncated === false && value.activationHistoryTruncated === false);
     const versions = new Map();
     let previousVersionNumber;
     for (const version of value.versions) {
@@ -684,6 +685,12 @@ function verifyCvSnapshotFacts(records) {
         (previousVersionNumber === undefined || previousVersionNumber > version.versionNumber));
       versions.set(version.versionId, version);
       previousVersionNumber = version.versionNumber;
+    }
+    const currentVersions = [...versions.values()].filter(version => version.isCurrent);
+    if (value.currentVersionId === null) {
+      require(currentVersions.length === 0 && value.activationHistory.length === 0);
+    } else {
+      require(currentVersions.length === 1 && currentVersions[0].versionId === value.currentVersionId && currentVersions[0].state === "accepted");
     }
 
     const acceptancesByVersion = new Map();
@@ -698,38 +705,34 @@ function verifyCvSnapshotFacts(records) {
       )) fail("CV_SNAPSHOT_FACTS_INVALID");
       previousAcceptance = acceptance;
       const version = versions.get(acceptance.versionId);
-      require(version !== undefined || value.versionsTruncated);
-      if (version !== undefined) {
-        require(version.state === "accepted" && version.acceptedAt === acceptance.acceptedAt &&
-          compareUtcInstant(acceptance.acceptedAt, version.registeredAt) >= 0);
-      }
+      require(version !== undefined && version.state === "accepted" && version.acceptedAt === acceptance.acceptedAt &&
+        compareUtcInstant(acceptance.acceptedAt, version.registeredAt) >= 0);
       const count = (acceptancesByVersion.get(acceptance.versionId) ?? 0) + 1;
       require(count === 1);
       acceptancesByVersion.set(acceptance.versionId, count);
     }
-    const oldestIncludedAcceptanceAt = value.acceptanceHistory.at(-1)?.acceptedAt;
     for (const version of versions.values()) {
       if (version.state === "accepted") {
         require(version.acceptedAt !== undefined && compareUtcInstant(version.acceptedAt, version.registeredAt) >= 0);
-        // A newer event must be in this descending prefix; equal-time events can fall on either side of the ID tie-break.
-        const acceptanceIsInsideHistoryPrefix = !value.acceptanceHistoryTruncated || oldestIncludedAcceptanceAt === undefined ||
-          compareUtcInstant(version.acceptedAt, oldestIncludedAcceptanceAt) > 0;
-        require(acceptancesByVersion.has(version.versionId) || !acceptanceIsInsideHistoryPrefix);
+        require(acceptancesByVersion.has(version.versionId));
       } else {
         require(!acceptancesByVersion.has(version.versionId));
       }
     }
 
     const activationIds = new Set();
+    let previousActivation;
     for (const activation of value.activationHistory) {
       require(!activationIds.has(activation.activationId));
+      if (previousActivation !== undefined && (
+        compareUtcInstant(previousActivation.activatedAt, activation.activatedAt) < 0 ||
+        compareUtcInstant(previousActivation.activatedAt, activation.activatedAt) === 0 && previousActivation.activationId < activation.activationId
+      )) fail("CV_SNAPSHOT_FACTS_INVALID");
+      previousActivation = activation;
       activationIds.add(activation.activationId);
       const version = versions.get(activation.versionId);
-      require(version !== undefined || value.versionsTruncated);
-      if (version !== undefined) {
-        require(version.state === "accepted" && version.acceptedAt !== undefined &&
-          compareUtcInstant(activation.activatedAt, version.acceptedAt) >= 0);
-      }
+      require(version !== undefined && version.state === "accepted" && version.acceptedAt !== undefined &&
+        compareUtcInstant(activation.activatedAt, version.acceptedAt) >= 0);
     }
     if (value.currentVersionId !== null) {
       require(value.activationHistory.length > 0 && value.activationHistory[0].versionId === value.currentVersionId);

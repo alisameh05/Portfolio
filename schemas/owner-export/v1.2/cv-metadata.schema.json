@@ -43,7 +43,7 @@
             ]
           }
         },
-        "versionsTruncated": { "type": "boolean" },
+        "versionsTruncated": { "const": false },
         "acceptanceHistory": {
           "type": "array", "maxItems": 100,
           "items": {
@@ -52,7 +52,7 @@
             "properties": { "approvalId": { "$ref": "#/$defs/stableId" }, "versionId": { "$ref": "#/$defs/stableId" }, "acceptedAt": { "$ref": "#/$defs/utcInstant" } }
           }
         },
-        "acceptanceHistoryTruncated": { "type": "boolean" },
+        "acceptanceHistoryTruncated": { "const": false },
         "activationHistory": {
           "type": "array", "maxItems": 100,
           "items": {
@@ -61,13 +61,8 @@
             "properties": { "activationId": { "$ref": "#/$defs/stableId" }, "versionId": { "$ref": "#/$defs/stableId" }, "activatedAt": { "$ref": "#/$defs/utcInstant" } }
           }
         },
-        "activationHistoryTruncated": { "type": "boolean" }
-      },
-      "allOf": [
-        { "if": { "properties": { "versionsTruncated": { "const": true } }, "required": ["versionsTruncated"] }, "then": { "properties": { "versions": { "type": "array", "minItems": 100 } } } },
-        { "if": { "properties": { "acceptanceHistoryTruncated": { "const": true } }, "required": ["acceptanceHistoryTruncated"] }, "then": { "properties": { "acceptanceHistory": { "type": "array", "minItems": 100 } } } },
-        { "if": { "properties": { "activationHistoryTruncated": { "const": true } }, "required": ["activationHistoryTruncated"] }, "then": { "properties": { "activationHistory": { "type": "array", "minItems": 100 } } } }
-      ]
+        "activationHistoryTruncated": { "const": false }
+      }
     }
   },
   "$defs": {

@@ -10,6 +10,12 @@ import type {
 
 const HISTORY_LIMIT = 100;
 
+class CvExportHistoryLimitExceeded extends Error {
+  constructor() {
+    super("CV_EXPORT_HISTORY_LIMIT_EXCEEDED");
+  }
+}
+
 interface RootRow {
   readonly aggregate_version: number | string;
   readonly current_version_id: string | null;
@@ -116,25 +122,8 @@ export function createPostgresOwnerCvExportSnapshotReader(): OwnerCvExportSnapsh
            order by version_number desc, version_id desc
            limit ${HISTORY_LIMIT + 1}
         `.execute(executor);
-        let retainedVersions = [...versionResult.rows.slice(0, HISTORY_LIMIT)];
-        let versionsTruncated = versionResult.rows.length > HISTORY_LIMIT;
-        if (currentVersionId !== null && !retainedVersions.some((row) => row.version_id === currentVersionId)) {
-          const currentResult = await sql<VersionRow>`
-            select version_id::text as version_id, media_id::text as media_id, media_asset_version,
-                   version_number, locale, label, state, registered_at, is_current,
-                   media_decision_id::text as media_decision_id, media_object_id::text as media_object_id,
-                   media_sha256, media_object_version
-              from cv_portfolio.versions
-             where portfolio_id = ${scope.portfolioId}::uuid and owner_id = ${scope.ownerId}::uuid
-               and version_id = ${currentVersionId}::uuid
-          `.execute(executor);
-          const current = currentResult.rows[0];
-          if (current === undefined || current.state !== "accepted" || !current.is_current) throw new PostgresInfrastructureError();
-          retainedVersions = [...retainedVersions.slice(0, HISTORY_LIMIT - 1), current]
-            .sort((left, right) => integer(right.version_number) - integer(left.version_number) ||
-              (left.version_id < right.version_id ? 1 : left.version_id > right.version_id ? -1 : 0));
-          versionsTruncated = true;
-        }
+        if (versionResult.rows.length > HISTORY_LIMIT) throw new CvExportHistoryLimitExceeded();
+        const retainedVersions = versionResult.rows;
 
         const recentAcceptances = await sql<AcceptanceRow>`
           select approval_id::text as approval_id, version_id::text as version_id,
@@ -152,6 +141,9 @@ export function createPostgresOwnerCvExportSnapshotReader(): OwnerCvExportSnapsh
            order by activated_at desc, activation_id desc
            limit ${HISTORY_LIMIT + 1}
         `.execute(executor);
+        if (recentAcceptances.rows.length > HISTORY_LIMIT || activations.rows.length > HISTORY_LIMIT) {
+          throw new CvExportHistoryLimitExceeded();
+        }
 
         const acceptedVersionIds = retainedVersions.filter((row) => row.state === "accepted").map((row) => row.version_id);
         const versionAcceptances = acceptedVersionIds.length === 0 ? { rows: [] as AcceptanceRow[] } : await sql<AcceptanceRow>`
@@ -207,8 +199,8 @@ export function createPostgresOwnerCvExportSnapshotReader(): OwnerCvExportSnapsh
           versionId: stableId("CvVersion", row.version_id),
           activatedAt: iso(row.activated_at),
         }));
-        if (!versionsTruncated && (acceptanceHistory.some((entry) => !versionIds.has(entry.versionId)) ||
-            activationHistory.some((entry) => !versionIds.has(entry.versionId)))) throw new PostgresInfrastructureError();
+        if (acceptanceHistory.some((entry) => !versionIds.has(entry.versionId)) ||
+            activationHistory.some((entry) => !versionIds.has(entry.versionId))) throw new PostgresInfrastructureError();
         const capturedAt = captured.rows[0]?.captured_at;
         if (capturedAt === undefined) throw new PostgresInfrastructureError();
         return {
@@ -216,16 +208,19 @@ export function createPostgresOwnerCvExportSnapshotReader(): OwnerCvExportSnapsh
           aggregateVersion: root === undefined ? 1 : integer(root.aggregate_version),
           currentVersionId,
           versions,
-          versionsTruncated,
+          versionsTruncated: false,
           acceptanceHistory,
-          acceptanceHistoryTruncated: recentAcceptances.rows.length > HISTORY_LIMIT,
+          acceptanceHistoryTruncated: false,
           activationHistory,
-          activationHistoryTruncated: activations.rows.length > HISTORY_LIMIT,
+          activationHistoryTruncated: false,
         };
       };
       try {
         return ok(await read(context));
-      } catch {
+      } catch (error) {
+        if (error instanceof CvExportHistoryLimitExceeded) {
+          return err({ kind: "temporarily_unavailable", code: "CV_EXPORT_HISTORY_LIMIT_EXCEEDED" });
+        }
         return err({ kind: "temporarily_unavailable", code: "CV_OWNER_EXPORT_UNAVAILABLE" });
       }
     },

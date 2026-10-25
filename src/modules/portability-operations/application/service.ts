@@ -726,10 +726,7 @@ function isSafeCvMetadataExportV1_2(value: unknown): boolean {
       new Set(value["acceptanceHistory"].map((entry) => entry.approvalId)).size !== value["acceptanceHistory"].length ||
       !Array.isArray(value["activationHistory"]) || value["activationHistory"].length > 100 || !value["activationHistory"].every(isPortableCvActivationV1_2) ||
       new Set(value["activationHistory"].map((entry) => entry.activationId)).size !== value["activationHistory"].length ||
-      typeof value["versionsTruncated"] !== "boolean" || typeof value["acceptanceHistoryTruncated"] !== "boolean" || typeof value["activationHistoryTruncated"] !== "boolean" ||
-      value["versionsTruncated"] && value["versions"].length !== 100 ||
-      value["acceptanceHistoryTruncated"] && value["acceptanceHistory"].length !== 100 ||
-      value["activationHistoryTruncated"] && value["activationHistory"].length !== 100) return false;
+      value["versionsTruncated"] !== false || value["acceptanceHistoryTruncated"] !== false || value["activationHistoryTruncated"] !== false) return false;
   const currentVersions = value["versions"].filter((version) => version.isCurrent);
   return value["currentVersionId"] === null
     ? currentVersions.length === 0

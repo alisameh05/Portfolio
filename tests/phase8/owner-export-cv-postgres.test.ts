@@ -207,6 +207,37 @@ describe.runIf(Boolean(WORKER_URL && APPLICATION_URL && ADMIN_URL))("Issue #244 
     }
   });
 
+  it("fails the snapshot explicitly when retained CV versions exceed the export history limit", async () => {
+    const mediaId = createStableId("MediaAsset");
+    const media = await seedAcceptedMedia({ mediaId, portfolioId, ownerId });
+    const versionIds = Array.from({ length: 101 }, () => createStableId("CvVersion"));
+    await admin!.query(`insert into cv_portfolio.versions
+        (version_id, portfolio_id, owner_id, media_id, media_asset_version, media_decision_id, media_object_id,
+         media_sha256, media_object_version, version_number, locale, label, state, is_current)
+      select requested.version_id, $2::uuid, $3::uuid, $4::uuid, 3, $5::uuid, $6::uuid, $7, $8,
+             requested.version_number::integer, 'en', 'History limit fixture', 'registered', false
+        from unnest($1::uuid[]) with ordinality as requested(version_id, version_number)`,
+    [versionIds, portfolioId, ownerId, mediaId, media.mediaDecisionId, media.mediaObjectId, media.sha256, media.objectVersion]);
+
+    const reader = createPostgresOwnerCvExportSnapshotReader();
+    const result = await worker!.transactions.run((context) => reader.readOwnerCvExportSnapshot(scope, context),
+      { isolationLevel: "repeatable read" });
+    expect(result).toMatchObject({ ok: false, error: { code: "CV_EXPORT_HISTORY_LIMIT_EXCEEDED" } });
+
+    const snapshotReader = createOwnerExportSnapshotReader({
+      configuration: {} as never,
+      content: {} as never,
+      cv: reader,
+      transactions: worker!.transactions,
+      capabilities: { async read() { return { currentCvAvailable: true, externalLinksAvailable: false }; } },
+    });
+    const captured = await snapshotReader.capture({ portfolioId, ownerId,
+      snapshotId: createStableId("OwnerExportArtifact"), includedScopes: ["cv-metadata"] });
+    expect(captured).toMatchObject({ ok: false, error: { code: "OWNER_EXPORT_CV_HISTORY_LIMIT_EXCEEDED" } });
+
+    await admin!.query("delete from cv_portfolio.versions where version_id = any($1::uuid[])", [versionIds]);
+  });
+
   it("preserves accepted versions without Current and rejects an activation/withdrawal race", async () => {
     const firstMediaId = createStableId("MediaAsset");
     const secondMediaId = createStableId("MediaAsset");
@@ -345,5 +376,19 @@ describe.runIf(Boolean(WORKER_URL && APPLICATION_URL && ADMIN_URL))("Issue #244 
       portfolioId, ownerId, snapshotId: createStableId("OwnerExportArtifact"), includedScopes: ["cv-metadata"],
     });
     expect(changedSource.ok).toBe(false);
+
+    const extraActivationIds = Array.from({ length: 99 }, () => createStableId("CvActivation"));
+    await admin!.query(`insert into cv_portfolio.activation_history
+        (activation_id, portfolio_id, owner_id, version_id, activated_at)
+      select requested.activation_id, $2::uuid, $3::uuid, $4::uuid,
+             '2026-10-25T10:00:00Z'::timestamptz + (requested.activation_number::text || ' seconds')::interval
+        from unnest($1::uuid[]) with ordinality as requested(activation_id, activation_number)`,
+    [extraActivationIds, portfolioId, ownerId, secondVersionId]);
+    const overLimit = await worker!.transactions.run(
+      (context) => cvDelegate.readOwnerCvExportSnapshot(scope, context),
+      { isolationLevel: "repeatable read" },
+    );
+    expect(overLimit).toMatchObject({ ok: false, error: { code: "CV_EXPORT_HISTORY_LIMIT_EXCEEDED" } });
+    await admin!.query("delete from cv_portfolio.activation_history where activation_id = any($1::uuid[])", [extraActivationIds]);
   });
 });

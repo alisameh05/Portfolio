@@ -14,6 +14,7 @@ const LEASE_DURATION_SECONDS = 300;
 const CLAIM_LIMIT = 10;
 const RETRY_FAILURE = parseSafeErrorCode("OWNER_EXPORT_ASSEMBLY_RETRY");
 const PERMANENT_FAILURE = parseSafeErrorCode("OWNER_EXPORT_ASSEMBLY_FAILED");
+const CV_HISTORY_LIMIT_EXCEEDED = parseSafeErrorCode("OWNER_EXPORT_CV_HISTORY_LIMIT_EXCEEDED");
 const UNSUPPORTED_SCOPE = parseSafeErrorCode("OWNER_EXPORT_SCOPE_UNSUPPORTED");
 const INVALID_JOB = parseSafeErrorCode("OWNER_EXPORT_JOB_INVALID");
 
@@ -232,7 +233,12 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
           snapshotId: snapshotId.value,
           includedScopes: record.includedScopes,
         });
-        if (!captured.ok) throw new Error("OWNER_EXPORT_SNAPSHOT_UNAVAILABLE");
+        if (!captured.ok) {
+          if (captured.error.code === CV_HISTORY_LIMIT_EXCEEDED) {
+            return await failExport(record, { jobId: jobId.value, leaseToken: job.leaseToken }, CV_HISTORY_LIMIT_EXCEEDED);
+          }
+          throw new Error("OWNER_EXPORT_SNAPSHOT_UNAVAILABLE");
+        }
         const saved = await deps.exports.saveOwnerExportSnapshot({
           exportId: record.exportId,
           actingJobId: jobId.value,
@@ -309,8 +315,11 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
           deps.snapshots.revalidateMediaForReady?.({ snapshot, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId, context }) ?? Promise.resolve(false) } : {}),
       });
       return completed.ok && completed.value === "applied" ? "completed" : "stale";
-    } catch {
+    } catch (error) {
       if (record === null) return "stale";
+      if (error instanceof Error && error.message === "OWNER_EXPORT_CV_HISTORY_LIMIT_EXCEEDED") {
+        return await failExport(record, { jobId: jobId.value, leaseToken: job.leaseToken }, CV_HISTORY_LIMIT_EXCEEDED);
+      }
       if (job.attemptCount >= 5) {
         const failed = await failExport(record, { jobId: jobId.value, leaseToken: job.leaseToken }, PERMANENT_FAILURE);
         return failed;
