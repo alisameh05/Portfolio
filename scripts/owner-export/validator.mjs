@@ -706,10 +706,14 @@ function verifyCvSnapshotFacts(records) {
       require(count === 1);
       acceptancesByVersion.set(acceptance.versionId, count);
     }
+    const oldestIncludedAcceptanceAt = value.acceptanceHistory.at(-1)?.acceptedAt;
     for (const version of versions.values()) {
       if (version.state === "accepted") {
-        require(acceptancesByVersion.has(version.versionId) || value.acceptanceHistoryTruncated);
         require(version.acceptedAt !== undefined && compareUtcInstant(version.acceptedAt, version.registeredAt) >= 0);
+        // A newer event must be in this descending prefix; equal-time events can fall on either side of the ID tie-break.
+        const acceptanceIsInsideHistoryPrefix = !value.acceptanceHistoryTruncated || oldestIncludedAcceptanceAt === undefined ||
+          compareUtcInstant(version.acceptedAt, oldestIncludedAcceptanceAt) > 0;
+        require(acceptancesByVersion.has(version.versionId) || !acceptanceIsInsideHistoryPrefix);
       } else {
         require(!acceptancesByVersion.has(version.versionId));
       }

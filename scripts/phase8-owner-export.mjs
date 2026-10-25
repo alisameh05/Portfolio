@@ -149,7 +149,7 @@ try {
   const cvSourceFiles = ["tests/phase8/owner-export-cv-package.test.ts", "tests/phase8/owner-export-cv-postgres.test.ts"];
   const cvSuites = tests.testResults.filter(suite => cvSourceFiles.some(file => suite.name.replace(/\\/g, "/").endsWith(file)));
   const cvAssertions = cvSuites.flatMap(suite => suite.assertionResults ?? []);
-  if (cvSuites.length !== cvSourceFiles.length || cvAssertions.length !== 8 || cvAssertions.some(assertion => assertion.status !== "passed")) {
+  if (cvSuites.length !== cvSourceFiles.length || cvAssertions.length !== 9 || cvAssertions.some(assertion => assertion.status !== "passed")) {
     throw new Error("PHASE8_OWNER_EXPORT_CV_ASSERTIONS_INVALID");
   }
   cvCriterionTests = [
@@ -158,7 +158,7 @@ try {
     { criterion: "AC03", tests: ["exports retained CV identities, real approval and activation history, and verified accepted PDF bytes", "deduplicates an accepted PDF referenced by both selected scopes"] },
     { criterion: "AC04", tests: ["preserves accepted versions without Current and rejects an activation/withdrawal race", "fails closed when a retained CV's exact accepted Media binding is stale"] },
     { criterion: "AC05", tests: ["does not build a byte-complete package when required CV bytes are missing", "does not build a byte-complete package when required CV bytes are corrupt", "preserves accepted versions without Current and rejects an activation/withdrawal race"] },
-    { criterion: "AC06", tests: ["exports retained CV identities, real approval and activation history, and verified accepted PDF bytes", "represents no Current CV with retained versions and no invented activation history", "deduplicates an accepted PDF referenced by both selected scopes", "does not build a byte-complete package when required CV bytes are missing", "does not build a byte-complete package when required CV bytes are corrupt", "fails closed when a retained CV's exact accepted Media binding is stale", "reads only the scoped CV projection and denies unrelated purpose, private columns, writes, and anonymous access", "preserves accepted versions without Current and rejects an activation/withdrawal race", "exposes only the English Current CV and declares stream and redirect success", "contains no forbidden public surface"] },
+    { criterion: "AC06", tests: ["exports retained CV identities, real approval and activation history, and verified accepted PDF bytes", "rejects an omitted acceptance inside the retained history prefix after digest recomputation", "represents no Current CV with retained versions and no invented activation history", "deduplicates an accepted PDF referenced by both selected scopes", "does not build a byte-complete package when required CV bytes are missing", "does not build a byte-complete package when required CV bytes are corrupt", "fails closed when a retained CV's exact accepted Media binding is stale", "reads only the scoped CV projection and denies unrelated purpose, private columns, writes, and anonymous access", "preserves accepted versions without Current and rejects an activation/withdrawal race", "exposes only the English Current CV and declares stream and redirect success", "contains no forbidden public surface"] },
   ];
   for (const criterion of cvCriterionTests) {
     if (criterion.tests.some(title => assertionByTitle.get(title) !== "passed")) {

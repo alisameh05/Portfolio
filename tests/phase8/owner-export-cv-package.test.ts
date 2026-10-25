@@ -163,11 +163,23 @@ async function rewriteCvRecord(archive: Uint8Array, record: Record<string, unkno
     schemas: Array<{ path: string }>;
     entries: Array<{ path: string; scope: string; digest: string }>;
     assets: Array<{ path: string }>;
+    dependencies: Array<Record<string, string>>;
   };
   const cvEntry = manifest.entries.find((entry) => entry.scope === "cv-metadata");
   if (cvEntry === undefined) throw new Error("OWNER_EXPORT_CV_TEST_ENTRY_MISSING");
   const cvRecordBytes = new TextEncoder().encode(`${JSON.stringify(record)}\n`);
   cvEntry.digest = createHash("sha256").update(cvRecordBytes).digest("hex");
+  const value = record["value"] as { versions?: Array<{ versionId: string; mediaId: string }> };
+  if (value.versions !== undefined) {
+    manifest.dependencies = value.versions.map((version) => ({
+      sourceScope: "cv-metadata",
+      sourceId: version.versionId,
+      targetScope: "media-metadata",
+      targetId: version.mediaId,
+      disposition: "omitted",
+      reason: "scope-not-selected",
+    })).sort((left, right) => left.sourceId < right.sourceId ? -1 : left.sourceId > right.sourceId ? 1 : 0);
+  }
   manifest.digest = ownerExportManifestDigest(manifest);
   const manifestBytes = new TextEncoder().encode(`${JSON.stringify(manifest)}\n`);
   const names = ["manifest.json", ...manifest.schemas.map((schema) => schema.path),
@@ -238,6 +250,39 @@ describe("Issue #244 CV export package 1.6", () => {
       acceptanceHistory: [{ ...firstAcceptance, acceptedAt: "2026-10-25T10:00:00.000Z" }, ...acceptances.slice(1)] } };
     const tamperedArchive = await rewriteCvRecord(archive, tamperedRecord);
     expect(() => validateOwnerExportZip(tamperedArchive)).toThrow("CV_SNAPSHOT_FACTS_INVALID");
+  });
+
+  it("rejects an omitted acceptance inside the retained history prefix after digest recomputation", async () => {
+    const built = await buildCvOwnerExportPackage({ exportId: id("9") as never, portfolioId, snapshot: snapshot(), objects: objectReader() });
+    const archive = await collect(built.content);
+    const truncatedValue = JSON.parse(new TextDecoder().decode(storedEntry(archive, "records/cv-metadata.ndjson"))) as {
+      scope: string;
+      value: Record<string, unknown>;
+    };
+    const versions = truncatedValue.value["versions"] as Array<Record<string, unknown>>;
+    const currentVersion = versions.find((version) => version["isCurrent"] === true);
+    if (currentVersion === undefined) throw new Error("OWNER_EXPORT_CV_TEST_CURRENT_VERSION_MISSING");
+    currentVersion["acceptedAt"] = "2026-10-24T10:00:45.000Z";
+    truncatedValue.value["versions"] = [
+      ...versions,
+      ...Array.from({ length: 98 }, (_, index) => ({
+        versionId: id(String(500 + index)), mediaId, versionNumber: 100 - index, locale: "en",
+        registeredAt: "2026-10-01T00:00:00.000Z", label: "Retained historical registration", state: "registered", isCurrent: false,
+      })),
+    ].sort((left, right) => Number(right["versionNumber"]) - Number(left["versionNumber"]));
+    truncatedValue.value["versionsTruncated"] = true;
+    truncatedValue.value["acceptanceHistory"] = Array.from({ length: 100 }, (_, index) => ({
+      approvalId: id(String(700 + index)),
+      versionId: id(String(900 + index)),
+      acceptedAt: new Date(Date.UTC(2026, 9, 24, 10, 1, 39 - index)).toISOString(),
+    }));
+    truncatedValue.value["acceptanceHistoryTruncated"] = true;
+    const activations = truncatedValue.value["activationHistory"] as Array<Record<string, unknown>>;
+    const currentActivation = activations.find((activation) => activation["versionId"] === cvVersionId);
+    if (currentActivation === undefined) throw new Error("OWNER_EXPORT_CV_TEST_CURRENT_ACTIVATION_MISSING");
+    currentActivation["activatedAt"] = "2026-10-24T10:00:46.000Z";
+    const omittedRecentAcceptance = await rewriteCvRecord(archive, truncatedValue);
+    expect(() => validateOwnerExportZip(omittedRecentAcceptance)).toThrow("CV_SNAPSHOT_FACTS_INVALID");
   });
 
   it("represents no Current CV with retained versions and no invented activation history", async () => {
