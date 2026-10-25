@@ -151,6 +151,12 @@ describe.runIf(Boolean(WORKER_URL && APPLICATION_URL && ADMIN_URL))("Issue #244 
       await admin?.query("delete from media.upload_intents where owner_id = $1", [ownerId]);
       lifecycleStep = "cleanup-media-assets";
       await admin?.query("delete from media.assets where owner_id = $1", [ownerId]);
+      lifecycleStep = "cleanup-taxonomy-history";
+      await admin?.query("delete from taxonomy.value_history where portfolio_id = $1", [portfolioId]);
+      lifecycleStep = "cleanup-taxonomy-values";
+      await admin?.query("delete from taxonomy.taxonomy_values where portfolio_id = $1", [portfolioId]);
+      lifecycleStep = "cleanup-taxonomy-roots";
+      await admin?.query("delete from taxonomy.roots where portfolio_id = $1", [portfolioId]);
       lifecycleStep = "cleanup-settings";
       await admin?.query("delete from portfolio_config.settings where portfolio_id = $1", [portfolioId]);
       lifecycleStep = "cleanup-complete";
