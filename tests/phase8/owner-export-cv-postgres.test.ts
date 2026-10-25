@@ -33,6 +33,7 @@ const acceptedDocumentDigest = createHash("sha256").update(acceptedDocumentBytes
 let admin: Client | undefined;
 let worker: ReturnType<typeof createPostgresRuntimeDatabase> | undefined;
 let application: ReturnType<typeof createPostgresRuntimeDatabase> | undefined;
+let lifecycleStep = "initialization";
 
 async function seedAcceptedMedia(input: { readonly mediaId: string; readonly portfolioId: string; readonly ownerId: string }) {
   const uploadIntentId = createStableId("MediaUploadIntent");
@@ -87,42 +88,71 @@ async function seedAcceptedMedia(input: { readonly mediaId: string; readonly por
 
 describe.runIf(Boolean(WORKER_URL && APPLICATION_URL && ADMIN_URL))("Issue #244 CV export PostgreSQL permissions", () => {
   beforeAll(async () => {
-    if (ADMIN_URL === undefined || WORKER_URL === undefined || APPLICATION_URL === undefined) throw new Error("PHASE8_OWNER_EXPORT_DATABASE_REQUIRED");
-    admin = new Client({ connectionString: ADMIN_URL });
-    await admin.connect();
-    worker = createPostgresRuntimeDatabase(WORKER_URL);
-    application = createPostgresRuntimeDatabase(APPLICATION_URL);
-    const repository = createPostgresPortfolioSettingsRepository();
-    const configured = await worker.transactions.run((context) => repository.getSettings(scope, context));
-    if (!configured.ok) {
-      const provisioned = await application.transactions.run((context) => repository.provisionSettings(scope, settings, context));
-      if (!provisioned.ok) throw new Error("PHASE8_CV_EXPORT_SETTINGS_REQUIRED");
+    try {
+      if (ADMIN_URL === undefined || WORKER_URL === undefined || APPLICATION_URL === undefined) throw new Error("PHASE8_OWNER_EXPORT_DATABASE_REQUIRED");
+      admin = new Client({ connectionString: ADMIN_URL });
+      await admin.connect();
+      worker = createPostgresRuntimeDatabase(WORKER_URL);
+      application = createPostgresRuntimeDatabase(APPLICATION_URL);
+      const repository = createPostgresPortfolioSettingsRepository();
+      lifecycleStep = "worker-settings-read";
+      const configured = await worker.transactions.run((context) => repository.getSettings(scope, context));
+      if (!configured.ok) {
+        lifecycleStep = "application-settings-provision";
+        const provisioned = await application.transactions.run((context) => repository.provisionSettings(scope, settings, context));
+        if (!provisioned.ok) throw new Error("PHASE8_CV_EXPORT_SETTINGS_REQUIRED");
+      }
+      lifecycleStep = "create-cv-portfolio-root";
+      await admin.query("insert into cv_portfolio.portfolios (portfolio_id, owner_id, aggregate_version) values ($1, $2, 1)",
+        [portfolioId, ownerId]);
+      lifecycleStep = "ready";
+    } catch (error) {
+      const code = error !== null && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[A-Z0-9]{5}$/.test(error.code)
+        ? error.code : "unknown";
+      throw new Error(`PHASE8_CV_EXPORT_POSTGRES_${lifecycleStep.toUpperCase().replaceAll("-", "_")}_FAILED:${code}`);
     }
-    await admin.query("insert into cv_portfolio.portfolios (portfolio_id, owner_id, aggregate_version) values ($1, $2, 1)",
-      [portfolioId, ownerId]);
   });
 
   afterAll(async () => {
     try {
+      lifecycleStep = "cleanup-begin";
       await admin?.query("begin");
       try {
+        lifecycleStep = "cleanup-activation-history";
         await admin?.query("delete from cv_portfolio.activation_history where portfolio_id = $1", [portfolioId]);
+        lifecycleStep = "cleanup-acceptance-history";
         await admin?.query("delete from cv_portfolio.acceptance_history where portfolio_id = $1", [portfolioId]);
+        lifecycleStep = "cleanup-cv-versions";
         await admin?.query("delete from cv_portfolio.versions where portfolio_id = $1", [portfolioId]);
+        lifecycleStep = "cleanup-cv-portfolio";
         await admin?.query("delete from cv_portfolio.portfolios where portfolio_id = $1", [portfolioId]);
+        lifecycleStep = "cleanup-cv-commit";
         await admin?.query("commit");
       } catch (error) {
         await admin?.query("rollback");
         throw error;
       }
+      lifecycleStep = "cleanup-media-rejections";
       await admin?.query("delete from media.rejection_history where owner_id = $1", [ownerId]);
+      lifecycleStep = "cleanup-media-decisions";
       await admin?.query("delete from media.decision_history where owner_id = $1", [ownerId]);
+      lifecycleStep = "cleanup-media-states";
       await admin?.query("delete from media.processing_states where owner_id = $1", [ownerId]);
+      lifecycleStep = "cleanup-media-attempts";
       await admin?.query("delete from media.processing_attempts where owner_id = $1", [ownerId]);
+      lifecycleStep = "cleanup-media-objects";
       await admin?.query("delete from media.processed_objects where owner_id = $1", [ownerId]);
+      lifecycleStep = "cleanup-media-upload-intents";
       await admin?.query("delete from media.upload_intents where owner_id = $1", [ownerId]);
+      lifecycleStep = "cleanup-media-assets";
       await admin?.query("delete from media.assets where owner_id = $1", [ownerId]);
+      lifecycleStep = "cleanup-settings";
       await admin?.query("delete from portfolio_config.settings where portfolio_id = $1", [portfolioId]);
+      lifecycleStep = "cleanup-complete";
+    } catch (error) {
+      const code = error !== null && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[A-Z0-9]{5}$/.test(error.code)
+        ? error.code : "unknown";
+      throw new Error(`PHASE8_CV_EXPORT_POSTGRES_${lifecycleStep.toUpperCase().replaceAll("-", "_")}_FAILED:${code}`);
     } finally {
       await worker?.resource.close();
       await application?.resource.close();
