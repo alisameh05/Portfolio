@@ -61,9 +61,9 @@
         "activationHistoryTruncated": { "type": "boolean" }
       },
       "allOf": [
-        { "if": { "properties": { "versionsTruncated": { "const": true } }, "required": ["versionsTruncated"] }, "then": { "properties": { "versions": { "minItems": 100 } } } },
-        { "if": { "properties": { "acceptanceHistoryTruncated": { "const": true } }, "required": ["acceptanceHistoryTruncated"] }, "then": { "properties": { "acceptanceHistory": { "minItems": 100 } } } },
-        { "if": { "properties": { "activationHistoryTruncated": { "const": true } }, "required": ["activationHistoryTruncated"] }, "then": { "properties": { "activationHistory": { "minItems": 100 } } } }
+        { "if": { "properties": { "versionsTruncated": { "const": true } }, "required": ["versionsTruncated"] }, "then": { "properties": { "versions": { "type": "array", "minItems": 100 } } } },
+        { "if": { "properties": { "acceptanceHistoryTruncated": { "const": true } }, "required": ["acceptanceHistoryTruncated"] }, "then": { "properties": { "acceptanceHistory": { "type": "array", "minItems": 100 } } } },
+        { "if": { "properties": { "activationHistoryTruncated": { "const": true } }, "required": ["activationHistoryTruncated"] }, "then": { "properties": { "activationHistory": { "type": "array", "minItems": 100 } } } }
       ]
     }
   },
