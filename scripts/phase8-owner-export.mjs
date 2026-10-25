@@ -22,9 +22,10 @@ function run(command, args, env = process.env) {
   const result = spawnSync(command, args, { cwd: root, env, encoding: "utf8", windowsHide: true,
     ...(command === exe("pg_ctl") ? { stdio: "ignore" } : {}), timeout: 240_000 });
   if (result.error || result.status !== 0) {
-    if (args[0]?.includes("vitest")) { if (result.stdout) process.stdout.write(result.stdout); if (result.stderr) process.stderr.write(result.stderr); }
-    const detail = [result.stderr, result.stdout, result.error?.message].filter(Boolean).join("\n")
-      .replace(/postgres(?:ql)?:\/\/\S+/gi, "[database-url]").replace(/\r?\n/g, " | ").slice(-1_000);
+    const isVitestRun = args[0]?.includes("vitest.mjs") ?? false;
+    const detail = isVitestRun ? "vitest-failed" :
+      [result.stderr, result.stdout, result.error?.message].filter(Boolean).join("\n")
+        .replace(/postgres(?:ql)?:\/\/\S+/gi, "[database-url]").replace(/\r?\n/g, " | ").slice(-1_000);
     throw new Error(`PHASE8_OWNER_EXPORT_COMMAND_FAILED:${args[0] ?? command}:${result.status ?? "unavailable"}:${detail || "unavailable"}`);
   }
   return result.stdout;
@@ -215,25 +216,18 @@ try {
 } catch (error) {
   console.error(error instanceof Error && /^PHASE8_OWNER_EXPORT_/.test(error.message) ? error.message : "PHASE8_OWNER_EXPORT_VALIDATION_FAILED");
   console.error(JSON.stringify({ stage, code: typeof error?.code === "string" && /^[A-Z0-9]{5}$/.test(error.code) ? error.code : "unavailable" }));
-  try {
-    const report = JSON.parse(readFileSync(reportPath, "utf8"));
-    for (const suite of report.testResults ?? []) {
-      const failed = (suite.assertionResults ?? []).filter(assertion => assertion.status !== "passed");
-      if (suite.status !== "passed" || failed.length > 0) {
-        console.error(JSON.stringify(safeVitestSuiteFailure(suite, failed)));
+  for (const path of [reportPath, roleReportPath, regressionReportPath]) {
+    try {
+      const report = JSON.parse(readFileSync(path, "utf8"));
+      for (const suite of report.testResults ?? []) {
+        const failed = (suite.assertionResults ?? []).filter(assertion => assertion.status !== "passed");
+        if (suite.status !== "passed" || failed.length > 0) {
+          console.error(JSON.stringify(safeVitestSuiteFailure(suite, failed)));
+        }
       }
-    }
-    if (report.failureMessage !== undefined) console.error(JSON.stringify({ reportFailure: "present" }));
-  } catch { /* no test report exists */ }
-  try {
-    const report = JSON.parse(readFileSync(roleReportPath, "utf8"));
-    for (const suite of report.testResults ?? []) {
-      const failed = (suite.assertionResults ?? []).filter(assertion => assertion.status !== "passed");
-      if (suite.status !== "passed" || failed.length > 0) {
-        console.error(JSON.stringify(safeVitestSuiteFailure(suite, failed)));
-      }
-    }
-  } catch { /* no role matrix report is available */ }
+      if (report.failureMessage !== undefined) console.error(JSON.stringify({ reportFailure: "present" }));
+    } catch { /* no report is available for this stage */ }
+  }
   process.exitCode = 1;
 } finally {
   if (connected) await admin.end();
