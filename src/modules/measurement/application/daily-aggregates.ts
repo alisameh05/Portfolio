@@ -92,6 +92,37 @@ function dimensionKey(row: DailyAggregateReportRecord): string {
   return JSON.stringify(row.dimensions);
 }
 
+/** Applies Measurement's deterministic small-cell and complementary suppression to one approved breakdown. */
+export function suppressDailyAggregateBreakdown(rows: readonly DailyAggregateReportRecord[]): {
+  readonly rows: readonly DailyAggregateReportRecord[];
+  readonly suppressedCells: boolean;
+} {
+  const groups = new Map<string, DailyAggregateReportRecord[]>();
+  for (const row of rows) groups.set(suppressionKey(row), [...(groups.get(suppressionKey(row)) ?? []), row]);
+  const hidden = new Set<DailyAggregateReportRecord>();
+  let suppressedCells = false;
+  for (const group of groups.values()) {
+    const small = group.filter((row) => row.observedSubjects < 5);
+    if (small.length === 0) continue;
+    suppressedCells = true;
+    for (const row of small) hidden.add(row);
+    const complements = group.filter((row) => row.observedSubjects >= 5)
+      .sort((a, b) => {
+        const left = dimensionKey(a), right = dimensionKey(b);
+        return left < right ? -1 : left > right ? 1 : 0;
+      });
+    for (const row of complements.slice(0, small.length)) hidden.add(row);
+  }
+  return {
+    rows: rows.filter((row) => !hidden.has(row)).sort((a, b) => {
+      const left = `${a.date}:${a.metric}:${a.metricKey}:${dimensionKey(a)}`;
+      const right = `${b.date}:${b.metric}:${b.metricKey}:${dimensionKey(b)}`;
+      return left < right ? -1 : left > right ? 1 : 0;
+    }),
+    suppressedCells,
+  };
+}
+
 export function createOwnerAggregateReportService(deps: OwnerAggregateReportDependencies): {
   getAggregateReport(query: GetAggregateReportQuery): Promise<Result<SafeAggregateReport, Rejection>>;
 } {
@@ -139,26 +170,9 @@ export function createOwnerAggregateReportService(deps: OwnerAggregateReportDepe
         let reportRows = rows;
         let suppressedCells = false;
         if (breakdown !== "summary") {
-          const groups = new Map<string, DailyAggregateReportRecord[]>();
-          for (const row of rows) groups.set(suppressionKey(row), [...(groups.get(suppressionKey(row)) ?? []), row]);
-          const hidden = new Set<DailyAggregateReportRecord>();
-          for (const group of groups.values()) {
-            const small = group.filter(row => row.observedSubjects < 5);
-            if (small.length === 0) continue;
-            suppressedCells = true;
-            for (const row of small) hidden.add(row);
-            const complements = group.filter(row => row.observedSubjects >= 5)
-              .sort((a, b) => {
-                const left = dimensionKey(a), right = dimensionKey(b);
-                return left < right ? -1 : left > right ? 1 : 0;
-              });
-            for (const row of complements.slice(0, small.length)) hidden.add(row);
-          }
-          reportRows = rows.filter(row => !hidden.has(row)).sort((a, b) => {
-            const left = `${a.date}:${a.metric}:${a.metricKey}:${dimensionKey(a)}`;
-            const right = `${b.date}:${b.metric}:${b.metricKey}:${dimensionKey(b)}`;
-            return left < right ? -1 : left > right ? 1 : 0;
-          });
+          const filtered = suppressDailyAggregateBreakdown(rows);
+          reportRows = [...filtered.rows];
+          suppressedCells = filtered.suppressedCells;
           if (reportRows.length === 0) {
             return { ok: true, value: { ...metadata, state: "low-sample", observedSubjects: "not-disclosed" } };
           }

@@ -160,6 +160,7 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
   Object.freeze({ migration: "20261024233915_owner_cv_export_read_access.sql", ticket: 244, capability: "portability.cv_export", includeInDeclaredCapabilities: true }),
   Object.freeze({ migration: "20261025090000_read_feedback_for_owner_exports.sql", ticket: 245, capability: "portability.feedback_export", includeInDeclaredCapabilities: true }),
   Object.freeze({ migration: "20261025190828_retain_moderation_export_artifact_cleanup.sql", ticket: 245, capability: "portability.feedback_export" }),
+  Object.freeze({ migration: "20261025200000_read_measurement_for_owner_exports.sql", ticket: 246, capability: "portability.analytics_export", includeInDeclaredCapabilities: true }),
   Object.freeze({
     migration: "20261023100000_build_configuration_owner_exports.sql",
     migrationSha256: "3b2525935b8e8e1c83c64d1fe28ca0af60f6534cde53627bcb012059ce992966",

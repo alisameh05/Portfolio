@@ -39,6 +39,9 @@ export type { GoalConversionCursor, GoalConversionCheckpoint, GoalConversionRepo
 export type { AnalyticsGoalScopeFactsPort, OwnerAnalyticsGoalServiceDependencies } from "./application/index.js";
 export type { AnalyticsGoalRootRecord, AnalyticsGoalVersionRecord, AnalyticsGoalActivationRecord, OwnerAnalyticsGoalRepositoryPort } from "./ports/index.js";
 export { createPostgresOwnerAnalyticsGoalRepository } from "./adapters/postgres-goals.js";
+export { createOwnerAnalyticsExportSnapshotService } from "./application/owner-analytics-export.js";
+export type { OwnerAnalyticsExportSnapshot, OwnerAnalyticsExportSnapshotReaderPort, OwnerAnalyticsExportServiceDependencies } from "./application/owner-analytics-export.js";
+export { createPostgresOwnerAnalyticsExportSnapshotReader } from "./adapters/postgres-owner-analytics-export.js";
 export { createPostgresAnalyticsGoalScopeFacts } from "./adapters/postgres-goal-scope-facts.js";
 
 export type { AnalyticsEventAction, AnalyticsGoalStep, AnalyticsGoalDefinition, GetOwnerAnalyticsGoalQuery, CreateOwnerAnalyticsGoalVersionApplicationCommand, ActivateOwnerAnalyticsGoalVersionApplicationCommand, AnalyticsGoalVersionView, AnalyticsGoalActivationView, AnalyticsGoalAggregateView, AnalyticsGoalVersionReceipt, AnalyticsGoalActivationReceipt, OwnerAnalyticsApplicationService } from "./application/owner-analytics.js";
