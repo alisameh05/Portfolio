@@ -23,6 +23,17 @@ function run(command, args, env = process.env) {
     ...(command === exe("pg_ctl") ? { stdio: "ignore" } : {}), timeout: 240_000 });
   if (result.error || result.status !== 0) {
     const isVitestRun = args[0]?.includes("vitest.mjs") ?? false;
+    if (isVitestRun) {
+      const failureMessages = [result.stderr, result.stdout]
+        .filter(value => typeof value === "string" && value.trim().length > 0);
+      const failureText = failureMessages.slice(0, 3).map(message => message.slice(0, 16_384)).join("\n");
+      const lifecycleFailure = failureText.match(/PHASE8_CV_EXPORT_POSTGRES_([A-Z0-9_]+)_FAILED:([A-Z0-9]{5}|unknown)/);
+      console.error(JSON.stringify({
+        category: lifecycleFailure ? "postgres-lifecycle" : "vitest-process",
+        ...(lifecycleFailure ? { stage: lifecycleFailure[1], sqlState: lifecycleFailure[2] } : {}),
+        diagnostic: safeAssertionDiagnostic({ failureMessages }),
+      }));
+    }
     const detail = isVitestRun ? "vitest-failed" :
       [result.stderr, result.stdout, result.error?.message].filter(Boolean).join("\n")
         .replace(/postgres(?:ql)?:\/\/\S+/gi, "[database-url]").replace(/\r?\n/g, " | ").slice(-1_000);
@@ -105,7 +116,7 @@ try {
     "tests/phase8/owner-export-cv-package.test.ts", "tests/phase8/owner-export-cv-postgres.test.ts"];
   const expectedTests = 76;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
-    "--no-file-parallelism", "--reporter=json", `--outputFile=${reportPath}`], env);
+    "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
   const assertions = tests.testResults.flatMap(suite => suite.assertionResults ?? []);
   if (!tests.success || tests.numFailedTestSuites !== 0 || tests.numFailedTests !== 0 || tests.numPendingTests !== 0 || tests.numTodoTests !== 0 ||
@@ -115,7 +126,7 @@ try {
   }
   stage = "role-rls-acceptance";
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "tests/database/role-rls-matrix.test.ts",
-    "--no-file-parallelism", "--reporter=json", `--outputFile=${roleReportPath}`], env);
+    "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile=${roleReportPath}`], env);
   const roleMatrix = JSON.parse(readFileSync(roleReportPath, "utf8"));
   if (!roleMatrix.success || roleMatrix.numFailedTestSuites !== 0 || roleMatrix.numFailedTests !== 0 ||
       roleMatrix.numPendingTests !== 0 || roleMatrix.numTodoTests !== 0 || roleMatrix.numPassedTests === 0 ||
@@ -128,7 +139,7 @@ try {
   // regression without re-running those suites in the Phase 8 acceptance job.
   const regressionFiles = ["tests/contracts/public-contract.test.ts"];
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...regressionFiles,
-    "--no-file-parallelism", "--reporter=json", `--outputFile=${regressionReportPath}`], env);
+    "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile=${regressionReportPath}`], env);
   const regressions = JSON.parse(readFileSync(regressionReportPath, "utf8"));
   regressionAssertions = regressions.testResults.flatMap(suite => suite.assertionResults ?? []);
   if (!regressions.success || regressions.numFailedTestSuites !== 0 || regressions.numFailedTests !== 0 ||
