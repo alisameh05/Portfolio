@@ -707,7 +707,7 @@ function verifyRecordOrdering(scope, records, version) {
         }
       }
     }
-  } else if (scope === "moderation-history") {
+  } else if (scope === "moderation-history" && version === "1.7") {
     for (const record of records) {
       const value = valueOf(record);
       const history = value.decisionHistory;
