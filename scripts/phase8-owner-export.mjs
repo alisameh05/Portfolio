@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { Client } from "pg";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
+import { safeAssertionDiagnostic } from "./validation-errors.mjs";
 
 const root = process.cwd();
 const runId = randomUUID();
@@ -27,6 +28,21 @@ function run(command, args, env = process.env) {
     throw new Error(`PHASE8_OWNER_EXPORT_COMMAND_FAILED:${args[0] ?? command}:${result.status ?? "unavailable"}:${detail || "unavailable"}`);
   }
   return result.stdout;
+}
+
+function safeVitestSuiteFailure(suite, failedAssertions) {
+  const failureMessages = [suite.message, suite.failureMessages, suite.errorMessage]
+    .flatMap(value => Array.isArray(value) ? value : [value])
+    .filter(value => typeof value === "string" && value.trim().length > 0);
+  const failureText = failureMessages.slice(0, 3).map(message => message.slice(0, 16_384)).join("\n");
+  const lifecycleFailure = failureText.match(/PHASE8_CV_EXPORT_POSTGRES_([A-Z0-9_]+)_FAILED:([A-Z0-9]{5}|unknown)/);
+  return {
+    suite: suite.name.replace(root, ""),
+    status: suite.status,
+    category: lifecycleFailure ? "postgres-lifecycle" : failedAssertions.length > 0 ? "assertion" : "suite",
+    ...(lifecycleFailure ? { stage: lifecycleFailure[1], sqlState: lifecycleFailure[2] } : {}),
+    assertions: failedAssertions.map(safeAssertionDiagnostic),
+  };
 }
 
 const temp = join(tmpdir(), `portfolio-phase8-owner-export-${runId}`);
@@ -201,32 +217,20 @@ try {
   console.error(JSON.stringify({ stage, code: typeof error?.code === "string" && /^[A-Z0-9]{5}$/.test(error.code) ? error.code : "unavailable" }));
   try {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
-    const safeDiagnostic = value => String(value).replace(/postgres(?:ql)?:\/\/\S+/gi, "[database-url]")
-      .replaceAll(root, "[repository]").replace(/\r?\n/g, " | ").slice(-4_000);
     for (const suite of report.testResults ?? []) {
       const failed = (suite.assertionResults ?? []).filter(assertion => assertion.status !== "passed");
       if (suite.status !== "passed" || failed.length > 0) {
-        const diagnostics = [suite.message, suite.failureMessages, suite.errorMessage]
-          .flatMap(value => Array.isArray(value) ? value : [value])
-          .filter(value => typeof value === "string" && value.trim().length > 0)
-          .join("\n");
-        console.error(JSON.stringify({ suite: suite.name.replace(root, ""), status: suite.status,
-          diagnostics: diagnostics.length === 0 ? "unavailable" : safeDiagnostic(diagnostics),
-          assertions: failed.map(assertion => ({ title: assertion.title, status: assertion.status,
-            failureMessages: assertion.failureMessages?.map(safeDiagnostic) })) }));
+        console.error(JSON.stringify(safeVitestSuiteFailure(suite, failed)));
       }
     }
-    if (report.failureMessage !== undefined) console.error(JSON.stringify({ reportFailure: safeDiagnostic(report.failureMessage) }));
+    if (report.failureMessage !== undefined) console.error(JSON.stringify({ reportFailure: "present" }));
   } catch { /* no test report exists */ }
   try {
     const report = JSON.parse(readFileSync(roleReportPath, "utf8"));
     for (const suite of report.testResults ?? []) {
       const failed = (suite.assertionResults ?? []).filter(assertion => assertion.status !== "passed");
       if (suite.status !== "passed" || failed.length > 0) {
-        console.error(JSON.stringify({ suite: suite.name.replace(root, ""), status: suite.status,
-          assertions: failed.map(assertion => ({ title: assertion.title, status: assertion.status,
-            failureMessages: assertion.failureMessages?.map(message => String(message)
-              .replace(/postgres(?:ql)?:\/\/\S+/gi, "[database-url]").replace(/\r?\n/g, " | ").slice(-1_000)) })) }));
+        console.error(JSON.stringify(safeVitestSuiteFailure(suite, failed)));
       }
     }
   } catch { /* no role matrix report is available */ }
