@@ -389,6 +389,7 @@ const localManifest14 = readLocalSchema("v1.4/manifest.schema.json");
 const localManifest15 = readLocalSchema("v1.5/manifest.schema.json");
 const localManifest16 = readLocalSchema("v1.6/manifest.schema.json");
 const localManifest17 = readLocalSchema("v1.7/manifest.schema.json");
+const localManifest19 = readLocalSchema("v1.9/manifest.schema.json");
 const manifestValidators = new Map([
   ["1.0", ajv.compile(localManifest10.schema)],
   ["1.1", ajv.compile(localManifest11.schema)],
@@ -398,6 +399,7 @@ const manifestValidators = new Map([
   ["1.6", ajv.compile(localManifest15.schema)],
   ["1.7", ajv.compile(localManifest16.schema)],
   ["1.8", ajv.compile(localManifest17.schema)],
+  ["1.9", ajv.compile(localManifest19.schema)],
 ]);
 function readLocalRecordSchemas(schemaVersion) {
   return new Map(SCOPES.map((scope) => {
@@ -443,7 +445,7 @@ const analyticsSchema18 = readLocalSchema("v1.7/analytics-reports.schema.json");
 if (analyticsSchema18.schema.$id !== "urn:shipwithali:owner-export-schema:analytics-reports:1.2") throw new Error("invalid local Analytics schema identity");
 localRecordSchemas18.set("analytics-reports", { ...analyticsSchema18, validate: ajv.compile(analyticsSchema18.schema), uri: analyticsSchema18.schema.$id });
 function recordSchemasForVersion(version) {
-  return version === "1.0" ? localRecordSchemas10 : version === "1.3" ? localRecordSchemas13 : version === "1.4" ? localRecordSchemas12 : version === "1.5" ? localRecordSchemas15 : version === "1.6" ? localRecordSchemas16 : version === "1.7" ? localRecordSchemas17 : version === "1.8" ? localRecordSchemas18 : localRecordSchemas11;
+  return version === "1.0" ? localRecordSchemas10 : version === "1.3" ? localRecordSchemas13 : version === "1.4" ? localRecordSchemas12 : version === "1.5" ? localRecordSchemas15 : version === "1.6" ? localRecordSchemas16 : version === "1.7" ? localRecordSchemas17 : version === "1.8" || version === "1.9" ? localRecordSchemas18 : localRecordSchemas11;
 }
 
 function object(value) {
@@ -462,6 +464,7 @@ function supportedManifestVersion(manifest) {
   if (minor === 6) return "1.6";
   if (minor === 7) return "1.7";
   if (minor === 8) return "1.8";
+  if (minor === 9) return "1.9";
   if (minor === undefined || minor < 1) fail("PACKAGE_VERSION_MINOR_UNSUPPORTED");
   return "1.1";
 }
@@ -483,10 +486,10 @@ function validateEntryDescriptor(entry, version) {
   if (!object(entry) || !SCOPE_SET.has(entry.scope)) fail("PACKAGE_ENTRY_DESCRIPTOR_INVALID");
   const extension = entry.mediaType === "application/x-ndjson" ? "ndjson" : entry.mediaType === "application/json" ? "json" : "";
   const schemaVersion = version === "1.0" ? "1.0" :
-    (version === "1.3" || version === "1.4" || version === "1.5" || version === "1.7" || version === "1.8") && entry.scope === "portfolio-content" ||
-    (version === "1.4" || version === "1.5" || version === "1.7" || version === "1.8") && entry.scope === "taxonomy" || (version === "1.5" || version === "1.6" || version === "1.7" || version === "1.8") && entry.scope === "media-metadata" ||
-    (version === "1.6" || version === "1.7" || version === "1.8") && entry.scope === "cv-metadata" ||
-    (version === "1.7" || version === "1.8") && entry.scope === "moderation-history" || version === "1.8" && entry.scope === "analytics-reports" ? "1.2" : "1.1";
+    (version === "1.3" || version === "1.4" || version === "1.5" || version === "1.7" || version === "1.8" || version === "1.9") && entry.scope === "portfolio-content" ||
+    (version === "1.4" || version === "1.5" || version === "1.7" || version === "1.8" || version === "1.9") && entry.scope === "taxonomy" || (version === "1.5" || version === "1.6" || version === "1.7" || version === "1.8" || version === "1.9") && entry.scope === "media-metadata" ||
+    (version === "1.6" || version === "1.7" || version === "1.8" || version === "1.9") && entry.scope === "cv-metadata" ||
+    (version === "1.7" || version === "1.8" || version === "1.9") && entry.scope === "moderation-history" || (version === "1.8" || version === "1.9") && entry.scope === "analytics-reports" ? "1.2" : "1.1";
   const schema = recordSchemasForVersion(version).get(entry.scope);
   if (
     extension === "" || entry.path !== `records/${entry.scope}.${extension}` ||
@@ -509,8 +512,8 @@ function verifySchemaEntries(manifest, version, entryMap) {
   const schemaDescriptors = version === "1.0" ? undefined : manifest.schemas;
   const expectedDescriptors = [];
   if (version !== "1.0") {
-    const manifestSchema = version === "1.8" ? localManifest17 : version === "1.7" ? localManifest16 : version === "1.6" ? localManifest15 : version === "1.5" ? localManifest14 : version === "1.4" ? localManifest13 : version === "1.3" ? localManifest12 : localManifest11;
-    const manifestSchemaVersion = version === "1.8" ? "1.7" : version === "1.7" ? "1.6" : version === "1.6" ? "1.5" : version === "1.5" ? "1.4" : version === "1.4" ? "1.3" : version === "1.3" ? "1.2" : "1.1";
+    const manifestSchema = version === "1.9" ? localManifest19 : version === "1.8" ? localManifest17 : version === "1.7" ? localManifest16 : version === "1.6" ? localManifest15 : version === "1.5" ? localManifest14 : version === "1.4" ? localManifest13 : version === "1.3" ? localManifest12 : localManifest11;
+    const manifestSchemaVersion = version === "1.9" ? "1.9" : version === "1.8" ? "1.7" : version === "1.7" ? "1.6" : version === "1.6" ? "1.5" : version === "1.5" ? "1.4" : version === "1.4" ? "1.3" : version === "1.3" ? "1.2" : "1.1";
     expectedDescriptors.push({
       kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: `urn:shipwithali:owner-export-schema:manifest:${manifestSchemaVersion}`,
       schemaVersion: manifestSchemaVersion, digest: sha256(manifestSchema.bytes), source: manifestSchema,
@@ -518,11 +521,11 @@ function verifySchemaEntries(manifest, version, entryMap) {
   }
   for (const scope of usedScopes) {
     const source = localRecordSchemas.get(scope);
-    const recordVersion = (version === "1.3" || version === "1.4" || version === "1.5" || version === "1.6" || version === "1.7" || version === "1.8") && scope === "portfolio-content" ||
-      (version === "1.4" || version === "1.5" || version === "1.7" || version === "1.8") && scope === "taxonomy" || (version === "1.5" || version === "1.6" || version === "1.7" || version === "1.8") && scope === "media-metadata" ||
-      (version === "1.6" || version === "1.7" || version === "1.8") && scope === "cv-metadata" ||
-      (version === "1.7" || version === "1.8") && scope === "moderation-history"
-      ? "1.2" : version === "1.8" && scope === "analytics-reports" ? "1.2" : schemaVersion;
+    const recordVersion = (version === "1.3" || version === "1.4" || version === "1.5" || version === "1.6" || version === "1.7" || version === "1.8" || version === "1.9") && scope === "portfolio-content" ||
+      (version === "1.4" || version === "1.5" || version === "1.7" || version === "1.8" || version === "1.9") && scope === "taxonomy" || (version === "1.5" || version === "1.6" || version === "1.7" || version === "1.8" || version === "1.9") && scope === "media-metadata" ||
+      (version === "1.6" || version === "1.7" || version === "1.8" || version === "1.9") && scope === "cv-metadata" ||
+      (version === "1.7" || version === "1.8" || version === "1.9") && scope === "moderation-history"
+      ? "1.2" : (version === "1.8" || version === "1.9") && scope === "analytics-reports" ? "1.2" : schemaVersion;
     expectedDescriptors.push({
       kind: "record", scope, path: `schemas/${scope}.schema.json`, schemaUri: source.uri,
       schemaVersion: recordVersion, digest: sha256(source.bytes), source,
@@ -743,8 +746,8 @@ function verifyRecordOrdering(scope, records, version) {
       }
       let previous;
       for (const activation of value.activationHistory) {
-        const previousKey = previous === undefined ? undefined : (version === "1.6" || version === "1.7") ? previous.activationId : previous.versionId;
-        const activationKey = (version === "1.6" || version === "1.7") ? activation.activationId : activation.versionId;
+        const previousKey = previous === undefined ? undefined : (version === "1.6" || version === "1.7" || version === "1.9") ? previous.activationId : previous.versionId;
+        const activationKey = (version === "1.6" || version === "1.7" || version === "1.9") ? activation.activationId : activation.versionId;
         if (previous !== undefined && (
           compareUtcInstant(previous.activatedAt, activation.activatedAt) < 0 ||
           compareUtcInstant(previous.activatedAt, activation.activatedAt) === 0 && previousKey < activationKey
@@ -761,18 +764,18 @@ function verifyRecordOrdering(scope, records, version) {
       for (let index = 1; index < goal.activationHistory.length; index += 1) {
         const previous = goal.activationHistory[index - 1];
         const current = goal.activationHistory[index];
-        if (version === "1.8"
+        if (version === "1.8" || version === "1.9"
           ? current.activationSequence !== previous.activationSequence + 1
           : compareUtcInstant(previous.activatedAt, current.activatedAt) > 0 ||
             compareUtcInstant(previous.activatedAt, current.activatedAt) === 0 && previous.versionId >= current.versionId) {
           fail("PACKAGE_RECORD_ORDER_INVALID");
         }
       }
-      if (version === "1.8" && goal.activationHistory.length > 0 && goal.activationHistory[0].activationSequence !== 1) {
+      if ((version === "1.8" || version === "1.9") && goal.activationHistory.length > 0 && goal.activationHistory[0].activationSequence !== 1) {
         fail("PACKAGE_RECORD_ORDER_INVALID");
       }
       const reports = valueOf(record).reports;
-      if (version === "1.8") {
+      if (version === "1.8" || version === "1.9") {
         const versionOrder = new Map(goal.versions.map((item, index) => [item.versionId, index]));
         let previousVersionIndex = -1;
         let previousEndDay;
@@ -799,7 +802,7 @@ function verifyRecordOrdering(scope, records, version) {
         }
       }
     }
-  } else if (scope === "moderation-history" && version === "1.7") {
+  } else if (scope === "moderation-history" && (version === "1.7" || version === "1.9")) {
     for (const record of records) {
       const value = valueOf(record);
       const history = value.decisionHistory;
@@ -1131,7 +1134,7 @@ function verifyAssets(manifest, version, entryMap, recordsByScope) {
   const assetPaths = new Set();
   let previousPath = "";
   for (const descriptor of assets) {
-    const mediaBytesPackage = (version === "1.5" || version === "1.6" || version === "1.7") && object(descriptor) && descriptor.scope === "media-metadata";
+    const mediaBytesPackage = (version === "1.5" || version === "1.6" || version === "1.7" || version === "1.9") && object(descriptor) && descriptor.scope === "media-metadata";
     const validPath = object(descriptor) && (mediaBytesPackage
       ? descriptor.path === `assets/media-metadata/sha256/${descriptor.digest}`
       : descriptor.path === `assets/${descriptor.scope}/${descriptor.assetId}`);
@@ -1154,7 +1157,7 @@ function verifyAssets(manifest, version, entryMap, recordsByScope) {
     const visit = (value) => {
       if (typeof value === "string" && value.startsWith("assets/")) {
         const expectedPrefix = `assets/${scope}/`;
-        const cvMediaReference = (version === "1.6" || version === "1.7") && scope === "cv-metadata" && value.startsWith("assets/media-metadata/sha256/");
+        const cvMediaReference = (version === "1.6" || version === "1.7" || version === "1.9") && scope === "cv-metadata" && value.startsWith("assets/media-metadata/sha256/");
         if (!value.startsWith(expectedPrefix) && !cvMediaReference || !assetPaths.has(value)) fail("PACKAGE_ASSET_REFERENCE_INVALID");
         referencedAssetPaths.add(value);
       } else if (Array.isArray(value)) {
@@ -1166,7 +1169,7 @@ function verifyAssets(manifest, version, entryMap, recordsByScope) {
     records.forEach(visit);
   }
   if (referencedAssetPaths.size !== assetPaths.size) fail("PACKAGE_ASSET_REFERENCE_INVALID");
-  if (version === "1.5" || version === "1.6" || version === "1.7") {
+  if (version === "1.5" || version === "1.6" || version === "1.7" || version === "1.9") {
     const descriptors = new Map(assets.map((descriptor) => [descriptor.path, descriptor]));
     for (const record of recordsByScope.get("media-metadata") ?? []) {
       for (const portable of record.value.portableAssets) {
@@ -1178,7 +1181,7 @@ function verifyAssets(manifest, version, entryMap, recordsByScope) {
       }
     }
   }
-  if (version === "1.6" || version === "1.7") {
+  if (version === "1.6" || version === "1.7" || version === "1.9") {
     const descriptors = new Map(assets.map((descriptor) => [descriptor.path, descriptor]));
     for (const record of recordsByScope.get("cv-metadata") ?? []) {
       for (const versionRecord of record.value.versions) {
@@ -1335,7 +1338,7 @@ export function validateOwnerExportZip(input) {
   const manifest = parseJsonBytes(manifestBytes);
   if (!object(manifest) || manifest.packageFormat !== "shipwithali-owner-export") fail("PACKAGE_FORMAT_UNSUPPORTED");
   const version = supportedManifestVersion(manifest);
-  if (version !== "1.5" && version !== "1.6" && version !== "1.7" && version !== "1.8" && entries.some((entry) => entry.bytes.length > LIMITS.legacyEntryBytes)) fail("ENTRY_SIZE_LIMIT");
+  if (version !== "1.5" && version !== "1.6" && version !== "1.7" && version !== "1.8" && version !== "1.9" && entries.some((entry) => entry.bytes.length > LIMITS.legacyEntryBytes)) fail("ENTRY_SIZE_LIMIT");
   if (version !== "1.0") {
     checkRequiredFeatures(manifest);
     const requiredProperties = ["exportId", "snapshot", "dependencies", "exclusions", "schemas", "assets"];
@@ -1362,20 +1365,20 @@ export function validateOwnerExportZip(input) {
     const validatorForScope = recordSchemasForVersion(version).get(descriptor.scope).validate;
     const records = recordsFromEntry(findEntry(entryMap, descriptor.path), descriptor, validatorForScope);
     verifyRecordOrdering(descriptor.scope, records, version);
-    if (version === "1.8" && descriptor.scope === "analytics-reports") {
+    if ((version === "1.8" || version === "1.9") && descriptor.scope === "analytics-reports") {
       verifyAnalyticsRetention(manifest, records);
     }
     recordsByScope.set(descriptor.scope, records);
     recordCounts[descriptor.scope] = records.length;
   }
-  if (version === "1.3" || (version === "1.4" || version === "1.7") && includedScopes.includes("portfolio-content")) {
+  if (version === "1.3" || (version === "1.4" || version === "1.7" || version === "1.9") && includedScopes.includes("portfolio-content")) {
     verifyContentSnapshotFacts(recordsByScope.get("portfolio-content"));
   }
-  if (version === "1.4" || version === "1.7" && includedScopes.includes("taxonomy")) verifyTaxonomySnapshotFacts(
+  if (version === "1.4" || (version === "1.7" || version === "1.9") && includedScopes.includes("taxonomy")) verifyTaxonomySnapshotFacts(
     recordsByScope.get("taxonomy"), recordsByScope.get("portfolio-content"), includedScopes,
   );
-  if (version === "1.6") verifyCvSnapshotFacts(recordsByScope.get("cv-metadata"));
-  if (version === "1.7") verifyModerationRetention(recordsByScope.get("moderation-history"), manifest.snapshot.capturedAt);
+  if (version === "1.6" || version === "1.9" && includedScopes.includes("cv-metadata")) verifyCvSnapshotFacts(recordsByScope.get("cv-metadata"));
+  if (version === "1.7" || version === "1.9" && includedScopes.includes("moderation-history")) verifyModerationRetention(recordsByScope.get("moderation-history"), manifest.snapshot.capturedAt);
   const assets = verifyAssets(manifest, version, entryMap, recordsByScope);
   const dependencies = verifyDependencies(manifest, version, recordsByScope);
 

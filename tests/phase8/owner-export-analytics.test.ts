@@ -177,7 +177,7 @@ describe("Analytics Owner export", () => {
       snapshotId: id<"OwnerExportArtifact">("108"),
       capturedAt,
       includedScopes: ["analytics-reports"],
-      analytics: { records: captured.value.records },
+      analytics: { records: captured.value.records, policyExpiresAt: captured.value.policyExpiresAt },
       policyExpiresAt: captured.value.policyExpiresAt,
     };
     const built = await buildAnalyticsOwnerExportPackage({ exportId: id<"OwnerExport">("109"), snapshot });

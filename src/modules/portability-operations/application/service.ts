@@ -241,7 +241,12 @@ export interface OwnerExportPackageManifestV1_8 extends Omit<OwnerExportPackageM
     OwnerExportMediaEntryDescriptor | OwnerExportCvEntryDescriptor | OwnerExportModerationEntryDescriptor | OwnerExportAnalyticsEntryDescriptor)[];
 }
 
-export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3 | OwnerExportPackageManifestV1_4 | OwnerExportPackageManifestV1_5 | OwnerExportPackageManifestV1_6 | OwnerExportPackageManifestV1_7 | OwnerExportPackageManifestV1_8;
+/** Composite package 1.9 registers the full seven-scope selection without changing pinned record schemas. */
+export interface OwnerExportPackageManifestV1_9 extends Omit<OwnerExportPackageManifestV1_8, "schemaVersion"> {
+  readonly schemaVersion: "1.9";
+}
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3 | OwnerExportPackageManifestV1_4 | OwnerExportPackageManifestV1_5 | OwnerExportPackageManifestV1_6 | OwnerExportPackageManifestV1_7 | OwnerExportPackageManifestV1_8 | OwnerExportPackageManifestV1_9;
 
 interface OwnerExportViewBase {
   readonly exportId: StableId<"OwnerExport">;

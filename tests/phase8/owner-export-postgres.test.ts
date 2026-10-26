@@ -43,6 +43,7 @@ import {
 } from "../../src/modules/portability-operations/index.js";
 import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
 import { createPostgresContentAuthoringRepository } from "../../src/modules/content-publishing/adapters/postgres-authoring.js";
+import { createOwnerExportArtifactCleanupService } from "../../src/modules/portability-operations/application/owner-export-cleanup.js";
 import { createPortfolioConfigurationExportSnapshotReader } from "../../src/modules/portfolio-configuration/index.js";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
 import { createSystemIdGenerator, type StableIdGenerator } from "../../src/runtime/ports.js";
@@ -530,6 +531,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       const assembly = createOwnerExportAssemblyService({
         operations: workerOperations,
         exports: workerStore,
+        artifacts: workerStore,
         snapshots,
         storage,
         clock: { now: () => now },
@@ -545,6 +547,8 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       const persisted = await workerStore.findOwnerExport({ exportId: request.value.exportId, ...scope });
       expect(persisted).toMatchObject({
         status: "ready",
+        completedAt: expect.any(String),
+        expiresAt: expect.any(String),
         schemaVersion: "1.2",
         snapshot: {
           configurationVersion: 2,
@@ -555,6 +559,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
           extensions: { configurationSnapshot: { aggregateVersion: 2 } },
         },
       });
+      expect(Date.parse(persisted!.expiresAt!) - Date.parse(persisted!.completedAt!)).toBe(7 * 24 * 60 * 60 * 1000);
 
       const firstDownload = await primary.service.downloadOwnerExport({ actor, portfolioId, exportId: request.value.exportId });
       expect(firstDownload.ok).toBe(true);
@@ -697,6 +702,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       const assembly = createOwnerExportAssemblyService({
         operations: workerOperations,
         exports: workerStore,
+        artifacts: workerStore,
         snapshots,
         mediaObjects,
         storage,
@@ -731,6 +737,19 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
         candidateSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
         candidateContentLength: expect.any(Number),
       });
+      await admin!.query("update media.processing_states set aggregate_version = 4 where media_id = $1", [mediaId]);
+      await admin!.query(
+        "insert into media.rejection_history (rejection_id, portfolio_id, owner_id, media_id, aggregate_version, private_reason, rejected_by, rejected_at) values ($1, $2, $3, $4, 4, 'private owner-only rejection rationale', $3, $5)",
+        [createStableId("MediaRejection"), scope.portfolioId, scope.ownerId, mediaId, now],
+      );
+      const cleanup = createOwnerExportArtifactCleanupService({ scope, artifacts: workerStore, snapshots, storage });
+      expect(await cleanup.runOwnerExportCleanup()).toMatchObject({ ok: true, value: { deleted: 1, pending: 0 } });
+      const invalidated = await workerStore.findOwnerExport({ exportId: request.value.exportId, ...scope });
+      expect(invalidated).toMatchObject({ status: "expired", artifactRevocationCode: "privacy_invalid",
+        artifactRevokedAt: expect.any(String), artifactDeletedAt: expect.any(String) });
+      expect(await storage.readOwnerExport({ portfolioId: scope.portfolioId, exportId: request.value.exportId,
+        artifactId: invalidated!.candidateArtifactId!, expectedContentLength: invalidated!.candidateContentLength!,
+        expectedSha256: invalidated!.candidateSha256! })).toMatchObject({ ok: false });
     } finally {
       await new Promise<void>((resolve) => objectServer.server.close(() => resolve()));
     }
@@ -800,6 +819,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       const assembly = createOwnerExportAssemblyService({
         operations: workerOperations,
         exports: lostReadyReplyStore,
+        artifacts: baseStore,
         snapshots,
         storage: faultStorage,
         clock: { now: () => now },
@@ -853,8 +873,8 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     const primary = composeService(application!);
     const exportsBefore = await ownerExportCount();
     const jobsBefore = await assemblyJobCount();
-    const request = await primary.service.requestOwnerExport(command(["portfolio-content", "cv-metadata"], "phase8-config-export-unsupported-001"));
-    expect(request).toMatchObject({ ok: false, error: { kind: "validation", code: "OWNER_EXPORT_SCOPE_UNSUPPORTED" } });
+    const request = await primary.service.requestOwnerExport(command(["unknown-scope"], "phase8-config-export-unsupported-001"));
+    expect(request).toMatchObject({ ok: false, error: { kind: "validation", code: "OWNER_EXPORT_SCOPE_UNKNOWN" } });
     expect(await ownerExportCount()).toBe(exportsBefore);
     expect(await assemblyJobCount()).toBe(jobsBefore);
   });

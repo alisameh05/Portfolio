@@ -79,6 +79,15 @@ const PORTABILITY_EXPORT_UNSCOPED_INSERT = `insert into portability.owner_export
   array['portfolio-content'], 'requested', '1.0', transaction_timestamp()
 )`;
 
+const PORTABILITY_INVALIDATION_LEDGER_INSERT = `insert into portability.owner_export_invalidation_ledger (
+  export_id, portfolio_id, artifact_id, revoked_at, revocation_code
+) select '018f4f7d-5000-7000-8000-000000000293', '018f4f7d-5000-7000-8000-000000000290',
+  '018f4f7d-5000-7000-8000-000000000294', transaction_timestamp(), 'prior_revocation' where false`;
+const PORTABILITY_INVALIDATION_LEDGER_FORGED_INSERT = `insert into portability.owner_export_invalidation_ledger (
+  export_id, portfolio_id, artifact_id, revoked_at, revocation_code
+) values ('018f4f7d-5000-7000-8000-000000000293', '018f4f7d-5000-7000-8000-000000000290',
+  '018f4f7d-5000-7000-8000-000000000294', transaction_timestamp(), 'prior_revocation')`;
+
 /**
  * Phase 8 #238 Owner-export matrix. Identity binding is the point: the
  * application may write only rows that carry its resolved Owner scope, and no
@@ -109,6 +118,18 @@ const PORTABILITY_EXPORT_MATRIX: ReadonlyArray<readonly [string, string, string,
   ["shipwithali_worker", "delete owner exports", "delete from portability.owner_exports where false", false],
   ["shipwithali_backup", "select owner exports", "select count(*) from portability.owner_exports", true],
   ["shipwithali_backup", "insert owner exports", PORTABILITY_EXPORT_UNSCOPED_INSERT, false],
+  ["anon", "select invalidation ledger", "select count(*) from portability.owner_export_invalidation_ledger", false],
+  ["authenticated", "select invalidation ledger", "select count(*) from portability.owner_export_invalidation_ledger", false],
+  ["shipwithali_application", "select invalidation ledger", "select count(*) from portability.owner_export_invalidation_ledger", false],
+  ["shipwithali_application", "insert invalidation ledger", PORTABILITY_INVALIDATION_LEDGER_INSERT, false],
+  ["shipwithali_worker", "select invalidation ledger", "select count(*) from portability.owner_export_invalidation_ledger", true],
+  ["shipwithali_worker", "insert invalidation ledger", PORTABILITY_INVALIDATION_LEDGER_INSERT, true],
+  ["shipwithali_worker", "cannot forge invalidation ledger entries", PORTABILITY_INVALIDATION_LEDGER_FORGED_INSERT, false],
+  ["shipwithali_worker", "update deletion acknowledgement", "update portability.owner_export_invalidation_ledger set artifact_deleted_at = artifact_deleted_at where false", true],
+  ["shipwithali_worker", "rewrite invalidation identity", "update portability.owner_export_invalidation_ledger set revocation_code = revocation_code where false", false],
+  ["shipwithali_worker", "delete invalidation ledger", "delete from portability.owner_export_invalidation_ledger where false", false],
+  ["shipwithali_backup", "select invalidation ledger", "select count(*) from portability.owner_export_invalidation_ledger", true],
+  ["shipwithali_backup", "insert invalidation ledger", PORTABILITY_INVALIDATION_LEDGER_INSERT, false],
 ];
 
 const PORTABILITY_EXPORT_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
@@ -118,6 +139,10 @@ const PORTABILITY_EXPORT_POLICIES: ReadonlyArray<readonly [string, string, strin
   ["owner_exports", "owner_exports_application_update_policy", "UPDATE", "{shipwithali_application}"],
   ["owner_exports", "owner_exports_worker_select_policy", "SELECT", "{shipwithali_worker}"],
   ["owner_exports", "owner_exports_worker_update_policy", "UPDATE", "{shipwithali_worker}"],
+  ["owner_export_invalidation_ledger", "owner_export_invalidation_ledger_backup_select", "SELECT", "{shipwithali_backup}"],
+  ["owner_export_invalidation_ledger", "owner_export_invalidation_ledger_worker_insert", "INSERT", "{shipwithali_worker}"],
+  ["owner_export_invalidation_ledger", "owner_export_invalidation_ledger_worker_select", "SELECT", "{shipwithali_worker}"],
+  ["owner_export_invalidation_ledger", "owner_export_invalidation_ledger_worker_update", "UPDATE", "{shipwithali_worker}"],
 ];
 
 const FEEDBACK_EXPORT_MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
@@ -1020,7 +1045,7 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
         const portability = await admin.query(
           `select tablename, policyname, roles, cmd
              from pg_policies
-            where schemaname = 'portability' and tablename = 'owner_exports'
+            where schemaname = 'portability' and tablename in ('owner_exports', 'owner_export_invalidation_ledger')
             order by policyname`,
         );
         expect(
@@ -1054,6 +1079,14 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
         expect(rel.rows).toHaveLength(1);
         expect(rel.rows[0]?.["relrowsecurity"]).toBe(true);
         expect(rel.rows[0]?.["relforcerowsecurity"]).toBe(true);
+        const ledger = await admin.query(
+          `select c.relrowsecurity, c.relforcerowsecurity
+             from pg_class c join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'portability' and c.relname = 'owner_export_invalidation_ledger'`,
+        );
+        expect(ledger.rows).toHaveLength(1);
+        expect(ledger.rows[0]?.["relrowsecurity"]).toBe(true);
+        expect(ledger.rows[0]?.["relforcerowsecurity"]).toBe(true);
       } finally {
         await admin.end();
       }

@@ -188,7 +188,7 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
       };
       const workerOperations = createPostgresOperationsPersistence(worker.database, clock);
       const workerStore = createPostgresOwnerExportStore(worker.database, { outbox: workerOperations.outbox });
-      const assembly = createOwnerExportAssemblyService({ operations: workerOperations, exports: workerStore,
+      const assembly = createOwnerExportAssemblyService({ operations: workerOperations, exports: workerStore, artifacts: workerStore,
         snapshots: reader, storage, clock, ids });
       const assembled = await assembly.runOwnerExportAssembly({ workerId: "analytics-assembly-test" });
       expect(assembled, JSON.stringify(assembled))
@@ -203,10 +203,12 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
         actor: { kind: "owner", ownerId, sessionId: "analytics-assembly-test" },
         idempotencyKey: mixedKey.value, includedScopes: ["analytics-reports", "portfolio-configuration"] });
       if (!mixed.ok) throw new Error("PHASE8_ANALYTICS_MIXED_REQUEST_FAILED");
-      expect(await assembly.runOwnerExportAssembly({ workerId: "analytics-assembly-test" }))
-        .toMatchObject({ ok: true, value: { claimed: 1, completed: 0, failed: 1, retried: 0 } });
-      expect(await workerStore.findOwnerExport({ portfolioId, ownerId, exportId: mixed.value.exportId }))
-        .toMatchObject({ status: "failed", failureCode: "OWNER_EXPORT_SCOPE_UNSUPPORTED" });
+      const mixedAssembly = await assembly.runOwnerExportAssembly({ workerId: "analytics-assembly-test" });
+      expect(mixedAssembly).toMatchObject({ ok: true, value: { claimed: 1, completed: 1, failed: 0, retried: 0 } });
+      const mixedRecord = await workerStore.findOwnerExport({ portfolioId, ownerId, exportId: mixed.value.exportId });
+      expect(mixedRecord).toMatchObject({ status: "ready", schemaVersion: "1.9",
+        integrityManifest: { schemaVersion: "1.9", includedScopes: ["analytics-reports", "portfolio-configuration"] } });
+      expect(validateOwnerExportZip(storedBytes).includedScopes).toEqual(["analytics-reports", "portfolio-configuration"]);
 
       const privilege = await admin.query(`select
         has_table_privilege('shipwithali_worker','measurement.analytics_goals','INSERT') as goal_insert,

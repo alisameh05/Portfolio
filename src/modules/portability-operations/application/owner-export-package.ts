@@ -22,6 +22,7 @@ import type {
   OwnerExportModerationEntryDescriptor,
   OwnerExportAnalyticsEntryDescriptor,
   OwnerExportPackageManifestV1_8,
+  OwnerExportPackageManifestV1_9,
 } from "./service.js";
 import { isSafeOwnerExportCvMetadataV1_2, isSafeOwnerExportMediaMetadataV1_2, isSafeOwnerExportModerationMetadataV1_2 } from "./service.js";
 import { MAX_OWNER_EXPORT_ARTIFACT_BYTES } from "./service.js";
@@ -68,7 +69,7 @@ export interface OwnerExportSelectedSnapshot {
     readonly dependencies: readonly { readonly feedbackId: string; readonly projectId: string }[];
   };
   /** Measurement-owned, privacy-projected goal history and aggregate reports. */
-  readonly analytics?: { readonly records: readonly { readonly goalId: string; readonly value: Readonly<Record<string, unknown>> }[] };
+  readonly analytics?: { readonly records: readonly { readonly goalId: string; readonly value: Readonly<Record<string, unknown>> }[]; readonly policyExpiresAt?: string };
 }
 
 export interface OwnerExportMediaAssetSnapshot {
@@ -105,6 +106,8 @@ export interface BuiltOwnerExportPackage {
   readonly sha256: string;
   readonly manifest: OwnerExportPackageManifest;
   readonly content: AsyncIterable<Uint8Array>;
+  /** Internal reusable members for composing the registered scope packages into one immutable archive. */
+  readonly archiveEntries?: readonly StoredOwnerExportZipEntry[];
 }
 
 function sha256(bytes: Uint8Array | string): string {
@@ -464,8 +467,8 @@ export async function buildAnalyticsOwnerExportPackage(input: {
 }): Promise<BuiltOwnerExportPackage> {
   const { snapshot } = input;
   if (snapshot.kind !== "owner-export-snapshot-v1" || snapshot.includedScopes.length !== 1 ||
-      snapshot.includedScopes[0] !== "analytics-reports" || snapshot.analytics === undefined || snapshot.policyExpiresAt === undefined ||
-      !UTC_INSTANT_PATTERN.test(snapshot.policyExpiresAt)) {
+      snapshot.includedScopes[0] !== "analytics-reports" || snapshot.analytics === undefined || snapshot.analytics.policyExpiresAt === undefined ||
+      !UTC_INSTANT_PATTERN.test(snapshot.analytics.policyExpiresAt)) {
     throw new TypeError("OWNER_EXPORT_ANALYTICS_SNAPSHOT_INVALID");
   }
   const ordered = [...snapshot.analytics.records].sort((left, right) => compareCodePoints(left.goalId, right.goalId));
@@ -499,17 +502,18 @@ export async function buildAnalyticsOwnerExportPackage(input: {
     schemas, assets: [],
     extensions: { analyticsReportPolicy: { maximumPeriodDays: 31, maximumRowsPerQuery: 500, minimumObservedSubjects: 5,
       grouping: "daily-goal", breakdown: "locale", totalRows: "omitted", withheldCounts: "omitted",
-      aggregateRetentionExpiresAt: snapshot.policyExpiresAt } },
+      aggregateRetentionExpiresAt: snapshot.analytics.policyExpiresAt } },
   } satisfies OwnerExportPackageManifestV1_8;
   const completeManifest = { ...manifest, digest: sha256(utf8.encode(canonicalJson(manifest, true))) };
   const manifestBytes = utf8.encode(`${JSON.stringify(completeManifest)}\n`);
-  const archive = createStoredOwnerExportZip([
+  const zipEntries: StoredOwnerExportZipEntry[] = [
     fixedBytesMember("manifest.json", manifestBytes), fixedBytesMember("schemas/manifest.schema.json", manifestSchema),
     fixedBytesMember("schemas/analytics-reports.schema.json", analyticsSchema), fixedBytesMember(entry.path, recordBytes),
-  ]);
+  ];
+  const archive = createStoredOwnerExportZip(zipEntries);
   const integrity = await measureOwnerExportStream(archive.content);
   if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
-  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content, archiveEntries: zipEntries };
 }
 
 /**
@@ -596,7 +600,7 @@ export async function buildConfigurationOwnerExportPackage(input: {
   const archive = createStoredOwnerExportZip(zipEntries);
   const integrity = await measureOwnerExportStream(archive.content);
   if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
-  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content, archiveEntries: zipEntries };
 }
 
 function sortedUnique(values: readonly string[]): string[] {
@@ -818,7 +822,7 @@ export async function buildMediaOwnerExportPackage(input: {
   const archive = createStoredOwnerExportZip(zipEntries);
   const integrity = await measureOwnerExportStream(archive.content);
   if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
-  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content, archiveEntries: zipEntries };
 }
 
 /** Builds CV v1.6 with exact accepted Media PDF bytes, retaining source-owned lifecycle identities. */
@@ -1013,7 +1017,7 @@ export async function buildCvOwnerExportPackage(input: {
   const archive = createStoredOwnerExportZip(zipEntries);
   const integrity = await measureOwnerExportStream(archive.content);
   if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
-  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content, archiveEntries: zipEntries };
 }
 
 function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
@@ -1178,7 +1182,7 @@ async function buildTaxonomyOwnerExportPackage(input: {
   const archive = createStoredOwnerExportZip(zipEntries);
   const integrity = await measureOwnerExportStream(archive.content);
   if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
-  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content, archiveEntries: zipEntries };
 }
 
 async function buildModerationOnlyOwnerExportPackage(input: {
@@ -1254,11 +1258,11 @@ async function buildModerationOnlyOwnerExportPackage(input: {
   const archive = createStoredOwnerExportZip(zipEntries);
   const integrity = await measureOwnerExportStream(archive.content);
   if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
-  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content, archiveEntries: zipEntries };
 }
 
 /** Builds the content package v1.3 without changing the meaning of any v1.1 record. */
-export async function buildSelectedOwnerExportPackage(input: {
+async function buildCoreOwnerExportPackage(input: {
   readonly exportId: StableId<"OwnerExport">;
   readonly snapshot: OwnerExportSelectedSnapshot;
 }): Promise<BuiltOwnerExportPackage> {
@@ -1379,5 +1383,197 @@ export async function buildSelectedOwnerExportPackage(input: {
   const archive = createStoredOwnerExportZip(zipEntries);
   const integrity = await measureOwnerExportStream(archive.content);
   if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
-  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content, archiveEntries: zipEntries };
+}
+
+const OWNER_EXPORT_SCOPE_ORDER = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "moderation-history", "analytics-reports", "portfolio-configuration"] as const;
+const OWNER_EXPORT_EXCLUSIONS = ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"] as const;
+const OWNER_EXPORT_REQUIRED_FEATURES = ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"] as const;
+const OWNER_EXPORT_COMPOSITE_MAX_ENTRIES = 512;
+
+function selectedSnapshot(snapshot: OwnerExportSelectedSnapshot, scopes: readonly string[]): OwnerExportSelectedSnapshot {
+  const includedScopes = OWNER_EXPORT_SCOPE_ORDER.filter((scope) => scopes.includes(scope));
+  const selected = new Set(includedScopes);
+  return {
+    kind: snapshot.kind,
+    snapshotId: snapshot.snapshotId,
+    capturedAt: snapshot.capturedAt,
+    includedScopes,
+    ...(snapshot.policyExpiresAt === undefined ? {} : { policyExpiresAt: snapshot.policyExpiresAt }),
+    ...(selected.has("portfolio-configuration") && snapshot.configuration !== undefined ? { configuration: snapshot.configuration } : {}),
+    ...(selected.has("portfolio-content") && snapshot.content !== undefined ? { content: snapshot.content } : {}),
+    ...(selected.has("taxonomy") && snapshot.taxonomy !== undefined ? { taxonomy: snapshot.taxonomy } : {}),
+    ...(selected.has("media-metadata") && snapshot.media !== undefined ? { media: snapshot.media } : {}),
+    ...(selected.has("cv-metadata") && snapshot.cv !== undefined ? { cv: snapshot.cv } : {}),
+    ...(selected.has("cv-metadata") && snapshot.cvAssets !== undefined ? { cvAssets: snapshot.cvAssets } : {}),
+    ...(selected.has("moderation-history") && snapshot.moderation !== undefined ? { moderation: snapshot.moderation } : {}),
+    ...(selected.has("moderation-history") && snapshot.moderationCheckpoint !== undefined ? { moderationCheckpoint: snapshot.moderationCheckpoint } : {}),
+    ...(selected.has("analytics-reports") && snapshot.analytics !== undefined ? { analytics: snapshot.analytics } : {}),
+  };
+}
+
+function collectPortableIds(value: unknown, ids: Set<string>): void {
+  if (typeof value === "string") {
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value)) ids.add(value);
+  } else if (Array.isArray(value)) value.forEach((item) => collectPortableIds(item, ids));
+  else if (value !== null && typeof value === "object") Object.values(value as Record<string, unknown>).forEach((item) => collectPortableIds(item, ids));
+}
+
+function dependencyCoverageForComposite(
+  manifests: readonly OwnerExportPackageManifest[],
+  snapshot: OwnerExportSelectedSnapshot,
+): OwnerExportDependencyDescriptor[] {
+  const idsByScope = new Map<string, Set<string>>();
+  const add = (scope: string, value: unknown) => {
+    const ids = idsByScope.get(scope) ?? new Set<string>();
+    collectPortableIds(value, ids);
+    idsByScope.set(scope, ids);
+  };
+  for (const record of snapshot.content?.records ?? []) add("portfolio-content", record.value);
+  for (const record of snapshot.taxonomy?.records ?? []) add("taxonomy", record.value);
+  for (const record of snapshot.media?.records ?? []) add("media-metadata", record.value);
+  for (const version of snapshot.cv?.versions ?? []) add("cv-metadata", version);
+  for (const record of snapshot.moderation?.records ?? []) add("moderation-history", record.value);
+  for (const record of snapshot.analytics?.records ?? []) add("analytics-reports", record.value);
+  if (snapshot.configuration?.settings !== undefined && snapshot.configuration.settings !== null) {
+    const settings = snapshot.configuration.settings;
+    add("portfolio-configuration", { profile: settings.profile, contactChannels: { channels: settings.contactChannels }, projectCta: settings.globalCta });
+  }
+  const selected = new Set(snapshot.includedScopes);
+  const dependencies = new Map<string, OwnerExportDependencyDescriptor>();
+  for (const manifest of manifests) {
+    for (const dependency of (manifest as OwnerExportPackageManifestV1_8).dependencies) {
+      const key = [dependency.sourceScope, dependency.sourceId, dependency.targetScope, dependency.targetId].join("|");
+      const targetIncluded = selected.has(dependency.targetScope);
+      const targetPresent = idsByScope.get(dependency.targetScope)?.has(dependency.targetId) === true;
+      dependencies.set(key, targetIncluded && targetPresent
+        ? { sourceScope: dependency.sourceScope, sourceId: dependency.sourceId, targetScope: dependency.targetScope,
+          targetId: dependency.targetId, disposition: "included" }
+        : { sourceScope: dependency.sourceScope, sourceId: dependency.sourceId, targetScope: dependency.targetScope,
+          targetId: dependency.targetId, disposition: "omitted", reason: targetIncluded ? "not-retained" : "scope-not-selected" });
+    }
+  }
+  return [...dependencies.values()].sort((left, right) =>
+    OWNER_EXPORT_SCOPE_ORDER.indexOf(left.sourceScope) - OWNER_EXPORT_SCOPE_ORDER.indexOf(right.sourceScope) || compareCodePoints(left.sourceId, right.sourceId) ||
+    OWNER_EXPORT_SCOPE_ORDER.indexOf(left.targetScope) - OWNER_EXPORT_SCOPE_ORDER.indexOf(right.targetScope) || compareCodePoints(left.targetId, right.targetId));
+}
+
+/** Builds one schema 1.9 package from the registered scope builders without changing their record meanings. */
+export async function buildSelectedOwnerExportPackage(input: {
+  readonly exportId: StableId<"OwnerExport">;
+  readonly snapshot: OwnerExportSelectedSnapshot;
+  readonly portfolioId?: StableId<"Portfolio">;
+  readonly objects?: OwnerExportMediaObjectReaderPort;
+}): Promise<BuiltOwnerExportPackage> {
+  const { snapshot } = input;
+  if (snapshot.kind !== "owner-export-snapshot-v1") throw new TypeError("OWNER_EXPORT_CONTENT_SNAPSHOT_INVALID");
+  const selectedScopes = OWNER_EXPORT_SCOPE_ORDER.filter((scope) => snapshot.includedScopes.includes(scope));
+  if (selectedScopes.length === 0 || selectedScopes.length !== snapshot.includedScopes.length) throw new TypeError("OWNER_EXPORT_SCOPE_UNSUPPORTED");
+  const coreScopes = selectedScopes.filter((scope) => ["portfolio-content", "taxonomy", "moderation-history", "portfolio-configuration"].includes(scope));
+  const mediaCvScopes = selectedScopes.filter((scope) => scope === "media-metadata" || scope === "cv-metadata");
+  const analyticsScopes = selectedScopes.filter((scope) => scope === "analytics-reports");
+  const groups = [coreScopes, mediaCvScopes, analyticsScopes].filter((scopes) => scopes.length > 0);
+  if (groups.length === 1) {
+    if (analyticsScopes.length > 0) return buildAnalyticsOwnerExportPackage({ exportId: input.exportId, snapshot: selectedSnapshot(snapshot, analyticsScopes) });
+    if (mediaCvScopes.includes("cv-metadata")) {
+      if (input.objects === undefined || input.portfolioId === undefined) throw new TypeError("OWNER_EXPORT_MEDIA_STORAGE_UNAVAILABLE");
+      return buildCvOwnerExportPackage({ exportId: input.exportId, portfolioId: input.portfolioId,
+        snapshot: selectedSnapshot(snapshot, mediaCvScopes), objects: input.objects });
+    }
+    if (mediaCvScopes.length > 0) {
+      if (input.objects === undefined || input.portfolioId === undefined) throw new TypeError("OWNER_EXPORT_MEDIA_STORAGE_UNAVAILABLE");
+      return buildMediaOwnerExportPackage({ exportId: input.exportId, portfolioId: input.portfolioId,
+        snapshot: selectedSnapshot(snapshot, mediaCvScopes), objects: input.objects });
+    }
+    if (coreScopes.length === 1 && coreScopes[0] === "portfolio-configuration" && snapshot.configuration !== undefined) {
+      return buildConfigurationOwnerExportPackage({ exportId: input.exportId, snapshot: snapshot.configuration });
+    }
+    return buildCoreOwnerExportPackage({ exportId: input.exportId, snapshot: selectedSnapshot(snapshot, coreScopes) });
+  }
+
+  const parts: BuiltOwnerExportPackage[] = [];
+  if (coreScopes.length > 0) {
+    const core = selectedSnapshot(snapshot, coreScopes);
+    if (coreScopes.length === 1 && coreScopes[0] === "portfolio-configuration" && core.configuration !== undefined) {
+      parts.push(await buildConfigurationOwnerExportPackage({ exportId: input.exportId, snapshot: core.configuration }));
+    } else parts.push(await buildCoreOwnerExportPackage({ exportId: input.exportId, snapshot: core }));
+  }
+  if (mediaCvScopes.length > 0) {
+    if (input.objects === undefined || input.portfolioId === undefined) throw new TypeError("OWNER_EXPORT_MEDIA_STORAGE_UNAVAILABLE");
+    const mediaSnapshot = selectedSnapshot(snapshot, mediaCvScopes);
+    parts.push(mediaCvScopes.includes("cv-metadata")
+      ? await buildCvOwnerExportPackage({ exportId: input.exportId, portfolioId: input.portfolioId, snapshot: mediaSnapshot, objects: input.objects })
+      : await buildMediaOwnerExportPackage({ exportId: input.exportId, portfolioId: input.portfolioId, snapshot: mediaSnapshot, objects: input.objects }));
+  }
+  if (analyticsScopes.length > 0) parts.push(await buildAnalyticsOwnerExportPackage({
+    exportId: input.exportId, snapshot: selectedSnapshot(snapshot, analyticsScopes),
+  }));
+
+  const subManifests = parts.map((part) => part.manifest);
+  const componentManifests = subManifests.map((manifest) => manifest as OwnerExportPackageManifestV1_8);
+  const entries = componentManifests.flatMap((manifest) => [...manifest.entries])
+    .sort((left, right) => OWNER_EXPORT_SCOPE_ORDER.indexOf(left.scope) - OWNER_EXPORT_SCOPE_ORDER.indexOf(right.scope));
+  if (entries.length !== selectedScopes.length || entries.some((entry, index) => entry.scope !== selectedScopes[index])) {
+    throw new TypeError("OWNER_EXPORT_SCOPE_SNAPSHOT_INCOMPLETE");
+  }
+  const recordSchemas = componentManifests.flatMap((manifest) => manifest.schemas.filter((schema) => schema.kind === "record"))
+    .sort((left, right) => OWNER_EXPORT_SCOPE_ORDER.indexOf(left.scope!) - OWNER_EXPORT_SCOPE_ORDER.indexOf(right.scope!));
+  const manifestSchemaBytes = readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.9", "manifest.schema.json"));
+  const schemas: OwnerExportSchemaDescriptor[] = [
+    { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.9", schemaVersion: "1.9", digest: sha256(manifestSchemaBytes) },
+    ...recordSchemas,
+  ];
+  const assetsByPath = new Map<string, OwnerExportAssetDescriptor>();
+  for (const manifest of componentManifests) for (const asset of manifest.assets) {
+    const existing = assetsByPath.get(asset.path);
+    if (existing !== undefined && (existing.digest !== asset.digest || existing.byteLength !== asset.byteLength || existing.scope !== asset.scope)) {
+      throw new TypeError("OWNER_EXPORT_ASSET_PATH_CONFLICT");
+    }
+    assetsByPath.set(asset.path, asset);
+  }
+  const assets = [...assetsByPath.values()].sort((left, right) => compareCodePoints(left.path, right.path));
+  const includedScopes = [...selectedScopes] as OwnerExportSelectedSnapshot["includedScopes"];
+  const extensions = Object.assign({}, ...componentManifests.map((manifest) => manifest.extensions ?? {}));
+  const manifest = {
+    packageFormat: "shipwithali-owner-export" as const, schemaVersion: "1.9" as const, exportId: input.exportId,
+    snapshot: { snapshotId: snapshot.snapshotId, capturedAt: snapshot.capturedAt, consistency: "transactional" as const },
+    createdAt: snapshot.capturedAt, algorithm: "sha-256" as const, digest: "0".repeat(64),
+    requiredFeatures: OWNER_EXPORT_REQUIRED_FEATURES, includedScopes, publicEventDataCoverage: { mode: "excluded" as const },
+    dependencies: dependencyCoverageForComposite(subManifests, snapshot), exclusions: OWNER_EXPORT_EXCLUSIONS,
+    entries, schemas, assets, ...(Object.keys(extensions).length === 0 ? {} : { extensions }),
+  } satisfies OwnerExportPackageManifestV1_9;
+  const completeManifest = { ...manifest, digest: sha256(utf8.encode(canonicalJson(manifest, true))) };
+  const manifestBytes = utf8.encode(`${JSON.stringify(completeManifest)}\n`);
+  const memberByPath = new Map<string, StoredOwnerExportZipEntry>();
+  for (const part of parts) {
+    if (part.archiveEntries === undefined) throw new TypeError("OWNER_EXPORT_PACKAGE_MEMBERS_MISSING");
+    for (const member of part.archiveEntries) {
+      if (member.name === "manifest.json" || member.name === "schemas/manifest.schema.json") continue;
+      if (memberByPath.has(member.name)) throw new TypeError("OWNER_EXPORT_PACKAGE_MEMBER_DUPLICATE");
+      memberByPath.set(member.name, member);
+    }
+  }
+  const zipEntries: StoredOwnerExportZipEntry[] = [
+    fixedBytesMember("manifest.json", manifestBytes), fixedBytesMember("schemas/manifest.schema.json", manifestSchemaBytes),
+  ];
+  for (const schema of recordSchemas) {
+    const member = memberByPath.get(schema.path);
+    if (member === undefined) throw new TypeError("OWNER_EXPORT_SCHEMA_MEMBER_MISSING");
+    zipEntries.push(member);
+  }
+  for (const entry of entries) {
+    const member = memberByPath.get(entry.path);
+    if (member === undefined) throw new TypeError("OWNER_EXPORT_RECORD_MEMBER_MISSING");
+    zipEntries.push(member);
+  }
+  for (const asset of assets) {
+    const member = memberByPath.get(asset.path);
+    if (member === undefined) throw new TypeError("OWNER_EXPORT_ASSET_MEMBER_MISSING");
+    zipEntries.push(member);
+  }
+  if (zipEntries.length > OWNER_EXPORT_COMPOSITE_MAX_ENTRIES) throw new RangeError("OWNER_EXPORT_ENTRY_COUNT_LIMIT");
+  const archive = createStoredOwnerExportZip(zipEntries);
+  const integrity = await measureOwnerExportStream(archive.content);
+  if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content, archiveEntries: zipEntries };
 }

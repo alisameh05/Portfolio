@@ -121,17 +121,22 @@ export function canonicalizeOwnerExportScopes(
   if (seen.size === 0) {
     return err({ kind: "validation", code: "OWNER_EXPORT_SCOPES_EMPTY" });
   }
-  // Manifest 1.6 supports CV-only and CV plus Media; other CV combinations
-  // have no portable schema/assembly contract yet. Preserve older supported
-  // combinations for the other scopes.
-  const hasCv = seen.has("cv-metadata");
-  const hasMedia = seen.has("media-metadata");
-  if ((hasCv && seen.size !== 1 && !(seen.size === 2 && hasMedia)) ||
-      (hasMedia && seen.size !== 1 && !(seen.size === 2 && hasCv))) {
-    return err({ kind: "validation", code: "OWNER_EXPORT_SCOPE_UNSUPPORTED" });
-  }
   const canonical = OWNER_EXPORT_SCOPES.filter((scope) => seen.has(scope));
   return ok([...canonical] as ExportScope[]);
+}
+
+function schemaVersionForScopes(scopes: readonly ExportScope[]): string {
+  const core = scopes.some((scope) => ["portfolio-content", "taxonomy", "moderation-history", "portfolio-configuration"].includes(scope));
+  const assets = scopes.some((scope) => scope === "media-metadata" || scope === "cv-metadata");
+  const analytics = scopes.includes("analytics-reports");
+  if (Number(core) + Number(assets) + Number(analytics) > 1) return "1.9";
+  if (analytics) return "1.8";
+  if (scopes.includes("moderation-history")) return "1.7";
+  if (scopes.includes("cv-metadata")) return "1.6";
+  if (scopes.includes("media-metadata")) return "1.5";
+  if (scopes.includes("taxonomy")) return "1.4";
+  if (scopes.includes("portfolio-content")) return "1.3";
+  return "1.2";
 }
 
 /** The runtime ID adapter produces canonical UUIDv7 identities; a violation is a hard fault. */
@@ -189,6 +194,12 @@ export interface OwnerExportServiceDependencies {
     readonly portfolioId: StableId<"Portfolio">;
     readonly ownerId: StableId<"Owner">;
   }) => Promise<boolean>;
+  /** Media/CV packages stay unavailable after their source accepts a newer policy state. */
+  readonly revalidateMediaForDownload?: (input: {
+    readonly snapshot: OwnerExportAssemblySnapshot;
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly ownerId: StableId<"Owner">;
+  }) => Promise<boolean>;
 }
 
 export function createOwnerExportService(
@@ -218,7 +229,7 @@ export function createOwnerExportService(
     }
     const idempotencyKey = parseIdempotencyKey(command.idempotencyKey);
     if (!idempotencyKey.ok) return idempotencyKey;
-    const schemaVersion = scopes.value.includes("analytics-reports") ? "1.8" : scopes.value.includes("moderation-history") ? "1.7" : scopes.value.includes("cv-metadata") ? "1.6" : scopes.value.includes("media-metadata") ? "1.5" : scopes.value.includes("taxonomy") ? "1.4" : scopes.value.includes("portfolio-content") ? "1.3" : "1.2";
+    const schemaVersion = schemaVersionForScopes(scopes.value);
     const requestHash = await hashCanonicalRequest({
       operation: "owner-export-request",
       schemaVersion,
@@ -307,7 +318,7 @@ export function createOwnerExportService(
           return { ok: false, error: rejectionForPersistence() };
         }
         const expiresAt = record.expiresAt ?? new Date(Date.parse(record.completedAt) + OWNER_EXPORT_RETENTION_SECONDS * 1000).toISOString();
-        if (Date.parse(clock.now()) >= Date.parse(expiresAt)) {
+        if (Date.parse(record.databaseNow ?? clock.now()) >= Date.parse(expiresAt)) {
           return ok({
             ...base,
             state: "expired",
@@ -411,8 +422,20 @@ export function createOwnerExportService(
     const expiresAt = record.expiresAt ?? (record.completedAt === undefined
       ? undefined
       : new Date(Date.parse(record.completedAt) + OWNER_EXPORT_RETENTION_SECONDS * 1000).toISOString());
-    if (expiresAt === undefined || Date.parse(clock.now()) >= Date.parse(expiresAt)) {
+    if (expiresAt === undefined || Date.parse(record.databaseNow ?? clock.now()) >= Date.parse(expiresAt)) {
       return { ok: false, error: { kind: "conflict", code: "OWNER_EXPORT_DOWNLOAD_EXPIRED" } };
+    }
+    if (record.includedScopes.includes("media-metadata") || record.includedScopes.includes("cv-metadata")) {
+      if (record.snapshot === undefined || !("kind" in record.snapshot) || dependencies.revalidateMediaForDownload === undefined) {
+        return { ok: false, error: { kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
+      }
+      try {
+        if (!await dependencies.revalidateMediaForDownload({ snapshot: record.snapshot, portfolioId: query.portfolioId, ownerId: query.actor.ownerId })) {
+          return { ok: false, error: { kind: "conflict", code: "OWNER_EXPORT_DOWNLOAD_EXPIRED" } };
+        }
+      } catch {
+        return { ok: false, error: { kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
+      }
     }
     if (record.includedScopes.includes("moderation-history")) {
       if (record.snapshot === undefined || !("kind" in record.snapshot) || dependencies.revalidateModerationForDownload === undefined) {
@@ -483,23 +506,22 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const entries = value["entries"];
   const recordVersion = (scope: unknown) => {
     if (manifestVersion === "1.0") return "1.0";
-    if (manifestVersion === "1.8" && scope === "analytics-reports") return "1.2";
-    if ((manifestVersion === "1.5" || manifestVersion === "1.6" || manifestVersion === "1.7") && scope === "media-metadata") return "1.2";
-    if ((manifestVersion === "1.6" || manifestVersion === "1.7") && scope === "cv-metadata") return "1.2";
-    if (manifestVersion === "1.7" && scope === "moderation-history") return "1.2";
-    const usesVersion12 = ((manifestVersion === "1.3" || manifestVersion === "1.4" || manifestVersion === "1.7") && scope === "portfolio-content") ||
-      ((manifestVersion === "1.4" || manifestVersion === "1.7") && scope === "taxonomy");
+    if ((manifestVersion === "1.8" || manifestVersion === "1.9") && scope === "analytics-reports") return "1.2";
+    if (["1.5", "1.6", "1.7", "1.8", "1.9"].includes(String(manifestVersion)) && scope === "media-metadata") return "1.2";
+    if (["1.6", "1.7", "1.8", "1.9"].includes(String(manifestVersion)) && scope === "cv-metadata") return "1.2";
+    if (["1.7", "1.8", "1.9"].includes(String(manifestVersion)) && scope === "moderation-history") return "1.2";
+    const usesVersion12 = (["1.3", "1.4", "1.7", "1.8", "1.9"].includes(String(manifestVersion)) && scope === "portfolio-content") ||
+      (["1.4", "1.7", "1.8", "1.9"].includes(String(manifestVersion)) && scope === "taxonomy");
     return usesVersion12 ? "1.2" : "1.1";
   };
   const commonShape = (
     value["packageFormat"] === "shipwithali-owner-export" &&
-    ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"].includes(value["schemaVersion"] as string) &&
+    ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9"].includes(value["schemaVersion"] as string) &&
     typeof value["createdAt"] === "string" &&
     Number.isFinite(Date.parse(value["createdAt"] as string)) &&
     value["algorithm"] === "sha-256" &&
     typeof value["digest"] === "string" && /^[a-f0-9]{64}$/.test(value["digest"]) &&
     Array.isArray(scopes) && scopes.length >= 1 &&
-    (manifestVersion !== "1.8" || scopes.length === 1 && scopes[0] === "analytics-reports") &&
     scopes.every((scope) => (OWNER_EXPORT_SCOPES as readonly string[]).includes(scope as string)) &&
     new Set(scopes as string[]).size === (scopes as unknown[]).length &&
     Array.isArray(entries) && entries.length >= 1 &&
@@ -529,7 +551,7 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const snapshot = value["snapshot"];
   const stableId = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   return (
-    ["1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"].includes(value["schemaVersion"] as string) &&
+    ["1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9"].includes(value["schemaVersion"] as string) &&
     typeof value["exportId"] === "string" && stableId.test(value["exportId"]) &&
     isRecord(snapshot) && typeof snapshot["snapshotId"] === "string" && stableId.test(snapshot["snapshotId"]) &&
     typeof snapshot["capturedAt"] === "string" && Number.isFinite(Date.parse(snapshot["capturedAt"])) &&

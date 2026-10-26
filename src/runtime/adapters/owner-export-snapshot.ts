@@ -142,10 +142,8 @@ export function createOwnerExportSnapshotReader(input: {
       const hasConfiguration = scopes.includes("portfolio-configuration");
       const canonicalScopes = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "moderation-history", "analytics-reports", "portfolio-configuration"].filter((scope) => scopes.includes(scope));
       if (canonicalScopes.length !== scopes.length || canonicalScopes.some((scope, index) => scopes[index] !== scope) ||
-          (!hasContent && !hasTaxonomy && !hasMedia && !hasCv && !hasModeration && !hasAnalytics && !hasConfiguration) ||
-          hasAnalytics && scopes.length !== 1 ||
-          (hasCv && scopes.length !== 1 && !(scopes.length === 2 && hasMedia)) ||
-          (hasMedia && scopes.length !== 1 && !(scopes.length === 2 && hasCv))) {
+          scopes.length === 0 ||
+          (!hasContent && !hasTaxonomy && !hasMedia && !hasCv && !hasModeration && !hasAnalytics && !hasConfiguration)) {
         return err({ kind: "validation", code: "OWNER_EXPORT_SCOPE_UNSUPPORTED" });
       }
       if (hasTaxonomy && input.taxonomy === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_TAXONOMY_UNAVAILABLE" });
@@ -280,14 +278,18 @@ export function createOwnerExportSnapshotReader(input: {
             };
           });
         const moderationSnapshot = captured.moderation === undefined ? undefined : projectFeedbackOwnerExportSnapshot(captured.moderation);
+        const policyDeadlines = [captured.analytics?.ok ? captured.analytics.value.policyExpiresAt : undefined,
+          moderationSnapshot?.policyExpiresAt, configuration?.policyExpiresAt]
+          .filter((value): value is string => value !== undefined && Number.isFinite(Date.parse(value)));
+        const policyExpiresAt = policyDeadlines.length === 0 ? undefined :
+          policyDeadlines.reduce((earliest, value) => Date.parse(value) < Date.parse(earliest) ? value : earliest);
         return ok({
           kind: "owner-export-snapshot-v1",
           snapshotId: request.snapshotId,
           capturedAt: captured.capturedAt,
           includedScopes: scopes as OwnerExportSelectedSnapshot["includedScopes"],
           ...(captured.analytics === undefined ? {} : {
-            analytics: { records: captured.analytics.records },
-            policyExpiresAt: captured.analytics.policyExpiresAt,
+            analytics: { records: captured.analytics.records, policyExpiresAt: captured.analytics.policyExpiresAt },
           }),
           ...(configuration === undefined ? {} : { configuration }),
           ...(captured.content === undefined ? {} : { content: { records: captured.content.records.map((record) => ({ contentId: record.contentId, value: portableContentRecord(record) })) } }),
@@ -338,8 +340,8 @@ export function createOwnerExportSnapshotReader(input: {
           })) }),
           ...(moderationSnapshot === undefined ? {} : {
             moderation: { records: moderationSnapshot.records },
-            ...(moderationSnapshot.policyExpiresAt === undefined ? {} : { policyExpiresAt: moderationSnapshot.policyExpiresAt }),
           }),
+          ...(policyExpiresAt === undefined ? {} : { policyExpiresAt }),
         });
       } catch (error) {
         return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_SNAPSHOT_UNAVAILABLE" });
@@ -390,6 +392,38 @@ export function createOwnerExportSnapshotReader(input: {
       if (input.moderation === undefined || !("kind" in snapshot) || !snapshot.includedScopes.includes("moderation-history")) return false;
       const current = await input.moderation.readOwnerExportSnapshot({ portfolioId, ownerId }, context);
       return matchesOwnerExportModerationFacts(snapshot, projectFeedbackOwnerExportSnapshot(current).records);
+    },
+    async revalidateOwnerExportForCleanup({ snapshot, portfolioId, ownerId, context }) {
+      if (!("kind" in snapshot)) return true;
+      const hasCurrentMediaPolicy = snapshot.includedScopes.includes("media-metadata") || snapshot.includedScopes.includes("cv-metadata");
+      if (hasCurrentMediaPolicy) {
+        if (input.media === undefined) return false;
+        const versions = new Map<StableId<"MediaAsset">, number>();
+        for (const record of snapshot.media?.records ?? []) {
+          if (record.value["state"] !== "accepted" || record.value["byteCoverage"] !== "included") continue;
+          if (typeof record.value["aggregateVersion"] !== "number" || !Number.isSafeInteger(record.value["aggregateVersion"])) return false;
+          const mediaId = parseStableId("MediaAsset", record.mediaId);
+          if (!mediaId.ok) return false;
+          versions.set(mediaId.value, record.value["aggregateVersion"]);
+        }
+        for (const version of snapshot.cv?.versions ?? []) {
+          if (version.state !== "accepted") continue;
+          if (version.acceptedMediaSnapshot === undefined) return false;
+          const mediaId = version.mediaId;
+          const mediaVersion = version.acceptedMediaSnapshot.mediaAssetVersion;
+          const existing = versions.get(mediaId);
+          if (existing !== undefined && existing !== mediaVersion) return false;
+          versions.set(mediaId, mediaVersion);
+        }
+        const media = await input.media.revalidateOwnerMediaExportSnapshot({ portfolioId, ownerId }, versions, context);
+        if (!media.ok || !media.value) return false;
+      }
+      if (snapshot.includedScopes.includes("moderation-history")) {
+        if (input.moderation === undefined || snapshot.moderationCheckpoint === undefined) return false;
+        const current = await input.moderation.readOwnerExportSnapshot({ portfolioId, ownerId }, context);
+        if (!matchesOwnerExportModerationFacts(snapshot, projectFeedbackOwnerExportSnapshot(current).records)) return false;
+      }
+      return true;
     },
   };
 }

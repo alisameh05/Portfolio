@@ -5,11 +5,11 @@ import { parseSafeErrorCode } from "./persistence.js";
 import type { Clock, StableIdGenerator, TransactionContext } from "../../../runtime/ports.js";
 import type { OwnerExportStorePort, PersistedOwnerExport } from "./owner-export-store.js";
 import type { OwnerExportAssemblySnapshot } from "./owner-export-package.js";
-import { buildConfigurationOwnerExportPackage, buildCvOwnerExportPackage, buildMediaOwnerExportPackage, buildSelectedOwnerExportPackage, type OwnerExportMediaObjectReaderPort } from "./owner-export-package.js";
+import { buildConfigurationOwnerExportPackage, buildSelectedOwnerExportPackage, type OwnerExportMediaObjectReaderPort } from "./owner-export-package.js";
 import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportObjectReadPort } from "./service.js";
-import { OWNER_EXPORT_RETENTION_SECONDS, applyGuardedOwnerExportTransition } from "./owner-export-service.js";
+import { applyGuardedOwnerExportTransition } from "./owner-export-service.js";
 import { calculateJobRetryDelayMilliseconds } from "./retry-policy.js";
-import type { OwnerExportModerationArtifactsPort, createOwnerExportModerationCleanupService } from "./owner-export-cleanup.js";
+import type { OwnerExportArtifactCleanupPort, createOwnerExportArtifactCleanupService } from "./owner-export-cleanup.js";
 
 const LEASE_DURATION_SECONDS = 300;
 const CLAIM_LIMIT = 10;
@@ -44,6 +44,12 @@ export interface OwnerExportSnapshotReaderPort {
     readonly ownerId: StableId<"Owner">;
     readonly context: TransactionContext;
   }): Promise<boolean>;
+  revalidateOwnerExportForCleanup?(input: {
+    readonly snapshot: OwnerExportAssemblySnapshot;
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly ownerId: StableId<"Owner">;
+    readonly context: TransactionContext;
+  }): Promise<boolean>;
 }
 
 /** @deprecated Use the scope-aware reader port; retained for #240 adapter callers. */
@@ -69,8 +75,8 @@ export interface OwnerExportAssemblyDependencies {
   readonly clock: Clock;
   readonly ids: StableIdGenerator;
   readonly random?: () => number;
-  readonly artifacts?: OwnerExportModerationArtifactsPort;
-  readonly cleanup?: ReturnType<typeof createOwnerExportModerationCleanupService>;
+  readonly artifacts: OwnerExportArtifactCleanupPort;
+  readonly cleanup?: ReturnType<typeof createOwnerExportArtifactCleanupService>;
 }
 
 export interface OwnerExportAssemblyRunResult {
@@ -113,15 +119,6 @@ function parseJob(value: unknown): {
   };
 }
 
-function effectiveExpiry(completedAt: string, policyExpiresAt?: string): string {
-  const defaultExpiry = Date.parse(completedAt) + OWNER_EXPORT_RETENTION_SECONDS * 1000;
-  if (policyExpiresAt !== undefined) {
-    const policy = Date.parse(policyExpiresAt);
-    if (Number.isFinite(policy)) return new Date(Math.min(defaultExpiry, policy)).toISOString();
-  }
-  return new Date(defaultExpiry).toISOString();
-}
-
 async function verifyArtifact(
   content: AsyncIterable<Uint8Array>,
   contentLength: number,
@@ -142,17 +139,9 @@ async function verifyArtifact(
 }
 
 function isSupportedScopeSelection(scopes: readonly string[]): boolean {
-  if (scopes.includes("analytics-reports")) return sameScopes(scopes, ["analytics-reports"]);
-  const supportedOrder = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "moderation-history", "portfolio-configuration"];
+  const supportedOrder = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "moderation-history", "analytics-reports", "portfolio-configuration"];
   const canonical = supportedOrder.filter((scope) => scopes.includes(scope));
-  if (scopes.length === 1 && scopes[0] === "media-metadata") return true;
-  if (scopes.includes("cv-metadata")) {
-    return sameScopes(scopes, ["cv-metadata"]) || sameScopes(scopes, ["media-metadata", "cv-metadata"]);
-  }
-  if (scopes.includes("media-metadata")) return false;
-  return canonical.length === scopes.length && canonical.every((scope, index) => scopes[index] === scope) &&
-    (scopes.includes("portfolio-content") || scopes.includes("taxonomy") ||
-      scopes.includes("moderation-history") || scopes.length === 1 && scopes[0] === "portfolio-configuration");
+  return scopes.length > 0 && canonical.length === scopes.length && canonical.every((scope, index) => scopes[index] === scope);
 }
 
 function sameScopes(left: readonly string[], right: readonly string[]): boolean {
@@ -160,10 +149,9 @@ function sameScopes(left: readonly string[], right: readonly string[]): boolean 
 }
 
 /**
- * Resumable leased worker for content, taxonomy, configuration, and moderation export slices. Snapshot
- * and candidate checkpoints are write-once. Moderation uploads hold a bounded
- * lifecycle fence shared with cleanup; other Storage work runs outside database
- * transactions. Readiness and queue completion commit under the current lease.
+ * Resumable leased worker for every registered Owner export scope. Snapshot
+ * and candidate checkpoints are write-once. Uploads hold a bounded lifecycle
+ * fence shared with cleanup. Readiness and queue completion commit under the current lease.
  */
 export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDependencies) {
   async function failExport(
@@ -274,15 +262,9 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         if (restored === undefined || !restored.ok) throw new Error("OWNER_EXPORT_MODERATION_UNAVAILABLE");
         snapshot = restored.value;
       }
-      const built = snapshot !== null && typeof snapshot === "object" && "kind" in snapshot && snapshot.includedScopes.includes("cv-metadata")
-        ? deps.mediaObjects === undefined ? (() => { throw new Error("OWNER_EXPORT_MEDIA_STORAGE_UNAVAILABLE"); })()
-          : await buildCvOwnerExportPackage({ exportId: record.exportId, portfolioId: parsed.portfolioId, snapshot, objects: deps.mediaObjects })
-        : snapshot !== null && typeof snapshot === "object" && "kind" in snapshot &&
-        snapshot.includedScopes.length === 1 && snapshot.includedScopes[0] === "media-metadata"
-        ? deps.mediaObjects === undefined ? (() => { throw new Error("OWNER_EXPORT_MEDIA_STORAGE_UNAVAILABLE"); })()
-          : await buildMediaOwnerExportPackage({ exportId: record.exportId, portfolioId: parsed.portfolioId, snapshot, objects: deps.mediaObjects })
-        : snapshot !== null && typeof snapshot === "object" && "kind" in snapshot
-        ? await buildSelectedOwnerExportPackage({ exportId: record.exportId, snapshot })
+      const built = snapshot !== null && typeof snapshot === "object" && "kind" in snapshot
+        ? await buildSelectedOwnerExportPackage({ exportId: record.exportId, snapshot, portfolioId: parsed.portfolioId,
+          ...(deps.mediaObjects === undefined ? {} : { objects: deps.mediaObjects }) })
         : await buildConfigurationOwnerExportPackage({ exportId: record.exportId, snapshot });
       if (record.candidateArtifactId === undefined || record.candidateSha256 === undefined || record.candidateContentLength === undefined) {
         const candidateArtifactId = parseStableId("OwnerExportArtifact", deps.ids.generate("OwnerExportArtifact"));
@@ -326,12 +308,9 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         }
         return true;
       };
-      if (record.includedScopes.includes("moderation-history")) {
-        if (deps.artifacts === undefined) throw new Error("OWNER_EXPORT_UPLOAD_FENCE_UNAVAILABLE");
-        const uploaded = await deps.artifacts.uploadCandidate({ portfolioId: parsed.portfolioId,
-          exportId: record.exportId, artifactId, actingJobId: jobId.value, leaseToken: job.leaseToken }, upload);
-        if (!uploaded) return "stale";
-      } else await upload();
+      const uploaded = await deps.artifacts.uploadCandidate({ portfolioId: parsed.portfolioId,
+        exportId: record.exportId, artifactId, actingJobId: jobId.value, leaseToken: job.leaseToken }, upload);
+      if (!uploaded) return "stale";
       const completedAt = deps.clock.now();
       const completed = await applyGuardedOwnerExportTransition(deps.exports, {
         exportId: record.exportId,
@@ -340,9 +319,9 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         expectedAggregateVersion: record.aggregateVersion,
         leaseToken: job.leaseToken,
         transitionedAt: completedAt,
-        expiresAt: effectiveExpiry(completedAt, "kind" in snapshot
+        policyExpiresAt: "kind" in snapshot
           ? snapshot.policyExpiresAt ?? snapshot.configuration?.policyExpiresAt
-          : snapshot.policyExpiresAt),
+          : snapshot.policyExpiresAt,
         actingJobId: jobId.value,
         integrityManifest: built.manifest,
         artifactId,

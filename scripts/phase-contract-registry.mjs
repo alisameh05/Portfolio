@@ -162,6 +162,7 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
   Object.freeze({ migration: "20261025190828_retain_moderation_export_artifact_cleanup.sql", ticket: 245, capability: "portability.feedback_export" }),
   Object.freeze({ migration: "20261025200000_read_measurement_for_owner_exports.sql", ticket: 246, capability: "portability.analytics_export", includeInDeclaredCapabilities: true }),
   Object.freeze({ migration: "20261026011341_restrict_analytics_export_deletion.sql", ticket: 246, capability: "portability.analytics_export" }),
+  Object.freeze({ migration: "20261026100000_reconcile_all_owner_export_artifacts.sql", ticket: 247, capability: "portability.owner_export_cleanup" }),
   Object.freeze({
     migration: "20261023100000_build_configuration_owner_exports.sql",
     migrationSha256: "3b2525935b8e8e1c83c64d1fe28ca0af60f6534cde53627bcb012059ce992966",
