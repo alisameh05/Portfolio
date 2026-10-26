@@ -200,6 +200,56 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
         .toMatchObject({ status: "ready", schemaVersion: "1.8", integrityManifest: { includedScopes: ["analytics-reports"] } });
       expect(validateOwnerExportZip(storedBytes).recordCounts["analytics-reports"]).toBe(3);
 
+      // Resume an export checkpointed before #247, when Analytics kept its
+      // retention deadline only at the snapshot's top level.
+      const legacyKey = parseIdempotencyKey(createStableId("Key"));
+      if (!legacyKey.ok) throw new Error("PHASE8_ANALYTICS_REQUEST_KEY_INVALID");
+      const legacyRequest = await exportService.requestOwnerExport({ portfolioId,
+        actor: { kind: "owner", ownerId, sessionId: "analytics-legacy-resume" },
+        idempotencyKey: legacyKey.value, includedScopes: ["analytics-reports"] });
+      if (!legacyRequest.ok) throw new Error("PHASE8_ANALYTICS_LEGACY_REQUEST_FAILED");
+      const [legacyJob] = await workerOperations.jobs.claimDue({ workerId: "analytics-old-worker", now: clock.now(),
+        leaseDurationSeconds: 300, limit: 1, jobTypes: ["portability.owner-export-assembly.v1"] });
+      if (legacyJob === undefined) throw new Error("PHASE8_ANALYTICS_LEGACY_LEASE_MISSING");
+      const lease = { actingJobId: legacyJob.jobId as StableId<"Job">, leaseToken: legacyJob.leaseToken };
+      const legacySnapshot: OwnerExportSelectedSnapshot = { ...snapshot,
+        snapshotId: createStableId("OwnerExportArtifact"), analytics: { records: snapshot.analytics!.records } };
+      // The previous builder used this same top-level deadline in the manifest.
+      const priorPackage = await buildSelectedOwnerExportPackage({ exportId: legacyRequest.value.exportId,
+        snapshot: { ...legacySnapshot, analytics: { ...legacySnapshot.analytics!, policyExpiresAt: snapshot.policyExpiresAt! } } });
+      const priorBytes = await archiveBytes(priorPackage.content);
+      expect(await workerStore.applyOwnerExportTransition({ exportId: legacyRequest.value.exportId,
+        fromStatus: "requested", toStatus: "building", expectedAggregateVersion: 1, transitionedAt: clock.now(), ...lease }))
+        .toMatchObject({ ok: true, value: { kind: "applied" } });
+      expect(await workerStore.saveOwnerExportSnapshot({ exportId: legacyRequest.value.exportId, ...lease, snapshot: legacySnapshot }))
+        .toEqual({ ok: true, value: "saved" });
+      const candidateArtifactId = createStableId("OwnerExportArtifact");
+      expect(await workerStore.saveOwnerExportCandidate({ exportId: legacyRequest.value.exportId, ...lease,
+        artifactId: candidateArtifactId, sha256: priorPackage.sha256, contentLength: priorPackage.contentLength }))
+        .toEqual({ ok: true, value: "saved" });
+      const persistedLegacy = await admin.query("select snapshot_data from portability.owner_exports where export_id=$1", [legacyRequest.value.exportId]);
+      expect(persistedLegacy.rows[0]?.snapshot_data.analytics).toEqual({ records: snapshot.analytics!.records });
+      await admin.query(`update operations.jobs set status='available', lease_owner=null, lease_token=null,
+        lease_expires_at=null, available_at=clock_timestamp()-interval '1 second' where job_id=$1`, [legacyJob.jobId]);
+      storedBytes = priorBytes;
+      let resumedWrites = 0;
+      const resumed = await createOwnerExportAssemblyService({ operations: workerOperations, exports: workerStore,
+        artifacts: workerStore, clock, ids, snapshots: { ...reader,
+          async capture() { throw new Error("LEGACY_EXPORT_MUST_NOT_RECAPTURE"); } },
+        storage: { ...storage, async writeOwnerExport(input) {
+          expect(await archiveBytes(input.content)).toEqual(priorBytes);
+          resumedWrites++;
+          return ok(undefined);
+        } },
+      }).runOwnerExportAssembly({ workerId: "analytics-upgraded-worker" });
+      expect(resumed, JSON.stringify(resumed)).toMatchObject({ ok: true, value: { claimed: 1, completed: 1, retried: 0, failed: 0 } });
+      expect(resumedWrites).toBe(1);
+      expect(await workerStore.findOwnerExport({ portfolioId, ownerId, exportId: legacyRequest.value.exportId }))
+        .toMatchObject({ status: "ready", candidateArtifactId, candidateSha256: priorPackage.sha256,
+          candidateContentLength: priorBytes.byteLength, artifactSha256: priorPackage.sha256,
+          expiresAt: snapshot.policyExpiresAt });
+      expect(validateOwnerExportZip(storedBytes).manifest.digest).toBe(priorPackage.manifest.digest);
+
       const mixedKey = parseIdempotencyKey(createStableId("Key"));
       if (!mixedKey.ok) throw new Error("PHASE8_ANALYTICS_REQUEST_KEY_INVALID");
       const mixed = await exportService.requestOwnerExport({ portfolioId,
@@ -220,6 +270,15 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
         integrityManifest: { schemaVersion: "1.9", includedScopes: ["analytics-reports", "portfolio-configuration"] } });
       expect(mixedRecord!.expiresAt).toBe((mixedRecord!.snapshot as OwnerExportSelectedSnapshot).policyExpiresAt);
       expect(validateOwnerExportZip(storedBytes).includedScopes).toEqual(["analytics-reports", "portfolio-configuration"]);
+      // A mixed package's top-level deadline cannot stand in for Analytics'
+      // own deadline when restoring persisted snapshots.
+      await admin.query("update portability.owner_exports set snapshot_data=snapshot_data #- '{analytics,policyExpiresAt}' where export_id=$1", [mixed.value.exportId]);
+      const missingAnalyticsDeadline = await workerStore.findOwnerExport({ portfolioId, ownerId, exportId: mixed.value.exportId });
+      expect((missingAnalyticsDeadline!.snapshot as OwnerExportSelectedSnapshot).analytics!.policyExpiresAt).toBeUndefined();
+      await expect(buildSelectedOwnerExportPackage({ exportId: mixed.value.exportId,
+        snapshot: missingAnalyticsDeadline!.snapshot as OwnerExportSelectedSnapshot })).rejects.toThrow("OWNER_EXPORT_ANALYTICS_SNAPSHOT_INVALID");
+      await admin.query("update portability.owner_exports set snapshot_data=$2::jsonb where export_id=$1",
+        [mixed.value.exportId, JSON.stringify(mixedRecord!.snapshot)]);
 
       const privilege = await admin.query(`select
         has_table_privilege('shipwithali_worker','measurement.analytics_goals','INSERT') as goal_insert,

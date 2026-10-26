@@ -41,7 +41,7 @@ import type {
   PersistedOwnerExport,
 } from "../application/owner-export-store.js";
 import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportPackageManifest } from "../application/service.js";
-import { checkpointOwnerExportSnapshot, type OwnerExportAssemblySnapshot, type OwnerExportConfigurationSnapshot } from "../application/owner-export-package.js";
+import { checkpointOwnerExportSnapshot, type OwnerExportAssemblySnapshot, type OwnerExportConfigurationSnapshot, type OwnerExportSelectedSnapshot } from "../application/owner-export-package.js";
 import type { TransactionContext } from "../../../runtime/ports.js";
 import type { OwnerExportArtifactCleanupPort, OwnerExportInvalidationLedgerRecord } from "../application/owner-export-cleanup.js";
 
@@ -174,7 +174,17 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
           data["configuration"] !== undefined && (!data["configuration"] || typeof data["configuration"] !== "object")) {
         throw new PostgresInfrastructureError();
       }
-      snapshot = data as unknown as OwnerExportAssemblySnapshot;
+      const selected = data as unknown as OwnerExportSelectedSnapshot;
+      // Before #247, Analytics-only checkpoints stored their own retention
+      // deadline at the top level. Normalize in memory without changing the
+      // checkpoint or candidate bytes. A mixed package's earlier deadline may
+      // belong to another scope, so it cannot supply this fallback.
+      snapshot = row.included_scopes.length === 1 && row.included_scopes[0] === "analytics-reports" &&
+        selected.includedScopes.length === 1 && selected.includedScopes[0] === "analytics-reports" &&
+        selected.analytics !== undefined && selected.analytics.policyExpiresAt === undefined &&
+        typeof selected.policyExpiresAt === "string"
+        ? { ...selected, analytics: { ...selected.analytics, policyExpiresAt: selected.policyExpiresAt } }
+        : selected;
     } else {
       const capabilities = data["capabilities"];
       if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities) ||
