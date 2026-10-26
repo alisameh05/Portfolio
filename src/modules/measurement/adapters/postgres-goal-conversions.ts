@@ -26,7 +26,8 @@ function asInstant(value: string | Date): string {
 
 async function setScope(tx: TransactionContext, portfolioId: StableId<"Portfolio">) {
   const db = resolvePostgresTransaction(tx);
-  await sql`select set_config('shipwithali.portfolio_id', ${portfolioId}, true)`.execute(db);
+  await sql`select set_config('shipwithali.portfolio_id', ${portfolioId}, true),
+    set_config('shipwithali.worker_purpose', 'measurement.goal-conversion', true)`.execute(db);
   return db;
 }
 

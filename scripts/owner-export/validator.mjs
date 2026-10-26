@@ -388,6 +388,7 @@ const localManifest13 = readLocalSchema("v1.3/manifest.schema.json");
 const localManifest14 = readLocalSchema("v1.4/manifest.schema.json");
 const localManifest15 = readLocalSchema("v1.5/manifest.schema.json");
 const localManifest16 = readLocalSchema("v1.6/manifest.schema.json");
+const localManifest17 = readLocalSchema("v1.7/manifest.schema.json");
 const manifestValidators = new Map([
   ["1.0", ajv.compile(localManifest10.schema)],
   ["1.1", ajv.compile(localManifest11.schema)],
@@ -396,6 +397,7 @@ const manifestValidators = new Map([
   ["1.5", ajv.compile(localManifest14.schema)],
   ["1.6", ajv.compile(localManifest15.schema)],
   ["1.7", ajv.compile(localManifest16.schema)],
+  ["1.8", ajv.compile(localManifest17.schema)],
 ]);
 function readLocalRecordSchemas(schemaVersion) {
   return new Map(SCOPES.map((scope) => {
@@ -436,8 +438,12 @@ const localRecordSchemas17 = new Map(localRecordSchemas16);
 const moderationSchema17 = readLocalSchema("v1.2/moderation-history.schema.json");
 if (moderationSchema17.schema.$id !== "urn:shipwithali:owner-export-schema:moderation-history:1.2") throw new Error("invalid local Moderation schema identity");
 localRecordSchemas17.set("moderation-history", { ...moderationSchema17, validate: ajv.compile(moderationSchema17.schema), uri: moderationSchema17.schema.$id });
+const localRecordSchemas18 = new Map(localRecordSchemas17);
+const analyticsSchema18 = readLocalSchema("v1.7/analytics-reports.schema.json");
+if (analyticsSchema18.schema.$id !== "urn:shipwithali:owner-export-schema:analytics-reports:1.2") throw new Error("invalid local Analytics schema identity");
+localRecordSchemas18.set("analytics-reports", { ...analyticsSchema18, validate: ajv.compile(analyticsSchema18.schema), uri: analyticsSchema18.schema.$id });
 function recordSchemasForVersion(version) {
-  return version === "1.0" ? localRecordSchemas10 : version === "1.3" ? localRecordSchemas13 : version === "1.4" ? localRecordSchemas12 : version === "1.5" ? localRecordSchemas15 : version === "1.6" ? localRecordSchemas16 : version === "1.7" ? localRecordSchemas17 : localRecordSchemas11;
+  return version === "1.0" ? localRecordSchemas10 : version === "1.3" ? localRecordSchemas13 : version === "1.4" ? localRecordSchemas12 : version === "1.5" ? localRecordSchemas15 : version === "1.6" ? localRecordSchemas16 : version === "1.7" ? localRecordSchemas17 : version === "1.8" ? localRecordSchemas18 : localRecordSchemas11;
 }
 
 function object(value) {
@@ -455,6 +461,7 @@ function supportedManifestVersion(manifest) {
   if (minor === 5) return "1.5";
   if (minor === 6) return "1.6";
   if (minor === 7) return "1.7";
+  if (minor === 8) return "1.8";
   if (minor === undefined || minor < 1) fail("PACKAGE_VERSION_MINOR_UNSUPPORTED");
   return "1.1";
 }
@@ -476,9 +483,10 @@ function validateEntryDescriptor(entry, version) {
   if (!object(entry) || !SCOPE_SET.has(entry.scope)) fail("PACKAGE_ENTRY_DESCRIPTOR_INVALID");
   const extension = entry.mediaType === "application/x-ndjson" ? "ndjson" : entry.mediaType === "application/json" ? "json" : "";
   const schemaVersion = version === "1.0" ? "1.0" :
-    (version === "1.3" || version === "1.4" || version === "1.5" || version === "1.7") && entry.scope === "portfolio-content" ||
-    (version === "1.4" || version === "1.5" || version === "1.7") && entry.scope === "taxonomy" || (version === "1.5" || version === "1.6" || version === "1.7") && entry.scope === "media-metadata" ||
-    (version === "1.6" || version === "1.7") && entry.scope === "cv-metadata" || version === "1.7" && entry.scope === "moderation-history" ? "1.2" : "1.1";
+    (version === "1.3" || version === "1.4" || version === "1.5" || version === "1.7" || version === "1.8") && entry.scope === "portfolio-content" ||
+    (version === "1.4" || version === "1.5" || version === "1.7" || version === "1.8") && entry.scope === "taxonomy" || (version === "1.5" || version === "1.6" || version === "1.7" || version === "1.8") && entry.scope === "media-metadata" ||
+    (version === "1.6" || version === "1.7" || version === "1.8") && entry.scope === "cv-metadata" ||
+    (version === "1.7" || version === "1.8") && entry.scope === "moderation-history" || version === "1.8" && entry.scope === "analytics-reports" ? "1.2" : "1.1";
   const schema = recordSchemasForVersion(version).get(entry.scope);
   if (
     extension === "" || entry.path !== `records/${entry.scope}.${extension}` ||
@@ -501,8 +509,8 @@ function verifySchemaEntries(manifest, version, entryMap) {
   const schemaDescriptors = version === "1.0" ? undefined : manifest.schemas;
   const expectedDescriptors = [];
   if (version !== "1.0") {
-    const manifestSchema = version === "1.7" ? localManifest16 : version === "1.6" ? localManifest15 : version === "1.5" ? localManifest14 : version === "1.4" ? localManifest13 : version === "1.3" ? localManifest12 : localManifest11;
-    const manifestSchemaVersion = version === "1.7" ? "1.6" : version === "1.6" ? "1.5" : version === "1.5" ? "1.4" : version === "1.4" ? "1.3" : version === "1.3" ? "1.2" : "1.1";
+    const manifestSchema = version === "1.8" ? localManifest17 : version === "1.7" ? localManifest16 : version === "1.6" ? localManifest15 : version === "1.5" ? localManifest14 : version === "1.4" ? localManifest13 : version === "1.3" ? localManifest12 : localManifest11;
+    const manifestSchemaVersion = version === "1.8" ? "1.7" : version === "1.7" ? "1.6" : version === "1.6" ? "1.5" : version === "1.5" ? "1.4" : version === "1.4" ? "1.3" : version === "1.3" ? "1.2" : "1.1";
     expectedDescriptors.push({
       kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: `urn:shipwithali:owner-export-schema:manifest:${manifestSchemaVersion}`,
       schemaVersion: manifestSchemaVersion, digest: sha256(manifestSchema.bytes), source: manifestSchema,
@@ -510,10 +518,11 @@ function verifySchemaEntries(manifest, version, entryMap) {
   }
   for (const scope of usedScopes) {
     const source = localRecordSchemas.get(scope);
-    const recordVersion = (version === "1.3" || version === "1.4" || version === "1.5" || version === "1.6" || version === "1.7") && scope === "portfolio-content" ||
-      (version === "1.4" || version === "1.5" || version === "1.7") && scope === "taxonomy" || (version === "1.5" || version === "1.6" || version === "1.7") && scope === "media-metadata" ||
-      (version === "1.6" || version === "1.7") && scope === "cv-metadata" || version === "1.7" && scope === "moderation-history"
-      ? "1.2" : schemaVersion;
+    const recordVersion = (version === "1.3" || version === "1.4" || version === "1.5" || version === "1.6" || version === "1.7" || version === "1.8") && scope === "portfolio-content" ||
+      (version === "1.4" || version === "1.5" || version === "1.7" || version === "1.8") && scope === "taxonomy" || (version === "1.5" || version === "1.6" || version === "1.7" || version === "1.8") && scope === "media-metadata" ||
+      (version === "1.6" || version === "1.7" || version === "1.8") && scope === "cv-metadata" ||
+      (version === "1.7" || version === "1.8") && scope === "moderation-history"
+      ? "1.2" : version === "1.8" && scope === "analytics-reports" ? "1.2" : schemaVersion;
     expectedDescriptors.push({
       kind: "record", scope, path: `schemas/${scope}.schema.json`, schemaUri: source.uri,
       schemaVersion: recordVersion, digest: sha256(source.bytes), source,
@@ -608,6 +617,67 @@ function addUtcCalendarMonths(value, months) {
   return date.getTime();
 }
 
+function measurementAggregateExpiryAt(utcDay) {
+  const [year, month, day] = utcDay.split("-").map(Number);
+  const targetMonth = month - 1 + 13;
+  const targetYear = year + Math.floor(targetMonth / 12);
+  const normalizedMonth = targetMonth % 12;
+  const lastDay = new Date(Date.UTC(targetYear, normalizedMonth + 1, 0)).getUTCDate();
+  return Date.UTC(targetYear, normalizedMonth, Math.min(day, lastDay));
+}
+
+function verifyAnalyticsRetention(manifest, records) {
+  const capturedAt = manifest.snapshot.capturedAt;
+  const captureTime = Date.parse(capturedAt);
+  const captureDay = capturedAt.slice(0, 10);
+  let earliest = captureDay;
+  let previousDay = new Date(Date.parse(`${earliest}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  while (measurementAggregateExpiryAt(previousDay) > captureTime) {
+    earliest = previousDay;
+    previousDay = new Date(Date.parse(`${earliest}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  }
+  const policy = manifest.extensions?.analyticsReportPolicy;
+  if (!object(policy) || Object.keys(policy).sort().join(",") !== "aggregateRetentionExpiresAt,breakdown,grouping,maximumPeriodDays,maximumRowsPerQuery,minimumObservedSubjects,totalRows,withheldCounts" ||
+      policy.maximumPeriodDays !== 31 || policy.maximumRowsPerQuery !== 500 || policy.minimumObservedSubjects !== 5 ||
+      policy.grouping !== "daily-goal" || policy.breakdown !== "locale" || policy.totalRows !== "omitted" || policy.withheldCounts !== "omitted" ||
+      policy.aggregateRetentionExpiresAt !== new Date(measurementAggregateExpiryAt(earliest)).toISOString()) {
+    fail("PACKAGE_ANALYTICS_POLICY_INVALID");
+  }
+  for (const record of records) {
+    for (const version of record.value.goal.versions) {
+      const reports = record.value.reports.filter((report) => report.goalVersionId === version.versionId);
+      let expectedStart = earliest;
+      let index = 0;
+      while (expectedStart <= captureDay) {
+        const expectedEnd = new Date(Math.min(Date.parse(`${captureDay}T00:00:00Z`),
+          Date.parse(`${expectedStart}T00:00:00Z`) + 30 * 86_400_000)).toISOString().slice(0, 10);
+        const report = reports[index++];
+        const reportAsOf = report ? Date.parse(report.asOf) : Number.NaN;
+        if (!report || report.periodStartDay !== expectedStart || report.periodEndDay !== expectedEnd ||
+            report.periodEndDay > captureDay || measurementAggregateExpiryAt(report.periodStartDay) <= captureTime ||
+            !Number.isFinite(reportAsOf) || reportAsOf > captureTime || Object.hasOwn(report, "aggregateCount")) {
+          fail("PACKAGE_ANALYTICS_RETENTION_INVALID");
+        }
+        if (report.cells !== undefined) {
+          if (!Array.isArray(report.cells) || report.cells.length > 499) fail("PACKAGE_ANALYTICS_REPORT_INVALID");
+          const seenCells = new Set();
+          for (const cell of report.cells) {
+            const key = `${cell.utcDay}:${cell.locale}`;
+            const cellTime = Date.parse(`${cell.utcDay}T00:00:00Z`);
+            if (!Number.isFinite(cellTime) || new Date(cellTime).toISOString().slice(0, 10) !== cell.utcDay ||
+                cell.utcDay < report.periodStartDay || cell.utcDay > report.periodEndDay || seenCells.has(key)) {
+              fail("PACKAGE_ANALYTICS_REPORT_INVALID");
+            }
+            seenCells.add(key);
+          }
+        }
+        expectedStart = new Date(Date.parse(`${expectedEnd}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+      }
+      if (index !== reports.length) fail("PACKAGE_ANALYTICS_RETENTION_INVALID");
+    }
+  }
+}
+
 function verifyModerationRetention(records, capturedAt) {
   const captureTime = Date.parse(capturedAt);
   for (const record of records) {
@@ -691,12 +761,34 @@ function verifyRecordOrdering(scope, records, version) {
       for (let index = 1; index < goal.activationHistory.length; index += 1) {
         const previous = goal.activationHistory[index - 1];
         const current = goal.activationHistory[index];
-        if (compareUtcInstant(previous.activatedAt, current.activatedAt) > 0 ||
-          compareUtcInstant(previous.activatedAt, current.activatedAt) === 0 && previous.versionId >= current.versionId) {
+        if (version === "1.8"
+          ? current.activationSequence !== previous.activationSequence + 1
+          : compareUtcInstant(previous.activatedAt, current.activatedAt) > 0 ||
+            compareUtcInstant(previous.activatedAt, current.activatedAt) === 0 && previous.versionId >= current.versionId) {
           fail("PACKAGE_RECORD_ORDER_INVALID");
         }
       }
+      if (version === "1.8" && goal.activationHistory.length > 0 && goal.activationHistory[0].activationSequence !== 1) {
+        fail("PACKAGE_RECORD_ORDER_INVALID");
+      }
       const reports = valueOf(record).reports;
+      if (version === "1.8") {
+        const versionOrder = new Map(goal.versions.map((item, index) => [item.versionId, index]));
+        let previousVersionIndex = -1;
+        let previousEndDay;
+        for (const report of reports) {
+          const currentVersionIndex = versionOrder.get(report.goalVersionId);
+          if (currentVersionIndex === undefined || currentVersionIndex < previousVersionIndex ||
+              currentVersionIndex === previousVersionIndex && previousEndDay !== undefined && report.periodStartDay <= previousEndDay ||
+              (Date.parse(`${report.periodEndDay}T00:00:00Z`) - Date.parse(`${report.periodStartDay}T00:00:00Z`)) / 86_400_000 >= 31) {
+            fail("PACKAGE_ANALYTICS_REPORT_ORDER_INVALID");
+          }
+          if (currentVersionIndex !== previousVersionIndex) previousEndDay = undefined;
+          previousVersionIndex = currentVersionIndex;
+          previousEndDay = report.periodEndDay;
+        }
+        continue;
+      }
       for (let index = 1; index < reports.length; index += 1) {
         const previous = reports[index - 1];
         const current = reports[index];
@@ -1243,7 +1335,7 @@ export function validateOwnerExportZip(input) {
   const manifest = parseJsonBytes(manifestBytes);
   if (!object(manifest) || manifest.packageFormat !== "shipwithali-owner-export") fail("PACKAGE_FORMAT_UNSUPPORTED");
   const version = supportedManifestVersion(manifest);
-  if (version !== "1.5" && version !== "1.6" && version !== "1.7" && entries.some((entry) => entry.bytes.length > LIMITS.legacyEntryBytes)) fail("ENTRY_SIZE_LIMIT");
+  if (version !== "1.5" && version !== "1.6" && version !== "1.7" && version !== "1.8" && entries.some((entry) => entry.bytes.length > LIMITS.legacyEntryBytes)) fail("ENTRY_SIZE_LIMIT");
   if (version !== "1.0") {
     checkRequiredFeatures(manifest);
     const requiredProperties = ["exportId", "snapshot", "dependencies", "exclusions", "schemas", "assets"];
@@ -1260,6 +1352,7 @@ export function validateOwnerExportZip(input) {
       !includedScopes.includes("taxonomy"))) fail("PACKAGE_SCOPE_UNSUPPORTED");
   if (version === "1.7" && (includedScopes.some(scope => !["portfolio-content", "taxonomy", "moderation-history", "portfolio-configuration"].includes(scope)) ||
       !includedScopes.includes("moderation-history"))) fail("PACKAGE_SCOPE_UNSUPPORTED");
+  if (version === "1.8" && (includedScopes.length !== 1 || includedScopes[0] !== "analytics-reports")) fail("PACKAGE_SCOPE_UNSUPPORTED");
   if (version === "1.5" && (includedScopes.length !== 1 || includedScopes[0] !== "media-metadata")) fail("PACKAGE_SCOPE_UNSUPPORTED");
   if (version === "1.6" && (!includedScopes.includes("cv-metadata") || includedScopes.some((scope) => !["cv-metadata", "media-metadata"].includes(scope)))) fail("PACKAGE_SCOPE_UNSUPPORTED");
   const descriptors = verifySchemaEntries(manifest, version, entryMap);
@@ -1269,6 +1362,9 @@ export function validateOwnerExportZip(input) {
     const validatorForScope = recordSchemasForVersion(version).get(descriptor.scope).validate;
     const records = recordsFromEntry(findEntry(entryMap, descriptor.path), descriptor, validatorForScope);
     verifyRecordOrdering(descriptor.scope, records, version);
+    if (version === "1.8" && descriptor.scope === "analytics-reports") {
+      verifyAnalyticsRetention(manifest, records);
+    }
     recordsByScope.set(descriptor.scope, records);
     recordCounts[descriptor.scope] = records.length;
   }

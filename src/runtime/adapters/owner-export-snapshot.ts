@@ -9,6 +9,7 @@ import type { TaxonomyOwnerExportSnapshotReader } from "../../modules/taxonomy-d
 import type { OwnerMediaExportSnapshotReaderPort } from "../../modules/media/application/owner-contracts.js";
 import type { OwnerCvExportSnapshotReaderPort } from "../../modules/cv-portfolio/index.js";
 import { projectFeedbackOwnerExportSnapshot, type FeedbackOwnerExportSnapshotReaderPort } from "../../modules/interaction-moderation/application/owner-export.js";
+import type { OwnerAnalyticsExportSnapshotReaderPort } from "../../modules/measurement/application/owner-analytics-export.js";
 
 type OwnerExportMediaType = NonNullable<OwnerExportSelectedSnapshot["media"]>["assets"][number]["mediaType"];
 const OWNER_EXPORT_MEDIA_TYPES: readonly OwnerExportMediaType[] = [
@@ -125,6 +126,7 @@ export function createOwnerExportSnapshotReader(input: {
   readonly media?: OwnerMediaExportSnapshotReaderPort;
   readonly cv?: OwnerCvExportSnapshotReaderPort;
   readonly moderation?: FeedbackOwnerExportSnapshotReaderPort;
+  readonly analytics?: OwnerAnalyticsExportSnapshotReaderPort;
   readonly transactions: TransactionRunner;
   readonly capabilities: OwnerExportCapabilityFactsReader;
 }): OwnerExportSnapshotReaderPort {
@@ -136,10 +138,12 @@ export function createOwnerExportSnapshotReader(input: {
       const hasMedia = scopes.includes("media-metadata");
       const hasCv = scopes.includes("cv-metadata");
       const hasModeration = scopes.includes("moderation-history");
+      const hasAnalytics = scopes.includes("analytics-reports");
       const hasConfiguration = scopes.includes("portfolio-configuration");
-      const canonicalScopes = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "moderation-history", "portfolio-configuration"].filter((scope) => scopes.includes(scope));
+      const canonicalScopes = ["portfolio-content", "taxonomy", "media-metadata", "cv-metadata", "moderation-history", "analytics-reports", "portfolio-configuration"].filter((scope) => scopes.includes(scope));
       if (canonicalScopes.length !== scopes.length || canonicalScopes.some((scope, index) => scopes[index] !== scope) ||
-          (!hasContent && !hasTaxonomy && !hasMedia && !hasCv && !hasModeration && !hasConfiguration) ||
+          (!hasContent && !hasTaxonomy && !hasMedia && !hasCv && !hasModeration && !hasAnalytics && !hasConfiguration) ||
+          hasAnalytics && scopes.length !== 1 ||
           (hasCv && scopes.length !== 1 && !(scopes.length === 2 && hasMedia)) ||
           (hasMedia && scopes.length !== 1 && !(scopes.length === 2 && hasCv))) {
         return err({ kind: "validation", code: "OWNER_EXPORT_SCOPE_UNSUPPORTED" });
@@ -148,6 +152,7 @@ export function createOwnerExportSnapshotReader(input: {
       if (hasMedia && input.media === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_MEDIA_UNAVAILABLE" });
       if (hasCv && input.cv === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_CV_UNAVAILABLE" });
       if (hasModeration && input.moderation === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_MODERATION_UNAVAILABLE" });
+      if (hasAnalytics && input.analytics === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_ANALYTICS_UNAVAILABLE" });
       try {
         const captured = await input.transactions.run(async (transaction) => {
           const settings = hasConfiguration
@@ -172,6 +177,10 @@ export function createOwnerExportSnapshotReader(input: {
           const moderation = hasModeration
             ? await input.moderation!.readOwnerExportSnapshot({ portfolioId: request.portfolioId, ownerId: request.ownerId }, transaction)
             : undefined;
+          const analytics = hasAnalytics
+            ? await input.analytics!.readOwnerAnalyticsExportSnapshot({ portfolioId: request.portfolioId, ownerId: request.ownerId, transaction })
+            : undefined;
+          if (analytics !== undefined && !analytics.ok) throw new Error("OWNER_EXPORT_ANALYTICS_UNAVAILABLE");
           const acceptedCvMediaIds = cv?.ok
             ? [...new Set(cv.value.versions.filter((version) => version.state === "accepted").map((version) => version.mediaId))]
             : [];
@@ -189,10 +198,10 @@ export function createOwnerExportSnapshotReader(input: {
             }, transaction)
             : undefined;
           if (mediaLocales !== undefined && !mediaLocales.ok) throw new Error("OWNER_EXPORT_MEDIA_LOCALES_UNAVAILABLE");
-          const capturedAt = settings?.ok ? settings.value.capturedAt : content?.ok ? content.value.capturedAt : taxonomy?.ok ? taxonomy.value.capturedAt : cv?.ok ? cv.value.capturedAt : media?.ok ? media.value.capturedAt : moderation?.capturedAt;
+          const capturedAt = settings?.ok ? settings.value.capturedAt : content?.ok ? content.value.capturedAt : taxonomy?.ok ? taxonomy.value.capturedAt : cv?.ok ? cv.value.capturedAt : media?.ok ? media.value.capturedAt : moderation?.capturedAt ?? (analytics?.ok ? analytics.value.capturedAt : undefined);
           if (capturedAt === undefined || settings?.ok && settings.value.capturedAt !== capturedAt ||
               content?.ok && content.value.capturedAt !== capturedAt || taxonomy?.ok && taxonomy.value.capturedAt !== capturedAt || cv?.ok && cv.value.capturedAt !== capturedAt ||
-              media?.ok && media.value.capturedAt !== capturedAt || moderation !== undefined && moderation.capturedAt !== capturedAt) {
+              media?.ok && media.value.capturedAt !== capturedAt || moderation !== undefined && moderation.capturedAt !== capturedAt || analytics?.ok && analytics.value.capturedAt !== capturedAt) {
             throw new Error("OWNER_EXPORT_SNAPSHOT_TIME_MISMATCH");
           }
           return {
@@ -205,6 +214,7 @@ export function createOwnerExportSnapshotReader(input: {
             cvMedia: media?.ok ? media.value : undefined,
             mediaLocales: mediaLocales?.ok ? mediaLocales.value : undefined,
             moderation,
+            analytics: analytics?.ok ? analytics.value : undefined,
           };
         }, { isolationLevel: "repeatable read" });
         if ("cvHistoryLimitExceeded" in captured) {
@@ -224,7 +234,7 @@ export function createOwnerExportSnapshotReader(input: {
             },
           };
         }
-        if (!hasContent && !hasTaxonomy && !hasMedia && !hasCv && !hasModeration && configuration !== undefined) return ok(configuration);
+        if (!hasContent && !hasTaxonomy && !hasMedia && !hasCv && !hasModeration && !hasAnalytics && configuration !== undefined) return ok(configuration);
         const localesByMedia = new Map((captured.mediaLocales ?? []).map((fact) => [fact.mediaAssetId, fact.locales]));
         const mediaRecords = captured.media?.records.map((record) => {
           const locales = localesByMedia.get(record.mediaId) ?? [];
@@ -275,6 +285,10 @@ export function createOwnerExportSnapshotReader(input: {
           snapshotId: request.snapshotId,
           capturedAt: captured.capturedAt,
           includedScopes: scopes as OwnerExportSelectedSnapshot["includedScopes"],
+          ...(captured.analytics === undefined ? {} : {
+            analytics: { records: captured.analytics.records },
+            policyExpiresAt: captured.analytics.policyExpiresAt,
+          }),
           ...(configuration === undefined ? {} : { configuration }),
           ...(captured.content === undefined ? {} : { content: { records: captured.content.records.map((record) => ({ contentId: record.contentId, value: portableContentRecord(record) })) } }),
           ...(captured.taxonomy === undefined ? {} : { taxonomy: { records: captured.taxonomy.taxonomies.map((record) => ({

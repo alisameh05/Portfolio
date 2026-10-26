@@ -44,6 +44,17 @@ export function createPostgresOwnerAnalyticsGoalRepository(): OwnerAnalyticsGoal
       if (!Number.isSafeInteger(aggregateVersion) || aggregateVersion < 1) throw new Error("INVALID_ANALYTICS_GOAL_VERSION");
       return { goalId: row.goal_id, aggregateVersion, activeVersionId: row.active_version_id };
     },
+    async listGoals(portfolioId, transaction): Promise<readonly AnalyticsGoalRootRecord[]> {
+      const db = resolvePostgresTransaction(transaction);
+      await setScope(transaction, portfolioId);
+      const result = await sql<GoalRootRow>`select goal_id, aggregate_version, active_version_id
+        from measurement.analytics_goals where portfolio_id = ${portfolioId}::uuid order by goal_id`.execute(db);
+      return result.rows.map(row => {
+        const aggregateVersion = Number(row.aggregate_version);
+        if (!Number.isSafeInteger(aggregateVersion) || aggregateVersion < 1) throw new Error("INVALID_ANALYTICS_GOAL_VERSION");
+        return { goalId: row.goal_id, aggregateVersion, activeVersionId: row.active_version_id };
+      });
+    },
     async insertGoal(goalId, portfolioId, transaction) {
       const db = resolvePostgresTransaction(transaction);
       await setScope(transaction, portfolioId);

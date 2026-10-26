@@ -218,7 +218,7 @@ export function createOwnerExportService(
     }
     const idempotencyKey = parseIdempotencyKey(command.idempotencyKey);
     if (!idempotencyKey.ok) return idempotencyKey;
-    const schemaVersion = scopes.value.includes("moderation-history") ? "1.7" : scopes.value.includes("cv-metadata") ? "1.6" : scopes.value.includes("media-metadata") ? "1.5" : scopes.value.includes("taxonomy") ? "1.4" : scopes.value.includes("portfolio-content") ? "1.3" : "1.2";
+    const schemaVersion = scopes.value.includes("analytics-reports") ? "1.8" : scopes.value.includes("moderation-history") ? "1.7" : scopes.value.includes("cv-metadata") ? "1.6" : scopes.value.includes("media-metadata") ? "1.5" : scopes.value.includes("taxonomy") ? "1.4" : scopes.value.includes("portfolio-content") ? "1.3" : "1.2";
     const requestHash = await hashCanonicalRequest({
       operation: "owner-export-request",
       schemaVersion,
@@ -483,6 +483,7 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const entries = value["entries"];
   const recordVersion = (scope: unknown) => {
     if (manifestVersion === "1.0") return "1.0";
+    if (manifestVersion === "1.8" && scope === "analytics-reports") return "1.2";
     if ((manifestVersion === "1.5" || manifestVersion === "1.6" || manifestVersion === "1.7") && scope === "media-metadata") return "1.2";
     if ((manifestVersion === "1.6" || manifestVersion === "1.7") && scope === "cv-metadata") return "1.2";
     if (manifestVersion === "1.7" && scope === "moderation-history") return "1.2";
@@ -492,12 +493,13 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   };
   const commonShape = (
     value["packageFormat"] === "shipwithali-owner-export" &&
-    ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7"].includes(value["schemaVersion"] as string) &&
+    ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"].includes(value["schemaVersion"] as string) &&
     typeof value["createdAt"] === "string" &&
     Number.isFinite(Date.parse(value["createdAt"] as string)) &&
     value["algorithm"] === "sha-256" &&
     typeof value["digest"] === "string" && /^[a-f0-9]{64}$/.test(value["digest"]) &&
     Array.isArray(scopes) && scopes.length >= 1 &&
+    (manifestVersion !== "1.8" || scopes.length === 1 && scopes[0] === "analytics-reports") &&
     scopes.every((scope) => (OWNER_EXPORT_SCOPES as readonly string[]).includes(scope as string)) &&
     new Set(scopes as string[]).size === (scopes as unknown[]).length &&
     Array.isArray(entries) && entries.length >= 1 &&
@@ -527,7 +529,7 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
   const snapshot = value["snapshot"];
   const stableId = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   return (
-    ["1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7"].includes(value["schemaVersion"] as string) &&
+    ["1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"].includes(value["schemaVersion"] as string) &&
     typeof value["exportId"] === "string" && stableId.test(value["exportId"]) &&
     isRecord(snapshot) && typeof snapshot["snapshotId"] === "string" && stableId.test(snapshot["snapshotId"]) &&
     typeof snapshot["capturedAt"] === "string" && Number.isFinite(Date.parse(snapshot["capturedAt"])) &&

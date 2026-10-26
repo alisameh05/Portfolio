@@ -20,6 +20,8 @@ import type {
   OwnerExportMediaEntryDescriptor,
   OwnerExportCvEntryDescriptor,
   OwnerExportModerationEntryDescriptor,
+  OwnerExportAnalyticsEntryDescriptor,
+  OwnerExportPackageManifestV1_8,
 } from "./service.js";
 import { isSafeOwnerExportCvMetadataV1_2, isSafeOwnerExportMediaMetadataV1_2, isSafeOwnerExportModerationMetadataV1_2 } from "./service.js";
 import { MAX_OWNER_EXPORT_ARTIFACT_BYTES } from "./service.js";
@@ -48,7 +50,7 @@ export interface OwnerExportSelectedSnapshot {
   readonly kind: "owner-export-snapshot-v1";
   readonly snapshotId: StableId<"OwnerExportArtifact">;
   readonly capturedAt: string;
-  readonly includedScopes: readonly ("portfolio-content" | "taxonomy" | "media-metadata" | "cv-metadata" | "moderation-history" | "portfolio-configuration")[];
+  readonly includedScopes: readonly ("portfolio-content" | "taxonomy" | "media-metadata" | "cv-metadata" | "moderation-history" | "analytics-reports" | "portfolio-configuration")[];
   readonly policyExpiresAt?: string;
   readonly configuration?: OwnerExportConfigurationSnapshot;
   readonly content?: { readonly records: readonly { readonly contentId: string; readonly value: Readonly<Record<string, unknown>> }[] };
@@ -65,6 +67,8 @@ export interface OwnerExportSelectedSnapshot {
     readonly recordsDigest: string;
     readonly dependencies: readonly { readonly feedbackId: string; readonly projectId: string }[];
   };
+  /** Measurement-owned, privacy-projected goal history and aggregate reports. */
+  readonly analytics?: { readonly records: readonly { readonly goalId: string; readonly value: Readonly<Record<string, unknown>> }[] };
 }
 
 export interface OwnerExportMediaAssetSnapshot {
@@ -323,6 +327,189 @@ function readPinnedModerationSchema(path: string): Uint8Array {
 
 function readPinnedTaxonomySchema(path: string): Uint8Array {
   return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.3", path));
+}
+
+function readPinnedAnalyticsSchema(path: string): Uint8Array {
+  return readFileSync(join(process.cwd(), "schemas", "owner-export", "v1.7", path));
+}
+
+const PORTABLE_ANALYTICS_ACTIONS = new Set([
+  "page-viewed", "project-viewed", "active-engagement-sampled", "media-engaged", "related-project-opened",
+  "contact-channel-opened", "external-project-link-opened", "testimonial-engaged", "global-project-cta-opened",
+]);
+const STABLE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const UTC_INSTANT_PATTERN = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?Z$/;
+const UTC_DAY_PATTERN = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+
+function onlyKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value) &&
+    Object.keys(value).every((key) => keys.includes(key));
+}
+
+function safeAnalyticsDefinition(value: unknown): boolean {
+  if (!onlyKeys(value, ["name", "steps"]) || typeof value["name"] !== "string" || value["name"].length < 1 ||
+      !Array.isArray(value["steps"]) || value["steps"].length < 1 || value["steps"].length > 10) return false;
+  return value["steps"].every((step) => {
+    if (!onlyKeys(step, ["action", "publicRouteIds", "projectIds"]) || typeof step["action"] !== "string" ||
+        !PORTABLE_ANALYTICS_ACTIONS.has(step["action"])) return false;
+    const validIds = (ids: unknown): boolean => Array.isArray(ids) && ids.every((id) => typeof id === "string" && STABLE_ID_PATTERN.test(id));
+    return (step["publicRouteIds"] === undefined || validIds(step["publicRouteIds"])) &&
+      (step["projectIds"] === undefined || validIds(step["projectIds"]));
+  });
+}
+
+function validUtcDay(value: string): boolean {
+  if (!UTC_DAY_PATTERN.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function safeAnalyticsValueV1_2(value: unknown): boolean {
+  if (!onlyKeys(value, ["goal", "reports"]) || !onlyKeys(value["goal"], ["goalId", "aggregateVersion", "activeVersionId", "versions", "activationHistory"])) return false;
+  const goal = value["goal"];
+  if (typeof goal["goalId"] !== "string" || !STABLE_ID_PATTERN.test(goal["goalId"]) ||
+      !Number.isSafeInteger(goal["aggregateVersion"]) || Number(goal["aggregateVersion"]) < 1 ||
+      !(goal["activeVersionId"] === null || (typeof goal["activeVersionId"] === "string" && STABLE_ID_PATTERN.test(goal["activeVersionId"]))) ||
+      !Array.isArray(goal["versions"]) || goal["versions"].length === 0 || !Array.isArray(goal["activationHistory"]) ||
+      !goal["versions"].every((version) => onlyKeys(version, ["versionId", "versionNumber", "definition", "createdAt"]) &&
+        typeof version["versionId"] === "string" && STABLE_ID_PATTERN.test(version["versionId"]) &&
+        Number.isSafeInteger(version["versionNumber"]) && Number(version["versionNumber"]) > 0 &&
+        safeAnalyticsDefinition(version["definition"]) && typeof version["createdAt"] === "string" && UTC_INSTANT_PATTERN.test(version["createdAt"])) ||
+      !goal["activationHistory"].every((activation) => onlyKeys(activation, ["versionId", "activatedAt", "activationSequence"]) &&
+        typeof activation["versionId"] === "string" && STABLE_ID_PATTERN.test(activation["versionId"]) &&
+        typeof activation["activatedAt"] === "string" && UTC_INSTANT_PATTERN.test(activation["activatedAt"]) &&
+        Number.isSafeInteger(activation["activationSequence"]) && Number(activation["activationSequence"]) > 0) ||
+      !Array.isArray(value["reports"])) return false;
+  const versionIds = new Set<string>();
+  let previousVersionNumber = 0;
+  for (const version of goal["versions"]) {
+    if (version["versionNumber"] <= previousVersionNumber || versionIds.has(String(version["versionId"]))) return false;
+    versionIds.add(String(version["versionId"]));
+    previousVersionNumber = Number(version["versionNumber"]);
+  }
+  if (goal["activeVersionId"] !== null && !versionIds.has(String(goal["activeVersionId"]))) return false;
+  for (let index = 0; index < goal["activationHistory"].length; index += 1) {
+    const activation = goal["activationHistory"][index];
+    if (activation["activationSequence"] !== index + 1 || !versionIds.has(String(activation["versionId"]))) return false;
+  }
+  if (goal["activationHistory"].length > 0 && goal["activationHistory"].at(-1)?.["versionId"] !== goal["activeVersionId"]) return false;
+  return value["reports"].every((report) => {
+    if (!onlyKeys(report, ["goalVersionId", "periodStartDay", "periodEndDay", "sampleState", "completeness", "asOf", "policyVersion", "sourceHorizon", "grouping", "breakdown", "countDisposition", "cells"]) ||
+        typeof report["goalVersionId"] !== "string" || !STABLE_ID_PATTERN.test(report["goalVersionId"]) || !versionIds.has(report["goalVersionId"]) ||
+        typeof report["periodStartDay"] !== "string" || !validUtcDay(report["periodStartDay"]) ||
+        typeof report["periodEndDay"] !== "string" || !validUtcDay(report["periodEndDay"]) ||
+        Date.parse(`${report["periodEndDay"]}T00:00:00Z`) < Date.parse(`${report["periodStartDay"]}T00:00:00Z`) ||
+        Math.floor((Date.parse(`${report["periodEndDay"]}T00:00:00Z`) - Date.parse(`${report["periodStartDay"]}T00:00:00Z`)) / 86_400_000) + 1 > 31 ||
+        typeof report["asOf"] !== "string" || !UTC_INSTANT_PATTERN.test(report["asOf"]) ||
+        report["grouping"] !== "daily-goal" || report["breakdown"] !== "locale" ||
+        typeof report["policyVersion"] !== "string" || report["policyVersion"].length < 1 ||
+        report["sourceHorizon"] !== "accepted-events-within-14-days-of-as-of") return false;
+    if (report["cells"] !== undefined) {
+      if (!Array.isArray(report["cells"]) || report["cells"].length < 1 || report["cells"].length >= 500) return false;
+      const seenCells = new Set<string>();
+      for (const cell of report["cells"]) {
+        if (!onlyKeys(cell, ["utcDay", "locale", "aggregateCount"]) || typeof cell["utcDay"] !== "string" || !validUtcDay(cell["utcDay"]) ||
+            cell["utcDay"] < report["periodStartDay"] || cell["utcDay"] > report["periodEndDay"] ||
+            (cell["locale"] !== "en" && cell["locale"] !== "ar") || !Number.isSafeInteger(cell["aggregateCount"]) || Number(cell["aggregateCount"]) < 1) return false;
+        const key = `${cell["utcDay"]}:${cell["locale"]}`;
+        if (seenCells.has(key)) return false;
+        seenCells.add(key);
+      }
+    }
+    const available = report["sampleState"] === "sufficient" && report["completeness"] === "complete" && report["countDisposition"] === "included";
+    const partiallyWithheld = report["sampleState"] === "low-sample" && report["completeness"] === "complete" && report["countDisposition"] === "partially-withheld";
+    const noData = report["sampleState"] === "no-data" && report["completeness"] === "complete" && report["countDisposition"] === "not-applicable";
+    const withheld = (report["sampleState"] === "low-sample" || report["sampleState"] === "incomplete") &&
+      report["countDisposition"] === "withheld" && report["completeness"] === (report["sampleState"] === "incomplete" ? "incomplete" : "complete");
+    if (available || partiallyWithheld) return Array.isArray(report["cells"]);
+    return (noData || withheld) && report["cells"] === undefined;
+  });
+}
+
+function analyticsDependencies(records: readonly { readonly goalId: string; readonly value: Readonly<Record<string, unknown>> }[]): OwnerExportDependencyDescriptor[] {
+  const unique = new Map<string, OwnerExportDependencyDescriptor>();
+  for (const record of records) {
+    const goal = record.value["goal"];
+    if (goal === null || typeof goal !== "object") continue;
+    const versions = (goal as Record<string, unknown>)["versions"];
+    if (!Array.isArray(versions)) continue;
+    for (const version of versions) {
+      if (version === null || typeof version !== "object") continue;
+      const definition = (version as Record<string, unknown>)["definition"];
+      if (definition === null || typeof definition !== "object") continue;
+      const steps = (definition as Record<string, unknown>)["steps"];
+      if (!Array.isArray(steps)) continue;
+      for (const step of steps) {
+        if (step === null || typeof step !== "object") continue;
+        const row = step as Record<string, unknown>;
+        for (const [field, targetIds] of [["projectIds", row["projectIds"]], ["publicRouteIds", row["publicRouteIds"]]] as const) {
+          if (!Array.isArray(targetIds)) continue;
+          for (const targetId of targetIds) {
+            if (typeof targetId !== "string") continue;
+            const dependency = { sourceScope: "analytics-reports" as const, sourceId: record.goalId,
+              targetScope: "portfolio-content" as const, targetId, disposition: "omitted" as const, reason: "scope-not-selected" as const };
+            unique.set([dependency.sourceScope, dependency.sourceId, dependency.targetScope, dependency.targetId].join("|"), dependency);
+          }
+        }
+      }
+    }
+  }
+  return [...unique.values()].sort((left, right) => compareCodePoints(left.sourceId, right.sourceId) || compareCodePoints(left.targetId, right.targetId));
+}
+
+/** Emits the Measurement-owned Analytics view with explicit withheld-count semantics. */
+export async function buildAnalyticsOwnerExportPackage(input: {
+  readonly exportId: StableId<"OwnerExport">;
+  readonly snapshot: OwnerExportSelectedSnapshot;
+}): Promise<BuiltOwnerExportPackage> {
+  const { snapshot } = input;
+  if (snapshot.kind !== "owner-export-snapshot-v1" || snapshot.includedScopes.length !== 1 ||
+      snapshot.includedScopes[0] !== "analytics-reports" || snapshot.analytics === undefined || snapshot.policyExpiresAt === undefined ||
+      !UTC_INSTANT_PATTERN.test(snapshot.policyExpiresAt)) {
+    throw new TypeError("OWNER_EXPORT_ANALYTICS_SNAPSHOT_INVALID");
+  }
+  const ordered = [...snapshot.analytics.records].sort((left, right) => compareCodePoints(left.goalId, right.goalId));
+  if (ordered.some((record, index) => !STABLE_ID_PATTERN.test(record.goalId) || !safeAnalyticsValueV1_2(record.value) ||
+      (index > 0 && ordered[index - 1]!.goalId === record.goalId) ||
+      (record.value["goal"] as Record<string, unknown>)["goalId"] !== record.goalId)) {
+    throw new TypeError("OWNER_EXPORT_ANALYTICS_RECORD_INVALID");
+  }
+  const analyticsSchema = readPinnedAnalyticsSchema("analytics-reports.schema.json");
+  const manifestSchema = readPinnedAnalyticsSchema("manifest.schema.json");
+  const recordBytes = ordered.length === 0 ? new Uint8Array() : utf8.encode(
+    `${ordered.map((record) => canonicalJson({ scope: "analytics-reports", value: record.value })).join("\n")}\n`,
+  );
+  const entry: OwnerExportAnalyticsEntryDescriptor = {
+    path: "records/analytics-reports.ndjson", scope: "analytics-reports", mediaType: "application/x-ndjson",
+    recordSchema: "urn:shipwithali:owner-export-schema:analytics-reports:1.2", schemaPath: "schemas/analytics-reports.schema.json",
+    schemaVersion: "1.2", digest: sha256(recordBytes), recordCount: ordered.length,
+  };
+  const schemas: OwnerExportSchemaDescriptor[] = [
+    { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.7", schemaVersion: "1.7", digest: sha256(manifestSchema) },
+    { kind: "record", scope: "analytics-reports", path: "schemas/analytics-reports.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:analytics-reports:1.2", schemaVersion: "1.2", digest: sha256(analyticsSchema) },
+  ];
+  const manifest = {
+    packageFormat: "shipwithali-owner-export" as const, schemaVersion: "1.8" as const, entries: [entry], exportId: input.exportId,
+    snapshot: { snapshotId: snapshot.snapshotId, capturedAt: snapshot.capturedAt, consistency: "transactional" as const },
+    createdAt: snapshot.capturedAt, algorithm: "sha-256" as const, digest: "0".repeat(64),
+    requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"] as const,
+    includedScopes: ["analytics-reports"] as const, publicEventDataCoverage: { mode: "excluded" as const },
+    dependencies: analyticsDependencies(ordered),
+    exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"] as const,
+    schemas, assets: [],
+    extensions: { analyticsReportPolicy: { maximumPeriodDays: 31, maximumRowsPerQuery: 500, minimumObservedSubjects: 5,
+      grouping: "daily-goal", breakdown: "locale", totalRows: "omitted", withheldCounts: "omitted",
+      aggregateRetentionExpiresAt: snapshot.policyExpiresAt } },
+  } satisfies OwnerExportPackageManifestV1_8;
+  const completeManifest = { ...manifest, digest: sha256(utf8.encode(canonicalJson(manifest, true))) };
+  const manifestBytes = utf8.encode(`${JSON.stringify(completeManifest)}\n`);
+  const archive = createStoredOwnerExportZip([
+    fixedBytesMember("manifest.json", manifestBytes), fixedBytesMember("schemas/manifest.schema.json", manifestSchema),
+    fixedBytesMember("schemas/analytics-reports.schema.json", analyticsSchema), fixedBytesMember(entry.path, recordBytes),
+  ]);
+  const integrity = await measureOwnerExportStream(archive.content);
+  if (integrity.contentLength !== archive.contentLength) throw new RangeError("OWNER_EXPORT_ZIP_LENGTH_MISMATCH");
+  return { contentLength: archive.contentLength, sha256: integrity.sha256, manifest: completeManifest, content: archive.content };
 }
 
 /**
@@ -1078,6 +1265,10 @@ export async function buildSelectedOwnerExportPackage(input: {
   const { snapshot } = input;
   if (snapshot.kind !== "owner-export-snapshot-v1") {
     throw new TypeError("OWNER_EXPORT_CONTENT_SNAPSHOT_INVALID");
+  }
+  if (snapshot.includedScopes.includes("analytics-reports")) {
+    if (snapshot.includedScopes.length !== 1) throw new TypeError("OWNER_EXPORT_SCOPE_UNSUPPORTED");
+    return buildAnalyticsOwnerExportPackage(input);
   }
   if (snapshot.includedScopes.includes("taxonomy")) return buildTaxonomyOwnerExportPackage(input);
   const hasContent = snapshot.includedScopes.includes("portfolio-content");

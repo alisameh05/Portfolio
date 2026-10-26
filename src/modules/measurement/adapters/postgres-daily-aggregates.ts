@@ -90,6 +90,7 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
   return {
     async rebuildDay(input, transaction): Promise<number> {
       const db = await configure(transaction, input.portfolioId);
+      await sql`select set_config('shipwithali.worker_purpose', 'measurement.aggregate', true)`.execute(db);
       const start = `${input.utcDay}T00:00:00.000Z`;
       const endDate = new Date(Date.parse(start) + 86_400_000).toISOString();
       const acceptedCutoff = new Date(Date.parse(input.asOf) - 14 * 86_400_000).toISOString();
@@ -263,7 +264,9 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
             case when ${summary} then exists (
               select 1 from measurement.daily_aggregates small
               where small.portfolio_id = a.portfolio_id and small.utc_day = a.utc_day and small.metric_kind = a.metric_kind
-                and small.metric_key = a.metric_key and small.dimensions <> '{}'::jsonb and small.observed_subjects < 5
+                and small.metric_key = a.metric_key and small.goal_id is not distinct from a.goal_id
+                and small.goal_version_id is not distinct from a.goal_version_id
+                and small.dimensions <> '{}'::jsonb and small.observed_subjects < 5
             ) else false end as has_small_dimension_cell
           from measurement.daily_aggregates a where a.portfolio_id = ${input.portfolioId}::uuid
             and a.utc_day between ${input.startDay}::date and ${input.endDay}::date and a.metric_kind = 'action'
@@ -276,16 +279,19 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
             case when ${summary} then exists (
               select 1 from measurement.daily_aggregates small
               where small.portfolio_id = a.portfolio_id and small.utc_day = a.utc_day and small.metric_kind = a.metric_kind
-                and small.metric_key = a.metric_key and small.dimensions <> '{}'::jsonb and small.observed_subjects < 5
+                and small.metric_key = a.metric_key and small.goal_id = a.goal_id and small.goal_version_id = a.goal_version_id
+                and small.dimensions <> '{}'::jsonb and small.observed_subjects < 5
             ) else false end as has_small_dimension_cell
           from measurement.daily_aggregates a join measurement.analytics_goal_versions v
             on v.portfolio_id = a.portfolio_id and v.goal_id = a.goal_id and v.version_id = a.goal_version_id
           where a.portfolio_id = ${input.portfolioId}::uuid and a.utc_day between ${input.startDay}::date and ${input.endDay}::date and a.metric_kind = 'goal'
+            and (${input.goalId ?? null}::uuid is null or a.goal_id = ${input.goalId ?? null}::uuid)
+            and (${input.goalVersionId ?? null}::uuid is null or a.goal_version_id = ${input.goalVersionId ?? null}::uuid)
             and ((${summary} and a.dimensions = '{}'::jsonb) or (not ${summary} and a.dimensions ? ${dimensionKey ?? ""}))
           order by a.utc_day, a.metric_key, a.dimensions limit ${input.limit}`.execute(db);
       const coverage = await sql<CoverageRow>`select count(*)::int as day_count, bool_or(incomplete) as incomplete,
           bool_or(policy_version <> ${POLICY_VERSION}) as policy_stale,
-          to_char(max(checkpoint_at) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as as_of
+          to_char(coalesce(max(checkpoint_at), transaction_timestamp()) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as as_of
         from measurement.daily_aggregate_checkpoints where portfolio_id = ${input.portfolioId}::uuid
           and utc_day between ${input.startDay}::date and ${input.endDay}::date`.execute(db);
       const checkpoint = coverage.rows[0];

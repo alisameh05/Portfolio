@@ -214,6 +214,7 @@ export function createPostgresMeasurementRetentionRepository(): MeasurementReten
   return {
     async processBatch(input, transaction): Promise<BoundedWorkResult> {
       const db = await configure(transaction, input.portfolioId);
+      await sql`select set_config('shipwithali.worker_purpose', 'measurement.retention', true)`.execute(db);
       const firstStage = retentionStages(input.kind)[0]!;
       await sql`select measurement.begin_retention_checkpoint(${input.portfolioId}::uuid, ${input.jobId}::uuid,
         ${input.kind}, ${input.now}::timestamptz, ${firstStage})`.execute(db);

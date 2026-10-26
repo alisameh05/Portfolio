@@ -1,0 +1,383 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shipwithali:owner-export-schema:analytics-reports:1.2",
+  "title": "Portable privacy-safe analytics report record 1.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scope",
+    "value"
+  ],
+  "properties": {
+    "scope": {
+      "const": "analytics-reports"
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "goal",
+        "reports"
+      ],
+      "properties": {
+        "goal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "goalId",
+            "aggregateVersion",
+            "activeVersionId",
+            "versions",
+            "activationHistory"
+          ],
+          "properties": {
+            "goalId": {
+              "$ref": "#/$defs/stableId"
+            },
+            "aggregateVersion": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "activeVersionId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/stableId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "versions": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "versionId",
+                  "versionNumber",
+                  "definition",
+                  "createdAt"
+                ],
+                "properties": {
+                  "versionId": {
+                    "$ref": "#/$defs/stableId"
+                  },
+                  "versionNumber": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "definition": {
+                    "$ref": "#/$defs/definition"
+                  },
+                  "createdAt": {
+                    "$ref": "#/$defs/utcInstant"
+                  }
+                }
+              }
+            },
+            "activationHistory": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "versionId",
+                  "activatedAt",
+                  "activationSequence"
+                ],
+                "properties": {
+                  "versionId": {
+                    "$ref": "#/$defs/stableId"
+                  },
+                  "activatedAt": {
+                    "$ref": "#/$defs/utcInstant"
+                  },
+                  "activationSequence": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                }
+              }
+            }
+          }
+        },
+        "reports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "goalVersionId",
+              "periodStartDay",
+              "periodEndDay",
+              "sampleState",
+              "completeness",
+              "asOf",
+              "policyVersion",
+              "sourceHorizon",
+              "grouping",
+              "breakdown",
+              "countDisposition"
+            ],
+            "properties": {
+              "goalVersionId": {
+                "$ref": "#/$defs/stableId"
+              },
+              "periodStartDay": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "periodEndDay": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "sampleState": {
+                "enum": [
+                  "sufficient",
+                  "low-sample",
+                  "no-data",
+                  "incomplete"
+                ]
+              },
+              "completeness": {
+                "enum": [
+                  "complete",
+                  "incomplete"
+                ]
+              },
+              "asOf": {
+                "$ref": "#/$defs/utcInstant"
+              },
+              "policyVersion": {
+                "const": "phase7.daily.v2"
+              },
+              "sourceHorizon": {
+                "const": "accepted-events-within-14-days-of-as-of"
+              },
+              "grouping": {
+                "const": "daily-goal"
+              },
+              "breakdown": {
+                "const": "locale"
+              },
+              "countDisposition": {
+                "enum": [
+                  "included",
+                  "partially-withheld",
+                  "withheld",
+                  "not-applicable"
+                ]
+              },
+              "cells": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 499,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "utcDay",
+                    "locale",
+                    "aggregateCount"
+                  ],
+                  "properties": {
+                    "utcDay": {
+                      "type": "string",
+                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                    },
+                    "locale": {
+                      "enum": [
+                        "en",
+                        "ar"
+                      ]
+                    },
+                    "aggregateCount": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    }
+                  }
+                }
+              }
+            },
+            "oneOf": [
+              {
+                "properties": {
+                  "sampleState": {
+                    "const": "sufficient"
+                  },
+                  "completeness": {
+                    "const": "complete"
+                  },
+                  "countDisposition": {
+                    "const": "included"
+                  },
+                  "cells": {
+                    "type": "array",
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "cells"
+                ]
+              },
+              {
+                "properties": {
+                  "sampleState": {
+                    "const": "low-sample"
+                  },
+                  "completeness": {
+                    "const": "complete"
+                  },
+                  "countDisposition": {
+                    "const": "partially-withheld"
+                  },
+                  "cells": {
+                    "type": "array",
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "cells"
+                ]
+              },
+              {
+                "properties": {
+                  "sampleState": {
+                    "const": "low-sample"
+                  },
+                  "completeness": {
+                    "const": "complete"
+                  },
+                  "countDisposition": {
+                    "const": "withheld"
+                  }
+                },
+                "not": {
+                  "required": [
+                    "cells"
+                  ],
+                  "properties": {
+                    "cells": {}
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "sampleState": {
+                    "const": "no-data"
+                  },
+                  "completeness": {
+                    "const": "complete"
+                  },
+                  "countDisposition": {
+                    "const": "not-applicable"
+                  }
+                },
+                "not": {
+                  "required": [
+                    "cells"
+                  ],
+                  "properties": {
+                    "cells": {}
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "sampleState": {
+                    "const": "incomplete"
+                  },
+                  "completeness": {
+                    "const": "incomplete"
+                  },
+                  "countDisposition": {
+                    "const": "withheld"
+                  }
+                },
+                "not": {
+                  "required": [
+                    "cells"
+                  ],
+                  "properties": {
+                    "cells": {}
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "utcInstant": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$"
+    },
+    "definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "steps"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "enum": [
+                  "page-viewed",
+                  "project-viewed",
+                  "active-engagement-sampled",
+                  "media-engaged",
+                  "related-project-opened",
+                  "contact-channel-opened",
+                  "external-project-link-opened",
+                  "testimonial-engaged",
+                  "global-project-cta-opened"
+                ]
+              },
+              "publicRouteIds": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/stableId"
+                }
+              },
+              "projectIds": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/stableId"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

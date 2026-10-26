@@ -17,6 +17,7 @@ export { createPostgresMeasurementRetentionRepository } from "./postgres-retenti
 
 export { createPostgresOwnerAnalyticsGoalRepository } from "./postgres-goals.js";
 export { createPostgresAnalyticsGoalScopeFacts } from "./postgres-goal-scope-facts.js";
+export { createPostgresOwnerAnalyticsExportSnapshotReader } from "./postgres-owner-analytics-export.js";
 
 /**
  * Stub adapters for Phase 1 skeleton.

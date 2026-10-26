@@ -193,6 +193,8 @@
     "phase8:focus:exports": "node scripts/phase8-owner-export.mjs",
     "prephase8:focus:taxonomy": "npm run validation:ready",
     "phase8:focus:taxonomy": "node scripts/phase8-owner-export-taxonomy.mjs",
+    "prephase8:focus:analytics-export": "npm run validation:ready",
+    "phase8:focus:analytics-export": "node scripts/phase8-owner-export-analytics.mjs",
     "prephase7:focus:integrated": "npm run validation:ready",
     "phase7:focus:integrated": "node scripts/phase7-integration-208.mjs",
     "prephase7:focus:feedback-retention": "npm run validation:ready",

@@ -102,6 +102,18 @@ export interface OwnerExportModerationEntryDescriptor {
   readonly recordCount: number;
 }
 
+/** Analytics report exports use the privacy-preserving 1.2 record contract. */
+export interface OwnerExportAnalyticsEntryDescriptor {
+  readonly path: "records/analytics-reports.ndjson";
+  readonly scope: "analytics-reports";
+  readonly mediaType: "application/x-ndjson";
+  readonly recordSchema: "urn:shipwithali:owner-export-schema:analytics-reports:1.2";
+  readonly schemaPath: "schemas/analytics-reports.schema.json";
+  readonly schemaVersion: "1.2";
+  readonly digest: string;
+  readonly recordCount: number;
+}
+
 export interface OwnerExportEntryDescriptorV1_0<TScope extends ExportScope = ExportScope> {
   readonly path: string;
   readonly scope: TScope;
@@ -222,7 +234,14 @@ export interface OwnerExportPackageManifestV1_7 extends Omit<OwnerExportPackageM
     OwnerExportMediaEntryDescriptor | OwnerExportCvEntryDescriptor | OwnerExportModerationEntryDescriptor)[];
 }
 
-export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3 | OwnerExportPackageManifestV1_4 | OwnerExportPackageManifestV1_5 | OwnerExportPackageManifestV1_6 | OwnerExportPackageManifestV1_7;
+/** Analytics package 1.8 adds retained, privacy-safe aggregate report records. */
+export interface OwnerExportPackageManifestV1_8 extends Omit<OwnerExportPackageManifestV1_7, "schemaVersion" | "entries"> {
+  readonly schemaVersion: "1.8";
+  readonly entries: readonly (OwnerExportEntryDescriptor | OwnerExportContentEntryDescriptor | OwnerExportTaxonomyEntryDescriptor |
+    OwnerExportMediaEntryDescriptor | OwnerExportCvEntryDescriptor | OwnerExportModerationEntryDescriptor | OwnerExportAnalyticsEntryDescriptor)[];
+}
+
+export type OwnerExportPackageManifest = OwnerExportPackageManifestV1_0 | OwnerExportPackageManifestV1_1 | OwnerExportPackageManifestV1_2 | OwnerExportPackageManifestV1_3 | OwnerExportPackageManifestV1_4 | OwnerExportPackageManifestV1_5 | OwnerExportPackageManifestV1_6 | OwnerExportPackageManifestV1_7 | OwnerExportPackageManifestV1_8;
 
 interface OwnerExportViewBase {
   readonly exportId: StableId<"OwnerExport">;

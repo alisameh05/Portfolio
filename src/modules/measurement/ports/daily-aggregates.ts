@@ -27,6 +27,8 @@ export interface DailyAggregateRepositoryPort {
     readonly startDay: string;
     readonly endDay: string;
     readonly grouping: "daily-action" | "daily-goal";
+    readonly goalId?: StableId<"AnalyticsGoal">;
+    readonly goalVersionId?: StableId<"AnalyticsGoalVersion">;
     readonly breakdown: "summary" | "locale" | "country" | "device" | "referrer" | "project" | "route";
     readonly action?: string;
     readonly limit: number;

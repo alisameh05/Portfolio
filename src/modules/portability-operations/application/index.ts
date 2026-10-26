@@ -27,6 +27,7 @@ export {
   type OwnerExportContentEntryDescriptor,
   type OwnerExportTaxonomyEntryDescriptor,
   type OwnerExportModerationEntryDescriptor,
+  type OwnerExportAnalyticsEntryDescriptor,
   type OwnerExportObjectRead,
   type OwnerExportObjectReadPort,
   type OwnerExportObjectReadRequest,
@@ -36,6 +37,7 @@ export {
   type OwnerExportPackageManifestV1_3,
   type OwnerExportPackageManifestV1_4,
   type OwnerExportPackageManifestV1_7,
+  type OwnerExportPackageManifestV1_8,
   type OwnerExportPackageManifest,
   type OwnerExportSchemaDescriptor,
   type OwnerExportAssetDescriptor,
@@ -99,6 +101,7 @@ export {
   type OwnerExportObjectStoragePort,
 } from "./owner-export-assembly.js";
 export {
+  buildAnalyticsOwnerExportPackage,
   buildConfigurationOwnerExportPackage,
   buildSelectedOwnerExportPackage,
   type BuiltOwnerExportPackage,

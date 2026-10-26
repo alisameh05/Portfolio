@@ -306,6 +306,7 @@ export async function initializeDatabaseRuntime(
             { createPostgresOwnerMediaExportSnapshotReader },
             { createPostgresOwnerCvExportSnapshotReader },
             { createPostgresFeedbackOwnerExportSnapshotReader },
+            { createPostgresOwnerAnalyticsExportSnapshotReader },
             { createSupabaseMediaExportStorage },
             { createOwnerExportModerationCleanupService },
           ] = await Promise.all([
@@ -319,6 +320,7 @@ export async function initializeDatabaseRuntime(
             import("../modules/media/adapters/postgres-owner-export-snapshot.js"),
             import("../modules/cv-portfolio/adapters/postgres-owner-export-snapshot.js"),
             import("../modules/interaction-moderation/adapters/postgres-owner-export.js"),
+            import("../modules/measurement/adapters/postgres-owner-analytics-export.js"),
             import("../runtime/adapters/supabase-media-export-storage.js"),
             import("../modules/portability-operations/application/owner-export-cleanup.js"),
           ]);
@@ -333,6 +335,7 @@ export async function initializeDatabaseRuntime(
               media: createPostgresOwnerMediaExportSnapshotReader({ database: database.database, transactions: operations.transactions }),
               cv: createPostgresOwnerCvExportSnapshotReader(),
               moderation: createPostgresFeedbackOwnerExportSnapshotReader(),
+              analytics: createPostgresOwnerAnalyticsExportSnapshotReader(),
               transactions: operations.transactions,
               capabilities: {
                 async read(scope) {

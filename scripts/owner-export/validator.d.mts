@@ -10,7 +10,7 @@ export interface OwnerExportValidationEntry {
   readonly mediaType: "application/x-ndjson" | "application/json";
   readonly recordSchema: string;
   readonly schemaPath: string;
-  readonly schemaVersion: "1.0";
+  readonly schemaVersion: string;
   readonly digest: string;
   readonly recordCount: number;
 }
@@ -37,7 +37,10 @@ export interface OwnerExportValidationManifestV1_1 extends OwnerExportValidation
   readonly assets: readonly Readonly<Record<string, unknown>>[];
   readonly extensions?: Readonly<Record<string, unknown>>;
 }
-export type OwnerExportValidationManifest = OwnerExportValidationManifestV1_0 | OwnerExportValidationManifestV1_1;
+export interface OwnerExportValidationManifestV1_8 extends OwnerExportValidationManifestV1_1 {
+  readonly schemaVersion: "1.8";
+}
+export type OwnerExportValidationManifest = OwnerExportValidationManifestV1_0 | OwnerExportValidationManifestV1_1 | OwnerExportValidationManifestV1_8;
 export interface OwnerExportValidationResult {
   readonly manifest: OwnerExportValidationManifest;
   readonly includedScopes: readonly string[];
