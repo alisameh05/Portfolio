@@ -16,8 +16,7 @@ update portability.owner_exports set artifact_revocation_code =
   'prior_revocation'
   where artifact_revoked_at is not null;
 drop policy owner_exports_migration_revocation_backfill_update on portability.owner_exports;
-drop policy owner_exports_migration_revocation_backfill_select on portability.owner_exports;
-revoke select, update (artifact_revocation_code) on portability.owner_exports from shipwithali_migration;
+revoke update (artifact_revocation_code) on portability.owner_exports from shipwithali_migration;
 alter table portability.owner_exports
   add constraint owner_exports_artifact_revocation_code_check check (
     (artifact_revoked_at is null and artifact_revocation_code is null)
@@ -43,6 +42,10 @@ select export_id, portfolio_id, candidate_artifact_id, artifact_revoked_at,
   artifact_revocation_code, artifact_deleted_at
 from portability.owner_exports
 where artifact_revoked_at is not null and candidate_artifact_id is not null;
+-- FORCE RLS also applies to the restricted table owner. Retain both read
+-- permissions until the ledger has copied prior revocations and deletions.
+drop policy owner_exports_migration_revocation_backfill_select on portability.owner_exports;
+revoke select on portability.owner_exports from shipwithali_migration;
 alter table portability.owner_export_invalidation_ledger enable row level security;
 alter table portability.owner_export_invalidation_ledger force row level security;
 grant select on portability.owner_export_invalidation_ledger to shipwithali_worker;

@@ -11,6 +11,8 @@ import { createStableId, ok, parseIdempotencyKey, type StableId } from "../../sr
 import { createSystemIdGenerator } from "../../src/runtime/ports.js";
 import { createPostgresOperationsPersistence } from "../../src/modules/portability-operations/adapters/postgres-operations.js";
 import { createPostgresOwnerExportStore } from "../../src/modules/portability-operations/adapters/postgres-owner-export-store.js";
+import { createPostgresPortfolioSettingsRepository } from "../../src/modules/portfolio-configuration/adapters/postgres-settings.js";
+import { createPostgresContentAuthoringRepository } from "../../src/modules/content-publishing/adapters/postgres-authoring.js";
 import { createOwnerExportService, isManifestShape } from "../../src/modules/portability-operations/application/owner-export-service.js";
 import { createOwnerExportAssemblyService, type OwnerExportObjectStoragePort } from "../../src/modules/portability-operations/application/owner-export-assembly.js";
 import { buildSelectedOwnerExportPackage, type OwnerExportSelectedSnapshot } from "../../src/modules/portability-operations/application/owner-export-package.js";
@@ -131,6 +133,7 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
       expect(capture.ok).toBe(true);
       if (!capture.ok || !("kind" in capture.value)) throw new Error("PHASE8_ANALYTICS_SNAPSHOT_CAPTURE_FAILED");
       const snapshot = capture.value as OwnerExportSelectedSnapshot;
+      expect(snapshot.policyExpiresAt).toBe(snapshot.analytics!.policyExpiresAt);
       expect(snapshot.analytics?.records.map((record) => record.goalId)).toEqual([...fixtureGoalIds].sort());
       const available = snapshot.analytics!.records.find((record) => record.goalId === availableGoalId)!.value as { goal: { activeVersionId: string; activationHistory: readonly { activationSequence: number }[]; versions: readonly unknown[] }; reports: readonly Record<string, unknown>[] };
       expect(available.goal.versions).toHaveLength(2);
@@ -203,11 +206,19 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
         actor: { kind: "owner", ownerId, sessionId: "analytics-assembly-test" },
         idempotencyKey: mixedKey.value, includedScopes: ["analytics-reports", "portfolio-configuration"] });
       if (!mixed.ok) throw new Error("PHASE8_ANALYTICS_MIXED_REQUEST_FAILED");
-      const mixedAssembly = await assembly.runOwnerExportAssembly({ workerId: "analytics-assembly-test" });
+      const mixedReader = createOwnerExportSnapshotReader({
+        configuration: createPostgresPortfolioSettingsRepository(), content: createPostgresContentAuthoringRepository(),
+        analytics: createPostgresOwnerAnalyticsExportSnapshotReader(), transactions: worker.transactions,
+        capabilities: { async read() { return { currentCvAvailable: false, externalLinksAvailable: false }; } },
+      });
+      const mixedAssembly = await createOwnerExportAssemblyService({ operations: workerOperations,
+        exports: workerStore, artifacts: workerStore, snapshots: mixedReader, storage, clock, ids,
+      }).runOwnerExportAssembly({ workerId: "analytics-assembly-test" });
       expect(mixedAssembly).toMatchObject({ ok: true, value: { claimed: 1, completed: 1, failed: 0, retried: 0 } });
       const mixedRecord = await workerStore.findOwnerExport({ portfolioId, ownerId, exportId: mixed.value.exportId });
       expect(mixedRecord).toMatchObject({ status: "ready", schemaVersion: "1.9",
         integrityManifest: { schemaVersion: "1.9", includedScopes: ["analytics-reports", "portfolio-configuration"] } });
+      expect(mixedRecord!.expiresAt).toBe((mixedRecord!.snapshot as OwnerExportSelectedSnapshot).policyExpiresAt);
       expect(validateOwnerExportZip(storedBytes).includedScopes).toEqual(["analytics-reports", "portfolio-configuration"]);
 
       const privilege = await admin.query(`select

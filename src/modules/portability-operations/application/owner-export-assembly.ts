@@ -312,6 +312,9 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         exportId: record.exportId, artifactId, actingJobId: jobId.value, leaseToken: job.leaseToken }, upload);
       if (!uploaded) return "stale";
       const completedAt = deps.clock.now();
+      const policyExpiresAt = "kind" in snapshot
+        ? snapshot.policyExpiresAt ?? snapshot.configuration?.policyExpiresAt
+        : snapshot.policyExpiresAt;
       const completed = await applyGuardedOwnerExportTransition(deps.exports, {
         exportId: record.exportId,
         fromStatus: "building",
@@ -319,16 +322,18 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
         expectedAggregateVersion: record.aggregateVersion,
         leaseToken: job.leaseToken,
         transitionedAt: completedAt,
-        policyExpiresAt: "kind" in snapshot
-          ? snapshot.policyExpiresAt ?? snapshot.configuration?.policyExpiresAt
-          : snapshot.policyExpiresAt,
+        ...(policyExpiresAt === undefined ? {} : { policyExpiresAt }),
         actingJobId: jobId.value,
         integrityManifest: built.manifest,
         artifactId,
-        ...(record.includedScopes.includes("media-metadata") || record.includedScopes.includes("cv-metadata") ? { precondition: (context: TransactionContext) =>
-          deps.snapshots.revalidateMediaForReady?.({ snapshot, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId, context }) ?? Promise.resolve(false) } : {}),
-        ...(record.includedScopes.includes("moderation-history") ? { precondition: (context: TransactionContext) =>
-          deps.snapshots.revalidateModerationForReady?.({ snapshot, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId, context }) ?? Promise.resolve(false) } : {}),
+        precondition: async (context) => {
+          const input = { snapshot, portfolioId: parsed.portfolioId, ownerId: parsed.ownerId, context };
+          if ((uploadRecord.includedScopes.includes("media-metadata") || uploadRecord.includedScopes.includes("cv-metadata")) &&
+              !await deps.snapshots.revalidateMediaForReady?.(input)) return false;
+          if (uploadRecord.includedScopes.includes("moderation-history") &&
+              !await deps.snapshots.revalidateModerationForReady?.(input)) return false;
+          return true;
+        },
       });
       return completed.ok && completed.value === "applied" ? "completed" : "stale";
     } catch (error) {

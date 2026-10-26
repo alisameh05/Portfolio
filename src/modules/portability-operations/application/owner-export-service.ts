@@ -522,6 +522,7 @@ export function isManifestShape(value: unknown): value is OwnerExportPackageMani
     value["algorithm"] === "sha-256" &&
     typeof value["digest"] === "string" && /^[a-f0-9]{64}$/.test(value["digest"]) &&
     Array.isArray(scopes) && scopes.length >= 1 &&
+    (manifestVersion !== "1.8" || scopes.length === 1 && scopes[0] === "analytics-reports") &&
     scopes.every((scope) => (OWNER_EXPORT_SCOPES as readonly string[]).includes(scope as string)) &&
     new Set(scopes as string[]).size === (scopes as unknown[]).length &&
     Array.isArray(entries) && entries.length >= 1 &&
@@ -585,11 +586,11 @@ export function validateOwnerExportTransition(
       (input.leaseToken !== undefined && (input.leaseToken.length < 16 || input.leaseToken.length > 256))) {
     return err({ kind: "validation", code: "OWNER_EXPORT_TRANSITION_LEASE_INVALID" });
   }
-  if (input.expiresAt !== undefined && (!Number.isFinite(Date.parse(input.expiresAt)) ||
-      new Date(Date.parse(input.expiresAt)).toISOString() !== input.expiresAt)) {
+  if (input.policyExpiresAt !== undefined && (!Number.isFinite(Date.parse(input.policyExpiresAt)) ||
+      new Date(Date.parse(input.policyExpiresAt)).toISOString() !== input.policyExpiresAt)) {
     return err({ kind: "validation", code: "OWNER_EXPORT_TRANSITION_EXPIRY_INVALID" });
   }
-  if (input.expiresAt !== undefined && input.toStatus !== "ready") {
+  if (input.policyExpiresAt !== undefined && input.toStatus !== "ready") {
     return err({ kind: "validation", code: "OWNER_EXPORT_TRANSITION_METADATA_UNEXPECTED" });
   }
   if (input.precondition !== undefined && input.toStatus !== "ready") {

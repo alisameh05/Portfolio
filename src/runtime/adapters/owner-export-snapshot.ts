@@ -278,7 +278,7 @@ export function createOwnerExportSnapshotReader(input: {
             };
           });
         const moderationSnapshot = captured.moderation === undefined ? undefined : projectFeedbackOwnerExportSnapshot(captured.moderation);
-        const policyDeadlines = [captured.analytics?.ok ? captured.analytics.value.policyExpiresAt : undefined,
+        const policyDeadlines = [captured.analytics?.policyExpiresAt,
           moderationSnapshot?.policyExpiresAt, configuration?.policyExpiresAt]
           .filter((value): value is string => value !== undefined && Number.isFinite(Date.parse(value)));
         const policyExpiresAt = policyDeadlines.length === 0 ? undefined :

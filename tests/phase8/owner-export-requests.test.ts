@@ -275,8 +275,8 @@ describe("AC02: input validation precedes every durable effect", () => {
     ["duplicate scope", { includedScopes: ["taxonomy", "taxonomy"] as unknown }],
     ["unknown scope", { includedScopes: ["taxonomy", "portfolio-settings"] as unknown }],
     ["invalid member type", { includedScopes: ["taxonomy", 7] as unknown }],
-    ["mixed Media selection", { includedScopes: ["media-metadata", "portfolio-content"] as unknown }],
-    ["unsupported CV combination", { includedScopes: ["cv-metadata", "portfolio-content"] as unknown }],
+    ["duplicate Media selection", { includedScopes: ["media-metadata", "media-metadata"] as unknown }],
+    ["unknown CV combination", { includedScopes: ["cv-metadata", "unknown-scope"] as unknown }],
     ["malformed portfolio identity", { portfolioId: "not-a-uuid" }],
     ["malformed owner identity", { ownerId: "also-not-a-uuid" }],
     ["empty idempotency key", { idempotencyKey: "" }],
@@ -505,6 +505,8 @@ describe("AC07 (validator slice): declared lifecycle edges with exact metadata",
       .toEqual({ ok: true, value: "stale" });
     expect(await applyGuardedOwnerExportTransition(staleStore, { ...base, fromStatus: "building", toStatus: "ready", integrityManifest: manifest, artifactId: unsafeStableId<"OwnerExportArtifact">("0196a1b2-7c3d-7e11-9f22-000000000022") }))
       .toEqual({ ok: true, value: "stale" });
+    expect(await applyGuardedOwnerExportTransition(staleStore, { ...base, fromStatus: "building", toStatus: "ready", integrityManifest: manifest, artifactId: unsafeStableId<"OwnerExportArtifact">("0196a1b2-7c3d-7e11-9f22-000000000022"), policyExpiresAt: NOW }))
+      .toEqual({ ok: true, value: "stale" });
     expect(await applyGuardedOwnerExportTransition(staleStore, { ...base, fromStatus: "building", toStatus: "failed", failureCode: parseSafeErrorCode("ASSEMBLY_FAILED") }))
       .toEqual({ ok: true, value: "stale" });
     expect(await applyGuardedOwnerExportTransition(staleStore, { ...base, fromStatus: "ready", toStatus: "expired", integrityManifest: manifest, artifactId: unsafeStableId<"OwnerExportArtifact">("0196a1b2-7c3d-7e11-9f22-000000000022") }))
@@ -519,6 +521,8 @@ describe("AC07 (validator slice): declared lifecycle edges with exact metadata",
     ["invalid failure code shape", { fromStatus: "building", toStatus: "failed", failureCode: "assembly-failed" }, "OWNER_EXPORT_TRANSITION_FAILURE_CODE_INVALID"],
     ["malformed manifest", { fromStatus: "building", toStatus: "ready", integrityManifest: { packageFormat: "other" }, artifactId: unsafeStableId<"OwnerExportArtifact">("0196a1b2-7c3d-7e11-9f22-000000000024") }, "OWNER_EXPORT_TRANSITION_MANIFEST_INVALID"],
     ["stale aggregate version", { fromStatus: "requested", toStatus: "building", expectedAggregateVersion: 0 }, "OWNER_EXPORT_TRANSITION_VERSION_INVALID"],
+    ["malformed policy deadline", { fromStatus: "building", toStatus: "ready", policyExpiresAt: "invalid" }, "OWNER_EXPORT_TRANSITION_EXPIRY_INVALID"],
+    ["policy deadline outside readiness", { fromStatus: "requested", toStatus: "building", policyExpiresAt: NOW }, "OWNER_EXPORT_TRANSITION_METADATA_UNEXPECTED"],
   ] as const)("rejects %s locally", (_label, override, code) => {
     const invalid = { ...base, ...override } as unknown as OwnerExportTransitionInput;
     const result = validateOwnerExportTransition(invalid);

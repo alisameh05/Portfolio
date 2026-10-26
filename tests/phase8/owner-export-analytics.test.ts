@@ -196,7 +196,7 @@ describe("Analytics Owner export", () => {
       reports: analyticsValue.reports.map((report) => ({ ...report, aggregateCount: 0 })),
     };
     await expect(buildAnalyticsOwnerExportPackage({ exportId: id<"OwnerExport">("110"), snapshot: {
-      ...snapshot, analytics: { records: [{ goalId, value: malformed }] },
+      ...snapshot, analytics: { ...snapshot.analytics!, records: [{ goalId, value: malformed }] },
     } })).rejects.toThrow("OWNER_EXPORT_ANALYTICS_RECORD_INVALID");
   });
 

@@ -52,6 +52,7 @@ import { createOwnerExportConfigurationSnapshotReader } from "../../src/runtime/
 import { createOwnerExportSnapshotReader } from "../../src/runtime/adapters/owner-export-snapshot.js";
 import { createSupabaseOwnerExportStorage } from "../../src/runtime/adapters/supabase-owner-export-storage.js";
 import { createPostgresOwnerMediaExportSnapshotReader } from "../../src/modules/media/adapters/postgres-owner-export-snapshot.js";
+import { createPostgresFeedbackOwnerExportSnapshotReader } from "../../src/modules/interaction-moderation/adapters/postgres-owner-export.js";
 import type { PortfolioSettings } from "../../src/modules/portfolio-configuration/domain/index.js";
 import type { OwnerExportConfigurationSnapshot, OwnerExportMediaObjectReaderPort } from "../../src/modules/portability-operations/application/owner-export-package.js";
 import { validateOwnerExportZip } from "../../scripts/owner-export/validator.mjs";
@@ -311,6 +312,14 @@ async function startIsolatedObjectStorage(): Promise<{
     if (request.headers["apikey"] !== "phase8-isolated-storage-key" ||
         request.headers["authorization"] !== "Bearer phase8-isolated-storage-key") {
       response.writeHead(401).end();
+      return;
+    }
+    if (request.method === "DELETE" && path === "/storage/v1/object/owner-exports") {
+      const parts: Buffer[] = [];
+      for await (const part of request) parts.push(Buffer.from(part));
+      const body = JSON.parse(Buffer.concat(parts).toString("utf8")) as { prefixes: string[] };
+      for (const prefix of body.prefixes) objects.delete(`${path}/${prefix}`);
+      response.writeHead(200, { "content-type": "application/json" }).end("[]");
       return;
     }
     if (request.method === "POST") {
@@ -755,6 +764,75 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     }
   });
 
+  it.each([false, true])("#247: mixed Media/Moderation readiness with Media rejected during upload: %s", async (rejectMedia) => {
+    const scope = { portfolioId: createStableId("Portfolio"), ownerId: createStableId("Owner") };
+    TEST_OWNER_IDS.push(scope.ownerId);
+    await application!.transactions.run(context => createPostgresPortfolioSettingsRepository().provisionSettings(
+      scope, { ...configurationSettings("Mixed export"), portfolioId: scope.portfolioId }, context));
+    const { mediaId, sourceObjectId, outputObjectId, originalBytes, mediaBytes } = await seedAcceptedMediaExportFixture(scope);
+    const snapshots = createOwnerExportSnapshotReader({
+      configuration: createPostgresPortfolioSettingsRepository(), content: createPostgresContentAuthoringRepository(),
+      media: createPostgresOwnerMediaExportSnapshotReader({ database: worker!.database, transactions: worker!.transactions }),
+      moderation: createPostgresFeedbackOwnerExportSnapshotReader(), transactions: worker!.transactions,
+      capabilities: { async read() { return { currentCvAvailable: false, externalLinksAvailable: false }; } },
+    });
+    let bytes = new Uint8Array();
+    let moderationUnchanged = false;
+    const storage = {
+      async writeOwnerExport(input: Parameters<ReturnType<typeof createSupabaseOwnerExportStorage>["writeOwnerExport"]>[0]) {
+        const chunks: Uint8Array[] = [];
+        for await (const chunk of input.content) chunks.push(chunk);
+        bytes = new Uint8Array(Buffer.concat(chunks));
+        if (rejectMedia) {
+          await admin!.query("update media.processing_states set aggregate_version = 4 where media_id = $1", [mediaId]);
+          await admin!.query(`insert into media.rejection_history
+            (rejection_id,portfolio_id,owner_id,media_id,aggregate_version,private_reason,rejected_by,rejected_at)
+            values ($1,$2,$3,$4,4,'Synthetic rejection during upload',$3,$5)`,
+          [createStableId("MediaRejection"), scope.portfolioId, scope.ownerId, mediaId, now]);
+        }
+        return { ok: true as const, value: undefined };
+      },
+      async readOwnerExport() {
+        return { ok: true as const, value: { contentLength: bytes.byteLength,
+          sha256: createHash("sha256").update(bytes).digest("hex"),
+          content: { async *[Symbol.asyncIterator]() { yield bytes; } } } };
+      },
+    };
+    const operations = createPostgresOperationsPersistence(worker!.database, { now: () => now });
+    const store = createPostgresOwnerExportStore(worker!.database, { outbox: operations.outbox });
+    const assembly = createOwnerExportAssemblyService({ operations, exports: store, artifacts: store, storage,
+      snapshots: { ...snapshots, async revalidateModerationForReady(input) {
+        moderationUnchanged = await snapshots.revalidateModerationForReady!(input);
+        return moderationUnchanged;
+      } },
+      mediaObjects: { async readMediaExportObject(input) {
+        const object = input.objectId === sourceObjectId ? originalBytes : input.objectId === outputObjectId ? mediaBytes : undefined;
+        if (object === undefined) throw new Error("MIXED_EXPORT_OBJECT_MISSING");
+        return { async *[Symbol.asyncIterator]() { yield object; } };
+      } }, clock: { now: () => now }, ids: createSystemIdGenerator(),
+    });
+    const requested = await composeService(application!).service.requestOwnerExport({
+      actor: { kind: "owner", ownerId: scope.ownerId, sessionId: "mixed-export-race" }, portfolioId: scope.portfolioId,
+      idempotencyKey: key(`mixed-export-race-${rejectMedia}`), includedScopes: ["media-metadata", "moderation-history"],
+    });
+    expect(requested.ok).toBe(true);
+    if (!requested.ok) throw new Error("MIXED_EXPORT_REQUEST_FAILED");
+    expect(await assembly.runOwnerExportAssembly({ workerId: "mixed-export-race" }))
+      .toMatchObject({ ok: true, value: { claimed: 1, completed: rejectMedia ? 0 : 1, retried: rejectMedia ? 1 : 0, failed: 0, staleLeases: 0 } });
+    const persisted = await store.findOwnerExport({ ...scope, exportId: requested.value.exportId });
+    expect(persisted?.status).toBe(rejectMedia ? "building" : "ready");
+    expect(await worker!.transactions.run(context => snapshots.revalidateModerationForReady!({
+      ...scope, snapshot: persisted!.snapshot!, context,
+    }))).toBe(true);
+    if (!rejectMedia) expect(moderationUnchanged).toBe(true);
+    expect(await countRows(`select count(*)::int as count from operations.outbox_events
+      where aggregate_id=$1 and event_type='portability.export_produced.v1'`, [requested.value.exportId])).toBe(rejectMedia ? 0 : 1);
+    const job = await admin!.query("select status from operations.jobs where payload->>'exportId'=$1", [requested.value.exportId]);
+    expect(job.rows[0]?.status).toBe(rejectMedia ? "available" : "completed");
+    // Leave no due/leased job for the following worker acceptance scenario.
+    await admin!.query("delete from operations.jobs where payload->>'exportId'=$1", [requested.value.exportId]);
+  });
+
   it("AC03/04/05: retries capture, lost upload, and verification faults without publishing partial readiness", async () => {
     const scope = { portfolioId, ownerId };
     const settingsRepository = createPostgresPortfolioSettingsRepository();
@@ -774,7 +852,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
           ok: true as const,
           value: {
             ...captured.value,
-            policyExpiresAt: new Date(Date.parse(now) + 86400_000).toISOString(),
+            policyExpiresAt: new Date(Date.parse(captured.value.capturedAt) + 86400_000).toISOString(),
           },
         };
       },
@@ -854,7 +932,8 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
         .toMatchObject({ ok: true, value: { claimed: 1, staleLeases: 1, completed: 0 } });
       const completed = await baseStore.findOwnerExport({ exportId, ...scope });
       expect(completed).toMatchObject({ status: "ready", completedAt: expect.any(String), expiresAt: expect.any(String) });
-      expect(Date.parse(completed!.expiresAt!) - Date.parse(completed!.completedAt!)).toBe(86400_000);
+      expect(completed!.expiresAt).toBe((completed!.snapshot as OwnerExportConfigurationSnapshot).policyExpiresAt);
+      expect(Date.parse(completed!.expiresAt!) - Date.parse(completed!.completedAt!)).toBeLessThanOrEqual(86400_000);
       expect(captures).toBe(2);
       expect(objectServer.objects.size).toBe(1);
 
@@ -977,7 +1056,9 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     expect(readyView.ok ? readyView.value.state : undefined).toBe("ready");
     if (readyView.ok && readyView.value.state === "ready") {
       expect(readyView.value.downloadAvailable).toBe(true);
-      expect(readyView.value.completedAt).toBe(now);
+      const completed = await workerStore.findOwnerExport({ exportId: originalExportId!, portfolioId, ownerId });
+      expect(readyView.value.completedAt).toBe(completed?.completedAt);
+      expect(readyView.value.completedAt).not.toBe(now);
     }
     expect(await countRows(
       "select count(*)::int as count from operations.outbox_events where event_type = 'portability.export_produced.v1' and aggregate_id = $1",

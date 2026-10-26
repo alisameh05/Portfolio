@@ -651,7 +651,7 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
         await expect(applicationStore.findOwnerExport(scope)).rejects.toThrow();
       }
       await admin.query("update portability.owner_exports set snapshot_data=$2::jsonb where export_id=$1", [scope.exportId, JSON.stringify(checkpoint.snapshot)]);
-      if (!deadlineOnly && !earlierErasure) {
+      if (!deadlineOnly && !earlierErasure && !expiryOnly) {
         await admin.query("update interaction.feedback set paragraph='Changed retained feedback' where feedback_id=$1", [feedbackId]);
         expect(await service.downloadOwnerExport({ actor, ...scope })).toMatchObject({ ok: false });
       }

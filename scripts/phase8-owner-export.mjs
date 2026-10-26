@@ -124,8 +124,8 @@ try {
     "tests/phase8/owner-export-media-package.test.ts", "tests/runtime/supabase-media-export-storage.test.ts",
     "tests/phase8/owner-export-cv-package.test.ts", "tests/phase8/owner-export-cv-postgres.test.ts",
     "tests/phase8/owner-export-moderation.test.ts", "tests/phase8/owner-export-moderation-postgres.test.ts",
-    "tests/phase8/owner-export-reconciliation.test.ts"];
-  const expectedTests = 107;
+    "tests/phase8/owner-export-reconciliation.test.ts", "tests/phase8/owner-export-migration-postgres.test.ts"];
+  const expectedTests = 113;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -227,14 +227,14 @@ try {
     { criterion: "AC03", tests: ["AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects"] },
     { criterion: "AC04", tests: ["AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
       "AC04 compares portable facts independently of object key order but preserves history order",
-      "AC01/AC04 retains privacy-safe checkpoints for Moderation only through source retention",
-      "AC01/AC04 retains privacy-safe checkpoints for Moderation with configuration through source retention",
-      "AC01/AC04 retains privacy-safe checkpoints for Failed Moderation build through source retention",
-      "AC01/AC04 retains privacy-safe checkpoints for Failed Moderation finalization through source retention",
-      "AC01/AC04 retains privacy-safe checkpoints for Earlier source erasure through source retention",
-      "AC01/AC04 retains privacy-safe checkpoints for Exact Feedback deadline through source retention",
-      "AC01/AC04 retains privacy-safe checkpoints for Exact seven-day export expiry through source retention",
-      "AC01/AC04 retains privacy-safe checkpoints for Upload racing cleanup through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Moderation only' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Moderation with configuration' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Failed Moderation build' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Failed Moderation finalization' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Earlier source erasure' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Upload racing cleanup' through source retention",
       "AC04 denies a ready private ZIP when the current retained Feedback no longer matches its snapshot",
       "AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages"] },
     { criterion: "AC05", tests: ["AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages",
@@ -244,7 +244,7 @@ try {
       "AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts"] },
     { criterion: "AC07", tests: ["AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts",
       "AC07 durable Moderation checkpoints contain only comparison and dependency facts",
-      "AC01/AC04 retains privacy-safe checkpoints for Failed Moderation build through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Failed Moderation build' through source retention",
       "sends every success response with the private no-store headers"] },
     { criterion: "AC08", tests: ["AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages"] },
   ];
@@ -254,21 +254,25 @@ try {
     }
   }
   reconciliationCriterionTests = [
-    { criterion: "AC01", tests: ["AC01/AC04 retains privacy-safe checkpoints for Exact Feedback deadline through source retention",
-      "AC01/AC04 retains privacy-safe checkpoints for Exact seven-day export expiry through source retention"] },
-    { criterion: "AC02", tests: ["AC01/AC04 retains privacy-safe checkpoints for Exact Feedback deadline through source retention",
-      "AC01/AC04 retains privacy-safe checkpoints for Exact seven-day export expiry through source retention"] },
+    { criterion: "AC01", tests: ["AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention"] },
+    { criterion: "AC02", tests: ["AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention"] },
     { criterion: "AC03", tests: ["AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects",
       "AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
-      "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL"] },
+      "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL",
+      "#247: mixed Media/Moderation readiness with Media rejected during upload: false",
+      "#247: mixed Media/Moderation readiness with Media rejected during upload: true"] },
     { criterion: "AC04", tests: ["AC01/02/06/07: exports one captured Configuration version through isolated private Storage",
       "AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race"] },
-    { criterion: "AC05", tests: ["deletes only the exact owned ZIP through Storage and reports retryable deletion failures",
-      "AC01/AC04 retains privacy-safe checkpoints for Exact seven-day export expiry through source retention"] },
-    { criterion: "AC06", tests: ["AC01/AC04 retains privacy-safe checkpoints for Upload racing cleanup through source retention",
+    { criterion: "AC05", tests: ["deletes only the exact owned ZIP, reconciles missing objects, and reports retryable failures",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention"] },
+    { criterion: "AC06", tests: ["AC01/AC04 retains privacy-safe checkpoints for 'Upload racing cleanup' through source retention",
       "AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects"] },
     { criterion: "AC07", tests: ["AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts",
-      "AC01/AC04 retains privacy-safe checkpoints for Exact seven-day export expiry through source retention"] },
+      "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+      "replays with existing revoked exports: false and removes temporary access",
+      "replays with existing revoked exports: true and removes temporary access"] },
     { criterion: "AC08", tests: ["AC08 preserves exact scope coverage and privacy exclusions for every single-scope package",
       "AC08 composes cross-group selections and marks exact retained versus omitted dependencies",
       "AC08 emits the complete seven-scope package in canonical order with no privacy expansion"] },
@@ -309,7 +313,8 @@ try {
       suites: tests.testResults.filter(suite => suite.name.replace(/\\/g, "/").endsWith("owner-export-reconciliation.test.ts") ||
         suite.name.replace(/\\/g, "/").endsWith("owner-export-moderation-postgres.test.ts") ||
         suite.name.replace(/\\/g, "/").endsWith("owner-export-assembly.test.ts") ||
-        suite.name.replace(/\\/g, "/").endsWith("owner-export-postgres.test.ts"))
+        suite.name.replace(/\\/g, "/").endsWith("owner-export-postgres.test.ts") ||
+        suite.name.replace(/\\/g, "/").endsWith("owner-export-migration-postgres.test.ts"))
         .map(suite => suite.name.replace(root, "").replace(/\\/g, "/").replace(/^\//, "")),
       passed: reconciliationCriterionTests.flatMap(criterion => criterion.tests).length,
       assertions: reconciliationCriterionTests.flatMap(criterion => criterion.tests)

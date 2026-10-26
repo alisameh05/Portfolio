@@ -378,14 +378,14 @@ export function createPostgresOwnerExportStore(
         }
         if (input.precondition !== undefined && !await input.precondition(context)) throw new PostgresInfrastructureError();
         const result = await sql<ExportRow>`
-          with completion_clock as materialized (select clock_timestamp() as completed_at)
+          with completion_clock as materialized (select clock_timestamp() as completion_instant)
           update portability.owner_exports
              set status = ${input.toStatus},
                  started_at = case
                    when ${input.toStatus} = 'building' then ${input.transitionedAt}::timestamptz
                    else started_at end,
                  completed_at = case
-                   when ${input.toStatus} = 'ready' then completion_clock.completed_at
+                   when ${input.toStatus} = 'ready' then completion_clock.completion_instant
                    else completed_at end,
                  failed_at = ${failedAt}::timestamptz,
                  expired_at = ${expiredAt}::timestamptz,
@@ -398,7 +398,7 @@ export function createPostgresOwnerExportStore(
                  artifact_sha256 = case when ${input.toStatus} = 'ready' then candidate_sha256 else artifact_sha256 end,
                  artifact_content_length = case when ${input.toStatus} = 'ready' then candidate_content_length else artifact_content_length end,
                  expires_at = case when ${input.toStatus} = 'ready'
-                   then least(completion_clock.completed_at + interval '7 days',
+                   then least(completion_clock.completion_instant + interval '168 hours',
                      coalesce(${input.policyExpiresAt ?? null}::timestamptz, 'infinity'::timestamptz))
                    else expires_at end,
                  aggregate_version = ${input.expectedAggregateVersion} + 1
@@ -468,7 +468,7 @@ export function createPostgresOwnerExportStore(
     });
   }
 
-  const artifacts: OwnerExportModerationArtifactsPort = {
+  const artifacts: OwnerExportArtifactCleanupPort = {
     async uploadCandidate(input, upload) {
       return transactions.run(async context => {
         const executor = resolvePostgresTransaction(context);
