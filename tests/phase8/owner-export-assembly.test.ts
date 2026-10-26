@@ -262,4 +262,20 @@ describe("configuration Owner export assembly", () => {
       }).rejects.toThrow("storage stream interrupted");
     }
   });
+
+  it("reads private Owner exports through the authenticated Storage object endpoint", async () => {
+    const bytes = new TextEncoder().encode("synthetic private owner export");
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const artifactId = stableId("3") as OwnerExportConfigurationSnapshot["snapshotId"];
+    const fetcher: typeof fetch = async (input, init) => {
+      expect(new URL(String(input)).pathname).toBe(`/storage/v1/object/authenticated/owner-exports/${portfolioId}/${exportId}/${artifactId}.zip`);
+      expect(init?.headers).toMatchObject({ apikey: "synthetic-key", authorization: "Bearer synthetic-key" });
+      return new Response(bytes, { status: 200, headers: { "content-length": String(bytes.byteLength) } });
+    };
+    const storage = createSupabaseOwnerExportStorage({ storageUrl: "http://127.0.0.1:54321", serviceRoleKey: "synthetic-key", fetcher });
+    const read = await storage.readOwnerExport({ portfolioId, exportId, artifactId, expectedSha256: sha256, expectedContentLength: bytes.byteLength });
+
+    expect(read.ok).toBe(true);
+    if (read.ok) expect(await collectBytes(read.value.content)).toEqual(bytes);
+  });
 });

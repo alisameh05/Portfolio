@@ -116,7 +116,7 @@ export function createSupabaseOwnerExportStorage(options: SupabaseOwnerExportSto
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetcher(new URL(`/storage/v1/object/${encodeURIComponent(bucket)}/${pathFor(input)}`, base), {
+      const response = await fetcher(new URL(`/storage/v1/object/authenticated/${encodeURIComponent(bucket)}/${pathFor(input)}`, base), {
         signal: controller.signal,
         headers,
       });

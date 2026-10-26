@@ -1,9 +1,9 @@
 {
   "ticket": 241,
-  "runId": "bb875344-aebd-43fc-804a-e24fab8a8c74",
-  "startedAt": "2026-10-24T06:47:47.266Z",
-  "sourceRevision": "179c9b7d945c2577c9fab932ee7471d3c14bdf69",
-  "sourceTreeSha256": "18a3c4c37b76cdc6330f1cc877f08715b192ad18181f200c8b947a86e53beb2f",
+  "runId": "ccbf35d4-99fd-487e-9ad6-01261ed5e26b",
+  "startedAt": "2026-10-26T23:39:04.161Z",
+  "sourceRevision": "097fb746375357b7daf37ebe12dfc931eae2445b",
+  "sourceTreeSha256": "6a6d9468147b38e582de0e29f79690354f97108441329f2cf76c15a9b2a8cc8c",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -221,6 +221,38 @@
     {
       "name": "20261024120000_read_content_for_owner_exports.sql",
       "sha256": "51ae23020903a72a2a6d7db96b3629dc4ffcb27a9658addc8cc0696a3f32d27e"
+    },
+    {
+      "name": "20261024130000_read_taxonomy_for_owner_exports.sql",
+      "sha256": "86512866f93801d15d962d8b514214941f3ce20cc22cdf7df0cb72fd0112300e"
+    },
+    {
+      "name": "20261024140000_read_media_for_owner_exports.sql",
+      "sha256": "0445745ac90122a3df27d53cb92e66975fe145eed4390ba6e8d30ce82a2a302f"
+    },
+    {
+      "name": "20261024233915_owner_cv_export_read_access.sql",
+      "sha256": "6ef6a318730547c3cf7315126f04dc769f5cc1628af889ad1c70f67467ecaab3"
+    },
+    {
+      "name": "20261025090000_read_feedback_for_owner_exports.sql",
+      "sha256": "d23dea8422800de3b2286a3c354eed68fad572fa5e4dcacb4f6a26a5259e5bdb"
+    },
+    {
+      "name": "20261025190828_retain_moderation_export_artifact_cleanup.sql",
+      "sha256": "ab521d5e0d6832f57eedddffd268e49541f99e1cb67aac7355921a5cc8125fe5"
+    },
+    {
+      "name": "20261025200000_read_measurement_for_owner_exports.sql",
+      "sha256": "e0ddaae3563cb85ee63e83bffdd7bd80d05d0d454ea217ea78087613a0693021"
+    },
+    {
+      "name": "20261026011341_restrict_analytics_export_deletion.sql",
+      "sha256": "2f6c6fce8f330941409c734e0b1d12cae0b71a07f8217cdf5f8b6b39488db2bb"
+    },
+    {
+      "name": "20261026100000_reconcile_all_owner_export_artifacts.sql",
+      "sha256": "28ea11c784b188977f57514dd874dcf877dbf307d0a4020857c078f18cfc06f9"
     }
   ],
   "tools": {
@@ -229,7 +261,7 @@
   },
   "required": {
     "success": true,
-    "passed": 52,
+    "passed": 117,
     "failed": 0,
     "skipped": 0,
     "todo": 0,
@@ -237,7 +269,7 @@
   },
   "roleMatrix": {
     "success": true,
-    "passed": 97,
+    "passed": 123,
     "failed": 0,
     "skipped": 0,
     "todo": 0
@@ -276,6 +308,10 @@
       "status": "passed"
     },
     {
+      "title": "deletes only the exact owned ZIP, reconciles missing objects, and reports retryable failures",
+      "status": "passed"
+    },
+    {
       "title": "emits the retained configuration version, locales and capabilities in a validator-approved 1.2 package",
       "status": "passed"
     },
@@ -296,6 +332,10 @@
       "status": "passed"
     },
     {
+      "title": "reads private Owner exports through the authenticated Storage object endpoint",
+      "status": "passed"
+    },
+    {
       "title": "AC01–AC08 captures all retained facts, races consistently, and validates independent content-only and combined packages",
       "status": "passed"
     },
@@ -308,7 +348,195 @@
       "status": "passed"
     },
     {
+      "title": "exports retained CV identities, real approval and activation history, and verified accepted PDF bytes",
+      "status": "passed"
+    },
+    {
+      "title": "rejects an omitted acceptance from a complete retained history after digest recomputation",
+      "status": "passed"
+    },
+    {
+      "title": "independently validates Current CV pointers and activation order",
+      "status": "passed"
+    },
+    {
+      "title": "refuses a source snapshot that marks versionsTruncated incomplete",
+      "status": "passed"
+    },
+    {
+      "title": "refuses a source snapshot that marks acceptanceHistoryTruncated incomplete",
+      "status": "passed"
+    },
+    {
+      "title": "refuses a source snapshot that marks activationHistoryTruncated incomplete",
+      "status": "passed"
+    },
+    {
+      "title": "validator rejects archives that claim any CV history was truncated",
+      "status": "passed"
+    },
+    {
+      "title": "represents no Current CV with retained versions and no invented activation history",
+      "status": "passed"
+    },
+    {
+      "title": "deduplicates an accepted PDF referenced by both selected scopes",
+      "status": "passed"
+    },
+    {
+      "title": "does not build a byte-complete package when required CV bytes are missing",
+      "status": "passed"
+    },
+    {
+      "title": "does not build a byte-complete package when required CV bytes are corrupt",
+      "status": "passed"
+    },
+    {
+      "title": "fails closed when a retained CV's exact accepted Media binding is stale",
+      "status": "passed"
+    },
+    {
+      "title": "reads only the scoped CV projection and denies unrelated purpose, private columns, writes, and anonymous access",
+      "status": "passed"
+    },
+    {
+      "title": "fails the snapshot explicitly when retained CV versions exceed the export history limit",
+      "status": "passed"
+    },
+    {
+      "title": "preserves accepted versions without Current and rejects an activation/withdrawal race",
+      "status": "passed"
+    },
+    {
+      "title": "packages accepted bytes, deduplicates shared digests, and passes the independent validator",
+      "status": "passed"
+    },
+    {
+      "title": "fails closed for missing required accepted bytes",
+      "status": "passed"
+    },
+    {
+      "title": "fails closed for same-length replacement required accepted bytes",
+      "status": "passed"
+    },
+    {
+      "title": "records rejected bytes as excluded without reading or declaring any object",
+      "status": "passed"
+    },
+    {
+      "title": "rejects an accepted object above the 50 MiB per-object bound before opening Storage",
+      "status": "passed"
+    },
+    {
+      "title": "rejects packages whose unique assets exceed the validator's 512-member limit",
+      "status": "passed"
+    },
+    {
+      "title": "replays with existing revoked exports: false and removes temporary access",
+      "status": "passed"
+    },
+    {
+      "title": "replays with existing revoked exports: true and removes temporary access",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts",
+      "status": "passed"
+    },
+    {
+      "title": "AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects",
+      "status": "passed"
+    },
+    {
+      "title": "AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Moderation only' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Moderation with configuration' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Failed Moderation build' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Failed Moderation finalization' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Earlier source erasure' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Upload racing cleanup' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC06 grants direct reads only to the matching Owner and exact worker purpose",
+      "status": "passed"
+    },
+    {
+      "title": "AC07 durable Moderation checkpoints contain only comparison and dependency facts",
+      "status": "passed"
+    },
+    {
+      "title": "AC04 compares portable facts independently of object key order but preserves history order",
+      "status": "passed"
+    },
+    {
+      "title": "AC02 applies the exact 90-day pending and rejected boundaries, including stale rows",
+      "status": "passed"
+    },
+    {
+      "title": "AC02 clamps 12 calendar months at month end and strips text and reasons at the exact deadline",
+      "status": "passed"
+    },
+    {
+      "title": "AC02 preserves a truthful minimal audit after an earlier text erasure",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages",
+      "status": "passed"
+    },
+    {
+      "title": "AC05 independently rejects erased audit rows that still retain decision reasons",
+      "status": "passed"
+    },
+    {
+      "title": "AC04 denies a ready private ZIP when the current retained Feedback no longer matches its snapshot",
+      "status": "passed"
+    },
+    {
       "title": "AC01/02/06/07: exports one captured Configuration version through isolated private Storage",
+      "status": "passed"
+    },
+    {
+      "title": "#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields",
+      "status": "passed"
+    },
+    {
+      "title": "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL",
+      "status": "passed"
+    },
+    {
+      "title": "#247: mixed Media/Moderation readiness with Media rejected during upload: false",
+      "status": "passed"
+    },
+    {
+      "title": "#247: mixed Media/Moderation readiness with Media rejected during upload: true",
       "status": "passed"
     },
     {
@@ -316,7 +544,15 @@
       "status": "passed"
     },
     {
-      "title": "AC09: fails an unsupported requested scope without manufacturing a ready package",
+      "title": "AC09: rejects an unsupported requested scope without manufacturing a ready package",
+      "status": "passed"
+    },
+    {
+      "title": "keeps upload and revocation fenced on a single reserved PostgreSQL connection",
+      "status": "passed"
+    },
+    {
+      "title": "saturates the default five-connection pool with concurrent uploads and revocations without nested checkouts",
       "status": "passed"
     },
     {
@@ -344,7 +580,19 @@
       "status": "passed"
     },
     {
-      "title": "accepts every nonempty subset in canonical declared order",
+      "title": "AC08 preserves exact scope coverage and privacy exclusions for every single-scope package",
+      "status": "passed"
+    },
+    {
+      "title": "AC08 composes cross-group selections and marks exact retained versus omitted dependencies",
+      "status": "passed"
+    },
+    {
+      "title": "AC08 emits the complete seven-scope package in canonical order with no privacy expansion",
+      "status": "passed"
+    },
+    {
+      "title": "accepts supported selections including CV-only and CV with Media in canonical order",
       "status": "passed"
     },
     {
@@ -373,6 +621,14 @@
     },
     {
       "title": "rejects invalid member type before any reservation",
+      "status": "passed"
+    },
+    {
+      "title": "rejects duplicate Media selection before any reservation",
+      "status": "passed"
+    },
+    {
+      "title": "rejects unknown CV combination before any reservation",
       "status": "passed"
     },
     {
@@ -448,10 +704,584 @@
       "status": "passed"
     },
     {
+      "title": "rejects malformed policy deadline locally",
+      "status": "passed"
+    },
+    {
+      "title": "rejects policy deadline outside readiness locally",
+      "status": "passed"
+    },
+    {
       "title": "maps declared uppercase persistence codes to lowercase transport codes",
+      "status": "passed"
+    },
+    {
+      "title": "passes the selected loopback API port to the standard export child",
+      "status": "passed"
+    },
+    {
+      "title": "streams only the pinned processed object and verifies its exact length and SHA-256",
+      "status": "passed"
+    },
+    {
+      "title": "streams the exact upload-intent-scoped original from the private candidate bucket",
+      "status": "passed"
+    },
+    {
+      "title": "composes the configured candidate bucket for original Media export reads",
+      "status": "passed"
+    },
+    {
+      "title": "cancels the private Storage response when a consumer stops before verification",
+      "status": "passed"
+    },
+    {
+      "title": "rejects missing, redirected, changed, and wrong-length objects",
+      "status": "passed"
+    },
+    {
+      "title": "requires HTTPS except on loopback and rejects malformed object identities before fetching",
       "status": "passed"
     }
   ],
+  "mediaAcceptance": {
+    "suites": [
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-content-postgres.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-media-package.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-postgres.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-requests.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/runtime/supabase-media-export-storage.test.ts"
+    ],
+    "passed": 59,
+    "assertions": [
+      {
+        "title": "AC01–AC08 captures all retained facts, races consistently, and validates independent content-only and combined packages",
+        "status": "passed"
+      },
+      {
+        "title": "packages accepted bytes, deduplicates shared digests, and passes the independent validator",
+        "status": "passed"
+      },
+      {
+        "title": "fails closed for missing required accepted bytes",
+        "status": "passed"
+      },
+      {
+        "title": "fails closed for same-length replacement required accepted bytes",
+        "status": "passed"
+      },
+      {
+        "title": "records rejected bytes as excluded without reading or declaring any object",
+        "status": "passed"
+      },
+      {
+        "title": "rejects an accepted object above the 50 MiB per-object bound before opening Storage",
+        "status": "passed"
+      },
+      {
+        "title": "rejects packages whose unique assets exceed the validator's 512-member limit",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/02/06/07: exports one captured Configuration version through isolated private Storage",
+        "status": "passed"
+      },
+      {
+        "title": "#243 AC01/04/08: reads accepted Media history under its purpose-bound worker role and excludes private fields",
+        "status": "passed"
+      },
+      {
+        "title": "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL",
+        "status": "passed"
+      },
+      {
+        "title": "#247: mixed Media/Moderation readiness with Media rejected during upload: false",
+        "status": "passed"
+      },
+      {
+        "title": "#247: mixed Media/Moderation readiness with Media rejected during upload: true",
+        "status": "passed"
+      },
+      {
+        "title": "AC03/04/05: retries capture, lost upload, and verification faults without publishing partial readiness",
+        "status": "passed"
+      },
+      {
+        "title": "AC09: rejects an unsupported requested scope without manufacturing a ready package",
+        "status": "passed"
+      },
+      {
+        "title": "keeps upload and revocation fenced on a single reserved PostgreSQL connection",
+        "status": "passed"
+      },
+      {
+        "title": "saturates the default five-connection pool with concurrent uploads and revocations without nested checkouts",
+        "status": "passed"
+      },
+      {
+        "title": "AC03: commits exact concurrent requests once and replays the original receipt to both",
+        "status": "passed"
+      },
+      {
+        "title": "AC04: retries replay the original receipt across truthful settlements; meaning changes conflict",
+        "status": "passed"
+      },
+      {
+        "title": "AC05: a forced reservation failure leaves no receipt, export, or job and frees the key",
+        "status": "passed"
+      },
+      {
+        "title": "AC07: guarded transitions keep the metadata truthful and stale attempts never win",
+        "status": "passed"
+      },
+      {
+        "title": "AC06: protected existence is uniform for cross-owner and cross-portfolio reads",
+        "status": "passed"
+      },
+      {
+        "title": "AC08: jobs follow the assembly payload contract and carry resolved Owner identity",
+        "status": "passed"
+      },
+      {
+        "title": "accepts supported selections including CV-only and CV with Media in canonical order",
+        "status": "passed"
+      },
+      {
+        "title": "normalizes every permutation of one selection to identical canonical meaning",
+        "status": "passed"
+      },
+      {
+        "title": "hashes the canonical order, so permutations reuse the same reservation meaning",
+        "status": "passed"
+      },
+      {
+        "title": "rejects the empty selection without durable effects",
+        "status": "passed"
+      },
+      {
+        "title": "rejects non-array selection before any reservation",
+        "status": "passed"
+      },
+      {
+        "title": "rejects duplicate scope before any reservation",
+        "status": "passed"
+      },
+      {
+        "title": "rejects unknown scope before any reservation",
+        "status": "passed"
+      },
+      {
+        "title": "rejects invalid member type before any reservation",
+        "status": "passed"
+      },
+      {
+        "title": "rejects duplicate Media selection before any reservation",
+        "status": "passed"
+      },
+      {
+        "title": "rejects unknown CV combination before any reservation",
+        "status": "passed"
+      },
+      {
+        "title": "rejects malformed portfolio identity before any reservation",
+        "status": "passed"
+      },
+      {
+        "title": "rejects malformed owner identity before any reservation",
+        "status": "passed"
+      },
+      {
+        "title": "rejects empty idempotency key before any reservation",
+        "status": "passed"
+      },
+      {
+        "title": "rejects oversized idempotency key before any reservation",
+        "status": "passed"
+      },
+      {
+        "title": "rejects non-owner actors as forbidden without durable effects",
+        "status": "passed"
+      },
+      {
+        "title": "reserves exactly one export row and one job for one accepted request",
+        "status": "passed"
+      },
+      {
+        "title": "replays the original receipt exactly on exact retry and conflicts on changed meaning",
+        "status": "passed"
+      },
+      {
+        "title": "maps persistence faults to the fail-closed rejection",
+        "status": "passed"
+      },
+      {
+        "title": "hands the same effect context to the export reservation and the job enqueue",
+        "status": "passed"
+      },
+      {
+        "title": "keeps the downloaded filename and schema version aligned with the persisted artifact",
+        "status": "passed"
+      },
+      {
+        "title": "accepts exactly the declared edges and their required metadata",
+        "status": "passed"
+      },
+      {
+        "title": "rejects impossible edge locally",
+        "status": "passed"
+      },
+      {
+        "title": "rejects unknown state locally",
+        "status": "passed"
+      },
+      {
+        "title": "rejects missing manifest on readiness locally",
+        "status": "passed"
+      },
+      {
+        "title": "rejects artifact without manifest locally",
+        "status": "passed"
+      },
+      {
+        "title": "rejects invalid failure code shape locally",
+        "status": "passed"
+      },
+      {
+        "title": "rejects malformed manifest locally",
+        "status": "passed"
+      },
+      {
+        "title": "rejects stale aggregate version locally",
+        "status": "passed"
+      },
+      {
+        "title": "rejects malformed policy deadline locally",
+        "status": "passed"
+      },
+      {
+        "title": "rejects policy deadline outside readiness locally",
+        "status": "passed"
+      },
+      {
+        "title": "maps declared uppercase persistence codes to lowercase transport codes",
+        "status": "passed"
+      },
+      {
+        "title": "streams only the pinned processed object and verifies its exact length and SHA-256",
+        "status": "passed"
+      },
+      {
+        "title": "streams the exact upload-intent-scoped original from the private candidate bucket",
+        "status": "passed"
+      },
+      {
+        "title": "composes the configured candidate bucket for original Media export reads",
+        "status": "passed"
+      },
+      {
+        "title": "cancels the private Storage response when a consumer stops before verification",
+        "status": "passed"
+      },
+      {
+        "title": "rejects missing, redirected, changed, and wrong-length objects",
+        "status": "passed"
+      },
+      {
+        "title": "requires HTTPS except on loopback and rejects malformed object identities before fetching",
+        "status": "passed"
+      }
+    ]
+  },
+  "cvAcceptance": {
+    "suites": [
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-cv-package.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-cv-postgres.test.ts"
+    ],
+    "passed": 15,
+    "assertions": [
+      {
+        "title": "exports retained CV identities, real approval and activation history, and verified accepted PDF bytes",
+        "status": "passed"
+      },
+      {
+        "title": "rejects an omitted acceptance from a complete retained history after digest recomputation",
+        "status": "passed"
+      },
+      {
+        "title": "independently validates Current CV pointers and activation order",
+        "status": "passed"
+      },
+      {
+        "title": "refuses a source snapshot that marks versionsTruncated incomplete",
+        "status": "passed"
+      },
+      {
+        "title": "refuses a source snapshot that marks acceptanceHistoryTruncated incomplete",
+        "status": "passed"
+      },
+      {
+        "title": "refuses a source snapshot that marks activationHistoryTruncated incomplete",
+        "status": "passed"
+      },
+      {
+        "title": "validator rejects archives that claim any CV history was truncated",
+        "status": "passed"
+      },
+      {
+        "title": "represents no Current CV with retained versions and no invented activation history",
+        "status": "passed"
+      },
+      {
+        "title": "deduplicates an accepted PDF referenced by both selected scopes",
+        "status": "passed"
+      },
+      {
+        "title": "does not build a byte-complete package when required CV bytes are missing",
+        "status": "passed"
+      },
+      {
+        "title": "does not build a byte-complete package when required CV bytes are corrupt",
+        "status": "passed"
+      },
+      {
+        "title": "fails closed when a retained CV's exact accepted Media binding is stale",
+        "status": "passed"
+      },
+      {
+        "title": "reads only the scoped CV projection and denies unrelated purpose, private columns, writes, and anonymous access",
+        "status": "passed"
+      },
+      {
+        "title": "fails the snapshot explicitly when retained CV versions exceed the export history limit",
+        "status": "passed"
+      },
+      {
+        "title": "preserves accepted versions without Current and rejects an activation/withdrawal race",
+        "status": "passed"
+      }
+    ]
+  },
+  "moderationAcceptance": {
+    "suites": [
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-moderation-postgres.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-moderation.test.ts"
+    ],
+    "passed": 20,
+    "assertions": [
+      {
+        "title": "sends every success response with the private no-store headers",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts",
+        "status": "passed"
+      },
+      {
+        "title": "AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects",
+        "status": "passed"
+      },
+      {
+        "title": "AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Moderation only' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Moderation with configuration' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Failed Moderation build' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Failed Moderation finalization' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Earlier source erasure' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Upload racing cleanup' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC06 grants direct reads only to the matching Owner and exact worker purpose",
+        "status": "passed"
+      },
+      {
+        "title": "AC07 durable Moderation checkpoints contain only comparison and dependency facts",
+        "status": "passed"
+      },
+      {
+        "title": "AC04 compares portable facts independently of object key order but preserves history order",
+        "status": "passed"
+      },
+      {
+        "title": "AC02 applies the exact 90-day pending and rejected boundaries, including stale rows",
+        "status": "passed"
+      },
+      {
+        "title": "AC02 clamps 12 calendar months at month end and strips text and reasons at the exact deadline",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages",
+        "status": "passed"
+      },
+      {
+        "title": "AC05 independently rejects erased audit rows that still retain decision reasons",
+        "status": "passed"
+      },
+      {
+        "title": "AC04 denies a ready private ZIP when the current retained Feedback no longer matches its snapshot",
+        "status": "passed"
+      }
+    ]
+  },
+  "reconciliationAcceptance": {
+    "suites": [
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-assembly.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-migration-postgres.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-moderation-postgres.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-postgres.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-reconciliation.test.ts"
+    ],
+    "passed": 22,
+    "assertions": [
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects",
+        "status": "passed"
+      },
+      {
+        "title": "AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
+        "status": "passed"
+      },
+      {
+        "title": "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL",
+        "status": "passed"
+      },
+      {
+        "title": "#247: mixed Media/Moderation readiness with Media rejected during upload: false",
+        "status": "passed"
+      },
+      {
+        "title": "#247: mixed Media/Moderation readiness with Media rejected during upload: true",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/02/06/07: exports one captured Configuration version through isolated private Storage",
+        "status": "passed"
+      },
+      {
+        "title": "AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
+        "status": "passed"
+      },
+      {
+        "title": "deletes only the exact owned ZIP, reconciles missing objects, and reports retryable failures",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Upload racing cleanup' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts",
+        "status": "passed"
+      },
+      {
+        "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+        "status": "passed"
+      },
+      {
+        "title": "replays with existing revoked exports: false and removes temporary access",
+        "status": "passed"
+      },
+      {
+        "title": "replays with existing revoked exports: true and removes temporary access",
+        "status": "passed"
+      },
+      {
+        "title": "AC08 preserves exact scope coverage and privacy exclusions for every single-scope package",
+        "status": "passed"
+      },
+      {
+        "title": "AC08 composes cross-group selections and marks exact retained versus omitted dependencies",
+        "status": "passed"
+      },
+      {
+        "title": "AC08 emits the complete seven-scope package in canonical order with no privacy expansion",
+        "status": "passed"
+      }
+    ]
+  },
+  "cvRegressionAcceptance": {
+    "suites": [
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/contracts/public-contract.test.ts"
+    ],
+    "passed": 6,
+    "assertions": [
+      {
+        "title": "requires a 1-128 character visible-ASCII idempotency key for every mutation",
+        "status": "passed"
+      },
+      {
+        "title": "declares replacement semantics and private pending Feedback",
+        "status": "passed"
+      },
+      {
+        "title": "keeps Public event data to the closed nine-event allowlist",
+        "status": "passed"
+      },
+      {
+        "title": "exposes only the English Current CV and declares stream and redirect success",
+        "status": "passed"
+      },
+      {
+        "title": "uses safe RFC Problem Details for every declared error",
+        "status": "passed"
+      },
+      {
+        "title": "contains no forbidden public surface",
+        "status": "passed"
+      }
+    ]
+  },
   "databaseRoles": [
     "owner_export_application_runtime",
     "shipwithali_application",
@@ -471,7 +1301,7 @@
     "AC08"
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase8:focus:exports",
-  "scope": "All repository migrations on disposable native PostgreSQL; restricted application and worker roles; existing configuration-only request-to-ready recovery scenarios; Content-owned full-history snapshot capture for Draft, Published, Hidden, and Archived Projects, Achievements, and Testimonials; independent English and Arabic revision/review/publication histories and exact current pointers; durable route identities, reservations, redirects, and discovery tie ordering; repeatable-read source capture; content-only and combined-scope package contents with omitted dependency declarations; independent offline schema/hash/count/domain validation; owner and purpose fenced worker reads with no Content writes; unsupported scopes failing safely; private/no-store download headers; role/RLS matrix enforcement.",
-  "completedAt": "2026-10-24T06:48:39.516Z",
+  "scope": "Issue #241 Owner export PostgreSQL/Content acceptance plus Issue #243 standalone Media acceptance history, Issue #244 retained CV versions and exact accepted PDF bytes, Issue #245 privacy-safe Feedback snapshots, and Issue #247 expiry/revocation, resumable artifact deletion and all-scope package reconciliation; restricted application and worker roles; disposable native PostgreSQL; independent offline package validation; PR CI exercises production Storage against an isolated private service.",
+  "completedAt": "2026-10-26T23:40:11.101Z",
   "cleanup": true
 }

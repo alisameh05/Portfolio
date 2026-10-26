@@ -1,0 +1,553 @@
+{
+  "schemaVersion": 1,
+  "ticket": 247,
+  "runId": "ccbf35d4-99fd-487e-9ad6-01261ed5e26b",
+  "startedAt": "2026-10-26T23:39:04.161Z",
+  "completedAt": "2026-10-26T23:40:11.101Z",
+  "sourceRevision": "097fb746375357b7daf37ebe12dfc931eae2445b",
+  "sourceTreeSha256": "6a6d9468147b38e582de0e29f79690354f97108441329f2cf76c15a9b2a8cc8c",
+  "postgresVersion": "postgres (PostgreSQL) 18.3",
+  "migrations": [
+    {
+      "name": "20260922170000_prepare_migration_capability.sql",
+      "sha256": "f626df30438e644254fd6c5af015118be117ef5090fbc976bb0762593ac481fe"
+    },
+    {
+      "name": "20260922171906_establish_database_security_baseline.sql",
+      "sha256": "1406e77b9a2505ec684ef350170545558217ca2bf345675f67eb723a735f6be3"
+    },
+    {
+      "name": "20260922203000_create_operations_primitives.sql",
+      "sha256": "adad38103c83693de591f1691fe4eaabbe7da90423b3e68a02d7b7aa9b76cb98"
+    },
+    {
+      "name": "20261001220000_create_identity_access_owner_links.sql",
+      "sha256": "caa742152a624883937f3204ca1ec2ee947c7c52a812e0760ba794d1195b1205"
+    },
+    {
+      "name": "20261002120000_create_portfolio_configuration_settings.sql",
+      "sha256": "55452f45d7b4b18720993ec5fe4d0e818652c331339bd97c7e15fed6fb6a9c90"
+    },
+    {
+      "name": "20261002130000_allow_versioned_portfolio_profile_updates.sql",
+      "sha256": "533e07ffcad2d12297337fd84a6b7beb29cc5254a8f1632e75024ad73a013fae"
+    },
+    {
+      "name": "20261002140000_allow_owner_contact_channel_replacement.sql",
+      "sha256": "046977710edcffca09133ea794e874dbdd9b68188526cdc548182b3c73843ca4"
+    },
+    {
+      "name": "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+      "sha256": "f05678c118b14daee3ccfaf34736169b3339720b32ed6c1a394366398ded605a"
+    },
+    {
+      "name": "20261005001318_create_content_authoring.sql",
+      "sha256": "9b83a3dfdeed012f5ff6a61a96d765f54ebd8280530a2be428ec0e11eb0c029e"
+    },
+    {
+      "name": "20261007090000_add_immutable_content_revision_reviews.sql",
+      "sha256": "787ce6c713d8c2c719878ed119d1e0095b7e852d13fa634544e73db27e861a02"
+    },
+    {
+      "name": "20261007170000_add_project_publication_routes.sql",
+      "sha256": "a1fccbc91c732890ff8e0d0e5f754385abc927a70008e2017e6bf0b4a462c896"
+    },
+    {
+      "name": "20261007190000_add_achievement_publication_timeline.sql",
+      "sha256": "abeddadfcab69209b95986d036d0a929e916630ba9cf9c55828e2fb477ae441f"
+    },
+    {
+      "name": "20261007200000_publish_localized_testimonials.sql",
+      "sha256": "d262130f861be52c4c5556f45f31d0dd94dfcc10a6471cf22c28ca0390eb0877"
+    },
+    {
+      "name": "20261008090000_preserve_project_route_history.sql",
+      "sha256": "e56f6c1aaa4c40d28cb7f2dc5ab7c17d766c19ea82b72c0549264abd1275e058"
+    },
+    {
+      "name": "20261008120000_add_content_lifecycle_history.sql",
+      "sha256": "b2ef7861b063a20f45bbc2fd7857e6aaee59f3d154512d3c752e8b2f0a6c90c1"
+    },
+    {
+      "name": "20261008130000_add_project_status_and_featured.sql",
+      "sha256": "da301da8f9aa79dcdc754c305e6453e348012d5d450fc689793c562264febbe2"
+    },
+    {
+      "name": "20261008180000_add_project_relationships.sql",
+      "sha256": "0826469828a5534a191fa9fcbf00355b8ef80078db1556d164e68edfef624174"
+    },
+    {
+      "name": "20261008210000_provision_project_taxonomies.sql",
+      "sha256": "c405a2ecb3f425eaf6874557a70d4f277e95d38816970c6ac884b67279c76948"
+    },
+    {
+      "name": "20261009090000_record_taxonomy_evolution_actor_reason.sql",
+      "sha256": "14d9ebfa4266d239eca09f6e6ee944684423624e2ef545bfdf57e9c8aca9114e"
+    },
+    {
+      "name": "20261009100000_index_project_discovery_reads.sql",
+      "sha256": "ad685fa5f79f1f7c3b9ba001c3c5ea73272845ce6881eece0787a25fcd056d48"
+    },
+    {
+      "name": "20261010100000_create_private_media_upload_intents.sql",
+      "sha256": "dc9148b681510d17d79b6c9d81bd7f2f1a0538b6fc3033cc973ce5a82cc7987d"
+    },
+    {
+      "name": "20261010200000_record_trusted_pdf_processing.sql",
+      "sha256": "5780f2f4fcd167a9d3c806887cbcc71bf14694e606f0cda6338ceecfc2932dd6"
+    },
+    {
+      "name": "20261011210000_harden_trusted_pdf_processing.sql",
+      "sha256": "13664c93dbbdf3001c793d661739a3989c76fc7e8f00b7e5cdb781734171332a"
+    },
+    {
+      "name": "20261011220000_record_bounded_video_variants.sql",
+      "sha256": "81cc24aef5bb3393b9e405c269e806121598010675affb6239dbc1b901031cbe"
+    },
+    {
+      "name": "20261011230000_process_bounded_media_image_variants.sql",
+      "sha256": "de011d9c57ce64acdec8e4330e7e958fbd390541dd608bcba29c0e81c3059eca"
+    },
+    {
+      "name": "20261012000000_restore_video_variant_policy_after_images.sql",
+      "sha256": "172a5fed40a44dcc83833d12d8e0412f095e80fcb7af2b760b4d75f7b0921d69"
+    },
+    {
+      "name": "20261012010000_accept_media_with_editorial_accessibility.sql",
+      "sha256": "879e0bd7110e9e2867fc9be61e4f1d6758f739566075af92d76a8d57621494f3"
+    },
+    {
+      "name": "20261012020000_index_current_visible_media_references.sql",
+      "sha256": "9b166b1a14d6f2d05a32c5023657ab89ed90d3aae153fb2c1a28ca9af6b4e736"
+    },
+    {
+      "name": "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "sha256": "777d87a02304e3707d6420a80d219e6e7e5be101dc4de7cd03d854ef8c34210c"
+    },
+    {
+      "name": "20261012040000_accept_registered_cv_versions.sql",
+      "sha256": "bae3eb3d78f01690eba48d8027c63402243a6d0e6bdde425f71b946d0e413da9"
+    },
+    {
+      "name": "20261012050000_activate_current_cv_atomically.sql",
+      "sha256": "1b6a5576aecb056850924b93119727eadf64af01d1000f99ec81db824b5abc31"
+    },
+    {
+      "name": "20261012060000_reject_media_with_usage_guard.sql",
+      "sha256": "c8e577aaf24b0c090f0bef8d876f1be6538a48bd7bcaa3299de4c8befa8cacbf"
+    },
+    {
+      "name": "20261013100000_configure_public_profile_media.sql",
+      "sha256": "36f524652c3d7c66fb5924ce2ad281406a58eb1d4bb767287e5d8e1b3cdfce8f"
+    },
+    {
+      "name": "20261014194925_measurement_consent.sql",
+      "sha256": "9b122a259e91cee3875aa22133ff1b529c0b07203f01464378d0e3116ba01630"
+    },
+    {
+      "name": "20261014210000_persist_project_reactions.sql",
+      "sha256": "0217150ac17a8f1a156821dc22755b11ea743c8510e230f6d0fad1060d59b941"
+    },
+    {
+      "name": "20261014211320_persist_project_ratings.sql",
+      "sha256": "98b27aa626fa29c74b0e844f22ba83c87272338fffafccbc113963655d4f4133"
+    },
+    {
+      "name": "20261015003000_persist_private_feedback.sql",
+      "sha256": "991aeb268280b9e00c089d527598eeb20114f005e35057fb4521d2d9deaaa19c"
+    },
+    {
+      "name": "20261015010000_retain_feedback_moderation.sql",
+      "sha256": "5dcb17fa99531d21cdbd0ae60af6fd2b7178a6b161b8f66daa56ed70c5136938"
+    },
+    {
+      "name": "20261015093040_query_current_interaction_summaries.sql",
+      "sha256": "8fbef1951cc33e3a6ae286dc9f1d53bee87b45eb0dc9e45e4c080eb7a56cea88"
+    },
+    {
+      "name": "20261015120000_persist_consented_public_events.sql",
+      "sha256": "49a176f484fda2e0f067925501c609222308a1a776eecea06f13abbe591e73f6"
+    },
+    {
+      "name": "20261015130000_enable_public_interaction_event_facts.sql",
+      "sha256": "360c8a80bf10242bfa45c70da4dbcba9e4afd00207bd98883411f40ec694049b"
+    },
+    {
+      "name": "20261015150000_enable_configuration_interaction_event_facts.sql",
+      "sha256": "ce3d4700c6cf9154f8aa5a462bca3032d19ead3faf1b73ef64dca4ff954a03a9"
+    },
+    {
+      "name": "20261015160000_persist_immutable_analytics_goal_versions.sql",
+      "sha256": "db9ef116e1a8a1a5898b1c2c369c85f043fda60d115f8baee03bbd07ff83d085"
+    },
+    {
+      "name": "20261015170000_activate_analytics_goal_versions.sql",
+      "sha256": "7f6a8d3444468125fd9bbecf8d3f95bd1ea6c953f8a1626b140a707a82c54f66"
+    },
+    {
+      "name": "20261015180000_match_analytics_goal_conversions.sql",
+      "sha256": "682a4c7b6f3fd7e19c10fef259cb0fc50df93eec9c9bfd2c119e436ebea2a03a"
+    },
+    {
+      "name": "20261015190000_persist_reproducible_daily_aggregates.sql",
+      "sha256": "f0bf8f4237f6b16413c521bccb46ef790f607dd791c4e86f319b5016455bfefc"
+    },
+    {
+      "name": "20261015200000_enable_fixed_aggregate_dimensions.sql",
+      "sha256": "bf2e22a2e285faedba9b13962303da71b2c18f59cb4131720a8917722c02bd79"
+    },
+    {
+      "name": "20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
+      "sha256": "04e33297a492b55c2dc8b2392fc9f0291fa3e10f9ade40e7c9ef6fc97b297221"
+    },
+    {
+      "name": "20261015203000_retain_feedback_privacy.sql",
+      "sha256": "7f1910911ff0069922e2188673531d492b9d98e9cf6c3f2e971f379152c433bb"
+    },
+    {
+      "name": "20261017142000_revoke_public_aggregate_guard_execution.sql",
+      "sha256": "7b385899021083dca28b10d34d175b14c6daa443e98a846953f3ff16212d1a91"
+    },
+    {
+      "name": "20261018172500_bound_job_retries_and_incidents.sql",
+      "sha256": "c63d813d82f4fab902fcfbfde78c667b95618b450e438f58d88aad103fe78b1e"
+    },
+    {
+      "name": "20261023090000_reserve_owner_export_requests.sql",
+      "sha256": "43d9996f1d8c59c663c5c81842631248001ed8a6b551652e5a43acd22d6badd4"
+    },
+    {
+      "name": "20261023100000_build_configuration_owner_exports.sql",
+      "sha256": "3b2525935b8e8e1c83c64d1fe28ca0af60f6534cde53627bcb012059ce992966"
+    },
+    {
+      "name": "20261024120000_read_content_for_owner_exports.sql",
+      "sha256": "51ae23020903a72a2a6d7db96b3629dc4ffcb27a9658addc8cc0696a3f32d27e"
+    },
+    {
+      "name": "20261024130000_read_taxonomy_for_owner_exports.sql",
+      "sha256": "86512866f93801d15d962d8b514214941f3ce20cc22cdf7df0cb72fd0112300e"
+    },
+    {
+      "name": "20261024140000_read_media_for_owner_exports.sql",
+      "sha256": "0445745ac90122a3df27d53cb92e66975fe145eed4390ba6e8d30ce82a2a302f"
+    },
+    {
+      "name": "20261024233915_owner_cv_export_read_access.sql",
+      "sha256": "6ef6a318730547c3cf7315126f04dc769f5cc1628af889ad1c70f67467ecaab3"
+    },
+    {
+      "name": "20261025090000_read_feedback_for_owner_exports.sql",
+      "sha256": "d23dea8422800de3b2286a3c354eed68fad572fa5e4dcacb4f6a26a5259e5bdb"
+    },
+    {
+      "name": "20261025190828_retain_moderation_export_artifact_cleanup.sql",
+      "sha256": "ab521d5e0d6832f57eedddffd268e49541f99e1cb67aac7355921a5cc8125fe5"
+    },
+    {
+      "name": "20261025200000_read_measurement_for_owner_exports.sql",
+      "sha256": "e0ddaae3563cb85ee63e83bffdd7bd80d05d0d454ea217ea78087613a0693021"
+    },
+    {
+      "name": "20261026011341_restrict_analytics_export_deletion.sql",
+      "sha256": "2f6c6fce8f330941409c734e0b1d12cae0b71a07f8217cdf5f8b6b39488db2bb"
+    },
+    {
+      "name": "20261026100000_reconcile_all_owner_export_artifacts.sql",
+      "sha256": "28ea11c784b188977f57514dd874dcf877dbf307d0a4020857c078f18cfc06f9"
+    }
+  ],
+  "tools": {
+    "node": "24.21.0",
+    "npm": "11.19.0"
+  },
+  "required": {
+    "success": true,
+    "passed": 22,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "failedSuites": 0
+  },
+  "roleMatrix": {
+    "success": true,
+    "passed": 123,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "assertions": [
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects",
+      "status": "passed"
+    },
+    {
+      "title": "AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
+      "status": "passed"
+    },
+    {
+      "title": "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL",
+      "status": "passed"
+    },
+    {
+      "title": "#247: mixed Media/Moderation readiness with Media rejected during upload: false",
+      "status": "passed"
+    },
+    {
+      "title": "#247: mixed Media/Moderation readiness with Media rejected during upload: true",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/02/06/07: exports one captured Configuration version through isolated private Storage",
+      "status": "passed"
+    },
+    {
+      "title": "AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
+      "status": "passed"
+    },
+    {
+      "title": "deletes only the exact owned ZIP, reconciles missing objects, and reports retryable failures",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Upload racing cleanup' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts",
+      "status": "passed"
+    },
+    {
+      "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+      "status": "passed"
+    },
+    {
+      "title": "replays with existing revoked exports: false and removes temporary access",
+      "status": "passed"
+    },
+    {
+      "title": "replays with existing revoked exports: true and removes temporary access",
+      "status": "passed"
+    },
+    {
+      "title": "AC08 preserves exact scope coverage and privacy exclusions for every single-scope package",
+      "status": "passed"
+    },
+    {
+      "title": "AC08 composes cross-group selections and marks exact retained versus omitted dependencies",
+      "status": "passed"
+    },
+    {
+      "title": "AC08 emits the complete seven-scope package in canonical order with no privacy expansion",
+      "status": "passed"
+    }
+  ],
+  "suites": [
+    "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-assembly.test.ts",
+    "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-migration-postgres.test.ts",
+    "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-moderation-postgres.test.ts",
+    "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-postgres.test.ts",
+    "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-reconciliation.test.ts"
+  ],
+  "criteria": [
+    "AC01",
+    "AC02",
+    "AC03",
+    "AC04",
+    "AC05",
+    "AC06",
+    "AC07",
+    "AC08"
+  ],
+  "criterionEvidence": [
+    {
+      "criterion": "AC01",
+      "executedTests": [
+        {
+          "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+          "status": "passed"
+        },
+        {
+          "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "criterion": "AC02",
+      "executedTests": [
+        {
+          "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+          "status": "passed"
+        },
+        {
+          "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "criterion": "AC03",
+      "executedTests": [
+        {
+          "title": "AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects",
+          "status": "passed"
+        },
+        {
+          "title": "AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
+          "status": "passed"
+        },
+        {
+          "title": "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL",
+          "status": "passed"
+        },
+        {
+          "title": "#247: mixed Media/Moderation readiness with Media rejected during upload: false",
+          "status": "passed"
+        },
+        {
+          "title": "#247: mixed Media/Moderation readiness with Media rejected during upload: true",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "criterion": "AC04",
+      "executedTests": [
+        {
+          "title": "AC01/02/06/07: exports one captured Configuration version through isolated private Storage",
+          "status": "passed"
+        },
+        {
+          "title": "AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "criterion": "AC05",
+      "executedTests": [
+        {
+          "title": "deletes only the exact owned ZIP, reconciles missing objects, and reports retryable failures",
+          "status": "passed"
+        },
+        {
+          "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "criterion": "AC06",
+      "executedTests": [
+        {
+          "title": "AC01/AC04 retains privacy-safe checkpoints for 'Upload racing cleanup' through source retention",
+          "status": "passed"
+        },
+        {
+          "title": "AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "criterion": "AC07",
+      "executedTests": [
+        {
+          "title": "AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts",
+          "status": "passed"
+        },
+        {
+          "title": "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+          "status": "passed"
+        },
+        {
+          "title": "replays with existing revoked exports: false and removes temporary access",
+          "status": "passed"
+        },
+        {
+          "title": "replays with existing revoked exports: true and removes temporary access",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "criterion": "AC08",
+      "executedTests": [
+        {
+          "title": "AC08 preserves exact scope coverage and privacy exclusions for every single-scope package",
+          "status": "passed"
+        },
+        {
+          "title": "AC08 composes cross-group selections and marks exact retained versus omitted dependencies",
+          "status": "passed"
+        },
+        {
+          "title": "AC08 emits the complete seven-scope package in canonical order with no privacy expansion",
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "artifactLedger": {
+    "fields": [
+      "exportId",
+      "portfolioId",
+      "artifactId",
+      "revokedAt",
+      "revocationCode",
+      "artifactDeletedAt"
+    ],
+    "causes": [
+      "expired",
+      "privacy_invalid",
+      "build_failed",
+      "prior_revocation"
+    ],
+    "signals": "counts-only"
+  },
+  "artifactDeletion": {
+    "bounded": true,
+    "resumable": true,
+    "idempotent": true,
+    "scenarios": [
+      "before and at seven-day expiry",
+      "earlier Feedback retention deadline",
+      "storage outage and restart",
+      "upload versus cleanup barrier"
+    ]
+  },
+  "hostedEvidence": [
+    {
+      "check": "Production owner-export Storage adapter against isolated private Storage with direct-path denial",
+      "status": "required-in-pr-ci"
+    }
+  ],
+  "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase8:focus:exports -- --with-storage",
+  "scope": "All seven registered scopes, bounded ownership-scoped ZIP revocation/deletion, DB-clock expiry, safe durable tombstones, current Moderation/Media policy revalidation, and independently validated canonical composite packages.",
+  "cleanup": true
+}

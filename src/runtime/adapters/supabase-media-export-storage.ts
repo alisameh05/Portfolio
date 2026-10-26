@@ -53,7 +53,7 @@ export function createSupabaseMediaExportStorage(options: SupabaseMediaExportSto
         .map(encodeURIComponent).join("/");
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
-      const response = await fetcher(new URL(`/storage/v1/object/${encodeURIComponent(bucket)}/${encodedPath}`, base), {
+      const response = await fetcher(new URL(`/storage/v1/object/authenticated/${encodeURIComponent(bucket)}/${encodedPath}`, base), {
         signal: controller.signal,
         redirect: "manual",
         headers: { apikey: options.serviceRoleKey, authorization: `Bearer ${options.serviceRoleKey}` },
