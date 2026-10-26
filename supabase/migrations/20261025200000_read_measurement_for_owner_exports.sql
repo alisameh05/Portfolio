@@ -42,7 +42,7 @@ create policy analytics_goal_activation_worker_owner_export on measurement.analy
   for select to shipwithali_worker using (measurement.owner_export_scope_is_valid(portfolio_id));
 create policy analytics_goal_versions_worker_purpose_fence on measurement.analytics_goal_versions
   as restrictive for select to shipwithali_worker using (
-    (current_setting('shipwithali.worker_purpose', true) = 'measurement.goal-conversion'
+    (current_setting('shipwithali.worker_purpose', true) in ('measurement.goal-conversion', 'measurement.aggregate')
       and portfolio_id = nullif(current_setting('shipwithali.portfolio_id', true), '')::uuid)
     or measurement.owner_export_scope_is_valid(portfolio_id)
   );

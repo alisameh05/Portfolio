@@ -241,6 +241,17 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
           (select count(version_id)::int from measurement.analytics_goal_activation_history where portfolio_id=${portfolioId}::uuid) as activations`.execute(db);
       });
       expect(conversionPurpose.rows[0]).toEqual({ versions: 4, activations: 4 });
+      for (const scope of [portfolioId, createStableId("Portfolio")]) {
+        const aggregatePurpose = await worker.transactions.run(async (tx) => {
+          const db = resolvePostgresTransaction(tx);
+          await sql`select set_config('shipwithali.portfolio_id', ${scope}, true),
+            set_config('shipwithali.worker_purpose', 'measurement.aggregate', true)`.execute(db);
+          return sql<{ versions: number; activations: number }>`select
+            (select count(version_id)::int from measurement.analytics_goal_versions where portfolio_id=${portfolioId}::uuid) as versions,
+            (select count(version_id)::int from measurement.analytics_goal_activation_history where portfolio_id=${portfolioId}::uuid) as activations`.execute(db);
+        });
+        expect(aggregatePurpose.rows[0]).toEqual({ versions: scope === portfolioId ? 4 : 0, activations: 0 });
+      }
       const wrongOwner = await worker.transactions.run(async (tx) => {
         const db = resolvePostgresTransaction(tx);
         await sql`select set_config('shipwithali.portfolio_id', ${portfolioId}, true), set_config('shipwithali.owner_id', ${createStableId("Owner")}, true),
