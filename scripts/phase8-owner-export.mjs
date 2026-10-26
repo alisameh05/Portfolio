@@ -17,7 +17,7 @@ const root = process.cwd();
 const runId = randomUUID();
 const startedAt = new Date().toISOString();
 const initialSource = workingTreeSourceSha256();
-const scope = "Issue #241 Owner export PostgreSQL/Content acceptance plus Issue #243 standalone Media acceptance history, accepted original and variant byte integrity, Issue #244 retained CV versions, Current pointer, activation and approval history, exact accepted PDF bytes, and purpose-bound Worker RLS; restricted application and worker roles; disposable native PostgreSQL; independent offline package validation; PR CI exercises the production export adapter against real private Storage.";
+const scope = "Issue #241 Owner export PostgreSQL/Content acceptance plus Issue #243 standalone Media acceptance history, Issue #244 retained CV versions and exact accepted PDF bytes, Issue #245 privacy-safe Feedback snapshots, and Issue #247 expiry/revocation, resumable artifact deletion and all-scope package reconciliation; restricted application and worker roles; disposable native PostgreSQL; independent offline package validation; PR CI exercises production Storage against an isolated private service.";
 const discoveredBin = process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" :
   spawnSync("pg_config", ["--bindir"], { encoding: "utf8", timeout: 5_000 }).stdout?.trim();
 const bin = process.env.PHASE8_OWNER_EXPORT_POSTGRES_BIN ?? discoveredBin ?? "";
@@ -71,6 +71,7 @@ const evidencePath = resolve("evidence/phase8-owner-exports-241.json");
 const mediaEvidencePath = resolve("evidence/phase8-owner-export-media-243.json");
 const cvEvidencePath = resolve("evidence/phase8-owner-export-cv-244.json");
 const moderationEvidencePath = resolve("evidence/phase8-owner-export-moderation-245.json");
+const reconciliationEvidencePath = resolve("evidence/phase8-owner-export-reconciliation-247.json");
 mkdirSync(temp, { recursive: true });
 mkdirSync("artifacts", { recursive: true });
 rmSync(reportPath, { force: true });
@@ -80,13 +81,14 @@ rmSync(evidencePath, { force: true });
 rmSync(mediaEvidencePath, { force: true });
 rmSync(cvEvidencePath, { force: true });
 rmSync(moderationEvidencePath, { force: true });
+rmSync(reconciliationEvidencePath, { force: true });
 const port = await new Promise((resolvePort, reject) => {
   const server = createServer(); server.once("error", reject);
   server.listen(0, "127.0.0.1", () => { const value = server.address().port; server.close(() => resolvePort(value)); });
 });
 const adminUrl = `postgres://postgres@127.0.0.1:${port}/postgres`;
 const admin = new Client({ connectionString: adminUrl });
-let started = false, connected = false, cleanup = false, stage = "runtime", result, criterionTests, cvCriterionTests, moderationCriterionTests, assertionByTitle, regressionAssertions;
+let started = false, connected = false, cleanup = false, stage = "runtime", result, criterionTests, cvCriterionTests, moderationCriterionTests, reconciliationCriterionTests, assertionByTitle, regressionAssertions;
 try {
   run(process.execPath, ["scripts/validation-environment.mjs"]);
   const postgresVersion = run(exe("postgres"), ["--version"]).trim();
@@ -121,8 +123,9 @@ try {
     "tests/phase8/owner-export-postgres.test.ts", "tests/phase8/owner-export-assembly.test.ts", "tests/phase8/owner-export-content.test.ts", "tests/phase8/owner-export-content-postgres.test.ts",
     "tests/phase8/owner-export-media-package.test.ts", "tests/runtime/supabase-media-export-storage.test.ts",
     "tests/phase8/owner-export-cv-package.test.ts", "tests/phase8/owner-export-cv-postgres.test.ts",
-    "tests/phase8/owner-export-moderation.test.ts", "tests/phase8/owner-export-moderation-postgres.test.ts"];
-  const expectedTests = 103;
+    "tests/phase8/owner-export-moderation.test.ts", "tests/phase8/owner-export-moderation-postgres.test.ts",
+    "tests/phase8/owner-export-reconciliation.test.ts", "tests/phase8/owner-export-migration-postgres.test.ts"];
+  const expectedTests = 113;
   run(process.execPath, ["node_modules/vitest/vitest.mjs", "run", ...acceptanceFiles,
     "--no-file-parallelism", "--reporter=default", "--reporter=json", `--outputFile=${reportPath}`], env);
   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -230,6 +233,7 @@ try {
       "AC01/AC04 retains privacy-safe checkpoints for 'Failed Moderation finalization' through source retention",
       "AC01/AC04 retains privacy-safe checkpoints for 'Earlier source erasure' through source retention",
       "AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
       "AC01/AC04 retains privacy-safe checkpoints for 'Upload racing cleanup' through source retention",
       "AC04 denies a ready private ZIP when the current retained Feedback no longer matches its snapshot",
       "AC01/AC05/AC08 independently validates moderation-only, combined, and empty-history packages"] },
@@ -247,6 +251,35 @@ try {
   for (const criterion of moderationCriterionTests) {
     if (criterion.tests.some(title => assertionByTitle.get(title) !== "passed")) {
       throw new Error(`PHASE8_OWNER_EXPORT_MODERATION_CRITERION_EVIDENCE_MISSING:${criterion.criterion}`);
+    }
+  }
+  reconciliationCriterionTests = [
+    { criterion: "AC01", tests: ["AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention"] },
+    { criterion: "AC02", tests: ["AC01/AC04 retains privacy-safe checkpoints for 'Exact Feedback deadline' through source retention",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention"] },
+    { criterion: "AC03", tests: ["AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects",
+      "AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race",
+      "#243: readies Media export after reloading its persisted snapshot and candidate through PostgreSQL",
+      "#247: mixed Media/Moderation readiness with Media rejected during upload: false",
+      "#247: mixed Media/Moderation readiness with Media rejected during upload: true"] },
+    { criterion: "AC04", tests: ["AC01/02/06/07: exports one captured Configuration version through isolated private Storage",
+      "AC04 rejects pre-ready and download snapshots after erasure, deletion, or a capture/finalization race"] },
+    { criterion: "AC05", tests: ["deletes only the exact owned ZIP, reconciles missing objects, and reports retryable failures",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention"] },
+    { criterion: "AC06", tests: ["AC01/AC04 retains privacy-safe checkpoints for 'Upload racing cleanup' through source retention",
+      "AC03 rechecks stale cleanup candidates after real Owner approvals win on Hidden and Archived Projects"] },
+    { criterion: "AC07", tests: ["AC01/AC02/AC05/AC06/AC07 captures hidden and archived projects with truthful retained or erased facts",
+      "AC01/AC04 retains privacy-safe checkpoints for 'Exact seven-day export expiry' through source retention",
+      "replays with existing revoked exports: false and removes temporary access",
+      "replays with existing revoked exports: true and removes temporary access"] },
+    { criterion: "AC08", tests: ["AC08 preserves exact scope coverage and privacy exclusions for every single-scope package",
+      "AC08 composes cross-group selections and marks exact retained versus omitted dependencies",
+      "AC08 emits the complete seven-scope package in canonical order with no privacy expansion"] },
+  ];
+  for (const criterion of reconciliationCriterionTests) {
+    if (criterion.tests.some(title => assertionByTitle.get(title) !== "passed")) {
+      throw new Error(`PHASE8_OWNER_EXPORT_RECONCILIATION_CRITERION_EVIDENCE_MISSING:${criterion.criterion}`);
     }
   }
   result = {
@@ -275,6 +308,17 @@ try {
       passed: assertions.filter(assertion => moderationCriterionTests.some(criterion => criterion.tests.includes(assertion.title))).length,
       assertions: assertions.filter(assertion => moderationCriterionTests.some(criterion => criterion.tests.includes(assertion.title)))
         .map(assertion => ({ title: assertion.title, status: assertion.status })),
+    },
+    reconciliationAcceptance: {
+      suites: tests.testResults.filter(suite => suite.name.replace(/\\/g, "/").endsWith("owner-export-reconciliation.test.ts") ||
+        suite.name.replace(/\\/g, "/").endsWith("owner-export-moderation-postgres.test.ts") ||
+        suite.name.replace(/\\/g, "/").endsWith("owner-export-assembly.test.ts") ||
+        suite.name.replace(/\\/g, "/").endsWith("owner-export-postgres.test.ts") ||
+        suite.name.replace(/\\/g, "/").endsWith("owner-export-migration-postgres.test.ts"))
+        .map(suite => suite.name.replace(root, "").replace(/\\/g, "/").replace(/^\//, "")),
+      passed: reconciliationCriterionTests.flatMap(criterion => criterion.tests).length,
+      assertions: reconciliationCriterionTests.flatMap(criterion => criterion.tests)
+        .map(title => ({ title, status: assertionByTitle.get(title) })),
     },
     cvRegressionAcceptance: {
       suites: regressions.testResults.map(suite => suite.name.replace(root, "").replace(/\\/g, "/").replace(/^\//, "")),
@@ -381,6 +425,35 @@ try {
     } else {
       writeFileSync(moderationEvidencePath, `${moderationEvidenceJson}\n`);
       console.log(JSON.stringify({ evidence: moderationEvidencePath, assertions: moderationEvidence.required.passed, cleanup }));
+    }
+    const reconciliationEvidence = {
+      schemaVersion: 1, ticket: 247, runId, startedAt, completedAt: result.completedAt,
+      sourceRevision: result.sourceRevision, sourceTreeSha256: result.sourceTreeSha256, postgresVersion: result.postgresVersion,
+      migrations: result.migrations, tools: result.tools,
+      required: { success: true, passed: result.reconciliationAcceptance.passed, failed: 0, skipped: 0, todo: 0, failedSuites: 0 },
+      roleMatrix: result.roleMatrix,
+      assertions: result.reconciliationAcceptance.assertions,
+      suites: result.reconciliationAcceptance.suites,
+      criteria: reconciliationCriterionTests.map(criterion => criterion.criterion),
+      criterionEvidence: reconciliationCriterionTests.map(criterion => ({ criterion: criterion.criterion,
+        executedTests: criterion.tests.map(title => ({ title, status: assertionByTitle.get(title) })) })),
+      artifactLedger: { fields: ["exportId", "portfolioId", "artifactId", "revokedAt", "revocationCode", "artifactDeletedAt"],
+        causes: ["expired", "privacy_invalid", "build_failed", "prior_revocation"], signals: "counts-only" },
+      artifactDeletion: { bounded: true, resumable: true, idempotent: true,
+        scenarios: ["before and at seven-day expiry", "earlier Feedback retention deadline", "storage outage and restart", "upload versus cleanup barrier"] },
+      hostedEvidence: [{ check: "Production owner-export Storage adapter against isolated private Storage with direct-path denial",
+        status: "required-in-pr-ci" }],
+      reproduction: "npm run setup:validation; npm run validation:ready; npm run phase8:focus:exports -- --with-storage",
+      scope: "All seven registered scopes, bounded ownership-scoped ZIP revocation/deletion, DB-clock expiry, safe durable tombstones, current Moderation/Media policy revalidation, and independently validated canonical composite packages.",
+      cleanup,
+    };
+    const reconciliationEvidenceJson = JSON.stringify(reconciliationEvidence, null, 2);
+    if (/PRIVATE_(?:NAME|TEXT|REASON|APPROVAL_REASON)_SENTINEL/u.test(reconciliationEvidenceJson)) {
+      console.error("PHASE8_OWNER_EXPORT_RECONCILIATION_EVIDENCE_CONTAINS_PRIVATE_MARKER");
+      process.exitCode = 1;
+    } else {
+      writeFileSync(reconciliationEvidencePath, `${reconciliationEvidenceJson}\n`);
+      console.log(JSON.stringify({ evidence: reconciliationEvidencePath, assertions: reconciliationEvidence.required.passed, cleanup }));
     }
     console.log(JSON.stringify({ evidence: evidencePath, cleanup }));
   }

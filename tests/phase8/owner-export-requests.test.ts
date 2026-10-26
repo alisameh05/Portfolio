@@ -187,8 +187,21 @@ function* subsets(values: readonly string[]): Generator<readonly string[]> {
 }
 
 function ownerExportSelections(): readonly (readonly string[])[] {
-  const independent = OWNER_EXPORT_SCOPES.filter((scope) => scope !== "media-metadata" && scope !== "cv-metadata");
-  return [...subsets(independent), ["cv-metadata"], ["media-metadata"], ["media-metadata", "cv-metadata"]];
+  return [...subsets(OWNER_EXPORT_SCOPES)];
+}
+
+function schemaVersionForScopes(scopes: readonly string[]): string {
+  const core = scopes.some((scope) => ["portfolio-content", "taxonomy", "moderation-history", "portfolio-configuration"].includes(scope));
+  const assets = scopes.some((scope) => scope === "media-metadata" || scope === "cv-metadata");
+  const analytics = scopes.includes("analytics-reports");
+  if (Number(core) + Number(assets) + Number(analytics) > 1) return "1.9";
+  if (analytics) return "1.8";
+  if (scopes.includes("moderation-history")) return "1.7";
+  if (scopes.includes("cv-metadata")) return "1.6";
+  if (scopes.includes("media-metadata")) return "1.5";
+  if (scopes.includes("taxonomy")) return "1.4";
+  if (scopes.includes("portfolio-content")) return "1.3";
+  return "1.2";
 }
 
 describe("AC01: canonical Owner export scope selection and hashing", () => {
@@ -202,7 +215,7 @@ describe("AC01: canonical Owner export scope selection and hashing", () => {
         .toEqual(OWNER_EXPORT_SCOPES.filter((scope) => subset.includes(scope)));
       counted += 1;
     }
-    expect(counted).toBe(34);
+    expect(counted).toBe(127);
   });
 
   it("normalizes every permutation of one selection to identical canonical meaning", () => {
@@ -223,7 +236,7 @@ describe("AC01: canonical Owner export scope selection and hashing", () => {
     let subsetIndex = 0;
     for (const subset of ownerExportSelections()) {
       subsetIndex += 1;
-      const schemaVersion = subset.includes("analytics-reports") ? "1.8" : subset.includes("moderation-history") ? "1.7" : subset.includes("cv-metadata") ? "1.6" : subset.includes("media-metadata") ? "1.5" : subset.includes("taxonomy") ? "1.4" : subset.includes("portfolio-content") ? "1.3" : "1.2";
+      const schemaVersion = schemaVersionForScopes(subset);
       const expectedHash = await hashCanonicalRequest({
         operation: "owner-export-request",
         schemaVersion,
@@ -241,7 +254,7 @@ describe("AC01: canonical Owner export scope selection and hashing", () => {
     const original = await service.requestOwnerExport(requestCommand(["taxonomy", "portfolio-content"] as ExportScope[], "phase8-permutation-key"));
     const replayed = await service.requestOwnerExport(requestCommand(["portfolio-content", "taxonomy"] as ExportScope[], "phase8-permutation-key"));
     expect(replayed).toEqual(original);
-    expect(fakeOperations.executed).toHaveLength(35);
+    expect(fakeOperations.executed).toHaveLength(128);
   });
 
   it("rejects the empty selection without durable effects", async () => {
@@ -262,8 +275,8 @@ describe("AC02: input validation precedes every durable effect", () => {
     ["duplicate scope", { includedScopes: ["taxonomy", "taxonomy"] as unknown }],
     ["unknown scope", { includedScopes: ["taxonomy", "portfolio-settings"] as unknown }],
     ["invalid member type", { includedScopes: ["taxonomy", 7] as unknown }],
-    ["mixed Media selection", { includedScopes: ["media-metadata", "portfolio-content"] as unknown }],
-    ["unsupported CV combination", { includedScopes: ["cv-metadata", "portfolio-content"] as unknown }],
+    ["duplicate Media selection", { includedScopes: ["media-metadata", "media-metadata"] as unknown }],
+    ["unknown CV combination", { includedScopes: ["cv-metadata", "unknown-scope"] as unknown }],
     ["malformed portfolio identity", { portfolioId: "not-a-uuid" }],
     ["malformed owner identity", { ownerId: "also-not-a-uuid" }],
     ["empty idempotency key", { idempotencyKey: "" }],
@@ -492,6 +505,8 @@ describe("AC07 (validator slice): declared lifecycle edges with exact metadata",
       .toEqual({ ok: true, value: "stale" });
     expect(await applyGuardedOwnerExportTransition(staleStore, { ...base, fromStatus: "building", toStatus: "ready", integrityManifest: manifest, artifactId: unsafeStableId<"OwnerExportArtifact">("0196a1b2-7c3d-7e11-9f22-000000000022") }))
       .toEqual({ ok: true, value: "stale" });
+    expect(await applyGuardedOwnerExportTransition(staleStore, { ...base, fromStatus: "building", toStatus: "ready", integrityManifest: manifest, artifactId: unsafeStableId<"OwnerExportArtifact">("0196a1b2-7c3d-7e11-9f22-000000000022"), policyExpiresAt: NOW }))
+      .toEqual({ ok: true, value: "stale" });
     expect(await applyGuardedOwnerExportTransition(staleStore, { ...base, fromStatus: "building", toStatus: "failed", failureCode: parseSafeErrorCode("ASSEMBLY_FAILED") }))
       .toEqual({ ok: true, value: "stale" });
     expect(await applyGuardedOwnerExportTransition(staleStore, { ...base, fromStatus: "ready", toStatus: "expired", integrityManifest: manifest, artifactId: unsafeStableId<"OwnerExportArtifact">("0196a1b2-7c3d-7e11-9f22-000000000022") }))
@@ -506,6 +521,8 @@ describe("AC07 (validator slice): declared lifecycle edges with exact metadata",
     ["invalid failure code shape", { fromStatus: "building", toStatus: "failed", failureCode: "assembly-failed" }, "OWNER_EXPORT_TRANSITION_FAILURE_CODE_INVALID"],
     ["malformed manifest", { fromStatus: "building", toStatus: "ready", integrityManifest: { packageFormat: "other" }, artifactId: unsafeStableId<"OwnerExportArtifact">("0196a1b2-7c3d-7e11-9f22-000000000024") }, "OWNER_EXPORT_TRANSITION_MANIFEST_INVALID"],
     ["stale aggregate version", { fromStatus: "requested", toStatus: "building", expectedAggregateVersion: 0 }, "OWNER_EXPORT_TRANSITION_VERSION_INVALID"],
+    ["malformed policy deadline", { fromStatus: "building", toStatus: "ready", policyExpiresAt: "invalid" }, "OWNER_EXPORT_TRANSITION_EXPIRY_INVALID"],
+    ["policy deadline outside readiness", { fromStatus: "requested", toStatus: "building", policyExpiresAt: NOW }, "OWNER_EXPORT_TRANSITION_METADATA_UNEXPECTED"],
   ] as const)("rejects %s locally", (_label, override, code) => {
     const invalid = { ...base, ...override } as unknown as OwnerExportTransitionInput;
     const result = validateOwnerExportTransition(invalid);

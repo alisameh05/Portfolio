@@ -35,7 +35,7 @@ jobs:
         run: node scripts/setup-ci-native-postgres.mjs
       - run: npm run test:setup
       - run: npm run typecheck
-      - name: Require Phase 8 Owner export, Issue #243 Media, and Issue #245 Moderation acceptance with zero skips
+      - name: Require Phase 8 Owner exports, Issues #243/#244/#245/#247 acceptance with zero skips
         run: npm run phase8:focus:exports -- --with-storage
       - name: Require Issue #242 taxonomy PostgreSQL acceptance with zero skips
         id: taxonomy-acceptance
@@ -70,6 +70,14 @@ jobs:
         with:
           name: phase8-owner-export-moderation-245
           path: evidence/phase8-owner-export-moderation-245.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Publish sanitized Issue #247 expiry and reconciliation acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase8-owner-export-reconciliation-247
+          path: evidence/phase8-owner-export-reconciliation-247.json
           if-no-files-found: warn
           retention-days: 14
       - name: Publish sanitized Issue #242 taxonomy acceptance evidence

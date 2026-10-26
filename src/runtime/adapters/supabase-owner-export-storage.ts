@@ -27,6 +27,17 @@ function unavailable(): Result<never, Rejection> {
   return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" });
 }
 
+async function objectIsAlreadyAbsent(response: Response): Promise<boolean> {
+  if (response.status !== 404) return false;
+  try {
+    const body: unknown = await response.json();
+    return body !== null && typeof body === "object" && !Array.isArray(body) &&
+      (body as Record<string, unknown>)["code"] === "NoSuchKey";
+  } catch {
+    return false;
+  }
+}
+
 function validBucket(value: string): string {
   if (!/^[a-z][a-z0-9-]{2,62}$/.test(value)) throw new TypeError("Invalid Owner export bucket.");
   return value;
@@ -206,7 +217,7 @@ export function createSupabaseOwnerExportStorage(options: SupabaseOwnerExportSto
           headers: { ...headers, "content-type": "application/json" },
           body: JSON.stringify({ prefixes: [[input.portfolioId, input.exportId, `${input.artifactId}.zip`].join("/")] }),
         });
-        return response.ok ? ok(undefined) : unavailable();
+        return response.ok || await objectIsAlreadyAbsent(response) ? ok(undefined) : unavailable();
       } catch { return unavailable(); }
       finally { clearTimeout(timer); }
     },

@@ -40,7 +40,10 @@ export interface OwnerExportValidationManifestV1_1 extends OwnerExportValidation
 export interface OwnerExportValidationManifestV1_8 extends OwnerExportValidationManifestV1_1 {
   readonly schemaVersion: "1.8";
 }
-export type OwnerExportValidationManifest = OwnerExportValidationManifestV1_0 | OwnerExportValidationManifestV1_1 | OwnerExportValidationManifestV1_8;
+export interface OwnerExportValidationManifestV1_9 extends OwnerExportValidationManifestV1_1 {
+  readonly schemaVersion: "1.9";
+}
+export type OwnerExportValidationManifest = OwnerExportValidationManifestV1_0 | OwnerExportValidationManifestV1_1 | OwnerExportValidationManifestV1_8 | OwnerExportValidationManifestV1_9;
 export interface OwnerExportValidationResult {
   readonly manifest: OwnerExportValidationManifest;
   readonly includedScopes: readonly string[];

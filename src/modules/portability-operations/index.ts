@@ -51,6 +51,7 @@ export {
   type OwnerExportPackageManifestV1_4,
   type OwnerExportPackageManifestV1_7,
   type OwnerExportPackageManifestV1_8,
+  type OwnerExportPackageManifestV1_9,
   type OwnerExportPackageManifest,
   type OwnerExportSchemaDescriptor,
   type OwnerExportAssetDescriptor,

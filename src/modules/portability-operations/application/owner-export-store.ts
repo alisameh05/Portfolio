@@ -36,6 +36,10 @@ export interface PersistedOwnerExport {
   readonly expiresAt?: string;
   readonly artifactRevokedAt?: string;
   readonly artifactDeletedAt?: string;
+  /** Safe tombstone cause retained for bounded recovery reconciliation. */
+  readonly artifactRevocationCode?: "expired" | "privacy_invalid" | "build_failed" | "prior_revocation";
+  /** Database clock sampled by the ownership-scoped read when available. */
+  readonly databaseNow?: string;
 }
 
 export interface OwnerExportReservationInput {
@@ -65,7 +69,8 @@ export interface OwnerExportTransitionInput {
   readonly failureCode?: SafeErrorCode;
   readonly integrityManifest?: OwnerExportPackageManifest;
   readonly artifactId?: StableId<"OwnerExportArtifact">;
-  readonly expiresAt?: string;
+  /** Source retention deadline; PostgreSQL chooses the earlier of it and the database-clock seven-day limit. */
+  readonly policyExpiresAt?: string;
   /** Internal readiness fence run in the same transaction as the ready transition. */
   readonly precondition?: (context: TransactionContext) => Promise<boolean>;
 }

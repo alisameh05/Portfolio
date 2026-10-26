@@ -250,14 +250,16 @@ export async function initializeDatabaseRuntime(
         const database = createPostgresRuntimeDatabase(databaseUrl);
         const operations = createPostgresOperationsPersistence(database.database);
         const [{ createPostgresOwnerExportStore }, { createOwnerExportService }, { createPostgresFeedbackOwnerExportSnapshotReader },
-          { projectFeedbackOwnerExportSnapshot }, { matchesOwnerExportModerationFacts }] = await Promise.all([
+          { createPostgresOwnerMediaExportSnapshotReader }, { projectFeedbackOwnerExportSnapshot }, { matchesOwnerExportModerationFacts }] = await Promise.all([
           import("../modules/portability-operations/adapters/postgres-owner-export-store.js"),
           import("../modules/portability-operations/application/owner-export-service.js"),
           import("../modules/interaction-moderation/adapters/postgres-owner-export.js"),
+          import("../modules/media/adapters/postgres-owner-export-snapshot.js"),
           import("../modules/interaction-moderation/application/owner-export.js"),
           import("../modules/portability-operations/application/owner-export-package.js"),
         ]);
         const moderationExportReader = createPostgresFeedbackOwnerExportSnapshotReader();
+        const mediaExportReader = createPostgresOwnerMediaExportSnapshotReader({ database: database.database, transactions: operations.transactions });
         const ownerExportStore = createPostgresOwnerExportStore(database.database, { outbox: operations.outbox });
         let ownerExportStorage: Awaited<ReturnType<typeof import("../runtime/adapters/supabase-owner-export-storage.js").createSupabaseOwnerExportStorage>> | undefined;
         if (env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]) {
@@ -285,6 +287,26 @@ export async function initializeDatabaseRuntime(
           clock: createSystemClock(),
           ids: createSystemIdGenerator(),
           ...(ownerExportStorage === undefined ? {} : { objectRead: ownerExportStorage }),
+          revalidateMediaForDownload: async ({ snapshot, portfolioId, ownerId }) => {
+            if (!("kind" in snapshot)) return false;
+            const versions = new Map<StableId<"MediaAsset">, number>();
+            for (const record of snapshot.media?.records ?? []) {
+              if (record.value["state"] !== "accepted" || record.value["byteCoverage"] !== "included") continue;
+              if (typeof record.value["aggregateVersion"] !== "number" || !Number.isSafeInteger(record.value["aggregateVersion"])) return false;
+              const mediaId = parseStableId("MediaAsset", record.mediaId);
+              if (!mediaId.ok) return false;
+              versions.set(mediaId.value, record.value["aggregateVersion"]);
+            }
+            for (const version of snapshot.cv?.versions ?? []) {
+              if (version.state !== "accepted") continue;
+              if (version.acceptedMediaSnapshot === undefined) return false;
+              const existing = versions.get(version.mediaId);
+              if (existing !== undefined && existing !== version.acceptedMediaSnapshot.mediaAssetVersion) return false;
+              versions.set(version.mediaId, version.acceptedMediaSnapshot.mediaAssetVersion);
+            }
+            const current = await mediaExportReader.revalidateOwnerMediaExportSnapshot({ portfolioId, ownerId }, versions);
+            return current.ok && current.value;
+          },
           revalidateModerationForDownload: async ({ snapshot, portfolioId, ownerId }) => {
             if (!("kind" in snapshot)) return false;
             return database.transactions.run(async transaction => {
@@ -308,7 +330,7 @@ export async function initializeDatabaseRuntime(
             { createPostgresFeedbackOwnerExportSnapshotReader },
             { createPostgresOwnerAnalyticsExportSnapshotReader },
             { createSupabaseMediaExportStorage },
-            { createOwnerExportModerationCleanupService },
+            { createOwnerExportArtifactCleanupService },
           ] = await Promise.all([
             import("../modules/portability-operations/application/owner-export-assembly.js"),
             import("../modules/portfolio-configuration/adapters/postgres-settings.js"),
@@ -386,10 +408,10 @@ export async function initializeDatabaseRuntime(
               },
             });
           if (!configuredScope?.portfolioId.ok || !configuredScope.ownerId.ok) throw new Error("OWNER_EXPORT_SCOPE_UNAVAILABLE");
-          const exportCleanup = createOwnerExportModerationCleanupService({
+          const exportCleanup = createOwnerExportArtifactCleanupService({
             scope: { portfolioId: configuredScope.portfolioId.value, ownerId: configuredScope.ownerId.value },
             artifacts: ownerExportStore, snapshots: exportSnapshots,
-            storage: ownerExportStorage ?? unavailableOwnerExportStorage, clock: createSystemClock(),
+            storage: ownerExportStorage ?? unavailableOwnerExportStorage,
           });
           ownerExportAssembly = createOwnerExportAssemblyService({
             operations,

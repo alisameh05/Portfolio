@@ -41,9 +41,9 @@ import type {
   PersistedOwnerExport,
 } from "../application/owner-export-store.js";
 import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportPackageManifest } from "../application/service.js";
-import { checkpointOwnerExportSnapshot, type OwnerExportAssemblySnapshot, type OwnerExportConfigurationSnapshot } from "../application/owner-export-package.js";
+import { checkpointOwnerExportSnapshot, type OwnerExportAssemblySnapshot, type OwnerExportConfigurationSnapshot, type OwnerExportSelectedSnapshot } from "../application/owner-export-package.js";
 import type { TransactionContext } from "../../../runtime/ports.js";
-import type { OwnerExportModerationArtifactsPort } from "../application/owner-export-cleanup.js";
+import type { OwnerExportArtifactCleanupPort, OwnerExportInvalidationLedgerRecord } from "../application/owner-export-cleanup.js";
 
 export const EXPORT_STATUS_VALUES: readonly ExportStatus[] = [
   "requested", "building", "ready", "failed", "expired",
@@ -77,6 +77,8 @@ interface ExportRow {
   aggregate_version: number;
   artifact_revoked_at: Date | string | null;
   artifact_deleted_at: Date | string | null;
+  artifact_revocation_code: string | null;
+  database_now?: Date | string;
 }
 
 function toIso(value: Date | string | null): string | undefined {
@@ -114,6 +116,12 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
   if (!exportId.ok || !portfolioId.ok || !ownerId.ok || !artifactId.ok || !snapshotId.ok || !candidateArtifactId.ok || !EXPORT_STATUS_VALUES.includes(status)) {
     throw new PostgresInfrastructureError();
   }
+  const artifactRevocationCode = row.artifact_revocation_code;
+  if (artifactRevocationCode !== null && artifactRevocationCode !== "expired" && artifactRevocationCode !== "privacy_invalid" &&
+      artifactRevocationCode !== "build_failed" && artifactRevocationCode !== "prior_revocation") {
+    throw new PostgresInfrastructureError();
+  }
+  if ((row.artifact_revoked_at === null) !== (artifactRevocationCode === null)) throw new PostgresInfrastructureError();
   let failureCode: SafeErrorCode | undefined;
   if (row.failure_code !== null) {
     try {
@@ -166,7 +174,17 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
           data["configuration"] !== undefined && (!data["configuration"] || typeof data["configuration"] !== "object")) {
         throw new PostgresInfrastructureError();
       }
-      snapshot = data as unknown as OwnerExportAssemblySnapshot;
+      const selected = data as unknown as OwnerExportSelectedSnapshot;
+      // Before #247, Analytics-only checkpoints stored their own retention
+      // deadline at the top level. Normalize in memory without changing the
+      // checkpoint or candidate bytes. A mixed package's earlier deadline may
+      // belong to another scope, so it cannot supply this fallback.
+      snapshot = row.included_scopes.length === 1 && row.included_scopes[0] === "analytics-reports" &&
+        selected.includedScopes.length === 1 && selected.includedScopes[0] === "analytics-reports" &&
+        selected.analytics !== undefined && selected.analytics.policyExpiresAt === undefined &&
+        typeof selected.policyExpiresAt === "string"
+        ? { ...selected, analytics: { ...selected.analytics, policyExpiresAt: selected.policyExpiresAt } }
+        : selected;
     } else {
       const capabilities = data["capabilities"];
       if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities) ||
@@ -209,6 +227,8 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
     ...(expiresAt === undefined ? {} : { expiresAt }),
     ...(row.artifact_revoked_at == null ? {} : { artifactRevokedAt: toIso(row.artifact_revoked_at)! }),
     ...(row.artifact_deleted_at == null ? {} : { artifactDeletedAt: toIso(row.artifact_deleted_at)! }),
+    ...(artifactRevocationCode === null ? {} : { artifactRevocationCode }),
+    ...(row.database_now === undefined ? {} : { databaseNow: toIso(row.database_now)! }),
   };
 }
 
@@ -216,7 +236,7 @@ const EXPORT_COLUMNS = sql.raw(`export_id, portfolio_id, owner_id, included_scop
   requested_at, started_at, completed_at, failed_at, expired_at, failure_code, manifest, artifact_id,
   snapshot_id, snapshot_captured_at, configuration_version, snapshot_data, candidate_artifact_id,
   candidate_sha256, candidate_content_length, artifact_sha256, artifact_content_length, expires_at, aggregate_version,
-  artifact_revoked_at, artifact_deleted_at`);
+  artifact_revoked_at, artifact_deleted_at, artifact_revocation_code`);
 
 export interface PostgresOwnerExportStoreOptions {
   readonly outbox: OutboxPersistencePort;
@@ -225,7 +245,7 @@ export interface PostgresOwnerExportStoreOptions {
 export function createPostgresOwnerExportStore(
   database: Kysely<DB>,
   options: PostgresOwnerExportStoreOptions,
-): OwnerExportStorePort & OwnerExportModerationArtifactsPort {
+): OwnerExportStorePort & OwnerExportArtifactCleanupPort {
   const { outbox } = options;
   const transactions = createPostgresTransactionRunner(database);
 
@@ -263,7 +283,7 @@ export function createPostgresOwnerExportStore(
         await sql`select set_config('shipwithali.portfolio_id', ${input.portfolioId}, true),
                          set_config('shipwithali.owner_id', ${input.ownerId}, true)`.execute(executor);
         const result = await sql<ExportRow>`
-          select ${EXPORT_COLUMNS}
+          select ${EXPORT_COLUMNS}, clock_timestamp() as database_now
             from portability.owner_exports
            where export_id = ${input.exportId}::uuid
              and portfolio_id = ${input.portfolioId}::uuid
@@ -368,13 +388,14 @@ export function createPostgresOwnerExportStore(
         }
         if (input.precondition !== undefined && !await input.precondition(context)) throw new PostgresInfrastructureError();
         const result = await sql<ExportRow>`
+          with completion_clock as materialized (select clock_timestamp() as completion_instant)
           update portability.owner_exports
              set status = ${input.toStatus},
                  started_at = case
                    when ${input.toStatus} = 'building' then ${input.transitionedAt}::timestamptz
                    else started_at end,
                  completed_at = case
-                   when ${input.toStatus} = 'ready' then ${input.transitionedAt}::timestamptz
+                   when ${input.toStatus} = 'ready' then completion_clock.completion_instant
                    else completed_at end,
                  failed_at = ${failedAt}::timestamptz,
                  expired_at = ${expiredAt}::timestamptz,
@@ -387,9 +408,11 @@ export function createPostgresOwnerExportStore(
                  artifact_sha256 = case when ${input.toStatus} = 'ready' then candidate_sha256 else artifact_sha256 end,
                  artifact_content_length = case when ${input.toStatus} = 'ready' then candidate_content_length else artifact_content_length end,
                  expires_at = case when ${input.toStatus} = 'ready'
-                   then coalesce(${input.expiresAt ?? null}::timestamptz, ${input.transitionedAt}::timestamptz + interval '7 days')
+                   then least(completion_clock.completion_instant + interval '168 hours',
+                     coalesce(${input.policyExpiresAt ?? null}::timestamptz, 'infinity'::timestamptz))
                    else expires_at end,
                  aggregate_version = ${input.expectedAggregateVersion} + 1
+           from completion_clock
            where export_id = ${input.exportId}::uuid
              and status = ${input.fromStatus}
              and aggregate_version = ${input.expectedAggregateVersion}
@@ -429,13 +452,13 @@ export function createPostgresOwnerExportStore(
             aggregateVersion: input.expectedAggregateVersion + 1,
             correlationId: input.exportId,
             causationId: input.actingJobId,
-            occurredAt: input.transitionedAt,
-            availableAt: input.transitionedAt,
+            occurredAt: persisted.completedAt ?? input.transitionedAt,
+            availableAt: persisted.completedAt ?? input.transitionedAt,
           });
         }
         const queueTransition = input.toStatus === "ready" && input.leaseToken !== undefined
           ? await sql`update operations.jobs
-                set status = 'completed', completed_at = ${input.transitionedAt}::timestamptz,
+                set status = 'completed', completed_at = ${persisted.completedAt ?? input.transitionedAt}::timestamptz,
                     lease_owner = null, lease_token = null, lease_expires_at = null
               where job_id = ${input.actingJobId}::uuid and status = 'leased' and lease_token = ${input.leaseToken}`.execute(executor)
           : input.toStatus === "failed" && input.leaseToken !== undefined
@@ -455,7 +478,7 @@ export function createPostgresOwnerExportStore(
     });
   }
 
-  const artifacts: OwnerExportModerationArtifactsPort = {
+  const artifacts: OwnerExportArtifactCleanupPort = {
     async uploadCandidate(input, upload) {
       return transactions.run(async context => {
         const executor = resolvePostgresTransaction(context);
@@ -470,51 +493,104 @@ export function createPostgresOwnerExportStore(
         return upload();
       });
     },
-    async listModerationCleanup(input) {
+    async listOwnerExportCleanup(input) {
       return transactions.run(async context => {
         const result = await sql<ExportRow>`select ${EXPORT_COLUMNS} from portability.owner_exports
           where portfolio_id = ${input.portfolioId}::uuid and owner_id = ${input.ownerId}::uuid
-            and included_scopes @> array['moderation-history']::text[]
             and candidate_artifact_id is not null and artifact_deleted_at is null
             and (${input.after ?? null}::uuid is null or export_id > ${input.after ?? null}::uuid)
           order by export_id limit ${input.limit}`.execute(resolvePostgresTransaction(context));
         return result.rows.map(parseRow);
       });
     },
-    async revokeModerationArtifact(input) {
+    async revokeOwnerExportArtifact(input) {
       return transactions.run(async context => {
         const executor = resolvePostgresTransaction(context);
-        const locked = await sql<ExportRow>`select ${EXPORT_COLUMNS} from portability.owner_exports
+        const locked = await sql<ExportRow & { cleanup_now: Date | string }>`select ${EXPORT_COLUMNS}, clock_timestamp() as cleanup_now from portability.owner_exports
           where export_id = ${input.exportId}::uuid and portfolio_id = ${input.portfolioId}::uuid
-            and owner_id = ${input.ownerId}::uuid and included_scopes @> array['moderation-history']::text[]
+            and owner_id = ${input.ownerId}::uuid
             and candidate_artifact_id is not null and artifact_deleted_at is null for update`.execute(executor);
         const row = locked.rows[0];
         if (row === undefined) return null;
         const record = parseRow(row);
         if (record.artifactRevokedAt !== undefined) return record;
+        if (record.candidateArtifactId === undefined) throw new PostgresInfrastructureError();
         const policyExpiry = record.snapshot !== undefined && 'kind' in record.snapshot ? record.snapshot.policyExpiresAt : undefined;
         const deadline = record.expiresAt ?? policyExpiry;
-        if (record.status !== 'failed' && record.status !== 'expired' &&
-            (deadline === undefined || Date.parse(input.now) < Date.parse(deadline)) && await input.stillEligible(record, context)) return null;
+        const cleanupNow = Date.parse(row.cleanup_now instanceof Date ? row.cleanup_now.toISOString() : row.cleanup_now);
+        const expired = deadline !== undefined && cleanupNow >= Date.parse(deadline);
+        const stillEligible = record.status === 'failed' || record.status === 'expired' ? false : await input.stillEligible(record, context);
+        if (record.status !== 'failed' && record.status !== 'expired' && !expired && stillEligible) return null;
+        const revocationCode = record.status === 'failed' ? 'build_failed' : expired || record.status === 'expired' ? 'expired' : 'privacy_invalid';
+        const revokedAt = row.cleanup_now instanceof Date ? row.cleanup_now.toISOString() : new Date(row.cleanup_now).toISOString();
         // Only module-owned rows change. The five-state lifecycle is retained;
         // queue redelivery observes a terminal record and cannot resurrect it.
         const updated = await sql<ExportRow>`update portability.owner_exports set
-          artifact_revoked_at = ${input.now}::timestamptz,
+          artifact_revoked_at = ${revokedAt}::timestamptz,
+          artifact_revocation_code = ${revocationCode},
           status = case when status = 'ready' then 'expired' when status = 'building' then 'failed' else status end,
-          expired_at = case when status = 'ready' then ${input.now}::timestamptz else expired_at end,
-          failed_at = case when status = 'building' then ${input.now}::timestamptz else failed_at end,
-          failure_code = case when status = 'building' then 'OWNER_EXPORT_MODERATION_CHANGED' else failure_code end,
+          expired_at = case when status = 'ready' then ${revokedAt}::timestamptz else expired_at end,
+          failed_at = case when status = 'building' then ${revokedAt}::timestamptz else failed_at end,
+          failure_code = case when status = 'building' then 'OWNER_EXPORT_PRIVACY_CHANGED' else failure_code end,
           aggregate_version = aggregate_version + 1
           where export_id = ${input.exportId}::uuid returning ${EXPORT_COLUMNS}`.execute(executor);
-        return updated.rows[0] === undefined ? null : parseRow(updated.rows[0]);
+        if (updated.rows[0] === undefined) return null;
+        await sql`insert into portability.owner_export_invalidation_ledger (
+            export_id, portfolio_id, artifact_id, revoked_at, revocation_code
+          ) values (${record.exportId}::uuid, ${record.portfolioId}::uuid,
+            ${record.candidateArtifactId}::uuid, ${revokedAt}::timestamptz, ${revocationCode})
+          on conflict (export_id) do nothing`.execute(executor);
+        return parseRow(updated.rows[0]);
       });
     },
-    async markModerationArtifactDeleted(input) {
+    async markOwnerExportArtifactDeleted(input) {
       await transactions.run(async context => {
-        await sql`update portability.owner_exports set artifact_deleted_at = greatest(clock_timestamp(), artifact_revoked_at)
+        const executor = resolvePostgresTransaction(context);
+        const deleted = await sql`update portability.owner_exports
+            set artifact_deleted_at = greatest(clock_timestamp(), artifact_revoked_at)
           where export_id = ${input.exportId}::uuid and portfolio_id = ${input.portfolioId}::uuid
             and candidate_artifact_id = ${input.artifactId}::uuid and artifact_revoked_at is not null
-            and artifact_deleted_at is null and status in ('failed', 'expired')`.execute(resolvePostgresTransaction(context));
+            and artifact_deleted_at is null and status in ('failed', 'expired')
+          `.execute(executor);
+        if (Number(deleted.numAffectedRows ?? 0) !== 1) return;
+        const ledgerUpdate = await sql`update portability.owner_export_invalidation_ledger as ledger
+          set artifact_deleted_at = export.artifact_deleted_at
+          from portability.owner_exports as export
+          where ledger.export_id = ${input.exportId}::uuid and ledger.portfolio_id = ${input.portfolioId}::uuid
+            and ledger.artifact_id = ${input.artifactId}::uuid and ledger.artifact_deleted_at is null
+            and export.export_id = ledger.export_id and export.portfolio_id = ledger.portfolio_id
+            and export.candidate_artifact_id = ledger.artifact_id and export.artifact_revoked_at = ledger.revoked_at
+            and export.artifact_revocation_code = ledger.revocation_code and export.artifact_deleted_at is not null
+            and export.status in ('failed', 'expired')`.execute(executor);
+        if (Number(ledgerUpdate.numAffectedRows ?? 0) !== 1) throw new PostgresInfrastructureError();
+      });
+    },
+    async listOwnerExportInvalidationLedger(input) {
+      if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 100) throw new TypeError("OWNER_EXPORT_LEDGER_LIMIT_INVALID");
+      return transactions.run(async context => {
+        const result = await sql<{ export_id: string; portfolio_id: string; artifact_id: string;
+          revoked_at: Date | string; revocation_code: string; artifact_deleted_at: Date | string | null }>`
+          select export_id, portfolio_id, artifact_id, revoked_at, revocation_code, artifact_deleted_at
+            from portability.owner_export_invalidation_ledger
+           where (${input.after ?? null}::uuid is null or export_id > ${input.after ?? null}::uuid)
+             and (${input.portfolioId ?? null}::uuid is null or portfolio_id = ${input.portfolioId ?? null}::uuid)
+           order by export_id limit ${input.limit}
+        `.execute(resolvePostgresTransaction(context));
+        return result.rows.map((row): OwnerExportInvalidationLedgerRecord => {
+          const exportId = parseStableId("OwnerExport", row.export_id);
+          const portfolioId = parseStableId("Portfolio", row.portfolio_id);
+          const artifactId = parseStableId("OwnerExportArtifact", row.artifact_id);
+          if (!exportId.ok || !portfolioId.ok || !artifactId.ok ||
+              !["expired", "privacy_invalid", "build_failed", "prior_revocation"].includes(row.revocation_code)) {
+            throw new PostgresInfrastructureError();
+          }
+          const revokedAt = row.revoked_at instanceof Date ? row.revoked_at.toISOString() : new Date(row.revoked_at).toISOString();
+          const artifactDeletedAt = row.artifact_deleted_at == null ? undefined :
+            row.artifact_deleted_at instanceof Date ? row.artifact_deleted_at.toISOString() : new Date(row.artifact_deleted_at).toISOString();
+          return { exportId: exportId.value, portfolioId: portfolioId.value, artifactId: artifactId.value,
+            revokedAt, revocationCode: row.revocation_code as OwnerExportInvalidationLedgerRecord["revocationCode"],
+            ...(artifactDeletedAt === undefined ? {} : { artifactDeletedAt }) };
+        });
       });
     },
   };

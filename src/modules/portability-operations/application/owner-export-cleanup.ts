@@ -1,5 +1,5 @@
 import { err, ok, type Rejection, type Result, type StableId } from "@shared/domain";
-import type { Clock, TransactionContext } from "../../../runtime/ports.js";
+import type { TransactionContext } from "../../../runtime/ports.js";
 import type { PersistedOwnerExport } from "./owner-export-store.js";
 import type { OwnerExportAssemblySnapshot } from "./owner-export-package.js";
 
@@ -14,28 +14,42 @@ export interface OwnerExportObjectDeletePort {
   deleteOwnerExport(input: OwnerExportObjectIdentity): Promise<Result<void, Rejection>>;
 }
 
-/** Revocation and upload use the same database fence, including stale writers. */
-export interface OwnerExportModerationArtifactsPort {
-  uploadCandidate(input: OwnerExportObjectIdentity & { readonly actingJobId: StableId<"Job">; readonly leaseToken: string },
-    upload: () => Promise<boolean>): Promise<boolean>;
-  listModerationCleanup(input: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner">;
-    readonly after?: StableId<"OwnerExport">; readonly limit: number }): Promise<readonly PersistedOwnerExport[]>;
-  revokeModerationArtifact(input: { readonly exportId: StableId<"OwnerExport">; readonly portfolioId: StableId<"Portfolio">;
-    readonly ownerId: StableId<"Owner">; readonly now: string;
-    readonly stillEligible: (record: PersistedOwnerExport, context: TransactionContext) => Promise<boolean>;
-  }): Promise<PersistedOwnerExport | null>;
-  markModerationArtifactDeleted(input: OwnerExportObjectIdentity): Promise<void>;
+export interface OwnerExportInvalidationLedgerRecord {
+  readonly portfolioId: StableId<"Portfolio">;
+  readonly exportId: StableId<"OwnerExport">;
+  readonly artifactId: StableId<"OwnerExportArtifact">;
+  readonly revokedAt: string;
+  readonly revocationCode: "expired" | "privacy_invalid" | "build_failed" | "prior_revocation";
+  readonly artifactDeletedAt?: string;
 }
 
-export function createOwnerExportModerationCleanupService(deps: {
+/** Revocation and upload use the same database fence, including stale writers. */
+export interface OwnerExportArtifactCleanupPort {
+  uploadCandidate(input: OwnerExportObjectIdentity & { readonly actingJobId: StableId<"Job">; readonly leaseToken: string },
+    upload: () => Promise<boolean>): Promise<boolean>;
+  listOwnerExportCleanup(input: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner">;
+    readonly after?: StableId<"OwnerExport">; readonly limit: number }): Promise<readonly PersistedOwnerExport[]>;
+  revokeOwnerExportArtifact(input: { readonly exportId: StableId<"OwnerExport">; readonly portfolioId: StableId<"Portfolio">;
+    readonly ownerId: StableId<"Owner">;
+    readonly stillEligible: (record: PersistedOwnerExport, context: TransactionContext) => Promise<boolean>;
+  }): Promise<PersistedOwnerExport | null>;
+  markOwnerExportArtifactDeleted(input: OwnerExportObjectIdentity): Promise<void>;
+  /** Bounded protected current ledger for restore-quarantine reconciliation. */
+  listOwnerExportInvalidationLedger(input: { readonly after?: StableId<"OwnerExport">; readonly limit: number;
+    readonly portfolioId?: StableId<"Portfolio"> }): Promise<readonly OwnerExportInvalidationLedgerRecord[]>;
+}
+
+/** @deprecated Use the scope-neutral cleanup port. */
+export type OwnerExportModerationArtifactsPort = OwnerExportArtifactCleanupPort;
+
+export function createOwnerExportArtifactCleanupService(deps: {
   readonly scope: { readonly portfolioId: StableId<"Portfolio">; readonly ownerId: StableId<"Owner"> };
-  readonly artifacts: OwnerExportModerationArtifactsPort;
+  readonly artifacts: OwnerExportArtifactCleanupPort;
   readonly storage: OwnerExportObjectDeletePort;
-  readonly snapshots: { revalidateModerationForReady?(input: {
+  readonly snapshots: { revalidateOwnerExportForCleanup?(input: {
     readonly snapshot: OwnerExportAssemblySnapshot; readonly portfolioId: StableId<"Portfolio">;
     readonly ownerId: StableId<"Owner">; readonly context: TransactionContext;
   }): Promise<boolean> };
-  readonly clock: Clock;
 }) {
   return {
     async runOwnerExportCleanup(input: { readonly after?: StableId<"OwnerExport">; readonly limit?: number } = {}) {
@@ -44,22 +58,22 @@ export function createOwnerExportModerationCleanupService(deps: {
         return err({ kind: "validation", code: "OWNER_EXPORT_CLEANUP_LIMIT_INVALID" } as const);
       }
       try {
-        const page = await deps.artifacts.listModerationCleanup({ ...deps.scope, limit,
+        const page = await deps.artifacts.listOwnerExportCleanup({ ...deps.scope, limit,
           ...(input.after === undefined ? {} : { after: input.after }) });
         let deleted = 0, pending = 0;
         for (const selected of page) {
           // Re-read under the upload fence. A stale selection never revokes a
           // newly eligible snapshot or deletes before durable access denial.
-          const revoked = await deps.artifacts.revokeModerationArtifact({ ...deps.scope,
-            exportId: selected.exportId, now: deps.clock.now(),
+          const revoked = await deps.artifacts.revokeOwnerExportArtifact({ ...deps.scope,
+            exportId: selected.exportId,
             stillEligible: (record, context) => record.snapshot === undefined ? Promise.resolve(false) :
-              deps.snapshots.revalidateModerationForReady?.({ ...deps.scope, snapshot: record.snapshot, context }) ?? Promise.resolve(false),
+              deps.snapshots.revalidateOwnerExportForCleanup?.({ ...deps.scope, snapshot: record.snapshot, context }) ?? Promise.resolve(false),
           });
           if (revoked?.candidateArtifactId === undefined) continue;
           const identity = { portfolioId: revoked.portfolioId, exportId: revoked.exportId, artifactId: revoked.candidateArtifactId };
           const removed = await deps.storage.deleteOwnerExport(identity);
           if (!removed.ok) { pending++; continue; }
-          await deps.artifacts.markModerationArtifactDeleted(identity);
+          await deps.artifacts.markOwnerExportArtifactDeleted(identity);
           deleted++;
         }
         const next = page.length === limit ? page.at(-1)?.exportId : undefined;
@@ -71,3 +85,6 @@ export function createOwnerExportModerationCleanupService(deps: {
     },
   };
 }
+
+/** @deprecated Use createOwnerExportArtifactCleanupService. */
+export const createOwnerExportModerationCleanupService = createOwnerExportArtifactCleanupService;

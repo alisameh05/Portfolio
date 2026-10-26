@@ -177,7 +177,7 @@ describe("Analytics Owner export", () => {
       snapshotId: id<"OwnerExportArtifact">("108"),
       capturedAt,
       includedScopes: ["analytics-reports"],
-      analytics: { records: captured.value.records },
+      analytics: { records: captured.value.records, policyExpiresAt: captured.value.policyExpiresAt },
       policyExpiresAt: captured.value.policyExpiresAt,
     };
     const built = await buildAnalyticsOwnerExportPackage({ exportId: id<"OwnerExport">("109"), snapshot });
@@ -196,7 +196,7 @@ describe("Analytics Owner export", () => {
       reports: analyticsValue.reports.map((report) => ({ ...report, aggregateCount: 0 })),
     };
     await expect(buildAnalyticsOwnerExportPackage({ exportId: id<"OwnerExport">("110"), snapshot: {
-      ...snapshot, analytics: { records: [{ goalId, value: malformed }] },
+      ...snapshot, analytics: { ...snapshot.analytics!, records: [{ goalId, value: malformed }] },
     } })).rejects.toThrow("OWNER_EXPORT_ANALYTICS_RECORD_INVALID");
   });
 

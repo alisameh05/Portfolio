@@ -22,7 +22,7 @@ import { createSystemIdGenerator } from "../../src/runtime/ports.js";
 import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
 import { createStableId, parseIdempotencyKey, ok, err, type StableId } from "../../src/shared/domain/index.js";
 import { validateOwnerExportZip } from "../../scripts/owner-export/validator.mjs";
-import { createOwnerExportModerationCleanupService, type OwnerExportObjectDeletePort } from "../../src/modules/portability-operations/application/owner-export-cleanup.js";
+import { createOwnerExportArtifactCleanupService, type OwnerExportObjectDeletePort } from "../../src/modules/portability-operations/application/owner-export-cleanup.js";
 import { createSupabaseOwnerExportStorage } from "../../src/runtime/adapters/supabase-owner-export-storage.js";
 
 const APPLICATION_URL = process.env["PHASE8_OWNER_EXPORT_APPLICATION_URL"];
@@ -410,8 +410,9 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
     { selection: "Failed Moderation finalization", includedScopes: ["moderation-history"] as const, terminalFailure: true, failFinalization: true },
     { selection: "Earlier source erasure", includedScopes: ["moderation-history"] as const, terminalFailure: false, earlierErasure: true },
     { selection: "Exact Feedback deadline", includedScopes: ["moderation-history"] as const, terminalFailure: false, deadlineOnly: true },
+    { selection: "Exact seven-day export expiry", includedScopes: ["moderation-history"] as const, terminalFailure: false, expiryOnly: true },
     { selection: "Upload racing cleanup", includedScopes: ["moderation-history"] as const, terminalFailure: false, raceUpload: true },
-  ])("AC01/AC04 retains privacy-safe checkpoints for $selection through source retention", async ({ includedScopes, terminalFailure, failFinalization = false, earlierErasure = false, deadlineOnly = false, raceUpload = false }) => {
+  ])("AC01/AC04 retains privacy-safe checkpoints for $selection through source retention", async ({ includedScopes, terminalFailure, failFinalization = false, earlierErasure = false, deadlineOnly = false, expiryOnly = false, raceUpload = false }) => {
     await seedPortfolio();
     const projectId = await insertProject("hidden");
     const feedbackId = await insertFeedback({ state: "approved", projectId,
@@ -423,8 +424,7 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
     const suppressedId = await insertFeedback({ state: "suppressed", projectId,
       submittedAt: new Date(suppressionAt.getTime() - DAY_MS).toISOString(), decision: "suppressed",
       approvalAt: new Date(suppressionAt.getTime() - DAY_MS / 2).toISOString(), decisionAt: suppressionAt.toISOString() });
-    let nowOverride: string | undefined;
-    const clock = { now: () => nowOverride ?? new Date().toISOString() };
+    const clock = { now: () => new Date().toISOString() };
     const ids = createSystemIdGenerator();
     const applicationOperations = createPostgresOperationsPersistence(application.database, clock);
     const applicationStore = createPostgresOwnerExportStore(application.database, { outbox: applicationOperations.outbox });
@@ -468,8 +468,8 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
       if (realStorage !== undefined) return realStorage.deleteOwnerExport(input);
       stored = new Uint8Array(); return ok(undefined);
     } };
-    const cleanup = () => createOwnerExportModerationCleanupService({ scope: { portfolioId, ownerId },
-      artifacts: workerStore, storage: deletion, snapshots, clock });
+    const cleanup = () => createOwnerExportArtifactCleanupService({ scope: { portfolioId, ownerId },
+      artifacts: workerStore, storage: deletion, snapshots });
     const service = createOwnerExportService({
       operations: applicationOperations, exports: applicationStore, clock, ids, objectRead: storage,
       revalidateModerationForDownload: async ({ snapshot, portfolioId, ownerId }) => {
@@ -509,8 +509,8 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
             dependencies: expect.arrayContaining([{ feedbackId, projectId }, { feedbackId: pendingId, projectId }, { feedbackId: suppressedId, projectId }]) },
           ...(includedScopes.length === 2 ? { configuration: { settings: { profile: { displayName: "Owner" } } } } : {}) } });
       if (checkpoint?.snapshot === undefined || !("kind" in checkpoint.snapshot) || checkpoint.snapshot.moderationCheckpoint === undefined) throw new Error("PHASE8_FEEDBACK_EXPORT_CHECKPOINT_MISSING");
-      expect(await workerStore.listModerationCleanup({ portfolioId, ownerId: createStableId('Owner'), limit: 25 })).toEqual([]);
-      expect(await workerStore.revokeModerationArtifact({ ...scope, ownerId: createStableId('Owner'), now: clock.now(),
+      expect(await workerStore.listOwnerExportCleanup({ portfolioId, ownerId: createStableId('Owner'), limit: 25 })).toEqual([]);
+      expect(await workerStore.revokeOwnerExportArtifact({ ...scope, ownerId: createStableId('Owner'),
         stillEligible: async () => false })).toBeNull();
       if (storageUrl !== undefined) {
         const direct = await fetch(new URL(`/storage/v1/object/owner-exports/${portfolioId}/${scope.exportId}/${checkpoint.candidateArtifactId}.zip`, storageUrl));
@@ -527,9 +527,15 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
       const retainSource = async () => {
         if (deadlineOnly) {
           const cutoff = checkpoint.snapshot!.policyExpiresAt!;
-          nowOverride = new Date(Date.parse(cutoff) - 1).toISOString();
+          await admin.query("update portability.owner_exports set expires_at=$2::timestamptz where export_id=$1", [scope.exportId, cutoff]);
+          expect((await workerStore.findOwnerExport(scope))?.expiresAt).toBe(cutoff);
           expect(await cleanup().runOwnerExportCleanup()).toMatchObject({ ok: true, value: { deleted: 0, pending: 0 } });
-          nowOverride = cutoff;
+          await admin.query("update portability.owner_exports set expires_at=clock_timestamp() where export_id=$1", [scope.exportId]);
+        } else if (expiryOnly) {
+          await admin.query("update portability.owner_exports set expires_at=clock_timestamp()+interval '1 minute' where export_id=$1", [scope.exportId]);
+          expect(await cleanup().runOwnerExportCleanup()).toMatchObject({ ok: true, value: { deleted: 0, pending: 0 } });
+          expect(await service.downloadOwnerExport({ actor, ...scope })).toMatchObject({ ok: true });
+          await admin.query("update portability.owner_exports set expires_at=clock_timestamp() where export_id=$1", [scope.exportId]);
         } else if (earlierErasure) {
           await admin.query('update interaction.moderation_decisions set reason=null,owner_id=null where feedback_id=$1', [suppressedId]);
           await admin.query('update interaction.feedback set author_name=null,paragraph=null,text_erased_at=clock_timestamp() where feedback_id=$1', [suppressedId]);
@@ -549,7 +555,9 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
         expect((await admin.query("select count(*)::int as count from interaction.moderation_decisions where feedback_id=$1 and (reason is not null or owner_id is not null)", [suppressedId])).rows[0]?.count).toBe(0);
         }
         await assertPrivateMarkersAbsent();
-        if (!deadlineOnly) {
+        if (expiryOnly) {
+          expect(await worker.transactions.run(context => snapshots.revalidateModerationForReady!({ snapshot: checkpoint.snapshot!, portfolioId, ownerId, context }))).toBe(true);
+        } else if (!deadlineOnly) {
           expect(await worker.transactions.run(context => snapshots.revalidateModerationForReady!({ snapshot: checkpoint.snapshot!, portfolioId, ownerId, context }))).toBe(false);
           expect(await snapshots.restoreModerationSnapshot!({ snapshot: checkpoint.snapshot!, portfolioId, ownerId })).toMatchObject({ ok: false });
         }
@@ -560,10 +568,18 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
         expect(await cleanup().runOwnerExportCleanup({ limit: 1 })).toMatchObject({ ok: true, value: { pending: 1, deleted: 0, incomplete: true } });
         const revoked = await workerStore.findOwnerExport(scope);
         expect(revoked?.artifactRevokedAt).toBeDefined();
+        expect(revoked?.artifactRevocationCode).toBe(terminalFailure ? "build_failed" : deadlineOnly || expiryOnly ? "expired" : "privacy_invalid");
         expect(revoked?.artifactDeletedAt).toBeUndefined();
+        const invalidations = await workerStore.listOwnerExportInvalidationLedger({ portfolioId, limit: 100 });
+        const invalidation = invalidations.find(entry => entry.exportId === scope.exportId);
+        expect(invalidation).toEqual({ portfolioId, exportId: scope.exportId, artifactId: checkpoint.candidateArtifactId,
+          revokedAt: expect.any(String), revocationCode: terminalFailure ? "build_failed" : deadlineOnly || expiryOnly ? "expired" : "privacy_invalid" });
         expect(await service.downloadOwnerExport({ actor, ...scope })).toMatchObject({ ok: false });
         expect(await cleanup().runOwnerExportCleanup()).toMatchObject({ ok: true, value: { deleted: 1, pending: 0 } });
         expect((await workerStore.findOwnerExport(scope))?.artifactDeletedAt).toBeDefined();
+        const reconciledInvalidation = (await workerStore.listOwnerExportInvalidationLedger({ portfolioId, limit: 100 }))
+          .find(entry => entry.exportId === scope.exportId);
+        expect(reconciledInvalidation?.artifactDeletedAt).toEqual(expect.any(String));
         expect(await storage.readOwnerExport({ ...exportIdentity!, expectedContentLength: checkpoint.candidateContentLength!,
           expectedSha256: checkpoint.candidateSha256! })).toMatchObject({ ok: false });
         expect(await cleanup().runOwnerExportCleanup()).toMatchObject({ ok: true, value: { scanned: 0, deleted: 0 } });
@@ -635,7 +651,7 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
         await expect(applicationStore.findOwnerExport(scope)).rejects.toThrow();
       }
       await admin.query("update portability.owner_exports set snapshot_data=$2::jsonb where export_id=$1", [scope.exportId, JSON.stringify(checkpoint.snapshot)]);
-      if (!deadlineOnly && !earlierErasure) {
+      if (!deadlineOnly && !earlierErasure && !expiryOnly) {
         await admin.query("update interaction.feedback set paragraph='Changed retained feedback' where feedback_id=$1", [feedbackId]);
         expect(await service.downloadOwnerExport({ actor, ...scope })).toMatchObject({ ok: false });
       }
