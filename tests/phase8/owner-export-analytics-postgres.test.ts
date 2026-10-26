@@ -260,6 +260,63 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
       });
       expect(wrongOwner.rows[0]?.count).toBe(0);
 
+      const deletionJobId = createStableId("Job");
+      const expired = await admin.query<{ utc_day: string }>(
+        "select (($1::timestamptz at time zone 'UTC')::date - interval '14 months')::date::text as utc_day", [capturedInstant]);
+      const expiredDay = expired.rows[0]!.utc_day;
+      await admin.query(`insert into measurement.daily_aggregates
+        (portfolio_id,utc_day,metric_kind,metric_key,dimensions,event_count,sum_value,observed_subjects,
+         returning_subjects,policy_version,checkpoint_at,incomplete)
+        values ($1,$2::date,'action','page-viewed','{}'::jsonb,1,0,1,0,'phase7.daily.v2',$3::timestamptz,false)`,
+      [portfolioId, today, capturedInstant]);
+      await admin.query(`insert into measurement.daily_aggregate_checkpoints
+        (portfolio_id,utc_day,source_event_count,source_conversion_count,policy_version,checkpoint_at,incomplete)
+        values ($1,$2::date,0,0,'phase7.daily.v2',$3::timestamptz,false)`, [portfolioId, expiredDay, capturedInstant]);
+      await admin.query(`insert into measurement.retention_checkpoints
+        (portfolio_id,job_id,work_kind,requested_at,stage,updated_at)
+        values ($1,$2,'aggregates',$3::timestamptz,'checkpoints',$3::timestamptz)`, [portfolioId, deletionJobId, capturedInstant]);
+      for (const [purpose, scope] of [
+        ["measurement.owner-export", portfolioId],
+        ["measurement.aggregate", createStableId("Portfolio")],
+        ["measurement.retention", createStableId("Portfolio")],
+        ["content.owner-export", portfolioId],
+      ] as const) {
+        const deletion = await worker.transactions.run(async (tx) => {
+          const db = resolvePostgresTransaction(tx);
+          await sql`select set_config('shipwithali.portfolio_id', ${scope}, true),
+            set_config('shipwithali.owner_id', ${ownerId}, true), set_config('shipwithali.worker_purpose', ${purpose}, true)`.execute(db);
+          const visible = await sql<{ aggregates: number; checkpoints: number }>`select
+            (select count(*)::int from measurement.daily_aggregates where portfolio_id=${portfolioId}::uuid
+              and utc_day=${today}::date and metric_kind='action' and metric_key='page-viewed') as aggregates,
+            (select count(*)::int from measurement.daily_aggregate_checkpoints where portfolio_id=${portfolioId}::uuid
+              and utc_day=${expiredDay}::date) as checkpoints`.execute(db);
+          const aggregates = await sql`delete from measurement.daily_aggregates where portfolio_id=${portfolioId}::uuid
+            and utc_day=${today}::date and metric_kind='action' and metric_key='page-viewed' returning utc_day`.execute(db);
+          const checkpoints = await sql`delete from measurement.daily_aggregate_checkpoints where portfolio_id=${portfolioId}::uuid
+            and utc_day=${expiredDay}::date returning utc_day`.execute(db);
+          return { visible: visible.rows[0], aggregates: aggregates.rows.length, checkpoints: checkpoints.rows.length };
+        });
+        const visible = purpose === "measurement.owner-export" ? 1 : 0;
+        expect(deletion, JSON.stringify({ purpose, ...deletion }))
+          .toEqual({ visible: { aggregates: visible, checkpoints: visible }, aggregates: 0, checkpoints: 0 });
+      }
+      expect((await admin.query(`select 1 from measurement.daily_aggregates where portfolio_id=$1
+        and utc_day=$2::date and metric_kind='action' and metric_key='page-viewed'`, [portfolioId, today])).rows).toHaveLength(1);
+      expect((await admin.query("select 1 from measurement.daily_aggregate_checkpoints where portfolio_id=$1 and utc_day=$2::date",
+        [portfolioId, expiredDay])).rows).toHaveLength(1);
+      const permittedDeletion = await worker.transactions.run(async (tx) => {
+        const db = resolvePostgresTransaction(tx);
+        await sql`select set_config('shipwithali.portfolio_id', ${portfolioId}, true),
+          set_config('shipwithali.worker_purpose', 'measurement.aggregate', true)`.execute(db);
+        const aggregates = await sql`delete from measurement.daily_aggregates where portfolio_id=${portfolioId}::uuid
+          and utc_day=${today}::date and metric_kind='action' and metric_key='page-viewed' returning utc_day`.execute(db);
+        await sql`select set_config('shipwithali.worker_purpose', 'measurement.retention', true)`.execute(db);
+        const checkpoints = await sql`delete from measurement.daily_aggregate_checkpoints where portfolio_id=${portfolioId}::uuid
+          and utc_day=${expiredDay}::date returning utc_day`.execute(db);
+        return { aggregates: aggregates.rows.length, checkpoints: checkpoints.rows.length };
+      });
+      expect(permittedDeletion).toEqual({ aggregates: 1, checkpoints: 1 });
+
       let signalRootsRead!: () => void;
       let releaseCapture!: () => void;
       const rootsRead = new Promise<void>((resolve) => { signalRootsRead = resolve; });
@@ -323,6 +380,7 @@ describe.runIf(enabled)("Phase 8 #246 real Analytics export fixture", () => {
         if (fixtureSeeded) {
           await admin.query("begin");
           await admin.query("set local session_replication_role = replica");
+          await admin.query("delete from measurement.retention_checkpoints where portfolio_id=$1", [portfolioId]);
           await admin.query("delete from measurement.daily_aggregates where portfolio_id=$1", [portfolioId]);
           await admin.query("delete from measurement.daily_aggregate_checkpoints where portfolio_id=$1", [portfolioId]);
           await admin.query("delete from measurement.analytics_goal_activation_history where portfolio_id=$1", [portfolioId]);
