@@ -130,10 +130,10 @@ function contentProjections(records) {
   const discovery = [];
   for (const record of records) {
     const value = record.value;
-    const legacyV1 = record.schemaVersion === "1.0";
+    const legacyRecordSchema = record.schemaVersion === "1.0" || record.schemaVersion === "1.1";
     if (!stable(value.contentId) || !["project", "achievement", "testimonial"].includes(value.contentType) ||
         !["draft", "published", "hidden", "archived"].includes(value.lifecycle)) fail("REFERENCE_IMPORT_MODEL_CONTENT_INVALID");
-    if (!Array.isArray(value.revisions) || (!legacyV1 && (!Array.isArray(value.publications) || !Array.isArray(value.publicationHistory)))) {
+    if (!Array.isArray(value.revisions) || (!legacyRecordSchema && (!Array.isArray(value.publications) || !Array.isArray(value.publicationHistory)))) {
       fail("REFERENCE_IMPORT_MODEL_CONTENT_HISTORY_INVALID");
     }
     const revisions = new Map();
@@ -146,7 +146,7 @@ function contentProjections(records) {
       revisions.set(revision.revisionId, revision);
     }
     const publicationsByLocale = new Map();
-    if (legacyV1) {
+    if (legacyRecordSchema) {
       const currentByLocale = new Set();
       for (const revision of value.revisions) {
         if (typeof revision.reviewed !== "boolean" || typeof revision.currentlyPublished !== "boolean" ||
@@ -175,10 +175,10 @@ function contentProjections(records) {
         }
       }
     }
-    const legacyPublicLocales = legacyV1 ? [...new Set(value.revisions.filter((revision) => revision.currentlyPublished).map((revision) => revision.locale))].sort() : [];
-    const publicLocales = value.lifecycle === "published" ? (legacyV1 ? legacyPublicLocales : [...publicationsByLocale.keys()].sort()) : [];
+    const legacyPublicLocales = legacyRecordSchema ? [...new Set(value.revisions.filter((revision) => revision.currentlyPublished).map((revision) => revision.locale))].sort() : [];
+    const publicLocales = value.lifecycle === "published" ? (legacyRecordSchema ? legacyPublicLocales : [...publicationsByLocale.keys()].sort()) : [];
     const route = value.publicRoute;
-    if (!legacyV1 && route !== null && route !== undefined) {
+    if (!legacyRecordSchema && route !== null && route !== undefined) {
       const current = route.reservations?.filter((reservation) => reservation.isCurrent) ?? [];
       if (!stable(route.identity) || value.publicRouteIdentity !== route.identity || current.length !== 1 ||
           current[0].slug !== route.canonicalSlug || (value.routeHistory ?? []).some((redirect) =>
@@ -190,7 +190,7 @@ function contentProjections(records) {
         redirects: value.routeHistory ?? [], history: route.history ?? [],
         publiclyResolvable: value.lifecycle === "published" && publicLocales.length > 0,
       } });
-    } else if (legacyV1) {
+    } else if (legacyRecordSchema) {
       if (value.publicRouteIdentity !== null && !stable(value.publicRouteIdentity)) fail("REFERENCE_IMPORT_MODEL_ROUTE_IDENTITY_INVALID");
       if (stable(value.publicRouteIdentity)) projections.push({ kind: "public-route", identity: value.publicRouteIdentity, value: {
         contentId: value.contentId, canonicalSlug: null, canonicalSlugAvailable: false,
@@ -200,9 +200,12 @@ function contentProjections(records) {
     } else if (value.publicRouteIdentity !== null) fail("REFERENCE_IMPORT_MODEL_ROUTE_IDENTITY_INVALID");
     for (const target of value.relatedProjectIds ?? []) {
       if (!stable(target)) fail("REFERENCE_IMPORT_MODEL_RELATIONSHIP_INVALID");
+      const relationshipHistoryAvailable = Object.hasOwn(value, "relationshipHistory");
       projections.push({ kind: "content-relationship", identity: `${value.contentId}:${target}`,
         value: { contentId: value.contentId, relatedContentId: target, selected: projectIds.has(target),
-          history: (value.relationshipHistory ?? []).filter((entry) => entry.relatedProjectId === target || entry.rightProjectId === target) } });
+          ...(relationshipHistoryAvailable ? { history: value.relationshipHistory.filter((entry) =>
+            entry.relatedProjectId === target || entry.rightProjectId === target) } : {}),
+          historyAvailable: relationshipHistoryAvailable } });
     }
     for (const assignment of value.taxonomyAssignments ?? []) {
       if (!stable(assignment.valueId)) fail("REFERENCE_IMPORT_MODEL_RELATIONSHIP_INVALID");
@@ -212,19 +215,24 @@ function contentProjections(records) {
     }
     const item = {
       contentId: value.contentId, contentType: value.contentType, lifecycle: value.lifecycle,
-      projectStatus: value.projectStatus ?? null, featured: value.featured === true,
-      revisions: value.revisions, publications: legacyV1 ? null : value.publications,
-      publicationHistory: legacyV1 ? null : value.publicationHistory,
-      publicationHistoryAvailable: !legacyV1,
-      publicationInterpretation: legacyV1 ? "legacy-current-flags-only" : "versioned-publication-history",
-      lifecycleHistory: value.lifecycleHistory ?? [], publicRouteIdentity: value.publicRouteIdentity ?? null,
-      routeReservationHistoryAvailable: !legacyV1,
+      ...(Object.hasOwn(value, "projectStatus") ? { projectStatus: value.projectStatus } : {}),
+      ...(Object.hasOwn(value, "featured") ? { featured: value.featured } : {}),
+      revisions: value.revisions, publications: legacyRecordSchema ? null : value.publications,
+      publicationHistory: legacyRecordSchema ? null : value.publicationHistory,
+      publicationHistoryAvailable: !legacyRecordSchema,
+      publicationInterpretation: legacyRecordSchema ? "legacy-current-flags-only" : "versioned-publication-history",
+      ...(Object.hasOwn(value, "lifecycleHistory") ? { lifecycleHistory: value.lifecycleHistory } : {}),
+      lifecycleHistoryAvailable: Object.hasOwn(value, "lifecycleHistory"),
+      publicRouteIdentity: value.publicRouteIdentity ?? null,
+      routeReservationHistoryAvailable: !legacyRecordSchema,
       routeHistory: value.routeHistory ?? [], relatedProjectIds: value.relatedProjectIds ?? [],
-      relationshipHistory: value.relationshipHistory ?? [], taxonomyAssignments: value.taxonomyAssignments ?? [],
+      ...(Object.hasOwn(value, "relationshipHistory") ? { relationshipHistory: value.relationshipHistory } : {}),
+      relationshipHistoryAvailable: Object.hasOwn(value, "relationshipHistory"),
+      taxonomyAssignments: value.taxonomyAssignments ?? [],
       mediaAssetIds: value.mediaAssetIds ?? [], publicLocales,
       publiclyDiscoverable: value.lifecycle === "published" && publicLocales.length > 0,
       firstPublishedAt: value.firstPublishedAt ?? null,
-      discoveryOrderAvailable: !legacyV1 && typeof value.firstPublishedAt === "string",
+      discoveryOrderAvailable: !legacyRecordSchema && typeof value.firstPublishedAt === "string",
     };
     projections.push({ kind: "content-item", identity: value.contentId, value: item });
     for (const revision of value.revisions) projections.push({ kind: "content-revision", identity: revision.revisionId,
@@ -377,7 +385,7 @@ function moderationProjections(records) {
 function analyticsProjections(records) {
   return records.map((record) => {
     const value = record.value;
-    const legacyV1 = record.schemaVersion === "1.0";
+    const legacyRecordSchema = record.schemaVersion === "1.0" || record.schemaVersion === "1.1";
     const goal = value.goal;
     if (!stable(goal?.goalId) || !Array.isArray(goal.versions) || !Array.isArray(goal.activationHistory ?? [])) {
       fail("REFERENCE_IMPORT_MODEL_GOAL_INVALID");
@@ -389,25 +397,25 @@ function analyticsProjections(records) {
     if (activeVersionId !== null && !versionIds.has(activeVersionId) ||
         new Set(versions.map((version) => version.versionNumber)).size !== versions.length ||
         versions.some((version) => !Number.isSafeInteger(version.versionNumber) || version.versionNumber < 1) ||
-        history.some((event, index) => !versionIds.has(event.versionId) || (!legacyV1 &&
+        history.some((event, index) => !versionIds.has(event.versionId) || (!legacyRecordSchema &&
           (!Number.isSafeInteger(event.activationSequence) || event.activationSequence !== index + 1))) ||
         activeVersionId !== null && history.length > 0 && !history.some((event) => event.versionId === activeVersionId)) {
       fail("REFERENCE_IMPORT_MODEL_GOAL_POINTER_INVALID");
     }
     const reports = (value.reports ?? []).map((report) => {
-      const countDisposition = legacyV1 ? report.sampleState === "sufficient" ? "included" : "withheld" : report.countDisposition ?? null;
-      if (countDisposition === "withheld" && (Object.hasOwn(report, "cells") || (!legacyV1 && Object.hasOwn(report, "aggregateCount")))) {
+      const countDisposition = legacyRecordSchema ? report.sampleState === "sufficient" ? "included" : "withheld" : report.countDisposition ?? null;
+      if (countDisposition === "withheld" && (Object.hasOwn(report, "cells") || (!legacyRecordSchema && Object.hasOwn(report, "aggregateCount")))) {
         fail("REFERENCE_IMPORT_MODEL_SUPPRESSED_REPORT_LEAK");
       }
       if (report.goalVersionId !== undefined && !versionIds.has(report.goalVersionId)) fail("REFERENCE_IMPORT_MODEL_REPORT_VERSION_INVALID");
       return { goalVersionId: report.goalVersionId ?? null, sampleState: report.sampleState ?? null,
-        countDisposition, ...(legacyV1 && countDisposition === "included" ? { aggregateCount: report.aggregateCount } : {}),
-        ...(legacyV1 && countDisposition === "withheld" ? { withheldCount: true } : {}),
-        ...(!legacyV1 && countDisposition === "included" && report.cells !== undefined ? { cells: report.cells } : {}) };
+        countDisposition, ...(legacyRecordSchema && countDisposition === "included" ? { aggregateCount: report.aggregateCount } : {}),
+        ...(legacyRecordSchema && countDisposition === "withheld" ? { withheldCount: true } : {}),
+        ...(!legacyRecordSchema && countDisposition === "included" && report.cells !== undefined ? { cells: report.cells } : {}) };
     });
     return { kind: "analytics-goal", identity: goal.goalId, value: { goalId: goal.goalId,
       aggregateVersion: goal.aggregateVersion, activeVersionId, versions: goal.versions,
-      activationHistory: history, activationSequenceAvailable: !legacyV1, reports } };
+      activationHistory: history, activationSequenceAvailable: !legacyRecordSchema, reports } };
   });
 }
 

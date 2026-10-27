@@ -215,6 +215,103 @@ async function legacyV1Archive(options: { includeContent?: boolean; duplicateRev
   return { archive: await repack(new Map(archiveEntries)), contentId, routeId, englishRevisionId, arabicRevisionId, goalId, versionId };
 }
 
+async function wrappedLegacyArchive(options: { manifestVersion: "1.1" | "1.2"; scopes: Array<"portfolio-content" | "analytics-reports">;
+  contentFacts: "omitted" | "explicit" }) {
+  const contentId = "0196a1b2-7c3d-7e11-9f22-000000000911";
+  const routeId = "0196a1b2-7c3d-7e11-9f22-000000000912";
+  const revisionId = "0196a1b2-7c3d-7e11-9f22-000000000913";
+  const goalId = "0196a1b2-7c3d-7e11-9f22-000000000914";
+  const firstVersionId = "0196a1b2-7c3d-7e11-9f22-000000000915";
+  const activeVersionId = "0196a1b2-7c3d-7e11-9f22-000000000916";
+  const relatedProjectId = "0196a1b2-7c3d-7e11-9f22-000000000919";
+  const contentValues: Array<Record<string, unknown>> = [
+    {
+      contentId, contentType: "project", lifecycle: "published",
+      ...(options.contentFacts === "explicit" ? { projectStatus: null, featured: false } : {}),
+      revisions: [{ revisionId, locale: "en", sequence: 2, title: "Legacy wrapped project", summary: "A preserved summary.",
+        body: "A preserved body.", reviewed: true, currentlyPublished: true }],
+      publicRouteIdentity: routeId, routeHistory: [{ fromSlug: "old-wrapped-project", toSlug: "wrapped-project" }],
+      relatedProjectIds: [relatedProjectId], taxonomyValueIds: [], mediaAssetIds: [], evidenceItems: [],
+    },
+    {
+      contentId: relatedProjectId, contentType: "project", lifecycle: "draft",
+      ...(options.contentFacts === "explicit" ? { projectStatus: null, featured: false } : {}),
+      revisions: [{ revisionId: "0196a1b2-7c3d-7e11-9f22-000000000920", locale: "en", sequence: 1,
+        title: "Related draft project", summary: "A current relationship target.", body: "A preserved target body.",
+        reviewed: false, currentlyPublished: false }],
+      publicRouteIdentity: null, routeHistory: [], relatedProjectIds: [], taxonomyValueIds: [], mediaAssetIds: [], evidenceItems: [],
+    },
+  ];
+  const analyticsValue: Record<string, unknown> = {
+      goal: {
+        goalId, aggregateVersion: 3, activeVersionId,
+        versions: [
+          { versionId: firstVersionId, versionNumber: 1,
+            definition: { name: "Earlier journey", steps: [{ action: "project-viewed", projectIds: [contentId], publicRouteIds: [routeId] }] },
+            createdAt: "2026-10-01T10:00:00Z" },
+          { versionId: activeVersionId, versionNumber: 2,
+            definition: { name: "Current journey", steps: [{ action: "project-viewed", projectIds: [contentId], publicRouteIds: [routeId] }] },
+            createdAt: "2026-10-02T10:00:00Z" },
+        ],
+        activationHistory: [
+          { versionId: firstVersionId, activatedAt: "2026-10-01T11:00:00Z" },
+          { versionId: activeVersionId, activatedAt: "2026-10-02T11:00:00Z" },
+        ],
+      },
+      reports: [
+        { goalVersionId: activeVersionId, periodStart: "2026-10-01T00:00:00Z", periodEnd: "2026-10-02T00:00:00Z", sampleState: "suppressed", aggregateCount: 7 },
+        { goalVersionId: activeVersionId, periodStart: "2026-10-02T00:00:00Z", periodEnd: "2026-10-03T00:00:00Z", sampleState: "sufficient", aggregateCount: 12 },
+      ],
+  };
+  const scopeOrder = ["portfolio-content", "analytics-reports"] as const;
+  const scopes = scopeOrder.filter((scope) => options.scopes.includes(scope));
+  if (scopes.length === 0) throw new Error("REFERENCE_FIXTURE_SCOPE_REQUIRED");
+  const scopeValues = new Map<string, Array<Record<string, unknown>>>([
+    ["portfolio-content", contentValues], ["analytics-reports", [analyticsValue]],
+  ]);
+  const records = new Map(scopes.map((scope) => [scope, new TextEncoder().encode(
+    `${scopeValues.get(scope)!.map((value) => JSON.stringify({ scope, value })).join("\n")}\n`)]));
+  const entries = scopes.map((scope) => ({ path: `records/${scope}.ndjson`, scope, mediaType: "application/x-ndjson",
+    recordSchema: `urn:shipwithali:owner-export-schema:${scope}:1.1`, schemaPath: `schemas/${scope}.schema.json`, schemaVersion: "1.1",
+    digest: createHash("sha256").update(records.get(scope)!).digest("hex"), recordCount: scopeValues.get(scope)!.length }));
+  const dependencies = [
+    ...(scopes.includes("portfolio-content") ? [{ sourceScope: "portfolio-content", sourceId: contentId,
+      targetScope: "portfolio-content", targetId: relatedProjectId, disposition: "included" }] : []),
+    ...(scopes.includes("analytics-reports") ? [contentId, routeId].map((targetId) => ({
+      sourceScope: "analytics-reports", sourceId: goalId, targetScope: "portfolio-content", targetId,
+      disposition: scopes.includes("portfolio-content") ? "included" : "omitted",
+      ...(!scopes.includes("portfolio-content") ? { reason: "scope-not-selected" } : {}),
+    })) : []),
+  ];
+  const manifestSchema = new Uint8Array(readFileSync("schemas/owner-export/v1.1/manifest.schema.json"));
+  const schemaBytes = new Map<string, Uint8Array>([["schemas/manifest.schema.json", manifestSchema]]);
+  for (const scope of scopes) schemaBytes.set(`schemas/${scope}.schema.json`,
+    new Uint8Array(readFileSync(`schemas/owner-export/v1.1/${scope}.schema.json`)));
+  const schemas = [
+    { kind: "manifest", path: "schemas/manifest.schema.json", schemaUri: "urn:shipwithali:owner-export-schema:manifest:1.1", schemaVersion: "1.1",
+      digest: createHash("sha256").update(manifestSchema).digest("hex") },
+    ...scopes.map((scope) => ({ kind: "record", scope, path: `schemas/${scope}.schema.json`,
+      schemaUri: `urn:shipwithali:owner-export-schema:${scope}:1.1`, schemaVersion: "1.1",
+      digest: createHash("sha256").update(schemaBytes.get(`schemas/${scope}.schema.json`)!).digest("hex") })),
+  ];
+  const manifest: Record<string, unknown> = {
+    packageFormat: "shipwithali-owner-export", schemaVersion: options.manifestVersion,
+    exportId: "0196a1b2-7c3d-7e11-9f22-000000000917",
+    snapshot: { snapshotId: "0196a1b2-7c3d-7e11-9f22-000000000918", capturedAt: "2026-10-03T00:00:00Z", consistency: "transactional" },
+    createdAt: "2026-10-03T00:00:00Z", algorithm: "sha-256", digest: "",
+    requiredFeatures: ["asset-integrity-v1", "dependency-coverage-v1", "record-integrity-v1", "schema-integrity-v1", "snapshot-identity-v1"],
+    includedScopes: scopes, publicEventDataCoverage: { mode: "excluded" }, dependencies,
+    exclusions: ["raw-public-event-data", "functional-visitor-identities", "measurement-visitor-identities", "sessions", "credentials", "lab-entries"],
+    entries, schemas, assets: [],
+    ...(options.manifestVersion === "1.2" ? { extensions: { configurationSnapshot: { aggregateVersion: null, availableLocales: [],
+      capabilities: { currentCvAvailable: false, externalLinksAvailable: false, globalProjectCtaAvailable: false } } } } : {}),
+  };
+  manifest["digest"] = ownerExportManifestDigest(manifest);
+  const archiveEntries = new Map<string, Uint8Array>([["manifest.json", new TextEncoder().encode(JSON.stringify(manifest))], ...schemaBytes]);
+  for (const scope of scopes) archiveEntries.set(`records/${scope}.ndjson`, records.get(scope)!);
+  return { archive: await repack(archiveEntries), contentId, relatedProjectId, routeId, revisionId, goalId, firstVersionId, activeVersionId };
+}
+
 describe("Issue #250 independent reference importer", () => {
   it("independently parses and reconstructs every selected scope, history, dependency and byte reference", async () => {
     const archive = await fullArchive();
@@ -269,8 +366,13 @@ describe("Issue #250 independent reference importer", () => {
     expect(projections.get(`content-item:${fixtureIds.publishedProject}`)).toMatchObject({
       lifecycle: "published", publicLocales: ["en"], publiclyDiscoverable: true,
     });
+    const strictContent = projections.get(`content-item:${fixtureIds.hiddenProject}`);
+    expect(strictContent).toMatchObject({ lifecycleHistoryAvailable: true, relationshipHistoryAvailable: true,
+      lifecycleHistory: expect.arrayContaining([expect.objectContaining({ lifecycle: "hidden", sequence: 2 })]),
+      relationshipHistory: [expect.objectContaining({ relatedProjectId: fixtureIds.draftProject, sequence: 1 })] });
     expect(projections.get(`content-relationship:${fixtureIds.hiddenProject}:${fixtureIds.draftProject}`)).toMatchObject({
-      contentId: fixtureIds.hiddenProject, relatedContentId: fixtureIds.draftProject, selected: true,
+      contentId: fixtureIds.hiddenProject, relatedContentId: fixtureIds.draftProject, selected: true, historyAvailable: true,
+      history: [expect.objectContaining({ relatedProjectId: fixtureIds.draftProject, sequence: 1 })],
     });
     expect(projections.get(`content-taxonomy-assignment:${fixtureIds.hiddenProject}:${fixtureIds.taxonomy}:${fixtureIds.activeValue}`))
       .toMatchObject({ selectedTaxonomy: true, currentMeaningId: fixtureIds.activeValue });
@@ -701,7 +803,11 @@ describe("Issue #250 independent reference importer", () => {
     expect(legacyContent).toMatchObject({ lifecycle: "published", publicLocales: ["ar", "en"],
       publications: null, publicationHistory: null, publicationHistoryAvailable: false,
       publicationInterpretation: "legacy-current-flags-only", firstPublishedAt: null, discoveryOrderAvailable: false,
-      routeReservationHistoryAvailable: false });
+      routeReservationHistoryAvailable: false, lifecycleHistoryAvailable: false, relationshipHistoryAvailable: false });
+    expect(Object.hasOwn(legacyContent!, "projectStatus")).toBe(false);
+    expect(Object.hasOwn(legacyContent!, "featured")).toBe(false);
+    expect(Object.hasOwn(legacyContent!, "lifecycleHistory")).toBe(false);
+    expect(Object.hasOwn(legacyContent!, "relationshipHistory")).toBe(false);
     expect(legacyContent?.["revisions"]).toEqual([
       expect.objectContaining({ revisionId: legacy.englishRevisionId, locale: "en", reviewed: true, currentlyPublished: true }),
       expect.objectContaining({ revisionId: legacy.arabicRevisionId, locale: "ar", reviewed: true, currentlyPublished: true }),
@@ -741,6 +847,97 @@ describe("Issue #250 independent reference importer", () => {
       namespace: "ref_3333333333333333" })).rejects.toMatchObject({ code: "REFERENCE_IMPORT_MODEL_REVISION_IDENTITY_INVALID" });
     expect(invalidCalls).toEqual([]);
     expect(invalidWrites).toEqual([]);
+  });
+
+  it("imports schema 1.1 Content and Analytics records with legacy history semantics in manifest 1.1 and 1.2", async () => {
+    let fixtureNumber = 0;
+    const scopeSelections: Array<Array<"portfolio-content" | "analytics-reports">> = [
+      ["portfolio-content", "analytics-reports"], ["portfolio-content"], ["analytics-reports"],
+    ];
+    for (const manifestVersion of ["1.1", "1.2"] as const) {
+      for (const contentFacts of ["omitted", "explicit"] as const) for (const scopes of scopeSelections) {
+        const fixture = await wrappedLegacyArchive({ manifestVersion, scopes, contentFacts });
+        const checked = validateOwnerExportZip(fixture.archive);
+        expect(checked.manifest["schemaVersion"]).toBe(manifestVersion);
+        expect(checked.includedScopes).toEqual(scopes);
+        expect(checked.manifest["entries"]).toEqual(expect.arrayContaining(scopes.map((scope) =>
+          expect.objectContaining({ scope, schemaVersion: "1.1", recordSchema: `urn:shipwithali:owner-export-schema:${scope}:1.1` }))));
+        const declaredDependencies = checked.manifest["dependencies"] as Array<Record<string, unknown>>;
+        if (scopes.includes("portfolio-content")) expect(declaredDependencies).toContainEqual(expect.objectContaining({
+          sourceScope: "portfolio-content", sourceId: fixture.contentId, targetScope: "portfolio-content",
+          targetId: fixture.relatedProjectId, disposition: "included",
+        }));
+
+        const { database, calls } = referenceDatabase();
+        const namespace = `ref_${(++fixtureNumber).toString(16).padStart(16, "0")}`;
+        const imported = await importOwnerExportReference({ archive: fixture.archive, database,
+          objectSink: { async put() {}, async removeObjects() {} }, namespace });
+        expect(imported).toMatchObject({ includedScopes: scopes, totalRecords: (scopes.includes("portfolio-content") ? 2 : 0) +
+          (scopes.includes("analytics-reports") ? 1 : 0),
+          dependencyCount: (scopes.includes("portfolio-content") ? 1 : 0) + (scopes.includes("analytics-reports") ? 2 : 0),
+          externalDependencyCount: scopes.includes("analytics-reports") && !scopes.includes("portfolio-content") ? 2 : 0 });
+        const projections = calls.filter((call) => call.sql.startsWith("insert into") && call.sql.includes(`"${namespace}".reference_model`))
+          .map((call) => ({ kind: call.parameters?.[0], identity: call.parameters?.[1],
+            value: JSON.parse(String(call.parameters?.[2])) as Record<string, unknown> }));
+
+        if (scopes.includes("portfolio-content")) {
+          const content = projections.find((row) => row.kind === "content-item" && row.identity === fixture.contentId)?.value;
+          expect(content).toMatchObject({ contentId: fixture.contentId, lifecycle: "published",
+            publicLocales: ["en"], publiclyDiscoverable: true, publications: null, publicationHistory: null,
+            publicationHistoryAvailable: false, publicationInterpretation: "legacy-current-flags-only",
+            firstPublishedAt: null, discoveryOrderAvailable: false, routeReservationHistoryAvailable: false,
+            lifecycleHistoryAvailable: false, relationshipHistoryAvailable: false, relatedProjectIds: [fixture.relatedProjectId] });
+          if (contentFacts === "omitted") {
+            expect(Object.hasOwn(content!, "projectStatus")).toBe(false);
+            expect(Object.hasOwn(content!, "featured")).toBe(false);
+          } else {
+            expect(content).toMatchObject({ projectStatus: null, featured: false });
+          }
+          expect(Object.hasOwn(content!, "lifecycleHistory")).toBe(false);
+          expect(Object.hasOwn(content!, "relationshipHistory")).toBe(false);
+          expect(content?.["revisions"]).toEqual([expect.objectContaining({ revisionId: fixture.revisionId, locale: "en",
+            sequence: 2, reviewed: true, currentlyPublished: true })]);
+          const relationship = projections.find((row) => row.kind === "content-relationship" &&
+            row.identity === `${fixture.contentId}:${fixture.relatedProjectId}`)?.value;
+          expect(relationship).toMatchObject({ contentId: fixture.contentId, relatedContentId: fixture.relatedProjectId,
+            selected: true, historyAvailable: false });
+          expect(Object.hasOwn(relationship!, "history")).toBe(false);
+          expect(projections.find((row) => row.kind === "content-item" && row.identity === fixture.relatedProjectId)?.value)
+            .toMatchObject({ contentId: fixture.relatedProjectId, contentType: "project", lifecycle: "draft" });
+          const revision = content?.["revisions"] as Array<Record<string, unknown>>;
+          expect(revision.every((item) => !Object.hasOwn(item, "reviewId") && !Object.hasOwn(item, "reviewedAt"))).toBe(true);
+          expect(projections.find((row) => row.kind === "public-route" && row.identity === fixture.routeId)?.value)
+            .toMatchObject({ contentId: fixture.contentId, canonicalSlug: null, canonicalSlugAvailable: false,
+              reservations: null, routeReservationHistoryAvailable: false,
+              redirects: [{ fromSlug: "old-wrapped-project", toSlug: "wrapped-project" }], publiclyResolvable: null });
+        }
+
+        if (scopes.includes("analytics-reports")) {
+          const goal = projections.find((row) => row.kind === "analytics-goal" && row.identity === fixture.goalId)?.value;
+          expect(goal).toMatchObject({ goalId: fixture.goalId, activeVersionId: fixture.activeVersionId,
+            activationSequenceAvailable: false, activationHistory: [
+              { versionId: fixture.firstVersionId, activatedAt: "2026-10-01T11:00:00Z" },
+              { versionId: fixture.activeVersionId, activatedAt: "2026-10-02T11:00:00Z" },
+            ] });
+          const history = goal?.["activationHistory"] as Array<Record<string, unknown>>;
+          expect(history.every((event) => !Object.hasOwn(event, "activationSequence"))).toBe(true);
+          expect(goal?.["reports"]).toEqual([
+            { goalVersionId: fixture.activeVersionId, sampleState: "suppressed", countDisposition: "withheld", withheldCount: true },
+            { goalVersionId: fixture.activeVersionId, sampleState: "sufficient", countDisposition: "included", aggregateCount: 12 },
+          ]);
+          const external = calls.filter((call) => call.sql.startsWith("insert into") && call.sql.includes(`"${namespace}".external_dependencies`))
+            .map((call) => JSON.parse(String(call.parameters?.[1])) as Record<string, unknown>);
+          if (scopes.length === 1) {
+            expect(external).toEqual(expect.arrayContaining([
+              expect.objectContaining({ targetId: fixture.contentId, disposition: "omitted", reason: "scope-not-selected" }),
+              expect.objectContaining({ targetId: fixture.routeId, disposition: "omitted", reason: "scope-not-selected" }),
+            ]));
+            expect(external.every((edge) => !Object.hasOwn(edge, "declarationAvailable"))).toBe(true);
+            expect(projections.some((row) => row.kind === "content-item" || row.kind === "public-route")).toBe(false);
+          }
+        }
+      }
+    }
   });
 
   it("preserves additive minor-version goal semantics", async () => {

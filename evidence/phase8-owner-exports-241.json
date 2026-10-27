@@ -1,9 +1,9 @@
 {
   "ticket": 241,
-  "runId": "ccbf35d4-99fd-487e-9ad6-01261ed5e26b",
-  "startedAt": "2026-10-26T23:39:04.161Z",
-  "sourceRevision": "097fb746375357b7daf37ebe12dfc931eae2445b",
-  "sourceTreeSha256": "6a6d9468147b38e582de0e29f79690354f97108441329f2cf76c15a9b2a8cc8c",
+  "runId": "f7718858-581d-47f3-b474-98aa099a8697",
+  "startedAt": "2026-10-27T00:55:17.349Z",
+  "sourceRevision": "c2efa70aa971376d5837c0683f31a6be4e9b52ef",
+  "sourceTreeSha256": "bee3bd8c6040baf2081ae001bf1299301054df390fc8a6c476b1b9b4ce53a6d6",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -746,11 +746,11 @@
   ],
   "mediaAcceptance": {
     "suites": [
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-content-postgres.test.ts",
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-media-package.test.ts",
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-postgres.test.ts",
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-requests.test.ts",
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/runtime/supabase-media-export-storage.test.ts"
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-content-postgres.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-media-package.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-postgres.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-requests.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/runtime/supabase-media-export-storage.test.ts"
     ],
     "passed": 59,
     "assertions": [
@@ -994,8 +994,8 @@
   },
   "cvAcceptance": {
     "suites": [
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-cv-package.test.ts",
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-cv-postgres.test.ts"
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-cv-package.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-cv-postgres.test.ts"
     ],
     "passed": 15,
     "assertions": [
@@ -1063,8 +1063,8 @@
   },
   "moderationAcceptance": {
     "suites": [
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-moderation-postgres.test.ts",
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-moderation.test.ts"
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-moderation-postgres.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-moderation.test.ts"
     ],
     "passed": 20,
     "assertions": [
@@ -1152,11 +1152,11 @@
   },
   "reconciliationAcceptance": {
     "suites": [
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-assembly.test.ts",
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-migration-postgres.test.ts",
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-moderation-postgres.test.ts",
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-postgres.test.ts",
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-reconciliation.test.ts"
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-assembly.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-migration-postgres.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-moderation-postgres.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-postgres.test.ts",
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-reconciliation.test.ts"
     ],
     "passed": 22,
     "assertions": [
@@ -1252,7 +1252,7 @@
   },
   "cvRegressionAcceptance": {
     "suites": [
-      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/contracts/public-contract.test.ts"
+      "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/contracts/public-contract.test.ts"
     ],
     "passed": 6,
     "assertions": [
@@ -1302,6 +1302,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase8:focus:exports",
   "scope": "Issue #241 Owner export PostgreSQL/Content acceptance plus Issue #243 standalone Media acceptance history, Issue #244 retained CV versions and exact accepted PDF bytes, Issue #245 privacy-safe Feedback snapshots, and Issue #247 expiry/revocation, resumable artifact deletion and all-scope package reconciliation; restricted application and worker roles; disposable native PostgreSQL; independent offline package validation; PR CI exercises production Storage against an isolated private service.",
-  "completedAt": "2026-10-26T23:40:11.101Z",
+  "completedAt": "2026-10-27T00:56:28.951Z",
   "cleanup": true
 }

@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "ticket": 250,
-  "runId": "2c90635f-1551-4d01-bc1f-a2175862db70",
-  "startedAt": "2026-10-26T23:37:26.208Z",
-  "completedAt": "2026-10-26T23:38:22.725Z",
+  "runId": "0b66c8dc-c97c-4940-b2f5-8932be98e945",
+  "startedAt": "2026-10-27T00:53:39.641Z",
+  "completedAt": "2026-10-27T00:54:36.483Z",
   "source": {
-    "revision": "097fb746375357b7daf37ebe12dfc931eae2445b",
-    "branch": "t3/media-accessibility-assertions",
-    "workingTreeSha256": "6a6d9468147b38e582de0e29f79690354f97108441329f2cf76c15a9b2a8cc8c"
+    "revision": "c2efa70aa971376d5837c0683f31a6be4e9b52ef",
+    "branch": "t3/fix-legacy11-omission",
+    "workingTreeSha256": "bee3bd8c6040baf2081ae001bf1299301054df390fc8a6c476b1b9b4ce53a6d6"
   },
   "tools": {
     "node": "v24.21.0",
@@ -273,12 +273,12 @@
   "acceptance": {
     "command": "npm run phase8:focus:reference-import",
     "suiteCount": 8,
-    "passed": 54,
+    "passed": 55,
     "failed": 0,
     "skipped": 0,
     "suites": [
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-analytics-postgres.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-analytics-postgres.test.ts",
         "status": "passed",
         "passed": 1,
         "failed": 0,
@@ -291,7 +291,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-content-postgres.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-content-postgres.test.ts",
         "status": "passed",
         "passed": 1,
         "failed": 0,
@@ -304,7 +304,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-cv-postgres.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-cv-postgres.test.ts",
         "status": "passed",
         "passed": 3,
         "failed": 0,
@@ -325,7 +325,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-moderation-postgres.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-moderation-postgres.test.ts",
         "status": "passed",
         "passed": 12,
         "failed": 0,
@@ -382,7 +382,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-package.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-package.test.ts",
         "status": "passed",
         "passed": 15,
         "failed": 0,
@@ -451,7 +451,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-reference-import-postgres.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-reference-import-postgres.test.ts",
         "status": "passed",
         "passed": 7,
         "failed": 0,
@@ -488,9 +488,9 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-reference-import.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-reference-import.test.ts",
         "status": "passed",
-        "passed": 14,
+        "passed": 15,
         "failed": 0,
         "skipped": 0,
         "tests": [
@@ -547,13 +547,17 @@
             "status": "passed"
           },
           {
+            "title": "Issue #250 independent reference importer imports schema 1.1 Content and Analytics records with legacy history semantics in manifest 1.1 and 1.2",
+            "status": "passed"
+          },
+          {
             "title": "Issue #250 independent reference importer preserves additive minor-version goal semantics",
             "status": "passed"
           }
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-293d8289/tests/phase8/owner-export-taxonomy-postgres.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-taxonomy-postgres.test.ts",
         "status": "passed",
         "passed": 1,
         "failed": 0,
@@ -597,12 +601,12 @@
     "bilingualPublicationPointers": 2,
     "feedbackHistoryRecords": 4,
     "relationship": {
-      "sourceProjectId": "01a17a93-c564-7d36-a699-b2a292a8a728",
-      "relatedHiddenProjectId": "01a17a93-c7c8-7953-a8f0-3111e1075456",
+      "sourceProjectId": "01a17ad9-88ee-7b9f-895c-5164be6e1a2a",
+      "relatedHiddenProjectId": "01a17ad9-8a94-7c2c-bb39-d01729f4c027",
       "historyAndReferenceProjectionAsserted": true
     },
     "draftPrivacy": {
-      "contentId": "01a17a93-c7ab-7a11-ad94-fdf05c5a3556",
+      "contentId": "01a17ad9-8a87-7cc9-bde5-d02ac73d036f",
       "publicLocales": [],
       "excludedFromSourceDiscovery": true,
       "excludedFromImportedDiscovery": true
@@ -610,8 +614,8 @@
     "discoveryTie": {
       "firstPublishedAt": "2026-10-26T10:00:00.000Z",
       "expectedAndObservedContentIds": [
-        "01a17a93-c73b-756b-95b2-8d90b852cab9",
-        "01a17a93-c564-7d36-a699-b2a292a8a728"
+        "01a17ad9-8a37-742a-bbdf-3ba4a2a08652",
+        "01a17ad9-88ee-7b9f-895c-5164be6e1a2a"
       ]
     },
     "assetCount": 14,
@@ -626,11 +630,11 @@
     "partialScenarioCount": 13,
     "absentCvScenarioCount": 1,
     "stagesMs": {
-      "fullAssembly": 141,
-      "exportDownloadValidate": 230,
-      "fullImport": 304,
-      "fullImportCleanup": 154,
-      "partialReconstruction": 7972
+      "fullAssembly": 173,
+      "exportDownloadValidate": 248,
+      "fullImport": 229,
+      "fullImportCleanup": 119,
+      "partialReconstruction": 7958
     },
     "cleanup": true,
     "sourceBackedArchiveBytes": 120556,
@@ -658,8 +662,8 @@
       "two activated goal versions with independently withheld reports"
     ],
     "sourceBackedDiscoveryTieOrder": [
-      "01a17a93-c73b-756b-95b2-8d90b852cab9",
-      "01a17a93-c564-7d36-a699-b2a292a8a728"
+      "01a17ad9-8a37-742a-bbdf-3ba4a2a08652",
+      "01a17ad9-88ee-7b9f-895c-5164be6e1a2a"
     ],
     "sourceBackedDraftPublicLocales": [],
     "barrier": {
