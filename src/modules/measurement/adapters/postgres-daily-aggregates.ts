@@ -98,10 +98,14 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
       const expired = await sql<{ expired: boolean }>`select
         ((${input.utcDay}::date::timestamp at time zone 'UTC') + interval '13 months') <= ${input.asOf}::timestamptz as expired`.execute(db);
       if (expired.rows[0]?.expired) return { processedCount: 0, coverageIncomplete: false };
-      const retention = await sql<{ retention_sealed: boolean; incomplete: boolean }>`select retention_sealed, incomplete
+      const checkpoint = await sql<{ retention_sealed: boolean; incomplete: boolean; newer_than_request: boolean }>`select
+          retention_sealed, incomplete, checkpoint_at > ${input.asOf}::timestamptz as newer_than_request
         from measurement.daily_aggregate_checkpoints where portfolio_id = ${input.portfolioId}::uuid
           and utc_day = ${input.utcDay}::date for update`.execute(db);
-      if (retention.rows[0]?.retention_sealed) return { processedCount: 0, coverageIncomplete: retention.rows[0].incomplete };
+      const existingCheckpoint = checkpoint.rows[0];
+      if (existingCheckpoint?.retention_sealed || existingCheckpoint?.newer_than_request) {
+        return { processedCount: 0, coverageIncomplete: existingCheckpoint.incomplete };
+      }
 
       const actions = await sql<ActionRow>`with day_events as (
         select e.action, e.measurement_subject, e.active_milliseconds

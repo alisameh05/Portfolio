@@ -1,9 +1,9 @@
 {
   "ticket": 248,
-  "runId": "23ab1ea3-0e19-44f1-a379-b63c06fe43f4",
-  "startedAt": "2026-10-27T01:15:31.986Z",
-  "sourceRevision": "097fb746375357b7daf37ebe12dfc931eae2445b",
-  "sourceTreeSha256": "32c4dacb27dfb6c6b0f8f9a1828fc576ed56c716520dfa831a16ab3783994c2d",
+  "runId": "7b22a2ab-e57a-4b3a-a06b-cee55f05f8e1",
+  "startedAt": "2026-10-27T03:51:38.357Z",
+  "sourceRevision": "ee29eab6146cd0bed58770e41e9a06bbd24ad93d",
+  "sourceTreeSha256": "d1a320f0c26b1d8072bd6819ee70229cb31e6251cba60d8f4ae39a422064d00d",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -724,6 +724,62 @@
   },
   "assertions": [
     {
+      "title": "catches up real retention work before admitting dependent daily aggregation",
+      "status": "passed"
+    },
+    {
+      "title": "proves concurrent lease exclusion, expiry recovery, stale-token denial, and idempotent post-effect replay",
+      "status": "passed"
+    },
+    {
+      "title": "recovers a claimed cleanup job that crashes before its first effect",
+      "status": "passed"
+    },
+    {
+      "title": "rejects expired job transitions before reclaim and resumes the existing checkpoint on a new token",
+      "status": "passed"
+    },
+    {
+      "title": "rejects Visitor, Owner, wrong-purpose System, and foreign-Portfolio commands at both module boundaries",
+      "status": "passed"
+    },
+    {
+      "title": "rolls back a failed retention batch and persists a delayed safe retry",
+      "status": "passed"
+    },
+    {
+      "title": "terminalizes the fifth failed claim and a crashed fifth claim with one durable incident",
+      "status": "passed"
+    },
+    {
+      "title": "rejects expired outbox transitions and terminalizes the fifth delivery with one incident",
+      "status": "passed"
+    },
+    {
+      "title": "uses PostgreSQL time for job not-before and preserves retry attempts until available",
+      "status": "passed"
+    },
+    {
+      "title": "uses PostgreSQL time for outbox not-before and preserves retry attempts until available",
+      "status": "passed"
+    },
+    {
+      "title": "re-drives an authorized current-policy dead job once and retains its audit and terminal source",
+      "status": "passed"
+    },
+    {
+      "title": "completes retention before scheduling aggregates and dispatches the existing Owner export service",
+      "status": "passed"
+    },
+    {
+      "title": "does not admit aggregation when a durable retention key is delayed or dead",
+      "status": "passed"
+    },
+    {
+      "title": "rejects an invalid worker identity before queue access",
+      "status": "passed"
+    },
+    {
       "title": "deduplicates concurrent triggers by Portfolio/type/due-period and retains truthful scoped status",
       "status": "passed"
     },
@@ -830,62 +886,6 @@
     {
       "title": "drains a twenty-day outage in contiguous bounded slices without losing the older completion watermark",
       "status": "passed"
-    },
-    {
-      "title": "catches up real retention work before admitting dependent daily aggregation",
-      "status": "passed"
-    },
-    {
-      "title": "proves concurrent lease exclusion, expiry recovery, stale-token denial, and idempotent post-effect replay",
-      "status": "passed"
-    },
-    {
-      "title": "recovers a claimed cleanup job that crashes before its first effect",
-      "status": "passed"
-    },
-    {
-      "title": "rejects expired job transitions before reclaim and resumes the existing checkpoint on a new token",
-      "status": "passed"
-    },
-    {
-      "title": "rejects Visitor, Owner, wrong-purpose System, and foreign-Portfolio commands at both module boundaries",
-      "status": "passed"
-    },
-    {
-      "title": "rolls back a failed retention batch and persists a delayed safe retry",
-      "status": "passed"
-    },
-    {
-      "title": "terminalizes the fifth failed claim and a crashed fifth claim with one durable incident",
-      "status": "passed"
-    },
-    {
-      "title": "rejects expired outbox transitions and terminalizes the fifth delivery with one incident",
-      "status": "passed"
-    },
-    {
-      "title": "uses PostgreSQL time for job not-before and preserves retry attempts until available",
-      "status": "passed"
-    },
-    {
-      "title": "uses PostgreSQL time for outbox not-before and preserves retry attempts until available",
-      "status": "passed"
-    },
-    {
-      "title": "re-drives an authorized current-policy dead job once and retains its audit and terminal source",
-      "status": "passed"
-    },
-    {
-      "title": "completes retention before scheduling aggregates and dispatches the existing Owner export service",
-      "status": "passed"
-    },
-    {
-      "title": "does not admit aggregation when a durable retention key is delayed or dead",
-      "status": "passed"
-    },
-    {
-      "title": "rejects an invalid worker identity before queue access",
-      "status": "passed"
     }
   ],
   "databaseRoles": [
@@ -908,6 +908,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase8:focus:retention-passes",
   "scope": "All repository migrations on disposable native PostgreSQL; durable Portfolio/type/UTC-period deduplication under concurrent enqueue, independent-worker day-rollover retention barriers with held, retry-delayed, and dead keys, serialized Owner admission across a stale status snapshot and concurrent horizon advance, PostgreSQL-current-day horizon/admission fencing with a lagging worker clock, database-clock not-before enforcement for job and outbox retries plus a worker-clock-ahead UTC policy rollover, expired-before-reclaim job/outbox transition fencing with checkpoint resume, bounded contiguous catch-up and historical redrive, successful checkpoint retry-streak reset with fifth-failure/crash terminalization preserved, five existing versioned handlers, ten-job Owner assembly backlog reporting and restart, loopback Storage-adapter effects, truthful completion and coverage status, bounded indexed history queries, in-place upgrade row preservation, and legacy queue compatibility after application rollback.",
-  "endedAt": "2026-10-27T01:16:57.012Z",
+  "endedAt": "2026-10-27T03:52:55.581Z",
   "cleanup": true
 }

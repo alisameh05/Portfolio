@@ -275,6 +275,7 @@ async function checkpointTestArtifact(
 }
 
 async function makeAssemblyJobDue(exportId: StableId<"OwnerExport">): Promise<void> {
+  // Policy fixtures use a fixed future clock; cross the database not-before boundary explicitly before work is due.
   await admin!.query(
     `update operations.jobs
         set available_at = clock_timestamp() - interval '1 second'
@@ -549,6 +550,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       const request = await primary.service.requestOwnerExport(command(["portfolio-configuration"], "phase8-config-export-e2e-001"));
       expect(request.ok).toBe(true);
       if (!request.ok) return;
+      await makeAssemblyJobDue(request.value.exportId);
 
       expect(await assembly.runOwnerExportAssembly({ workerId: "phase8-config-export-worker" }))
         .toMatchObject({ ok: true, value: { claimed: 1, completed: 1, retried: 0, failed: 0 } });
@@ -726,6 +728,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       });
       expect(request.ok).toBe(true);
       if (!request.ok) return;
+      await makeAssemblyJobDue(request.value.exportId);
 
       const assembled = await assembly.runOwnerExportAssembly({ workerId: "phase8-media-export-ready-worker" });
       expect(assembled).toMatchObject({ ok: true, value: { claimed: 1, completed: 1, retried: 0, failed: 0 } });
@@ -817,6 +820,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     });
     expect(requested.ok).toBe(true);
     if (!requested.ok) throw new Error("MIXED_EXPORT_REQUEST_FAILED");
+    await makeAssemblyJobDue(requested.value.exportId);
     expect(await assembly.runOwnerExportAssembly({ workerId: "mixed-export-race" }))
       .toMatchObject({ ok: true, value: { claimed: 1, completed: rejectMedia ? 0 : 1, retried: rejectMedia ? 1 : 0, failed: 0, staleLeases: 0 } });
     const persisted = await store.findOwnerExport({ ...scope, exportId: requested.value.exportId });
@@ -908,6 +912,7 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
       expect(request.ok).toBe(true);
       if (!request.ok) return;
       const exportId = request.value.exportId;
+      await makeAssemblyJobDue(exportId);
 
       expect(await assembly.runOwnerExportAssembly({ workerId: "phase8-config-retry-worker" }))
         .toMatchObject({ ok: true, value: { claimed: 1, retried: 1, completed: 0 } });

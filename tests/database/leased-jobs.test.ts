@@ -35,6 +35,7 @@ function stubOperationsDatabase(queue: QueueEntry[]) {
         const sqlText =
           typeof graphic?.sql === "string" ? graphic.sql :
           rendered.includes("to_regclass('operations.incidents')") ? rendered :
+          rendered.includes("operations.phase7_schedule_progress") ? rendered :
           `stub statement ${calls}`;
         return { sql: sqlText, parameters: [] as never[] };
       },
@@ -42,6 +43,10 @@ function stubOperationsDatabase(queue: QueueEntry[]) {
         // The schema-era probe is infrastructure plumbing, not a scripted step.
         if (compiled.sql.includes("to_regclass('operations.incidents')")) {
           return { rows: [{ bounded: true }] };
+        }
+        // This adapter fixture represents the legacy schema before Phase 7 scheduling fields.
+        if (compiled.sql.includes("operations.phase7_schedule_progress")) {
+          return { rows: [{ enabled: false }] };
         }
         const entry = queue[calls];
         calls += 1;
@@ -100,7 +105,7 @@ describe("leased-job store adapter (#52)", () => {
         validClockStore.transactions.run((context) =>
           validClockStore.jobs.enqueue(context, { ...validJob(JOB_A), availableAt }),
         ),
-      ).resolves.toBeUndefined();
+      ).resolves.toBe(true);
       expect(validClock.queryCount()).toBe(3);
     }
 
@@ -157,6 +162,8 @@ describe("leased-job store adapter (#52)", () => {
             payload_version: 1,
             payload: { target: "public" },
             attempt_count: 0,
+            semantic_scope_id: null,
+            semantic_period: null,
           },
           {
             job_id: JOB_B,
@@ -164,6 +171,8 @@ describe("leased-job store adapter (#52)", () => {
             payload_version: 1,
             payload: { target: "owner" },
             attempt_count: 2,
+            semantic_scope_id: null,
+            semantic_period: null,
           },
         ],
       },
@@ -237,6 +246,8 @@ describe("leased-job store adapter (#52)", () => {
       payload_version: 1,
       payload: { target: "public" },
       attempt_count: 0,
+      semantic_scope_id: null,
+      semantic_period: null,
     });
     const firstStub = stubOperationsDatabase([
       { rows: [] },
@@ -306,7 +317,21 @@ describe("leased-job store adapter (#52)", () => {
     const stub = stubOperationsDatabase([{ rows: [] }, { rows: [] }, { rows: [] }]);
     const store = createPostgresOperationsPersistence(stub.database);
     expect(Object.keys(store.jobs).sort()).toEqual(
-      ["claimDue", "complete", "enqueue", "fail", "getDeadForRedrive", "redriveDead", "release", "scheduleRetry"].sort(),
+      [
+        "admitPhase7DependentWork",
+        "advancePhase7AggregateSchedule",
+        "advancePhase7RetentionSchedule",
+        "claimDue",
+        "complete",
+        "enqueue",
+        "fail",
+        "getDeadForRedrive",
+        "getPhase7ScheduleStatus",
+        "getPhase7ScheduleStatusAtDatabaseCurrentPeriod",
+        "redriveDead",
+        "release",
+        "scheduleRetry",
+      ].sort(),
     );
     const source = JSON.stringify(Object.keys(store.jobs));
     expect(source).not.toMatch(/"schedule"|handle|backoff|alert|dashboard/i);

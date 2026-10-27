@@ -373,11 +373,16 @@ async function phase3OperationsRows(client) {
 // Era-compatible preservation: a later migration may append columns (the Phase 8
 // bounded-retry migration appends outbox_events.dead_at). A Phase 3 row survives
 // when every previously captured value is unchanged and every newly introduced
-// column is null on that row.
-function phase3RowPreserved(expectedRow, actualRow) {
+// column is null or has its reviewed replay default on that row.
+const PHASE3_JOB_REPLAY_DEFAULTS = Object.freeze({ work_incomplete: false });
+
+// The reviewed Phase 7 schedule-key migration adds nullable work_incomplete
+// with DEFAULT false, so that exact additive value appears on existing jobs.
+function phase3RowPreserved(expectedRow, actualRow, allowedReplayDefaults = {}) {
   if (expectedRow === undefined || actualRow === undefined) return false;
   if (Object.entries(expectedRow).some(([key, value]) => JSON.stringify(actualRow[key]) !== JSON.stringify(value))) return false;
-  return Object.keys(actualRow).every((key) => key in expectedRow || actualRow[key] === null);
+  return Object.entries(actualRow).every(([key, value]) => key in expectedRow || value === null ||
+    (Object.hasOwn(allowedReplayDefaults, key) && JSON.stringify(value) === JSON.stringify(allowedReplayDefaults[key])));
 }
 
 async function assertPhase3OperationsPreserved(connectionString, expected) {
@@ -391,7 +396,7 @@ async function assertPhase3OperationsPreserved(connectionString, expected) {
       expected.jobs.length === actual.jobs.length &&
       expected.idempotency.every((entry, index) => phase3RowPreserved(entry.row, actual.idempotency[index]?.row)) &&
       expected.outbox.every((entry, index) => phase3RowPreserved(entry.row, actual.outbox[index]?.row)) &&
-      expected.jobs.every((entry, index) => phase3RowPreserved(entry.row, actual.jobs[index]?.row));
+      expected.jobs.every((entry, index) => phase3RowPreserved(entry.row, actual.jobs[index]?.row, PHASE3_JOB_REPLAY_DEFAULTS));
     if (!preserved) throw new Error("PORTFOLIO_SETTINGS_PHASE3_OPERATIONS_NOT_PRESERVED");
     return actual;
   } finally {
