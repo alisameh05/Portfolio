@@ -1269,14 +1269,32 @@ function expectedDependencies(recordsByScope) {
 function verifyDependencies(manifest, version, recordsByScope) {
   if (version === "1.0") return [];
   const knownIdsByScope = new Map(SCOPES.map((scope) => [scope, new Set()]));
+  const addIdentity = (scope, id) => {
+    if (typeof id === "string" && STABLE_ID_PATTERN.test(id)) knownIdsByScope.get(scope).add(id);
+  };
   for (const [scope, records] of recordsByScope) {
-    const ids = knownIdsByScope.get(scope);
-    const walk = (value) => {
-      if (typeof value === "string" && STABLE_ID_PATTERN.test(value)) ids.add(value);
-      else if (Array.isArray(value)) value.forEach(walk);
-      else if (object(value)) Object.values(value).forEach(walk);
-    };
-    records.forEach(walk);
+    for (const record of records) {
+      const value = record.value;
+      if (scope === "portfolio-content") {
+        addIdentity(scope, value.contentId);
+        addIdentity(scope, object(value.publicRoute) ? value.publicRoute.identity : value.publicRouteIdentity);
+      } else if (scope === "taxonomy") {
+        addIdentity(scope, value.taxonomyId);
+        for (const item of value.values ?? []) addIdentity(scope, item.valueId);
+      } else if (scope === "media-metadata") addIdentity(scope, value.mediaId);
+      else if (scope === "cv-metadata") {
+        const cv = object(value.cv) ? value.cv : value;
+        for (const versionRecord of cv.versions ?? []) addIdentity(scope, versionRecord.versionId);
+      } else if (scope === "moderation-history") addIdentity(scope, value.feedbackId);
+      else if (scope === "analytics-reports") {
+        addIdentity(scope, value.goal?.goalId);
+        for (const versionRecord of value.goal?.versions ?? []) addIdentity(scope, versionRecord.versionId);
+      } else if (scope === "portfolio-configuration") {
+        // The published format uses the profile Media ID as both the source
+        // and target identity for its optional profile-media dependency.
+        addIdentity(scope, value.profile?.mediaAssetId);
+      }
+    }
   }
   const includedScopes = new Set(manifest.includedScopes);
   const seen = new Set();

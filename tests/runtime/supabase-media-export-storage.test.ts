@@ -40,7 +40,7 @@ describe("Supabase private Media export storage", () => {
     const [url, init] = fetcher.mock.calls[0] as [URL, RequestInit];
 
     expect(bytes).toEqual(source);
-    expect(url.pathname).toBe(`/storage/v1/object/media-processed/processed/${input.portfolioId}/${input.mediaId}/${input.objectId}/${sha256}.pdf`);
+    expect(url.pathname).toBe(`/storage/v1/object/authenticated/media-processed/processed/${input.portfolioId}/${input.mediaId}/${input.objectId}/${sha256}.pdf`);
     expect(init?.headers).toMatchObject({ apikey: "private-storage-key", authorization: "Bearer private-storage-key" });
     expect(init?.redirect).toBe("manual");
     expect(init?.method).toBeUndefined();
@@ -57,7 +57,7 @@ describe("Supabase private Media export storage", () => {
     });
     expect(await collect(await storage.readMediaExportObject({ ...input, source: "original", uploadIntentId, mediaType: "image/png" }))).toEqual(source);
     const [url, init] = fetcher.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe(`/storage/v1/object/media-candidates/candidate/${input.portfolioId}/${input.mediaId}/${uploadIntentId}/${input.objectId}`);
+    expect(url.pathname).toBe(`/storage/v1/object/authenticated/media-candidates/candidate/${input.portfolioId}/${input.mediaId}/${uploadIntentId}/${input.objectId}`);
     expect(init?.redirect).toBe("manual");
     expect(url.pathname).not.toContain("sign/");
   });
@@ -77,7 +77,7 @@ describe("Supabase private Media export storage", () => {
     expect(storage).toBeDefined();
     expect(await collect(await storage!.readMediaExportObject({ ...input, source: "original", uploadIntentId, mediaType: "image/png" }))).toEqual(source);
     const [url] = fetcher.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe(`/storage/v1/object/portfolio-media-candidates/candidate/${input.portfolioId}/${input.mediaId}/${uploadIntentId}/${input.objectId}`);
+    expect(url.pathname).toBe(`/storage/v1/object/authenticated/portfolio-media-candidates/candidate/${input.portfolioId}/${input.mediaId}/${uploadIntentId}/${input.objectId}`);
   });
 
   it("cancels the private Storage response when a consumer stops before verification", async () => {
