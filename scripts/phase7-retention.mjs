@@ -19,7 +19,16 @@ const exe = name => bin ? join(bin, name + (process.platform === "win32" ? ".exe
 function run(command, args, env = process.env) {
   const result = spawnSync(command, args, { cwd: root, env, encoding: "utf8", windowsHide: true,
     ...(command === exe("pg_ctl") ? { stdio: "ignore" } : {}), timeout: 180_000 });
-  if (result.error || result.status !== 0) throw new Error(`MEASUREMENT_RETENTION_COMMAND_FAILED:${args[0] ?? command}:${result.status ?? "unavailable"}`);
+  if (result.error || result.status !== 0) {
+    const logArgument = args.indexOf("-l");
+    let serverLog = "";
+    if (command === exe("pg_ctl") && args.includes("start") && logArgument >= 0 && args[logArgument + 1]) {
+      try { serverLog = readFileSync(args[logArgument + 1], "utf8"); } catch { /* startup may fail before log creation */ }
+    }
+    const detail = [result.stderr, result.stdout, result.error?.message, serverLog].filter(Boolean).join("\n")
+      .replace(/postgres(?:ql)?:\/\/\S+/gi, "[database-url]").replace(/\r?\n/g, " | ").slice(-1_000);
+    throw new Error(`MEASUREMENT_RETENTION_COMMAND_FAILED:${args[0] ?? command}:${result.status ?? "unavailable"}:${detail || "unavailable"}`);
+  }
   return result.stdout;
 }
 
@@ -52,9 +61,9 @@ try {
   const postgresVersion = run(exe("postgres"), ["--version"]).trim();
   stage = "cluster";
   run(exe("initdb"), ["-D", data, "--no-locale", "-A", "trust", "-U", "postgres"]);
-  started = true;
   mkdirSync(join(temp, "socket"), { recursive: true });
   run(exe("pg_ctl"), ["-D", data, "-l", join(temp, "server.log"), "-o", `-h 127.0.0.1 -p ${port} -F -k ${join(temp, "socket")}`, "-w", "start"]);
+  started = true;
   await admin.connect();
   connected = true;
   stage = "baseline";

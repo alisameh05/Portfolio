@@ -52,6 +52,13 @@ const RETRY_RECOVERY_POLICIES: ReadonlyArray<readonly [string, string, string, s
   ["job_redrive_audit", "operations_backup_policy_job_redrive_audit", "SELECT", "{shipwithali_backup}"],
 ];
 
+const PHASE7_DUE_WORK_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
+  ["phase7_schedule_progress", "operations_backup_policy_phase7_schedule_progress", "SELECT", "{shipwithali_backup}"],
+  ["phase7_schedule_progress", "phase7_schedule_progress_worker_insert", "INSERT", "{shipwithali_worker}"],
+  ["phase7_schedule_progress", "phase7_schedule_progress_worker_select", "SELECT", "{shipwithali_worker}"],
+  ["phase7_schedule_progress", "phase7_schedule_progress_worker_update", "UPDATE", "{shipwithali_worker}"],
+];
+
 const PORTABILITY_EXPORT_UUID = "018f4f7d-5000-7000-8000-000000000170";
 const CONFIGURATION_EXPORT_PORTFOLIO = "018f4f7d-5000-7000-8000-000000000290";
 const CONFIGURATION_EXPORT_OWNER = "018f4f7d-5000-7000-8000-000000000291";
@@ -247,6 +254,7 @@ const OWNER_EXPORT_JOB_POLICIES: ReadonlyArray<readonly [string, string, string,
  * treated as corruption and fails the matrix in every context.
  */
 let retryRecoverySchema = false;
+let phase7ScheduleSchema = false;
 let portabilityExportSchema = false;
 let feedbackExportSchema = false;
 let configurationExportSchema = false;
@@ -268,6 +276,7 @@ if (DATABASE_URL !== undefined) {
     const bounded = await era.query(
       `select to_regclass('operations.incidents') is not null as has_incidents,
               to_regclass('operations.job_redrive_audit') is not null as has_redrive,
+              to_regclass('operations.phase7_schedule_progress') is not null as has_phase7_schedule_progress,
               exists (
                 select 1 from information_schema.columns
                  where table_schema = 'operations'
@@ -285,6 +294,14 @@ if (DATABASE_URL !== undefined) {
         declared.includes("operations.bounded_retries")
           ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:operations.bounded_retries"
           : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:operations.bounded_retries",
+      );
+    }
+    phase7ScheduleSchema = boundedRow["has_phase7_schedule_progress"] === true;
+    if (declared.includes("operations.phase7_durable_schedules") !== phase7ScheduleSchema) {
+      throw new Error(
+        declared.includes("operations.phase7_durable_schedules")
+          ? "ROLE_MATRIX_DECLARED_CAPABILITY_NOT_INSTALLED:operations.phase7_durable_schedules"
+          : "ROLE_MATRIX_DATABASE_HAS_UNDECLARED_CAPABILITY:operations.phase7_durable_schedules",
       );
     }
     const portability = await era.query(
@@ -884,6 +901,7 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
         ["outbox_events", "outbox_worker_select_policy", "SELECT", "{shipwithali_worker}"],
         ["outbox_events", "outbox_worker_update_policy", "UPDATE", "{shipwithali_worker}"],
         ...(configurationExportSchema ? CONFIGURATION_EXPORT_OUTBOX_POLICY : []),
+        ...(phase7ScheduleSchema ? PHASE7_DUE_WORK_POLICIES : []),
       ]);
     } finally {
       await admin.end();

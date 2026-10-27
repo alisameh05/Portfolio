@@ -1,8 +1,9 @@
 {
   "ticket": 206,
-  "runId": "7cb91d76-ad31-4cd5-b168-758301fc8249",
-  "sourceRevision": "82ab2a4e1d1d2bd27f6b3f9050a7fa81d9eb19c1",
-  "sourceTreeSha256": "9498700e6c0653c10e83c0d62c5bd337bbf7877b7837c613b3d4441706414ac2",
+  "runId": "5e75f030-cac2-4412-a387-7d6c28382ca5",
+  "startedAt": "2026-10-27T01:16:58.569Z",
+  "sourceRevision": "097fb746375357b7daf37ebe12dfc931eae2445b",
+  "sourceTreeSha256": "32c4dacb27dfb6c6b0f8f9a1828fc576ed56c716520dfa831a16ab3783994c2d",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -208,15 +209,85 @@
     {
       "name": "20261018172500_bound_job_retries_and_incidents.sql",
       "sha256": "c63d813d82f4fab902fcfbfde78c667b95618b450e438f58d88aad103fe78b1e"
+    },
+    {
+      "name": "20261023090000_reserve_owner_export_requests.sql",
+      "sha256": "43d9996f1d8c59c663c5c81842631248001ed8a6b551652e5a43acd22d6badd4"
+    },
+    {
+      "name": "20261023100000_build_configuration_owner_exports.sql",
+      "sha256": "3b2525935b8e8e1c83c64d1fe28ca0af60f6534cde53627bcb012059ce992966"
+    },
+    {
+      "name": "20261024120000_read_content_for_owner_exports.sql",
+      "sha256": "51ae23020903a72a2a6d7db96b3629dc4ffcb27a9658addc8cc0696a3f32d27e"
+    },
+    {
+      "name": "20261024130000_read_taxonomy_for_owner_exports.sql",
+      "sha256": "86512866f93801d15d962d8b514214941f3ce20cc22cdf7df0cb72fd0112300e"
+    },
+    {
+      "name": "20261024140000_read_media_for_owner_exports.sql",
+      "sha256": "0445745ac90122a3df27d53cb92e66975fe145eed4390ba6e8d30ce82a2a302f"
+    },
+    {
+      "name": "20261024233915_owner_cv_export_read_access.sql",
+      "sha256": "6ef6a318730547c3cf7315126f04dc769f5cc1628af889ad1c70f67467ecaab3"
+    },
+    {
+      "name": "20261025090000_read_feedback_for_owner_exports.sql",
+      "sha256": "d23dea8422800de3b2286a3c354eed68fad572fa5e4dcacb4f6a26a5259e5bdb"
+    },
+    {
+      "name": "20261025190828_retain_moderation_export_artifact_cleanup.sql",
+      "sha256": "ab521d5e0d6832f57eedddffd268e49541f99e1cb67aac7355921a5cc8125fe5"
+    },
+    {
+      "name": "20261025200000_read_measurement_for_owner_exports.sql",
+      "sha256": "e0ddaae3563cb85ee63e83bffdd7bd80d05d0d454ea217ea78087613a0693021"
+    },
+    {
+      "name": "20261026011341_restrict_analytics_export_deletion.sql",
+      "sha256": "2f6c6fce8f330941409c734e0b1d12cae0b71a07f8217cdf5f8b6b39488db2bb"
+    },
+    {
+      "name": "20261026100000_reconcile_all_owner_export_artifacts.sql",
+      "sha256": "28ea11c784b188977f57514dd874dcf877dbf307d0a4020857c078f18cfc06f9"
+    },
+    {
+      "name": "20261026164603_phase7_durable_policy_schedule_keys.sql",
+      "sha256": "cdd65060a1363d35f93f76c289950e69b26ebb04f718f12fe0cf3563f75668ab"
     }
   ],
   "tools": {
     "node": "24.21.0",
     "npm": "11.19.0"
   },
+  "acceptanceInventory": {
+    "suiteFiles": [
+      "tests/phase7/due-work.test.ts",
+      "tests/phase7/due-work-postgres.test.ts"
+    ],
+    "assertionTitles": [
+      "completes retention before scheduling aggregates and dispatches the existing Owner export service",
+      "does not admit aggregation when a durable retention key is delayed or dead",
+      "rejects an invalid worker identity before queue access",
+      "catches up real retention work before admitting dependent daily aggregation",
+      "proves concurrent lease exclusion, expiry recovery, stale-token denial, and idempotent post-effect replay",
+      "recovers a claimed cleanup job that crashes before its first effect",
+      "rejects expired job transitions before reclaim and resumes the existing checkpoint on a new token",
+      "rejects Visitor, Owner, wrong-purpose System, and foreign-Portfolio commands at both module boundaries",
+      "rolls back a failed retention batch and persists a delayed safe retry",
+      "terminalizes the fifth failed claim and a crashed fifth claim with one durable incident",
+      "rejects expired outbox transitions and terminalizes the fifth delivery with one incident",
+      "uses PostgreSQL time for job not-before and preserves retry attempts until available",
+      "uses PostgreSQL time for outbox not-before and preserves retry attempts until available",
+      "re-drives an authorized current-policy dead job once and retains its audit and terminal source"
+    ]
+  },
   "required": {
     "success": true,
-    "passed": 11,
+    "passed": 14,
     "failed": 0,
     "skipped": 0,
     "todo": 0,
@@ -224,7 +295,7 @@
   },
   "assertions": [
     {
-      "title": "enqueues and executes real retention and daily aggregation jobs with retention-first incompleteness",
+      "title": "catches up real retention work before admitting dependent daily aggregation",
       "status": "passed"
     },
     {
@@ -233,6 +304,10 @@
     },
     {
       "title": "recovers a claimed cleanup job that crashes before its first effect",
+      "status": "passed"
+    },
+    {
+      "title": "rejects expired job transitions before reclaim and resumes the existing checkpoint on a new token",
       "status": "passed"
     },
     {
@@ -248,7 +323,15 @@
       "status": "passed"
     },
     {
-      "title": "fences outbox retries and terminalizes the fifth delivery with one incident",
+      "title": "rejects expired outbox transitions and terminalizes the fifth delivery with one incident",
+      "status": "passed"
+    },
+    {
+      "title": "uses PostgreSQL time for job not-before and preserves retry attempts until available",
+      "status": "passed"
+    },
+    {
+      "title": "uses PostgreSQL time for outbox not-before and preserves retry attempts until available",
       "status": "passed"
     },
     {
@@ -256,11 +339,11 @@
       "status": "passed"
     },
     {
-      "title": "runs retention before rebuilding the retained UTC horizon through module commands",
+      "title": "completes retention before scheduling aggregates and dispatches the existing Owner export service",
       "status": "passed"
     },
     {
-      "title": "stores only a fixed safe error code and stops before aggregation after a failed owned command",
+      "title": "does not admit aggregation when a durable retention key is delayed or dead",
       "status": "passed"
     },
     {
@@ -286,6 +369,7 @@
     "T19-09"
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase7:focus:jobs",
-  "scope": "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, bounded five-attempt retry policy with seeded vectors, database-time availability and lease fences, stale-token denial, retry/dead-letter incident atomicity, final-attempt crash recovery, and idempotent post-effect replay.",
+  "scope": "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, bounded five-attempt retry policy with seeded vectors, database-clock-only not-before eligibility and lease-expiry fences including rejection before reclaim, stale-token denial, retry/dead-letter incident atomicity, final-attempt crash recovery, and idempotent post-effect replay.",
+  "endedAt": "2026-10-27T01:17:29.265Z",
   "cleanup": true
 }

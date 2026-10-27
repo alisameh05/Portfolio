@@ -53,10 +53,11 @@ export function createDailyAggregateWorkService(deps: DailyAggregateWorkDependen
     async aggregateDay(command) {
       if (!isValidWorkCommand(command, deps.portfolioId)) return invalid("DAILY_AGGREGATE_COMMAND_INVALID");
       try {
-        const count = await deps.transactions.run(transaction => deps.repository.rebuildDay({
+        const rebuilt = await deps.transactions.run(transaction => deps.repository.rebuildDay({
           portfolioId: deps.portfolioId, utcDay: command.utcDay, asOf: command.now,
         }, transaction));
-        return { ok: true, value: { processedCount: count, nextCursor: null, incomplete: false } };
+        return { ok: true, value: { processedCount: rebuilt.processedCount, nextCursor: null,
+          incomplete: rebuilt.coverageIncomplete, coverageIncomplete: rebuilt.coverageIncomplete } };
       } catch {
         return unavailable();
       }

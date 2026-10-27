@@ -28,7 +28,7 @@ function goalRow(observedSubjects: number): DailyAggregateReportRecord {
 
 function harness(rows: readonly DailyAggregateReportRecord[] = [], incomplete = false) {
   const repository: DailyAggregateRepositoryPort = {
-    rebuildDay: vi.fn(async () => 2),
+    rebuildDay: vi.fn(async () => ({ processedCount: 2, coverageIncomplete: false })),
     readReport: vi.fn(async () => ({ rows, asOf: now, incomplete })),
   };
   const transactions: Pick<TransactionRunner, "run"> = { run: async <T>(callback: (tx: TransactionContext) => Promise<T | TransactionRollback<T>> | T | TransactionRollback<T>) => {
@@ -57,7 +57,8 @@ describe("daily aggregates and safe Owner reporting", () => {
   it("replaces one UTC day through a bounded worker command and rejects other purposes or old data", async () => {
     const { repository, transactions } = harness();
     const worker = createDailyAggregateWorkService({ portfolioId, transactions, repository });
-    expect(await worker.aggregateDay(workCommand())).toEqual({ ok: true, value: { processedCount: 2, nextCursor: null, incomplete: false } });
+    expect(await worker.aggregateDay(workCommand())).toEqual({ ok: true, value: { processedCount: 2, nextCursor: null,
+      incomplete: false, coverageIncomplete: false } });
     expect(repository.rebuildDay).toHaveBeenCalledWith({ portfolioId, utcDay: "2026-10-14", asOf: now }, expect.anything());
     expect(await worker.aggregateDay(workCommand({ actor: { kind: "system", jobId, purpose: "measurement.retention" } })))
       .toMatchObject({ ok: false, error: { kind: "validation", code: "DAILY_AGGREGATE_COMMAND_INVALID" } });

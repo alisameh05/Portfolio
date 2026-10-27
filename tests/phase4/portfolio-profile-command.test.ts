@@ -47,9 +47,15 @@ function operationsFake() {
       scheduleRetry: async () => false,
     },
     jobs: {
-      enqueue: async () => undefined, claimDue: async () => [], complete: async () => false,
+      enqueue: async () => true, claimDue: async () => [], complete: async () => false,
       fail: async () => false, scheduleRetry: async () => false, getDeadForRedrive: async () => null,
-      redriveDead: async () => null, release: async () => false,
+      getPhase7ScheduleStatus: async () => ({ jobs: [], oldestOverduePeriod: null, oldestUnfinishedPeriod: null,
+        oldestCoverageIncompletePeriod: null, failedCount: 0, firstPolicyPeriod: "2026-01-01", requiredThroughPeriod: "2026-01-01",
+        retentionScheduledThrough: "2025-12-31", retentionCompleteThrough: "2025-12-31", aggregateScheduledThrough: "2025-12-31",
+        lastCompletePolicyPeriod: null, phase: "retention" }),
+      getPhase7ScheduleStatusAtDatabaseCurrentPeriod: async input => operations.jobs.getPhase7ScheduleStatus(input),
+      advancePhase7RetentionSchedule: async () => false, advancePhase7AggregateSchedule: async () => false,
+      redriveDead: async () => null, release: async () => false, admitPhase7DependentWork: async () => false,
     },
   };
   return { operations, events, get executions() { return executions; } };

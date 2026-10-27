@@ -80,6 +80,8 @@ export interface OwnerExportAssemblyDependencies {
 }
 
 export interface OwnerExportAssemblyRunResult {
+  /** True when the fixed claim batch filled; additional queued exports may remain. */
+  readonly incompleteBacklog?: boolean;
   readonly cleanup?: { readonly scanned: number; readonly deleted: number; readonly pending: number; readonly incomplete: boolean };
   readonly claimed: number;
   readonly completed: number;
@@ -386,7 +388,8 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
           else if (result === "failed") counts.failed += 1;
           else counts.staleLeases += 1;
         }
-        return ok({ ...counts, ...(cleanup === undefined ? {} : { cleanup }) });
+        return ok({ ...counts, incompleteBacklog: jobs.length === CLAIM_LIMIT,
+          ...(cleanup === undefined ? {} : { cleanup }) });
       } catch {
         return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_ASSEMBLY_UNAVAILABLE" });
       }

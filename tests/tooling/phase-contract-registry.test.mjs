@@ -13,6 +13,7 @@ import {
   validateTransformationShape,
   PHASE_DATABASE_CHECKPOINTS,
   PHASE5_MIGRATION_COMPATIBILITY,
+  PHASE_DECLARED_ADDITIVE_MIGRATIONS,
 } from "../../scripts/phase-contract-registry.mjs";
 import { assertPhase3OperationsContractPreserved } from "../../scripts/phase4-migration-integrity.mjs";
 
@@ -159,6 +160,46 @@ test("the configuration export migration admits only its source-bound outbox pol
   }, { transformations: [] }), /PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_MISSING/u);
 });
 
+test("the Phase 7 schedule migration binds exact checks, indexes, defaults, and PostgreSQL engine variants", () => {
+  const migration = PHASE_DECLARED_ADDITIVE_MIGRATIONS.find(row =>
+    row.migration === "20261026164603_phase7_durable_policy_schedule_keys.sql");
+  assert.ok(migration);
+  assert.ok(migration.operationsAdditions.some(row => row.identity === "operations.jobs.jobs_semantic_schedule_pair_check" &&
+    typeof row.expected.definition === "string"));
+  assert.ok(migration.operationsAdditions.some(row => row.identity === "operations.jobs.jobs_policy_period_status_idx" &&
+    row.expected.definition.includes("INCLUDE (status, work_incomplete)")));
+  assert.ok(migration.operationsAdditions.some(row => row.identity === "operations.jobs.work_incomplete" &&
+    row.expected.default === "false"));
+  assert.equal(migration.operationsAdditionsByEngine["17"].length, 0);
+  assert.equal(migration.operationsAdditionsByEngine["18"].length, 10);
+
+  const blank = major => ({ postgresMajor: major, migrationLedger: [], schemas: [], objects: [], columns: [], constraints: [],
+    policies: [], grants: [], defaultPrivileges: [], indexes: [], functions: [], triggers: [], types: [] });
+  for (const postgresMajor of [17, 18]) {
+    const phase3 = blank(postgresMajor);
+    const upgraded = structuredClone(phase3);
+    upgraded.migrationLedger = [{ version: "20261026164603", name: "phase7_durable_policy_schedule_keys" }];
+    const additions = [...migration.operationsAdditions,
+      ...(migration.operationsAdditionsByEngine[String(postgresMajor)] ?? [])];
+    for (const addition of additions) upgraded[addition.category].push(structuredClone(addition.expected));
+    assert.doesNotThrow(() => assertPhase3OperationsContractPreserved(phase3, upgraded, { transformations: [] }));
+    if (postgresMajor !== 18) continue;
+
+    const alteredCheck = structuredClone(upgraded);
+    alteredCheck.constraints.find(row => row.name === "jobs_semantic_schedule_pair_check").definition += " OR true";
+    assert.throws(() => assertPhase3OperationsContractPreserved(phase3, alteredCheck, { transformations: [] }),
+      /PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_ALTERED/u);
+    const alteredIndex = structuredClone(upgraded);
+    alteredIndex.indexes.find(row => row.name === "jobs_policy_period_status_idx").definition += " WHERE true";
+    assert.throws(() => assertPhase3OperationsContractPreserved(phase3, alteredIndex, { transformations: [] }),
+      /PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_ALTERED/u);
+    const alteredDefault = structuredClone(upgraded);
+    alteredDefault.columns.find(row => row.name === "work_incomplete").default = "true";
+    assert.throws(() => assertPhase3OperationsContractPreserved(phase3, alteredDefault, { transformations: [] }),
+      /PHASE3_OPERATIONS_CONTRACT_DECLARED_ADDITION_ALTERED/u);
+  }
+});
+
 test("canonical operations expectations bind complete row operations to reviewed migrations", () => {
   const boundary = composeOperationsBoundary(undefined, 18);
   assert.equal(boundary.operations.length, 99);
@@ -172,7 +213,7 @@ test("canonical operations expectations bind complete row operations to reviewed
 });
 
 test("capabilities are declared per checkpoint, never learned from a database", () => {
-  assert.deepEqual(declaredCapabilities().toSorted(), ["measurement.events", "operations.bounded_retries", "portability.analytics_export", "portability.configuration_export", "portability.content_export", "portability.cv_export", "portability.feedback_export", "portability.media_export", "portability.owner_export_requests", "portability.taxonomy_export"]);
+  assert.deepEqual(declaredCapabilities().toSorted(), ["measurement.events", "operations.bounded_retries", "operations.phase7_durable_schedules", "portability.analytics_export", "portability.configuration_export", "portability.content_export", "portability.cv_export", "portability.feedback_export", "portability.media_export", "portability.owner_export_requests", "portability.taxonomy_export"]);
   assert.deepEqual(capabilitiesForMigrations(
     ["20261023100000_build_configuration_owner_exports.sql"],
     [],

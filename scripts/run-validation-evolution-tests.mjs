@@ -50,6 +50,7 @@ export const REQUIRED_REGRESSION_TESTS = Object.freeze([
   "workflow mutations cannot omit triggers, suites, checks, or failures",
   "workflow checker rejects invalid YAML and missing regression job",
   "regression TAP rejects removed, skipped, cancelled, or failed constituents",
+  "the Phase 7 schedule migration binds exact checks, indexes, defaults, and PostgreSQL engine variants",
   "structured failures sanitize metadata, paths, causes, and serialized output",
   "combined cleanup failures retain the primary cause and every cleanup cause safely",
   "the real CLI with no Docker exits before changing evidence",

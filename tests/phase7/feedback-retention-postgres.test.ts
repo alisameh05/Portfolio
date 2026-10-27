@@ -171,7 +171,7 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Feedback retention Pos
     expect(copiesAfterRealSubmission.rows[0]).toEqual({ outbox: 0, receipts: 0, reasons: 0 });
   });
 
-  it("T18-03: approved hidden records are retained and only reappear after current Project publication", async () => {
+  it("T18-03: approved hidden and archived records survive retention and reappear only after publication", async () => {
     const projectId = await seedPublishedProject("hidden");
     const hidden = await seedFeedback({ state: "approved", submittedAt: "2024-01-01T00:00:00.000Z", approvedAt: "2024-01-02T00:00:00.000Z" });
     await admin.query("update interaction.feedback set project_id=$2 where feedback_id=$1", [hidden.feedbackId, projectId]);
@@ -181,6 +181,17 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Feedback retention Pos
     expect((await admin.query("select count(*)::int as count from interaction.feedback where feedback_id=$1", [hidden.feedbackId])).rows[0].count).toBe(1);
     await admin.query("update content.items set lifecycle='published' where content_id=$1", [projectId]);
     expect(await service.getApprovedFeedback({ scope, portfolioId, projectId, locale: "en", correlationId: "restored" })).toMatchObject({ ok: true, value: { items: [{ feedbackId: hidden.feedbackId }] } });
+
+    const archivedProjectId = await seedPublishedProject("archived");
+    const archived = await seedFeedback({ state: "approved", submittedAt: "2024-02-01T00:00:00.000Z", approvedAt: "2024-02-02T00:00:00.000Z" });
+    await admin.query("update interaction.feedback set project_id=$2 where feedback_id=$1", [archived.feedbackId, archivedProjectId]);
+    expect(await service.getApprovedFeedback({ scope, portfolioId, projectId: archivedProjectId, locale: "en", correlationId: "archived" }))
+      .toMatchObject({ ok: false, error: { kind: "not_found" } });
+    await drain("2026-10-15T00:00:00.000Z");
+    expect((await admin.query("select count(*)::int as count from interaction.feedback where feedback_id=$1", [archived.feedbackId])).rows[0].count).toBe(1);
+    await admin.query("update content.items set lifecycle='published' where content_id=$1", [archivedProjectId]);
+    expect(await service.getApprovedFeedback({ scope, portfolioId, projectId: archivedProjectId, locale: "en", correlationId: "archived-restored" }))
+      .toMatchObject({ ok: true, value: { items: [{ feedbackId: archived.feedbackId }] } });
   });
 
   it("T18-06: independent moderation wins a pending-to-approved race with cleanup", async () => {

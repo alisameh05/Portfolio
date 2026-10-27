@@ -20,6 +20,10 @@ import {
 } from "../../src/runtime/lifecycle.js";
 
 function createOperationsFake(): OperationsPersistencePorts {
+  const phase7Status = async () => ({ jobs: [], oldestOverduePeriod: null, oldestUnfinishedPeriod: null,
+    oldestCoverageIncompletePeriod: null, failedCount: 0, firstPolicyPeriod: "2026-01-01", requiredThroughPeriod: "2026-01-01",
+    retentionScheduledThrough: "2025-12-31", retentionCompleteThrough: "2025-12-31", aggregateScheduledThrough: "2025-12-31",
+    lastCompletePolicyPeriod: null, phase: "retention" as const });
   return {
     transactions: createPhase2TransactionFake(),
     idempotency: { execute: async () => ({ kind: "conflict" }) },
@@ -32,14 +36,18 @@ function createOperationsFake(): OperationsPersistencePorts {
       release: async () => false,
     },
     jobs: {
-      enqueue: async () => undefined,
+      enqueue: async () => true,
       claimDue: async () => [],
       complete: async () => false,
       fail: async () => false,
       scheduleRetry: async () => false,
+      getPhase7ScheduleStatus: phase7Status,
+      getPhase7ScheduleStatusAtDatabaseCurrentPeriod: phase7Status,
+      advancePhase7RetentionSchedule: async () => false, advancePhase7AggregateSchedule: async () => false,
       getDeadForRedrive: async () => null,
       redriveDead: async () => null,
       release: async () => false,
+      admitPhase7DependentWork: async () => false,
     },
   };
 }
