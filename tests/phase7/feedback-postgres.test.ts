@@ -222,9 +222,13 @@ describe.runIf(Boolean(url))("real PostgreSQL private Feedback acceptance", () =
     const projectId = await seed(), submitted = await service.submitFeedback(command(projectId)); expect(submitted.ok).toBe(true);
     if (!submitted.ok) throw new Error("submission");
     const mediaId = createStableId("MediaAsset"), eventId = createStableId("Event");
+    const availableAt = (await admin.query("select clock_timestamp() as now")).rows[0]!.now;
     // Same persisted shape as the established Media rejection producer.
-    await admin.query("insert into operations.outbox_events (event_id,event_type,schema_version,aggregate_id,aggregate_version,payload,correlation_id,occurred_at,available_at) values ($1,'media.asset_rejected.v1',1,$2,1,$3,'media-regression',$4,$4)",
-      [eventId, mediaId, { mediaAssetId: mediaId, reason: "OWNER_REJECTED" }, now]);
+    await admin.query("insert into operations.outbox_events (event_id,event_type,schema_version,aggregate_id,aggregate_version,payload,correlation_id,occurred_at,available_at) values ($1,'media.asset_rejected.v1',1,$2,1,$3,'media-regression',$4,$5)",
+      [eventId, mediaId, { mediaAssetId: mediaId, reason: "OWNER_REJECTED" }, now, availableAt]);
+    const feedbackDue = await admin.query("update operations.outbox_events set available_at=$2 where event_type='interaction.feedback_submitted.v1' and aggregate_id::text=$1 and payload->>'feedbackId'=$1",
+      [submitted.value.id, availableAt]);
+    expect(feedbackDue.rowCount).toBe(1);
     const claimed = await createPostgresOperationsPersistence(worker.database).outbox.claimDue({ workerId: "feedback-regression", now, leaseDurationSeconds: 30, limit: 100 });
     expect(claimed).toContainEqual(expect.objectContaining({ eventId, payload: { type: "media.asset_rejected.v1", version: 1, value: { mediaAssetId: mediaId, reason: "OWNER_REJECTED" } } }));
     expect(claimed).toContainEqual(expect.objectContaining({ payload: { type: "interaction.feedback_submitted.v1", version: 1, value: { feedbackId: submitted.value.id, projectId } } }));
