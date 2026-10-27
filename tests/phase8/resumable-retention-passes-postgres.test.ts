@@ -69,6 +69,8 @@ function testConfigurationSettings(portfolioId: StableId<"Portfolio">): Portfoli
 async function startIsolatedOwnerStorage(): Promise<{ readonly server: Server; readonly baseUrl: string; readonly objects: Map<string, Uint8Array>; readonly requests: string[] }> {
   const objects = new Map<string, Uint8Array>();
   const requests: string[] = [];
+  const authenticatedOwnerExportPrefix = "/storage/v1/object/authenticated/owner-exports/";
+  const canonicalOwnerExportPrefix = "/storage/v1/object/owner-exports/";
   const server = createServer(async (request, response) => {
     const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
     requests.push(`${request.method ?? "GET"} ${path}`);
@@ -94,7 +96,14 @@ async function startIsolatedOwnerStorage(): Promise<{ readonly server: Server; r
       response.writeHead(200).end(); return;
     }
     if (request.method === "GET") {
-      const bytes = objects.get(path);
+      if (!path.startsWith(authenticatedOwnerExportPrefix)) {
+        response.writeHead(404, { "content-type": "application/json" }).end('{"code":"NoSuchKey"}'); return;
+      }
+      const namespace = path.slice(authenticatedOwnerExportPrefix.length).split("/");
+      if (namespace.length !== 3 || namespace.some(part => part.length === 0)) {
+        response.writeHead(404, { "content-type": "application/json" }).end('{"code":"NoSuchKey"}'); return;
+      }
+      const bytes = objects.get(`${canonicalOwnerExportPrefix}${namespace.join("/")}`);
       if (bytes === undefined) { response.writeHead(404, { "content-type": "application/json" }).end('{"code":"NoSuchKey"}'); return; }
       response.writeHead(200, { "content-type": "application/vnd.shipwithali.owner-export+zip", "content-length": String(bytes.byteLength) }).end(bytes);
       return;
@@ -607,6 +616,8 @@ describe.runIf(Boolean(WORKER_URL && SECOND_WORKER_URL && ADMIN_URL && APPLICATI
     expect(originalRow).toMatchObject({ status: "ready", candidateArtifactId: expect.any(String) });
     const originalObjectPath = `/storage/v1/object/owner-exports/${scope.portfolioId}/${originalRequest.value.exportId}/${originalRow!.candidateArtifactId}.zip`;
     expect(objectServer.objects.has(originalObjectPath)).toBe(true);
+    expect(objectServer.requests).toContain(
+      `GET /storage/v1/object/authenticated/owner-exports/${scope.portfolioId}/${originalRequest.value.exportId}/${originalRow!.candidateArtifactId}.zip`);
     await admin!.query("update portability.owner_exports set expires_at='2000-01-01T00:00:00Z' where export_id=$1", [originalRequest.value.exportId]);
 
     const queuedRequest = await ownerServices.requestService.requestOwnerExport({ actor, portfolioId: scope.portfolioId,

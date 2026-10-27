@@ -344,7 +344,8 @@ async function startIsolatedObjectStorage(): Promise<{
       return;
     }
     if (request.method === "GET") {
-      const bytes = objects.get(path);
+      const objectPath = path.replace("/storage/v1/object/authenticated/", "/storage/v1/object/");
+      const bytes = objects.get(objectPath);
       if (bytes === undefined) { response.writeHead(404).end(); return; }
       response.writeHead(200, {
         "content-type": "application/vnd.shipwithali.owner-export+zip",
@@ -962,6 +963,106 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     expect(await ownerExportCount()).toBe(exportsBefore);
     expect(await assemblyJobCount()).toBe(jobsBefore);
   });
+
+  it("keeps upload and revocation fenced on a single reserved PostgreSQL connection", async () => {
+    const singlePool = createPostgresRuntimeDatabase(WORKER_URL!, { max: 1, connectionTimeoutMs: 1_000 });
+    const poolOperations = createPostgresOperationsPersistence(singlePool.database, { now: () => now });
+    const store = createPostgresOwnerExportStore(singlePool.database, { outbox: poolOperations.outbox });
+    try {
+      const primary = composeService(application!);
+      const requested = await primary.service.requestOwnerExport(command(["portfolio-content"], "phase8-fence-pool-one-001"));
+      expect(requested.ok).toBe(true);
+      if (!requested.ok) return;
+      const lease = await leaseExportJob(requested.value.exportId);
+      expect(await applyGuardedOwnerExportTransition(store, transitionInput(requested.value.exportId, "requested", "building", 1,
+        advance(), { actingJobId: lease.jobId, leaseToken: lease.leaseToken }))).toEqual({ ok: true, value: "applied" });
+      const { artifactId } = await checkpointTestArtifact(store, requested.value.exportId, lease);
+      const identity = { portfolioId, exportId: requested.value.exportId, artifactId,
+        actingJobId: lease.jobId, leaseToken: lease.leaseToken };
+      await expect(store.uploadCandidate(identity, async () => { throw new Error("synthetic upload callback failure"); }))
+        .rejects.toThrow("synthetic upload callback failure");
+      let uploaded = 0;
+      expect(await store.uploadCandidate(identity, async () => { uploaded += 1; return true; })).toBe(true);
+      expect(uploaded).toBe(1);
+
+      const revoked = await store.revokeOwnerExportArtifact({ exportId: requested.value.exportId, portfolioId, ownerId,
+        stillEligible: async () => false });
+      expect(revoked).toMatchObject({ status: "failed", artifactRevocationCode: "privacy_invalid" });
+      let lateUpload = 0;
+      expect(await store.uploadCandidate(identity, async () => { lateUpload += 1; return true; })).toBe(false);
+      expect(lateUpload).toBe(0);
+    } finally {
+      await singlePool.resource.close();
+    }
+  }, 30_000);
+
+  it("saturates the default five-connection pool with concurrent uploads and revocations without nested checkouts", async () => {
+    const saturatedPool = createPostgresRuntimeDatabase(WORKER_URL!, { connectionTimeoutMs: 1_500 });
+    const poolOperations = createPostgresOperationsPersistence(saturatedPool.database, { now: () => now });
+    const store = createPostgresOwnerExportStore(saturatedPool.database, { outbox: poolOperations.outbox });
+    let release!: () => void;
+    let allEntered!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let entered = 0;
+    let resolveAllEntered!: () => void;
+    const allEnteredPromise = new Promise<void>((resolve) => { resolveAllEntered = resolve; });
+    const arriveAndWait = async () => {
+      entered += 1;
+      if (entered === 5) resolveAllEntered();
+      await gate;
+    };
+    const primary = composeService(application!);
+    const jobs: Array<{ identity: { portfolioId: StableId<"Portfolio">; exportId: StableId<"OwnerExport">;
+      artifactId: StableId<"OwnerExportArtifact">; actingJobId: StableId<"Job">; leaseToken: string } }> = [];
+    try {
+      for (let index = 0; index < 5; index += 1) {
+        const requested = await primary.service.requestOwnerExport(command(["portfolio-content"], `phase8-fence-pool-five-00${index + 1}`));
+        expect(requested.ok).toBe(true);
+        if (!requested.ok) throw new Error("PHASE8_FENCE_POOL_REQUEST_FAILED");
+        const lease = await leaseExportJob(requested.value.exportId);
+        expect(await applyGuardedOwnerExportTransition(store, transitionInput(requested.value.exportId, "requested", "building", 1,
+          advance(), { actingJobId: lease.jobId, leaseToken: lease.leaseToken }))).toEqual({ ok: true, value: "applied" });
+        const { artifactId } = await checkpointTestArtifact(store, requested.value.exportId, lease);
+        jobs.push({ identity: { portfolioId, exportId: requested.value.exportId, artifactId,
+          actingJobId: lease.jobId, leaseToken: lease.leaseToken } });
+      }
+
+      const actions = [
+        store.uploadCandidate(jobs[0]!.identity, async () => { await arriveAndWait(); return true; }),
+        store.uploadCandidate(jobs[1]!.identity, async () => { await arriveAndWait(); throw new Error("synthetic saturated upload failure"); }),
+        store.uploadCandidate(jobs[2]!.identity, async () => { await arriveAndWait(); return true; }),
+        store.revokeOwnerExportArtifact({ exportId: jobs[3]!.identity.exportId, portfolioId, ownerId,
+          stillEligible: async () => { await arriveAndWait(); return false; } }),
+        store.revokeOwnerExportArtifact({ exportId: jobs[4]!.identity.exportId, portfolioId, ownerId,
+          stillEligible: async () => { await arriveAndWait(); throw new Error("synthetic saturated revocation failure"); } }),
+      ];
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      let barrierFailure: unknown;
+      try {
+        await Promise.race([allEnteredPromise, new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("PHASE8_FENCE_POOL_BARRIER_TIMEOUT")), 10_000);
+        })]);
+      } catch (error) { barrierFailure = error; }
+      finally {
+        if (timeout !== undefined) clearTimeout(timeout);
+        release();
+      }
+      const settled = await Promise.allSettled(actions);
+      if (barrierFailure !== undefined) throw barrierFailure;
+      expect(settled.map((item) => item.status)).toEqual(["fulfilled", "rejected", "fulfilled", "fulfilled", "rejected"]);
+      expect(settled[0]).toMatchObject({ status: "fulfilled", value: true });
+      expect(settled[2]).toMatchObject({ status: "fulfilled", value: true });
+      expect(settled[3]).toMatchObject({ status: "fulfilled", value: { status: "failed", artifactRevocationCode: "privacy_invalid" } });
+      // The failed callbacks both rolled back/released their fences and can be retried.
+      expect(await store.uploadCandidate(jobs[1]!.identity, async () => true)).toBe(true);
+      expect(await store.revokeOwnerExportArtifact({ exportId: jobs[4]!.identity.exportId, portfolioId, ownerId,
+        stillEligible: async () => false })).toMatchObject({ status: "failed", artifactRevocationCode: "privacy_invalid" });
+      expect(entered).toBe(5);
+    } finally {
+      release();
+      await saturatedPool.resource.close();
+    }
+  }, 40_000);
 
   it("AC03: commits exact concurrent requests once and replays the original receipt to both", async () => {
     const primary = composeService(application!);

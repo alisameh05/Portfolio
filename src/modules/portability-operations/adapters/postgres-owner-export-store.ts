@@ -42,7 +42,7 @@ import type {
 } from "../application/owner-export-store.js";
 import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportPackageManifest } from "../application/service.js";
 import { checkpointOwnerExportSnapshot, type OwnerExportAssemblySnapshot, type OwnerExportConfigurationSnapshot, type OwnerExportSelectedSnapshot } from "../application/owner-export-package.js";
-import type { TransactionContext } from "../../../runtime/ports.js";
+import type { TransactionContext, TransactionRunner } from "../../../runtime/ports.js";
 import type { OwnerExportArtifactCleanupPort, OwnerExportInvalidationLedgerRecord } from "../application/owner-export-cleanup.js";
 
 export const EXPORT_STATUS_VALUES: readonly ExportStatus[] = [
@@ -478,18 +478,60 @@ export function createPostgresOwnerExportStore(
     });
   }
 
+  async function withArtifactLifecycleFence<T>(
+    exportId: string,
+    action: (fencedTransactions: TransactionRunner) => Promise<T>,
+  ): Promise<T> {
+    return database.connection().execute(async (connection) => {
+      // A session advisory lock fences cleanup against an in-flight Storage
+      // write without keeping a PostgreSQL transaction open during object I/O.
+      // Transactions use the same reserved session, avoiding a second pool
+      // checkout (and deadlock when the supported pool size is one).
+      const fencedTransactions = createPostgresTransactionRunner(connection);
+      const lockSql = sql`select pg_advisory_lock(hashtextextended(${exportId}::text, 0))`;
+      const releaseFence = async (): Promise<boolean> => {
+        try {
+          const release = await sql<{ unlocked: boolean }>`select pg_advisory_unlock(hashtextextended(${exportId}::text, 0)) as unlocked`
+            .execute(connection);
+          if (release.rows[0]?.unlocked === true) return true;
+        } catch { /* use the checked-out session's final lock cleanup below */ }
+        try {
+          await sql`select pg_advisory_unlock_all()`.execute(connection);
+          return true;
+        } catch { return false; }
+      };
+      try { await lockSql.execute(connection); }
+      catch {
+        // A lost lock response is ambiguous: release this session's advisory
+        // locks before it returns to the pool, and surface the infrastructure
+        // failure even when cleanup succeeds.
+        await releaseFence();
+        throw new PostgresInfrastructureError();
+      }
+      let completed = false;
+      let result: T;
+      let failure: unknown;
+      try { result = await action(fencedTransactions); completed = true; }
+      catch (error) { failure = error; }
+      if (!await releaseFence()) throw new PostgresInfrastructureError();
+      if (!completed) throw failure;
+      return result!;
+    });
+  }
+
   const artifacts: OwnerExportArtifactCleanupPort = {
     async uploadCandidate(input, upload) {
-      return transactions.run(async context => {
-        const executor = resolvePostgresTransaction(context);
-        if (!await lockCurrentLease(executor, input)) return false;
-        const locked = await sql`select export_id from portability.owner_exports
-          where export_id = ${input.exportId}::uuid and portfolio_id = ${input.portfolioId}::uuid
-            and candidate_artifact_id = ${input.artifactId}::uuid and status = 'building'
-            and artifact_revoked_at is null for update`.execute(executor);
-        if (locked.rows.length !== 1) return false;
-        // Retain this row lock across the bounded Storage write/verification.
-        // Cleanup cannot acknowledge deletion while an earlier upload is live.
+      return withArtifactLifecycleFence(input.exportId, async (fencedTransactions) => {
+        const authorized = await fencedTransactions.run(async context => {
+          const executor = resolvePostgresTransaction(context);
+          if (!await lockCurrentLease(executor, input)) return false;
+          const locked = await sql`select export_id from portability.owner_exports
+            where export_id = ${input.exportId}::uuid and portfolio_id = ${input.portfolioId}::uuid
+              and candidate_artifact_id = ${input.artifactId}::uuid and status = 'building'
+              and artifact_revoked_at is null for update`.execute(executor);
+          return locked.rows.length === 1;
+        });
+        if (!authorized) return false;
         return upload();
       });
     },
@@ -504,7 +546,7 @@ export function createPostgresOwnerExportStore(
       });
     },
     async revokeOwnerExportArtifact(input) {
-      return transactions.run(async context => {
+      return withArtifactLifecycleFence(input.exportId, (fencedTransactions) => fencedTransactions.run(async context => {
         const executor = resolvePostgresTransaction(context);
         const locked = await sql<ExportRow & { cleanup_now: Date | string }>`select ${EXPORT_COLUMNS}, clock_timestamp() as cleanup_now from portability.owner_exports
           where export_id = ${input.exportId}::uuid and portfolio_id = ${input.portfolioId}::uuid
@@ -541,7 +583,7 @@ export function createPostgresOwnerExportStore(
             ${record.candidateArtifactId}::uuid, ${revokedAt}::timestamptz, ${revocationCode})
           on conflict (export_id) do nothing`.execute(executor);
         return parseRow(updated.rows[0]);
-      });
+      }));
     },
     async markOwnerExportArtifactDeleted(input) {
       await transactions.run(async context => {

@@ -185,7 +185,8 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
     await admin.connect();
     if (storageUrl !== undefined) {
       const url = new URL(storageUrl);
-      if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port !== '56321') throw new Error('PHASE8_STORAGE_NOT_ISOLATED');
+      const expectedPort = process.env["PHASE8_OWNER_EXPORT_STORAGE_PORT"] ?? "56321";
+      if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port !== expectedPort) throw new Error('PHASE8_STORAGE_NOT_ISOLATED');
       const response = await fetch(new URL('/storage/v1/bucket', url), { method: 'POST',
         headers: { apikey: process.env["PHASE8_OWNER_EXPORT_STORAGE_KEY"]!,
           authorization: `Bearer ${process.env["PHASE8_OWNER_EXPORT_STORAGE_KEY"]!}`, 'content-type': 'application/json' },
@@ -513,7 +514,7 @@ describe.runIf(enabled)("Phase 8 #245 real Feedback and Moderation export fixtur
       expect(await workerStore.revokeOwnerExportArtifact({ ...scope, ownerId: createStableId('Owner'),
         stillEligible: async () => false })).toBeNull();
       if (storageUrl !== undefined) {
-        const direct = await fetch(new URL(`/storage/v1/object/owner-exports/${portfolioId}/${scope.exportId}/${checkpoint.candidateArtifactId}.zip`, storageUrl));
+        const direct = await fetch(new URL(`/storage/v1/object/authenticated/owner-exports/${portfolioId}/${scope.exportId}/${checkpoint.candidateArtifactId}.zip`, storageUrl));
         expect(direct.ok).toBe(false);
         await direct.body?.cancel();
       }
