@@ -175,25 +175,29 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement daily aggregatio
     const triggerEvent = await addEvent({ subject, action: "page-viewed", occurredAt: "2026-10-14T12:00:00Z" });
     const goal = await addGoal([subject], [triggerEvent], "page-viewed");
     const operations = createPostgresOperationsPersistence(worker!.database);
-    await operations.jobs.getPhase7ScheduleStatus({ portfolioId, fromPeriod: "2026-10-14", throughPeriod: "2026-10-14" });
+    // A historical aggregate still requires retention through the database's
+    // current day before it may be claimed.
+    const policyPeriod = (await admin!.query<{ day: string }>(
+      "select to_char((clock_timestamp() at time zone 'UTC')::date,'YYYY-MM-DD') as day")).rows[0]!.day;
+    await operations.jobs.getPhase7ScheduleStatus({ portfolioId, fromPeriod: policyPeriod, throughPeriod: policyPeriod });
     const retentionTypes = ["measurement.detail-retention.v1", "measurement.aggregate-retention.v1",
       "measurement.withdrawal-cleanup.v1", "interaction.feedback-retention.v1"] as const;
     for (const type of retentionTypes) {
       const enqueued = await operations.transactions.run(tx => operations.jobs.enqueue(tx, {
-        jobId: id("Job"), availableAt: "2026-10-14T00:00:00.000Z", payload: { type, version: 1, value: {} },
-        semanticSchedule: { portfolioId, period: "2026-10-14" },
+        jobId: id("Job"), availableAt: `${policyPeriod}T00:00:00.000Z`, payload: { type, version: 1, value: {} },
+        semanticSchedule: { portfolioId, period: policyPeriod },
       }));
       expect(enqueued).toBe(true);
     }
     expect(await operations.jobs.advancePhase7RetentionSchedule({ portfolioId,
-      expectedNextPeriod: "2026-10-14", scheduledThroughPeriod: "2026-10-14" })).toBe(true);
+      expectedNextPeriod: policyPeriod, scheduledThroughPeriod: policyPeriod })).toBe(true);
     await admin!.query(`update operations.jobs set status='completed', completed_at=clock_timestamp()
-      where semantic_scope_id=$1 and semantic_period='2026-10-14' and job_type=any($2::text[])`, [portfolioId, retentionTypes]);
-    const ready = await operations.jobs.getPhase7ScheduleStatus({ portfolioId, fromPeriod: "2026-10-14", throughPeriod: "2026-10-14" });
-    expect(ready.retentionCompleteThrough).toBe("2026-10-14");
+      where semantic_scope_id=$1 and semantic_period=$2 and job_type=any($3::text[])`, [portfolioId, policyPeriod, retentionTypes]);
+    const ready = await operations.jobs.getPhase7ScheduleStatus({ portfolioId, fromPeriod: policyPeriod, throughPeriod: policyPeriod });
+    expect(ready.retentionCompleteThrough).toBe(policyPeriod);
     await operations.transactions.run(tx => operations.jobs.enqueue(tx, { jobId, availableAt: now,
       payload: { type: "measurement.daily-aggregate.v1", version: 1, value: { portfolioId, utcDay: "2026-10-14" } },
-      semanticSchedule: { portfolioId, period: "2026-10-14:2026-10-14" } }));
+      semanticSchedule: { portfolioId, period: `${policyPeriod}:2026-10-14` } }));
     const claim = { workerId: "daily-aggregate-proof", now, leaseDurationSeconds: 1, limit: 1 };
     const firstClaim = await operations.jobs.claimDue(claim);
     expect(firstClaim).toHaveLength(1);
