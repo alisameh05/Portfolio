@@ -18,7 +18,8 @@ export function createPhase7DueWorkWorker(input: {
   readonly portfolioId: StableId<"Portfolio">;
   readonly operations: Pick<OperationsPersistencePorts, "transactions" | "jobs">;
   readonly ownerExports: {
-    runOwnerExportAssembly(args: { readonly workerId: string }): Promise<Result<OwnerExportAssemblyRunResult, Rejection>>;
+    runOwnerExportAssembly(args: { readonly workerId: string; readonly maxClaims?: number;
+      readonly shouldStop?: () => boolean }): Promise<Result<OwnerExportAssemblyRunResult, Rejection>>;
   };
   readonly clock?: Clock;
   readonly ids?: StableIdGenerator;
