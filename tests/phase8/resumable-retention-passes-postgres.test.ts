@@ -265,7 +265,8 @@ function makeDueWorkService(db: NonNullable<typeof worker>, scope: StableId<"Por
     execute: (command: MeasurementWorkCommand) => Promise<Result<BoundedWorkResult, Rejection>>) => Promise<Result<BoundedWorkResult, Rejection>>;
   readonly afterRetentionEffect?: () => void;
   readonly onDetailRetention?: () => void;
-  readonly ownerExports?: { runOwnerExportAssembly(input: { readonly workerId: string }): Promise<{
+  readonly ownerExports?: { runOwnerExportAssembly(input: { readonly workerId: string; readonly maxClaims?: number;
+    readonly shouldStop?: () => boolean }): Promise<{
     readonly ok: true; readonly value: { readonly claimed: number; readonly completed: number; readonly retried: number;
       readonly failed: number; readonly staleLeases: number; readonly cleanup?: { readonly scanned: number; readonly deleted: number;
         readonly pending: number; readonly incomplete: boolean } };
@@ -798,6 +799,38 @@ describe.runIf(Boolean(WORKER_URL && SECOND_WORKER_URL && ADMIN_URL && APPLICATI
     await admin!.query(`update operations.jobs set status='available',lease_owner=null,lease_token=null,lease_expires_at=null
       where job_id=$1`, [holeJobId]);
   }, 60_000);
+
+  if (process.env["PHASE7_JOBS_TICKET"] === "249") {
+    it("runs expired Owner artifact cleanup with zero assembly claims and retains queued work", async () => {
+      const scope = { portfolioId: id("Portfolio"), ownerId: id("Owner") };
+      const owner = await makeOwnerExportFixture(scope, rolloverToday, true);
+      if (!owner.expiredObjectPath || !owner.expiredExportId || !owner.queuedExportId) {
+        throw new Error("PHASE8_ZERO_OWNER_CLAIM_FIXTURE_INCOMPLETE");
+      }
+      const operations = createPostgresOperationsPersistence(worker!.database);
+      const service = makeComposedDueWorkService(worker!, scope.portfolioId, () => rolloverToday, owner.services.assembly);
+      const result = await service.runDueWork({ workerId: "phase8-zero-owner-claim-cleanup", maxOwnerExportClaims: 0 });
+      expect(result).toMatchObject({ ok: true, value: { incomplete: true, incompleteOwnerExports: true,
+        ownerExportAssembly: { claimed: 0, completed: 0, retried: 0, failed: 0, staleLeases: 0,
+          incompleteBacklog: true, cleanup: { scanned: 1, deleted: 1, pending: 0, incomplete: false } } } });
+      expect(owner.objectServer.objects.has(owner.expiredObjectPath)).toBe(false);
+      expect(owner.objectServer.requests.some(request => request.startsWith("DELETE "))).toBe(true);
+      expect((await admin!.query(`select status,artifact_revoked_at is not null as revoked,
+        artifact_deleted_at is not null as deleted from portability.owner_exports where export_id=$1`,
+      [owner.expiredExportId])).rows).toEqual([{ status: "expired", revoked: true, deleted: true }]);
+      expect((await admin!.query(`select status,attempt_count,lease_owner,lease_token,lease_expires_at
+        from operations.jobs where job_type='portability.owner-export-assembly.v1' and payload->>'exportId'=$1`,
+      [owner.queuedExportId])).rows).toEqual([{ status: "available", attempt_count: 0,
+        lease_owner: null, lease_token: null, lease_expires_at: null }]);
+      expect((await admin!.query(`select count(*)::integer as count,
+        count(distinct job_type || ':' || semantic_period)::integer as unique_count from operations.jobs
+        where semantic_scope_id=$1 and job_type=any($2::text[])`, [scope.portfolioId, retentionTypes])).rows)
+        .toEqual([{ count: 60, unique_count: 60 }]);
+      expect(await operations.jobs.getPhase7ScheduleStatus({ portfolioId: scope.portfolioId,
+        fromPeriod: testUtcOffset(rolloverTodayPeriod, -14), throughPeriod: rolloverTodayPeriod }))
+        .toMatchObject({ retentionCompleteThrough: rolloverTodayPeriod });
+    }, 90_000);
+  }
 
   it("reopens the retention horizon when PostgreSQL advances beyond the worker clock and holds dependent work until current-day retention completes", async () => {
     const databaseDay = (await admin!.query<{ database_day: string }>(`select to_char((clock_timestamp() at time zone 'UTC')::date,

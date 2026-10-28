@@ -357,38 +357,57 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
   return {
     async runOwnerExportCleanup() {
       if (deps.cleanup === undefined) return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_CLEANUP_UNAVAILABLE" } as const);
-      const result = await deps.cleanup.runOwnerExportCleanup(cleanupCursor === undefined ? {} : { after: cleanupCursor });
+        const result = await deps.cleanup.runOwnerExportCleanup(cleanupCursor === undefined ? {} : { after: cleanupCursor });
       if (result.ok) cleanupCursor = result.value.nextCursor;
       return result;
     },
-    async runOwnerExportAssembly(input: { readonly workerId: string }): Promise<Result<OwnerExportAssemblyRunResult, Rejection>> {
-      if (!/^[A-Za-z0-9._:-]{1,128}$/.test(input.workerId)) {
+    async runOwnerExportAssembly(input: {
+      readonly workerId: string;
+      readonly maxClaims?: number;
+      readonly shouldStop?: () => boolean;
+    }): Promise<Result<OwnerExportAssemblyRunResult, Rejection>> {
+      const maxClaims = input.maxClaims ?? CLAIM_LIMIT;
+      if (!/^[A-Za-z0-9._:-]{1,128}$/.test(input.workerId) || !Number.isSafeInteger(maxClaims) ||
+          maxClaims < 0 || maxClaims > CLAIM_LIMIT ||
+          (input.shouldStop !== undefined && typeof input.shouldStop !== "function")) {
         return err({ kind: "validation", code: "OWNER_EXPORT_WORKER_CONTEXT_INVALID" });
       }
       try {
         let cleanup: OwnerExportAssemblyRunResult["cleanup"];
+        if (input.shouldStop?.()) {
+          return ok({ claimed: 0, completed: 0, retried: 0, failed: 0, staleLeases: 0, incompleteBacklog: true });
+        }
         if (deps.cleanup !== undefined) {
-          const cleaned = await deps.cleanup.runOwnerExportCleanup(cleanupCursor === undefined ? {} : { after: cleanupCursor });
+          const cleaned = await deps.cleanup.runOwnerExportCleanup({
+            ...(cleanupCursor === undefined ? {} : { after: cleanupCursor }),
+            ...(input.shouldStop === undefined ? {} : { shouldStop: input.shouldStop }),
+          });
           if (!cleaned.ok) return cleaned;
           cleanupCursor = cleaned.value.nextCursor;
           cleanup = cleaned.value;
         }
-        const jobs = await deps.operations.jobs.claimDue({
-          workerId: input.workerId,
-          now: deps.clock.now(),
-          leaseDurationSeconds: LEASE_DURATION_SECONDS,
-          limit: CLAIM_LIMIT,
-          jobTypes: [OWNER_EXPORT_ASSEMBLY_JOB_TYPE],
-        });
-        const counts = { claimed: jobs.length, completed: 0, retried: 0, failed: 0, staleLeases: 0 };
-        for (const job of jobs) {
+        const counts = { claimed: 0, completed: 0, retried: 0, failed: 0, staleLeases: 0 };
+        let halted = false;
+        while (counts.claimed < maxClaims) {
+          if (input.shouldStop?.()) { halted = true; break; }
+          const jobs = await deps.operations.jobs.claimDue({
+            workerId: input.workerId,
+            now: deps.clock.now(),
+            leaseDurationSeconds: LEASE_DURATION_SECONDS,
+            limit: 1,
+            jobTypes: [OWNER_EXPORT_ASSEMBLY_JOB_TYPE],
+          });
+          const job = jobs[0];
+          if (job === undefined) break;
+          counts.claimed += 1;
           const result = await processJob(job);
           if (result === "completed") counts.completed += 1;
           else if (result === "retried") counts.retried += 1;
           else if (result === "failed") counts.failed += 1;
           else counts.staleLeases += 1;
+          if (input.shouldStop?.()) { halted = true; break; }
         }
-        return ok({ ...counts, incompleteBacklog: jobs.length === CLAIM_LIMIT,
+        return ok({ ...counts, incompleteBacklog: halted || counts.claimed === maxClaims,
           ...(cleanup === undefined ? {} : { cleanup }) });
       } catch {
         return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_ASSEMBLY_UNAVAILABLE" });

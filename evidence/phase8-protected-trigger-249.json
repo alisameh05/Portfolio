@@ -1,0 +1,963 @@
+{
+  "ticket": 249,
+  "runId": "39a4d837-2949-4588-913d-f35c481b8957",
+  "startedAt": "2026-10-28T10:35:48.073Z",
+  "sourceRevision": "1f751047cd54de219eab46a7029146498e113f6d",
+  "sourceTreeSha256": "9abfa43b3b6c2e1058b9d312d2488c8767d8bc9dfb3e0f1df981ee47adb954f8",
+  "postgresVersion": "postgres (PostgreSQL) 17.11 (Debian 17.11-1.pgdg12+2)",
+  "migrations": [
+    {
+      "name": "20260922170000_prepare_migration_capability.sql",
+      "sha256": "f626df30438e644254fd6c5af015118be117ef5090fbc976bb0762593ac481fe"
+    },
+    {
+      "name": "20260922171906_establish_database_security_baseline.sql",
+      "sha256": "1406e77b9a2505ec684ef350170545558217ca2bf345675f67eb723a735f6be3"
+    },
+    {
+      "name": "20260922203000_create_operations_primitives.sql",
+      "sha256": "adad38103c83693de591f1691fe4eaabbe7da90423b3e68a02d7b7aa9b76cb98"
+    },
+    {
+      "name": "20261001220000_create_identity_access_owner_links.sql",
+      "sha256": "caa742152a624883937f3204ca1ec2ee947c7c52a812e0760ba794d1195b1205"
+    },
+    {
+      "name": "20261002120000_create_portfolio_configuration_settings.sql",
+      "sha256": "55452f45d7b4b18720993ec5fe4d0e818652c331339bd97c7e15fed6fb6a9c90"
+    },
+    {
+      "name": "20261002130000_allow_versioned_portfolio_profile_updates.sql",
+      "sha256": "533e07ffcad2d12297337fd84a6b7beb29cc5254a8f1632e75024ad73a013fae"
+    },
+    {
+      "name": "20261002140000_allow_owner_contact_channel_replacement.sql",
+      "sha256": "046977710edcffca09133ea794e874dbdd9b68188526cdc548182b3c73843ca4"
+    },
+    {
+      "name": "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+      "sha256": "f05678c118b14daee3ccfaf34736169b3339720b32ed6c1a394366398ded605a"
+    },
+    {
+      "name": "20261005001318_create_content_authoring.sql",
+      "sha256": "9b83a3dfdeed012f5ff6a61a96d765f54ebd8280530a2be428ec0e11eb0c029e"
+    },
+    {
+      "name": "20261007090000_add_immutable_content_revision_reviews.sql",
+      "sha256": "787ce6c713d8c2c719878ed119d1e0095b7e852d13fa634544e73db27e861a02"
+    },
+    {
+      "name": "20261007170000_add_project_publication_routes.sql",
+      "sha256": "a1fccbc91c732890ff8e0d0e5f754385abc927a70008e2017e6bf0b4a462c896"
+    },
+    {
+      "name": "20261007190000_add_achievement_publication_timeline.sql",
+      "sha256": "abeddadfcab69209b95986d036d0a929e916630ba9cf9c55828e2fb477ae441f"
+    },
+    {
+      "name": "20261007200000_publish_localized_testimonials.sql",
+      "sha256": "d262130f861be52c4c5556f45f31d0dd94dfcc10a6471cf22c28ca0390eb0877"
+    },
+    {
+      "name": "20261008090000_preserve_project_route_history.sql",
+      "sha256": "e56f6c1aaa4c40d28cb7f2dc5ab7c17d766c19ea82b72c0549264abd1275e058"
+    },
+    {
+      "name": "20261008120000_add_content_lifecycle_history.sql",
+      "sha256": "b2ef7861b063a20f45bbc2fd7857e6aaee59f3d154512d3c752e8b2f0a6c90c1"
+    },
+    {
+      "name": "20261008130000_add_project_status_and_featured.sql",
+      "sha256": "da301da8f9aa79dcdc754c305e6453e348012d5d450fc689793c562264febbe2"
+    },
+    {
+      "name": "20261008180000_add_project_relationships.sql",
+      "sha256": "0826469828a5534a191fa9fcbf00355b8ef80078db1556d164e68edfef624174"
+    },
+    {
+      "name": "20261008210000_provision_project_taxonomies.sql",
+      "sha256": "c405a2ecb3f425eaf6874557a70d4f277e95d38816970c6ac884b67279c76948"
+    },
+    {
+      "name": "20261009090000_record_taxonomy_evolution_actor_reason.sql",
+      "sha256": "14d9ebfa4266d239eca09f6e6ee944684423624e2ef545bfdf57e9c8aca9114e"
+    },
+    {
+      "name": "20261009100000_index_project_discovery_reads.sql",
+      "sha256": "ad685fa5f79f1f7c3b9ba001c3c5ea73272845ce6881eece0787a25fcd056d48"
+    },
+    {
+      "name": "20261010100000_create_private_media_upload_intents.sql",
+      "sha256": "dc9148b681510d17d79b6c9d81bd7f2f1a0538b6fc3033cc973ce5a82cc7987d"
+    },
+    {
+      "name": "20261010200000_record_trusted_pdf_processing.sql",
+      "sha256": "5780f2f4fcd167a9d3c806887cbcc71bf14694e606f0cda6338ceecfc2932dd6"
+    },
+    {
+      "name": "20261011210000_harden_trusted_pdf_processing.sql",
+      "sha256": "13664c93dbbdf3001c793d661739a3989c76fc7e8f00b7e5cdb781734171332a"
+    },
+    {
+      "name": "20261011220000_record_bounded_video_variants.sql",
+      "sha256": "81cc24aef5bb3393b9e405c269e806121598010675affb6239dbc1b901031cbe"
+    },
+    {
+      "name": "20261011230000_process_bounded_media_image_variants.sql",
+      "sha256": "de011d9c57ce64acdec8e4330e7e958fbd390541dd608bcba29c0e81c3059eca"
+    },
+    {
+      "name": "20261012000000_restore_video_variant_policy_after_images.sql",
+      "sha256": "172a5fed40a44dcc83833d12d8e0412f095e80fcb7af2b760b4d75f7b0921d69"
+    },
+    {
+      "name": "20261012010000_accept_media_with_editorial_accessibility.sql",
+      "sha256": "879e0bd7110e9e2867fc9be61e4f1d6758f739566075af92d76a8d57621494f3"
+    },
+    {
+      "name": "20261012020000_index_current_visible_media_references.sql",
+      "sha256": "9b166b1a14d6f2d05a32c5023657ab89ed90d3aae153fb2c1a28ca9af6b4e736"
+    },
+    {
+      "name": "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "sha256": "777d87a02304e3707d6420a80d219e6e7e5be101dc4de7cd03d854ef8c34210c"
+    },
+    {
+      "name": "20261012040000_accept_registered_cv_versions.sql",
+      "sha256": "bae3eb3d78f01690eba48d8027c63402243a6d0e6bdde425f71b946d0e413da9"
+    },
+    {
+      "name": "20261012050000_activate_current_cv_atomically.sql",
+      "sha256": "1b6a5576aecb056850924b93119727eadf64af01d1000f99ec81db824b5abc31"
+    },
+    {
+      "name": "20261012060000_reject_media_with_usage_guard.sql",
+      "sha256": "c8e577aaf24b0c090f0bef8d876f1be6538a48bd7bcaa3299de4c8befa8cacbf"
+    },
+    {
+      "name": "20261013100000_configure_public_profile_media.sql",
+      "sha256": "36f524652c3d7c66fb5924ce2ad281406a58eb1d4bb767287e5d8e1b3cdfce8f"
+    },
+    {
+      "name": "20261014194925_measurement_consent.sql",
+      "sha256": "9b122a259e91cee3875aa22133ff1b529c0b07203f01464378d0e3116ba01630"
+    },
+    {
+      "name": "20261014210000_persist_project_reactions.sql",
+      "sha256": "0217150ac17a8f1a156821dc22755b11ea743c8510e230f6d0fad1060d59b941"
+    },
+    {
+      "name": "20261014211320_persist_project_ratings.sql",
+      "sha256": "98b27aa626fa29c74b0e844f22ba83c87272338fffafccbc113963655d4f4133"
+    },
+    {
+      "name": "20261015003000_persist_private_feedback.sql",
+      "sha256": "991aeb268280b9e00c089d527598eeb20114f005e35057fb4521d2d9deaaa19c"
+    },
+    {
+      "name": "20261015010000_retain_feedback_moderation.sql",
+      "sha256": "5dcb17fa99531d21cdbd0ae60af6fd2b7178a6b161b8f66daa56ed70c5136938"
+    },
+    {
+      "name": "20261015093040_query_current_interaction_summaries.sql",
+      "sha256": "8fbef1951cc33e3a6ae286dc9f1d53bee87b45eb0dc9e45e4c080eb7a56cea88"
+    },
+    {
+      "name": "20261015120000_persist_consented_public_events.sql",
+      "sha256": "49a176f484fda2e0f067925501c609222308a1a776eecea06f13abbe591e73f6"
+    },
+    {
+      "name": "20261015130000_enable_public_interaction_event_facts.sql",
+      "sha256": "360c8a80bf10242bfa45c70da4dbcba9e4afd00207bd98883411f40ec694049b"
+    },
+    {
+      "name": "20261015150000_enable_configuration_interaction_event_facts.sql",
+      "sha256": "ce3d4700c6cf9154f8aa5a462bca3032d19ead3faf1b73ef64dca4ff954a03a9"
+    },
+    {
+      "name": "20261015160000_persist_immutable_analytics_goal_versions.sql",
+      "sha256": "db9ef116e1a8a1a5898b1c2c369c85f043fda60d115f8baee03bbd07ff83d085"
+    },
+    {
+      "name": "20261015170000_activate_analytics_goal_versions.sql",
+      "sha256": "7f6a8d3444468125fd9bbecf8d3f95bd1ea6c953f8a1626b140a707a82c54f66"
+    },
+    {
+      "name": "20261015180000_match_analytics_goal_conversions.sql",
+      "sha256": "682a4c7b6f3fd7e19c10fef259cb0fc50df93eec9c9bfd2c119e436ebea2a03a"
+    },
+    {
+      "name": "20261015190000_persist_reproducible_daily_aggregates.sql",
+      "sha256": "f0bf8f4237f6b16413c521bccb46ef790f607dd791c4e86f319b5016455bfefc"
+    },
+    {
+      "name": "20261015200000_enable_fixed_aggregate_dimensions.sql",
+      "sha256": "bf2e22a2e285faedba9b13962303da71b2c18f59cb4131720a8917722c02bd79"
+    },
+    {
+      "name": "20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
+      "sha256": "04e33297a492b55c2dc8b2392fc9f0291fa3e10f9ade40e7c9ef6fc97b297221"
+    },
+    {
+      "name": "20261015203000_retain_feedback_privacy.sql",
+      "sha256": "7f1910911ff0069922e2188673531d492b9d98e9cf6c3f2e971f379152c433bb"
+    },
+    {
+      "name": "20261017142000_revoke_public_aggregate_guard_execution.sql",
+      "sha256": "7b385899021083dca28b10d34d175b14c6daa443e98a846953f3ff16212d1a91"
+    },
+    {
+      "name": "20261018172500_bound_job_retries_and_incidents.sql",
+      "sha256": "c63d813d82f4fab902fcfbfde78c667b95618b450e438f58d88aad103fe78b1e"
+    },
+    {
+      "name": "20261023090000_reserve_owner_export_requests.sql",
+      "sha256": "43d9996f1d8c59c663c5c81842631248001ed8a6b551652e5a43acd22d6badd4"
+    },
+    {
+      "name": "20261023100000_build_configuration_owner_exports.sql",
+      "sha256": "3b2525935b8e8e1c83c64d1fe28ca0af60f6534cde53627bcb012059ce992966"
+    },
+    {
+      "name": "20261024120000_read_content_for_owner_exports.sql",
+      "sha256": "51ae23020903a72a2a6d7db96b3629dc4ffcb27a9658addc8cc0696a3f32d27e"
+    },
+    {
+      "name": "20261024130000_read_taxonomy_for_owner_exports.sql",
+      "sha256": "86512866f93801d15d962d8b514214941f3ce20cc22cdf7df0cb72fd0112300e"
+    },
+    {
+      "name": "20261024140000_read_media_for_owner_exports.sql",
+      "sha256": "0445745ac90122a3df27d53cb92e66975fe145eed4390ba6e8d30ce82a2a302f"
+    },
+    {
+      "name": "20261024233915_owner_cv_export_read_access.sql",
+      "sha256": "6ef6a318730547c3cf7315126f04dc769f5cc1628af889ad1c70f67467ecaab3"
+    },
+    {
+      "name": "20261025090000_read_feedback_for_owner_exports.sql",
+      "sha256": "d23dea8422800de3b2286a3c354eed68fad572fa5e4dcacb4f6a26a5259e5bdb"
+    },
+    {
+      "name": "20261025190828_retain_moderation_export_artifact_cleanup.sql",
+      "sha256": "ab521d5e0d6832f57eedddffd268e49541f99e1cb67aac7355921a5cc8125fe5"
+    },
+    {
+      "name": "20261025200000_read_measurement_for_owner_exports.sql",
+      "sha256": "e0ddaae3563cb85ee63e83bffdd7bd80d05d0d454ea217ea78087613a0693021"
+    },
+    {
+      "name": "20261026011341_restrict_analytics_export_deletion.sql",
+      "sha256": "2f6c6fce8f330941409c734e0b1d12cae0b71a07f8217cdf5f8b6b39488db2bb"
+    },
+    {
+      "name": "20261026100000_reconcile_all_owner_export_artifacts.sql",
+      "sha256": "28ea11c784b188977f57514dd874dcf877dbf307d0a4020857c078f18cfc06f9"
+    },
+    {
+      "name": "20261026164603_phase7_durable_policy_schedule_keys.sql",
+      "sha256": "cdd65060a1363d35f93f76c289950e69b26ebb04f718f12fe0cf3563f75668ab"
+    }
+  ],
+  "tools": {
+    "node": "24.21.0",
+    "npm": "11.19.0"
+  },
+  "platform": {
+    "os": "linux",
+    "architecture": "x64"
+  },
+  "acceptanceInventory": {
+    "suiteFiles": [
+      "tests/phase7/due-work.test.ts",
+      "tests/phase7/due-work-postgres.test.ts",
+      "tests/phase8/resumable-retention-passes.test.ts",
+      "tests/phase8/resumable-retention-passes-postgres.test.ts",
+      "tests/phase8/protected-trigger.test.ts",
+      "tests/phase8/protected-trigger-postgres.test.ts"
+    ],
+    "assertionTitles": [
+      "deduplicates concurrent triggers by Portfolio/type/due-period and retains truthful scoped status",
+      "keeps unscheduled legacy producers and consumers valid for application rollback",
+      "does not dispatch Owner assembly or schedule aggregates when shutdown arrives after retention is complete",
+      "observes shutdown raised by the final retention effect before dependent Owner or aggregate work",
+      "holds aggregation and Owner export dispatch behind a withdrawal transaction leased by another worker",
+      "runs the composed Portability cleanup and assembly only after the real retention barrier commits",
+      "serializes Owner cleanup and assembly admission with a concurrently advanced retention horizon",
+      "reopens the retention barrier at day rollover with an older aggregate hole and a held by another worker withdrawal",
+      "reopens the retention barrier at day rollover with an older aggregate hole and a retry-delayed withdrawal",
+      "reopens the retention barrier at day rollover with an older aggregate hole and a dead withdrawal",
+      "reopens the retention horizon when PostgreSQL advances beyond the worker clock and holds dependent work until current-day retention completes",
+      "resumes more than five successful retention checkpoint batches across a bounded restart",
+      "reports the saturated ten-job Owner assembly pass and drains the eleventh export on restart",
+      "keeps aggregate admission closed for a delayed retry barrier",
+      "keeps aggregate admission closed for a dead retention job barrier",
+      "catches up a twenty-day outage in ordered slices of at most fifteen policy periods",
+      "holds contiguous completion before an older aggregate hole, then audited redrive closes it once",
+      "keeps legacy redrive reads and writes free of Phase 8 scheduling columns",
+      "uses the semantic-period covering index for recent status reads over old queue history",
+      "keeps a future UTC policy period incomplete until database not-before",
+      "forces RLS and keeps the cursor table unavailable to application and public roles",
+      "publishes daily and catch-up invocations as UTC handoffs that remain uninstalled",
+      "deduplicates the same Portfolio/type/due-period across restarts and bounds catch-up",
+      "resumes a bounded owner-module checkpoint with the same job identity and UTC anchor before aggregates",
+      "keeps policy completion incomplete when a durable aggregate reports coverage gaps",
+      "reports shutdown before work as incomplete without scheduling or claiming a backlog",
+      "drains a twenty-day outage in contiguous bounded slices without losing the older completion watermark",
+      "completes retention before scheduling aggregates and dispatches the existing Owner export service",
+      "fails the protected trigger safely on an Owner dependency error and resumes after retry",
+      "does not admit aggregation when a durable retention key is delayed or dead",
+      "rejects an invalid worker identity before queue access",
+      "catches up real retention work before admitting dependent daily aggregation",
+      "proves concurrent lease exclusion, expiry recovery, stale-token denial, and idempotent post-effect replay",
+      "recovers a claimed cleanup job that crashes before its first effect",
+      "rejects expired job transitions before reclaim and resumes the existing checkpoint on a new token",
+      "rejects Visitor, Owner, wrong-purpose System, and foreign-Portfolio commands at both module boundaries",
+      "rolls back a failed retention batch and persists a delayed safe retry",
+      "terminalizes the fifth failed claim and a crashed fifth claim with one durable incident",
+      "rejects expired outbox transitions and terminalizes the fifth delivery with one incident",
+      "uses PostgreSQL time for job not-before and preserves retry attempts until available",
+      "uses PostgreSQL time for outbox not-before and preserves retry attempts until available",
+      "re-drives an authorized current-policy dead job once and retains its audit and terminal source",
+      "accepts the configured Bearer credential and runs only the host-registered bounded worker",
+      "rejects missing, wrong, and empty Bearer credentials before queue effects",
+      "does not treat spoofed Vercel scheduler headers as authority",
+      "rejects Owner cookies even when present beside a valid server-to-server credential",
+      "rejects query credentials, request bodies, unsupported methods, and malformed length headers",
+      "rejects oversized headers before authorization or queue effects",
+      "maps dependency errors to fixed responses without echoing exception or secret markers",
+      "returns HTTP 200 for a truthful authenticated incomplete pass and rejects malformed totals safely",
+      "fails closed for invalid host budgets or unregistered worker identity",
+      "enforces memory and monotonic deadline observations before additional claims",
+      "maps host clock and stop-observation failures to the fixed response before worker dispatch",
+      "fails closed for invalid memory and monotonic observations",
+      "counts compilation against the invocation and rejects a tiny remaining worker window",
+      "shares sanitized totals with the portable worker and keeps schedule handoffs uninstalled",
+      "overlapping protected requests deduplicate schedule keys in PostgreSQL and claim disjoint fenced work",
+      "returns HTTP 200 with incomplete totals and retains durable backlog across a restart",
+      "preserves completed retention and skips aggregates after Owner assembly fails",
+      "composes the actual bounded worker through the restricted PostgreSQL runtime",
+      "stops the real CLI after its active PostgreSQL batch commits at a lock barrier",
+      "runs expired Owner artifact cleanup with zero assembly claims and retains queued work",
+      "selects one exact ticket mode and rejects conflicting flags before gate setup",
+      "forwards an actual Linux OS SIGTERM during compilation before database work",
+      "keeps the spawned worker behind admission until its signal handler is ready"
+    ]
+  },
+  "required": {
+    "success": true,
+    "passed": 65,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "failedSuites": 0
+  },
+  "routeInventory": {
+    "success": true,
+    "summary": "route inventory: all 7 checks passed (5 public, 48 owner, 2 operational, 0 product runtime routes)"
+  },
+  "migrationProof": {
+    "cleanReplay": "passed",
+    "predecessorMigrations": 62,
+    "forwardMigration": "20261026164603_phase7_durable_policy_schedule_keys.sql",
+    "operationsContractPreserved": true,
+    "cleanUpgradeEquivalent": true,
+    "predecessorSchemaCommittedRowsPreserved": {
+      "jobs": 1,
+      "outboxEvents": 1,
+      "idempotencyReceipts": 1,
+      "nullableScheduleMetadata": true,
+      "workIncompleteDefault": false
+    },
+    "phase7ScheduleCatalog": {
+      "columns": [
+        {
+          "schema": "operations",
+          "tableName": "jobs",
+          "position": 13,
+          "name": "semantic_scope_id",
+          "type": "uuid",
+          "typeSchema": "pg_catalog",
+          "typeName": "uuid",
+          "nullable": "YES",
+          "default": null,
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": null
+        },
+        {
+          "schema": "operations",
+          "tableName": "jobs",
+          "position": 14,
+          "name": "semantic_period",
+          "type": "text",
+          "typeSchema": "pg_catalog",
+          "typeName": "text",
+          "nullable": "YES",
+          "default": null,
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": null
+        },
+        {
+          "schema": "operations",
+          "tableName": "jobs",
+          "position": 15,
+          "name": "work_incomplete",
+          "type": "boolean",
+          "typeSchema": "pg_catalog",
+          "typeName": "bool",
+          "nullable": "YES",
+          "default": "false",
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": null
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "position": 1,
+          "name": "portfolio_id",
+          "type": "uuid",
+          "typeSchema": "pg_catalog",
+          "typeName": "uuid",
+          "nullable": "NO",
+          "default": null,
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": null
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "position": 2,
+          "name": "first_policy_period",
+          "type": "date",
+          "typeSchema": "pg_catalog",
+          "typeName": "date",
+          "nullable": "NO",
+          "default": null,
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": 0
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "position": 3,
+          "name": "required_through_period",
+          "type": "date",
+          "typeSchema": "pg_catalog",
+          "typeName": "date",
+          "nullable": "NO",
+          "default": null,
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": 0
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "position": 4,
+          "name": "retention_scheduled_through",
+          "type": "date",
+          "typeSchema": "pg_catalog",
+          "typeName": "date",
+          "nullable": "NO",
+          "default": null,
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": 0
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "position": 5,
+          "name": "retention_complete_through",
+          "type": "date",
+          "typeSchema": "pg_catalog",
+          "typeName": "date",
+          "nullable": "NO",
+          "default": null,
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": 0
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "position": 6,
+          "name": "aggregate_scheduled_through",
+          "type": "date",
+          "typeSchema": "pg_catalog",
+          "typeName": "date",
+          "nullable": "NO",
+          "default": null,
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": 0
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "position": 7,
+          "name": "aggregate_finished_through",
+          "type": "date",
+          "typeSchema": "pg_catalog",
+          "typeName": "date",
+          "nullable": "NO",
+          "default": null,
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": 0
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "position": 8,
+          "name": "last_complete_period",
+          "type": "date",
+          "typeSchema": "pg_catalog",
+          "typeName": "date",
+          "nullable": "NO",
+          "default": null,
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": 0
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "position": 9,
+          "name": "phase",
+          "type": "text",
+          "typeSchema": "pg_catalog",
+          "typeName": "text",
+          "nullable": "NO",
+          "default": "'retention'::text",
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": null
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "position": 10,
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "typeSchema": "pg_catalog",
+          "typeName": "timestamptz",
+          "nullable": "NO",
+          "default": "clock_timestamp()",
+          "identity": "NO",
+          "identityGeneration": null,
+          "generated": "NEVER",
+          "generationExpression": null,
+          "characterMaximumLength": null,
+          "numericPrecision": null,
+          "numericScale": null,
+          "datetimePrecision": 6
+        }
+      ],
+      "constraints": [
+        {
+          "schema": "operations",
+          "tableName": "jobs",
+          "name": "jobs_semantic_schedule_pair_check",
+          "type": "c",
+          "validated": true,
+          "definition": "CHECK (semantic_scope_id IS NULL AND semantic_period IS NULL OR semantic_scope_id IS NOT NULL AND semantic_period ~ '^\\d{4}-\\d{2}-\\d{2}(:\\d{4}-\\d{2}-\\d{2})?$'::text)"
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "name": "phase7_schedule_progress_bounds_check",
+          "type": "c",
+          "validated": true,
+          "definition": "CHECK (required_through_period >= (first_policy_period - 1) AND retention_scheduled_through >= (first_policy_period - 1) AND retention_complete_through >= (first_policy_period - 1) AND aggregate_scheduled_through >= (first_policy_period - 1) AND aggregate_finished_through >= (first_policy_period - 1) AND last_complete_period >= (first_policy_period - 1) AND retention_complete_through <= retention_scheduled_through AND aggregate_scheduled_through <= retention_complete_through AND aggregate_finished_through <= aggregate_scheduled_through AND aggregate_finished_through <= retention_complete_through AND last_complete_period <= aggregate_finished_through AND last_complete_period <= aggregate_scheduled_through AND last_complete_period <= retention_complete_through)"
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "name": "phase7_schedule_progress_phase_check",
+          "type": "c",
+          "validated": true,
+          "definition": "CHECK (phase = ANY (ARRAY['retention'::text, 'aggregate'::text]))"
+        },
+        {
+          "schema": "operations",
+          "tableName": "phase7_schedule_progress",
+          "name": "phase7_schedule_progress_pkey",
+          "type": "p",
+          "validated": true,
+          "definition": "PRIMARY KEY (portfolio_id)"
+        }
+      ],
+      "indexes": [
+        {
+          "schema": "operations",
+          "table": "jobs",
+          "name": "jobs_policy_period_status_idx",
+          "definition": "CREATE INDEX jobs_policy_period_status_idx ON operations.jobs USING btree (semantic_scope_id, semantic_period, job_type) INCLUDE (status, work_incomplete) WHERE ((semantic_scope_id IS NOT NULL) AND (job_type = ANY (ARRAY['measurement.daily-aggregate.v1'::text, 'measurement.detail-retention.v1'::text, 'measurement.aggregate-retention.v1'::text, 'measurement.withdrawal-cleanup.v1'::text, 'interaction.feedback-retention.v1'::text])))"
+        },
+        {
+          "schema": "operations",
+          "table": "jobs",
+          "name": "jobs_semantic_schedule_once",
+          "definition": "CREATE UNIQUE INDEX jobs_semantic_schedule_once ON operations.jobs USING btree (semantic_scope_id, job_type, semantic_period) WHERE (semantic_scope_id IS NOT NULL)"
+        },
+        {
+          "schema": "operations",
+          "table": "phase7_schedule_progress",
+          "name": "phase7_schedule_progress_pkey",
+          "definition": "CREATE UNIQUE INDEX phase7_schedule_progress_pkey ON operations.phase7_schedule_progress USING btree (portfolio_id)"
+        }
+      ]
+    },
+    "rollbackCompatibilityMigrations": 62
+  },
+  "assertions": [
+    {
+      "title": "catches up real retention work before admitting dependent daily aggregation",
+      "status": "passed"
+    },
+    {
+      "title": "proves concurrent lease exclusion, expiry recovery, stale-token denial, and idempotent post-effect replay",
+      "status": "passed"
+    },
+    {
+      "title": "recovers a claimed cleanup job that crashes before its first effect",
+      "status": "passed"
+    },
+    {
+      "title": "rejects expired job transitions before reclaim and resumes the existing checkpoint on a new token",
+      "status": "passed"
+    },
+    {
+      "title": "rejects Visitor, Owner, wrong-purpose System, and foreign-Portfolio commands at both module boundaries",
+      "status": "passed"
+    },
+    {
+      "title": "rolls back a failed retention batch and persists a delayed safe retry",
+      "status": "passed"
+    },
+    {
+      "title": "terminalizes the fifth failed claim and a crashed fifth claim with one durable incident",
+      "status": "passed"
+    },
+    {
+      "title": "rejects expired outbox transitions and terminalizes the fifth delivery with one incident",
+      "status": "passed"
+    },
+    {
+      "title": "uses PostgreSQL time for job not-before and preserves retry attempts until available",
+      "status": "passed"
+    },
+    {
+      "title": "uses PostgreSQL time for outbox not-before and preserves retry attempts until available",
+      "status": "passed"
+    },
+    {
+      "title": "re-drives an authorized current-policy dead job once and retains its audit and terminal source",
+      "status": "passed"
+    },
+    {
+      "title": "completes retention before scheduling aggregates and dispatches the existing Owner export service",
+      "status": "passed"
+    },
+    {
+      "title": "fails the protected trigger safely on an Owner dependency error and resumes after retry",
+      "status": "passed"
+    },
+    {
+      "title": "does not admit aggregation when a durable retention key is delayed or dead",
+      "status": "passed"
+    },
+    {
+      "title": "rejects an invalid worker identity before queue access",
+      "status": "passed"
+    },
+    {
+      "title": "overlapping protected requests deduplicate schedule keys in PostgreSQL and claim disjoint fenced work",
+      "status": "passed"
+    },
+    {
+      "title": "returns HTTP 200 with incomplete totals and retains durable backlog across a restart",
+      "status": "passed"
+    },
+    {
+      "title": "preserves completed retention and skips aggregates after Owner assembly fails",
+      "status": "passed"
+    },
+    {
+      "title": "composes the actual bounded worker through the restricted PostgreSQL runtime",
+      "status": "passed"
+    },
+    {
+      "title": "stops the real CLI after its active PostgreSQL batch commits at a lock barrier",
+      "status": "passed"
+    },
+    {
+      "title": "forwards an actual Linux OS SIGTERM during compilation before database work",
+      "status": "passed"
+    },
+    {
+      "title": "keeps the spawned worker behind admission until its signal handler is ready",
+      "status": "passed"
+    },
+    {
+      "title": "selects one exact ticket mode and rejects conflicting flags before gate setup",
+      "status": "passed"
+    },
+    {
+      "title": "accepts the configured Bearer credential and runs only the host-registered bounded worker",
+      "status": "passed"
+    },
+    {
+      "title": "rejects missing, wrong, and empty Bearer credentials before queue effects",
+      "status": "passed"
+    },
+    {
+      "title": "does not treat spoofed Vercel scheduler headers as authority",
+      "status": "passed"
+    },
+    {
+      "title": "rejects Owner cookies even when present beside a valid server-to-server credential",
+      "status": "passed"
+    },
+    {
+      "title": "rejects query credentials, request bodies, unsupported methods, and malformed length headers",
+      "status": "passed"
+    },
+    {
+      "title": "rejects oversized headers before authorization or queue effects",
+      "status": "passed"
+    },
+    {
+      "title": "maps dependency errors to fixed responses without echoing exception or secret markers",
+      "status": "passed"
+    },
+    {
+      "title": "maps host clock and stop-observation failures to the fixed response before worker dispatch",
+      "status": "passed"
+    },
+    {
+      "title": "returns HTTP 200 for a truthful authenticated incomplete pass and rejects malformed totals safely",
+      "status": "passed"
+    },
+    {
+      "title": "fails closed for invalid host budgets or unregistered worker identity",
+      "status": "passed"
+    },
+    {
+      "title": "enforces memory and monotonic deadline observations before additional claims",
+      "status": "passed"
+    },
+    {
+      "title": "fails closed for invalid memory and monotonic observations",
+      "status": "passed"
+    },
+    {
+      "title": "counts compilation against the invocation and rejects a tiny remaining worker window",
+      "status": "passed"
+    },
+    {
+      "title": "shares sanitized totals with the portable worker and keeps schedule handoffs uninstalled",
+      "status": "passed"
+    },
+    {
+      "title": "deduplicates concurrent triggers by Portfolio/type/due-period and retains truthful scoped status",
+      "status": "passed"
+    },
+    {
+      "title": "keeps unscheduled legacy producers and consumers valid for application rollback",
+      "status": "passed"
+    },
+    {
+      "title": "does not dispatch Owner assembly or schedule aggregates when shutdown arrives after retention is complete",
+      "status": "passed"
+    },
+    {
+      "title": "observes shutdown raised by the final retention effect before dependent Owner or aggregate work",
+      "status": "passed"
+    },
+    {
+      "title": "holds aggregation and Owner export dispatch behind a withdrawal transaction leased by another worker",
+      "status": "passed"
+    },
+    {
+      "title": "runs the composed Portability cleanup and assembly only after the real retention barrier commits",
+      "status": "passed"
+    },
+    {
+      "title": "serializes Owner cleanup and assembly admission with a concurrently advanced retention horizon",
+      "status": "passed"
+    },
+    {
+      "title": "runs expired Owner artifact cleanup with zero assembly claims and retains queued work",
+      "status": "passed"
+    },
+    {
+      "title": "reopens the retention horizon when PostgreSQL advances beyond the worker clock and holds dependent work until current-day retention completes",
+      "status": "passed"
+    },
+    {
+      "title": "reopens the retention barrier at day rollover with an older aggregate hole and a held by another worker withdrawal",
+      "status": "passed"
+    },
+    {
+      "title": "reopens the retention barrier at day rollover with an older aggregate hole and a retry-delayed withdrawal",
+      "status": "passed"
+    },
+    {
+      "title": "reopens the retention barrier at day rollover with an older aggregate hole and a dead withdrawal",
+      "status": "passed"
+    },
+    {
+      "title": "resumes more than five successful retention checkpoint batches across a bounded restart",
+      "status": "passed"
+    },
+    {
+      "title": "reports the saturated ten-job Owner assembly pass and drains the eleventh export on restart",
+      "status": "passed"
+    },
+    {
+      "title": "keeps aggregate admission closed for a delayed retry barrier",
+      "status": "passed"
+    },
+    {
+      "title": "keeps aggregate admission closed for a dead retention job barrier",
+      "status": "passed"
+    },
+    {
+      "title": "catches up a twenty-day outage in ordered slices of at most fifteen policy periods",
+      "status": "passed"
+    },
+    {
+      "title": "holds contiguous completion before an older aggregate hole, then audited redrive closes it once",
+      "status": "passed"
+    },
+    {
+      "title": "keeps legacy redrive reads and writes free of Phase 8 scheduling columns",
+      "status": "passed"
+    },
+    {
+      "title": "uses the semantic-period covering index for recent status reads over old queue history",
+      "status": "passed"
+    },
+    {
+      "title": "keeps a future UTC policy period incomplete until database not-before",
+      "status": "passed"
+    },
+    {
+      "title": "forces RLS and keeps the cursor table unavailable to application and public roles",
+      "status": "passed"
+    },
+    {
+      "title": "publishes daily and catch-up invocations as UTC handoffs that remain uninstalled",
+      "status": "passed"
+    },
+    {
+      "title": "deduplicates the same Portfolio/type/due-period across restarts and bounds catch-up",
+      "status": "passed"
+    },
+    {
+      "title": "resumes a bounded owner-module checkpoint with the same job identity and UTC anchor before aggregates",
+      "status": "passed"
+    },
+    {
+      "title": "keeps policy completion incomplete when a durable aggregate reports coverage gaps",
+      "status": "passed"
+    },
+    {
+      "title": "reports shutdown before work as incomplete without scheduling or claiming a backlog",
+      "status": "passed"
+    },
+    {
+      "title": "drains a twenty-day outage in contiguous bounded slices without losing the older completion watermark",
+      "status": "passed"
+    }
+  ],
+  "databaseRoles": [
+    "due_work_application_runtime",
+    "shipwithali_application",
+    "due_work_worker_runtime",
+    "shipwithali_worker",
+    "anon",
+    "authenticated"
+  ],
+  "criteria": [
+    "AC01",
+    "AC02",
+    "AC03",
+    "AC04",
+    "AC05",
+    "AC06",
+    "AC07",
+    "AC08"
+  ],
+  "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase8:focus:protected-trigger",
+  "scope": "All repository migrations on disposable native PostgreSQL; durable Portfolio/type/UTC-period deduplication under concurrent enqueue, independent-worker day-rollover retention barriers with held, retry-delayed, and dead keys, serialized Owner admission across a stale status snapshot and concurrent horizon advance, PostgreSQL-current-day horizon/admission fencing with a lagging worker clock, database-clock not-before enforcement for job and outbox retries plus a worker-clock-ahead UTC policy rollover, expired-before-reclaim job/outbox transition fencing with checkpoint resume, bounded contiguous catch-up and historical redrive, successful checkpoint retry-streak reset with fifth-failure/crash terminalization preserved, five existing versioned handlers, ten-job Owner assembly backlog reporting and restart, loopback Storage-adapter effects, truthful completion and coverage status, bounded indexed history queries, in-place upgrade row preservation, and legacy queue compatibility after application rollback. The #249 suites add protected GET/Bearer security, fixed host authority, bounded memory/time/claim controls, sanitized incomplete and dependency responses, Owner dependency failure propagation with durable retention and retry, overlapping authenticated triggers on the real queue, zero-claim Owner cleanup against an expired real PostgreSQL artifact, startup-budget accounting, exclusive gate-mode attestation, and Linux OS-SIGTERM qualification during compilation, worker startup, and a real PostgreSQL lock-barrier batch.",
+  "endedAt": "2026-10-28T10:36:51.714Z",
+  "cleanup": true
+}

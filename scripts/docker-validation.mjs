@@ -7,8 +7,15 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const mode = process.argv[2] ?? "phase6";
-if (!["phase6", "gate", "media-cv-integration", "checks"].includes(mode)) {
-  console.error("Usage: node scripts/docker-validation.mjs [phase6|gate|media-cv-integration|checks]");
+if (!["phase6", "gate", "media-cv-integration", "checks", "phase8-protected-trigger"].includes(mode)) {
+  console.error("Usage: node scripts/docker-validation.mjs [phase6|gate|media-cv-integration|checks|phase8-protected-trigger]");
+  process.exit(2);
+}
+const requestedProject = process.env.PORTFOLIO_VALIDATION_PROJECT;
+const projectName = requestedProject ?? "portfolio-validation";
+const uniqueProject = requestedProject !== undefined;
+if (uniqueProject && !/^portfolio-validation-[a-z0-9-]{6,40}$/u.test(projectName)) {
+  console.error("Validation project name must use a unique portfolio-validation-* suffix.");
   process.exit(2);
 }
 function capture(command, args, message) {
@@ -35,15 +42,25 @@ try {
     env.PORTFOLIO_USE_MAIN_OBJECTS = "0";
   }
   mkdirSync(new URL("../evidence/", import.meta.url), { recursive: true });
-  const prefix = ["compose", "--project-name", "portfolio-validation", "--file", "compose.validation.yaml"];
-  // The fixed project name prevents two runs from sharing the cache daemon.
+  const prefix = ["compose", "--project-name", projectName, "--file", "compose.validation.yaml"];
+  // The default project reuses its cache daemon. Ticket-specific Linux qualification can
+  // select a random project and remove only its own containers, network, image, and volumes.
   const active = capture("docker", [...prefix, "ps", "--all", "--status", "running", "--quiet"], "Cannot inspect validation containers.");
   if (active) throw new Error("Portfolio Docker validation is already running. Wait for it to finish before starting another run.");
-  const result = spawnSync("docker", [...prefix, "run", "--build", "--rm", "--name", "portfolio-validation-runner", "validation", mode], {
+  const result = spawnSync("docker", [...prefix, "run", "--build", "--rm", "--name", `${projectName}-runner`, "validation", mode], {
     cwd: root, env, stdio: "inherit", windowsHide: true,
   });
   process.exitCode = result.status ?? 1;
   if (result.error) console.error("Docker validation could not start or was interrupted.");
+  if (uniqueProject) {
+    const cleanup = spawnSync("docker", [...prefix, "down", "--volumes", "--remove-orphans", "--rmi", "local"], {
+      cwd: root, env, encoding: "utf8", timeout: 30_000, windowsHide: true,
+    });
+    if (cleanup.error || cleanup.status !== 0) {
+      console.error("Owned Docker validation project cleanup failed.");
+      process.exitCode = 1;
+    }
+  }
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

@@ -41,6 +41,7 @@ import type { PortfolioSettingsApplicationService } from "../modules/portfolio-c
 import type { ConsentApplicationService, MeasurementMediaPublicFactsPort, MeasurementService, OwnerAnalyticsApplicationService } from "../modules/measurement/index.js";
 import type { InteractionModerationService, FunctionalInteractionContextPort } from "../modules/interaction-moderation/index.js";
 import { createPhase7DueWorkWorker } from "./phase7-due-work-worker.js";
+import { isValidPhase8DueWorkBudget, phase8DueWorkBudgetFromEnvironment, type Phase8DueWorkBudget } from "../runtime/phase8-due-work-control.js";
 
 export interface ReactionRuntimeServices {
   readonly scope: { readonly kind: "portfolio"; readonly portfolioId: StableId<"Portfolio"> };
@@ -135,6 +136,17 @@ export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
 /** Default bootstrap seam: forwards the ambient environment exactly once. */
 export function initializeRuntimeFromEnvironment(): RuntimeConfig {
   return initializeRuntime({ ...(process.env as RuntimeConfigEnv) });
+}
+
+/** Reads and validates bounded worker limits at the composition boundary. */
+export function getPhase8DueWorkBudgetFromEnvironment(
+  runWindowOverrideMs?: number,
+  env: Readonly<Record<string, string | undefined>> = { ...(process.env as RuntimeConfigEnv) },
+): Phase8DueWorkBudget | undefined {
+  const configuredBudget = phase8DueWorkBudgetFromEnvironment(env);
+  if (configuredBudget === undefined || runWindowOverrideMs === undefined) return configuredBudget;
+  const boundedBudget = { ...configuredBudget, maxRunDurationMs: runWindowOverrideMs };
+  return isValidPhase8DueWorkBudget(boundedBudget) ? boundedBudget : undefined;
 }
 
 export interface DatabaseRuntimeState extends RuntimeConfig {
@@ -237,7 +249,7 @@ export async function initializeDatabaseRuntime(
             import("../shared/adapters/postgres/runtime.js"),
             import("../modules/portability-operations/adapters/postgres-operations.js"),
           ]);
-        const configuredScope = runtimeKind === "application"
+        const configuredScope = runtimeKind === "application" || runtimeKind === "worker"
           ? {
             portfolioId: parseStableId("Portfolio", env["PORTFOLIO_ID"] ?? ""),
             ownerId: parseStableId("Owner", env["OWNER_ID"] ?? ""),
@@ -977,6 +989,11 @@ export async function initializeDatabaseRuntime(
     lifecycle.markFailed();
     throw new Error("Database runtime initialization failed.", { cause: error });
   }
+}
+
+/** Worker CLI seam: forward the ambient environment through the composition root exactly once. */
+export function initializeDatabaseRuntimeFromEnvironment(runtimeKind: DatabaseRuntimeKind): Promise<DatabaseRuntimeState> {
+  return initializeDatabaseRuntime({ ...(process.env as RuntimeConfigEnv) }, runtimeKind);
 }
 
 export function getOperationsPersistence(): OperationsPersistencePorts {

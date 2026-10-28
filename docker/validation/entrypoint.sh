@@ -2,8 +2,8 @@
 set -euo pipefail
 
 case "${1:-phase6}" in
-  phase6|gate|media-cv-integration|checks) ;;
-  *) echo 'Choose phase6, gate, media-cv-integration, or checks.' >&2; exit 2 ;;
+  phase6|gate|media-cv-integration|checks|phase8-protected-trigger) ;;
+  *) echo 'Choose phase6, gate, media-cv-integration, checks, or phase8-protected-trigger.' >&2; exit 2 ;;
 esac
 
 daemon_pid=''
@@ -30,6 +30,9 @@ cleanup() {
       cp -R /workspace/evidence/phase6-gate-checks /evidence/phase6-gate-checks || result=1
     fi
   fi
+  if [ "${mode}" = phase8-protected-trigger ] && [ -f /workspace/evidence/phase8-protected-trigger-249.json ]; then
+    cp /workspace/evidence/phase8-protected-trigger-249.json /evidence/phase8-protected-trigger-249.json || result=1
+  fi
   if [ -n "$daemon_pid" ]; then
     reset_private_services || result=1
     kill -TERM "$daemon_pid" 2>/dev/null || true
@@ -54,6 +57,9 @@ if [ "$mode" = phase6 ] || [ "$mode" = gate ] || [ "$mode" = media-cv-integratio
     rm -f "/workspace/evidence/$report" "/evidence/$report"
   done
   rm -rf /workspace/evidence/phase6-gate-checks /evidence/phase6-gate-checks
+fi
+if [ "$mode" = phase8-protected-trigger ]; then
+  rm -f /workspace/evidence/phase8-protected-trigger-249.json /evidence/phase8-protected-trigger-249.json
 fi
 # Build a private Git view without host paths, hooks, config or credentials.
 # This also avoids Windows worktree-specific config changing Linux ref lookup.
@@ -107,6 +113,41 @@ elif [ "${1:-phase6}" = gate ]; then
 elif [ "${1:-phase6}" = media-cv-integration ]; then
   rm -f /workspace/evidence/phase6-media-cv-integration-163.json /evidence/phase6-media-cv-integration-163.json
   npm run phase6:focus:media-cv-integration
+elif [ "${1:-phase6}" = phase8-protected-trigger ]; then
+  . /etc/os-release
+  if [ "${ID:-}" != debian ] || [ "${VERSION_CODENAME:-}" != bookworm ]; then
+    echo 'PHASE8_LINUX_VALIDATION_IMAGE_UNSUPPORTED' >&2
+    exit 1
+  fi
+  architecture="$(dpkg --print-architecture)"
+  if [ "$architecture" != amd64 ] && [ "$architecture" != arm64 ]; then
+    echo 'PHASE8_LINUX_VALIDATION_ARCHITECTURE_UNSUPPORTED' >&2
+    exit 1
+  fi
+  apt-get update
+  apt-get install -y --no-install-recommends curl ca-certificates
+  install -d /usr/share/postgresql-common/pgdg
+  curl --fail --silent --show-error --location -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    https://www.postgresql.org/media/keys/ACCC4CF8.asc
+  cat > /etc/apt/sources.list.d/pgdg.sources <<EOF
+Types: deb
+URIs: https://apt.postgresql.org/pub/repos/apt
+Suites: bookworm-pgdg
+Architectures: ${architecture}
+Components: main
+Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+EOF
+  apt-get update
+  apt-get install -y --no-install-recommends postgresql-17
+  export PHASE7_POSTGRES_BIN=/usr/lib/postgresql/17/bin
+  "$PHASE7_POSTGRES_BIN/postgres" --version
+  # The validation image starts as root, while initdb and the GitHub Actions
+  # runner both require an unprivileged process. Keep generated reports
+  # writable by the PostgreSQL account and run the full qualification there.
+  mkdir -p /workspace/evidence /workspace/artifacts
+  chown postgres:postgres /workspace/evidence /workspace/artifacts
+  runuser -u postgres -- env HOME=/var/lib/postgresql PHASE7_POSTGRES_BIN="$PHASE7_POSTGRES_BIN" \
+    npm run phase8:focus:protected-trigger
 else
   npm run phase6:focus:media-integration
   npm run phase6:focus:cv-portfolio

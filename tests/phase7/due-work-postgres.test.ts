@@ -194,13 +194,15 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     const jobId = id("Job");
     const eventId = id("PublicEvent");
     const subject = id("MeasurementVisitor");
-    await addEvent({ eventId, subject, portfolioId: scope, occurredAt: "2026-10-14T10:00:00.000Z", acceptedAt: "2026-10-14T10:00:00.000Z" });
+    const retainedUtcDay = new Date(Date.parse(now) - 86_400_000).toISOString().slice(0, 10);
+    const retainedEventAt = `${retainedUtcDay}T10:00:00.000Z`;
+    await addEvent({ eventId, subject, portfolioId: scope, occurredAt: retainedEventAt, acceptedAt: retainedEventAt });
     await seedReadyAggregationScope(scope, now.slice(0, 10));
     const firstOperations = createPostgresOperationsPersistence(worker!.database);
     const secondOperations = createPostgresOperationsPersistence(workerTwo!.database);
     await firstOperations.transactions.run(transaction => firstOperations.jobs.enqueue(transaction, {
-      jobId, availableAt: now, semanticSchedule: { portfolioId: scope, period: `${now.slice(0, 10)}:2026-10-14` },
-      payload: { type: "measurement.daily-aggregate.v1", version: 1, value: { utcDay: "2026-10-14" } },
+      jobId, availableAt: now, semanticSchedule: { portfolioId: scope, period: `${now.slice(0, 10)}:${retainedUtcDay}` },
+      payload: { type: "measurement.daily-aggregate.v1", version: 1, value: { utcDay: retainedUtcDay } },
     }));
     await makeJobAvailableInDatabasePast(jobId);
     const claimInput = { workerId: "worker-one", now, leaseDurationSeconds: 60, limit: 1,
@@ -213,10 +215,10 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     const firstLease = firstClaims[0] ?? competingClaims[0]!;
 
     const firstModules = makeModuleServices(worker!, scope);
-    const firstEffect = await firstModules.daily.aggregateDay({ ...workCommand(jobId, "measurement.aggregate", now, scope), utcDay: "2026-10-14" });
+    const firstEffect = await firstModules.daily.aggregateDay({ ...workCommand(jobId, "measurement.aggregate", now, scope), utcDay: retainedUtcDay });
     expect(firstEffect).toMatchObject({ ok: true });
     const aggregateAfterFirstEffect = (await admin!.query(`select event_count,metric_key,dimensions from measurement.daily_aggregates
-      where portfolio_id=$1 and utc_day='2026-10-14' and metric_kind='action' and dimensions='{}'::jsonb order by metric_key`, [scope])).rows;
+      where portfolio_id=$1 and utc_day=$2 and metric_kind='action' and dimensions='{}'::jsonb order by metric_key`, [scope, retainedUtcDay])).rows;
     // Simulate a worker crash after its PostgreSQL effect committed and before lease completion.
     await admin!.query("update operations.jobs set lease_expires_at=clock_timestamp() - interval '1 second' where job_id=$1", [jobId]);
     const afterExpiry = new Date().toISOString();
@@ -231,10 +233,10 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     expect(await firstOperations.jobs.fail(jobId, firstLease.leaseToken, parseSafeErrorCode("PHASE7_WORK_FAILED"))).toBe(false);
     expect(await firstOperations.jobs.scheduleRetry(jobId, firstLease.leaseToken, parseSafeErrorCode("PHASE7_WORK_FAILED"), 0)).toBe(false);
     expect(await firstOperations.jobs.release(jobId, firstLease.leaseToken)).toBe(false);
-    const replay = await makeModuleServices(workerTwo!, scope).daily.aggregateDay({ ...workCommand(jobId, "measurement.aggregate", afterExpiry, scope), utcDay: "2026-10-14" });
+    const replay = await makeModuleServices(workerTwo!, scope).daily.aggregateDay({ ...workCommand(jobId, "measurement.aggregate", afterExpiry, scope), utcDay: retainedUtcDay });
     expect(replay).toMatchObject({ ok: true });
     const aggregateRows = (await admin!.query(`select event_count,metric_key,dimensions from measurement.daily_aggregates
-      where portfolio_id=$1 and utc_day='2026-10-14' and metric_kind='action' and dimensions='{}'::jsonb order by metric_key`, [scope])).rows;
+      where portfolio_id=$1 and utc_day=$2 and metric_kind='action' and dimensions='{}'::jsonb order by metric_key`, [scope, retainedUtcDay])).rows;
     expect(aggregateRows).toEqual(aggregateAfterFirstEffect);
     expect(aggregateRows.some((row: { metric_key: string }) => row.metric_key === "page-viewed")).toBe(true);
     expect(await secondOperations.jobs.complete(jobId, reclaimed[0]!.leaseToken, afterExpiry)).toBe(true);

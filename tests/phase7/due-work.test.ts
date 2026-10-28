@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { createPhase7DueWorkService } from "../../src/runtime/phase7-due-work.js";
-import type { LeasedJobRecord, Phase7ScheduleStatus, VersionedPayload } from "../../src/modules/portability-operations/index.js";
+import { createProtectedDueWorkTrigger } from "../../src/runtime/protected-due-work-trigger.js";
+import { DEFAULT_PROTECTED_DUE_WORK_BUDGET } from "../../src/runtime/phase8-due-work-control.js";
+import type { LeasedJobRecord, OwnerExportAssemblyRunResult, Phase7ScheduleStatus, VersionedPayload } from "../../src/modules/portability-operations/index.js";
 import type { MeasurementWorkCommand } from "../../src/modules/measurement/index.js";
 import type { FeedbackWorkCommand } from "../../src/modules/interaction-moderation/index.js";
 import type { StableId } from "../../src/shared/domain/index.js";
+import type { Rejection, Result } from "../../src/shared/domain/index.js";
 
 const portfolioId = "0196a1b2-7c3d-7e11-9f22-000000000001" as StableId<"Portfolio">;
 const now = "2026-10-16T12:00:00.000Z";
@@ -24,6 +27,7 @@ function fixture() {
   const rows = new Map<string, Row>();
   const queue: string[] = [];
   const effects: Array<{ kind: string; command: MeasurementWorkCommand | FeedbackWorkCommand }> = [];
+  const ownerResponses: Result<OwnerExportAssemblyRunResult, Rejection>[] = [];
   const leaseTokens = new Map<string, string>();
   let progress: Progress | undefined;
   let idSequence = 1;
@@ -164,13 +168,13 @@ function fixture() {
   const interaction = { expireFeedback: vi.fn(async (command: FeedbackWorkCommand) => {
     effects.push({ kind: "feedback-retention", command }); return { ok: true as const, value: { processedCount: 1, nextCursor: null, incomplete: false } };
   }) };
-  const ownerExports = { runOwnerExportAssembly: vi.fn(async () => ({ ok: true as const,
+  const ownerExports = { runOwnerExportAssembly: vi.fn(async () => ownerResponses.shift() ?? ({ ok: true as const,
     value: { claimed: 0, completed: 0, retried: 0, failed: 0, staleLeases: 0, cleanup: { scanned: 0, deleted: 0, pending: 0, incomplete: false } } })) };
   const makeService = () => createPhase7DueWorkService({ portfolioId, clock: { now: () => now }, random: () => 0.5,
     ids: { generate: () => `0196a1b2-7c3d-7e11-9f22-${(idSequence++).toString(16).padStart(12, "0")}` },
     operations: { transactions: { run: async <T>(callback: (tx: unknown) => Promise<T>) => callback({}) }, jobs } as never,
     measurement, interaction, ownerExports });
-  return { rows, effects, jobs, measurement, ownerExports, makeService };
+  return { rows, effects, jobs, measurement, ownerExports, ownerResponses, makeService };
 }
 
 describe("Phase 7 due-work orchestration", () => {
@@ -191,6 +195,51 @@ describe("Phase 7 due-work orchestration", () => {
     expect(state.ownerExports.runOwnerExportAssembly).toHaveBeenCalledTimes(2);
     expect(state.jobs.complete).toHaveBeenCalledTimes(285);
     expect(state.jobs.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails the protected trigger safely on an Owner dependency error and resumes after retry", async () => {
+    const state = fixture();
+    const service = state.makeService();
+    const prepared = await service.runDueWork({ workerId: "phase7-retention-preparation", maxClaimsPerPhase: 1_000 });
+    expect(prepared).toMatchObject({ ok: true, value: { scheduled: 60, completed: 60, incompleteBacklog: true } });
+    expect([...state.rows.values()].filter(row => retentionTypes.includes(row.payload.type as typeof retentionTypes[number]) &&
+      row.status === "completed")).toHaveLength(60);
+    expect([...state.rows.values()].filter(row => row.payload.type === aggregateType)).toHaveLength(0);
+
+    const privateMarker = "OWNER_EXPORT_PRIVATE_DEPENDENCY_MARKER";
+    state.ownerResponses.push({ ok: false, error: { kind: "temporarily_unavailable", code: privateMarker } });
+    state.ownerExports.runOwnerExportAssembly.mockClear();
+    const failedAttemptClaims = state.jobs.claimDue.mock.calls.length;
+    const trigger = createProtectedDueWorkTrigger({ cronTriggerSecret: "phase8-test-cron-secret",
+      workerId: "phase8-composed-test-worker", runDueWork: service.runDueWork,
+      observations: { monotonicNowMs: () => 100, memoryUsageBytes: () => 128 * 1024 * 1024 },
+      budget: { ...DEFAULT_PROTECTED_DUE_WORK_BUDGET, maxClaimsPerPhase: 50, maxCatchUpPeriods: 15 } });
+    const request = () => new Request("https://portfolio.example.test/internal/operations/phase7-due-work", {
+      method: "GET", headers: { authorization: "Bearer phase8-test-cron-secret" },
+    });
+
+    const failed = await trigger.handle(request());
+    const failedBody = await failed.text();
+    expect(failed.status).toBe(503);
+    expect(failedBody).toBe('{"ok":false,"code":"due_work_unavailable"}');
+    expect(failedBody).not.toContain(privateMarker);
+    expect(state.ownerExports.runOwnerExportAssembly).toHaveBeenCalledTimes(1);
+    const failedClaimCalls = state.jobs.claimDue.mock.calls.slice(failedAttemptClaims);
+    expect(failedClaimCalls.some(([input]) => input.jobTypes?.includes(aggregateType))).toBe(false);
+    expect([...state.rows.values()].filter(row => row.payload.type === aggregateType)).toHaveLength(0);
+    expect([...state.rows.values()].some(row => row.status === "leased")).toBe(false);
+
+    state.ownerExports.runOwnerExportAssembly.mockClear();
+    const retryClaimCalls = state.jobs.claimDue.mock.calls.length;
+    const retried = await trigger.handle(request());
+    const retryBody = await retried.json() as { incomplete: boolean };
+    expect(retried.status).toBe(200);
+    expect(retryBody.incomplete).toBe(true);
+    expect(state.ownerExports.runOwnerExportAssembly).toHaveBeenCalledTimes(1);
+    const retryClaims = state.jobs.claimDue.mock.calls.slice(retryClaimCalls);
+    expect(retryClaims.some(([input]) => input.jobTypes?.includes(aggregateType))).toBe(true);
+    expect([...state.rows.values()].filter(row => row.payload.type === aggregateType)).toHaveLength(225);
+    expect([...state.rows.values()].some(row => row.status === "leased")).toBe(false);
   });
 
   it("does not admit aggregation when a durable retention key is delayed or dead", async () => {
