@@ -190,6 +190,9 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
   }, 60_000);
 
   it("proves concurrent lease exclusion, expiry recovery, stale-token denial, and idempotent post-effect replay", async () => {
+    // Replay the same policy snapshot; lease time must not age this event out
+    // of the aggregate's 14-day accepted-event window.
+    const aggregateAsOf = "2026-10-15T00:00:00.000Z";
     const scope = id("Portfolio");
     const jobId = id("Job");
     const eventId = id("PublicEvent");
@@ -213,7 +216,7 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     const firstLease = firstClaims[0] ?? competingClaims[0]!;
 
     const firstModules = makeModuleServices(worker!, scope);
-    const firstEffect = await firstModules.daily.aggregateDay({ ...workCommand(jobId, "measurement.aggregate", now, scope), utcDay: "2026-10-14" });
+    const firstEffect = await firstModules.daily.aggregateDay({ ...workCommand(jobId, "measurement.aggregate", aggregateAsOf, scope), utcDay: "2026-10-14" });
     expect(firstEffect).toMatchObject({ ok: true });
     const aggregateAfterFirstEffect = (await admin!.query(`select event_count,metric_key,dimensions from measurement.daily_aggregates
       where portfolio_id=$1 and utc_day='2026-10-14' and metric_kind='action' and dimensions='{}'::jsonb order by metric_key`, [scope])).rows;
@@ -231,7 +234,7 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     expect(await firstOperations.jobs.fail(jobId, firstLease.leaseToken, parseSafeErrorCode("PHASE7_WORK_FAILED"))).toBe(false);
     expect(await firstOperations.jobs.scheduleRetry(jobId, firstLease.leaseToken, parseSafeErrorCode("PHASE7_WORK_FAILED"), 0)).toBe(false);
     expect(await firstOperations.jobs.release(jobId, firstLease.leaseToken)).toBe(false);
-    const replay = await makeModuleServices(workerTwo!, scope).daily.aggregateDay({ ...workCommand(jobId, "measurement.aggregate", afterExpiry, scope), utcDay: "2026-10-14" });
+    const replay = await makeModuleServices(workerTwo!, scope).daily.aggregateDay({ ...workCommand(jobId, "measurement.aggregate", aggregateAsOf, scope), utcDay: "2026-10-14" });
     expect(replay).toMatchObject({ ok: true });
     const aggregateRows = (await admin!.query(`select event_count,metric_key,dimensions from measurement.daily_aggregates
       where portfolio_id=$1 and utc_day='2026-10-14' and metric_kind='action' and dimensions='{}'::jsonb order by metric_key`, [scope])).rows;
