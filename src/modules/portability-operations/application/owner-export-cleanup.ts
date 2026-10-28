@@ -2,6 +2,8 @@ import { err, ok, type Rejection, type Result, type StableId } from "@shared/dom
 import type { TransactionContext } from "../../../runtime/ports.js";
 import type { PersistedOwnerExport } from "./owner-export-store.js";
 import type { OwnerExportAssemblySnapshot } from "./owner-export-package.js";
+import type { OperationsObservationPort } from "./service.js";
+import { recordOperationsSignal } from "./operations-observability.js";
 
 export interface OwnerExportObjectIdentity {
   readonly portfolioId: StableId<"Portfolio">;
@@ -50,6 +52,7 @@ export function createOwnerExportArtifactCleanupService(deps: {
     readonly snapshot: OwnerExportAssemblySnapshot; readonly portfolioId: StableId<"Portfolio">;
     readonly ownerId: StableId<"Owner">; readonly context: TransactionContext;
   }): Promise<boolean> };
+  readonly observations?: Pick<OperationsObservationPort, "recordSignal">;
 }) {
   return {
     async runOwnerExportCleanup(input: { readonly after?: StableId<"OwnerExport">; readonly limit?: number } = {}) {
@@ -71,8 +74,19 @@ export function createOwnerExportArtifactCleanupService(deps: {
           });
           if (revoked?.candidateArtifactId === undefined) continue;
           const identity = { portfolioId: revoked.portfolioId, exportId: revoked.exportId, artifactId: revoked.candidateArtifactId };
-          const removed = await deps.storage.deleteOwnerExport(identity);
-          if (!removed.ok) { pending++; continue; }
+          let removed: Result<void, Rejection>;
+          try { removed = await deps.storage.deleteOwnerExport(identity); }
+          catch {
+            void recordOperationsSignal(deps.observations, { kind: "storage-operation", operation: "delete", outcome: "failed" });
+            pending++;
+            continue;
+          }
+          if (!removed.ok) {
+            void recordOperationsSignal(deps.observations, { kind: "storage-operation", operation: "delete", outcome: "failed" });
+            pending++;
+            continue;
+          }
+          void recordOperationsSignal(deps.observations, { kind: "storage-operation", operation: "delete", outcome: "succeeded" });
           await deps.artifacts.markOwnerExportArtifactDeleted(identity);
           deleted++;
         }

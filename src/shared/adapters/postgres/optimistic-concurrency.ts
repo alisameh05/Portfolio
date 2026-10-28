@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import type { TransactionContext } from "../../../runtime/ports.js";
 import {
   PostgresInfrastructureError,
+  postgresFailureCategory,
   resolvePostgresTransaction,
 } from "./runtime.js";
 
@@ -73,9 +74,9 @@ export async function updateVersionedRecord(
      where id = ${input.id}::uuid and version = ${input.expectedVersion}
      returning version
   `.execute(executor);
-  } catch {
-    throw new PostgresInfrastructureError();
-  }
+  } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
+    }
   const row = updated.rows[0];
   if (row !== undefined) return { kind: "updated", version: row.version };
 
@@ -84,9 +85,9 @@ export async function updateVersionedRecord(
     existing = await sql<{ version: number }>`
     select version from ${table} where id = ${input.id}::uuid
   `.execute(executor);
-  } catch {
-    throw new PostgresInfrastructureError();
-  }
+  } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
+    }
   const current = existing.rows[0];
   return current === undefined
     ? { kind: "not_found" }

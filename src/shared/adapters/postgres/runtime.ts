@@ -27,6 +27,36 @@ export type PostgresExecutor = Kysely<DB> | Transaction<DB>;
 const TRANSACTIONS = new WeakMap<TransactionContext, PostgresExecutor>();
 const CONTEXT_KIND = "transaction" as const;
 
+type RuntimeObservation = Readonly<Record<string, string | number>>;
+type RuntimeObservationSink = (observation: RuntimeObservation) => void;
+
+function emitRuntimeObservation(fields: RuntimeObservation, sink?: RuntimeObservationSink): void {
+  try { (sink ?? ((observation) => console.info(JSON.stringify(observation))))({ event: "operations.signal",
+    observedAt: new Date().toISOString(), ...fields }); }
+  catch { /* telemetry is best effort */ }
+}
+
+function isAuthorizationFailure(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current !== null && typeof current === "object"; depth += 1) {
+    if (current instanceof PostgresInfrastructureError) {
+      if (current.category === "authorization") return true;
+      current = (current as Error & { cause?: unknown }).cause;
+      continue;
+    }
+    const record = current as Record<string, unknown>;
+    if (record["code"] === "42501") return true;
+    if (record["code"] === "POSTGRES_UNAVAILABLE" &&
+        record["name"] === "PostgresInfrastructureError" && record["category"] === "authorization") return true;
+    current = record["cause"];
+  }
+  return false;
+}
+
+export function postgresFailureCategory(error: unknown): "authorization" | "transaction" {
+  return isAuthorizationFailure(error) ? "authorization" : "transaction";
+}
+
 class RequestedRollback<T> extends Error {
   constructor(readonly value: T) {
     super("TRANSACTION_ROLLBACK_REQUESTED");
@@ -35,10 +65,12 @@ class RequestedRollback<T> extends Error {
 
 export class PostgresInfrastructureError extends Error {
   readonly code = "POSTGRES_UNAVAILABLE";
+  readonly category: "authorization" | "transaction";
 
-  constructor() {
+  constructor(category: "authorization" | "transaction" = "transaction") {
     super("PostgreSQL operation failed.");
     this.name = "PostgresInfrastructureError";
+    this.category = category;
   }
 }
 
@@ -62,6 +94,7 @@ export function resolvePostgresTransaction(
 export function createPostgresTransactionRunner(
   database: Kysely<DB>,
   safeInputErrors: WeakSet<InputValidationError> = new WeakSet(),
+  runtimeObservationSink?: RuntimeObservationSink,
 ): TransactionRunner {
   return {
     async run<T>(
@@ -84,9 +117,14 @@ export function createPostgresTransactionRunner(
         );
       } catch (error) {
         if (error instanceof RequestedRollback) return error.value as T;
-        if (error instanceof PostgresInfrastructureError) throw error;
+        if (error instanceof PostgresInfrastructureError) {
+          emitRuntimeObservation({ signal: "database-failure", category: error.category }, runtimeObservationSink);
+          throw error;
+        }
         if (error instanceof InputValidationError && safeInputErrors.has(error)) throw error;
-        throw new PostgresInfrastructureError();
+        const category = postgresFailureCategory(error);
+        emitRuntimeObservation({ signal: "database-failure", category }, runtimeObservationSink);
+        throw new PostgresInfrastructureError(category);
       }
     },
   };
@@ -103,6 +141,7 @@ export interface PostgresPoolOptions {
   readonly max?: number;
   readonly connectionTimeoutMs?: number;
   readonly readinessTimeoutMs?: number;
+  readonly runtimeObservationSink?: RuntimeObservationSink;
 }
 
 export function createPostgresRuntimeDatabase(
@@ -116,6 +155,20 @@ export function createPostgresRuntimeDatabase(
     idleTimeoutMillis: 30_000,
     allowExitOnIdle: true,
   });
+  const configuredLimit = options.max ?? 5;
+  const recordPoolUsage = () => {
+    if (!Number.isSafeInteger(configuredLimit) || configuredLimit < 1 || configuredLimit > 1_000) return;
+    const usedConnections = Math.max(0, Math.min(1_000, pool.totalCount - pool.idleCount));
+    emitRuntimeObservation({ signal: "database-pool", usedConnections, configuredLimit }, options.runtimeObservationSink);
+  };
+  pool.on("acquire", recordPoolUsage);
+  // pg-pool emits `release` before adding the client back to its idle array.
+  // Defer the sample until that release transition (and any queued checkout)
+  // has completed so it represents current occupancy rather than one stale
+  // pre-transition observation.
+  pool.on("release", () => setImmediate(recordPoolUsage));
+  pool.on("remove", recordPoolUsage);
+  pool.on("error", () => emitRuntimeObservation({ signal: "database-failure", category: "pool" }, options.runtimeObservationSink));
   const database = new Kysely<DB>({ dialect: new PostgresDialect({ pool }) });
   let closePromise: Promise<void> | undefined;
 
@@ -150,7 +203,7 @@ export function createPostgresRuntimeDatabase(
 
   return {
     database,
-    transactions: createPostgresTransactionRunner(database),
+    transactions: createPostgresTransactionRunner(database, undefined, options.runtimeObservationSink),
     readiness,
     resource,
   };

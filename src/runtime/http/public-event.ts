@@ -37,6 +37,8 @@ import type {
   EventReceipt,
   ConsentApplicationService,
 } from "../../modules/measurement/index.js";
+import type { OperationsObservationPort } from "../../modules/portability-operations/index.js";
+import { emitOperationsSignal } from "../../modules/portability-operations/index.js";
 import type {
   IdempotencyKey,
   StableId,
@@ -58,6 +60,7 @@ export interface PublicEventAdapterDeps {
   readonly scope?: PortfolioRequestScope;
   service?: Pick<MeasurementService, "ingestEvent">;
   logger?: Logger;
+  operationsObservations?: Pick<OperationsObservationPort, "recordSignal">;
 }
 
 function requestInstance(request: Request): string {
@@ -86,7 +89,7 @@ function analyticsConsentToken(request: Request): string | undefined {
   return token;
 }
 
-export async function handlePostPublicEvent(
+async function handlePostPublicEventUnobserved(
   request: Request,
   deps: PublicEventAdapterDeps,
 ): Promise<Response> {
@@ -133,11 +136,22 @@ export async function handlePostPublicEvent(
     const scope = deps.scope ?? runtime?.scope ?? { kind: "unconfigured" as const };
     const consent = deps.consent ?? getConsentApplicationService();
     const token = analyticsConsentToken(request);
-    if (!consent || !token) return rejectionToProblem({ kind: "forbidden", code: "MEASUREMENT_CONSENT_REQUIRED" }, traceId, instance);
+    if (!consent || !token) {
+      await emitOperationsSignal(logger, deps.operationsObservations, { kind: "event-intake", outcome: "rejected" });
+      return rejectionToProblem({ kind: "forbidden", code: "MEASUREMENT_CONSENT_REQUIRED" }, traceId, instance);
+    }
     const verified = await consent.verifyEvidence({ scope, correlationId: traceId, token, noticeVersion: bodyResult.data.context.consentVersion });
-    if (!verified.ok) return rejectionToProblem(verified.error, traceId, instance);
+    if (!verified.ok) {
+      await emitOperationsSignal(logger, deps.operationsObservations, {
+        kind: "event-intake", outcome: verified.error.kind === "temporarily_unavailable" ? "unavailable" : "rejected",
+      });
+      return rejectionToProblem(verified.error, traceId, instance);
+    }
     const service = deps.service ?? runtime?.service;
-    if (!service) return rejectionToProblem({ kind: "temporarily_unavailable", code: "MEASUREMENT_UNAVAILABLE" }, traceId, instance);
+    if (!service) {
+      await emitOperationsSignal(logger, deps.operationsObservations, { kind: "event-intake", outcome: "unavailable" });
+      return rejectionToProblem({ kind: "temporarily_unavailable", code: "MEASUREMENT_UNAVAILABLE" }, traceId, instance);
+    }
     const command: IngestPublicEventCommand = {
       scope,
       correlationId: traceId,
@@ -151,10 +165,14 @@ export async function handlePostPublicEvent(
     try {
       result = await service.ingestEvent(command);
     } catch (error) {
+      await emitOperationsSignal(logger, deps.operationsObservations, { kind: "event-intake", outcome: "indeterminate" });
       return internalErrorProblem(error, traceId, instance, logger);
     }
 
     if (!result.ok) {
+      await emitOperationsSignal(logger, deps.operationsObservations, {
+        kind: "event-intake", outcome: result.error.kind === "temporarily_unavailable" ? "unavailable" : "rejected",
+      });
       const rejection = rejectionToProblem(result.error, traceId, instance);
       // Rejection codes are stable machine values (never secrets), so the
       // code is safe to log with correlation for diagnostics.
@@ -165,6 +183,10 @@ export async function handlePostPublicEvent(
       });
       return rejection;
     }
+
+    // The application receipt is the commit boundary. The transport can still
+    // fail afterward, so HTTP status is recorded separately from intake truth.
+    await emitOperationsSignal(logger, deps.operationsObservations, { kind: "event-intake", outcome: "accepted" });
 
     const value = result.value as EventReceipt;
     const payload = {
@@ -185,5 +207,25 @@ export async function handlePostPublicEvent(
     return Response.json(responseResult.data, { status: 202 });
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
+  }
+}
+
+/** Preserve the existing HTTP contract while emitting bounded safe metrics. */
+export async function handlePostPublicEvent(
+  request: Request,
+  deps: PublicEventAdapterDeps,
+): Promise<Response> {
+  const startedAt = performance.now();
+  let response: Response | undefined;
+  try {
+    response = await handlePostPublicEventUnobserved(request, deps);
+    return response;
+  } finally {
+    const durationMs = Math.max(0, Math.min(86_400_000, Math.floor(performance.now() - startedAt)));
+    const status = response?.status ?? 500;
+    const statusClass = `${Math.floor(status / 100)}xx` as "2xx" | "3xx" | "4xx" | "5xx";
+    await emitOperationsSignal(deps.logger, deps.operationsObservations, {
+      kind: "http-request", route: "public-event", statusClass, durationMs,
+    });
   }
 }

@@ -262,7 +262,10 @@ export async function initializeDatabaseRuntime(
         ]);
         const moderationExportReader = createPostgresFeedbackOwnerExportSnapshotReader();
         const mediaExportReader = createPostgresOwnerMediaExportSnapshotReader({ database: database.database, transactions: operations.transactions });
-        const ownerExportStore = createPostgresOwnerExportStore(database.database, { outbox: operations.outbox });
+        const ownerExportStore = createPostgresOwnerExportStore(database.database, {
+          outbox: operations.outbox,
+          transactions: database.transactions,
+        });
         let ownerExportStorage: Awaited<ReturnType<typeof import("../runtime/adapters/supabase-owner-export-storage.js").createSupabaseOwnerExportStorage>> | undefined;
         if (env["SUPABASE_URL"] && env["SUPABASE_SERVICE_ROLE_KEY"]) {
           const { createSupabaseOwnerExportStorage } = await import("../runtime/adapters/supabase-owner-export-storage.js");

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { unsafeStableId, type ActorContext } from "../../src/shared/domain/index.js";
 import type { TransactionContext } from "../../src/runtime/ports.js";
 import type { OperationsPersistencePorts, SafeResultEnvelope } from "../../src/modules/portability-operations/application/persistence.js";
+import type { OperationsObservationPort } from "../../src/modules/portability-operations/index.js";
 import {
   createContentAuthoringService,
   type ContentAuthoringRecord,
@@ -20,7 +21,7 @@ function uuid(index: number): string {
   return `0196a1b2-7c3d-7e11-9f22-3a4b5c6d7e${String(index).padStart(2, "0")}`;
 }
 
-function createHarness() {
+function createHarness(observations?: Pick<OperationsObservationPort, "recordSignal">) {
   const records = new Map<string, ContentAuthoringRecord>();
   const publicProjects = new Map<string, PublicProjectContentView>();
   const publicAchievements = new Map<string, PublicAchievementTimelineEntry>();
@@ -301,6 +302,7 @@ function createHarness() {
     discoveryProjection: { async writePublishedProjectLocale() {}, async updateProjectRouteSlug() {} },
     clock: { now: () => "2026-10-05T08:00:00.000Z" },
     ids: { generate: () => uuid(id++) },
+    ...(observations === undefined ? {} : { operationsObservations: observations }),
   });
   return { service, records, events };
 }
@@ -649,7 +651,8 @@ describe("Content authoring application service", () => {
   });
 
   it("fails closed for unresolved Media facts and rejects reviewed placeholder evidence without public side effects", async () => {
-    const { service, records, events } = createHarness();
+    const observed: unknown[] = [];
+    const { service, records, events } = createHarness({ async recordSignal(signal) { observed.push(signal); } });
     const artifactId = unsafeStableId<"SupportingArtifact">(uuid(98));
     const mediaId = unsafeStableId<"MediaAsset">(uuid(99));
     const created = await service.createContent({ actor: ACTOR, idempotencyKey: "publish-media-create" as never, correlationId: "publish-media-create",
@@ -669,6 +672,7 @@ describe("Content authoring application service", () => {
     expect(result).toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "MEDIA_ACCEPTANCE_UNAVAILABLE" } });
     expect(records.get(created.value.contentId)).toMatchObject({ lifecycle: "draft", aggregateVersion: 2 });
     expect(events.filter((event) => (event as { payload?: { type?: string } }).payload?.type === "content.language_version_published.v1")).toHaveLength(0);
+    expect(observed).toEqual([{ kind: "publication-failure", category: "dependency" }]);
   });
 
   it.each([

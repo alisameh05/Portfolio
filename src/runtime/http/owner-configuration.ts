@@ -35,6 +35,8 @@ import {
   zUpdateOwnerProfileConfigurationHeaders,
   zUpdateOwnerProfileConfigurationResponse,
 } from "../../contracts/http/owner/v1/generated/zod.gen.js";
+import { observeHttpRequest } from "./observe-request.js";
+
 import type {
   ActorContext,
   IdempotencyKey,
@@ -189,7 +191,7 @@ async function dispatchReceipt(
   return Response.json(parsed.data, { status: 200 });
 }
 
-export async function handleUpdateOwnerProfileConfiguration(
+ async function handleUpdateOwnerProfileConfigurationUnobserved(
   request: Request,
   deps: OwnerConfigurationAdapterDeps,
 ): Promise<Response> {
@@ -251,7 +253,7 @@ export async function handleUpdateOwnerProfileConfiguration(
   }
 }
 
-export async function handleUpdateOwnerContactChannels(
+ async function handleUpdateOwnerContactChannelsUnobserved(
   request: Request,
   deps: OwnerConfigurationAdapterDeps,
 ): Promise<Response> {
@@ -310,7 +312,7 @@ export async function handleUpdateOwnerContactChannels(
   }
 }
 
-export async function handleUpdateOwnerGlobalProjectCta(
+ async function handleUpdateOwnerGlobalProjectCtaUnobserved(
   request: Request,
   deps: OwnerConfigurationAdapterDeps,
 ): Promise<Response> {
@@ -369,4 +371,17 @@ export async function handleUpdateOwnerGlobalProjectCta(
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
+}
+
+
+export function handleUpdateOwnerProfileConfiguration(request: Request, deps: OwnerConfigurationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-configuration", () => handleUpdateOwnerProfileConfigurationUnobserved(request, deps), deps.logger);
+}
+
+export function handleUpdateOwnerContactChannels(request: Request, deps: OwnerConfigurationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-configuration", () => handleUpdateOwnerContactChannelsUnobserved(request, deps), deps.logger);
+}
+
+export function handleUpdateOwnerGlobalProjectCta(request: Request, deps: OwnerConfigurationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-configuration", () => handleUpdateOwnerGlobalProjectCtaUnobserved(request, deps), deps.logger);
 }

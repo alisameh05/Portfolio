@@ -48,6 +48,8 @@ import {
   zRetireOwnerTaxonomyValuePath,
   zRetireOwnerTaxonomyValueResponse,
 } from "../../contracts/http/owner/v1/generated/zod.gen.js";
+import { observeHttpRequest } from "./observe-request.js";
+
 import type {
   ActorContext,
   IdempotencyKey,
@@ -231,7 +233,7 @@ function commandHeaders(request: Request): Record<string, string | undefined> {
   };
 }
 
-export async function handleGetOwnerTaxonomyAggregate(
+ async function handleGetOwnerTaxonomyAggregateUnobserved(
   request: Request,
   params: { taxonomyId: string },
   deps: OwnerTaxonomyAdapterDeps,
@@ -395,7 +397,7 @@ async function handleTaxonomyCommand(
   }
 }
 
-export async function handleCreateOwnerTaxonomyValue(
+ async function handleCreateOwnerTaxonomyValueUnobserved(
   request: Request,
   params: { taxonomyId: string },
   deps: OwnerTaxonomyAdapterDeps,
@@ -423,7 +425,7 @@ export async function handleCreateOwnerTaxonomyValue(
   );
 }
 
-export async function handleRenameOwnerTaxonomyValue(
+ async function handleRenameOwnerTaxonomyValueUnobserved(
   request: Request,
   params: { valueId: string },
   deps: OwnerTaxonomyAdapterDeps,
@@ -451,7 +453,7 @@ export async function handleRenameOwnerTaxonomyValue(
   );
 }
 
-export async function handleRetireOwnerTaxonomyValue(
+ async function handleRetireOwnerTaxonomyValueUnobserved(
   request: Request,
   params: { valueId: string },
   deps: OwnerTaxonomyAdapterDeps,
@@ -479,7 +481,7 @@ export async function handleRetireOwnerTaxonomyValue(
   );
 }
 
-export async function handleMergeOwnerTaxonomyValue(
+ async function handleMergeOwnerTaxonomyValueUnobserved(
   request: Request,
   params: { valueId: string },
   deps: OwnerTaxonomyAdapterDeps,
@@ -505,4 +507,25 @@ export async function handleMergeOwnerTaxonomyValue(
     }) as MergeOwnerTaxonomyValueApplicationCommand,
     (command) => deps.service.mergeOwnerTaxonomyValue(command),
   );
+}
+
+
+export function handleGetOwnerTaxonomyAggregate(request: Request, params: { taxonomyId: string }, deps: OwnerTaxonomyAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-taxonomy", () => handleGetOwnerTaxonomyAggregateUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleCreateOwnerTaxonomyValue(request: Request, params: { taxonomyId: string }, deps: OwnerTaxonomyAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-taxonomy", () => handleCreateOwnerTaxonomyValueUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleRenameOwnerTaxonomyValue(request: Request, params: { valueId: string }, deps: OwnerTaxonomyAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-taxonomy", () => handleRenameOwnerTaxonomyValueUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleRetireOwnerTaxonomyValue(request: Request, params: { valueId: string }, deps: OwnerTaxonomyAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-taxonomy", () => handleRetireOwnerTaxonomyValueUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleMergeOwnerTaxonomyValue(request: Request, params: { valueId: string }, deps: OwnerTaxonomyAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-taxonomy", () => handleMergeOwnerTaxonomyValueUnobserved(request, params, deps), deps.logger);
 }

@@ -3,6 +3,8 @@ import {
   zCreateOwnerContentHeaders,
   zCreateOwnerContentResponse,
 } from "../../contracts/http/owner/v1/generated/zod.gen.js";
+import { observeHttpRequest } from "./observe-request.js";
+
 import type { CreateDraftPayload } from "../../modules/content-publishing/domain/index.js";
 import type { ContentAuthoringService } from "../../modules/content-publishing/application/authoring.js";
 import type { IdempotencyKey, Rejection } from "../../shared/domain/index.js";
@@ -35,7 +37,7 @@ function rejected(error: Rejection, logger: Logger | undefined, traceId: string,
   return response;
 }
 
-export async function handleCreateOwnerContent(
+ async function handleCreateOwnerContentUnobserved(
   request: Request,
   deps: OwnerContentAuthoringAdapterDeps,
 ): Promise<Response> {
@@ -74,4 +76,9 @@ export async function handleCreateOwnerContent(
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
+}
+
+
+export function handleCreateOwnerContent(request: Request, deps: OwnerContentAuthoringAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-content-authoring", () => handleCreateOwnerContentUnobserved(request, deps), deps.logger);
 }

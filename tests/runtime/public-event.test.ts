@@ -245,8 +245,14 @@ describe("POST Public event adapter (#28)", () => {
     );
     const firstBody = (await first.json()) as Record<string, unknown>;
     expect(firstBody["traceId"]).not.toBe("inbound-attacker-value");
-    const logged = (logger.records[0] as { fields: Record<string, unknown> }).fields;
-    expect(logged["traceId"]).toBe(firstBody["traceId"]);
+    const rejected = logger.records.filter((record) => record.event === "request.rejected");
+    expect(rejected).toHaveLength(1);
+    const logged = (rejected[0] as { fields: Record<string, unknown> }).fields;
+    expect(logged).toMatchObject({
+      traceId: firstBody["traceId"],
+      status: 409,
+      code: "IDEMPOTENCY_CONFLICT",
+    });
 
     const secondLogger = createTestLogger();
     const second = await handlePostPublicEvent(postEventRequest(), {

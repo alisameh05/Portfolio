@@ -19,6 +19,7 @@ export {
   type OperationsIncidentObservation,
   type OperationsJobApplicationService,
   type OperationsObservationPort,
+  type OperationsSignalObservation,
   type OwnerExportApplicationService,
   type OwnerExportAuthorizationContext,
   type OwnerExportDownloadView,
@@ -58,6 +59,25 @@ export {
 } from "./service.js";
 export { redriveDeadJob, type RedriveDeadJobCommand, type RedriveDeadJobDependencies } from "./redrive-service.js";
 export { JOB_REDRIVE_POLICY_VERSION, parsePhase7WorkPayload, type Phase7WorkPayload } from "./redrive-policy.js";
+
+export {
+  createLoggerOperationsObservationPort,
+  createOperationsSummaryService,
+  emitOperationsSignal,
+  OPERATIONS_SUMMARY_MAX_ROWS,
+  OPERATIONS_SUMMARY_PURPOSE,
+  OPERATIONS_SUMMARY_WINDOW_SECONDS,
+  recordOperationsSignal,
+  type BoundedCount,
+  type KnownValue,
+  type OperationsSummary,
+  type OperationsSummaryCommand,
+  type OperationsSummaryQuery,
+  type OperationsSummaryReaderPort,
+  type OperationsSummarySnapshot,
+  type OperationsValue,
+  type UnknownValue,
+} from "./operations-observability.js";
 
 export {
   parseSafeErrorCode,

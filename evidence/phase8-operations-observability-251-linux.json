@@ -1,0 +1,2906 @@
+{
+  "evidenceVersion": 1,
+  "ticket": 251,
+  "runId": "3a6a0343-fa07-4d72-af28-a62df3c12776",
+  "startedAt": "2026-10-28T19:07:40.426Z",
+  "completedAt": "2026-10-28T19:09:40.019Z",
+  "repository": {
+    "head": "1f751047cd54de219eab46a7029146498e113f6d",
+    "branch": null,
+    "detached": true,
+    "sourceTreeSha256Before": "d76e3c7475bced1d42b55e054ce0638ec5910fe1739a68d4082490f41fdf3045",
+    "sourceTreeSha256After": "d76e3c7475bced1d42b55e054ce0638ec5910fe1739a68d4082490f41fdf3045"
+  },
+  "tools": {
+    "node": "v24.21.0",
+    "npm": "11.19.0",
+    "vitest": "3.2.4",
+    "postgres": "postgres (PostgreSQL) 18.6 (Debian 18.6-1.pgdg12+2)",
+    "pgMajor": 18
+  },
+  "services": [
+    {
+      "name": "postgresql",
+      "status": "running",
+      "mode": "isolated disposable local cluster"
+    },
+    {
+      "name": "operations_summary_upgrade",
+      "status": "migrated predecessor, upgraded, rolled back, and forward-applied"
+    },
+    {
+      "name": "operations_summary_fresh",
+      "status": "fresh replay includes current migration"
+    },
+    {
+      "name": "operations_summary_predecessor",
+      "status": "fresh replay through migration63; migration64 absent"
+    }
+  ],
+  "roles": [
+    "operations_summary_worker_runtime -> shipwithali_worker",
+    "operations_summary_application_runtime -> shipwithali_application",
+    "shipwithali_migration (DDL only; no new product grants)"
+  ],
+  "migrations": [
+    {
+      "name": "20260922170000_prepare_migration_capability.sql",
+      "sha256": "f626df30438e644254fd6c5af015118be117ef5090fbc976bb0762593ac481fe"
+    },
+    {
+      "name": "20260922171906_establish_database_security_baseline.sql",
+      "sha256": "1406e77b9a2505ec684ef350170545558217ca2bf345675f67eb723a735f6be3"
+    },
+    {
+      "name": "20260922203000_create_operations_primitives.sql",
+      "sha256": "adad38103c83693de591f1691fe4eaabbe7da90423b3e68a02d7b7aa9b76cb98"
+    },
+    {
+      "name": "20261001220000_create_identity_access_owner_links.sql",
+      "sha256": "caa742152a624883937f3204ca1ec2ee947c7c52a812e0760ba794d1195b1205"
+    },
+    {
+      "name": "20261002120000_create_portfolio_configuration_settings.sql",
+      "sha256": "55452f45d7b4b18720993ec5fe4d0e818652c331339bd97c7e15fed6fb6a9c90"
+    },
+    {
+      "name": "20261002130000_allow_versioned_portfolio_profile_updates.sql",
+      "sha256": "533e07ffcad2d12297337fd84a6b7beb29cc5254a8f1632e75024ad73a013fae"
+    },
+    {
+      "name": "20261002140000_allow_owner_contact_channel_replacement.sql",
+      "sha256": "046977710edcffca09133ea794e874dbdd9b68188526cdc548182b3c73843ca4"
+    },
+    {
+      "name": "20261002150000_allow_versioned_portfolio_cta_updates.sql",
+      "sha256": "f05678c118b14daee3ccfaf34736169b3339720b32ed6c1a394366398ded605a"
+    },
+    {
+      "name": "20261005001318_create_content_authoring.sql",
+      "sha256": "9b83a3dfdeed012f5ff6a61a96d765f54ebd8280530a2be428ec0e11eb0c029e"
+    },
+    {
+      "name": "20261007090000_add_immutable_content_revision_reviews.sql",
+      "sha256": "787ce6c713d8c2c719878ed119d1e0095b7e852d13fa634544e73db27e861a02"
+    },
+    {
+      "name": "20261007170000_add_project_publication_routes.sql",
+      "sha256": "a1fccbc91c732890ff8e0d0e5f754385abc927a70008e2017e6bf0b4a462c896"
+    },
+    {
+      "name": "20261007190000_add_achievement_publication_timeline.sql",
+      "sha256": "abeddadfcab69209b95986d036d0a929e916630ba9cf9c55828e2fb477ae441f"
+    },
+    {
+      "name": "20261007200000_publish_localized_testimonials.sql",
+      "sha256": "d262130f861be52c4c5556f45f31d0dd94dfcc10a6471cf22c28ca0390eb0877"
+    },
+    {
+      "name": "20261008090000_preserve_project_route_history.sql",
+      "sha256": "e56f6c1aaa4c40d28cb7f2dc5ab7c17d766c19ea82b72c0549264abd1275e058"
+    },
+    {
+      "name": "20261008120000_add_content_lifecycle_history.sql",
+      "sha256": "b2ef7861b063a20f45bbc2fd7857e6aaee59f3d154512d3c752e8b2f0a6c90c1"
+    },
+    {
+      "name": "20261008130000_add_project_status_and_featured.sql",
+      "sha256": "da301da8f9aa79dcdc754c305e6453e348012d5d450fc689793c562264febbe2"
+    },
+    {
+      "name": "20261008180000_add_project_relationships.sql",
+      "sha256": "0826469828a5534a191fa9fcbf00355b8ef80078db1556d164e68edfef624174"
+    },
+    {
+      "name": "20261008210000_provision_project_taxonomies.sql",
+      "sha256": "c405a2ecb3f425eaf6874557a70d4f277e95d38816970c6ac884b67279c76948"
+    },
+    {
+      "name": "20261009090000_record_taxonomy_evolution_actor_reason.sql",
+      "sha256": "14d9ebfa4266d239eca09f6e6ee944684423624e2ef545bfdf57e9c8aca9114e"
+    },
+    {
+      "name": "20261009100000_index_project_discovery_reads.sql",
+      "sha256": "ad685fa5f79f1f7c3b9ba001c3c5ea73272845ce6881eece0787a25fcd056d48"
+    },
+    {
+      "name": "20261010100000_create_private_media_upload_intents.sql",
+      "sha256": "dc9148b681510d17d79b6c9d81bd7f2f1a0538b6fc3033cc973ce5a82cc7987d"
+    },
+    {
+      "name": "20261010200000_record_trusted_pdf_processing.sql",
+      "sha256": "5780f2f4fcd167a9d3c806887cbcc71bf14694e606f0cda6338ceecfc2932dd6"
+    },
+    {
+      "name": "20261011210000_harden_trusted_pdf_processing.sql",
+      "sha256": "13664c93dbbdf3001c793d661739a3989c76fc7e8f00b7e5cdb781734171332a"
+    },
+    {
+      "name": "20261011220000_record_bounded_video_variants.sql",
+      "sha256": "81cc24aef5bb3393b9e405c269e806121598010675affb6239dbc1b901031cbe"
+    },
+    {
+      "name": "20261011230000_process_bounded_media_image_variants.sql",
+      "sha256": "de011d9c57ce64acdec8e4330e7e958fbd390541dd608bcba29c0e81c3059eca"
+    },
+    {
+      "name": "20261012000000_restore_video_variant_policy_after_images.sql",
+      "sha256": "172a5fed40a44dcc83833d12d8e0412f095e80fcb7af2b760b4d75f7b0921d69"
+    },
+    {
+      "name": "20261012010000_accept_media_with_editorial_accessibility.sql",
+      "sha256": "879e0bd7110e9e2867fc9be61e4f1d6758f739566075af92d76a8d57621494f3"
+    },
+    {
+      "name": "20261012020000_index_current_visible_media_references.sql",
+      "sha256": "9b166b1a14d6f2d05a32c5023657ab89ed90d3aae153fb2c1a28ca9af6b4e736"
+    },
+    {
+      "name": "20261012030000_initialize_cv_portfolio_register_english_versions.sql",
+      "sha256": "777d87a02304e3707d6420a80d219e6e7e5be101dc4de7cd03d854ef8c34210c"
+    },
+    {
+      "name": "20261012040000_accept_registered_cv_versions.sql",
+      "sha256": "bae3eb3d78f01690eba48d8027c63402243a6d0e6bdde425f71b946d0e413da9"
+    },
+    {
+      "name": "20261012050000_activate_current_cv_atomically.sql",
+      "sha256": "1b6a5576aecb056850924b93119727eadf64af01d1000f99ec81db824b5abc31"
+    },
+    {
+      "name": "20261012060000_reject_media_with_usage_guard.sql",
+      "sha256": "c8e577aaf24b0c090f0bef8d876f1be6538a48bd7bcaa3299de4c8befa8cacbf"
+    },
+    {
+      "name": "20261013100000_configure_public_profile_media.sql",
+      "sha256": "36f524652c3d7c66fb5924ce2ad281406a58eb1d4bb767287e5d8e1b3cdfce8f"
+    },
+    {
+      "name": "20261014194925_measurement_consent.sql",
+      "sha256": "9b122a259e91cee3875aa22133ff1b529c0b07203f01464378d0e3116ba01630"
+    },
+    {
+      "name": "20261014210000_persist_project_reactions.sql",
+      "sha256": "0217150ac17a8f1a156821dc22755b11ea743c8510e230f6d0fad1060d59b941"
+    },
+    {
+      "name": "20261014211320_persist_project_ratings.sql",
+      "sha256": "98b27aa626fa29c74b0e844f22ba83c87272338fffafccbc113963655d4f4133"
+    },
+    {
+      "name": "20261015003000_persist_private_feedback.sql",
+      "sha256": "991aeb268280b9e00c089d527598eeb20114f005e35057fb4521d2d9deaaa19c"
+    },
+    {
+      "name": "20261015010000_retain_feedback_moderation.sql",
+      "sha256": "5dcb17fa99531d21cdbd0ae60af6fd2b7178a6b161b8f66daa56ed70c5136938"
+    },
+    {
+      "name": "20261015093040_query_current_interaction_summaries.sql",
+      "sha256": "8fbef1951cc33e3a6ae286dc9f1d53bee87b45eb0dc9e45e4c080eb7a56cea88"
+    },
+    {
+      "name": "20261015120000_persist_consented_public_events.sql",
+      "sha256": "49a176f484fda2e0f067925501c609222308a1a776eecea06f13abbe591e73f6"
+    },
+    {
+      "name": "20261015130000_enable_public_interaction_event_facts.sql",
+      "sha256": "360c8a80bf10242bfa45c70da4dbcba9e4afd00207bd98883411f40ec694049b"
+    },
+    {
+      "name": "20261015150000_enable_configuration_interaction_event_facts.sql",
+      "sha256": "ce3d4700c6cf9154f8aa5a462bca3032d19ead3faf1b73ef64dca4ff954a03a9"
+    },
+    {
+      "name": "20261015160000_persist_immutable_analytics_goal_versions.sql",
+      "sha256": "db9ef116e1a8a1a5898b1c2c369c85f043fda60d115f8baee03bbd07ff83d085"
+    },
+    {
+      "name": "20261015170000_activate_analytics_goal_versions.sql",
+      "sha256": "7f6a8d3444468125fd9bbecf8d3f95bd1ea6c953f8a1626b140a707a82c54f66"
+    },
+    {
+      "name": "20261015180000_match_analytics_goal_conversions.sql",
+      "sha256": "682a4c7b6f3fd7e19c10fef259cb0fc50df93eec9c9bfd2c119e436ebea2a03a"
+    },
+    {
+      "name": "20261015190000_persist_reproducible_daily_aggregates.sql",
+      "sha256": "f0bf8f4237f6b16413c521bccb46ef790f607dd791c4e86f319b5016455bfefc"
+    },
+    {
+      "name": "20261015200000_enable_fixed_aggregate_dimensions.sql",
+      "sha256": "bf2e22a2e285faedba9b13962303da71b2c18f59cb4131720a8917722c02bd79"
+    },
+    {
+      "name": "20261015202000_expire_measurement_detail_and_aggregate_retention.sql",
+      "sha256": "04e33297a492b55c2dc8b2392fc9f0291fa3e10f9ade40e7c9ef6fc97b297221"
+    },
+    {
+      "name": "20261015203000_retain_feedback_privacy.sql",
+      "sha256": "7f1910911ff0069922e2188673531d492b9d98e9cf6c3f2e971f379152c433bb"
+    },
+    {
+      "name": "20261017142000_revoke_public_aggregate_guard_execution.sql",
+      "sha256": "7b385899021083dca28b10d34d175b14c6daa443e98a846953f3ff16212d1a91"
+    },
+    {
+      "name": "20261018172500_bound_job_retries_and_incidents.sql",
+      "sha256": "c63d813d82f4fab902fcfbfde78c667b95618b450e438f58d88aad103fe78b1e"
+    },
+    {
+      "name": "20261023090000_reserve_owner_export_requests.sql",
+      "sha256": "43d9996f1d8c59c663c5c81842631248001ed8a6b551652e5a43acd22d6badd4"
+    },
+    {
+      "name": "20261023100000_build_configuration_owner_exports.sql",
+      "sha256": "3b2525935b8e8e1c83c64d1fe28ca0af60f6534cde53627bcb012059ce992966"
+    },
+    {
+      "name": "20261024120000_read_content_for_owner_exports.sql",
+      "sha256": "51ae23020903a72a2a6d7db96b3629dc4ffcb27a9658addc8cc0696a3f32d27e"
+    },
+    {
+      "name": "20261024130000_read_taxonomy_for_owner_exports.sql",
+      "sha256": "86512866f93801d15d962d8b514214941f3ce20cc22cdf7df0cb72fd0112300e"
+    },
+    {
+      "name": "20261024140000_read_media_for_owner_exports.sql",
+      "sha256": "0445745ac90122a3df27d53cb92e66975fe145eed4390ba6e8d30ce82a2a302f"
+    },
+    {
+      "name": "20261024233915_owner_cv_export_read_access.sql",
+      "sha256": "6ef6a318730547c3cf7315126f04dc769f5cc1628af889ad1c70f67467ecaab3"
+    },
+    {
+      "name": "20261025090000_read_feedback_for_owner_exports.sql",
+      "sha256": "d23dea8422800de3b2286a3c354eed68fad572fa5e4dcacb4f6a26a5259e5bdb"
+    },
+    {
+      "name": "20261025190828_retain_moderation_export_artifact_cleanup.sql",
+      "sha256": "ab521d5e0d6832f57eedddffd268e49541f99e1cb67aac7355921a5cc8125fe5"
+    },
+    {
+      "name": "20261025200000_read_measurement_for_owner_exports.sql",
+      "sha256": "e0ddaae3563cb85ee63e83bffdd7bd80d05d0d454ea217ea78087613a0693021"
+    },
+    {
+      "name": "20261026011341_restrict_analytics_export_deletion.sql",
+      "sha256": "2f6c6fce8f330941409c734e0b1d12cae0b71a07f8217cdf5f8b6b39488db2bb"
+    },
+    {
+      "name": "20261026100000_reconcile_all_owner_export_artifacts.sql",
+      "sha256": "28ea11c784b188977f57514dd874dcf877dbf307d0a4020857c078f18cfc06f9"
+    },
+    {
+      "name": "20261026164603_phase7_durable_policy_schedule_keys.sql",
+      "sha256": "cdd65060a1363d35f93f76c289950e69b26ebb04f718f12fe0cf3563f75668ab"
+    },
+    {
+      "name": "20261027014402_operations_observability_summary_indexes.sql",
+      "sha256": "792f546244568e0f245dbcefe2042de151cec10bff8c58a26d521dd98e569511"
+    }
+  ],
+  "volumes": {
+    "clusterBytesBeforeCleanup": 170922708,
+    "clusterBytesAfterCleanup": 0
+  },
+  "checks": {
+    "validationEvolution": {
+      "status": 0,
+      "expectedRegistryTests": [
+        "every committed migration is classified exactly once and matches the declared phase ranges",
+        "the Phase 7 schedule migration stays between its true predecessor prefix and later Phase 8 migrations",
+        "undeclared, duplicate, or unreviewed transformation migrations fail closed",
+        "a synthetic future transformation is admitted only through the injected shared registry",
+        "the configuration export migration admits only its source-bound outbox policy, insert grant, and unique index",
+        "canonical operations expectations bind complete row operations to reviewed migrations",
+        "capabilities are declared per checkpoint, never learned from a database",
+        "checkpoint pairing requires every historical suite to exist in the tree",
+        "the qualification DAG is a valid, acyclic, topologically ordered definition",
+        "completed nodes are reusable only while identity, definition, and evidence digests still verify",
+        "safe resume reuses only a clean successful prefix and invalidates descendants when an artifact changes",
+        "resume report proof rejects missing or changed tools, migrations, scope, checks, freshness, or cleanup",
+        "gate predecessor verification fails closed for missing or drifting contexts",
+        "the run file round-trips through read/record/write with digest evidence",
+        "evidence digests are computed for existing files and null otherwise",
+        "the declared prevention workflow runs the complete regression inventory and strict aggregator",
+        "workflow mutations cannot omit triggers, suites, checks, or failures",
+        "workflow checker rejects invalid YAML and missing regression job",
+        "regression TAP rejects removed, skipped, cancelled, or failed constituents",
+        "the Phase 7 schedule migration binds exact checks, indexes, defaults, and PostgreSQL engine variants",
+        "the Phase 8 operations observability migration binds exact columns, all eleven index definitions, and its source checksum",
+        "structured failures sanitize metadata, paths, causes, and serialized output",
+        "combined cleanup failures retain the primary cause and every cleanup cause safely",
+        "the real CLI with no Docker exits before changing evidence",
+        "Docker preflight distinguishes executable, access, OS, and Compose failures",
+        "explicit resume reuses only verified completed evidence and reruns missing nodes",
+        "drifted identity, tool, or definition context forces every node to rerun",
+        "qualification executes each node once in dependency order",
+        "a failed later gate resumes after rechecking and retaining the clean successful prefix",
+        "a failed, interrupted, or cleanup-failed gate does not reach later nodes",
+        "uncommitted source and source edits during a gate are rejected",
+        "qualification command rejects real TAP skips before returning a cacheable result",
+        "compound contract verification reuses the actual earlier drift and compatibility executions",
+        "qualification command rejects Vitest skips and cancelled or todo TAP outcomes"
+      ],
+      "expectedCacheTests": [
+        "reuses an equivalent checked command across phase gates only within the active run",
+        "semantic aliases share a cache only after each invocation matches its reviewed command",
+        "direct and npm route inventory aliases share the same artifact proof",
+        "standalone runs and noncanonical commands never reuse",
+        "failed, interrupted, skipped, or timed-out results are never cached",
+        "source, environment, runtime, platform, and command changes make a fresh execution",
+        "output artifacts must exist and remain byte-identical for reuse"
+      ],
+      "inventoryEnforcedByRunner": true
+    }
+  },
+  "suites": [
+    "tests/phase8/operations-observability-postgres.gate.ts",
+    "tests/phase8/operations-observability-runner.test.ts",
+    "tests/phase8/operations-observability-retention-producer.test.ts",
+    "tests/phase8/operations-observability.test.ts",
+    "tests/phase8/resumable-retention-passes.test.ts",
+    "tests/runtime/owner-content-authoring.test.ts"
+  ],
+  "testCounts": {
+    "total": 92,
+    "passed": 92,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "testInventory": [
+    {
+      "name": "Content authoring application service corrects private Project candidates with optimistic concurrency and exact idempotent replay",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service creates a private achievement Draft with its typed initial Revision",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service creates a private project Draft with its typed initial Revision",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service creates a private testimonial Draft with its typed initial Revision",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service fails closed for unresolved Media facts and rejects reviewed placeholder evidence without public side effects",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service generates a safe candidate slug and saves a new locale Revision with increasing version and stream sequence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service publishes only an accepted complete Project snapshot and serves the requested locale without fallback",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service publishes reviewed Achievements into a private-note-free, locale-specific chronological Timeline",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service records an explicit profile association when a Testimonial has no Project",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects a wrong snapshot hash, locale, or stale root version without recording a review",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects malformed Achievement evidence at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects malformed Project case study at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects malformed evidence claim at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects malformed media identity at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects unknown Project payload key at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects unknown Save draft-data keys before appending a Revision",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects unknown Testimonial association key at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects unknown case study key at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects unknown content kind at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects unknown evidence artifact key at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects unknown evidence claim key at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects unknown external link key at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects unsafe external link at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service rejects unsupported external link type at the application boundary before persistence",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service replays an Arabic-only Project create when its candidate slug is generated",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service requires an explicit Testimonial association and persists the selected Profile choice",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service returns bounded history pages with stable locale-sequence cursors and current review facts",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service returns the same creation receipt for an exact retry and rejects a different owner before ledger access",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Content authoring application service reviews the exact immutable Revision snapshot, replays safely, and keeps a saved Revision unreviewed",
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 observability gate portability discovers native PostgreSQL binaries from Windows and POSIX paths without a pinned install",
+      "suite": "tests/phase8/operations-observability-runner.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 observability gate portability maps all eight acceptance criteria to executable test or artifact references",
+      "suite": "tests/phase8/operations-observability-runner.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 observability gate portability matches a postmaster PID file and process command line to the exact data directory",
+      "suite": "tests/phase8/operations-observability-runner.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 observability gate portability rejects missing, failed, skipped, or planned acceptance references",
+      "suite": "tests/phase8/operations-observability-runner.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 observability gate portability removes only a gate-owned direct child and accepts branch or detached HEAD identity",
+      "suite": "tests/phase8/operations-observability-runner.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 observability gate portability resolves mapped acceptance references only against passing named checks and populated artifacts",
+      "suite": "tests/phase8/operations-observability-runner.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 observability gate portability retains the run directory when PostgreSQL remains live after cleanup",
+      "suite": "tests/phase8/operations-observability-runner.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 observability gate portability stops a PostgreSQL process created by an ambiguous start before removing its exact run directory",
+      "suite": "tests/phase8/operations-observability-runner.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 observability gate portability uses the short process temp root on Windows and the native temporary root on POSIX",
+      "suite": "tests/phase8/operations-observability-runner.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability accepts only the documented Portfolio CLI flag and rejects missing, extra, conflicting, and oversized scope",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability distinguishes Owner export assembly read interruption from completed integrity mismatch",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability documents every operational signal with a bounded source, query, and explicit unknown rule",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability does not call failed summary reads healthy and validates the clock",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability evaluates bounded dashboard definitions over serialized safe producer records and rejects field drift and inherited metric IDs",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability evaluates relational and object backup RPOs from separate source watermarks and leaves absent producers unknown",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability ignores sink failures and rejects out-of-contract observations without throwing",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability keeps a cancelled Owner export HTTP read out of Storage failures without claiming readiness",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability keeps a successful adapter response when its telemetry logger throws",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability keeps event drops unknown while measuring accepted intake without an owning drop producer",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability keeps export integrity unknown for absent, incomplete, malformed, capped or unavailable log windows and measures a complete zero",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability marks age unknown when bounded queue or lease samples cannot establish coverage",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability observes otherwise-uninstrumented public and Owner adapters with safe status classes",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability observes the existing private Owner export status route without recording URL or session markers",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability queries and summarizes an actual streamed Owner export integrity mismatch from a complete bounded system log window",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability records a provider read failure when cancellation races with its rejection",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability records a real consent database outage as unavailable rather than rejected",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability records a safe Storage failure when the content iterator cannot be initialized",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability records actual due-work completion after a sink failure without changing the committed checkpoint",
+      "suite": "tests/phase8/operations-observability-retention-producer.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability records an export assembly Storage write failure from a fixture adapter without private values",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability records consent rejection separately from HTTP status without leaking request markers",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability records one Owner export download read success only after verified stream completion",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability records one failed Owner export download read without provider or identity details",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability records streamed integrity mismatch and read failure once without buffering or consuming twice",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability records unavailable, committed acceptance, and indeterminate commit acknowledgement as distinct outcomes",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability requires the fixed system purpose and returns durable zero, watermark, and explicit unknown values",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability retains integrity classification when cancellation races with a proven mismatch",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 operations observability source-inventories every active handwritten HTTP handler and its fixed observer wrapper",
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 resumable retention policy passes (#248) deduplicates the same Portfolio/type/due-period across restarts and bounds catch-up",
+      "suite": "tests/phase8/resumable-retention-passes.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 resumable retention policy passes (#248) drains a twenty-day outage in contiguous bounded slices without losing the older completion watermark",
+      "suite": "tests/phase8/resumable-retention-passes.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 resumable retention policy passes (#248) keeps policy completion incomplete when a durable aggregate reports coverage gaps",
+      "suite": "tests/phase8/resumable-retention-passes.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 resumable retention policy passes (#248) publishes daily and catch-up invocations as UTC handoffs that remain uninstalled",
+      "suite": "tests/phase8/resumable-retention-passes.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 resumable retention policy passes (#248) reports shutdown before work as incomplete and preserves the bounded scheduled backlog",
+      "suite": "tests/phase8/resumable-retention-passes.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 resumable retention policy passes (#248) resumes a bounded owner-module checkpoint with the same job identity and UTC anchor before aggregates",
+      "suite": "tests/phase8/resumable-retention-passes.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds active lease-age reads after a large expired-lease prefix",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds current export states and recent transition windows across old requests",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds oldest-eligible traversal over a large pending and future queue",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification classifies an actual idle PostgreSQL backend failure as a pool error, not a transaction failure",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification emits database pool, transaction, authorization, lease-reclaim, and stale-write observations from real PostgreSQL boundaries",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification enforces purpose and role denial and uses bounded indexes over completed history",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification excludes expired leases and their missing acquisition timestamps from active lease age",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification keeps bootstrap completion dates unknown until the first policy period finishes",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification records one safe authorization failure when Owner Export transition RLS is wrapped inside a transaction",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification records one safe authorization failure when PostgreSQL outbox RLS is wrapped inside a transaction",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification records zero current pool occupancy after releasing a real PostgreSQL connection",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification reports 24-hour export measurement windows separately from 15-minute integrity failures",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification retries a transient capability probe failure on the same database handle before queue and Owner Export completion",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification returns a usable nonnegative lease age when application time predates PostgreSQL acquisition",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification returns unknown bytes when any bounded ready export is missing its content length",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification separates active and expired PostgreSQL job lease counts at the observed time",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification sums all five bounded export-state samples and preserves per-state cap reporting",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "operations summary PostgreSQL qualification supports queue claim, reclaim, complete, retry, and Owner Export completion before and after migration64",
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed"
+    }
+  ],
+  "testFailureLocations": [],
+  "cli": {
+    "valid": {
+      "status": 0,
+      "summaryPortfolioScope": "one-authorized-portfolio",
+      "queueScope": "system-wide-operations",
+      "runtimeObservationScope": "system-wide-restricted-operator-log-source",
+      "integrityFailuresRemainUnknownWithoutReader": true,
+      "outputContainsPortfolioId": false,
+      "outputContainsDatabaseUrl": false
+    },
+    "rejectedInputs": [
+      {
+        "status": 2,
+        "outcome": "OPERATIONS_SUMMARY_ARGUMENTS_INVALID"
+      },
+      {
+        "status": 2,
+        "outcome": "OPERATIONS_SUMMARY_ARGUMENTS_INVALID"
+      },
+      {
+        "status": 2,
+        "outcome": "OPERATIONS_SUMMARY_ARGUMENTS_INVALID"
+      },
+      {
+        "status": 2,
+        "outcome": "OPERATIONS_SUMMARY_ARGUMENTS_INVALID"
+      },
+      {
+        "status": 2,
+        "outcome": "OPERATIONS_SUMMARY_ARGUMENTS_INVALID"
+      }
+    ],
+    "validAttempt": {
+      "status": 0,
+      "parsedJsonKind": "object",
+      "rootObjectKeys": [
+        "aggregates",
+        "application",
+        "backup",
+        "capacity",
+        "database",
+        "events",
+        "exports",
+        "generatedAt",
+        "jobs",
+        "leases",
+        "outbox",
+        "portfolio",
+        "publication",
+        "recovery",
+        "retention",
+        "scope",
+        "storage",
+        "windowSeconds"
+      ],
+      "recognizedSummaryFields": [
+        "generatedAt",
+        "windowSeconds",
+        "scope",
+        "portfolio",
+        "application",
+        "database",
+        "capacity",
+        "outbox",
+        "jobs",
+        "leases",
+        "exports",
+        "publication",
+        "events",
+        "aggregates",
+        "retention",
+        "storage",
+        "backup",
+        "recovery"
+      ],
+      "hasResultEnvelope": false,
+      "hasPortfolioObject": true,
+      "hasScopeObject": true,
+      "portfolioScopeMatches": true,
+      "queueScopeMatches": true,
+      "runtimeObservationScopeMatches": true,
+      "integrityFailuresRemainUnknownWithoutReader": true,
+      "portfolioScopeCategory": "expected",
+      "queueScopeCategory": "expected",
+      "summaryContainsPortfolioId": false,
+      "outputContainsWorkerDatabaseUrl": false,
+      "outputLineCount": 1
+    }
+  },
+  "queryPlan": {
+    "indexNames": [
+      "jobs_operational_summary_dead_idx",
+      "jobs_operational_summary_lease_idx",
+      "jobs_operational_summary_status_idx",
+      "outbox_events_due_idx",
+      "outbox_events_operational_summary_dead_idx",
+      "outbox_events_operational_summary_eligible_idx",
+      "outbox_events_operational_summary_lease_idx",
+      "outbox_events_operational_summary_retry_idx",
+      "owner_exports_operational_summary_recent_idx",
+      "phase7_schedule_progress_pkey"
+    ],
+    "maximumIndexActualRows": 1001,
+    "eligibleIndexMaximumActualRows": 1001,
+    "delayedIndexMaximumActualRows": 1000,
+    "delayedIndexUsesAvailableAtCondition": true,
+    "indexActualRows": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      1000,
+      1000,
+      1001
+    ],
+    "indexReadFacts": [
+      {
+        "indexName": "outbox_events_operational_summary_eligible_idx",
+        "relation": "outbox_events",
+        "nodeType": "Index Only Scan",
+        "actualRows": 1001,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "outbox_events_operational_summary_retry_idx",
+        "relation": "outbox_events",
+        "nodeType": "Index Only Scan",
+        "actualRows": 1000,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "outbox_events_due_idx",
+        "relation": "outbox_events",
+        "nodeType": "Index Only Scan",
+        "actualRows": 1000,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": true,
+        "indexCondition": "(available_at > '2026-10-27 12:00:00+00'::timestamp with time zone)",
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "outbox_events_operational_summary_lease_idx",
+        "relation": "outbox_events",
+        "nodeType": "Index Only Scan",
+        "actualRows": 2,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "outbox_events_operational_summary_lease_idx",
+        "relation": "outbox_events",
+        "nodeType": "Index Only Scan",
+        "actualRows": 2,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "outbox_events_operational_summary_lease_idx",
+        "relation": "outbox_events",
+        "nodeType": "Index Only Scan",
+        "actualRows": 2,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "owner_exports_operational_summary_recent_idx",
+        "relation": "owner_exports",
+        "nodeType": "Index Only Scan",
+        "actualRows": 2,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": "((portfolio_id = '0196a1b2-7c3d-7e11-9f22-000000000001'::uuid) AND (status = 'requested'::text) AND (requested_at <= '2026-10-27 12:00:00+00'::timestamp with time zone))",
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "owner_exports_operational_summary_recent_idx",
+        "relation": "owner_exports",
+        "nodeType": "Index Only Scan",
+        "actualRows": 2,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": "((portfolio_id = '0196a1b2-7c3d-7e11-9f22-000000000001'::uuid) AND (status = 'building'::text) AND (requested_at <= '2026-10-27 12:00:00+00'::timestamp with time zone))",
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "owner_exports_operational_summary_recent_idx",
+        "relation": "owner_exports",
+        "nodeType": "Index Only Scan",
+        "actualRows": 2,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": 2,
+        "availableAtIndexCondition": false,
+        "indexCondition": "((portfolio_id = args_9.portfolio_id) AND (status = 'ready'::text))",
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "owner_exports_operational_summary_recent_idx",
+        "relation": "owner_exports",
+        "nodeType": "Index Scan",
+        "actualRows": 2,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": 2,
+        "availableAtIndexCondition": false,
+        "indexCondition": "((portfolio_id = args_10.portfolio_id) AND (status = 'failed'::text))",
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "owner_exports_operational_summary_recent_idx",
+        "relation": "owner_exports",
+        "nodeType": "Index Scan",
+        "actualRows": 2,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": 2,
+        "availableAtIndexCondition": false,
+        "indexCondition": "((portfolio_id = args_11.portfolio_id) AND (status = 'expired'::text))",
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "outbox_events_operational_summary_dead_idx",
+        "relation": "outbox_events",
+        "nodeType": "Index Only Scan",
+        "actualRows": 1,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "jobs_operational_summary_status_idx",
+        "relation": "jobs",
+        "nodeType": "Index Only Scan",
+        "actualRows": 1,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": "(status = 'available'::text)",
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "jobs_operational_summary_lease_idx",
+        "relation": "jobs",
+        "nodeType": "Index Only Scan",
+        "actualRows": 1,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "jobs_operational_summary_lease_idx",
+        "relation": "jobs",
+        "nodeType": "Index Only Scan",
+        "actualRows": 1,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "jobs_operational_summary_dead_idx",
+        "relation": "jobs",
+        "nodeType": "Index Only Scan",
+        "actualRows": 1,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "jobs_operational_summary_lease_idx",
+        "relation": "jobs",
+        "nodeType": "Index Only Scan",
+        "actualRows": 1,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "jobs_operational_summary_lease_idx",
+        "relation": "jobs",
+        "nodeType": "Index Only Scan",
+        "actualRows": 1,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "phase7_schedule_progress_pkey",
+        "relation": "phase7_schedule_progress",
+        "nodeType": "Index Scan",
+        "actualRows": 1,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": "(portfolio_id = args_12.portfolio_id)",
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      }
+    ],
+    "sortActualRows": [
+      2,
+      2,
+      2
+    ],
+    "exportWindowsDiagnostic": {
+      "stateReads": [
+        {
+          "indexName": "owner_exports_operational_summary_recent_idx",
+          "relation": "owner_exports",
+          "nodeType": "Index Only Scan",
+          "actualRows": 1000,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "((portfolio_id = '0196a1b2-7c3d-7e11-9f22-000000000001'::uuid) AND (status = 'requested'::text) AND (requested_at <= '2026-10-27 12:00:00+00'::timestamp with time zone))",
+          "leaseExpiryRangeCondition": false,
+          "exportTransitionIndexCondition": false
+        },
+        {
+          "indexName": "owner_exports_operational_summary_recent_idx",
+          "relation": "owner_exports",
+          "nodeType": "Index Only Scan",
+          "actualRows": 1000,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "((portfolio_id = '0196a1b2-7c3d-7e11-9f22-000000000001'::uuid) AND (status = 'building'::text) AND (requested_at <= '2026-10-27 12:00:00+00'::timestamp with time zone))",
+          "leaseExpiryRangeCondition": false,
+          "exportTransitionIndexCondition": false
+        }
+      ],
+      "transitionReads": [
+        {
+          "indexName": "owner_exports_operational_summary_ready_idx",
+          "relation": null,
+          "nodeType": "Bitmap Index Scan",
+          "actualRows": 252,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "((portfolio_id = args_9.portfolio_id) AND (completed_at <= args_9.observed_at) AND (completed_at >= (args_9.observed_at - '24:00:00'::interval)))",
+          "leaseExpiryRangeCondition": false,
+          "exportTransitionIndexCondition": true
+        },
+        {
+          "indexName": "owner_exports_operational_summary_failed_idx",
+          "relation": null,
+          "nodeType": "Bitmap Index Scan",
+          "actualRows": 252,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "((portfolio_id = args_10.portfolio_id) AND (failed_at <= args_10.observed_at) AND (failed_at >= (args_10.observed_at - '24:00:00'::interval)))",
+          "leaseExpiryRangeCondition": false,
+          "exportTransitionIndexCondition": true
+        },
+        {
+          "indexName": "owner_exports_operational_summary_expired_idx",
+          "relation": null,
+          "nodeType": "Bitmap Index Scan",
+          "actualRows": 252,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "((portfolio_id = args_11.portfolio_id) AND (expired_at <= args_11.observed_at) AND (expired_at >= (args_11.observed_at - '24:00:00'::interval)))",
+          "leaseExpiryRangeCondition": false,
+          "exportTransitionIndexCondition": true
+        }
+      ]
+    },
+    "exportWindows": {
+      "currentStateMaximumRows": 1000,
+      "transitionMaximumRows": 252,
+      "stateReads": [
+        {
+          "indexName": "owner_exports_operational_summary_recent_idx",
+          "relation": "owner_exports",
+          "nodeType": "Index Only Scan",
+          "actualRows": 1000,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "((portfolio_id = '0196a1b2-7c3d-7e11-9f22-000000000001'::uuid) AND (status = 'requested'::text) AND (requested_at <= '2026-10-27 12:00:00+00'::timestamp with time zone))",
+          "leaseExpiryRangeCondition": false,
+          "exportTransitionIndexCondition": false
+        },
+        {
+          "indexName": "owner_exports_operational_summary_recent_idx",
+          "relation": "owner_exports",
+          "nodeType": "Index Only Scan",
+          "actualRows": 1000,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "((portfolio_id = '0196a1b2-7c3d-7e11-9f22-000000000001'::uuid) AND (status = 'building'::text) AND (requested_at <= '2026-10-27 12:00:00+00'::timestamp with time zone))",
+          "leaseExpiryRangeCondition": false,
+          "exportTransitionIndexCondition": false
+        }
+      ],
+      "transitionReads": [
+        {
+          "indexName": "owner_exports_operational_summary_ready_idx",
+          "relation": null,
+          "nodeType": "Bitmap Index Scan",
+          "actualRows": 252,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "((portfolio_id = args_9.portfolio_id) AND (completed_at <= args_9.observed_at) AND (completed_at >= (args_9.observed_at - '24:00:00'::interval)))",
+          "leaseExpiryRangeCondition": false,
+          "exportTransitionIndexCondition": true
+        },
+        {
+          "indexName": "owner_exports_operational_summary_failed_idx",
+          "relation": null,
+          "nodeType": "Bitmap Index Scan",
+          "actualRows": 252,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "((portfolio_id = args_10.portfolio_id) AND (failed_at <= args_10.observed_at) AND (failed_at >= (args_10.observed_at - '24:00:00'::interval)))",
+          "leaseExpiryRangeCondition": false,
+          "exportTransitionIndexCondition": true
+        },
+        {
+          "indexName": "owner_exports_operational_summary_expired_idx",
+          "relation": null,
+          "nodeType": "Bitmap Index Scan",
+          "actualRows": 252,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "((portfolio_id = args_11.portfolio_id) AND (expired_at <= args_11.observed_at) AND (expired_at >= (args_11.observed_at - '24:00:00'::interval)))",
+          "leaseExpiryRangeCondition": false,
+          "exportTransitionIndexCondition": true
+        }
+      ],
+      "indexes": [
+        "owner_exports_operational_summary_expired_idx",
+        "owner_exports_operational_summary_failed_idx",
+        "owner_exports_operational_summary_ready_idx"
+      ]
+    },
+    "activeLeaseAge": {
+      "maximumIndexRows": 1,
+      "reads": [
+        {
+          "indexName": "outbox_events_operational_summary_lease_idx",
+          "relation": null,
+          "nodeType": "Bitmap Index Scan",
+          "actualRows": 1,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "(lease_expires_at > args_3.observed_at)",
+          "leaseExpiryRangeCondition": true,
+          "exportTransitionIndexCondition": false
+        },
+        {
+          "indexName": "jobs_operational_summary_lease_idx",
+          "relation": null,
+          "nodeType": "Bitmap Index Scan",
+          "actualRows": 1,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "(lease_expires_at > args_5.observed_at)",
+          "leaseExpiryRangeCondition": true,
+          "exportTransitionIndexCondition": false
+        },
+        {
+          "indexName": "outbox_events_operational_summary_lease_idx",
+          "relation": null,
+          "nodeType": "Bitmap Index Scan",
+          "actualRows": 1,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "(lease_expires_at > args_7.observed_at)",
+          "leaseExpiryRangeCondition": true,
+          "exportTransitionIndexCondition": false
+        },
+        {
+          "indexName": "jobs_operational_summary_lease_idx",
+          "relation": null,
+          "nodeType": "Bitmap Index Scan",
+          "actualRows": 1,
+          "actualLoops": 1,
+          "rowsRemovedByFilter": null,
+          "availableAtIndexCondition": false,
+          "indexCondition": "(lease_expires_at > args_8.observed_at)",
+          "leaseExpiryRangeCondition": true,
+          "exportTransitionIndexCondition": false
+        }
+      ]
+    }
+  },
+  "migrationProof": {
+    "predecessor": "rows, grants, RLS and policies captured before migration",
+    "upgradeCatalog": {
+      "jobs_operational_summary_dead_idx": "CREATE INDEX jobs_operational_summary_dead_idx ON operations.jobs USING btree (available_at, job_id) INCLUDE (attempt_count) WHERE (status = 'dead'::text)",
+      "jobs_operational_summary_lease_idx": "CREATE INDEX jobs_operational_summary_lease_idx ON operations.jobs USING btree (lease_expires_at, job_id) INCLUDE (attempt_count, lease_acquired_at) WHERE (status = 'leased'::text)",
+      "jobs_operational_summary_status_idx": "CREATE INDEX jobs_operational_summary_status_idx ON operations.jobs USING btree (status, available_at, job_id) INCLUDE (attempt_count, lease_expires_at) WHERE (status = ANY (ARRAY['available'::text, 'leased'::text, 'dead'::text]))",
+      "outbox_events_operational_summary_dead_idx": "CREATE INDEX outbox_events_operational_summary_dead_idx ON operations.outbox_events USING btree (dead_at, event_id) INCLUDE (attempt_count) WHERE (dead_at IS NOT NULL)",
+      "outbox_events_operational_summary_eligible_idx": "CREATE INDEX outbox_events_operational_summary_eligible_idx ON operations.outbox_events USING btree (occurred_at, event_id) INCLUDE (available_at, attempt_count, lease_expires_at, lease_acquired_at) WHERE ((completed_at IS NULL) AND (dead_at IS NULL))",
+      "outbox_events_operational_summary_lease_idx": "CREATE INDEX outbox_events_operational_summary_lease_idx ON operations.outbox_events USING btree (lease_expires_at, event_id) INCLUDE (available_at, attempt_count, lease_acquired_at) WHERE ((lease_expires_at IS NOT NULL) AND (completed_at IS NULL) AND (dead_at IS NULL))",
+      "outbox_events_operational_summary_retry_idx": "CREATE INDEX outbox_events_operational_summary_retry_idx ON operations.outbox_events USING btree (available_at, occurred_at, event_id) INCLUDE (attempt_count) WHERE ((completed_at IS NULL) AND (dead_at IS NULL) AND (attempt_count > 0))",
+      "owner_exports_operational_summary_expired_idx": "CREATE INDEX owner_exports_operational_summary_expired_idx ON portability.owner_exports USING btree (portfolio_id, expired_at DESC, export_id DESC) WHERE ((status = 'expired'::text) AND (expired_at IS NOT NULL))",
+      "owner_exports_operational_summary_failed_idx": "CREATE INDEX owner_exports_operational_summary_failed_idx ON portability.owner_exports USING btree (portfolio_id, failed_at DESC, export_id DESC) WHERE ((status = 'failed'::text) AND (failed_at IS NOT NULL))",
+      "owner_exports_operational_summary_ready_idx": "CREATE INDEX owner_exports_operational_summary_ready_idx ON portability.owner_exports USING btree (portfolio_id, completed_at DESC, export_id DESC) INCLUDE (started_at, artifact_content_length) WHERE ((status = 'ready'::text) AND (completed_at IS NOT NULL))",
+      "owner_exports_operational_summary_recent_idx": "CREATE INDEX owner_exports_operational_summary_recent_idx ON portability.owner_exports USING btree (portfolio_id, status, requested_at DESC, export_id DESC) INCLUDE (started_at, completed_at, artifact_content_length)"
+    },
+    "rollback": "indexes and nullable columns removed; rows, grants, RLS and policies preserved",
+    "forwardFixCatalog": {
+      "jobs_operational_summary_dead_idx": "CREATE INDEX jobs_operational_summary_dead_idx ON operations.jobs USING btree (available_at, job_id) INCLUDE (attempt_count) WHERE (status = 'dead'::text)",
+      "jobs_operational_summary_lease_idx": "CREATE INDEX jobs_operational_summary_lease_idx ON operations.jobs USING btree (lease_expires_at, job_id) INCLUDE (attempt_count, lease_acquired_at) WHERE (status = 'leased'::text)",
+      "jobs_operational_summary_status_idx": "CREATE INDEX jobs_operational_summary_status_idx ON operations.jobs USING btree (status, available_at, job_id) INCLUDE (attempt_count, lease_expires_at) WHERE (status = ANY (ARRAY['available'::text, 'leased'::text, 'dead'::text]))",
+      "outbox_events_operational_summary_dead_idx": "CREATE INDEX outbox_events_operational_summary_dead_idx ON operations.outbox_events USING btree (dead_at, event_id) INCLUDE (attempt_count) WHERE (dead_at IS NOT NULL)",
+      "outbox_events_operational_summary_eligible_idx": "CREATE INDEX outbox_events_operational_summary_eligible_idx ON operations.outbox_events USING btree (occurred_at, event_id) INCLUDE (available_at, attempt_count, lease_expires_at, lease_acquired_at) WHERE ((completed_at IS NULL) AND (dead_at IS NULL))",
+      "outbox_events_operational_summary_lease_idx": "CREATE INDEX outbox_events_operational_summary_lease_idx ON operations.outbox_events USING btree (lease_expires_at, event_id) INCLUDE (available_at, attempt_count, lease_acquired_at) WHERE ((lease_expires_at IS NOT NULL) AND (completed_at IS NULL) AND (dead_at IS NULL))",
+      "outbox_events_operational_summary_retry_idx": "CREATE INDEX outbox_events_operational_summary_retry_idx ON operations.outbox_events USING btree (available_at, occurred_at, event_id) INCLUDE (attempt_count) WHERE ((completed_at IS NULL) AND (dead_at IS NULL) AND (attempt_count > 0))",
+      "owner_exports_operational_summary_expired_idx": "CREATE INDEX owner_exports_operational_summary_expired_idx ON portability.owner_exports USING btree (portfolio_id, expired_at DESC, export_id DESC) WHERE ((status = 'expired'::text) AND (expired_at IS NOT NULL))",
+      "owner_exports_operational_summary_failed_idx": "CREATE INDEX owner_exports_operational_summary_failed_idx ON portability.owner_exports USING btree (portfolio_id, failed_at DESC, export_id DESC) WHERE ((status = 'failed'::text) AND (failed_at IS NOT NULL))",
+      "owner_exports_operational_summary_ready_idx": "CREATE INDEX owner_exports_operational_summary_ready_idx ON portability.owner_exports USING btree (portfolio_id, completed_at DESC, export_id DESC) INCLUDE (started_at, artifact_content_length) WHERE ((status = 'ready'::text) AND (completed_at IS NOT NULL))",
+      "owner_exports_operational_summary_recent_idx": "CREATE INDEX owner_exports_operational_summary_recent_idx ON portability.owner_exports USING btree (portfolio_id, status, requested_at DESC, export_id DESC) INCLUDE (started_at, completed_at, artifact_content_length)"
+    }
+  },
+  "acceptanceEvidencePlan": [
+    {
+      "id": "AC01",
+      "criterion": "Every parent-required signal has documented units/meaning/source/access/window and a bounded executable observation/query definition.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability documents every operational signal with a bounded source, query, and explicit unknown rule"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability evaluates bounded dashboard definitions over serialized safe producer records and rejects field drift and inherited metric IDs"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries and summarizes an actual streamed Owner export integrity mismatch from a complete bounded system log window"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification keeps bootstrap completion dates unknown until the first policy period finishes"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reports 24-hour export measurement windows separately from 15-minute integrity failures"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when Owner Export transition RLS is wrapped inside a transaction"
+        }
+      ]
+    },
+    {
+      "id": "AC02",
+      "criterion": "Application/queue/export/privacy producers emit actual safe observations; backup/recovery producer obligations are explicit and cannot be reported complete from fake data.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability observes otherwise-uninstrumented public and Owner adapters with safe status classes"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records consent rejection separately from HTTP status without leaking request markers"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records one Owner export download read success only after verified stream completion"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records one failed Owner export download read without provider or identity details"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records streamed integrity mismatch and read failure once without buffering or consuming twice"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps a cancelled Owner export HTTP read out of Storage failures without claiming readiness"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records a provider read failure when cancellation races with its rejection"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records a safe Storage failure when the content iterator cannot be initialized"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability retains integrity classification when cancellation races with a proven mismatch"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps event drops unknown while measuring accepted intake without an owning drop producer"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries and summarizes an actual streamed Owner export integrity mismatch from a complete bounded system log window"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records an export assembly Storage write failure from a fixture adapter without private values"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability distinguishes Owner export assembly read interruption from completed integrity mismatch"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-retention-producer.test.ts",
+          "name": "Phase 8 operations observability records actual due-work completion after a sink failure without changing the committed checkpoint"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when PostgreSQL outbox RLS is wrapped inside a transaction"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when Owner Export transition RLS is wrapped inside a transaction"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes"
+        }
+      ]
+    },
+    {
+      "id": "AC03",
+      "criterion": "Metrics label cardinality is bounded; unknown provider limits/uninstalled signals remain unknown rather than zero/healthy.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability documents every operational signal with a bounded source, query, and explicit unknown rule"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability source-inventories every active handwritten HTTP handler and its fixed observer wrapper"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability marks age unknown when bounded queue or lease samples cannot establish coverage"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability evaluates relational and object backup RPOs from separate source watermarks and leaves absent producers unknown"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps event drops unknown while measuring accepted intake without an owning drop producer"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps a cancelled Owner export HTTP read out of Storage failures without claiming readiness"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps export integrity unknown for absent, incomplete, malformed, capped or unavailable log windows and measures a complete zero"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification returns unknown bytes when any bounded ready export is missing its content length"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification sums all five bounded export-state samples and preserves per-state cap reporting"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification keeps bootstrap completion dates unknown until the first policy period finishes"
+        }
+      ]
+    },
+    {
+      "id": "AC04",
+      "criterion": "Dashboard definitions show oldest eligible outbox, dead/retry/lease state, retention last-complete/backlog and export/storage health with correct inclusion rules.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification keeps bootstrap completion dates unknown until the first policy period finishes"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification separates active and expired PostgreSQL job lease counts at the observed time"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification excludes expired leases and their missing acquisition timestamps from active lease age"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification returns unknown bytes when any bounded ready export is missing its content length"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reports 24-hour export measurement windows separately from 15-minute integrity failures"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification sums all five bounded export-state samples and preserves per-state cap reporting"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability evaluates bounded dashboard definitions over serialized safe producer records and rejects field drift and inherited metric IDs"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps a cancelled Owner export HTTP read out of Storage failures without claiming readiness"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries and summarizes an actual streamed Owner export integrity mismatch from a complete bounded system log window"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/resumable-retention-passes.test.ts",
+          "name": "Phase 8 resumable retention policy passes (#248) drains a twenty-day outage in contiguous bounded slices without losing the older completion watermark"
+        }
+      ]
+    },
+    {
+      "id": "AC05",
+      "criterion": "Private marker tests prove no Feedback/CV/Visitor/credential/signed-URL/provider exception leakage in responses/logs/metrics/evidence.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records consent rejection separately from HTTP status without leaking request markers"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability observes the existing private Owner export status route without recording URL or session markers"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability observes otherwise-uninstrumented public and Owner adapters with safe status classes"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability evaluates bounded dashboard definitions over serialized safe producer records and rejects field drift and inherited metric IDs"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records one failed Owner export download read without provider or identity details"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records streamed integrity mismatch and read failure once without buffering or consuming twice"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records a provider read failure when cancellation races with its rejection"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records a safe Storage failure when the content iterator cannot be initialized"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability retains integrity classification when cancellation races with a proven mismatch"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries and summarizes an actual streamed Owner export integrity mismatch from a complete bounded system log window"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records an export assembly Storage write failure from a fixture adapter without private values"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when PostgreSQL outbox RLS is wrapped inside a transaction"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when Owner Export transition RLS is wrapped inside a transaction"
+        }
+      ]
+    },
+    {
+      "id": "AC06",
+      "criterion": "Restricted operational summaries deny unapproved access and never create a product/public metrics interface.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability requires the fixed system purpose and returns durable zero, watermark, and explicit unknown values"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification enforces purpose and role denial and uses bounded indexes over completed history"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability documents every operational signal with a bounded source, query, and explicit unknown rule"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability accepts only the documented Portfolio CLI flag and rejects missing, extra, conflicting, and oversized scope"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability source-inventories every active handwritten HTTP handler and its fixed observer wrapper"
+        }
+      ]
+    },
+    {
+      "id": "AC07",
+      "criterion": "Instrumentation failure does not undo committed domain state or expose sensitive fallback errors.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-retention-producer.test.ts",
+          "name": "Phase 8 operations observability records actual due-work completion after a sink failure without changing the committed checkpoint"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records unavailable, committed acceptance, and indeterminate commit acknowledgement as distinct outcomes"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability ignores sink failures and rejects out-of-contract observations without throwing"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps a successful adapter response when its telemetry logger throws"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when PostgreSQL outbox RLS is wrapped inside a transaction"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification emits database pool, transaction, authorization, lease-reclaim, and stale-write observations from real PostgreSQL boundaries"
+        }
+      ]
+    },
+    {
+      "id": "AC08",
+      "criterion": "Representative observation/query plans are bounded and do not perform backup/restore, unbounded scans or source mutations.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds oldest-eligible traversal over a large pending and future queue"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds current export states and recent transition windows across old requests"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification sums all five bounded export-state samples and preserves per-state cap reporting"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds active lease-age reads after a large expired-lease prefix"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability documents every operational signal with a bounded source, query, and explicit unknown rule"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability evaluates bounded dashboard definitions over serialized safe producer records and rejects field drift and inherited metric IDs"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps export integrity unknown for absent, incomplete, malformed, capped or unavailable log windows and measures a complete zero"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability evaluates relational and object backup RPOs from separate source watermarks and leaves absent producers unknown"
+        }
+      ]
+    }
+  ],
+  "acceptanceEvidenceResolved": [
+    {
+      "id": "AC01",
+      "criterion": "Every parent-required signal has documented units/meaning/source/access/window and a bounded executable observation/query definition.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability documents every operational signal with a bounded source, query, and explicit unknown rule",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability evaluates bounded dashboard definitions over serialized safe producer records and rejects field drift and inherited metric IDs",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries and summarizes an actual streamed Owner export integrity mismatch from a complete bounded system log window",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification keeps bootstrap completion dates unknown until the first policy period finishes",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reports 24-hour export measurement windows separately from 15-minute integrity failures",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when Owner Export transition RLS is wrapped inside a transaction",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "AC02",
+      "criterion": "Application/queue/export/privacy producers emit actual safe observations; backup/recovery producer obligations are explicit and cannot be reported complete from fake data.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability observes otherwise-uninstrumented public and Owner adapters with safe status classes",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records consent rejection separately from HTTP status without leaking request markers",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records one Owner export download read success only after verified stream completion",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records one failed Owner export download read without provider or identity details",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records streamed integrity mismatch and read failure once without buffering or consuming twice",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps a cancelled Owner export HTTP read out of Storage failures without claiming readiness",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records a provider read failure when cancellation races with its rejection",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records a safe Storage failure when the content iterator cannot be initialized",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability retains integrity classification when cancellation races with a proven mismatch",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps event drops unknown while measuring accepted intake without an owning drop producer",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries and summarizes an actual streamed Owner export integrity mismatch from a complete bounded system log window",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records an export assembly Storage write failure from a fixture adapter without private values",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability distinguishes Owner export assembly read interruption from completed integrity mismatch",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-retention-producer.test.ts",
+          "name": "Phase 8 operations observability records actual due-work completion after a sink failure without changing the committed checkpoint",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when PostgreSQL outbox RLS is wrapped inside a transaction",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when Owner Export transition RLS is wrapped inside a transaction",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "AC03",
+      "criterion": "Metrics label cardinality is bounded; unknown provider limits/uninstalled signals remain unknown rather than zero/healthy.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability documents every operational signal with a bounded source, query, and explicit unknown rule",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability source-inventories every active handwritten HTTP handler and its fixed observer wrapper",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability marks age unknown when bounded queue or lease samples cannot establish coverage",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability evaluates relational and object backup RPOs from separate source watermarks and leaves absent producers unknown",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps event drops unknown while measuring accepted intake without an owning drop producer",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps a cancelled Owner export HTTP read out of Storage failures without claiming readiness",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps export integrity unknown for absent, incomplete, malformed, capped or unavailable log windows and measures a complete zero",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification returns unknown bytes when any bounded ready export is missing its content length",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification sums all five bounded export-state samples and preserves per-state cap reporting",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification keeps bootstrap completion dates unknown until the first policy period finishes",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "AC04",
+      "criterion": "Dashboard definitions show oldest eligible outbox, dead/retry/lease state, retention last-complete/backlog and export/storage health with correct inclusion rules.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification keeps bootstrap completion dates unknown until the first policy period finishes",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification separates active and expired PostgreSQL job lease counts at the observed time",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification excludes expired leases and their missing acquisition timestamps from active lease age",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification returns unknown bytes when any bounded ready export is missing its content length",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reports 24-hour export measurement windows separately from 15-minute integrity failures",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification sums all five bounded export-state samples and preserves per-state cap reporting",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability evaluates bounded dashboard definitions over serialized safe producer records and rejects field drift and inherited metric IDs",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps a cancelled Owner export HTTP read out of Storage failures without claiming readiness",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries and summarizes an actual streamed Owner export integrity mismatch from a complete bounded system log window",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/resumable-retention-passes.test.ts",
+          "name": "Phase 8 resumable retention policy passes (#248) drains a twenty-day outage in contiguous bounded slices without losing the older completion watermark",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "AC05",
+      "criterion": "Private marker tests prove no Feedback/CV/Visitor/credential/signed-URL/provider exception leakage in responses/logs/metrics/evidence.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records consent rejection separately from HTTP status without leaking request markers",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability observes the existing private Owner export status route without recording URL or session markers",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability observes otherwise-uninstrumented public and Owner adapters with safe status classes",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability evaluates bounded dashboard definitions over serialized safe producer records and rejects field drift and inherited metric IDs",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records one failed Owner export download read without provider or identity details",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records streamed integrity mismatch and read failure once without buffering or consuming twice",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records a provider read failure when cancellation races with its rejection",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records a safe Storage failure when the content iterator cannot be initialized",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability retains integrity classification when cancellation races with a proven mismatch",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries and summarizes an actual streamed Owner export integrity mismatch from a complete bounded system log window",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records an export assembly Storage write failure from a fixture adapter without private values",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when PostgreSQL outbox RLS is wrapped inside a transaction",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when Owner Export transition RLS is wrapped inside a transaction",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "AC06",
+      "criterion": "Restricted operational summaries deny unapproved access and never create a product/public metrics interface.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability requires the fixed system purpose and returns durable zero, watermark, and explicit unknown values",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification enforces purpose and role denial and uses bounded indexes over completed history",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability documents every operational signal with a bounded source, query, and explicit unknown rule",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability accepts only the documented Portfolio CLI flag and rejects missing, extra, conflicting, and oversized scope",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability source-inventories every active handwritten HTTP handler and its fixed observer wrapper",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "AC07",
+      "criterion": "Instrumentation failure does not undo committed domain state or expose sensitive fallback errors.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-retention-producer.test.ts",
+          "name": "Phase 8 operations observability records actual due-work completion after a sink failure without changing the committed checkpoint",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability records unavailable, committed acceptance, and indeterminate commit acknowledgement as distinct outcomes",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability ignores sink failures and rejects out-of-contract observations without throwing",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps a successful adapter response when its telemetry logger throws",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when PostgreSQL outbox RLS is wrapped inside a transaction",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification emits database pool, transaction, authorization, lease-reclaim, and stale-write observations from real PostgreSQL boundaries",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "AC08",
+      "criterion": "Representative observation/query plans are bounded and do not perform backup/restore, unbounded scans or source mutations.",
+      "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds oldest-eligible traversal over a large pending and future queue",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds current export states and recent transition windows across old requests",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification sums all five bounded export-state samples and preserves per-state cap reporting",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds active lease-age reads after a large expired-lease prefix",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability documents every operational signal with a bounded source, query, and explicit unknown rule",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability evaluates bounded dashboard definitions over serialized safe producer records and rejects field drift and inherited metric IDs",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability keeps export integrity unknown for absent, incomplete, malformed, capped or unavailable log windows and measures a complete zero",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/operations-observability.test.ts",
+          "name": "Phase 8 operations observability evaluates relational and object backup RPOs from separate source watermarks and leaves absent producers unknown",
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "startup": {
+    "attempted": true,
+    "commandOutcome": "exited-successfully"
+  },
+  "cleanupDiagnostics": {
+    "stage": "cleanup-complete",
+    "stopAttempted": true,
+    "stopCommandOutcome": "exited-successfully"
+  },
+  "cleanup": "passed",
+  "result": "passed",
+  "failureCode": null,
+  "failureStage": null,
+  "validationReadiness": [
+    "ready"
+  ],
+  "discoveredTestInventory": [
+    {
+      "suite": "tests/phase8/operations-observability-postgres.gate.ts",
+      "status": "passed",
+      "message": "",
+      "tests": [
+        {
+          "name": "operations summary PostgreSQL qualification supports queue claim, reclaim, complete, retry, and Owner Export completion before and after migration64",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification retries a transient capability probe failure on the same database handle before queue and Owner Export completion",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification keeps bootstrap completion dates unknown until the first policy period finishes",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification separates active and expired PostgreSQL job lease counts at the observed time",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification reports 24-hour export measurement windows separately from 15-minute integrity failures",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification returns unknown bytes when any bounded ready export is missing its content length",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification sums all five bounded export-state samples and preserves per-state cap reporting",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification returns a usable nonnegative lease age when application time predates PostgreSQL acquisition",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification excludes expired leases and their missing acquisition timestamps from active lease age",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification enforces purpose and role denial and uses bounded indexes over completed history",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds oldest-eligible traversal over a large pending and future queue",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds current export states and recent transition windows across old requests",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds active lease-age reads after a large expired-lease prefix",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification emits database pool, transaction, authorization, lease-reclaim, and stale-write observations from real PostgreSQL boundaries",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when PostgreSQL outbox RLS is wrapped inside a transaction",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification records one safe authorization failure when Owner Export transition RLS is wrapped inside a transaction",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification records zero current pool occupancy after releasing a real PostgreSQL connection",
+          "status": "passed"
+        },
+        {
+          "name": "operations summary PostgreSQL qualification classifies an actual idle PostgreSQL backend failure as a pool error, not a transaction failure",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "suite": "tests/phase8/operations-observability-retention-producer.test.ts",
+      "status": "passed",
+      "message": "",
+      "tests": [
+        {
+          "name": "Phase 8 operations observability records actual due-work completion after a sink failure without changing the committed checkpoint",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "suite": "tests/phase8/operations-observability-runner.test.ts",
+      "status": "passed",
+      "message": "",
+      "tests": [
+        {
+          "name": "Phase 8 observability gate portability uses the short process temp root on Windows and the native temporary root on POSIX",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 observability gate portability discovers native PostgreSQL binaries from Windows and POSIX paths without a pinned install",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 observability gate portability removes only a gate-owned direct child and accepts branch or detached HEAD identity",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 observability gate portability stops a PostgreSQL process created by an ambiguous start before removing its exact run directory",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 observability gate portability retains the run directory when PostgreSQL remains live after cleanup",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 observability gate portability matches a postmaster PID file and process command line to the exact data directory",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 observability gate portability maps all eight acceptance criteria to executable test or artifact references",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 observability gate portability resolves mapped acceptance references only against passing named checks and populated artifacts",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 observability gate portability rejects missing, failed, skipped, or planned acceptance references",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "suite": "tests/phase8/operations-observability.test.ts",
+      "status": "passed",
+      "message": "",
+      "tests": [
+        {
+          "name": "Phase 8 operations observability requires the fixed system purpose and returns durable zero, watermark, and explicit unknown values",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability does not call failed summary reads healthy and validates the clock",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability marks age unknown when bounded queue or lease samples cannot establish coverage",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability documents every operational signal with a bounded source, query, and explicit unknown rule",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability evaluates bounded dashboard definitions over serialized safe producer records and rejects field drift and inherited metric IDs",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability keeps event drops unknown while measuring accepted intake without an owning drop producer",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability evaluates relational and object backup RPOs from separate source watermarks and leaves absent producers unknown",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability records consent rejection separately from HTTP status without leaking request markers",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability records a real consent database outage as unavailable rather than rejected",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability records unavailable, committed acceptance, and indeterminate commit acknowledgement as distinct outcomes",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability accepts only the documented Portfolio CLI flag and rejects missing, extra, conflicting, and oversized scope",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability observes the existing private Owner export status route without recording URL or session markers",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability observes otherwise-uninstrumented public and Owner adapters with safe status classes",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability keeps a successful adapter response when its telemetry logger throws",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability source-inventories every active handwritten HTTP handler and its fixed observer wrapper",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability records one Owner export download read success only after verified stream completion",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability records one failed Owner export download read without provider or identity details",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability records a safe Storage failure when the content iterator cannot be initialized",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability records streamed integrity mismatch and read failure once without buffering or consuming twice",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability keeps a cancelled Owner export HTTP read out of Storage failures without claiming readiness",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability records a provider read failure when cancellation races with its rejection",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability retains integrity classification when cancellation races with a proven mismatch",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability queries and summarizes an actual streamed Owner export integrity mismatch from a complete bounded system log window",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability keeps export integrity unknown for absent, incomplete, malformed, capped or unavailable log windows and measures a complete zero",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability ignores sink failures and rejects out-of-contract observations without throwing",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability records an export assembly Storage write failure from a fixture adapter without private values",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 operations observability distinguishes Owner export assembly read interruption from completed integrity mismatch",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "suite": "tests/phase8/resumable-retention-passes.test.ts",
+      "status": "passed",
+      "message": "",
+      "tests": [
+        {
+          "name": "Phase 8 resumable retention policy passes (#248) publishes daily and catch-up invocations as UTC handoffs that remain uninstalled",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 resumable retention policy passes (#248) deduplicates the same Portfolio/type/due-period across restarts and bounds catch-up",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 resumable retention policy passes (#248) resumes a bounded owner-module checkpoint with the same job identity and UTC anchor before aggregates",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 resumable retention policy passes (#248) keeps policy completion incomplete when a durable aggregate reports coverage gaps",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 resumable retention policy passes (#248) reports shutdown before work as incomplete and preserves the bounded scheduled backlog",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 8 resumable retention policy passes (#248) drains a twenty-day outage in contiguous bounded slices without losing the older completion watermark",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "suite": "tests/runtime/owner-content-authoring.test.ts",
+      "status": "passed",
+      "message": "",
+      "tests": [
+        {
+          "name": "Content authoring application service corrects private Project candidates with optimistic concurrency and exact idempotent replay",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service reviews the exact immutable Revision snapshot, replays safely, and keeps a saved Revision unreviewed",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects a wrong snapshot hash, locale, or stale root version without recording a review",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service returns bounded history pages with stable locale-sequence cursors and current review facts",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service creates a private project Draft with its typed initial Revision",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service creates a private achievement Draft with its typed initial Revision",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service creates a private testimonial Draft with its typed initial Revision",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service generates a safe candidate slug and saves a new locale Revision with increasing version and stream sequence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects unknown Save draft-data keys before appending a Revision",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service records an explicit profile association when a Testimonial has no Project",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service returns the same creation receipt for an exact retry and rejects a different owner before ledger access",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service replays an Arabic-only Project create when its candidate slug is generated",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service requires an explicit Testimonial association and persists the selected Profile choice",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service publishes only an accepted complete Project snapshot and serves the requested locale without fallback",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service publishes reviewed Achievements into a private-note-free, locale-specific chronological Timeline",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service fails closed for unresolved Media facts and rejects reviewed placeholder evidence without public side effects",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects unknown content kind at the application boundary before persistence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects malformed Project case study at the application boundary before persistence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects malformed Achievement evidence at the application boundary before persistence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects malformed evidence claim at the application boundary before persistence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects malformed media identity at the application boundary before persistence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects unsafe external link at the application boundary before persistence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects unsupported external link type at the application boundary before persistence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects unknown Project payload key at the application boundary before persistence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects unknown case study key at the application boundary before persistence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects unknown evidence claim key at the application boundary before persistence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects unknown evidence artifact key at the application boundary before persistence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects unknown external link key at the application boundary before persistence",
+          "status": "passed"
+        },
+        {
+          "name": "Content authoring application service rejects unknown Testimonial association key at the application boundary before persistence",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

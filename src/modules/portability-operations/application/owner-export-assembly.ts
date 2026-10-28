@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import { err, ok, parseStableId, type Rejection, type Result, type StableId } from "@shared/domain";
 import type { OperationsPersistencePorts, SafeErrorCode } from "./persistence.js";
+import type { OperationsObservationPort } from "./service.js";
+import { recordOperationsSignal } from "./operations-observability.js";
 import { parseSafeErrorCode } from "./persistence.js";
 import type { Clock, StableIdGenerator, TransactionContext } from "../../../runtime/ports.js";
 import type { OwnerExportStorePort, PersistedOwnerExport } from "./owner-export-store.js";
 import type { OwnerExportAssemblySnapshot } from "./owner-export-package.js";
 import { buildConfigurationOwnerExportPackage, buildSelectedOwnerExportPackage, type OwnerExportMediaObjectReaderPort } from "./owner-export-package.js";
-import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportObjectReadPort } from "./service.js";
+import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, OwnerExportReadIntegrityError, type OwnerExportObjectReadPort } from "./service.js";
 import { applyGuardedOwnerExportTransition } from "./owner-export-service.js";
 import { calculateJobRetryDelayMilliseconds } from "./retry-policy.js";
 import type { OwnerExportArtifactCleanupPort, createOwnerExportArtifactCleanupService } from "./owner-export-cleanup.js";
@@ -77,6 +79,7 @@ export interface OwnerExportAssemblyDependencies {
   readonly random?: () => number;
   readonly artifacts: OwnerExportArtifactCleanupPort;
   readonly cleanup?: ReturnType<typeof createOwnerExportArtifactCleanupService>;
+  readonly observations?: Pick<OperationsObservationPort, "recordSignal">;
 }
 
 export interface OwnerExportAssemblyRunResult {
@@ -121,23 +124,27 @@ function parseJob(value: unknown): {
   };
 }
 
+type ArtifactVerificationOutcome = "verified" | "integrity-mismatch" | "read-failure";
+
 async function verifyArtifact(
   content: AsyncIterable<Uint8Array>,
   contentLength: number,
   expectedSha256: string,
-): Promise<boolean> {
+): Promise<ArtifactVerificationOutcome> {
   const digest = createHash("sha256");
   let total = 0;
   try {
     for await (const chunk of content) {
       total += chunk.byteLength;
-      if (total > contentLength) return false;
+      if (total > contentLength) return "integrity-mismatch";
       digest.update(chunk);
     }
-  } catch {
-    return false;
+  } catch (error) {
+    return error instanceof OwnerExportReadIntegrityError ? "integrity-mismatch" : "read-failure";
   }
-  return total === contentLength && digest.digest("hex") === expectedSha256;
+  return total === contentLength && digest.digest("hex") === expectedSha256
+    ? "verified"
+    : "integrity-mismatch";
 }
 
 function isSupportedScopeSelection(scopes: readonly string[]): boolean {
@@ -175,7 +182,7 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
     return transition.value === "applied" ? "failed" : "stale";
   }
 
-  async function processJob(job: {
+  async function processJobUnobserved(job: {
     readonly jobId: string;
     readonly payload: { readonly type: string; readonly version: number; readonly value: Readonly<Record<string, unknown>> };
     readonly leaseToken: string;
@@ -288,26 +295,54 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
       const artifactId = record.candidateArtifactId;
       const uploadRecord = record;
       const upload = async () => {
-        const stored = await deps.storage.writeOwnerExport({
-          portfolioId: parsed.portfolioId,
-          exportId: uploadRecord.exportId,
-          artifactId,
-          content: built.content,
-          contentLength: built.contentLength,
-          sha256: built.sha256,
-        });
-        if (!stored.ok) throw new Error("OWNER_EXPORT_STORAGE_WRITE_FAILED");
-        const read = await deps.storage.readOwnerExport({
-          portfolioId: parsed.portfolioId,
-          exportId: uploadRecord.exportId,
-          artifactId,
-          expectedSha256: uploadRecord.candidateSha256!,
-          expectedContentLength: uploadRecord.candidateContentLength!,
-        });
-        if (!read.ok || read.value.contentLength !== built.contentLength ||
-            !await verifyArtifact(read.value.content, built.contentLength, built.sha256)) {
+        let stored: Result<void, Rejection>;
+        try {
+          stored = await deps.storage.writeOwnerExport({
+            portfolioId: parsed.portfolioId,
+            exportId: uploadRecord.exportId,
+            artifactId,
+            content: built.content,
+            contentLength: built.contentLength,
+            sha256: built.sha256,
+          });
+        } catch {
+          void recordOperationsSignal(deps.observations, { kind: "storage-operation", operation: "write", outcome: "failed" });
+          throw new Error("OWNER_EXPORT_STORAGE_WRITE_FAILED");
+        }
+        if (!stored.ok) {
+          void recordOperationsSignal(deps.observations, { kind: "storage-operation", operation: "write", outcome: "failed" });
+          throw new Error("OWNER_EXPORT_STORAGE_WRITE_FAILED");
+        }
+        void recordOperationsSignal(deps.observations, { kind: "storage-operation", operation: "write", outcome: "succeeded", bytes: built.contentLength });
+        let read: Awaited<ReturnType<OwnerExportObjectStoragePort["readOwnerExport"]>>;
+        try {
+          read = await deps.storage.readOwnerExport({
+            portfolioId: parsed.portfolioId,
+            exportId: uploadRecord.exportId,
+            artifactId,
+            expectedSha256: uploadRecord.candidateSha256!,
+            expectedContentLength: uploadRecord.candidateContentLength!,
+          });
+        } catch {
+          void recordOperationsSignal(deps.observations, { kind: "storage-operation", operation: "read", outcome: "failed" });
           throw new Error("OWNER_EXPORT_STORAGE_VERIFY_FAILED");
         }
+        if (!read.ok) {
+          void recordOperationsSignal(deps.observations, { kind: "storage-operation", operation: "read", outcome: "failed" });
+          throw new Error("OWNER_EXPORT_STORAGE_VERIFY_FAILED");
+        }
+        const verification = read.value.contentLength === built.contentLength
+          ? await verifyArtifact(read.value.content, built.contentLength, built.sha256)
+          : "integrity-mismatch";
+        if (verification !== "verified") {
+          if (verification === "integrity-mismatch") {
+            void recordOperationsSignal(deps.observations, { kind: "owner-export-integrity", outcome: "failed" });
+          }
+          void recordOperationsSignal(deps.observations, { kind: "storage-operation", operation: "read", outcome: "failed" });
+          throw new Error("OWNER_EXPORT_STORAGE_VERIFY_FAILED");
+        }
+        void recordOperationsSignal(deps.observations, { kind: "owner-export-integrity", outcome: "verified" });
+        void recordOperationsSignal(deps.observations, { kind: "storage-operation", operation: "read", outcome: "succeeded", bytes: read.value.contentLength });
         return true;
       };
       const uploaded = await deps.artifacts.uploadCandidate({ portfolioId: parsed.portfolioId,
@@ -351,6 +386,23 @@ export function createOwnerExportAssemblyService(deps: OwnerExportAssemblyDepend
       const retried = await deps.operations.jobs.scheduleRetry(job.jobId, job.leaseToken, RETRY_FAILURE, delay);
       return retried ? "retried" : "stale";
     }
+  }
+
+  async function processJob(job: {
+    readonly jobId: string;
+    readonly payload: { readonly type: string; readonly version: number; readonly value: Readonly<Record<string, unknown>> };
+    readonly leaseToken: string;
+    readonly attemptCount: number;
+  }): Promise<"completed" | "retried" | "failed" | "stale"> {
+    const startedAt = Date.parse(deps.clock.now());
+    const outcome = await processJobUnobserved(job);
+    const endedAt = Date.parse(deps.clock.now());
+    void recordOperationsSignal(deps.observations, {
+      kind: "owner-export-build", outcome,
+      durationMs: Number.isFinite(startedAt) && Number.isFinite(endedAt)
+        ? Math.max(0, Math.min(86_400_000, endedAt - startedAt)) : Number.NaN,
+    });
+    return outcome;
   }
 
   let cleanupCursor: StableId<"OwnerExport"> | undefined;

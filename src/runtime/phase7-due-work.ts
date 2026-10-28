@@ -5,6 +5,8 @@ import {
   JOB_MAX_ATTEMPTS,
   parsePhase7WorkPayload,
   parseSafeErrorCode,
+  recordOperationsSignal,
+  type OperationsObservationPort,
   type OperationsPersistencePorts,
   type OwnerExportAssemblyRunResult,
   type VersionedPayload,
@@ -43,6 +45,7 @@ export interface Phase7DueWorkDependencies {
   readonly ids: StableIdGenerator;
   readonly random?: () => number;
   readonly operations: Pick<OperationsPersistencePorts, "transactions" | "jobs">;
+  readonly observations?: Pick<OperationsObservationPort, "recordSignal">;
   readonly measurement: Pick<MeasurementWorkService, "aggregateDay" | "expireDetail" | "expireAggregates" | "cleanWithdrawnConsent">;
   readonly interaction: Pick<FeedbackWorkService, "expireFeedback">;
   /** Existing module-owned #247 cleanup, expiry, orphan reconciliation, and assembly dispatch. */
@@ -228,6 +231,12 @@ export function createPhase7DueWorkService(deps: Phase7DueWorkDependencies) {
           if (transient && job.attemptCount < JOB_MAX_ATTEMPTS) totals.released += 1;
           else totals.failed += 1;
         } else totals.staleLeases += 1;
+        if (parsed.kind !== "aggregate") void recordOperationsSignal(deps.observations, {
+          kind: "retention-work",
+          domain: parsed.kind === "feedback-retention" ? "feedback" : "measurement",
+          outcome: !transitioned || transient && job.attemptCount < JOB_MAX_ATTEMPTS ? "incomplete" : "failed",
+          processed: 0,
+        });
         totals.incompleteBacklog = true;
         totals.halted = true;
         return totals;
@@ -239,6 +248,12 @@ export function createPhase7DueWorkService(deps: Phase7DueWorkDependencies) {
       const transitioned = hasMore
         ? await deps.operations.jobs.release(job.jobId, job.leaseToken, true)
         : await deps.operations.jobs.complete(job.jobId, job.leaseToken, jobNow, coverageIncomplete);
+      if (parsed.kind !== "aggregate") void recordOperationsSignal(deps.observations, {
+        kind: "retention-work",
+        domain: parsed.kind === "feedback-retention" ? "feedback" : "measurement",
+        outcome: transitioned && !hasMore && !coverageIncomplete ? "completed" : "incomplete",
+        processed: Math.max(0, Math.min(1_000_000, outcome.value.processedCount)),
+      });
       if (!transitioned) {
         totals.staleLeases += 1;
         totals.incompleteBacklog = true;

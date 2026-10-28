@@ -3,6 +3,7 @@ import test from "node:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { migrationSha256 } from "../../scripts/migration-checksum.mjs";
 import {
   composeOperationsBoundary,
   capabilitiesForMigrations,
@@ -16,6 +17,7 @@ import {
   PHASE_DECLARED_ADDITIVE_MIGRATIONS,
 } from "../../scripts/phase-contract-registry.mjs";
 import { assertPhase3OperationsContractPreserved } from "../../scripts/phase4-migration-integrity.mjs";
+import { partitionMigrationsAt } from "../../scripts/phase7-migration-boundary.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -35,6 +37,16 @@ test("every committed migration is classified exactly once and matches the decla
       assert.ok(PHASE5_MIGRATION_COMPATIBILITY[file], file);
     }
   }
+});
+
+test("the Phase 7 schedule migration stays between its true predecessor prefix and later Phase 8 migrations", () => {
+  const files = readdirSync(join(ROOT, "supabase/migrations")).filter((name) => name.endsWith(".sql")).sort();
+  const boundary = partitionMigrationsAt(files, "20261026164603_phase7_durable_policy_schedule_keys.sql");
+  assert.equal(boundary.predecessorMigrations.at(-1), "20261026100000_reconcile_all_owner_export_artifacts.sql");
+  assert.equal(boundary.forwardMigration, "20261026164603_phase7_durable_policy_schedule_keys.sql");
+  assert.deepEqual(boundary.laterMigrations, ["20261027014402_operations_observability_summary_indexes.sql"]);
+  assert.throws(() => partitionMigrationsAt([...files, boundary.forwardMigration], boundary.forwardMigration),
+    /PHASE7_MIGRATION_BOUNDARY_INVALID/u);
 });
 
 test("undeclared, duplicate, or unreviewed transformation migrations fail closed", () => {
@@ -200,6 +212,36 @@ test("the Phase 7 schedule migration binds exact checks, indexes, defaults, and 
   }
 });
 
+test("the Phase 8 operations observability migration binds exact columns, all eleven index definitions, and its source checksum", () => {
+  const name = "20261027014402_operations_observability_summary_indexes.sql";
+  const migration = PHASE_DECLARED_ADDITIVE_MIGRATIONS.find(row => row.migration === name);
+  assert.ok(migration);
+  assert.equal(migration.migrationSha256, migrationSha256(readFileSync(join(ROOT, "supabase/migrations", name), "utf8")));
+  const indexes = migration.operationsAdditions.filter(row => row.category === "indexes");
+  const portabilityIndexes = migration.portabilityAdditions.filter(row => row.category === "indexes");
+  const columns = migration.operationsAdditions.filter(row => row.category === "columns");
+  assert.deepEqual([...indexes, ...portabilityIndexes].map(row => row.expected.name).toSorted(), [
+    "jobs_operational_summary_dead_idx", "jobs_operational_summary_lease_idx", "jobs_operational_summary_status_idx",
+    "outbox_events_operational_summary_dead_idx", "outbox_events_operational_summary_eligible_idx",
+    "outbox_events_operational_summary_lease_idx", "outbox_events_operational_summary_retry_idx",
+    "owner_exports_operational_summary_expired_idx", "owner_exports_operational_summary_failed_idx",
+    "owner_exports_operational_summary_ready_idx", "owner_exports_operational_summary_recent_idx",
+  ]);
+  assert.equal(portabilityIndexes.length, 4);
+  assert.deepEqual(portabilityIndexes.map(row => row.expected.definition).toSorted(), [
+    "CREATE INDEX owner_exports_operational_summary_expired_idx ON portability.owner_exports USING btree (portfolio_id, expired_at DESC, export_id DESC) WHERE ((status = 'expired'::text) AND (expired_at IS NOT NULL))",
+    "CREATE INDEX owner_exports_operational_summary_failed_idx ON portability.owner_exports USING btree (portfolio_id, failed_at DESC, export_id DESC) WHERE ((status = 'failed'::text) AND (failed_at IS NOT NULL))",
+    "CREATE INDEX owner_exports_operational_summary_ready_idx ON portability.owner_exports USING btree (portfolio_id, completed_at DESC, export_id DESC) INCLUDE (started_at, artifact_content_length) WHERE ((status = 'ready'::text) AND (completed_at IS NOT NULL))",
+    "CREATE INDEX owner_exports_operational_summary_recent_idx ON portability.owner_exports USING btree (portfolio_id, status, requested_at DESC, export_id DESC) INCLUDE (started_at, completed_at, artifact_content_length)",
+  ]);
+  assert.deepEqual(columns.map(row => row.identity).toSorted(), [
+    "operations.jobs.lease_acquired_at", "operations.outbox_events.lease_acquired_at",
+  ]);
+  assert.equal(migration.operationsAdditions.length, indexes.length + columns.length);
+  assert.ok(indexes.every(row => row.expected.definition.startsWith("CREATE INDEX ") && row.expected.definition.includes(" USING btree ")));
+  assert.ok(columns.every(row => row.expected.nullable === "YES" && row.expected.default === null));
+});
+
 test("canonical operations expectations bind complete row operations to reviewed migrations", () => {
   const boundary = composeOperationsBoundary(undefined, 18);
   assert.equal(boundary.operations.length, 99);
@@ -213,7 +255,7 @@ test("canonical operations expectations bind complete row operations to reviewed
 });
 
 test("capabilities are declared per checkpoint, never learned from a database", () => {
-  assert.deepEqual(declaredCapabilities().toSorted(), ["measurement.events", "operations.bounded_retries", "operations.phase7_durable_schedules", "portability.analytics_export", "portability.configuration_export", "portability.content_export", "portability.cv_export", "portability.feedback_export", "portability.media_export", "portability.owner_export_requests", "portability.taxonomy_export"]);
+  assert.deepEqual(declaredCapabilities().toSorted(), ["measurement.events", "operations.bounded_retries", "operations.observability", "operations.phase7_durable_schedules", "portability.analytics_export", "portability.configuration_export", "portability.content_export", "portability.cv_export", "portability.feedback_export", "portability.media_export", "portability.owner_export_requests", "portability.taxonomy_export"]);
   assert.deepEqual(capabilitiesForMigrations(
     ["20261023100000_build_configuration_owner_exports.sql"],
     [],

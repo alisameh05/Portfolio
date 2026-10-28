@@ -666,6 +666,7 @@ export interface OperationsJobs {
   job_id: string;
   job_type: string;
   last_error_code: string | null;
+  lease_acquired_at: Timestamp | null;
   lease_expires_at: Timestamp | null;
   lease_owner: string | null;
   lease_token: string | null;
@@ -689,6 +690,7 @@ export interface OperationsOutboxEvents {
   event_id: string;
   event_type: string;
   last_error_code: string | null;
+  lease_acquired_at: Timestamp | null;
   lease_expires_at: Timestamp | null;
   lease_owner: string | null;
   lease_token: string | null;

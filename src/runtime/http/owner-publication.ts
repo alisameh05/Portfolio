@@ -54,6 +54,8 @@ import {
   zSaveOwnerContentRevisionPath,
   zSaveOwnerContentRevisionResponse,
 } from "../../contracts/http/owner/v1/generated/zod.gen.js";
+import { observeHttpRequest } from "./observe-request.js";
+
 import type {
   ActorContext,
   IdempotencyKey,
@@ -263,7 +265,7 @@ function commandHeaders(request: Request): Record<string, string | undefined> {
   };
 }
 
-export async function handleGetOwnerContentAggregate(
+ async function handleGetOwnerContentAggregateUnobserved(
   request: Request,
   params: { contentId: string },
   deps: OwnerPublicationAdapterDeps,
@@ -443,7 +445,7 @@ async function handleContentCommand(
   }
 }
 
-export async function handleSaveOwnerContentRevision(
+ async function handleSaveOwnerContentRevisionUnobserved(
   request: Request,
   params: { contentId: string },
   deps: OwnerPublicationAdapterDeps,
@@ -500,7 +502,7 @@ export async function handleSaveOwnerContentRevision(
   );
 }
 
-export async function handlePublishOwnerContentLanguage(
+ async function handlePublishOwnerContentLanguageUnobserved(
   request: Request,
   params: { contentId: string },
   deps: OwnerPublicationAdapterDeps,
@@ -592,7 +594,7 @@ async function runOwnerLifecycleCommand(
     : result;
 }
 
-export async function handleHideOwnerContent(
+ async function handleHideOwnerContentUnobserved(
   request: Request,
   params: { contentId: string },
   deps: OwnerPublicationAdapterDeps,
@@ -622,7 +624,7 @@ export async function handleHideOwnerContent(
   );
 }
 
-export async function handleArchiveOwnerContent(
+ async function handleArchiveOwnerContentUnobserved(
   request: Request,
   params: { contentId: string },
   deps: OwnerPublicationAdapterDeps,
@@ -652,7 +654,7 @@ export async function handleArchiveOwnerContent(
   );
 }
 
-export async function handleRestoreOwnerContent(
+ async function handleRestoreOwnerContentUnobserved(
   request: Request,
   params: { contentId: string },
   deps: OwnerPublicationAdapterDeps,
@@ -680,4 +682,29 @@ export async function handleRestoreOwnerContent(
     (command) => runOwnerLifecycleCommand(command, deps, "restoreContent"),
     lifecyclePayload,
   );
+}
+
+
+export function handleGetOwnerContentAggregate(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-publication", () => handleGetOwnerContentAggregateUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleSaveOwnerContentRevision(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-publication", () => handleSaveOwnerContentRevisionUnobserved(request, params, deps), deps.logger);
+}
+
+export function handlePublishOwnerContentLanguage(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-publication", () => handlePublishOwnerContentLanguageUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleHideOwnerContent(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-publication", () => handleHideOwnerContentUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleArchiveOwnerContent(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-publication", () => handleArchiveOwnerContentUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleRestoreOwnerContent(request: Request, params: { contentId: string }, deps: OwnerPublicationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-publication", () => handleRestoreOwnerContentUnobserved(request, params, deps), deps.logger);
 }

@@ -41,6 +41,8 @@ import {
   zRegisterOwnerCvVersionHeaders,
   zRegisterOwnerCvVersionResponse,
 } from "../../contracts/http/owner/v1/generated/zod.gen.js";
+import { observeHttpRequest } from "./observe-request.js";
+
 import type {
   ActorContext,
   IdempotencyKey,
@@ -143,7 +145,7 @@ function toRejection(
   return rejection;
 }
 
-export async function handleGetOwnerCvPortfolio(
+ async function handleGetOwnerCvPortfolioUnobserved(
   request: Request,
   deps: OwnerCvAdapterDeps,
 ): Promise<Response> {
@@ -200,7 +202,7 @@ export async function handleGetOwnerCvPortfolio(
   }
 }
 
-export async function handleRegisterOwnerCvVersion(
+ async function handleRegisterOwnerCvVersionUnobserved(
   request: Request,
   deps: OwnerCvAdapterDeps,
 ): Promise<Response> {
@@ -366,7 +368,7 @@ async function handleCvVersionCommand(
   }
 }
 
-export async function handleAcceptOwnerCvVersion(
+ async function handleAcceptOwnerCvVersionUnobserved(
   request: Request,
   params: { versionId: string },
   deps: OwnerCvAdapterDeps,
@@ -391,7 +393,7 @@ export async function handleAcceptOwnerCvVersion(
   );
 }
 
-export async function handleActivateOwnerCvVersion(
+ async function handleActivateOwnerCvVersionUnobserved(
   request: Request,
   params: { versionId: string },
   deps: OwnerCvAdapterDeps,
@@ -414,4 +416,21 @@ export async function handleActivateOwnerCvVersion(
     }) as ActivateOwnerCvVersionApplicationCommand,
     (command) => deps.service.activateOwnerCvVersion(command),
   );
+}
+
+
+export function handleGetOwnerCvPortfolio(request: Request, deps: OwnerCvAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-cv", () => handleGetOwnerCvPortfolioUnobserved(request, deps), deps.logger);
+}
+
+export function handleRegisterOwnerCvVersion(request: Request, deps: OwnerCvAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-cv", () => handleRegisterOwnerCvVersionUnobserved(request, deps), deps.logger);
+}
+
+export function handleAcceptOwnerCvVersion(request: Request, params: { versionId: string }, deps: OwnerCvAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-cv", () => handleAcceptOwnerCvVersionUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleActivateOwnerCvVersion(request: Request, params: { versionId: string }, deps: OwnerCvAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-cv", () => handleActivateOwnerCvVersionUnobserved(request, params, deps), deps.logger);
 }

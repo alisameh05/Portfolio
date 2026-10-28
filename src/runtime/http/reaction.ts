@@ -1,4 +1,6 @@
 import type { PortfolioRequestScope } from "@shared/application";
+import { observeHttpRequest } from "./observe-request.js";
+
 /**
  * reaction.ts — Phase 2 #26 Reaction HTTP adapter (tracer bullet).
  *
@@ -53,7 +55,7 @@ function requestInstance(request: Request): string {
   }
 }
 
-export async function handlePutProjectReaction(
+ async function handlePutProjectReactionUnobserved(
   request: Request,
   params: { projectId: string },
   deps: ReactionAdapterDeps,
@@ -153,4 +155,9 @@ export async function handlePutProjectReaction(
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
+}
+
+
+export function handlePutProjectReaction(request: Request, params: { projectId: string }, deps: ReactionAdapterDeps): Promise<Response> {
+  return observeHttpRequest("public-reaction", () => handlePutProjectReactionUnobserved(request, params, deps), deps.logger);
 }
