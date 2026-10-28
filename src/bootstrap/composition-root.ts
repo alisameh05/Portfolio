@@ -135,13 +135,18 @@ export function initializeRuntime(env: RuntimeConfigEnv): RuntimeConfig {
 
 /** Default bootstrap seam: forwards the ambient environment exactly once. */
 export function initializeRuntimeFromEnvironment(): RuntimeConfig {
-  return initializeRuntime({ ...(process.env as RuntimeConfigEnv) });
+  return initializeRuntime(getRuntimeEnvironmentSnapshot());
+}
+
+/** Captures the ambient environment once so composed consumers share the same snapshot. */
+export function getRuntimeEnvironmentSnapshot(): RuntimeConfigEnv {
+  return { ...(process.env as RuntimeConfigEnv) };
 }
 
 /** Reads and validates bounded worker limits at the composition boundary. */
 export function getPhase8DueWorkBudgetFromEnvironment(
   runWindowOverrideMs?: number,
-  env: Readonly<Record<string, string | undefined>> = { ...(process.env as RuntimeConfigEnv) },
+  env: Readonly<Record<string, string | undefined>> = {},
 ): Phase8DueWorkBudget | undefined {
   const configuredBudget = phase8DueWorkBudgetFromEnvironment(env);
   if (configuredBudget === undefined || runWindowOverrideMs === undefined) return configuredBudget;
@@ -989,11 +994,6 @@ export async function initializeDatabaseRuntime(
     lifecycle.markFailed();
     throw new Error("Database runtime initialization failed.", { cause: error });
   }
-}
-
-/** Worker CLI seam: forward the ambient environment through the composition root exactly once. */
-export function initializeDatabaseRuntimeFromEnvironment(runtimeKind: DatabaseRuntimeKind): Promise<DatabaseRuntimeState> {
-  return initializeDatabaseRuntime({ ...(process.env as RuntimeConfigEnv) }, runtimeKind);
 }
 
 export function getOperationsPersistence(): OperationsPersistencePorts {

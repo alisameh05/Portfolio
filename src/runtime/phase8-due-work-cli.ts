@@ -33,7 +33,8 @@ if (admission.kind === "stopped") {
       admission.dispose();
       process.exitCode = 2;
     } else {
-      const budget = composition.getPhase8DueWorkBudgetFromEnvironment(remainingRunMs);
+      const runtimeEnvironment = composition.getRuntimeEnvironmentSnapshot();
+      const budget = composition.getPhase8DueWorkBudgetFromEnvironment(remainingRunMs, runtimeEnvironment);
       if (budget === undefined) {
         process.stderr.write("DUE_WORK_BUDGET_INVALID\n");
         process.stdout.write("{\"ok\":false,\"code\":\"due_work_unavailable\"}\n");
@@ -57,7 +58,7 @@ if (admission.kind === "stopped") {
             isSignalled: () => admission.isSignalled() || isSignalled() }),
           run: async (shouldStop: () => boolean): Promise<Result<DueWorkRunResult, Rejection>> => {
             if (shouldStop()) return { ok: true, value: incompleteBeforeWork };
-            await composition.initializeDatabaseRuntimeFromEnvironment("worker");
+            await composition.initializeDatabaseRuntime(runtimeEnvironment, "worker");
             if (shouldStop()) return { ok: true, value: incompleteBeforeWork };
             return composition.getPhase7DueWorkWorkerService().runDueWork({
               workerId: `phase8-due-work-cli-${randomUUID()}`,
