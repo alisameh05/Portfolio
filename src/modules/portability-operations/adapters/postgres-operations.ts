@@ -590,6 +590,7 @@ export function createPostgresOperationsPersistence(
             select 1 from operations.phase7_schedule_progress progress
              where progress.portfolio_id = candidate.semantic_scope_id
                and progress.retention_complete_through >= progress.required_through_period
+               and progress.retention_complete_through >= (clock_timestamp() at time zone 'UTC')::date
                and progress.retention_complete_through >= split_part(candidate.semantic_period, ':', 1)::date
           )
           and not exists (

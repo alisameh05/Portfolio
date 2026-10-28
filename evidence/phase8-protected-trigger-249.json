@@ -1,9 +1,9 @@
 {
   "ticket": 249,
-  "runId": "39a4d837-2949-4588-913d-f35c481b8957",
-  "startedAt": "2026-10-28T10:35:48.073Z",
-  "sourceRevision": "1f751047cd54de219eab46a7029146498e113f6d",
-  "sourceTreeSha256": "9abfa43b3b6c2e1058b9d312d2488c8767d8bc9dfb3e0f1df981ee47adb954f8",
+  "runId": "92298d13-db3f-4e12-986a-4efefd42e7f7",
+  "startedAt": "2026-10-28T19:26:10.703Z",
+  "sourceRevision": "395acc63b3cc5ae8d05dc3ebd16cb9e6cf6cfdca",
+  "sourceTreeSha256": "8b361ea84071b5faaa45bb19460622bc4c9ab83d2311775492a06d96a95190c8",
   "postgresVersion": "postgres (PostgreSQL) 17.11 (Debian 17.11-1.pgdg12+2)",
   "migrations": [
     {
@@ -958,6 +958,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase8:focus:protected-trigger",
   "scope": "All repository migrations on disposable native PostgreSQL; durable Portfolio/type/UTC-period deduplication under concurrent enqueue, independent-worker day-rollover retention barriers with held, retry-delayed, and dead keys, serialized Owner admission across a stale status snapshot and concurrent horizon advance, PostgreSQL-current-day horizon/admission fencing with a lagging worker clock, database-clock not-before enforcement for job and outbox retries plus a worker-clock-ahead UTC policy rollover, expired-before-reclaim job/outbox transition fencing with checkpoint resume, bounded contiguous catch-up and historical redrive, successful checkpoint retry-streak reset with fifth-failure/crash terminalization preserved, five existing versioned handlers, ten-job Owner assembly backlog reporting and restart, loopback Storage-adapter effects, truthful completion and coverage status, bounded indexed history queries, in-place upgrade row preservation, and legacy queue compatibility after application rollback. The #249 suites add protected GET/Bearer security, fixed host authority, bounded memory/time/claim controls, sanitized incomplete and dependency responses, Owner dependency failure propagation with durable retention and retry, overlapping authenticated triggers on the real queue, zero-claim Owner cleanup against an expired real PostgreSQL artifact, startup-budget accounting, exclusive gate-mode attestation, and Linux OS-SIGTERM qualification during compilation, worker startup, and a real PostgreSQL lock-barrier batch.",
-  "endedAt": "2026-10-28T10:36:51.714Z",
+  "endedAt": "2026-10-28T19:27:26.488Z",
   "cleanup": true
 }

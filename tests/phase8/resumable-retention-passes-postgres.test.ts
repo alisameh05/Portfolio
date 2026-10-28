@@ -856,11 +856,49 @@ describe.runIf(Boolean(WORKER_URL && SECOND_WORKER_URL && ADMIN_URL && APPLICATI
 
     await seedStaleProgress(scope);
     await seedStaleProgress(admissionScope);
+    // Simulate crossing midnight after admission: both persisted watermarks
+    // still name yesterday, and no worker has refreshed this scope's horizon.
+    const completeRetentionPeriod = async (period: string) => {
+      for (const type of retentionTypes) {
+        expect(await operations.transactions.run(transaction => operations.jobs.enqueue(transaction, {
+          jobId: id("Job"), payload: { type, version: 1, value: {} }, availableAt: `${period}T00:00:00.000Z`,
+          semanticSchedule: { portfolioId: admissionScope, period },
+        }))).toBe(true);
+      }
+      expect((await admin!.query(`update operations.jobs set status='completed',completed_at=clock_timestamp()
+        where semantic_scope_id=$1 and semantic_period=$2 and job_type=any($3::text[]) returning job_id`,
+      [admissionScope, period, retentionTypes])).rows).toHaveLength(4);
+    };
+    await completeRetentionPeriod(priorPolicyDay);
+    const aggregateJobId = id("Job");
+    expect(await operations.transactions.run(transaction => operations.jobs.enqueue(transaction, {
+      jobId: aggregateJobId, availableAt: `${priorPolicyDay}T00:00:00.000Z`,
+      payload: { type: "measurement.daily-aggregate.v1", version: 1, value: { utcDay: priorPolicyDay } },
+      semanticSchedule: { portfolioId: admissionScope, period: `${priorPolicyDay}:${priorPolicyDay}` },
+    }))).toBe(true);
+    const aggregateClaim = { workerId: "midnight-aggregate-claim", now: laggingWorkerClock,
+      leaseDurationSeconds: 60, limit: 1, jobTypes: ["measurement.daily-aggregate.v1"], semanticScopeId: admissionScope };
+    expect(await operations.jobs.claimDue(aggregateClaim)).toEqual([]);
+    expect((await admin!.query(`select status,attempt_count,lease_token from operations.jobs where job_id=$1`,
+      [aggregateJobId])).rows).toEqual([{ status: "available", attempt_count: 0, lease_token: null }]);
+    expect((await admin!.query(`select to_char(required_through_period,'YYYY-MM-DD') as required_through,
+      to_char(retention_complete_through,'YYYY-MM-DD') as complete_through
+      from operations.phase7_schedule_progress where portfolio_id=$1`, [admissionScope])).rows)
+      .toEqual([{ required_through: priorPolicyDay, complete_through: priorPolicyDay }]);
     // Admission independently refreshes a different stale scope and denies dependent work.
     expect(await operations.jobs.admitPhase7DependentWork({ portfolioId: admissionScope })).toBe(false);
     expect((await admin!.query(`select to_char(required_through_period,'YYYY-MM-DD') as required_through,
       phase from operations.phase7_schedule_progress where portfolio_id=$1`, [admissionScope])).rows)
       .toEqual([{ required_through: databaseDay, phase: "retention" }]);
+    await completeRetentionPeriod(databaseDay);
+    expect(await operations.jobs.advancePhase7RetentionSchedule({ portfolioId: admissionScope,
+      expectedNextPeriod: databaseDay, scheduledThroughPeriod: databaseDay })).toBe(true);
+    expect(await operations.jobs.getPhase7ScheduleStatus({ portfolioId: admissionScope,
+      fromPeriod: priorPolicyDay, throughPeriod: databaseDay })).toMatchObject({ retentionCompleteThrough: databaseDay });
+    const admitted = await operations.jobs.claimDue(aggregateClaim);
+    expect(admitted).toHaveLength(1);
+    expect(admitted[0]!.jobId).toBe(aggregateJobId);
+    expect(await operations.jobs.complete(aggregateJobId, admitted[0]!.leaseToken, laggingWorkerClock)).toBe(true);
 
     const withdrawalJobId = id("Job");
     await operations.transactions.run(transaction => operations.jobs.enqueue(transaction, { jobId: withdrawalJobId,
