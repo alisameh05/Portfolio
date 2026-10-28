@@ -1,15 +1,15 @@
 {
   "evidenceVersion": 1,
   "ticket": 251,
-  "runId": "5246bf13-57e2-454c-93e2-4445a8b9249f",
-  "startedAt": "2026-10-28T19:24:42.027Z",
-  "completedAt": "2026-10-28T19:26:19.169Z",
+  "runId": "b72c1d03-2992-4e61-887e-7d843482a97c",
+  "startedAt": "2026-10-28T19:44:32.206Z",
+  "completedAt": "2026-10-28T19:46:05.654Z",
   "repository": {
-    "head": "88e6ee0d1626366f4756f57b635f7c884a120f45",
+    "head": "5f95646b2ac7251cefdf87df7ae829feff46adda",
     "branch": "t3/spec8-251-repair-r1",
     "detached": false,
-    "sourceTreeSha256Before": "513f8ca9d41098e1220e83101369294b18240aec84c66c1f2c1ea4d3301a0a0a",
-    "sourceTreeSha256After": "513f8ca9d41098e1220e83101369294b18240aec84c66c1f2c1ea4d3301a0a0a"
+    "sourceTreeSha256Before": "d69f8d77061fa498feb9a46b0c729174b930145cb0e469a711dcdc257c7f3d04",
+    "sourceTreeSha256After": "d69f8d77061fa498feb9a46b0c729174b930145cb0e469a711dcdc257c7f3d04"
   },
   "tools": {
     "node": "v24.21.0",

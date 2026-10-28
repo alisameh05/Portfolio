@@ -221,4 +221,3 @@ export function makeFixture(options: {
   });
   return { rows, effects, operations, progressByPortfolio, makeService, ownerExports };
 }
-
