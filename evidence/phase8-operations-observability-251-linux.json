@@ -1,15 +1,15 @@
 {
   "evidenceVersion": 1,
   "ticket": 251,
-  "runId": "3a6a0343-fa07-4d72-af28-a62df3c12776",
-  "startedAt": "2026-10-28T19:07:40.426Z",
-  "completedAt": "2026-10-28T19:09:40.019Z",
+  "runId": "dc723b3e-7058-4645-80fe-a756374f5884",
+  "startedAt": "2026-10-28T19:41:36.993Z",
+  "completedAt": "2026-10-28T19:42:25.307Z",
   "repository": {
-    "head": "1f751047cd54de219eab46a7029146498e113f6d",
+    "head": "95b69686fe89c2e3f1fe619e164be0579f218b52",
     "branch": null,
     "detached": true,
-    "sourceTreeSha256Before": "d76e3c7475bced1d42b55e054ce0638ec5910fe1739a68d4082490f41fdf3045",
-    "sourceTreeSha256After": "d76e3c7475bced1d42b55e054ce0638ec5910fe1739a68d4082490f41fdf3045"
+    "sourceTreeSha256Before": "513f8ca9d41098e1220e83101369294b18240aec84c66c1f2c1ea4d3301a0a0a",
+    "sourceTreeSha256After": "513f8ca9d41098e1220e83101369294b18240aec84c66c1f2c1ea4d3301a0a0a"
   },
   "tools": {
     "node": "v24.21.0",
