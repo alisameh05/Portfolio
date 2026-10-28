@@ -222,6 +222,10 @@ async function localVerification(connectionString) {
       ["outbox_events", "outbox_worker_select_policy", "SELECT", "shipwithali_worker"],
       ["outbox_events", "outbox_worker_update_policy", "UPDATE", "shipwithali_worker"],
       ["outbox_events", "owner_export_produced_outbox_worker_insert", "INSERT", "shipwithali_worker"],
+      ["phase7_schedule_progress", "operations_backup_policy_phase7_schedule_progress", "SELECT", "shipwithali_backup"],
+      ["phase7_schedule_progress", "phase7_schedule_progress_worker_insert", "INSERT", "shipwithali_worker"],
+      ["phase7_schedule_progress", "phase7_schedule_progress_worker_select", "SELECT", "shipwithali_worker"],
+      ["phase7_schedule_progress", "phase7_schedule_progress_worker_update", "UPDATE", "shipwithali_worker"],
     ];
     const policyMatches = expectedPolicies.every(([table, policy, command, role]) =>
       policies.rows.some(

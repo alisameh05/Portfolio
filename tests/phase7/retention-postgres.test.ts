@@ -151,7 +151,7 @@ describe.runIf(Boolean(workerUrl && appUrl && adminUrl))("Measurement retention 
     const rebuilt = await worker.transactions.run(transaction => aggregateRepository.rebuildDay({
       portfolioId, utcDay: day, asOf: "2024-02-14T00:00:00.000Z",
     }, transaction));
-    expect(rebuilt).toBe(0);
+    expect(rebuilt).toEqual({ processedCount: 0, coverageIncomplete: false });
     expect((await admin.query("select 1 from measurement.daily_aggregates where portfolio_id=$1 and utc_day=$2", [portfolioId, day])).rows).toHaveLength(0);
 
     const checkpointExpiry = await retention.expireAggregates(batch);

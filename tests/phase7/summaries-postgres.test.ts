@@ -215,6 +215,9 @@ describe.runIf(Boolean(url))("real current interaction summaries", () => {
       await workerOperations.transactions.run(tx => jobs.enqueue(tx, { jobId, availableAt: now,
         payload: { type: "interaction.summary_read.v1", version: 1, value: { projectId, locale: "en" } } }));
       expect((await moderation.suppressOwnerFeedback(decision(id, 2))).ok).toBe(true);
+      // Queue eligibility and leases use PostgreSQL time, independently of the
+      // fixed 2099 policy clock. Make only this queued summary job due.
+      expect((await admin.query("update operations.jobs set available_at=clock_timestamp()-interval '1 millisecond' where job_id=$1 returning job_id", [jobId])).rows).toEqual([{ job_id: jobId }]);
       const claim = { workerId: "summary-proof", now, leaseDurationSeconds: 1, limit: 1 };
       const first = await jobs.claimDue(claim); expect(first).toHaveLength(1);
       expect(first[0]!.jobId).toBe(jobId);
@@ -223,6 +226,7 @@ describe.runIf(Boolean(url))("real current interaction summaries", () => {
       expect(await query(projectId)).toMatchObject({ ok: true, value: { approvedFeedbackCount: 0 } });
       expect(await pages(projectId)).toMatchObject({ ok: true, value: { items: [] } });
       const later = "2099-10-15T00:00:02.000Z";
+      expect((await admin.query("update operations.jobs set lease_expires_at=clock_timestamp()-interval '1 second' where job_id=$1 and lease_token=$2 returning job_id", [jobId, first[0]!.leaseToken])).rows).toEqual([{ job_id: jobId }]);
       const reclaimed = await jobs.claimDue({ ...claim, now: later }); expect(reclaimed).toHaveLength(1);
       expect(reclaimed[0]!.leaseToken).not.toBe(first[0]!.leaseToken);
       expect(await jobs.complete(jobId, first[0]!.leaseToken, later)).toBe(false);

@@ -671,7 +671,10 @@ export interface OperationsJobs {
   lease_token: string | null;
   payload: Json;
   payload_version: number;
+  semantic_period: string | null;
+  semantic_scope_id: string | null;
   status: Generated<string>;
+  work_incomplete: Generated<boolean | null>;
 }
 
 export interface OperationsOutboxEvents {
@@ -692,6 +695,19 @@ export interface OperationsOutboxEvents {
   occurred_at: Timestamp;
   payload: Json;
   schema_version: number;
+}
+
+export interface OperationsPhase7ScheduleProgress {
+  aggregate_finished_through: Timestamp;
+  aggregate_scheduled_through: Timestamp;
+  first_policy_period: Timestamp;
+  last_complete_period: Timestamp;
+  phase: Generated<string>;
+  portfolio_id: string;
+  required_through_period: Timestamp;
+  retention_complete_through: Timestamp;
+  retention_scheduled_through: Timestamp;
+  updated_at: Generated<Timestamp>;
 }
 
 export interface PortfolioConfigContactChannels {
@@ -837,6 +853,7 @@ export interface DB {
   "operations.job_redrive_audit": OperationsJobRedriveAudit;
   "operations.jobs": OperationsJobs;
   "operations.outbox_events": OperationsOutboxEvents;
+  "operations.phase7_schedule_progress": OperationsPhase7ScheduleProgress;
   "portfolio_config.contact_channels": PortfolioConfigContactChannels;
   "portfolio_config.settings": PortfolioConfigSettings;
   "taxonomy.project_discovery_locales": TaxonomyProjectDiscoveryLocales;

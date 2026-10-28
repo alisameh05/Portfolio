@@ -4,4 +4,11 @@ export type PortfolioRequestScope = { readonly kind: "portfolio"; readonly portf
 export interface ApplicationRequestContext { readonly scope: PortfolioRequestScope; readonly correlationId: string }
 /** Internal work limits are closed, deterministic batch sizes; no unlimited work request. */
 export type WorkBatchSize = 25 | 50 | 100;
-export interface BoundedWorkResult { readonly processedCount: number; readonly nextCursor: string | null; readonly incomplete: boolean }
+export interface BoundedWorkResult {
+  readonly processedCount: number;
+  readonly nextCursor: string | null;
+  /** True while the owning service still has bounded batches to resume. */
+  readonly incomplete: boolean;
+  /** Durable data coverage is incomplete even after all batches are drained. */
+  readonly coverageIncomplete?: boolean;
+}

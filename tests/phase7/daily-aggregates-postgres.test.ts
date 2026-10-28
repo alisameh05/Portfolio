@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { sql } from "kysely";
 import { Client } from "pg";
-import { createPostgresRuntimeDatabase } from "../../src/shared/adapters/postgres/runtime.js";
+import { createPostgresRuntimeDatabase, resolvePostgresTransaction } from "../../src/shared/adapters/postgres/runtime.js";
 import { createPostgresDailyAggregateRepository } from "../../src/modules/measurement/adapters/postgres-daily-aggregates.js";
 import type { MeasurementEventType } from "../../src/modules/measurement/domain/index.js";
 import { createDailyAggregateWorkService, createOwnerAggregateReportService } from "../../src/modules/measurement/application/daily-aggregates.js";
@@ -21,6 +22,7 @@ const now = "2026-10-15T12:00:00.000Z";
 let admin: Client | undefined;
 let app: ReturnType<typeof createPostgresRuntimeDatabase> | undefined;
 let worker: ReturnType<typeof createPostgresRuntimeDatabase> | undefined;
+let secondWorker: ReturnType<typeof createPostgresRuntimeDatabase> | undefined;
 let idSequence = 100;
 
 function id<T extends string>(kind: T): StableId<T> {
@@ -35,6 +37,7 @@ function command(utcDay: string, jobId = id("Job"), at = now): MeasurementWorkCo
 }
 
 async function addEvent(input: { subject: StableId<"MeasurementVisitor">; action: "page-viewed" | "project-viewed" | "active-engagement-sampled";
+  portfolioId?: StableId<"Portfolio">;
   occurredAt: string; acceptedAt?: string; activeMilliseconds?: number; locale?: "en" | "ar"; countryCode?: string | null;
   deviceClass?: "desktop" | "mobile" | "tablet" | "other" | "unknown"; referrerClass?: "direct" | "search" | "social" | "professional" | "referral" | "unknown" }): Promise<StableId<"PublicEvent">> {
   const eventId = id("PublicEvent");
@@ -42,7 +45,7 @@ async function addEvent(input: { subject: StableId<"MeasurementVisitor">; action
     (event_id,portfolio_id,measurement_subject,action,occurred_at,accepted_at,effective_at,page_route_identity,project_id,
       locale,consent_version,active_milliseconds,country_code,device_class,referrer_class)
     values ($1,$2,$3,$4,$5,$6,$5,$7,$8,$10,'v1',$9,$11,$12,$13)`,
-    [eventId, portfolioId, input.subject, input.action, input.occurredAt, input.acceptedAt ?? input.occurredAt,
+    [eventId, input.portfolioId ?? portfolioId, input.subject, input.action, input.occurredAt, input.acceptedAt ?? input.occurredAt,
       routeId, input.action === "page-viewed" ? null : projectId,
       input.action === "active-engagement-sampled" ? input.activeMilliseconds ?? 5_000 : null,
       input.locale ?? "en", input.countryCode ?? "EG", input.deviceClass ?? "mobile", input.referrerClass ?? "direct"]);
@@ -82,6 +85,18 @@ function createServices(repository: DailyAggregateRepositoryPort = createPostgre
   return { workerService, reportService };
 }
 
+async function waitForAdvisoryLockWait(applicationName: string, blockingPid: number): Promise<number> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const result = await admin!.query(`select pid from pg_stat_activity
+      where application_name=$1 and state='active' and wait_event_type='Lock'
+        and $2 = any(pg_blocking_pids(pid))`, [applicationName, blockingPid]);
+    if (result.rows[0]) return Number(result.rows[0].pid);
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  throw new Error("DAILY_AGGREGATE_OLDER_WORKER_NOT_BLOCKED_BY_NEWER_TRANSACTION");
+}
+
 async function aggregate(day: string) {
   return createServices().workerService.aggregateDay(command(day));
 }
@@ -99,10 +114,14 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement daily aggregatio
     await admin.connect();
     app = createPostgresRuntimeDatabase(DATABASE_URL);
     worker = createPostgresRuntimeDatabase(DATABASE_URL.replace("aggregate_app_runtime", "aggregate_worker_runtime"));
+    const secondWorkerUrl = new URL(DATABASE_URL.replace("aggregate_app_runtime", "aggregate_worker_runtime"));
+    secondWorkerUrl.searchParams.set("application_name", "daily_aggregate_older_policy_worker");
+    secondWorker = createPostgresRuntimeDatabase(secondWorkerUrl.toString(), { max: 1 });
   }, 20_000);
 
   afterAll(async () => {
     await worker?.resource.close();
+    await secondWorker?.resource.close();
     await app?.resource.close();
     await admin?.end();
   });
@@ -156,14 +175,36 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement daily aggregatio
     const triggerEvent = await addEvent({ subject, action: "page-viewed", occurredAt: "2026-10-14T12:00:00Z" });
     const goal = await addGoal([subject], [triggerEvent], "page-viewed");
     const operations = createPostgresOperationsPersistence(worker!.database);
+    // A historical aggregate still requires retention through the database's
+    // current day before it may be claimed.
+    const policyPeriod = (await admin!.query<{ day: string }>(
+      "select to_char((clock_timestamp() at time zone 'UTC')::date,'YYYY-MM-DD') as day")).rows[0]!.day;
+    await operations.jobs.getPhase7ScheduleStatus({ portfolioId, fromPeriod: policyPeriod, throughPeriod: policyPeriod });
+    const retentionTypes = ["measurement.detail-retention.v1", "measurement.aggregate-retention.v1",
+      "measurement.withdrawal-cleanup.v1", "interaction.feedback-retention.v1"] as const;
+    for (const type of retentionTypes) {
+      const enqueued = await operations.transactions.run(tx => operations.jobs.enqueue(tx, {
+        jobId: id("Job"), availableAt: `${policyPeriod}T00:00:00.000Z`, payload: { type, version: 1, value: {} },
+        semanticSchedule: { portfolioId, period: policyPeriod },
+      }));
+      expect(enqueued).toBe(true);
+    }
+    expect(await operations.jobs.advancePhase7RetentionSchedule({ portfolioId,
+      expectedNextPeriod: policyPeriod, scheduledThroughPeriod: policyPeriod })).toBe(true);
+    await admin!.query(`update operations.jobs set status='completed', completed_at=clock_timestamp()
+      where semantic_scope_id=$1 and semantic_period=$2 and job_type=any($3::text[])`, [portfolioId, policyPeriod, retentionTypes]);
+    const ready = await operations.jobs.getPhase7ScheduleStatus({ portfolioId, fromPeriod: policyPeriod, throughPeriod: policyPeriod });
+    expect(ready.retentionCompleteThrough).toBe(policyPeriod);
     await operations.transactions.run(tx => operations.jobs.enqueue(tx, { jobId, availableAt: now,
-      payload: { type: "measurement.daily-aggregate.v1", version: 1, value: { portfolioId, utcDay: "2026-10-14" } } }));
+      payload: { type: "measurement.daily-aggregate.v1", version: 1, value: { portfolioId, utcDay: "2026-10-14" } },
+      semanticSchedule: { portfolioId, period: `${policyPeriod}:2026-10-14` } }));
     const claim = { workerId: "daily-aggregate-proof", now, leaseDurationSeconds: 1, limit: 1 };
     const firstClaim = await operations.jobs.claimDue(claim);
     expect(firstClaim).toHaveLength(1);
     expect(firstClaim[0]!.jobId).toBe(jobId);
     const { workerService } = createServices();
     await workerService.aggregateDay(command("2026-10-14", jobId));
+    await admin!.query(`update operations.jobs set lease_expires_at=clock_timestamp()-interval '1 second' where job_id=$1`, [jobId]);
     const later = "2026-10-15T12:00:02.000Z";
     const reclaimed = await operations.jobs.claimDue({ ...claim, now: later });
     expect(reclaimed).toHaveLength(1);
@@ -227,7 +268,7 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement daily aggregatio
     const groupedPlan = await admin!.query(`explain (format json) select metric_key from measurement.daily_aggregates
       where portfolio_id=$1 and utc_day between '2026-10-07' and '2026-10-07' and metric_kind='action'
         and dimensions ? 'countryCode'`, [portfolioId]);
-    expect(JSON.stringify(groupedPlan.rows)).toContain("daily_aggregates_report_range");
+    expect(JSON.stringify(groupedPlan.rows)).toMatch(/daily_aggregates_(?:report_range|pkey)/);
     await admin!.query("reset enable_seqscan");
     const beforeReplay = await admin!.query(`select dimensions,event_count::int,observed_subjects::int from measurement.daily_aggregates
       where portfolio_id=$1 and utc_day='2026-10-07' and metric_kind='action' and metric_key='page-viewed' order by dimensions`, [portfolioId]);
@@ -265,6 +306,142 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement daily aggregatio
       .toMatchObject({ ok: true, value: { state: "low-sample", observedSubjects: "fewer-than-five" } });
   });
 
+  it("keeps a newer daily checkpoint when an older two-worker rebuild follows the same-day lock", async () => {
+    const scopedPortfolioId = id("Portfolio");
+    const day = "2026-10-14";
+    const olderAsOf = "2026-10-15T00:00:00.000Z";
+    const newerAsOf = "2026-10-15T12:00:00.000Z";
+    for (let index = 0; index < 6; index++) {
+      await addEvent({ portfolioId: scopedPortfolioId, subject: id("MeasurementVisitor"), action: "page-viewed",
+        occurredAt: "2026-10-14T23:00:00.000Z", acceptedAt: "2026-10-15T06:00:00.000Z" });
+    }
+
+    let resolveNewerWritesReady!: () => void;
+    let resolveNewerCommit!: () => void;
+    const newerWritesReady = new Promise<void>(resolve => { resolveNewerWritesReady = resolve; });
+    const allowNewerCommit = new Promise<void>(resolve => { resolveNewerCommit = resolve; });
+    let newerBackendPid: number | undefined;
+    let newerRows: readonly Record<string, unknown>[] = [];
+    let newerCheckpoint: Record<string, unknown> | undefined;
+    const repository = createPostgresDailyAggregateRepository();
+    const newerRepository: DailyAggregateRepositoryPort = {
+      ...repository,
+      async rebuildDay(input, transaction) {
+        const rebuilt = await repository.rebuildDay(input, transaction);
+        const db = resolvePostgresTransaction(transaction);
+        const backend = await sql<{ pid: number }>`select pg_backend_pid() as pid`.execute(db);
+        newerBackendPid = Number(backend.rows[0]?.pid);
+        const rows = await sql<Record<string, unknown>>`select metric_kind, metric_key, dimensions,
+            event_count::int as event_count, sum_value::int as sum_value,
+            observed_subjects::int as observed_subjects, returning_subjects::int as returning_subjects,
+            policy_version, checkpoint_at::text as checkpoint_at, incomplete
+          from measurement.daily_aggregates where portfolio_id=${scopedPortfolioId}::uuid and utc_day=${day}::date
+          order by metric_kind, metric_key, dimensions`.execute(db);
+        const checkpoint = await sql<Record<string, unknown>>`select source_event_count::int as source_event_count,
+            source_conversion_count::int as source_conversion_count, policy_version,
+            checkpoint_at::text as checkpoint_at, incomplete, retention_sealed
+          from measurement.daily_aggregate_checkpoints where portfolio_id=${scopedPortfolioId}::uuid and utc_day=${day}::date`.execute(db);
+        newerRows = rows.rows;
+        newerCheckpoint = checkpoint.rows[0];
+        resolveNewerWritesReady();
+        await allowNewerCommit;
+        return rebuilt;
+      },
+    };
+    const newerService = createDailyAggregateWorkService({ portfolioId: scopedPortfolioId,
+      transactions: worker!.transactions, repository: newerRepository });
+    const olderService = createDailyAggregateWorkService({ portfolioId: scopedPortfolioId,
+      transactions: secondWorker!.transactions, repository });
+    const run = (asOf: string) => ({
+      scope: { kind: "portfolio" as const, portfolioId: scopedPortfolioId },
+      correlationId: `daily-aggregate-monotonic-${asOf}`,
+      actor: { kind: "system" as const, jobId: id("Job"), purpose: "measurement.aggregate" as const },
+      batchSize: 25 as const,
+      now: asOf,
+      utcDay: day,
+    });
+
+    const newerAttempt = newerService.aggregateDay(run(newerAsOf));
+    let olderAttempt: ReturnType<typeof olderService.aggregateDay> | undefined;
+    let synchronizationError: unknown;
+    try {
+      await Promise.race([newerWritesReady, newerAttempt.then(() => undefined)]);
+      expect(newerBackendPid).toBeTypeOf("number");
+      olderAttempt = olderService.aggregateDay(run(olderAsOf));
+      const olderBackendPid = await waitForAdvisoryLockWait("daily_aggregate_older_policy_worker", newerBackendPid!);
+      expect(olderBackendPid).not.toBe(newerBackendPid);
+    } catch (error) {
+      synchronizationError = error;
+    } finally {
+      resolveNewerCommit();
+    }
+    const newerResult = await newerAttempt;
+    const olderResult = olderAttempt === undefined ? undefined : await olderAttempt;
+    if (synchronizationError !== undefined) throw synchronizationError;
+    expect(newerResult).toMatchObject({ ok: true, value: { incomplete: false, coverageIncomplete: false } });
+    expect(olderResult).toMatchObject({ ok: true, value: { processedCount: 0, incomplete: false, coverageIncomplete: false } });
+
+    const rowsAfterOlder = await admin!.query(`select metric_kind, metric_key, dimensions,
+        event_count::int as event_count, sum_value::int as sum_value,
+        observed_subjects::int as observed_subjects, returning_subjects::int as returning_subjects,
+        policy_version, checkpoint_at::text as checkpoint_at, incomplete
+      from measurement.daily_aggregates where portfolio_id=$1 and utc_day=$2::date
+      order by metric_kind, metric_key, dimensions`, [scopedPortfolioId, day]);
+    const checkpointAfterOlder = await admin!.query(`select source_event_count::int as source_event_count,
+        source_conversion_count::int as source_conversion_count, policy_version,
+        checkpoint_at::text as checkpoint_at, incomplete, retention_sealed
+      from measurement.daily_aggregate_checkpoints where portfolio_id=$1 and utc_day=$2::date`, [scopedPortfolioId, day]);
+    expect(newerRows.find(row => row["metric_key"] === "page-viewed" && JSON.stringify(row["dimensions"]) === "{}")).toMatchObject({
+      event_count: 6, observed_subjects: 6, checkpoint_at: expect.any(String),
+    });
+    expect(newerCheckpoint).toMatchObject({ source_event_count: 6, source_conversion_count: 0,
+      policy_version: "phase7.daily.v2", checkpoint_at: expect.any(String), incomplete: false, retention_sealed: false });
+    expect(rowsAfterOlder.rows).toEqual(newerRows);
+    expect(checkpointAfterOlder.rows).toEqual([newerCheckpoint]);
+
+    await admin!.query(`update measurement.daily_aggregate_checkpoints set incomplete=true
+      where portfolio_id=$1 and utc_day=$2::date`, [scopedPortfolioId, day]);
+    const incompleteBefore = await admin!.query(`select source_event_count::int as source_event_count,
+        source_conversion_count::int as source_conversion_count, policy_version,
+        checkpoint_at::text as checkpoint_at, incomplete, retention_sealed
+      from measurement.daily_aggregate_checkpoints where portfolio_id=$1 and utc_day=$2::date`, [scopedPortfolioId, day]);
+    expect(await olderService.aggregateDay(run(olderAsOf))).toMatchObject({ ok: true,
+      value: { processedCount: 0, incomplete: true, coverageIncomplete: true } });
+    const incompleteAfter = await admin!.query(`select source_event_count::int as source_event_count,
+        source_conversion_count::int as source_conversion_count, policy_version,
+        checkpoint_at::text as checkpoint_at, incomplete, retention_sealed
+      from measurement.daily_aggregate_checkpoints where portfolio_id=$1 and utc_day=$2::date`, [scopedPortfolioId, day]);
+    const rowsAfterIncomplete = await admin!.query(`select metric_kind, metric_key, dimensions,
+        event_count::int as event_count, sum_value::int as sum_value,
+        observed_subjects::int as observed_subjects, returning_subjects::int as returning_subjects,
+        policy_version, checkpoint_at::text as checkpoint_at, incomplete
+      from measurement.daily_aggregates where portfolio_id=$1 and utc_day=$2::date
+      order by metric_kind, metric_key, dimensions`, [scopedPortfolioId, day]);
+    expect(incompleteAfter.rows).toEqual(incompleteBefore.rows);
+    expect(rowsAfterIncomplete.rows).toEqual(newerRows);
+
+    await admin!.query(`update measurement.daily_aggregate_checkpoints set retention_sealed=true
+      where portfolio_id=$1 and utc_day=$2::date`, [scopedPortfolioId, day]);
+    const sealedBefore = await admin!.query(`select source_event_count::int as source_event_count,
+        source_conversion_count::int as source_conversion_count, policy_version,
+        checkpoint_at::text as checkpoint_at, incomplete, retention_sealed
+      from measurement.daily_aggregate_checkpoints where portfolio_id=$1 and utc_day=$2::date`, [scopedPortfolioId, day]);
+    expect(await olderService.aggregateDay(run(olderAsOf))).toMatchObject({ ok: true,
+      value: { processedCount: 0, incomplete: true, coverageIncomplete: true } });
+    const sealedAfter = await admin!.query(`select source_event_count::int as source_event_count,
+        source_conversion_count::int as source_conversion_count, policy_version,
+        checkpoint_at::text as checkpoint_at, incomplete, retention_sealed
+      from measurement.daily_aggregate_checkpoints where portfolio_id=$1 and utc_day=$2::date`, [scopedPortfolioId, day]);
+    const rowsAfterSealed = await admin!.query(`select metric_kind, metric_key, dimensions,
+        event_count::int as event_count, sum_value::int as sum_value,
+        observed_subjects::int as observed_subjects, returning_subjects::int as returning_subjects,
+        policy_version, checkpoint_at::text as checkpoint_at, incomplete
+      from measurement.daily_aggregates where portfolio_id=$1 and utc_day=$2::date
+      order by metric_kind, metric_key, dimensions`, [scopedPortfolioId, day]);
+    expect(sealedAfter.rows).toEqual(sealedBefore.rows);
+    expect(rowsAfterSealed.rows).toEqual(newerRows);
+  });
+
   it("rolls back failed day replacement and enforces isolated application and worker access", async () => {
     const before = await admin!.query(`select utc_day::text,metric_key,event_count::text from measurement.daily_aggregates
       where portfolio_id=$1 and utc_day='2026-10-12' order by metric_key`, [portfolioId]);
@@ -294,7 +471,7 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement daily aggregatio
     const reportPlan = await admin!.query(`explain (format json) select metric_key from measurement.daily_aggregates
       where portfolio_id=$1 and utc_day between '2026-10-12' and '2026-10-12' and metric_kind='action'`, [portfolioId]);
     expect(JSON.stringify(eventPlan.rows)).toContain("public_events_daily_aggregate_order");
-    expect(JSON.stringify(reportPlan.rows)).toContain("daily_aggregates_report_range");
+    expect(JSON.stringify(reportPlan.rows)).toMatch(/daily_aggregates_(?:report_range|pkey)/);
     await admin!.query("reset enable_seqscan");
     await admin!.query("set role shipwithali_application");
     await expect(admin!.query("select measurement_subject from measurement.public_events limit 1")).rejects.toMatchObject({ code: "42501" });

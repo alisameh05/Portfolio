@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "ticket": 247,
-  "runId": "f7718858-581d-47f3-b474-98aa099a8697",
-  "startedAt": "2026-10-27T00:55:17.349Z",
-  "completedAt": "2026-10-27T00:56:28.951Z",
-  "sourceRevision": "c2efa70aa971376d5837c0683f31a6be4e9b52ef",
-  "sourceTreeSha256": "bee3bd8c6040baf2081ae001bf1299301054df390fc8a6c476b1b9b4ce53a6d6",
+  "runId": "7513e1dd-4d43-4ee9-aa66-1b3a023eaeb0",
+  "startedAt": "2026-10-27T04:35:46.218Z",
+  "completedAt": "2026-10-27T04:36:53.590Z",
+  "sourceRevision": "62aaac387cc58cd152c4510648a02e3b40e2b6ab",
+  "sourceTreeSha256": "4a4fa0d0248b4dce29b5a7341e7df48c1f2be0206620fbecaf17662f3bacfdfe",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -255,6 +255,10 @@
     {
       "name": "20261026100000_reconcile_all_owner_export_artifacts.sql",
       "sha256": "28ea11c784b188977f57514dd874dcf877dbf307d0a4020857c078f18cfc06f9"
+    },
+    {
+      "name": "20261026164603_phase7_durable_policy_schedule_keys.sql",
+      "sha256": "cdd65060a1363d35f93f76c289950e69b26ebb04f718f12fe0cf3563f75668ab"
     }
   ],
   "tools": {
@@ -367,11 +371,11 @@
     }
   ],
   "suites": [
-    "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-assembly.test.ts",
-    "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-migration-postgres.test.ts",
-    "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-moderation-postgres.test.ts",
-    "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-postgres.test.ts",
-    "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-reconciliation.test.ts"
+    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-assembly.test.ts",
+    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-migration-postgres.test.ts",
+    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-moderation-postgres.test.ts",
+    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-postgres.test.ts",
+    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-reconciliation.test.ts"
   ],
   "criteria": [
     "AC01",

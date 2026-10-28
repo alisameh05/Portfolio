@@ -156,6 +156,9 @@ export function assertPhase4ApplicationRls(snapshot) {
   const configurationExportApplied = snapshot.migrationLedger?.some((migration) =>
     migration.name === "build_configuration_owner_exports",
   ) === true;
+  const phase7DurableScheduleApplied = snapshot.migrationLedger?.some((migration) =>
+    migration.name === "phase7_durable_policy_schedule_keys",
+  ) === true;
   const tables = new Map(
     snapshot.objects.filter((object) => object.kind === "r")
       .map((object) => [`${object.schema}.${object.name}`, object]),
@@ -211,6 +214,8 @@ export function assertPhase4ApplicationRls(snapshot) {
     !(grant.schema === "operations" &&
       ["idempotency_records", "outbox_events", "jobs", "incidents", "job_redrive_audit"].includes(grant.object) &&
       grant.privilege === "SELECT") &&
+    !(phase7DurableScheduleApplied && grant.schema === "operations" && grant.object === "phase7_schedule_progress" &&
+      grant.objectType === "r" && grant.privilege === "SELECT") &&
     !(grant.schema === "media" && grant.objectType === "r" && grant.privilege === "SELECT" && new Set([
       "acceptance_commands",
       "assets",
@@ -558,7 +563,10 @@ export function assertPhase3OperationsContractPreserved(phase3, upgraded, {
   const appliedMigrationNames = new Set((upgraded.migrationLedger ?? []).map((migration) => migration.name));
   const declaredAdditions = PHASE_DECLARED_ADDITIVE_MIGRATIONS
     .filter((migration) => appliedMigrationNames.has(migration.migration.slice(15, -4)))
-    .flatMap((migration) => migration.operationsAdditions ?? []);
+    .flatMap((migration) => [
+      ...(migration.operationsAdditions ?? []),
+      ...(migration.operationsAdditionsByEngine?.[String(upgraded.postgresMajor)] ?? []),
+    ]);
   for (const addition of declaredAdditions) {
     const rows = actual[addition.category];
     if (!Array.isArray(rows)) throw new Error(`PHASE3_OPERATIONS_CONTRACT_CATEGORY_UNKNOWN:${addition.category}`);
@@ -609,9 +617,11 @@ export function assertPhase3OperationsContractPreserved(phase3, upgraded, {
 }
 
 export function assertPhase3OperationsRls(snapshot) {
-  for (const name of [
-    "operations.idempotency_records", "operations.outbox_events", "operations.jobs",
-  ]) {
+  const protectedTables = ["operations.idempotency_records", "operations.outbox_events", "operations.jobs"];
+  if (snapshot.migrationLedger?.some((migration) => migration.name === "phase7_durable_policy_schedule_keys")) {
+    protectedTables.push("operations.phase7_schedule_progress");
+  }
+  for (const name of protectedTables) {
     const table = snapshot.objects.find((object) => `${object.schema}.${object.name}` === name);
     if (table?.rlsEnabled !== true || table.rlsForced !== true) {
       throw new Error("PHASE3_OPERATIONS_RLS_NOT_FORCED");

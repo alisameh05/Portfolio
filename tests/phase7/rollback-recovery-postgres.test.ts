@@ -28,9 +28,13 @@ const WORKER_URL = process.env["PHASE7_JOBS_WORKER_URL"];
 const ADMIN_URL = process.env["PHASE7_JOBS_ADMIN_URL"];
 const APPLICATION_URL = process.env["PHASE7_JOBS_APPLICATION_URL"];
 const portfolioId = "0196a1b2-7c3d-7e11-9f22-000000000001" as StableId<"Portfolio">;
+const aggregatePortfolioId = "0196a1b2-7c3d-7e11-9f22-000000000009" as StableId<"Portfolio">;
+const invalidPayloadPortfolioId = "0196a1b2-7c3d-7e11-9f22-00000000000a" as StableId<"Portfolio">;
 const routeId = "0196a1b2-7c3d-7e11-9f22-000000000002" as StableId<"PublicRoute">;
 const measurementSubject = "0196a1b2-7c3d-7e11-9f22-000000000003" as StableId<"MeasurementVisitor">;
-const now = new Date().toISOString();
+const retentionTypes = ["measurement.detail-retention.v1", "measurement.aggregate-retention.v1",
+  "measurement.withdrawal-cleanup.v1", "interaction.feedback-retention.v1"] as const;
+let now = new Date().toISOString();
 let admin: Client | undefined;
 let worker: ReturnType<typeof createPostgresRuntimeDatabase> | undefined;
 let application: ReturnType<typeof createPostgresRuntimeDatabase> | undefined;
@@ -42,16 +46,46 @@ function id<T extends string>(kind: T): StableId<T> {
   return parsed.value;
 }
 
-function workCommand(jobId: StableId<"Job">, purpose: "measurement.aggregate", at: string) {
-  return { scope: { kind: "portfolio" as const, portfolioId }, correlationId: "phase8-rollback-recovery-postgres",
+function workCommand(jobId: StableId<"Job">, purpose: "measurement.aggregate", at: string,
+  scope: StableId<"Portfolio"> = portfolioId) {
+  return { scope: { kind: "portfolio" as const, portfolioId: scope }, correlationId: "phase8-rollback-recovery-postgres",
     actor: { kind: "system" as const, jobId, purpose }, batchSize: 100 as const, now: at };
 }
 
-async function addEvent(input: { eventId: StableId<"PublicEvent">; acceptedAt: string; occurredAt: string }): Promise<void> {
+async function makeJobAvailableInDatabasePast(jobId: StableId<"Job">): Promise<void> {
+  const updated = await admin!.query("update operations.jobs set available_at=clock_timestamp()-interval '1 millisecond' where job_id=$1 returning job_id",
+    [jobId]);
+  if (updated.rowCount !== 1) throw new Error("PHASE8_ROLLBACK_RECOVERY_TEST_JOB_NOT_FOUND");
+}
+
+async function addEvent(input: { eventId: StableId<"PublicEvent">; acceptedAt: string; occurredAt: string;
+  portfolioId?: StableId<"Portfolio"> }): Promise<void> {
   await admin!.query(`insert into measurement.public_events
     (event_id,portfolio_id,measurement_subject,action,occurred_at,accepted_at,effective_at,page_route_identity,project_id,locale,consent_version)
     values ($1,$2,$3,'page-viewed',$4,$5,$4,$6,null,'en','v1')`,
-  [input.eventId, portfolioId, measurementSubject, input.occurredAt, input.acceptedAt, routeId]);
+  [input.eventId, input.portfolioId ?? portfolioId, measurementSubject, input.occurredAt, input.acceptedAt, routeId]);
+}
+
+async function seedReadyAggregationScope(scope: StableId<"Portfolio">, policyPeriod: string): Promise<void> {
+  const operations = createPostgresOperationsPersistence(worker!.database);
+  await operations.jobs.getPhase7ScheduleStatus({ portfolioId: scope, fromPeriod: policyPeriod, throughPeriod: policyPeriod });
+  for (const type of retentionTypes) {
+    const enqueued = await operations.transactions.run(transaction => operations.jobs.enqueue(transaction, {
+      jobId: id("Job"), payload: { type, version: 1, value: {} }, availableAt: `${policyPeriod}T00:00:00.000Z`,
+      semanticSchedule: { portfolioId: scope, period: policyPeriod },
+    }));
+    if (!enqueued) throw new Error("PHASE8_ROLLBACK_RECOVERY_RETENTION_ENQUEUE_FAILED");
+  }
+  const advanced = await operations.jobs.advancePhase7RetentionSchedule({ portfolioId: scope,
+    expectedNextPeriod: policyPeriod, scheduledThroughPeriod: policyPeriod });
+  if (!advanced) throw new Error("PHASE8_ROLLBACK_RECOVERY_RETENTION_CURSOR_FAILED");
+  await admin!.query("update operations.jobs set status='completed',completed_at=clock_timestamp() where semantic_scope_id=$1 and job_type=any($2::text[])",
+    [scope, retentionTypes]);
+  const ready = await operations.jobs.getPhase7ScheduleStatus({ portfolioId: scope,
+    fromPeriod: policyPeriod, throughPeriod: policyPeriod });
+  if (ready.phase !== "aggregate" || ready.retentionCompleteThrough !== policyPeriod) {
+    throw new Error("PHASE8_ROLLBACK_RECOVERY_RETENTION_NOT_READY");
+  }
 }
 
 describe.runIf(Boolean(WORKER_URL && ADMIN_URL && APPLICATION_URL))("Phase 8 rollback and recovery PostgreSQL acceptance", () => {
@@ -61,6 +95,10 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL && APPLICATION_URL))("Phase 8 rol
     await admin.connect();
     worker = createPostgresRuntimeDatabase(WORKER_URL);
     application = createPostgresRuntimeDatabase(APPLICATION_URL);
+    // Keep due-time fixtures safely in the database past after eligibility
+    // moved from caller time to PostgreSQL time.
+    const databaseNow = await admin.query<{ now: Date }>("select clock_timestamp() as now");
+    now = databaseNow.rows[0]!.now.toISOString();
   });
 
   afterAll(async () => {
@@ -70,13 +108,15 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL && APPLICATION_URL))("Phase 8 rol
     try {
       // Audit tables hold foreign keys into jobs, so they are cleared first
       // regardless of which suite ran before this one in the shared cluster.
-      await admin?.query("delete from measurement.daily_aggregates where portfolio_id=$1", [portfolioId]);
-      await admin?.query("delete from measurement.public_events where portfolio_id=$1", [portfolioId]);
+      await admin?.query("delete from measurement.daily_aggregates where portfolio_id=any($1::uuid[])", [[portfolioId, aggregatePortfolioId]]);
+      await admin?.query("delete from measurement.public_events where portfolio_id=any($1::uuid[])", [[portfolioId, aggregatePortfolioId]]);
       await admin?.query("delete from operations.job_redrive_audit");
       await admin?.query("delete from operations.idempotency_records");
       await admin?.query("delete from operations.outbox_events");
       await admin?.query("delete from operations.incidents");
       await admin?.query("delete from operations.jobs");
+      await admin?.query("delete from operations.phase7_schedule_progress where portfolio_id=any($1::uuid[])",
+        [[aggregatePortfolioId, invalidPayloadPortfolioId]]);
       await worker?.resource.close();
       await application?.resource.close();
       await admin?.end();
@@ -148,25 +188,28 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL && APPLICATION_URL))("Phase 8 rol
   it("keeps committed core state valid when optional post-commit export work fails", async () => {
     const operations = createPostgresOperationsPersistence(worker!.database);
     const committedEvent = id("PublicEvent");
-    await addEvent({ eventId: committedEvent, occurredAt: now, acceptedAt: now });
+    await addEvent({ eventId: committedEvent, occurredAt: now, acceptedAt: now, portfolioId: aggregatePortfolioId });
     const aggregateJobId = id("Job");
     const utcDay = now.slice(0, 10);
+    await seedReadyAggregationScope(aggregatePortfolioId, utcDay);
     await operations.transactions.run(transaction => operations.jobs.enqueue(transaction, {
       jobId: aggregateJobId, availableAt: now,
       payload: { type: "measurement.daily-aggregate.v1", version: 1, value: { utcDay } },
+      semanticSchedule: { portfolioId: aggregatePortfolioId, period: `${utcDay}:${utcDay}` },
     }));
+    await makeJobAvailableInDatabasePast(aggregateJobId);
     const publication = await operations.jobs.claimDue({ workerId: "phase8-committed-state", now,
-      leaseDurationSeconds: 60, limit: 1, jobTypes: ["measurement.daily-aggregate.v1"] });
+      leaseDurationSeconds: 60, limit: 1, jobTypes: ["measurement.daily-aggregate.v1"], semanticScopeId: aggregatePortfolioId });
     expect(publication).toHaveLength(1);
     expect(publication[0]!.jobId).toBe(aggregateJobId);
-    const daily = createDailyAggregateWorkService({ portfolioId, transactions: worker!.transactions,
+    const daily = createDailyAggregateWorkService({ portfolioId: aggregatePortfolioId, transactions: worker!.transactions,
       repository: createPostgresDailyAggregateRepository() });
     const aggregated = await daily.aggregateDay({
-      ...workCommand(aggregateJobId, "measurement.aggregate", now), utcDay });
+      ...workCommand(aggregateJobId, "measurement.aggregate", now, aggregatePortfolioId), utcDay });
     expect(aggregated).toMatchObject({ ok: true });
     expect(await operations.jobs.complete(aggregateJobId, publication[0]!.leaseToken, now)).toBe(true);
     const committedAggregate = (await admin!.query(`select event_count,metric_key,dimensions from measurement.daily_aggregates
-      where portfolio_id=$1 and utc_day=$2 and metric_kind='action' and dimensions='{}'::jsonb order by metric_key`, [portfolioId, utcDay])).rows;
+      where portfolio_id=$1 and utc_day=$2 and metric_kind='action' and dimensions='{}'::jsonb order by metric_key`, [aggregatePortfolioId, utcDay])).rows;
     const committedSource = (await admin!.query("select event_id,accepted_at from measurement.public_events where event_id=$1", [committedEvent])).rows;
     if (committedAggregate.length === 0) throw new Error("PHASE8_ROLLBACK_RECOVERY_COMMITTED_STATE_MISSING");
 
@@ -176,6 +219,7 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL && APPLICATION_URL))("Phase 8 rol
       jobId: exportAssemblyJobId, availableAt: now,
       payload: { type: "portability.export_assembly.v1", version: 1, value: { exportId: failedExportArtifactId } },
     }));
+    await makeJobAvailableInDatabasePast(exportAssemblyJobId);
     const exportClaim = await operations.jobs.claimDue({ workerId: "phase8-optional-export", now,
       leaseDurationSeconds: 60, limit: 1, jobTypes: ["portability.export_assembly.v1"] });
     expect(exportClaim).toHaveLength(1);
@@ -187,7 +231,7 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL && APPLICATION_URL))("Phase 8 rol
     expect((await admin!.query("select occurrences,safe_error_code from operations.incidents where incident_key=$1",
       [`job:${exportAssemblyJobId}`])).rows).toEqual([{ occurrences: 1, safe_error_code: "EXPORT_ASSEMBLY_FAILED" }]);
     expect((await admin!.query(`select event_count,metric_key,dimensions from measurement.daily_aggregates
-      where portfolio_id=$1 and utc_day=$2 and metric_kind='action' and dimensions='{}'::jsonb order by metric_key`, [portfolioId, utcDay])).rows)
+      where portfolio_id=$1 and utc_day=$2 and metric_kind='action' and dimensions='{}'::jsonb order by metric_key`, [aggregatePortfolioId, utcDay])).rows)
       .toEqual(committedAggregate);
     expect((await admin!.query("select event_id,accepted_at from measurement.public_events where event_id=$1", [committedEvent])).rows)
       .toEqual(committedSource);
@@ -230,6 +274,7 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL && APPLICATION_URL))("Phase 8 rol
       jobId: failedExportJobId, availableAt: now,
       payload: { type: "portability.export_assembly.v1", version: 1, value: { exportId: failedExportArtifactId } },
     }));
+    await makeJobAvailableInDatabasePast(failedExportJobId);
     const first = await executeRequest(originalRequestKey.value, "c".repeat(64), failedExportArtifactId, originalEventId);
     expect(first).toMatchObject({ kind: "executed", result: { exportId: failedExportArtifactId } });
     const failedClaim = await workerOperations.jobs.claimDue({ workerId: "phase8-export-failure", now,
@@ -282,18 +327,37 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL && APPLICATION_URL))("Phase 8 rol
     // current handler policy is failure-coded on its first claim and
     // terminalized without consuming a retry window.
     const invalidJobId = id("Job");
-    const invalidAvailableAt = new Date(Date.parse(now) - 60_000).toISOString();
-    await admin!.query(`insert into operations.jobs(job_id,job_type,payload_version,payload,available_at)
-      values ($1,'measurement.detail-retention.v1',2,'{}'::jsonb,$2)`, [invalidJobId, invalidAvailableAt]);
-    const daily = createDailyAggregateWorkService({ portfolioId, transactions: worker!.transactions,
+    const policyPeriod = now.slice(0, 10);
+    const operations = createPostgresOperationsPersistence(worker!.database);
+    await operations.jobs.getPhase7ScheduleStatus({ portfolioId: invalidPayloadPortfolioId,
+      fromPeriod: policyPeriod, throughPeriod: policyPeriod });
+    for (const type of retentionTypes) {
+      const jobId = type === "measurement.detail-retention.v1" ? invalidJobId : id("Job");
+      const enqueued = await operations.transactions.run(transaction => operations.jobs.enqueue(transaction, {
+        jobId, availableAt: `${policyPeriod}T00:00:00.000Z`,
+        payload: { type, version: 1, value: {} },
+        semanticSchedule: { portfolioId: invalidPayloadPortfolioId, period: policyPeriod },
+      }));
+      if (!enqueued) throw new Error("PHASE8_ROLLBACK_RECOVERY_INVALID_JOB_ENQUEUE_FAILED");
+      if (type !== "measurement.detail-retention.v1") {
+        await admin!.query("update operations.jobs set status='completed',completed_at=clock_timestamp() where job_id=$1", [jobId]);
+      }
+    }
+    const advanced = await operations.jobs.advancePhase7RetentionSchedule({ portfolioId: invalidPayloadPortfolioId,
+      expectedNextPeriod: policyPeriod, scheduledThroughPeriod: policyPeriod });
+    if (!advanced) throw new Error("PHASE8_ROLLBACK_RECOVERY_INVALID_JOB_CURSOR_FAILED");
+    await admin!.query("update operations.jobs set payload_version=2 where job_id=$1", [invalidJobId]);
+    const daily = createDailyAggregateWorkService({ portfolioId: invalidPayloadPortfolioId, transactions: worker!.transactions,
       repository: createPostgresDailyAggregateRepository() });
-    const measurementRetention = createMeasurementRetentionWorkService({ portfolioId, transactions: worker!.transactions,
+    const measurementRetention = createMeasurementRetentionWorkService({ portfolioId: invalidPayloadPortfolioId, transactions: worker!.transactions,
       repository: createPostgresMeasurementRetentionRepository() });
-    const feedbackRetention = createFeedbackRetentionWorkService({ portfolioId, transactions: worker!.transactions,
+    const feedbackRetention = createFeedbackRetentionWorkService({ portfolioId: invalidPayloadPortfolioId, transactions: worker!.transactions,
       repository: createPostgresFeedbackRetentionRepository() });
-    const service = createPhase7DueWorkService({ portfolioId, clock: { now: () => now }, ids: createSystemIdGenerator(),
-      operations: createPostgresOperationsPersistence(worker!.database),
-      measurement: { ...daily, ...measurementRetention }, interaction: feedbackRetention });
+    const futurePolicyClock = new Date(Date.parse(now) + 24 * 60 * 60 * 1000).toISOString();
+    const service = createPhase7DueWorkService({ portfolioId: invalidPayloadPortfolioId, clock: { now: () => futurePolicyClock }, ids: createSystemIdGenerator(),
+      operations,
+      measurement: { ...daily, ...measurementRetention }, interaction: feedbackRetention,
+      ownerExports: { runOwnerExportAssembly: async () => ({ ok: true, value: { claimed: 0, completed: 0, retried: 0, failed: 0, staleLeases: 0 } }) } });
     const result = await service.runDueWork({ workerId: "phase8-invalid-payload" });
     expect(result).toMatchObject({ ok: true, value: { scheduled: 4, claimed: 1, completed: 0, released: 0,
       failed: 1, staleLeases: 0, processedCount: 0, incomplete: true } });

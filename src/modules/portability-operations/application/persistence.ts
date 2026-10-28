@@ -16,7 +16,7 @@ import type {
   TransactionContext,
   TransactionRunner,
 } from "../../../runtime/ports.js";
-import type { IdempotencyKey } from "@shared/domain";
+import type { IdempotencyKey, StableId } from "@shared/domain";
 import { InputValidationError, parseStableId } from "@shared/domain";
 
 export type SafeResultEnvelope = Readonly<Record<string, JsonValue>>;
@@ -78,6 +78,11 @@ export interface JobInput {
   readonly jobId: string;
   readonly payload: VersionedPayload;
   readonly availableAt: string;
+  readonly semanticSchedule?: {
+    readonly portfolioId: StableId<"Portfolio">;
+    /** One UTC date, or `policy-date:aggregate-date` for a rolling rebuild. */
+    readonly period: string;
+  };
 }
 
 export interface LeasedJobRecord {
@@ -86,6 +91,47 @@ export interface LeasedJobRecord {
   readonly leaseToken: string;
   readonly leaseExpiresAt: string;
   readonly attemptCount: number;
+  readonly semanticSchedule?: {
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly period: string;
+  };
+}
+
+export interface Phase7ScheduledJobStatus {
+  readonly jobType: string;
+  readonly period: string;
+  readonly status: "available" | "leased" | "completed" | "failed" | "dead";
+  readonly coverageIncomplete: boolean;
+}
+
+export interface Phase7ScheduleStatus {
+  /** Bounded records beginning at the oldest persisted due or incomplete period. */
+  readonly jobs: readonly Phase7ScheduledJobStatus[];
+  readonly firstPolicyPeriod: string;
+  readonly requiredThroughPeriod: string;
+  readonly retentionScheduledThrough: string;
+  readonly retentionCompleteThrough: string;
+  readonly aggregateScheduledThrough: string;
+  readonly lastCompletePolicyPeriod: string | null;
+  readonly phase: "retention" | "aggregate";
+  /** Oldest persisted period with unfinished work or incomplete coverage. */
+  readonly oldestOverduePeriod: string | null;
+  readonly oldestUnfinishedPeriod: string | null;
+  readonly oldestCoverageIncompletePeriod: string | null;
+  readonly failedCount: number;
+}
+
+export interface Phase7ScheduleStatusQuery {
+  readonly portfolioId: StableId<"Portfolio">;
+  /** Initialization only; persisted cursors continue from their durable watermarks. */
+  readonly fromPeriod: string;
+  readonly throughPeriod: string;
+}
+
+export interface Phase7ScheduleCursorAdvance {
+  readonly portfolioId: StableId<"Portfolio">;
+  readonly expectedNextPeriod: string;
+  readonly scheduledThroughPeriod: string;
 }
 
 export interface DeadJobRecord {
@@ -93,6 +139,10 @@ export interface DeadJobRecord {
   readonly payload: VersionedPayload;
   readonly attemptCount: number;
   readonly safeErrorCode: SafeErrorCode;
+  readonly semanticSchedule?: {
+    readonly portfolioId: StableId<"Portfolio">;
+    readonly period: string;
+  };
 }
 
 export interface JobRedriveAuditInput {
@@ -115,18 +165,38 @@ export interface LeaseClaimInput {
   readonly limit: number;
   /** Restricts shared job queues to one handler family. Outbox claims ignore this field. */
   readonly jobTypes?: readonly string[];
+  /** Restricts scheduled Phase 7 work to the Portfolio whose durable keys are being resumed. */
+  readonly semanticScopeId?: StableId<"Portfolio">;
 }
 
 export interface LeasedJobStorePort {
-  enqueue(context: TransactionContext, job: JobInput): Promise<void>;
+  /** Returns true only when a new durable job row was inserted. */
+  enqueue(context: TransactionContext, job: JobInput): Promise<boolean>;
   claimDue(input: LeaseClaimInput): Promise<readonly LeasedJobRecord[]>;
-  complete(id: string, leaseToken: string, completedAt: string): Promise<boolean>;
+  complete(id: string, leaseToken: string, completedAt: string, coverageIncomplete?: boolean): Promise<boolean>;
   fail(id: string, leaseToken: string, safeErrorCode: SafeErrorCode): Promise<boolean>;
   /** Schedules a transient retry from database time, or terminalizes attempt five. */
   scheduleRetry(id: string, leaseToken: string, safeErrorCode: SafeErrorCode, delayMilliseconds: number): Promise<boolean>;
   getDeadForRedrive(id: string): Promise<DeadJobRecord | null>;
   redriveDead(input: JobRedriveAuditInput): Promise<RedrivenJobRecord | null>;
-  release(id: string, leaseToken: string): Promise<boolean>;
+  /**
+   * Releases a job after successful durable checkpoint progress. When true,
+   * reset the failure/crash streak because work advanced before the lease was
+   * released; retries and crashes without a successful checkpoint keep their
+   * existing five-attempt terminalization behavior.
+   */
+  release(id: string, leaseToken: string, successfulCheckpoint?: boolean): Promise<boolean>;
+  /**
+   * Admits dependent Owner and aggregate work only when the completed retention
+   * watermark covers both the durable horizon and PostgreSQL's current UTC day.
+   * The adapter serializes this check with horizon updates and returns before I/O.
+   */
+  admitPhase7DependentWork(input: { readonly portfolioId: StableId<"Portfolio"> }): Promise<boolean>;
+  getPhase7ScheduleStatus(input: Phase7ScheduleStatusQuery): Promise<Phase7ScheduleStatus>;
+  /** Refreshes the durable horizon through PostgreSQL's current UTC day. */
+  getPhase7ScheduleStatusAtDatabaseCurrentPeriod(input: Phase7ScheduleStatusQuery): Promise<Phase7ScheduleStatus>;
+  advancePhase7RetentionSchedule(input: Phase7ScheduleCursorAdvance): Promise<boolean>;
+  advancePhase7AggregateSchedule(input: Phase7ScheduleCursorAdvance): Promise<boolean>;
 }
 
 export interface OperationsPersistencePorts {

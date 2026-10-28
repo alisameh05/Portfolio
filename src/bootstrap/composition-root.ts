@@ -40,6 +40,7 @@ import type { CurrentCvDeliveryService, OwnerCvApplicationService } from "../mod
 import type { PortfolioSettingsApplicationService } from "../modules/portfolio-configuration/index.js";
 import type { ConsentApplicationService, MeasurementMediaPublicFactsPort, MeasurementService, OwnerAnalyticsApplicationService } from "../modules/measurement/index.js";
 import type { InteractionModerationService, FunctionalInteractionContextPort } from "../modules/interaction-moderation/index.js";
+import { createPhase7DueWorkWorker } from "./phase7-due-work-worker.js";
 
 export interface ReactionRuntimeServices {
   readonly scope: { readonly kind: "portfolio"; readonly portfolioId: StableId<"Portfolio"> };
@@ -89,6 +90,7 @@ let currentModeration: (import("../modules/interaction-moderation/index.js").Own
 let currentOwnerAnalytics: OwnerAnalyticsApplicationService | undefined;
 let currentOwnerAnalyticsScope: ReactionRuntimeServices["scope"] | undefined;
 let currentOwnerAggregateReport: Pick<MeasurementService, "getAggregateReport"> | undefined;
+let currentPhase7PortfolioId: StableId<"Portfolio"> | undefined;
 
 function phase7RuntimeUnavailable() {
   return {
@@ -954,6 +956,7 @@ export async function initializeDatabaseRuntime(
     currentOwnerAnalytics = dependencies.ownerAnalytics;
     currentOwnerAggregateReport = dependencies.ownerAggregateReport;
     const scopedPortfolio = parseStableId("Portfolio", env["PORTFOLIO_ID"] ?? "");
+    currentPhase7PortfolioId = scopedPortfolio.ok ? scopedPortfolio.value : undefined;
     currentOwnerAnalyticsScope = currentOwnerAnalytics && scopedPortfolio.ok
       ? { kind: "portfolio", portfolioId: scopedPortfolio.value } : undefined;
     currentInteractionSummary = dependencies.interactionSummary;
@@ -994,6 +997,20 @@ export async function getOwnerExportApplicationService(): Promise<OwnerExportApp
 export function getOwnerExportAssemblyService() {
   if (currentOwnerExportAssembly === undefined) throw new Error("OWNER_EXPORT_ASSEMBLY_NOT_CONFIGURED");
   return currentOwnerExportAssembly;
+}
+
+/** Worker-only composition of the existing Measurement, Interaction and Owner export services. */
+export function getPhase7DueWorkWorkerService() {
+  if (currentOperations === undefined || currentPhase7PortfolioId === undefined) {
+    throw new Error("PHASE7_DUE_WORK_NOT_CONFIGURED");
+  }
+  return createPhase7DueWorkWorker({
+    portfolioId: currentPhase7PortfolioId,
+    operations: currentOperations,
+    ownerExports: getOwnerExportAssemblyService(),
+    clock: createSystemClock(),
+    ids: createSystemIdGenerator(),
+  });
 }
 
 /** Database composition activates only configuration commands with completed phase tickets. */

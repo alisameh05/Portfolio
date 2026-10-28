@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "ticket": 250,
-  "runId": "0b66c8dc-c97c-4940-b2f5-8932be98e945",
-  "startedAt": "2026-10-27T00:53:39.641Z",
-  "completedAt": "2026-10-27T00:54:36.483Z",
+  "runId": "e47b65fe-d322-4ee0-9b05-3ba06c773d3d",
+  "startedAt": "2026-10-27T04:37:34.194Z",
+  "completedAt": "2026-10-27T04:38:39.864Z",
   "source": {
-    "revision": "c2efa70aa971376d5837c0683f31a6be4e9b52ef",
-    "branch": "t3/fix-legacy11-omission",
-    "workingTreeSha256": "bee3bd8c6040baf2081ae001bf1299301054df390fc8a6c476b1b9b4ce53a6d6"
+    "revision": "62aaac387cc58cd152c4510648a02e3b40e2b6ab",
+    "branch": "codex/spec8-remaining-orchestration",
+    "workingTreeSha256": "4a4fa0d0248b4dce29b5a7341e7df48c1f2be0206620fbecaf17662f3bacfdfe"
   },
   "tools": {
     "node": "v24.21.0",
@@ -268,6 +268,10 @@
     {
       "name": "20261026100000_reconcile_all_owner_export_artifacts.sql",
       "sha256": "28ea11c784b188977f57514dd874dcf877dbf307d0a4020857c078f18cfc06f9"
+    },
+    {
+      "name": "20261026164603_phase7_durable_policy_schedule_keys.sql",
+      "sha256": "cdd65060a1363d35f93f76c289950e69b26ebb04f718f12fe0cf3563f75668ab"
     }
   ],
   "acceptance": {
@@ -278,7 +282,7 @@
     "skipped": 0,
     "suites": [
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-analytics-postgres.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-analytics-postgres.test.ts",
         "status": "passed",
         "passed": 1,
         "failed": 0,
@@ -291,7 +295,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-content-postgres.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-content-postgres.test.ts",
         "status": "passed",
         "passed": 1,
         "failed": 0,
@@ -304,7 +308,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-cv-postgres.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-cv-postgres.test.ts",
         "status": "passed",
         "passed": 3,
         "failed": 0,
@@ -325,7 +329,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-moderation-postgres.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-moderation-postgres.test.ts",
         "status": "passed",
         "passed": 12,
         "failed": 0,
@@ -382,7 +386,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-package.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-package.test.ts",
         "status": "passed",
         "passed": 15,
         "failed": 0,
@@ -451,7 +455,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-reference-import-postgres.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-reference-import-postgres.test.ts",
         "status": "passed",
         "passed": 7,
         "failed": 0,
@@ -488,7 +492,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-reference-import.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-reference-import.test.ts",
         "status": "passed",
         "passed": 15,
         "failed": 0,
@@ -557,7 +561,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/t3-eb3b716c/tests/phase8/owner-export-taxonomy-postgres.test.ts",
+        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-taxonomy-postgres.test.ts",
         "status": "passed",
         "passed": 1,
         "failed": 0,
@@ -601,12 +605,12 @@
     "bilingualPublicationPointers": 2,
     "feedbackHistoryRecords": 4,
     "relationship": {
-      "sourceProjectId": "01a17ad9-88ee-7b9f-895c-5164be6e1a2a",
-      "relatedHiddenProjectId": "01a17ad9-8a94-7c2c-bb39-d01729f4c027",
+      "sourceProjectId": "01a17ba6-7a75-7efa-a41c-539e8591b26d",
+      "relatedHiddenProjectId": "01a17ba6-7c1b-76aa-a12c-d22fa2a21804",
       "historyAndReferenceProjectionAsserted": true
     },
     "draftPrivacy": {
-      "contentId": "01a17ad9-8a87-7cc9-bde5-d02ac73d036f",
+      "contentId": "01a17ba6-7c0d-740d-9ebf-ed3276257350",
       "publicLocales": [],
       "excludedFromSourceDiscovery": true,
       "excludedFromImportedDiscovery": true
@@ -614,8 +618,8 @@
     "discoveryTie": {
       "firstPublishedAt": "2026-10-26T10:00:00.000Z",
       "expectedAndObservedContentIds": [
-        "01a17ad9-8a37-742a-bbdf-3ba4a2a08652",
-        "01a17ad9-88ee-7b9f-895c-5164be6e1a2a"
+        "01a17ba6-7bc4-710b-a79b-50cc1ea383da",
+        "01a17ba6-7a75-7efa-a41c-539e8591b26d"
       ]
     },
     "assetCount": 14,
@@ -630,11 +634,11 @@
     "partialScenarioCount": 13,
     "absentCvScenarioCount": 1,
     "stagesMs": {
-      "fullAssembly": 173,
+      "fullAssembly": 155,
       "exportDownloadValidate": 248,
-      "fullImport": 229,
-      "fullImportCleanup": 119,
-      "partialReconstruction": 7958
+      "fullImport": 323,
+      "fullImportCleanup": 102,
+      "partialReconstruction": 7281
     },
     "cleanup": true,
     "sourceBackedArchiveBytes": 120556,
@@ -662,8 +666,8 @@
       "two activated goal versions with independently withheld reports"
     ],
     "sourceBackedDiscoveryTieOrder": [
-      "01a17ad9-8a37-742a-bbdf-3ba4a2a08652",
-      "01a17ad9-88ee-7b9f-895c-5164be6e1a2a"
+      "01a17ba6-7bc4-710b-a79b-50cc1ea383da",
+      "01a17ba6-7a75-7efa-a41c-539e8591b26d"
     ],
     "sourceBackedDraftPublicLocales": [],
     "barrier": {

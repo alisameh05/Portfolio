@@ -15,12 +15,18 @@ export interface DailyAggregatePage {
   readonly incomplete: boolean;
 }
 
+export interface DailyAggregateRebuildResult {
+  readonly processedCount: number;
+  /** The owning module found that retention sealed this day before complete coverage. */
+  readonly coverageIncomplete: boolean;
+}
+
 export interface DailyAggregateRepositoryPort {
   rebuildDay(input: {
     readonly portfolioId: StableId<"Portfolio">;
     readonly utcDay: string;
     readonly asOf: string;
-  }, transaction: TransactionContext): Promise<number>;
+  }, transaction: TransactionContext): Promise<DailyAggregateRebuildResult>;
   readReport(input: {
     readonly portfolioId: StableId<"Portfolio">;
     readonly ownerId: StableId<"Owner">;

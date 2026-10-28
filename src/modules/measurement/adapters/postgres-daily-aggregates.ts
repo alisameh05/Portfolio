@@ -88,7 +88,7 @@ function asRecord(row: ReportRow): DailyAggregateReportRecord {
 
 export function createPostgresDailyAggregateRepository(): DailyAggregateRepositoryPort {
   return {
-    async rebuildDay(input, transaction): Promise<number> {
+    async rebuildDay(input, transaction) {
       const db = await configure(transaction, input.portfolioId);
       await sql`select set_config('shipwithali.worker_purpose', 'measurement.aggregate', true)`.execute(db);
       const start = `${input.utcDay}T00:00:00.000Z`;
@@ -97,11 +97,15 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
       await sql`select pg_advisory_xact_lock(hashtextextended(${input.portfolioId + ":" + input.utcDay}, 202))`.execute(db);
       const expired = await sql<{ expired: boolean }>`select
         ((${input.utcDay}::date::timestamp at time zone 'UTC') + interval '13 months') <= ${input.asOf}::timestamptz as expired`.execute(db);
-      if (expired.rows[0]?.expired) return 0;
-      const retention = await sql<{ retention_sealed: boolean }>`select retention_sealed
+      if (expired.rows[0]?.expired) return { processedCount: 0, coverageIncomplete: false };
+      const checkpoint = await sql<{ retention_sealed: boolean; incomplete: boolean; newer_than_request: boolean }>`select
+          retention_sealed, incomplete, checkpoint_at > ${input.asOf}::timestamptz as newer_than_request
         from measurement.daily_aggregate_checkpoints where portfolio_id = ${input.portfolioId}::uuid
           and utc_day = ${input.utcDay}::date for update`.execute(db);
-      if (retention.rows[0]?.retention_sealed) return 0;
+      const existingCheckpoint = checkpoint.rows[0];
+      if (existingCheckpoint?.retention_sealed || existingCheckpoint?.newer_than_request) {
+        return { processedCount: 0, coverageIncomplete: existingCheckpoint.incomplete };
+      }
 
       const actions = await sql<ActionRow>`with day_events as (
         select e.action, e.measurement_subject, e.active_milliseconds
@@ -249,7 +253,10 @@ export function createPostgresDailyAggregateRepository(): DailyAggregateReposito
         on conflict (portfolio_id, utc_day) do update set source_event_count = excluded.source_event_count,
           source_conversion_count = excluded.source_conversion_count, policy_version = excluded.policy_version,
           checkpoint_at = excluded.checkpoint_at, incomplete = false`.execute(db);
-      return actions.rows.length + actionDimensions.rows.length + goals.rows.length + goalDimensions.rows.length;
+      const coverage = await sql<{ incomplete: boolean }>`select incomplete from measurement.daily_aggregate_checkpoints
+        where portfolio_id = ${input.portfolioId}::uuid and utc_day = ${input.utcDay}::date`.execute(db);
+      return { processedCount: actions.rows.length + actionDimensions.rows.length + goals.rows.length + goalDimensions.rows.length,
+        coverageIncomplete: coverage.rows[0]?.incomplete ?? false };
     },
 
     async readReport(input, transaction): Promise<DailyAggregatePage> {
