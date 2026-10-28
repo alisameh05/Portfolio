@@ -1,15 +1,15 @@
 {
   "evidenceVersion": 1,
   "ticket": 251,
-  "runId": "e23fb64a-675b-49c2-8a21-ec5eabe3fa81",
-  "startedAt": "2026-10-28T18:55:16.603Z",
-  "completedAt": "2026-10-28T18:56:44.526Z",
+  "runId": "5246bf13-57e2-454c-93e2-4445a8b9249f",
+  "startedAt": "2026-10-28T19:24:42.027Z",
+  "completedAt": "2026-10-28T19:26:19.169Z",
   "repository": {
-    "head": "1f751047cd54de219eab46a7029146498e113f6d",
+    "head": "88e6ee0d1626366f4756f57b635f7c884a120f45",
     "branch": "t3/spec8-251-repair-r1",
     "detached": false,
-    "sourceTreeSha256Before": "d76e3c7475bced1d42b55e054ce0638ec5910fe1739a68d4082490f41fdf3045",
-    "sourceTreeSha256After": "d76e3c7475bced1d42b55e054ce0638ec5910fe1739a68d4082490f41fdf3045"
+    "sourceTreeSha256Before": "513f8ca9d41098e1220e83101369294b18240aec84c66c1f2c1ea4d3301a0a0a",
+    "sourceTreeSha256After": "513f8ca9d41098e1220e83101369294b18240aec84c66c1f2c1ea4d3301a0a0a"
   },
   "tools": {
     "node": "v24.21.0",
@@ -301,7 +301,7 @@
     }
   ],
   "volumes": {
-    "clusterBytesBeforeCleanup": 173188085,
+    "clusterBytesBeforeCleanup": 173204469,
     "clusterBytesAfterCleanup": 0
   },
   "checks": {

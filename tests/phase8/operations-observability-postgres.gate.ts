@@ -418,8 +418,10 @@ describe("operations summary PostgreSQL qualification", () => {
 
   it("keeps bootstrap completion dates unknown until the first policy period finishes", async () => {
     const bootstrapPortfolioId = uuid(7_000) as StableId<"Portfolio">;
-    const firstPolicyPeriod = "2026-10-27";
-    const priorPeriod = "2026-10-26";
+    const databaseDate = await admin.query<{ current_period: string }>(
+      "select to_char(clock_timestamp() at time zone 'UTC', 'YYYY-MM-DD') as current_period");
+    const firstPolicyPeriod = databaseDate.rows[0]!.current_period;
+    const priorPeriod = new Date(Date.parse(`${firstPolicyPeriod}T00:00:00.000Z`) - 86_400_000).toISOString().slice(0, 10);
     const operations = createPostgresOperationsPersistence(worker.database);
     const service = createOperationsSummaryService({ reader: createPostgresOperationsSummaryReader(worker.database),
       clock: { now: () => observedAt } });

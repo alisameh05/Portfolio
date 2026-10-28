@@ -1,9 +1,9 @@
 {
   "ticket": 248,
-  "runId": "b7a9db5a-3183-429e-af05-0eca0b98b342",
-  "startedAt": "2026-10-28T18:57:06.992Z",
-  "sourceRevision": "1f751047cd54de219eab46a7029146498e113f6d",
-  "sourceTreeSha256": "d76e3c7475bced1d42b55e054ce0638ec5910fe1739a68d4082490f41fdf3045",
+  "runId": "118a75f0-29c8-4b20-9270-7251a4f9508c",
+  "startedAt": "2026-10-28T19:34:04.976Z",
+  "sourceRevision": "88e6ee0d1626366f4756f57b635f7c884a120f45",
+  "sourceTreeSha256": "513f8ca9d41098e1220e83101369294b18240aec84c66c1f2c1ea4d3301a0a0a",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -915,6 +915,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase8:focus:retention-passes",
   "scope": "All repository migrations on disposable native PostgreSQL; durable Portfolio/type/UTC-period deduplication under concurrent enqueue, independent-worker day-rollover retention barriers with held, retry-delayed, and dead keys, serialized Owner admission across a stale status snapshot and concurrent horizon advance, PostgreSQL-current-day horizon/admission fencing with a lagging worker clock, database-clock not-before enforcement for job and outbox retries plus a worker-clock-ahead UTC policy rollover, expired-before-reclaim job/outbox transition fencing with checkpoint resume, bounded contiguous catch-up and historical redrive, successful checkpoint retry-streak reset with fifth-failure/crash terminalization preserved, five existing versioned handlers, ten-job Owner assembly backlog reporting and restart, loopback Storage-adapter effects, truthful completion and coverage status, bounded indexed history queries, in-place upgrade row preservation, and legacy queue compatibility after application rollback.",
-  "endedAt": "2026-10-28T18:58:47.695Z",
+  "endedAt": "2026-10-28T19:35:22.498Z",
   "cleanup": true
 }
