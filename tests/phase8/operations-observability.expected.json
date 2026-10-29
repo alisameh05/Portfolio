@@ -79,7 +79,7 @@
     "Phase 8 resumable retention policy passes (#248) drains a twenty-day outage in contiguous bounded slices without losing the older completion watermark",
     "Phase 8 resumable retention policy passes (#248) keeps policy completion incomplete when a durable aggregate reports coverage gaps",
     "Phase 8 resumable retention policy passes (#248) publishes daily and catch-up invocations as UTC handoffs that remain uninstalled",
-    "Phase 8 resumable retention policy passes (#248) reports shutdown before work as incomplete and preserves the bounded scheduled backlog",
+    "Phase 8 resumable retention policy passes (#248) reports shutdown before work as incomplete without scheduling or claiming a backlog",
     "Phase 8 resumable retention policy passes (#248) resumes a bounded owner-module checkpoint with the same job identity and UTC anchor before aggregates",
     "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds active lease-age reads after a large expired-lease prefix",
     "operations summary PostgreSQL qualification EXPLAIN ANALYZE bounds current export states and recent transition windows across old requests",

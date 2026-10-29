@@ -62,12 +62,13 @@ describe("Phase 8 resumable retention policy passes (#248)", () => {
       .toBeLessThan(fixture.effects.findIndex(effect => effect.kind === "aggregate"));
   });
 
-  it("reports shutdown before work as incomplete and preserves the bounded scheduled backlog", async () => {
+  it("reports shutdown before work as incomplete without scheduling or claiming a backlog", async () => {
     const fixture = makeFixture();
     const result = await fixture.makeService(portfolioId).runDueWork({ workerId: "stopping-worker", shouldStop: () => true });
 
-    expect(result).toMatchObject({ ok: true, value: { scheduled: 60, claimed: 0,
+    expect(result).toMatchObject({ ok: true, value: { scheduled: 0, claimed: 0,
       incompleteBacklog: true, incomplete: true, lastCompletePolicyPeriod: null, oldestOverduePeriod: "2026-10-12" } });
+    expect(fixture.rows.size).toBe(0);
   });
 
   it("drains a twenty-day outage in contiguous bounded slices without losing the older completion watermark", async () => {

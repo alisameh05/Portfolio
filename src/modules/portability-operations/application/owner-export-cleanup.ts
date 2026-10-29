@@ -55,7 +55,8 @@ export function createOwnerExportArtifactCleanupService(deps: {
   readonly observations?: Pick<OperationsObservationPort, "recordSignal">;
 }) {
   return {
-    async runOwnerExportCleanup(input: { readonly after?: StableId<"OwnerExport">; readonly limit?: number } = {}) {
+    async runOwnerExportCleanup(input: { readonly after?: StableId<"OwnerExport">; readonly limit?: number;
+      readonly shouldStop?: () => boolean } = {}) {
       const limit = input.limit ?? 25;
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
         return err({ kind: "validation", code: "OWNER_EXPORT_CLEANUP_LIMIT_INVALID" } as const);
@@ -63,8 +64,12 @@ export function createOwnerExportArtifactCleanupService(deps: {
       try {
         const page = await deps.artifacts.listOwnerExportCleanup({ ...deps.scope, limit,
           ...(input.after === undefined ? {} : { after: input.after }) });
-        let deleted = 0, pending = 0;
+        let scanned = 0, deleted = 0, pending = 0, halted = false;
+        let lastScanned: StableId<"OwnerExport"> | undefined;
         for (const selected of page) {
+          if (input.shouldStop?.()) { halted = true; break; }
+          scanned += 1;
+          lastScanned = selected.exportId;
           // Re-read under the upload fence. A stale selection never revokes a
           // newly eligible snapshot or deletes before durable access denial.
           const revoked = await deps.artifacts.revokeOwnerExportArtifact({ ...deps.scope,
@@ -90,8 +95,8 @@ export function createOwnerExportArtifactCleanupService(deps: {
           await deps.artifacts.markOwnerExportArtifactDeleted(identity);
           deleted++;
         }
-        const next = page.length === limit ? page.at(-1)?.exportId : undefined;
-        return ok({ scanned: page.length, deleted, pending, incomplete: pending > 0 || next !== undefined,
+        const next = halted ? lastScanned : page.length === limit ? page.at(-1)?.exportId : undefined;
+        return ok({ scanned, deleted, pending, incomplete: halted || pending > 0 || next !== undefined,
           ...(next === undefined ? {} : { nextCursor: next }) });
       } catch {
         return err({ kind: "temporarily_unavailable", code: "OWNER_EXPORT_CLEANUP_UNAVAILABLE" } as const);

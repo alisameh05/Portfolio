@@ -1,5 +1,5 @@
 import { err, parseStableId, type Rejection, type Result, type StableId } from "@shared/domain";
-import type { BoundedWorkResult } from "@shared/application";
+import type { BoundedWorkResult, WorkBatchSize } from "@shared/application";
 import {
   calculateJobRetryDelayMilliseconds,
   JOB_MAX_ATTEMPTS,
@@ -27,9 +27,19 @@ const LEASE_DURATION_SECONDS = 300;
 const BATCH_SIZE = 100 as const;
 const MAX_CLAIMS_PER_PHASE = 1_000;
 const MAX_CATCH_UP_PERIODS = 15;
+const MAX_OWNER_EXPORT_CLAIMS = 10;
 const SAFE_FAILURE = parseSafeErrorCode("PHASE7_WORK_FAILED");
 const SAFE_INVALID = parseSafeErrorCode("PHASE7_JOB_INVALID");
 const DAY_MS = 86_400_000;
+
+/** Limits shared with protected hosts so budgets cannot outlive a job lease. */
+export const PHASE7_DUE_WORK_LIMITS = Object.freeze({
+  leaseDurationMs: LEASE_DURATION_SECONDS * 1_000,
+  maxClaimsPerPhase: MAX_CLAIMS_PER_PHASE,
+  maxWorkBatchSize: BATCH_SIZE,
+  maxCatchUpPeriods: MAX_CATCH_UP_PERIODS,
+  maxOwnerExportClaims: MAX_OWNER_EXPORT_CLAIMS,
+});
 
 /** Deployment handoff only. Phase 10 installs schedules; this module never does. */
 export const PHASE7_DUE_WORK_SCHEDULES = Object.freeze([
@@ -50,7 +60,8 @@ export interface Phase7DueWorkDependencies {
   readonly interaction: Pick<FeedbackWorkService, "expireFeedback">;
   /** Existing module-owned #247 cleanup, expiry, orphan reconciliation, and assembly dispatch. */
   readonly ownerExports: {
-    runOwnerExportAssembly(input: { readonly workerId: string }): Promise<Result<OwnerExportAssemblyRunResult, Rejection>>;
+    runOwnerExportAssembly(input: { readonly workerId: string; readonly maxClaims?: number;
+      readonly shouldStop?: () => boolean }): Promise<Result<OwnerExportAssemblyRunResult, Rejection>>;
   };
 }
 
@@ -58,6 +69,12 @@ export interface DueWorkRunCommand {
   readonly workerId: string;
   /** Per-phase bound. Smaller values let a runner return control early. */
   readonly maxClaimsPerPhase?: number;
+  /** Maximum rows each existing module service may process in one transaction. */
+  readonly maxWorkBatchSize?: WorkBatchSize;
+  /** Maximum due policy periods to enqueue in this invocation. */
+  readonly maxCatchUpPeriods?: number;
+  /** Maximum Owner assembly leases to dispatch after the retention barrier. */
+  readonly maxOwnerExportClaims?: number;
   /** Checked between effects; the active owner-module batch always finishes first. */
   readonly shouldStop?: () => boolean;
 }
@@ -144,28 +161,32 @@ export function createPhase7DueWorkService(deps: Phase7DueWorkDependencies) {
     }));
   }
 
-  async function enqueueRetentionJobs(periods: readonly string[]): Promise<{ scheduled: number; deduplicated: number }> {
+  async function enqueueRetentionJobs(periods: readonly string[], shouldStop: () => boolean):
+  Promise<{ scheduled: number; deduplicated: number; halted: boolean }> {
     let scheduled = 0;
     let deduplicated = 0;
     for (const period of periods) for (const type of RETENTION_TYPES) {
+      if (shouldStop()) return { scheduled, deduplicated, halted: true };
       if (await enqueue(type, {}, period, period)) scheduled += 1;
       else deduplicated += 1;
     }
-    return { scheduled, deduplicated };
+    return { scheduled, deduplicated, halted: false };
   }
 
-  async function enqueueAggregateJobs(periods: readonly string[]): Promise<{ scheduled: number; deduplicated: number }> {
+  async function enqueueAggregateJobs(periods: readonly string[], shouldStop: () => boolean):
+  Promise<{ scheduled: number; deduplicated: number; halted: boolean }> {
     let scheduled = 0;
     let deduplicated = 0;
     for (const policyPeriod of periods) {
       // Rebuild the full retained UTC horizon each policy period so late accepted events converge.
       for (let offset = -14; offset <= 0; offset += 1) {
+        if (shouldStop()) return { scheduled, deduplicated, halted: true };
         const utcDay = utcDayAtOffset(policyPeriod, offset);
         if (await enqueue(AGGREGATE, { utcDay }, policyPeriod, `${policyPeriod}:${utcDay}`)) scheduled += 1;
         else deduplicated += 1;
       }
     }
-    return { scheduled, deduplicated };
+    return { scheduled, deduplicated, halted: false };
   }
 
   function validScheduledJob(job: { semanticSchedule?: { portfolioId: StableId<"Portfolio">; period: string } },
@@ -203,7 +224,7 @@ export function createPhase7DueWorkService(deps: Phase7DueWorkDependencies) {
       const policyPeriod = job.semanticSchedule!.period.slice(0, 10);
       const jobNow = startOfUtcDay(policyPeriod);
       const common = { scope: { kind: "portfolio" as const, portfolioId: deps.portfolioId },
-        correlationId: "phase7-due-work", batchSize: BATCH_SIZE, now: jobNow };
+        correlationId: "phase7-due-work", batchSize: command.maxWorkBatchSize ?? BATCH_SIZE, now: jobNow };
       let outcome: Result<BoundedWorkResult, Rejection>;
       try {
         switch (parsed.kind) {
@@ -269,8 +290,15 @@ export function createPhase7DueWorkService(deps: Phase7DueWorkDependencies) {
   return {
     async runDueWork(command: DueWorkRunCommand): Promise<Result<DueWorkRunResult, Rejection>> {
       const maxClaims = command.maxClaimsPerPhase ?? MAX_CLAIMS_PER_PHASE;
+      const maxWorkBatchSize = command.maxWorkBatchSize ?? BATCH_SIZE;
+      const maxCatchUpPeriods = command.maxCatchUpPeriods ?? MAX_CATCH_UP_PERIODS;
+      const maxOwnerExportClaims = command.maxOwnerExportClaims ?? MAX_OWNER_EXPORT_CLAIMS;
       if (!/^[A-Za-z0-9._:-]{1,128}$/.test(command.workerId) || !Number.isSafeInteger(maxClaims) ||
-          maxClaims < 1 || maxClaims > MAX_CLAIMS_PER_PHASE || (command.shouldStop !== undefined && typeof command.shouldStop !== "function")) {
+          maxClaims < 1 || maxClaims > MAX_CLAIMS_PER_PHASE || !Number.isSafeInteger(maxWorkBatchSize) ||
+          ![25, 50, BATCH_SIZE].includes(maxWorkBatchSize) || !Number.isSafeInteger(maxCatchUpPeriods) ||
+          maxCatchUpPeriods < 1 || maxCatchUpPeriods > MAX_CATCH_UP_PERIODS || !Number.isSafeInteger(maxOwnerExportClaims) ||
+          maxOwnerExportClaims < 0 || maxOwnerExportClaims > MAX_OWNER_EXPORT_CLAIMS ||
+          (command.shouldStop !== undefined && typeof command.shouldStop !== "function")) {
         return invalid("PHASE7_WORKER_COMMAND_INVALID");
       }
       const scheduledAt = deps.clock.now();
@@ -282,16 +310,17 @@ export function createPhase7DueWorkService(deps: Phase7DueWorkDependencies) {
           fromPeriod, throughPeriod: today });
         today = [today, before.requiredThroughPeriod].sort().at(-1)!;
         fromPeriod = utcDayAtOffset(today, -(MAX_CATCH_UP_PERIODS - 1));
-        const retentionPeriods = periodsAfterWatermark(before.retentionScheduledThrough, today);
-        const retentionScheduled = await enqueueRetentionJobs(retentionPeriods);
-        if (retentionPeriods.length > 0) {
+        const retentionPeriods = command.shouldStop?.() ? [] :
+          periodsAfterWatermark(before.retentionScheduledThrough, today, maxCatchUpPeriods);
+        const retentionScheduled = await enqueueRetentionJobs(retentionPeriods, () => command.shouldStop?.() ?? false);
+        if (retentionPeriods.length > 0 && !retentionScheduled.halted && !(command.shouldStop?.() ?? false)) {
           await deps.operations.jobs.advancePhase7RetentionSchedule({ portfolioId: deps.portfolioId,
             expectedNextPeriod: retentionPeriods[0]!, scheduledThroughPeriod: retentionPeriods.at(-1)! });
         }
         const retention = await runPhase(command, RETENTION_TYPES, maxClaims);
         const afterRetention = await deps.operations.jobs.getPhase7ScheduleStatusAtDatabaseCurrentPeriod({ portfolioId: deps.portfolioId,
           fromPeriod, throughPeriod: today });
-        let aggregateScheduled = { scheduled: 0, deduplicated: 0 };
+        let aggregateScheduled = { scheduled: 0, deduplicated: 0, halted: false };
         let aggregate: PhaseTotals = { claimed: 0, completed: 0, released: 0, failed: 0, staleLeases: 0,
           processedCount: 0, incompleteCoverage: false, incompleteBacklog: false, halted: false };
         // Durable phase status alone is not permission to start dependent work:
@@ -303,17 +332,20 @@ export function createPhase7DueWorkService(deps: Phase7DueWorkDependencies) {
         if (retentionStageComplete) {
           // This short owning-port transaction rechecks PostgreSQL's UTC day and ends before dependent work I/O.
           const admitted = await deps.operations.jobs.admitPhase7DependentWork({ portfolioId: deps.portfolioId });
-          retentionStageComplete = admitted;
-          if (admitted) {
-            const ownerExports = await deps.ownerExports.runOwnerExportAssembly({ workerId: command.workerId });
-            if (ownerExports.ok) ownerExportAssembly = ownerExports.value;
+          retentionStageComplete = admitted && !(command.shouldStop?.() ?? false);
+          if (retentionStageComplete) {
+            const ownerExports = await deps.ownerExports.runOwnerExportAssembly({ workerId: command.workerId,
+              maxClaims: maxOwnerExportClaims,
+              ...(command.shouldStop === undefined ? {} : { shouldStop: command.shouldStop }) });
+            if (!ownerExports.ok) return unavailable();
+            ownerExportAssembly = ownerExports.value;
           }
         }
-        if (retentionStageComplete) {
+        if (retentionStageComplete && !(command.shouldStop?.() ?? false)) {
           const aggregatePeriods = periodsAfterWatermark(afterRetention.aggregateScheduledThrough,
-            afterRetention.retentionCompleteThrough, Math.max(0, MAX_CATCH_UP_PERIODS - retentionPeriods.length));
-          aggregateScheduled = await enqueueAggregateJobs(aggregatePeriods);
-          if (aggregatePeriods.length > 0) {
+            afterRetention.retentionCompleteThrough, Math.max(0, maxCatchUpPeriods - retentionPeriods.length));
+          aggregateScheduled = await enqueueAggregateJobs(aggregatePeriods, () => command.shouldStop?.() ?? false);
+          if (aggregatePeriods.length > 0 && !aggregateScheduled.halted && !(command.shouldStop?.() ?? false)) {
             await deps.operations.jobs.advancePhase7AggregateSchedule({ portfolioId: deps.portfolioId,
               expectedNextPeriod: aggregatePeriods[0]!, scheduledThroughPeriod: aggregatePeriods.at(-1)! });
           }

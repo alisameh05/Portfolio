@@ -2,7 +2,8 @@ name: PR validation
 
 on:
   pull_request:
-    branches: [master]
+    # Stacked issue branches also need the source-bound Linux OS-signal gate.
+    branches: ['**']
   push:
     branches: [master]
   workflow_dispatch:
@@ -15,6 +16,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  phase8-protected-trigger:
+    name: Phase 8 protected due-work Linux PostgreSQL and OS SIGTERM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Select pinned npm
+        run: |
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).engines.npm')"
+          npm install --global "npm@$npm_version" --no-audit --no-fund
+      - name: Install locked development dependencies
+        run: npm run setup:validation
+      - name: Select supported native PostgreSQL
+        run: node scripts/setup-ci-native-postgres.mjs
+      - name: Require real PostgreSQL protected-trigger and Linux OS-SIGTERM proof with zero skips
+        run: npm run phase8:focus:protected-trigger
+      - name: Publish sanitized Issue #249 protected-trigger evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase8-protected-trigger-249
+          path: evidence/phase8-protected-trigger-249.json
+          if-no-files-found: warn
+          retention-days: 14
+
   validation:
     name: Runtime, typecheck and context
     runs-on: ubuntu-24.04

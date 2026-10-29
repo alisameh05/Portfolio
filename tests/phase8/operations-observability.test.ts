@@ -1142,9 +1142,13 @@ describe("Phase 8 operations observability", () => {
     };
     const jobId = "0196a1b2-7c3d-7e11-9f22-000000000007";
     const observations: OperationsSignalObservation[] = [];
+    let claimed = false;
     const dependencies: OwnerExportAssemblyDependencies = {
       operations: { jobs: {
-        async claimDue() { return [{ jobId, payload: { type: OWNER_EXPORT_ASSEMBLY_JOB_TYPE, version: 1,
+        async claimDue() {
+          if (claimed) return [];
+          claimed = true;
+          return [{ jobId, payload: { type: OWNER_EXPORT_ASSEMBLY_JOB_TYPE, version: 1,
           value: { exportId, portfolioId, ownerId, includedScopes: record.includedScopes } }, leaseToken: "fixture-lease", leaseExpiresAt: observedAt, attemptCount: 1 }]; },
         async scheduleRetry() { return true; },
       } } as unknown as OwnerExportAssemblyDependencies["operations"],
@@ -1184,8 +1188,12 @@ describe("Phase 8 operations observability", () => {
       candidateSha256: built.sha256, candidateContentLength: built.contentLength };
     const runAssemblyWithReadContent = async (content: AsyncIterable<Uint8Array>, workerId: string) => {
       const observations: OperationsSignalObservation[] = [];
+      let claimed = false;
       const dependencies: OwnerExportAssemblyDependencies = {
-        operations: { jobs: { async claimDue() { return [{ jobId: "0196a1b2-7c3d-7e11-9f22-000000000017", payload: { type: OWNER_EXPORT_ASSEMBLY_JOB_TYPE,
+        operations: { jobs: { async claimDue() {
+          if (claimed) return [];
+          claimed = true;
+          return [{ jobId: "0196a1b2-7c3d-7e11-9f22-000000000017", payload: { type: OWNER_EXPORT_ASSEMBLY_JOB_TYPE,
           version: 1, value: { exportId, portfolioId, ownerId, includedScopes: record.includedScopes } }, leaseToken: "fixture-lease",
           leaseExpiresAt: observedAt, attemptCount: 1 }]; }, async scheduleRetry() { return true; } } } as unknown as OwnerExportAssemblyDependencies["operations"],
         exports: { async findOwnerExport() { return record; } } as unknown as OwnerExportAssemblyDependencies["exports"],
