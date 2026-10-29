@@ -79,7 +79,7 @@ export function createPostgresIncidentLifecycleStore(database: Kysely<DB>): Inci
           values (${input.incidentId}::uuid, ${incidentKey}, ${input.environment ?? "unknown"}, ${categoryForCode(input.rule.owner, input.rule.code)}, null, ${input.rule.code}, ${input.rule.severity},
                   ${input.firstObservedAt}::timestamptz, ${input.lastObservedAt}::timestamptz, 1, ${input.lowerBound ?? false}, ${input.value},
                   ${input.rule.threshold}, ${input.rule.unit}, ${input.rule.windowSeconds}, ${input.rule.owner},
-                  ${input.rule.remediation}, 'pending', ${input.lastObservedAt}::timestamptz)
+                  ${input.rule.remediation}, 'pending', clock_timestamp())
           on conflict (incident_key) do update set
             safe_error_code = excluded.safe_error_code,
             severity = excluded.severity,
@@ -101,7 +101,7 @@ export function createPostgresIncidentLifecycleStore(database: Kysely<DB>): Inci
             first_observed_at = case when operations.incidents.resolved_at is not null then excluded.first_observed_at else operations.incidents.first_observed_at end,
             delivery_lease_token = case when operations.incidents.resolved_at is not null then null else operations.incidents.delivery_lease_token end,
             delivery_lease_expires_at = case when operations.incidents.resolved_at is not null then null else operations.incidents.delivery_lease_expires_at end,
-            next_delivery_at = case when operations.incidents.resolved_at is not null then excluded.last_observed_at else operations.incidents.next_delivery_at end
+            next_delivery_at = case when operations.incidents.resolved_at is not null then clock_timestamp() else operations.incidents.next_delivery_at end
           where (operations.incidents.resolved_at is null and excluded.last_observed_at >= operations.incidents.last_observed_at)
              or (operations.incidents.resolved_at is not null and excluded.last_observed_at > operations.incidents.resolved_at)
           returning environment, incident_id::text, first_observed_at, last_observed_at, occurrences, resolved_at,

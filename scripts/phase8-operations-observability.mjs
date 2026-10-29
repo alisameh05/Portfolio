@@ -154,6 +154,7 @@ export const ACTIONABLE_INCIDENTS_ACCEPTANCE_EVIDENCE_PLAN = [
   ] },
   { id: "AC02", criterion: "Completed/future-delayed work and absent or unknown measurements never create incidents.", evidence: [
     { kind: "test", suite: "tests/phase8/actionable-incidents.test.ts", name: "Phase 8 #252 actionable incident policy #252 AC02 excludes completed and future-delayed work and treats missing sources as unknown" },
+    { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 AC01-03 composes real PostgreSQL dead work into one delivered incident and recovers it after completion" },
   ] },
   { id: "AC03", criterion: "Duplicate observations update one durable incident and recovery resolves it once.", evidence: [
     { kind: "test", suite: "tests/phase8/optional-outages-postgres.gate.ts", name: "optional outage PostgreSQL qualification #252 AC03 recovers a terminal-work incident only after audited replacement completion and fences the old delivery" },

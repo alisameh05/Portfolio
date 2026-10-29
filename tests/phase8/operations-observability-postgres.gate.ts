@@ -474,7 +474,8 @@ describe("operations summary PostgreSQL qualification", () => {
         const skewId = uuid(skewMs < 0 ? 292_003 : 292_004) as StableId<"OperationsIncident">;
         const skewedAt = new Date(Date.now() + skewMs).toISOString();
         // Observed data can lag or lead the scheduler; only the database owns retry time.
-        await firstStore.upsert({ ...input, incidentId: skewId, scopeKey: skewId });
+        const skewInput = { ...input, incidentId: skewId, scopeKey: skewId, firstObservedAt: skewedAt, lastObservedAt: skewedAt };
+        await firstStore.upsert(skewInput);
         const dbBefore = (await freshAdmin.query("select clock_timestamp() as at")).rows[0].at as Date;
         const skewedService = createIncidentLifecycleService({ store: firstStore, sink: { async deliver() { throw new Error("ISOLATED_SINK_DOWN"); } } });
         expect(await skewedService.deliverDue(skewedAt)).toEqual({ attempted: 1, delivered: 0, failed: 1 });
@@ -483,6 +484,14 @@ describe("operations summary PostgreSQL qualification", () => {
         expect(next.getTime()).toBeGreaterThanOrEqual(dbBefore.getTime() + 30_000);
         expect(next.getTime()).toBeLessThanOrEqual(dbAfter.getTime() + 30_000);
         expect(await firstStore.claimDue(1, skewedAt)).toHaveLength(0);
+        const recoveredAt = new Date(Date.parse(skewedAt) + 1).toISOString();
+        expect(await firstStore.resolve(rule.key, skewId, recoveredAt)).toBe(true);
+        const reopenedAt = new Date(Date.parse(skewedAt) + 2).toISOString();
+        await firstStore.upsert({ ...skewInput, firstObservedAt: reopenedAt, lastObservedAt: reopenedAt });
+        const reopened = (await firstStore.claimDue(1, skewedAt))[0];
+        expect(reopened?.incidentId).toBe(skewId);
+        if (!reopened?.deliveryClaim) throw new Error("SKEWED_REOPEN_CLAIM_MISSING");
+        expect(await firstStore.markDelivered(reopened.deliveryClaim, skewedAt)).toBe(true);
       }
     } finally {
       releaseSink();
