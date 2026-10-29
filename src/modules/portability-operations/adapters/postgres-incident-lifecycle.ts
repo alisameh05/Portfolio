@@ -5,10 +5,11 @@ import type { DB } from "../../../shared/adapters/postgres/database.generated.js
 import { parseStableId } from "@shared/domain";
 import { PostgresInfrastructureError, postgresFailureCategory } from "../../../shared/adapters/postgres/runtime.js";
 import { isDeliverySafeIncidentInput, type DurableIncidentInput, type DurableIncidentRecord, type IncidentLifecycleStore } from "../application/incident-lifecycle.js";
-import { MAX_INCIDENT_DELIVERY_BATCH } from "../application/incident-lifecycle.js";
+import { MAX_INCIDENT_DELIVERY_BATCH, INCIDENT_DELIVERY_BACKOFF_SECONDS } from "../application/incident-lifecycle.js";
 import type { IncidentOwner } from "../application/incident-policy.js";
 
 interface IncidentRow {
+  measurement_is_lower_bound: boolean;
   environment: NonNullable<DurableIncidentInput["environment"]>;
   incident_id: string;
   first_observed_at: Date | string;
@@ -33,6 +34,7 @@ export function createPostgresIncidentLifecycleStore(database: Kysely<DB>): Inci
   const map = (input: DurableIncidentInput, row: IncidentRow): DurableIncidentRecord => ({
     ...input,
     environment: row.environment,
+    lowerBound: row.measurement_is_lower_bound,
     rule: { ...input.rule, threshold: row.threshold_value === null ? null : Number(row.threshold_value),
       unit: row.measurement_unit, windowSeconds: row.measurement_window_seconds },
     value: row.measured_value === null ? null : Number(row.measured_value),
@@ -72,10 +74,10 @@ export function createPostgresIncidentLifecycleStore(database: Kysely<DB>): Inci
         const result = await sql<IncidentRow>`
           insert into operations.incidents
             (incident_id, incident_key, environment, category, source_id, safe_error_code, severity, first_observed_at,
-             last_observed_at, occurrences, measured_value, threshold_value, measurement_unit, measurement_window_seconds,
+             last_observed_at, occurrences, measurement_is_lower_bound, measured_value, threshold_value, measurement_unit, measurement_window_seconds,
              owner_role, remediation_pointer, delivery_state, next_delivery_at)
           values (${input.incidentId}::uuid, ${incidentKey}, ${input.environment ?? "unknown"}, ${categoryForCode(input.rule.owner, input.rule.code)}, null, ${input.rule.code}, ${input.rule.severity},
-                  ${input.firstObservedAt}::timestamptz, ${input.lastObservedAt}::timestamptz, 1, ${input.value},
+                  ${input.firstObservedAt}::timestamptz, ${input.lastObservedAt}::timestamptz, 1, ${input.lowerBound ?? false}, ${input.value},
                   ${input.rule.threshold}, ${input.rule.unit}, ${input.rule.windowSeconds}, ${input.rule.owner},
                   ${input.rule.remediation}, 'pending', ${input.lastObservedAt}::timestamptz)
           on conflict (incident_key) do update set
@@ -85,6 +87,7 @@ export function createPostgresIncidentLifecycleStore(database: Kysely<DB>): Inci
             last_observed_at = greatest(operations.incidents.last_observed_at, excluded.last_observed_at),
             occurrences = case when operations.incidents.resolved_at is not null then 1 else operations.incidents.occurrences + 1 end,
             measured_value = excluded.measured_value,
+            measurement_is_lower_bound = excluded.measurement_is_lower_bound,
             threshold_value = excluded.threshold_value,
             measurement_unit = excluded.measurement_unit,
             measurement_window_seconds = excluded.measurement_window_seconds,
@@ -104,7 +107,7 @@ export function createPostgresIncidentLifecycleStore(database: Kysely<DB>): Inci
           returning environment, incident_id::text, first_observed_at, last_observed_at, occurrences, resolved_at,
                     owner_role, remediation_pointer, delivery_state, delivery_attempts,
                     delivery_lease_token, delivery_lease_generation, delivery_lease_expires_at,
-                    measured_value, threshold_value, measurement_unit, measurement_window_seconds
+                    measurement_is_lower_bound, measured_value, threshold_value, measurement_unit, measurement_window_seconds
         `.execute(executor);
         const row = result.rows[0];
         if (!row) {
@@ -113,7 +116,7 @@ export function createPostgresIncidentLifecycleStore(database: Kysely<DB>): Inci
           const current = await sql<IncidentRow>`select environment, incident_id::text, first_observed_at, last_observed_at,
             occurrences, resolved_at, owner_role, remediation_pointer, delivery_state, delivery_attempts,
             delivery_lease_token, delivery_lease_generation, delivery_lease_expires_at,
-            measured_value, threshold_value, measurement_unit, measurement_window_seconds
+            measurement_is_lower_bound, measured_value, threshold_value, measurement_unit, measurement_window_seconds
             from operations.incidents where incident_key=${incidentKey}`.execute(executor);
           if (!current.rows[0]) throw new PostgresInfrastructureError();
           return map(input, current.rows[0]);
@@ -154,7 +157,7 @@ export function createPostgresIncidentLifecycleStore(database: Kysely<DB>): Inci
             incident.first_observed_at, incident.last_observed_at, incident.occurrences, incident.resolved_at,
             incident.owner_role, incident.remediation_pointer, incident.delivery_state, incident.delivery_attempts,
             incident.delivery_lease_token, incident.delivery_lease_generation, incident.delivery_lease_expires_at,
-            incident.measured_value, incident.threshold_value, incident.measurement_unit, incident.measurement_window_seconds
+            incident.measurement_is_lower_bound, incident.measured_value, incident.threshold_value, incident.measurement_unit, incident.measurement_window_seconds
         `.execute(executor);
         return result.rows.flatMap((row) => {
           const rule = {
@@ -165,7 +168,7 @@ export function createPostgresIncidentLifecycleStore(database: Kysely<DB>): Inci
           };
           return [{
             incidentId: row.incident_id as StableId<"OperationsIncident">,
-            scopeKey: "redacted", environment: row.environment, rule, value: row.measured_value === null ? null : Number(row.measured_value),
+            lowerBound: row.measurement_is_lower_bound, scopeKey: "redacted", environment: row.environment, rule, value: row.measured_value === null ? null : Number(row.measured_value),
             firstObservedAt: instant(row.first_observed_at), lastObservedAt: instant(row.last_observed_at),
             occurrences: row.occurrences, state: "open" as const, deliveryState: row.delivery_state,
             deliveryAttempts: row.delivery_attempts, owner: row.owner_role, remediation: row.remediation_pointer,
@@ -188,12 +191,15 @@ export function createPostgresIncidentLifecycleStore(database: Kysely<DB>): Inci
       });
     },
     async markDeliveryFailed(claim, at, safeCode, nextAttemptAt) {
+      const retryDelayMs = nextAttemptAt === null ? null : Date.parse(nextAttemptAt) - Date.parse(at);
       if (!validClaim(claim) || !validInstant(at) || !/^[A-Z][A-Z0-9_]{0,63}$/u.test(safeCode) ||
-          (nextAttemptAt !== null && !validInstant(nextAttemptAt))) throw new TypeError("Incident delivery outcome is invalid.");
+          (nextAttemptAt !== null && (!validInstant(nextAttemptAt) || !Number.isSafeInteger(retryDelayMs) ||
+            !INCIDENT_DELIVERY_BACKOFF_SECONDS.some((seconds) => seconds * 1_000 === retryDelayMs)))) throw new TypeError("Incident delivery outcome is invalid.");
       return execute(async (executor) => {
         const result = await sql`update operations.incidents set
           delivery_state=case when ${nextAttemptAt === null} or delivery_attempts >= 8 then 'exhausted' else 'pending' end,
-          next_delivery_at=${nextAttemptAt}::timestamptz, delivery_error_code=${safeCode},
+          next_delivery_at=case when ${retryDelayMs}::integer is null then null
+            else clock_timestamp() + (${retryDelayMs}::integer * interval '1 millisecond') end, delivery_error_code=${safeCode},
           delivery_lease_token=null, delivery_lease_expires_at=null
           where incident_id=${claim.incidentId}::uuid and resolved_at is null and delivery_state='pending'
             and delivery_lease_token=${claim.token}::uuid and delivery_lease_generation=${claim.generation}
@@ -214,20 +220,37 @@ export function createPostgresIncidentLifecycleStore(database: Kysely<DB>): Inci
         return result.rows.length === 1;
       });
     },
+    async recoverWorkIncident(kind, sourceId) {
+      if ((kind !== "job" && kind !== "outbox") || !parseStableId(kind === "job" ? "Job" : "DomainEvent", sourceId).ok) {
+        throw new TypeError("Incident recovery target is invalid.");
+      }
+      return execute(async (executor) => {
+        const result = await sql`update operations.incidents set resolved_at=clock_timestamp(), recovery_recorded_at=clock_timestamp(),
+          delivery_state='not-required', next_delivery_at=null, delivery_lease_token=null, delivery_lease_expires_at=null
+          where incident_key=${`${kind}:${sourceId}`} and source_id=${sourceId}::uuid and resolved_at is null
+            and ((${kind === "job"} and (exists (select 1 from operations.jobs j where j.job_id=${sourceId}::uuid and j.status='completed' and not j.work_incomplete)
+              or exists (select 1 from operations.job_redrive_audit a join operations.jobs replacement on replacement.job_id=a.replacement_job_id
+                where a.original_job_id=${sourceId}::uuid and replacement.status='completed' and not replacement.work_incomplete)))
+              or (${kind === "outbox"} and exists (select 1 from operations.outbox_events e
+                where e.event_id=${sourceId}::uuid and e.completed_at is not null and e.dead_at is null)))
+          returning incident_id`.execute(executor);
+        return result.rows.length === 1;
+      });
+    },
     async listOpen(limit) {
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new TypeError("Incident inspection limit is invalid.");
       return execute(async (executor) => {
         const result = await sql<IncidentRow & { safe_error_code: string; severity: "warning" | "critical";
           measured_value: number | string | null; threshold_value: number | string | null; measurement_unit: string | null; measurement_window_seconds: number | null }>`
           select environment, safe_error_code, severity, first_observed_at, last_observed_at, occurrences, owner_role,
-            measured_value, threshold_value, measurement_unit, measurement_window_seconds,
+            measurement_is_lower_bound, measured_value, threshold_value, measurement_unit, measurement_window_seconds,
             remediation_pointer, delivery_state, delivery_attempts, incident_id::text, resolved_at
             from operations.incidents where resolved_at is null order by last_observed_at desc, incident_id limit ${limit}
         `.execute(executor);
         return result.rows.map((row) => ({ environment: row.environment, code: row.safe_error_code, severity: row.severity, owner: row.owner_role,
           remediation: row.remediation_pointer, firstObservedAt: instant(row.first_observed_at),
           lastObservedAt: instant(row.last_observed_at), occurrences: row.occurrences, deliveryState: row.delivery_state,
-          value: row.measured_value === null ? null : Number(row.measured_value),
+          value: row.measured_value === null ? null : Number(row.measured_value), lowerBound: row.measurement_is_lower_bound,
           threshold: row.threshold_value === null ? null : Number(row.threshold_value), unit: row.measurement_unit,
           windowSeconds: row.measurement_window_seconds }));
       });

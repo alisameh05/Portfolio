@@ -404,7 +404,15 @@ describe("operations summary PostgreSQL qualification", () => {
       expect(first.delivery).toMatchObject({ attempted: 1, delivered: 1, failed: 0 });
       expect(delivered).toEqual([expect.objectContaining({ code: "JOB_DEAD_WORK", owner: "operations",
         remediation: "runbook:operations/jobs", occurrences: 1 })]);
+      await freshAdmin.query(`insert into operations.jobs (job_id,job_type,payload_version,payload,available_at,status,attempt_count,last_error_code)
+        select ('0196a1b2-7c3d-7e11-9f22-' || lpad(to_hex(296000+i),12,'0'))::uuid,
+          'fixture.capped.v1',1,'{}'::jsonb,clock_timestamp(),'dead',8,'FIXTURE_DEAD' from generate_series(1,999) i`);
+      expect((await pass.run(scope)).openOrUpdated).toBe(1);
+      const capped = await incidentStore.listOpen(10);
+      expect(capped).toEqual([expect.objectContaining({ code: "JOB_DEAD_WORK", lowerBound: true, value: 1_000 })]);
+      expect(delivered).toHaveLength(1);
       await freshAdmin.query("update operations.jobs set status='completed', completed_at=clock_timestamp(), last_error_code=null where job_id=$1::uuid", [deadJob]);
+      await freshAdmin.query("update operations.jobs set status='completed', completed_at=clock_timestamp(), last_error_code=null where job_type='fixture.capped.v1'");
       const recovered = await pass.run(scope);
       expect(recovered.openOrUpdated).toBe(0);
       expect(delivered).toHaveLength(1);
@@ -413,6 +421,7 @@ describe("operations summary PostgreSQL qualification", () => {
         from operations.incidents where incident_key like 'jobs.dead_depth:%'`);
       expect(state.rows[0]).toEqual({ total: 1, resolved: 1, delivered: 0 });
     } finally {
+      await freshAdmin.query("delete from operations.jobs where job_type='fixture.capped.v1'");
       await freshAdmin.query("delete from operations.jobs where job_id=any($1::uuid[])", [[deadJob, completedJob, futureJob]]);
       await freshAdmin.query("delete from operations.incidents where incident_key like 'jobs.dead_depth:%'");
       await runtime.resource.close();
@@ -461,9 +470,23 @@ describe("operations summary PostgreSQL qualification", () => {
       expect(await firstStore.markDelivered(oldAttempt.deliveryClaim, at)).toBe(false);
       expect(await firstStore.markDeliveryFailed(oldAttempt.deliveryClaim, at, "INCIDENT_DELIVERY_FAILED", null)).toBe(false);
       expect(await secondStore.markDelivered(newAttempt.deliveryClaim, at)).toBe(true);
+      for (const skewMs of [-3_600_000, 3_600_000]) {
+        const skewId = uuid(skewMs < 0 ? 292_003 : 292_004) as StableId<"OperationsIncident">;
+        const skewedAt = new Date(Date.now() + skewMs).toISOString();
+        // Observed data can lag or lead the scheduler; only the database owns retry time.
+        await firstStore.upsert({ ...input, incidentId: skewId, scopeKey: skewId });
+        const dbBefore = (await freshAdmin.query("select clock_timestamp() as at")).rows[0].at as Date;
+        const skewedService = createIncidentLifecycleService({ store: firstStore, sink: { async deliver() { throw new Error("ISOLATED_SINK_DOWN"); } } });
+        expect(await skewedService.deliverDue(skewedAt)).toEqual({ attempted: 1, delivered: 0, failed: 1 });
+        const dbAfter = (await freshAdmin.query("select clock_timestamp() as at")).rows[0].at as Date;
+        const next = (await freshAdmin.query("select next_delivery_at from operations.incidents where incident_id=$1", [skewId])).rows[0].next_delivery_at as Date;
+        expect(next.getTime()).toBeGreaterThanOrEqual(dbBefore.getTime() + 30_000);
+        expect(next.getTime()).toBeLessThanOrEqual(dbAfter.getTime() + 30_000);
+        expect(await firstStore.claimDue(1, skewedAt)).toHaveLength(0);
+      }
     } finally {
       releaseSink();
-      await freshAdmin.query("delete from operations.incidents where incident_id=any($1::uuid[])", [[incidentId, uuid(292_002)]]);
+      await freshAdmin.query("delete from operations.incidents where incident_id=any($1::uuid[])", [[incidentId, uuid(292_002), uuid(292_003), uuid(292_004)]]);
       await firstRuntime.resource.close();
       await secondRuntime.resource.close();
     }

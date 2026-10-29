@@ -17,11 +17,13 @@ export type IncidentMeasurement = Readonly<{
   readonly key: string;
   readonly value: number | null;
   readonly state: "measured" | "unknown";
+  readonly lowerBound?: boolean;
 }>;
 
 export type IncidentDecision = Readonly<{
   readonly rule: IncidentRule;
   readonly value: number;
+  readonly lowerBound?: boolean;
 }>;
 
 /** Fixed, validated defaults. Additional sustained rules must be supplied by validated config. */
@@ -93,7 +95,7 @@ export function evaluateIncidentMeasurements(
       rule.key === "capacity.used_percent" || rule.key === "recovery.duration_ms"
       ? measurement.value > rule.threshold
       : measurement.value > 0;
-    return exceeded ? [{ rule, value: measurement.value }] : [];
+    return exceeded ? [{ rule, value: measurement.value, lowerBound: measurement.lowerBound ?? false }] : [];
   });
 }
 

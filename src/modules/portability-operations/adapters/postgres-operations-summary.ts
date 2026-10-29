@@ -269,7 +269,11 @@ export function createPostgresOperationsSummaryReader(database: Kysely<DB>): Ope
         throw new PostgresInfrastructureError();
       }
       try {
-        const result = await buildOperationsSummaryQuery(query).execute(database);
+          const result = await database.transaction().execute(async (transaction) => {
+            await sql`set local lock_timeout = '250ms'`.execute(transaction);
+            await sql`set local statement_timeout = '2s'`.execute(transaction);
+            return buildOperationsSummaryQuery(query).execute(transaction);
+          });
         const row = result.rows[0];
         if (!row) throw new PostgresInfrastructureError();
         const observedAt = toIso(row.observed_at);

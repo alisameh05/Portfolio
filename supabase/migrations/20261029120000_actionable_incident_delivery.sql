@@ -30,7 +30,8 @@ alter table operations.incidents
     check (delivery_error_code is null or delivery_error_code ~ '^[A-Z][A-Z0-9_]{0,63}$'),
   add column recovery_recorded_at timestamptz,
   add column environment text not null default 'unknown'
-    check (environment in ('unknown', 'local', 'test', 'staging', 'production'));
+    check (environment in ('unknown', 'local', 'test', 'staging', 'production')),
+  add column measurement_is_lower_bound boolean not null default false;
 
 alter table operations.incidents
   add constraint incidents_delivery_lease_pair_check check (
@@ -47,7 +48,7 @@ create index incidents_delivery_due_idx
   on operations.incidents (next_delivery_at, incident_id)
   where resolved_at is null and delivery_state = 'pending';
 
-grant update (first_observed_at, severity, environment, measured_value, threshold_value, measurement_unit, measurement_window_seconds,
+grant update (first_observed_at, severity, environment, measurement_is_lower_bound, measured_value, threshold_value, measurement_unit, measurement_window_seconds,
   owner_role, remediation_pointer, delivery_state, delivery_attempts,
   next_delivery_at, delivery_lease_token, delivery_lease_generation, delivery_lease_expires_at,
   delivery_error_code, recovery_recorded_at) on operations.incidents to shipwithali_worker;

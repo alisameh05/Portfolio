@@ -56,10 +56,11 @@ export interface IncidentLifecycleStore {
   markDelivered(claim: IncidentDeliveryClaim, at: string): Promise<boolean>;
   markDeliveryFailed(claim: IncidentDeliveryClaim, at: string, safeCode: string, nextAttemptAt: string | null): Promise<boolean>;
   resolve(ruleKey: string, scopeKey: string, at: string): Promise<boolean>;
+  recoverWorkIncident(kind: "job" | "outbox", sourceId: string): Promise<boolean>;
   listOpen(limit: number): Promise<readonly Readonly<{
     environment: IncidentEnvironment; code: string; severity: "warning" | "critical"; owner: string; remediation: string;
     firstObservedAt: string; lastObservedAt: string; occurrences: number; deliveryState: string;
-    value: number | null; threshold: number | null; unit: string | null; windowSeconds: number | null;
+    value: number | null; lowerBound: boolean; threshold: number | null; unit: string | null; windowSeconds: number | null;
   }>[]>;
 }
 
@@ -71,9 +72,11 @@ export function createIncidentLifecycleService(dependencies: {
   readonly deliveryBudgetMs?: number;
 }) {
   return {
-    async observe(inputs: readonly DurableIncidentInput[]): Promise<readonly DurableIncidentRecord[]> {
+    async observe(inputs: readonly DurableIncidentInput[], signal?: AbortSignal): Promise<readonly DurableIncidentRecord[]> {
+      if (inputs.length > 100) throw new TypeError("Incident observation batch is too large.");
       const result: DurableIncidentRecord[] = [];
-      for (const input of inputs.slice(0, 100)) {
+      for (const input of inputs) {
+        if (signal?.aborted) break;
         if (!parseStableId("OperationsIncident", input.incidentId).ok || !isDeliverySafeIncidentInput(input)) {
           throw new TypeError("Incident observation is invalid.");
         }
@@ -134,10 +137,19 @@ export function createIncidentLifecycleService(dependencies: {
     resolve(ruleKey: string, scopeKey: string, at: string): Promise<boolean> {
       return dependencies.store.resolve(ruleKey, scopeKey, at);
     },
+    async recoverWorkIncident(actor: Readonly<{ kind: string; jobId?: string; purpose: string }>,
+      kind: "job" | "outbox", sourceId: string): Promise<Result<boolean, Rejection>> {
+      if (actor.kind !== "system" || actor.purpose !== "operations.incident.recover" || !parseStableId("Job", actor.jobId ?? "").ok ||
+          !parseStableId(kind === "job" ? "Job" : "DomainEvent", sourceId).ok || (kind !== "job" && kind !== "outbox")) {
+        return err({ kind: "forbidden", code: "OPERATIONS_INCIDENT_RECOVERY_DENIED" });
+      }
+      try { return ok(await dependencies.store.recoverWorkIncident(kind, sourceId)); }
+      catch { return err({ kind: "temporarily_unavailable", code: "OPERATIONS_INCIDENT_RECOVERY_UNAVAILABLE" }); }
+    },
     async inspect(actor: Readonly<{ kind: string; jobId?: string; purpose: string }>, limit = 100): Promise<Result<readonly Readonly<{
       environment: IncidentEnvironment; code: string; severity: "warning" | "critical"; owner: string; remediation: string;
       firstObservedAt: string; lastObservedAt: string; occurrences: number; deliveryState: string;
-      value: number | null; threshold: number | null; unit: string | null; windowSeconds: number | null;
+      value: number | null; lowerBound: boolean; threshold: number | null; unit: string | null; windowSeconds: number | null;
     }>[], Rejection>> {
       if (actor.kind !== "system" || actor.purpose !== "operations.observability.read" || !parseStableId("Job", actor.jobId ?? "").ok ||
           !Number.isSafeInteger(limit) || limit < 1 || limit > 100) return err({ kind: "forbidden", code: "OPERATIONS_INCIDENT_ACCESS_DENIED" });
@@ -151,6 +163,7 @@ export function isDeliverySafeIncidentInput(input: DurableIncidentInput): boolea
   if (input === null || typeof input !== "object" || input.rule === null || typeof input.rule !== "object") return false;
   return typeof input.scopeKey === "string" && /^[a-zA-Z0-9._:-]{1,128}$/u.test(input.scopeKey) &&
     ["unknown", "local", "test", "staging", "production"].includes(input.environment ?? "unknown") &&
+    (input.lowerBound === undefined || typeof input.lowerBound === "boolean") &&
     typeof input.rule.key === "string" && /^[a-z][a-z0-9._-]{2,95}$/u.test(input.rule.key) &&
     typeof input.rule.code === "string" && /^[A-Z][A-Z0-9_]{1,63}$/u.test(input.rule.code) &&
     (input.rule.severity === "warning" || input.rule.severity === "critical") &&

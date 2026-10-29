@@ -246,12 +246,12 @@ test("the #252 incident migration binds added columns, checks, index, restricted
   const migration = PHASE_DECLARED_ADDITIVE_MIGRATIONS.find(row => row.migration === "20261029120000_actionable_incident_delivery.sql");
   assert.ok(migration);
   assert.equal(migration.migrationSha256, migrationSha256(readFileSync(join(ROOT, "supabase/migrations", migration.migration), "utf8")));
-  assert.equal(migration.operationsAdditions.length, 45);
+  assert.equal(migration.operationsAdditions.length, 47);
   const categories = Object.groupBy(migration.operationsAdditions, row => row.category);
-  assert.equal(categories.columns.length, 15);
+  assert.equal(categories.columns.length, 16);
   assert.equal(categories.constraints.length, 12);
   assert.equal(categories.indexes.length, 1);
-  assert.equal(categories.grants.length, 17);
+  assert.equal(categories.grants.length, 18);
   assert.ok(categories.columns.some(row => row.identity === "operations.incidents.measured_value" && row.expected.nullable === "YES"));
   assert.ok(categories.columns.some(row => row.identity === "operations.incidents.delivery_lease_generation" && row.expected.default === "0"));
   assert.ok(categories.constraints.some(row => row.identity === "operations.incidents.incidents_delivery_lease_pair_check"));

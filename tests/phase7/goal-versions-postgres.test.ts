@@ -1,3 +1,4 @@
+import { isolatedIdentityReadiness } from "../fixtures/identity-readiness.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { parseIdempotencyKey, parseStableId, type StableId } from "../../src/shared/domain/index.js";
@@ -98,7 +99,7 @@ beforeAll(async () => {
     on conflict (portfolio_id) do nothing`, [portfolioId, ownerId]);
   await admin.query("insert into content.items (content_id,portfolio_id,content_type,lifecycle,candidate_slug) values ($1,$2,'project','hidden',null)", [projectId, portfolioId]);
   await admin.query("insert into content.public_routes (route_identity,content_id,portfolio_id,content_type,current_slug,first_published_at) values ($1,$2,$3,'project','retained-goal-project',$4)", [routeId, projectId, portfolioId, now]);
-  await initializeDatabaseRuntime({ NODE_ENV: "test", APP_BASE_URL: "https://example.com", DATABASE_URL, PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId }, "application");
+  await initializeDatabaseRuntime({ NODE_ENV: "test", APP_BASE_URL: "https://example.com", DATABASE_URL, PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
   assembledService = (await getOwnerAnalyticsRuntimeServices()).service;
   service = makeService();
 }, 30_000);

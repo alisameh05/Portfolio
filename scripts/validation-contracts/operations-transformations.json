@@ -5,7 +5,7 @@
     "migrations": {
       "20261015120000_persist_consented_public_events.sql": "49a176f484fda2e0f067925501c609222308a1a776eecea06f13abbe591e73f6",
       "20261018172500_bound_job_retries_and_incidents.sql": "c63d813d82f4fab902fcfbfde78c667b95618b450e438f58d88aad103fe78b1e",
-      "20261029120000_actionable_incident_delivery.sql": "385403fb9811f267369c9e6d5ce8f112f9a82a95a34ecfb64d676a4b27e5b187",
+      "20261029120000_actionable_incident_delivery.sql": "9bb0b260a3831f9cd376f07deb707f38a447600458e491e0514573d92b3ebc9c",
       "20261023090000_reserve_owner_export_requests.sql": "43d9996f1d8c59c663c5c81842631248001ed8a6b551652e5a43acd22d6badd4"
     }
   },

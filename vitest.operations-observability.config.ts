@@ -7,6 +7,7 @@ export default defineConfig({
       "tests/phase8/actionable-incidents.test.ts",
       "tests/phase8/operations-observability-postgres.gate.ts",
       "tests/phase8/optional-outages-postgres.gate.ts",
+      "tests/phase8/incident-shutdown-postgres.gate.ts",
       "tests/phase8/operations-observability-runner.test.ts",
       "tests/phase8/operations-observability-retention-producer.test.ts",
       "tests/phase8/resumable-retention-passes.test.ts",

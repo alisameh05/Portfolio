@@ -586,14 +586,14 @@ describe.runIf(Boolean(url))("durable consented public-event ingestion", () => {
     const env = { NODE_ENV: "test", APP_BASE_URL: "https://example.com", DATABASE_URL: url!, PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId };
     try {
       resetRuntimeForTests();
-      const state = await initializeDatabaseRuntime(env, "application", () => ({ operations: runtimeOps, resource: runtime.resource, readiness: runtime.readiness, consent }));
+      const state = await initializeDatabaseRuntime(env, "application", () => ({ operations: runtimeOps, resource: runtime.resource, identityReadiness: { name: "isolated-test-identity", async check() { return true; } }, readiness: runtime.readiness, consent }));
       expect(state.runtimeKind).toBe("application");
       expect(getConsentApplicationService()).toBe(consent);
       expect(getMeasurementEventIngestionService()).toBeUndefined();
       const unavailable = await handlePostPublicEvent(request(evidence.token, pageEvent(routeId), "missing-event-service"), { scope, logger: createTestLogger() });
       expect(unavailable.status).toBe(503);
       resetRuntimeForTests();
-      await initializeDatabaseRuntime(env, "application", () => ({ operations: runtimeOps, resource: runtime.resource, readiness: runtime.readiness,
+      await initializeDatabaseRuntime(env, "application", () => ({ operations: runtimeOps, resource: runtime.resource, identityReadiness: { name: "isolated-test-identity", async check() { return true; } }, readiness: runtime.readiness,
         consent, eventIngestion: { scope, service } }));
       expect(getMeasurementEventIngestionService()?.service).toBe(service);
       const response = await handlePostPublicEvent(request(evidence.token, pageEvent(routeId), "assembled-event-service"), { logger: createTestLogger() });

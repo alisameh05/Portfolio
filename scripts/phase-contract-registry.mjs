@@ -294,7 +294,7 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
   }),
   Object.freeze({
     migration: "20261029120000_actionable_incident_delivery.sql",
-    migrationSha256: "385403fb9811f267369c9e6d5ce8f112f9a82a95a34ecfb64d676a4b27e5b187",
+    migrationSha256: "9bb0b260a3831f9cd376f07deb707f38a447600458e491e0514573d92b3ebc9c",
     ticket: 252, capability: "operations.incident_delivery", includeInDeclaredCapabilities: true,
     operationsAdditions: Object.freeze([
       ...[
@@ -313,6 +313,7 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
         ["delivery_error_code", 23, "text", "text", "YES", null],
         ["recovery_recorded_at", 24, "timestamp with time zone", "timestamptz", "YES", null],
         ["environment", 25, "text", "text", "NO", "'unknown'::text"],
+        ["measurement_is_lower_bound", 26, "boolean", "bool", "NO", "false"],
       ].map(([name, position, type, typeName, nullable, defaultValue]) => Object.freeze({
         category: "columns", identity: `operations.incidents.${name}`,
         expected: Object.freeze({ schema: "operations", tableName: "incidents", name, position, type,
@@ -336,7 +337,7 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
       Object.freeze({ category: "indexes", identity: "operations.incidents.incidents_delivery_due_idx",
         expected: Object.freeze({ schema: "operations", table: "incidents", name: "incidents_delivery_due_idx",
           definition: "CREATE INDEX incidents_delivery_due_idx ON operations.incidents USING btree (next_delivery_at, incident_id) WHERE ((resolved_at IS NULL) AND (delivery_state = 'pending'::text))" }) }),
-      ...["first_observed_at", "severity", "environment", "measured_value", "threshold_value", "measurement_unit", "measurement_window_seconds", "owner_role", "remediation_pointer",
+      ...["first_observed_at", "severity", "environment", "measurement_is_lower_bound", "measured_value", "threshold_value", "measurement_unit", "measurement_window_seconds", "owner_role", "remediation_pointer",
         "delivery_state", "delivery_attempts", "next_delivery_at", "delivery_lease_token", "delivery_lease_generation",
         "delivery_lease_expires_at", "delivery_error_code", "recovery_recorded_at"].map((column) => Object.freeze({
         // Match the established snapshot representation of column ACLs (internal char 'c').
@@ -347,7 +348,7 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
     ]),
     operationsAdditionsByEngine: Object.freeze({
       "17": Object.freeze([]),
-      "18": Object.freeze(["owner_role", "remediation_pointer", "delivery_state", "delivery_attempts", "delivery_lease_generation", "environment"]
+      "18": Object.freeze(["owner_role", "remediation_pointer", "delivery_state", "delivery_attempts", "delivery_lease_generation", "environment", "measurement_is_lower_bound"]
         .map((column) => Object.freeze({ category: "constraints", identity: `operations.incidents.incidents_${column}_not_null`,
           expected: Object.freeze({ schema: "operations", tableName: "incidents", name: `incidents_${column}_not_null`,
             type: "n", validated: true, definition: `NOT NULL ${column}` }) }))),

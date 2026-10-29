@@ -32,6 +32,8 @@ import { createCurrentCvDeliveryService } from "../../src/modules/cv-portfolio/a
 import { parseSafeErrorCode } from "../../src/modules/portability-operations/application/persistence.js";
 import { initializeDatabaseRuntime, resetRuntimeForTests } from "../../src/bootstrap/composition-root.js";
 import { getLifecycleCoordinator } from "../../src/runtime/lifecycle.js";
+import { createServer } from "node:http";
+import { createHash } from "node:crypto";
 
 const adminUrl = process.env["OPERATIONS_INCIDENT_SCENARIO_ADMIN_URL"];
 const applicationUrl = process.env["OPERATIONS_INCIDENT_SCENARIO_APPLICATION_URL"];
@@ -166,6 +168,7 @@ describe.runIf(Boolean(adminUrl && applicationUrl && workerUrl))("optional outag
     expect(summary.recovery.durationMs.state).toBe("unknown");
     const pointer = await admin.query("select current_version_id from cv_portfolio.portfolios where portfolio_id=$1", [scope.portfolioId]);
     expect(pointer.rows[0]?.current_version_id).toBe(registered.versionId);
+    await admin.query("update operations.incidents set next_delivery_at=clock_timestamp()+interval '1 day' where delivery_state='pending'");
   }, 30_000);
 
   it("#252 AC06 gates the assembled runtime on live database, configuration and identity while optional probes fail", async () => {
@@ -190,6 +193,71 @@ describe.runIf(Boolean(adminUrl && applicationUrl && workerUrl))("optional outag
       await expect(initializeDatabaseRuntime({ ...env, APP_BASE_URL: "invalid" }, "application", factory)).rejects.toThrow();
       expect((await readyz()).status).toBe(503);
     } finally { await db.resource.close(); resetRuntimeForTests(); }
+  }, 15_000);
+
+  it("#252 AC06 checks configured Auth health through standard assembly and fails closed on missing identity configuration", async () => {
+    let identityStatus = 200;
+    const server = createServer((request, response) => {
+      expect(request.method).toBe("GET");
+      expect(request.url).toBe("/auth/v1/health");
+      if (identityStatus === 0) return;
+      response.writeHead(identityStatus); response.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("ISOLATED_IDENTITY_ADDRESS_MISSING");
+    const base = `http://127.0.0.1:${address.port}`;
+    const scope = (await admin.query("select portfolio_id,owner_id from portfolio_config.settings limit 1")).rows[0];
+    const env = { NODE_ENV: "test", APP_BASE_URL: "http://localhost:3000", DATABASE_URL: applicationUrl!,
+      PORTFOLIO_ID: scope.portfolio_id as string, OWNER_ID: scope.owner_id as string, SUPABASE_URL: base,
+      SUPABASE_JWT_ISSUER: `${base}/auth/v1`, SUPABASE_JWT_AUDIENCE: "authenticated", OWNER_GITHUB_SUBJECTS: "synthetic-owner" };
+    const readyz = () => createCheckedReadyzResponse(getLifecycleCoordinator().getState(), () => getLifecycleCoordinator().checkReadiness());
+    try {
+      resetRuntimeForTests();
+      await initializeDatabaseRuntime(env, "application");
+      expect((await readyz()).status).toBe(200);
+      identityStatus = 503;
+      expect((await readyz()).status).toBe(503);
+      identityStatus = 0;
+      expect((await readyz()).status).toBe(503);
+      identityStatus = 200;
+      expect((await readyz()).status).toBe(200);
+      await getLifecycleCoordinator().shutdown(); resetRuntimeForTests();
+      await expect(initializeDatabaseRuntime({ ...env, SUPABASE_JWT_ISSUER: undefined }, "application")).rejects.toThrow();
+      expect((await readyz()).status).toBe(503);
+    } finally {
+      await getLifecycleCoordinator().shutdown(); resetRuntimeForTests();
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  }, 15_000);
+
+  it("#252 AC03 recovers a terminal-work incident only after audited replacement completion and fences the old delivery", async () => {
+    const operations = createPostgresOperationsPersistence(worker.database);
+    const original = createStableId("Job"), replacement = createStableId("Job");
+    const payload = { type: "fixture.incident-recovery.v1", version: 1, value: {} };
+    await operations.transactions.run((tx) => operations.jobs.enqueue(tx, { jobId: original, availableAt: new Date().toISOString(), payload }));
+    const [claim] = await operations.jobs.claimDue({ workerId: "incident-recovery", now: new Date().toISOString(), leaseDurationSeconds: 30, limit: 1, jobTypes: [payload.type] });
+    if (!claim) throw new Error("RECOVERY_JOB_CLAIM_MISSING");
+    expect(await operations.jobs.fail(original, claim.leaseToken, parseSafeErrorCode("ISOLATED_TERMINAL_FAILURE"))).toBe(true);
+    const store = createPostgresIncidentLifecycleStore(worker.database);
+    const service = createIncidentLifecycleService({ store, sink: { async deliver() { throw new Error("UNEXPECTED_DELIVERY"); } } });
+    const actor = { kind: "system", jobId: createStableId("Job"), purpose: "operations.incident.recover" };
+    expect(await service.recoverWorkIncident({ ...actor, kind: "owner" }, "job", original)).toMatchObject({ ok: false });
+    expect(await service.recoverWorkIncident(actor, "job", original)).toEqual({ ok: true, value: false });
+    const old = (await store.claimDue(1, new Date().toISOString()))[0]?.deliveryClaim;
+    if (!old) throw new Error("RECOVERY_INCIDENT_CLAIM_MISSING");
+    expect(await operations.jobs.redriveDead({ originalJobId: original, replacementJobId: replacement,
+      operatorScopeHash: "a".repeat(64), policyVersion: "incident-recovery-v1",
+      payloadSha256: createHash("sha256").update(JSON.stringify(payload)).digest("hex") })).not.toBeNull();
+    expect(await service.recoverWorkIncident(actor, "job", original)).toEqual({ ok: true, value: false });
+    const [retry] = await operations.jobs.claimDue({ workerId: "incident-recovery", now: new Date().toISOString(), leaseDurationSeconds: 30, limit: 1, jobTypes: [payload.type] });
+    if (!retry) throw new Error("RECOVERY_REPLACEMENT_CLAIM_MISSING");
+    expect(await operations.jobs.complete(replacement, retry.leaseToken, new Date().toISOString())).toBe(true);
+    expect(await service.recoverWorkIncident(actor, "job", original)).toEqual({ ok: true, value: true });
+    expect(await service.recoverWorkIncident(actor, "job", original)).toEqual({ ok: true, value: false });
+    expect(await store.markDelivered(old, new Date().toISOString())).toBe(false);
+    expect(await store.markDeliveryFailed(old, new Date().toISOString(), "INCIDENT_DELIVERY_FAILED", null)).toBe(false);
   }, 15_000);
 
   it("#252 AC04 AC08 exhausts eight real claims and stops before the next delivery on shutdown", async () => {

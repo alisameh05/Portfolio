@@ -5,9 +5,10 @@
  * Database-enabled application or worker composition additionally validates
  * DATABASE_URL through the composition root; the migration-only
  * DATABASE_DIRECT_URL is accepted solely by migration, generation, and
- * backup tooling and is never read here. Remaining Supabase, Auth, storage,
- * deployment, and testing secrets stay documented placeholders in
- * `.env.example` and are neither read nor required here.
+ * backup tooling and is never read here. Phase 8 application composition
+ * additionally validates Auth configuration through the identity adapter and
+ * registers its bounded health probe. Storage, deployment and provisioning
+ * inputs remain scoped to their owning adapters, outside this parser.
  *
  * Rules:
  * - Validation runs only when `createRuntimeConfig` is called from the

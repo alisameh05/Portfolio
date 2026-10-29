@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
+import { summaryMeasurements } from "../../src/modules/portability-operations/application/incident-pass.js";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
@@ -97,6 +98,10 @@ describe("Phase 8 operations observability", () => {
         objectSourceWatermarkAgeHours: { state: "unknown", reason: "producer-not-installed" }, state: { state: "unknown", reason: "producer-not-installed" } },
       recovery: { stage: { state: "unknown", reason: "producer-not-installed" }, durationMs: { state: "unknown", reason: "producer-not-installed" } },
     } });
+    if (result.ok) {
+      expect(summaryMeasurements({ ...result.value, jobs: { ...result.value.jobs, deadDepth: { value: 0, capped: true, sampleLimit: 1_000 } } }))
+        .toContainEqual({ key: "jobs.dead_depth", value: null, state: "unknown" });
+    }
     const failedMandatoryRead = createOperationsSummaryService({ reader: { async readOperationsSummary() { throw new Error("database unavailable"); } },
       clock: { now: () => observedAt } });
     expect(await failedMandatoryRead.readOperationsSummary({ actor: { kind: "system", jobId, purpose: OPERATIONS_SUMMARY_PURPOSE }, portfolioId }))
@@ -179,6 +184,8 @@ describe("Phase 8 operations observability", () => {
       }[] }[];
     };
     const signals = new Map(dashboard.signals.map((signal) => [signal["id"], signal]));
+      expect(signals.get("configured.sustained_rule")?.["query"]).toContain("complete current window");
+      expect(JSON.stringify(signals.get("configured.sustained_rule"))).not.toMatch(/80 percent|80%/iu);
     const required = ["http.request_count", "http.latency_ms", "http.status_class", "database.pool_used", "database.pool_limit",
       "database.transaction_failures", "database.rls_denials", "database.pool_failures", "outbox.eligible_depth", "outbox.oldest_eligible_age_seconds",
       "outbox.future_delayed_depth", "outbox.retry_depth", "outbox.dead_depth", "outbox.active_lease_depth", "outbox.expired_lease_depth",

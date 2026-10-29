@@ -1,13 +1,13 @@
 import type { StableId } from "@shared/domain";
 import type { OperationsSummary } from "./operations-observability.js";
-import { evaluateConfiguredSustainedRule, evaluateIncidentMeasurements, validateConfiguredIncidentRule,
+import { CORE_INCIDENT_RULES, evaluateConfiguredSustainedRule, evaluateIncidentMeasurements, validateConfiguredIncidentRule,
   type ConfiguredIncidentRule, type IncidentMeasurement } from "./incident-policy.js";
 import type { IncidentLifecycleStore, IncidentDeliverySink, IncidentEnvironment } from "./incident-lifecycle.js";
 import { createIncidentLifecycleService } from "./incident-lifecycle.js";
 
 /** A bounded system observation pass; providers remain behind the supplied summary reader and sink. */
 export function createOperationalIncidentPass(dependencies: {
-  readonly readSummary: () => Promise<OperationsSummary>;
+  readonly readSummary: (signal?: AbortSignal) => Promise<OperationsSummary>;
   readonly store: IncidentLifecycleStore;
   readonly sink: IncidentDeliverySink;
   readonly newIncidentId: () => StableId<"OperationsIncident">;
@@ -17,23 +17,33 @@ export function createOperationalIncidentPass(dependencies: {
   readonly readConfiguredSamples?: (rule: ConfiguredIncidentRule, summary: OperationsSummary) => Promise<readonly Readonly<{ value: number; observedAt: string }>[]>;
   readonly deliveryTimeoutMs?: number;
   readonly deliveryBudgetMs?: number;
+  readonly passBudgetMs?: number;
 }) {
+  const candidates = dependencies.configuredRules ?? [];
+  if (candidates.length + CORE_INCIDENT_RULES.length > 100) throw new TypeError("Incident rule configuration is invalid.");
+  const configuredRules = candidates.map(validateConfiguredIncidentRule);
+  const keys = new Set(CORE_INCIDENT_RULES.map((rule) => rule.key));
+  if (configuredRules.length + keys.size > 100 || configuredRules.some((rule) => {
+    if (rule === null || keys.has(rule.key)) return true;
+    keys.add(rule.key); return false;
+  })) throw new TypeError("Incident rule configuration is invalid.");
   const lifecycle = createIncidentLifecycleService({ store: dependencies.store, sink: dependencies.sink,
     ...(dependencies.deliveryTimeoutMs === undefined ? {} : { deliveryTimeoutMs: dependencies.deliveryTimeoutMs }),
     ...(dependencies.deliveryBudgetMs === undefined ? {} : { deliveryBudgetMs: dependencies.deliveryBudgetMs }) });
 
-  return {
-    async run(portfolioId: StableId<"Portfolio">, signal?: AbortSignal) {
-      if (signal?.aborted) return { stopped: true, openOrUpdated: 0, delivery: { attempted: 0, delivered: 0, failed: 0 } };
-      const summary = await dependencies.readSummary();
+  const stopped = () => ({ stopped: true, incomplete: true, openOrUpdated: null, delivery: null } as const);
+  async function execute(portfolioId: StableId<"Portfolio">, signal: AbortSignal) {
+      if (signal.aborted) return stopped();
+      const summary = await dependencies.readSummary(signal);
+      if (signal.aborted) return stopped();
       const environment = dependencies.environment ?? "unknown";
       const scopeKey = `${environment}:${portfolioId}`;
       const observedAt = summary.generatedAt;
       const measurements = summaryMeasurements(summary);
       const decisions = [...evaluateIncidentMeasurements(measurements)];
       const configuredMeasurements = new Map<string, "measured" | "unknown">();
-      for (const candidate of dependencies.configuredRules ?? []) {
-        const rule = validateConfiguredIncidentRule(candidate);
+      for (const rule of configuredRules) {
+        if (signal.aborted) return stopped();
         if (!rule || dependencies.readConfiguredSamples === undefined) continue;
         const result = evaluateConfiguredSustainedRule(rule, await dependencies.readConfiguredSamples(rule, summary), observedAt);
         configuredMeasurements.set(rule.key, result.state);
@@ -41,27 +51,47 @@ export function createOperationalIncidentPass(dependencies: {
       }
       const active = new Set(decisions.map(({ rule }) => rule.key));
       const inputs = decisions.map((decision) => ({ incidentId: dependencies.newIncidentId(), scopeKey, environment,
-        rule: decision.rule, value: decision.value, firstObservedAt: observedAt, lastObservedAt: observedAt }));
-      const observed = await lifecycle.observe(inputs);
+        rule: decision.rule, value: decision.value, lowerBound: decision.lowerBound ?? false, firstObservedAt: observedAt, lastObservedAt: observedAt }));
+      const observed = await lifecycle.observe(inputs, signal);
       for (const measurement of measurements) {
-        if (measurement.state === "measured" && !active.has(measurement.key)) {
+        if (signal.aborted) return stopped();
+        if (measurement.state === "measured" && !measurement.lowerBound && !active.has(measurement.key)) {
           await lifecycle.resolve(measurement.key, scopeKey, observedAt);
         }
       }
       for (const [key, state] of configuredMeasurements) {
+        if (signal.aborted) return stopped();
         if (state === "measured" && !active.has(key)) await lifecycle.resolve(key, scopeKey, observedAt);
       }
       const delivery = await lifecycle.deliverDue(dependencies.now(), signal);
-      return { observedAt, measurements: measurements.length, openOrUpdated: observed.length, delivery } as const;
+      return { stopped: signal.aborted, incomplete: signal.aborted, observedAt, measurements: measurements.length, openOrUpdated: observed.length, delivery } as const;
+  }
+  return {
+    async run(portfolioId: StableId<"Portfolio">, signal?: AbortSignal) {
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted) controller.abort();
+      const budget = Number.isSafeInteger(dependencies.passBudgetMs) && dependencies.passBudgetMs! >= 50 && dependencies.passBudgetMs! <= 30_000
+        ? dependencies.passBudgetMs! : 10_000;
+      const timer = setTimeout(abort, budget);
+      try {
+        if (controller.signal.aborted) return stopped();
+        return await Promise.race([execute(portfolioId, controller.signal), new Promise<ReturnType<typeof stopped>>((resolve) => {
+          if (controller.signal.aborted) { resolve(stopped()); return; }
+          controller.signal.addEventListener("abort", () => resolve(stopped()), { once: true });
+        })]);
+      } finally { clearTimeout(timer); signal?.removeEventListener("abort", abort); controller.abort(); }
     },
   };
 }
 
-/** Capped and incomplete summaries are unknown for incident creation and recovery. */
+/** Positive bounded samples prove failure; capped totals cannot certify recovery. */
 export function summaryMeasurements(summary: OperationsSummary): readonly IncidentMeasurement[] {
   const values: IncidentMeasurement[] = [];
   const count = (key: string, item: { value: number; capped: boolean }) => {
-    values.push(item.capped ? { key, value: null, state: "unknown" } : { key, value: item.value, state: "measured" });
+    values.push(item.capped && item.value <= 0 ? { key, value: null, state: "unknown" }
+      : { key, value: item.value, state: "measured", lowerBound: item.capped });
   };
   const age = summary.outbox.oldestEligibleAgeSeconds;
   values.push(age.state === "measured" && (age.value === null || Number.isFinite(age.value))

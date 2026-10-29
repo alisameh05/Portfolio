@@ -652,6 +652,7 @@ export interface OperationsIncidents {
   incident_key: string;
   last_observed_at: Generated<Timestamp>;
   measured_value: Numeric | null;
+  measurement_is_lower_bound: Generated<boolean>;
   measurement_unit: string | null;
   measurement_window_seconds: number | null;
   next_delivery_at: Generated<Timestamp | null>;

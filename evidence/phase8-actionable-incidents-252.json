@@ -1,15 +1,15 @@
 {
   "evidenceVersion": 1,
   "ticket": 252,
-  "runId": "7f69084b-8ef3-4eba-a864-42ce699012e3",
-  "startedAt": "2026-10-29T13:06:19.451Z",
-  "completedAt": "2026-10-29T13:07:14.394Z",
+  "runId": "79076e95-931d-40db-949e-ce23be256a8f",
+  "startedAt": "2026-10-29T13:40:23.501Z",
+  "completedAt": "2026-10-29T13:41:19.411Z",
   "repository": {
-    "head": "1f47d7ed18185e6df5c4e3d807a63ca469a2f1cd",
+    "head": "d745eab116eb4c271b07421128e7eb63c63e26e3",
     "branch": "t3/actionable-incident-readiness",
     "detached": false,
-    "sourceTreeSha256Before": "48dd93046335b82861ef363b0b009c87df8636a42b0f27a7b61c31f0394cecca",
-    "sourceTreeSha256After": "48dd93046335b82861ef363b0b009c87df8636a42b0f27a7b61c31f0394cecca"
+    "sourceTreeSha256Before": "cdea94c66e320ecd65d48af389f1c0d4e53dd6c137b6c0e2be5e361515a29a69",
+    "sourceTreeSha256After": "cdea94c66e320ecd65d48af389f1c0d4e53dd6c137b6c0e2be5e361515a29a69"
   },
   "tools": {
     "node": "v24.21.0",
@@ -35,6 +35,14 @@
     {
       "name": "operations_summary_predecessor",
       "status": "fresh replay through migration63; migration64 absent"
+    },
+    {
+      "name": "operations_incident_baseline",
+      "status": "historical Phase 3 operations preservation baseline"
+    },
+    {
+      "name": "operations_incident_scenario",
+      "status": "isolated current-source Scenario 15, identity, recovery and shutdown proofs"
     }
   ],
   "roles": [
@@ -301,11 +309,11 @@
     },
     {
       "name": "20261029120000_actionable_incident_delivery.sql",
-      "sha256": "385403fb9811f267369c9e6d5ce8f112f9a82a95a34ecfb64d676a4b27e5b187"
+      "sha256": "9bb0b260a3831f9cd376f07deb707f38a447600458e491e0514573d92b3ebc9c"
     }
   ],
   "volumes": {
-    "clusterBytesBeforeCleanup": 213234034,
+    "clusterBytesBeforeCleanup": 213774707,
     "clusterBytesAfterCleanup": 0
   },
   "checks": {
@@ -368,11 +376,12 @@
     "tests/phase8/operations-observability.test.ts",
     "tests/phase8/resumable-retention-passes.test.ts",
     "tests/runtime/owner-content-authoring.test.ts",
-    "tests/phase8/optional-outages-postgres.gate.ts"
+    "tests/phase8/optional-outages-postgres.gate.ts",
+    "tests/phase8/incident-shutdown-postgres.gate.ts"
   ],
   "testCounts": {
-    "total": 106,
-    "passed": 106,
+    "total": 110,
+    "passed": 110,
     "failed": 0,
     "skipped": 0,
     "todo": 0
@@ -545,6 +554,11 @@
     },
     {
       "name": "Phase 8 #252 actionable incident policy #252 AC04 bounds a never-settling isolated sink and persists the attempt as retryable",
+      "suite": "tests/phase8/actionable-incidents.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "Phase 8 #252 actionable incident policy #252 AC08 bounds summary collection and stops before observation on cancellation",
       "suite": "tests/phase8/actionable-incidents.test.ts",
       "status": "passed"
     },
@@ -774,6 +788,11 @@
       "status": "passed"
     },
     {
+      "name": "incident shutdown PostgreSQL qualification #252 AC08 interrupts a blocked summary before incident work and records real Linux SIGTERM separately",
+      "suite": "tests/phase8/incident-shutdown-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
       "name": "operations summary PostgreSQL qualification #252 AC01-03 composes real PostgreSQL dead work into one delivered incident and recovers it after completion",
       "suite": "tests/phase8/operations-observability-postgres.gate.ts",
       "status": "passed"
@@ -894,7 +913,17 @@
       "status": "passed"
     },
     {
+      "name": "optional outage PostgreSQL qualification #252 AC03 recovers a terminal-work incident only after audited replacement completion and fences the old delivery",
+      "suite": "tests/phase8/optional-outages-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
       "name": "optional outage PostgreSQL qualification #252 AC04 AC08 exhausts eight real claims and stops before the next delivery on shutdown",
+      "suite": "tests/phase8/optional-outages-postgres.gate.ts",
+      "status": "passed"
+    },
+    {
+      "name": "optional outage PostgreSQL qualification #252 AC06 checks configured Auth health through standard assembly and fails closed on missing identity configuration",
       "suite": "tests/phase8/optional-outages-postgres.gate.ts",
       "status": "passed"
     },
@@ -2586,6 +2615,11 @@
       "evidence": [
         {
           "kind": "test",
+          "suite": "tests/phase8/optional-outages-postgres.gate.ts",
+          "name": "optional outage PostgreSQL qualification #252 AC03 recovers a terminal-work incident only after audited replacement completion and fences the old delivery"
+        },
+        {
+          "kind": "test",
           "suite": "tests/phase8/operations-observability-postgres.gate.ts",
           "name": "operations summary PostgreSQL qualification #252 AC03-05 replays a persisted crash claim, retries an isolated failing sink, and resolves one deduplicated incident under worker RLS"
         },
@@ -2651,6 +2685,11 @@
       "evidence": [
         {
           "kind": "test",
+          "suite": "tests/phase8/optional-outages-postgres.gate.ts",
+          "name": "optional outage PostgreSQL qualification #252 AC06 checks configured Auth health through standard assembly and fails closed on missing identity configuration"
+        },
+        {
+          "kind": "test",
           "suite": "tests/phase8/operations-observability-postgres.gate.ts",
           "name": "operations summary PostgreSQL qualification #252 AC06 keeps actual PostgreSQL summary and core readiness through optional outages; required identity/config failures are unready"
         },
@@ -2676,6 +2715,22 @@
       "id": "AC08",
       "criterion": "Inspection and queue probes stay bounded and non-destructive; due-work keeps #249 graceful stop-claim behavior.",
       "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/actionable-incidents.test.ts",
+          "name": "Phase 8 #252 actionable incident policy #252 AC08 bounds summary collection and stops before observation on cancellation"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/incident-shutdown-postgres.gate.ts",
+          "name": "incident shutdown PostgreSQL qualification #252 AC08 interrupts a blocked summary before incident work and records real Linux SIGTERM separately"
+        },
+        {
+          "kind": "artifact",
+          "path": "incidentShutdownProof.boundedExit",
+          "check": "equals",
+          "value": true
+        },
         {
           "kind": "test",
           "suite": "tests/phase8/optional-outages-postgres.gate.ts",
@@ -2734,6 +2789,12 @@
       "id": "AC03",
       "criterion": "Duplicate observations update one durable incident and recovery resolves it once.",
       "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/optional-outages-postgres.gate.ts",
+          "name": "optional outage PostgreSQL qualification #252 AC03 recovers a terminal-work incident only after audited replacement completion and fences the old delivery",
+          "status": "passed"
+        },
         {
           "kind": "test",
           "suite": "tests/phase8/operations-observability-postgres.gate.ts",
@@ -2806,6 +2867,12 @@
       "evidence": [
         {
           "kind": "test",
+          "suite": "tests/phase8/optional-outages-postgres.gate.ts",
+          "name": "optional outage PostgreSQL qualification #252 AC06 checks configured Auth health through standard assembly and fails closed on missing identity configuration",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
           "suite": "tests/phase8/operations-observability-postgres.gate.ts",
           "name": "operations summary PostgreSQL qualification #252 AC06 keeps actual PostgreSQL summary and core readiness through optional outages; required identity/config failures are unready",
           "status": "passed"
@@ -2834,6 +2901,23 @@
       "id": "AC08",
       "criterion": "Inspection and queue probes stay bounded and non-destructive; due-work keeps #249 graceful stop-claim behavior.",
       "evidence": [
+        {
+          "kind": "test",
+          "suite": "tests/phase8/actionable-incidents.test.ts",
+          "name": "Phase 8 #252 actionable incident policy #252 AC08 bounds summary collection and stops before observation on cancellation",
+          "status": "passed"
+        },
+        {
+          "kind": "test",
+          "suite": "tests/phase8/incident-shutdown-postgres.gate.ts",
+          "name": "incident shutdown PostgreSQL qualification #252 AC08 interrupts a blocked summary before incident work and records real Linux SIGTERM separately",
+          "status": "passed"
+        },
+        {
+          "kind": "artifact",
+          "path": "incidentShutdownProof.boundedExit",
+          "status": "resolved"
+        },
         {
           "kind": "test",
           "suite": "tests/phase8/optional-outages-postgres.gate.ts",
@@ -2955,6 +3039,10 @@
       "definition": "CHECK (measured_value IS NULL OR measured_value >= 0::numeric)"
     },
     {
+      "name": "incidents_measurement_is_lower_bound_not_null",
+      "definition": "NOT NULL measurement_is_lower_bound"
+    },
+    {
       "name": "incidents_measurement_unit_check",
       "definition": "CHECK (measurement_unit IS NULL OR (measurement_unit = ANY (ARRAY['seconds'::text, 'milliseconds'::text, 'hours'::text, 'percent'::text, 'count'::text])))"
     },
@@ -3026,6 +3114,10 @@
       "message": "",
       "tests": [
         {
+          "name": "Phase 8 #252 actionable incident policy #252 AC08 bounds summary collection and stops before observation on cancellation",
+          "status": "passed"
+        },
+        {
           "name": "Phase 8 #252 actionable incident policy #252 AC01 evaluates strict queue-age, backup, RTO, dead-work, privacy, and capacity threshold boundaries",
           "status": "passed"
         },
@@ -3043,6 +3135,17 @@
         },
         {
           "name": "Phase 8 #252 actionable incident policy #252 AC04 bounds a never-settling isolated sink and persists the attempt as retryable",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "suite": "tests/phase8/incident-shutdown-postgres.gate.ts",
+      "status": "passed",
+      "message": "",
+      "tests": [
+        {
+          "name": "incident shutdown PostgreSQL qualification #252 AC08 interrupts a blocked summary before incident work and records real Linux SIGTERM separately",
           "status": "passed"
         }
       ]
@@ -3341,6 +3444,14 @@
           "status": "passed"
         },
         {
+          "name": "optional outage PostgreSQL qualification #252 AC06 checks configured Auth health through standard assembly and fails closed on missing identity configuration",
+          "status": "passed"
+        },
+        {
+          "name": "optional outage PostgreSQL qualification #252 AC03 recovers a terminal-work incident only after audited replacement completion and fences the old delivery",
+          "status": "passed"
+        },
+        {
           "name": "optional outage PostgreSQL qualification #252 AC04 AC08 exhausts eight real claims and stops before the next delivery on shutdown",
           "status": "passed"
         }
@@ -3500,5 +3611,12 @@
         }
       ]
     }
-  ]
+  ],
+  "incidentShutdownProof": {
+    "platform": "win32",
+    "mode": "abort-controller",
+    "blockedQueryObserved": true,
+    "noIncidentWork": true,
+    "boundedExit": true
+  }
 }

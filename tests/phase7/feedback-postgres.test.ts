@@ -1,3 +1,4 @@
+import { isolatedIdentityReadiness } from "../fixtures/identity-readiness.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { createStableId, parseIdempotencyKey, type StableId } from "../../src/shared/domain/index.js";
@@ -212,10 +213,10 @@ describe.runIf(Boolean(url))("real PostgreSQL private Feedback acceptance", () =
   it("standard Feedback assembly needs no functional/Measurement crypto and enforces configured rate controls", async () => {
     const projectId = await seed(), env = { NODE_ENV: "test", APP_BASE_URL: "https://example.com", DATABASE_URL: url!, PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId,
       FEEDBACK_RATE_LIMIT_MAX_REQUESTS: "1", FEEDBACK_RATE_LIMIT_WINDOW_SECONDS: "60", MEASUREMENT_ID_HASH_KEY: "invalid" };
-    resetRuntimeForTests(); await initializeDatabaseRuntime(env, "application"); const assembled = await getFeedbackRuntimeServices();
+    resetRuntimeForTests(); await initializeDatabaseRuntime(env, "application", undefined, { identityReadiness: isolatedIdentityReadiness }); const assembled = await getFeedbackRuntimeServices();
     expect((await http(projectId, undefined, key(), assembled)).status).toBe(201);
     const blocked = await http(projectId, undefined, key(), assembled); expect(blocked.status).toBe(429); expect(blocked.headers.get("retry-after")).toBeTruthy();
-    await getLifecycleCoordinator().shutdown(); resetRuntimeForTests(); await initializeDatabaseRuntime({ ...env, FEEDBACK_RATE_LIMIT_MAX_REQUESTS: "30" }, "application");
+    await getLifecycleCoordinator().shutdown(); resetRuntimeForTests(); await initializeDatabaseRuntime({ ...env, FEEDBACK_RATE_LIMIT_MAX_REQUESTS: "30" }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
     const failedDb = await getFeedbackRuntimeServices(); await getLifecycleCoordinator().shutdown(); expect((await http(projectId, undefined, key(), failedDb)).status).toBe(503); resetRuntimeForTests();
   });
   it("restricted worker claims a mixed Feedback and preexisting Media rejection batch without privacy regression", async () => {

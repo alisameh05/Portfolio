@@ -156,6 +156,7 @@ export const ACTIONABLE_INCIDENTS_ACCEPTANCE_EVIDENCE_PLAN = [
     { kind: "test", suite: "tests/phase8/actionable-incidents.test.ts", name: "Phase 8 #252 actionable incident policy #252 AC02 excludes completed and future-delayed work and treats missing sources as unknown" },
   ] },
   { id: "AC03", criterion: "Duplicate observations update one durable incident and recovery resolves it once.", evidence: [
+    { kind: "test", suite: "tests/phase8/optional-outages-postgres.gate.ts", name: "optional outage PostgreSQL qualification #252 AC03 recovers a terminal-work incident only after audited replacement completion and fences the old delivery" },
     { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 AC03-05 replays a persisted crash claim, retries an isolated failing sink, and resolves one deduplicated incident under worker RLS" },
     { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 AC01-03 composes real PostgreSQL dead work into one delivered incident and recovers it after completion" },
   ] },
@@ -171,6 +172,7 @@ export const ACTIONABLE_INCIDENTS_ACCEPTANCE_EVIDENCE_PLAN = [
     { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 AC03-05 replays a persisted crash claim, retries an isolated failing sink, and resolves one deduplicated incident under worker RLS" },
   ] },
   { id: "AC06", criterion: "Mandatory database/configuration/identity failures are unready; optional capability failures preserve core readiness and last-valid bounded queries.", evidence: [
+    { kind: "test", suite: "tests/phase8/optional-outages-postgres.gate.ts", name: "optional outage PostgreSQL qualification #252 AC06 checks configured Auth health through standard assembly and fails closed on missing identity configuration" },
     { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 AC06 keeps actual PostgreSQL summary and core readiness through optional outages; required identity/config failures are unready" },
     { kind: "test", suite: "tests/phase8/optional-outages-postgres.gate.ts", name: "optional outage PostgreSQL qualification #252 AC06 gates the assembled runtime on live database, configuration and identity while optional probes fail" },
   ] },
@@ -178,6 +180,9 @@ export const ACTIONABLE_INCIDENTS_ACCEPTANCE_EVIDENCE_PLAN = [
     { kind: "test", suite: "tests/phase8/optional-outages-postgres.gate.ts", name: "optional outage PostgreSQL qualification #252 AC07 Scenario 15 preserves published routes, Current CV, taxonomy and Moderation through optional outages" },
   ] },
   { id: "AC08", criterion: "Inspection and queue probes stay bounded and non-destructive; due-work keeps #249 graceful stop-claim behavior.", evidence: [
+    { kind: "test", suite: "tests/phase8/actionable-incidents.test.ts", name: "Phase 8 #252 actionable incident policy #252 AC08 bounds summary collection and stops before observation on cancellation" },
+    { kind: "test", suite: "tests/phase8/incident-shutdown-postgres.gate.ts", name: "incident shutdown PostgreSQL qualification #252 AC08 interrupts a blocked summary before incident work and records real Linux SIGTERM separately" },
+    { kind: "artifact", path: "incidentShutdownProof.boundedExit", check: "equals", value: true },
     { kind: "test", suite: "tests/phase8/optional-outages-postgres.gate.ts", name: "optional outage PostgreSQL qualification #252 AC04 AC08 exhausts eight real claims and stops before the next delivery on shutdown" },
     { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes" },
     { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 AC03-05 replays a persisted crash claim, retries an isolated failing sink, and resolves one deduplicated incident under worker RLS" },
@@ -637,6 +642,7 @@ async function runGate() {
   const pgLog = path.join(runRoot, "postgres.log");
   const testReport = path.join(runRoot, "vitest.json");
   const planPath = path.join(runRoot, "query-plan.json");
+  const shutdownPath = path.join(runRoot, "incident-shutdown.json");
   const evidence = {
     evidenceVersion: 1,
     ticket: incidentMode ? 252 : 251,
@@ -807,11 +813,14 @@ async function runGate() {
       OPERATIONS_SUMMARY_FRESH_WORKER_DATABASE_URL: freshWorkerUrl, OPERATIONS_SUMMARY_PLAN_PATH: planPath,
       OPERATIONS_INCIDENT_SCENARIO_ADMIN_URL: scenarioUrl,
       OPERATIONS_INCIDENT_SCENARIO_APPLICATION_URL: scenarioUrl.replace('postgres@', 'operations_summary_application_runtime@'),
-      OPERATIONS_INCIDENT_SCENARIO_WORKER_URL: scenarioUrl.replace('postgres@', 'operations_summary_worker_runtime@') };
+      OPERATIONS_INCIDENT_SCENARIO_WORKER_URL: scenarioUrl.replace('postgres@', 'operations_summary_worker_runtime@'),
+      OPERATIONS_INCIDENT_SHUTDOWN_PATH: shutdownPath };
     evidence.services = [{ name: "postgresql", status: "running", mode: "isolated disposable local cluster" },
       { name: "operations_summary_upgrade", status: "migrated predecessor, upgraded, rolled back, and forward-applied" },
       { name: "operations_summary_fresh", status: "fresh replay includes current migration" },
-      { name: "operations_summary_predecessor", status: "fresh replay through migration63; migration64 absent" }];
+      { name: "operations_summary_predecessor", status: "fresh replay through migration63; migration64 absent" },
+      { name: "operations_incident_baseline", status: "historical Phase 3 operations preservation baseline" },
+      { name: "operations_incident_scenario", status: "isolated current-source Scenario 15, identity, recovery and shutdown proofs" }];
     evidence.roles = ["operations_summary_worker_runtime -> shipwithali_worker", "operations_summary_application_runtime -> shipwithali_application",
       "shipwithali_migration (DDL only; no new product grants)"];
 
@@ -838,7 +847,7 @@ async function runGate() {
         const messages = test.failureMessages ?? [];
         const combined = messages.join("\n");
         const sourceLines = [...new Set(messages.flatMap((message) =>
-          [...message.matchAll(/(?:operations-observability|optional-outages)-postgres\.gate\.ts:(\d+):\d+/gu)].map((match) => Number(match[1]))))];
+          [...message.matchAll(/(?:operations-observability|optional-outages|incident-shutdown)-postgres\.gate\.ts:(\d+):\d+/gu)].map((match) => Number(match[1]))))];
         const comparison = combined.match(/expected (-?\d+) to be (-?\d+)/iu);
         const databaseCode = combined.match(/(?:code|SQLSTATE)\s*[:= ]\s*['"]?([0-9A-Z]{5})/iu)?.[1] ?? null;
         const kind = /PostgresInfrastructureError/u.test(combined) ? "postgres-infrastructure-error"
@@ -849,6 +858,9 @@ async function runGate() {
           ...(databaseCode ? { databaseCode } : {}) };
       }));
     if (existsSync(planPath)) evidence.queryPlan = JSON.parse(readFileSync(planPath, "utf8"));
+    if (existsSync(shutdownPath)) evidence.incidentShutdownProof = JSON.parse(readFileSync(shutdownPath, "utf8"));
+    if (!evidence.incidentShutdownProof?.boundedExit ||
+        (platform === "linux" && evidence.incidentShutdownProof.mode !== "os-sigterm")) throw fixedFailure("GATE_INCIDENT_SHUTDOWN_PROOF_MISSING");
     if (evidence.testInventory.some((test) => test.status !== "passed") || vitest.numFailedTests !== 0 ||
         (vitest.numPendingTests ?? 0) !== 0 || (vitest.numTodoTests ?? 0) !== 0 || evidence.testInventory.length === 0) {
       throw fixedFailure("GATE_TEST_STATUS_NOT_GREEN");

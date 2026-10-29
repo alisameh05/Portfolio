@@ -2,10 +2,37 @@ import { describe, expect, it, vi } from "vitest";
 import { evaluateIncidentMeasurements, evaluateConfiguredSustainedRule, validateConfiguredIncidentRule, CORE_INCIDENT_RULES } from "../../src/modules/portability-operations/application/incident-policy.js";
 import { createIncidentLifecycleService, INCIDENT_DELIVERY_BACKOFF_SECONDS, MAX_INCIDENT_DELIVERY_ATTEMPTS,
   type DurableIncidentInput, type DurableIncidentRecord, type IncidentLifecycleStore } from "../../src/modules/portability-operations/application/incident-lifecycle.js";
+import { createOperationalIncidentPass } from "../../src/modules/portability-operations/application/incident-pass.js";
+import type { StableId } from "../../src/shared/domain/index.js";
 
 const at = "2026-10-29T12:00:00.000Z";
 
 describe("Phase 8 #252 actionable incident policy", () => {
+  it("#252 AC08 bounds summary collection and stops before observation on cancellation", async () => {
+    const mutation = vi.fn(async () => { throw new Error("UNEXPECTED_INCIDENT_WRITE"); });
+    const store: IncidentLifecycleStore = { upsert: mutation, claimDue: mutation, markDelivered: mutation,
+      markDeliveryFailed: mutation, resolve: mutation, recoverWorkIncident: mutation, listOpen: mutation };
+    const sink = { deliver: mutation };
+    const pass = createOperationalIncidentPass({ store, sink, passBudgetMs: 50,
+      readSummary: () => new Promise<never>(() => undefined), now: () => at,
+      newIncidentId: () => "018b01f0-0000-7000-8000-000000000001" as StableId<"OperationsIncident"> });
+    const scope = "018b01f0-0000-7000-8000-000000000003" as StableId<"Portfolio">;
+    const shutdown = new AbortController();
+    const pending = pass.run(scope, shutdown.signal);
+    shutdown.abort();
+    expect(await pending).toMatchObject({ stopped: true, incomplete: true, openOrUpdated: null, delivery: null });
+    expect(await pass.run(scope)).toMatchObject({ stopped: true, incomplete: true });
+    const immediateShutdown = new AbortController();
+    const dependencies = { store, sink, passBudgetMs: 50, now: () => at,
+      newIncidentId: () => "018b01f0-0000-7000-8000-000000000001" as StableId<"OperationsIncident">,
+      readSummary: () => { immediateShutdown.abort(); return new Promise<never>(() => undefined); } };
+    expect(await createOperationalIncidentPass(dependencies).run(scope, immediateShutdown.signal)).toMatchObject({ stopped: true, incomplete: true });
+    const configured = { ...CORE_INCIDENT_RULES[0]!, key: "configured.rule", threshold: 1, windowSeconds: 60, sustained: true, minimumSamples: 2 };
+    expect(() => createOperationalIncidentPass({ ...dependencies, configuredRules: [configured, configured] })).toThrow("Incident rule configuration is invalid.");
+    expect(() => createOperationalIncidentPass({ ...dependencies, configuredRules: [{ ...configured, key: CORE_INCIDENT_RULES[0]!.key }] })).toThrow("Incident rule configuration is invalid.");
+    expect(() => createOperationalIncidentPass({ ...dependencies, configuredRules: Array(100).fill(configured) })).toThrow("Incident rule configuration is invalid.");
+    expect(mutation).not.toHaveBeenCalled();
+  });
   it("#252 AC01 evaluates strict queue-age, backup, RTO, dead-work, privacy, and capacity threshold boundaries", () => {
     for (const [key, threshold] of [["outbox.oldest_eligible_age_seconds", 900],
       ["backup.relational_source_watermark_age_hours", 24], ["backup.object_source_watermark_age_hours", 168],
@@ -123,6 +150,7 @@ describe("Phase 8 #252 actionable incident policy", () => {
       async markDeliveryFailed(_claim, _at, _code, nextAt) { record = { ...record, deliveryAttempts: attempts,
         deliveryState: nextAt === null ? "exhausted" : "pending" }; return true; },
       async resolve() { if (resolved) return false; resolved = true; record = { ...record, state: "resolved" }; return true; },
+      async recoverWorkIncident() { return false; },
       async listOpen() { return []; },
     };
     const sink = { async deliver() { throw new Error("provider payload marker must not be logged"); } };
@@ -158,6 +186,7 @@ describe("Phase 8 #252 actionable incident policy", () => {
       async markDelivered() { return false; },
       async markDeliveryFailed(_claim, _at, _code, nextAt) { failedNextAt = nextAt; return true; },
       async resolve() { return false; },
+      async recoverWorkIncident() { return false; },
       async listOpen() { return []; },
     };
     const service = createIncidentLifecycleService({ store, deliveryTimeoutMs: 50, deliveryBudgetMs: 100,

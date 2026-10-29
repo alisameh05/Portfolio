@@ -3,6 +3,7 @@ import { parseStableId, type StableId } from "../src/shared/domain/index.js";
 import { createOperationsSummaryService, OPERATIONS_SUMMARY_PURPOSE } from "../src/modules/portability-operations/application/operations-observability.js";
 import { createOperationalIncidentPass } from "../src/modules/portability-operations/application/index.js";
 import type { IncidentEnvironment } from "../src/modules/portability-operations/application/incident-lifecycle.js";
+import { createIncidentLifecycleService } from "../src/modules/portability-operations/application/incident-lifecycle.js";
 import { createPostgresOperationsSummaryReader } from "../src/modules/portability-operations/adapters/postgres-operations-summary.js";
 import { createPostgresIncidentLifecycleStore } from "../src/modules/portability-operations/adapters/postgres-incident-lifecycle.js";
 import { createPostgresRuntimeDatabase } from "../src/shared/adapters/postgres/runtime.js";
@@ -15,7 +16,10 @@ process.once("SIGTERM", requestStop);
 const databaseUrl = process.env["DATABASE_URL"];
 const sinkValue = process.env["OPERATIONS_INCIDENT_SINK_URL"];
 const args = process.argv.slice(2);
-const portfolioId = args.length === 2 && args[0] === "--portfolio-id" ? parseStableId("Portfolio", args[1] ?? "") : null;
+const recoveryKind = args[2] === "--recover-job-id" ? "job" : args[2] === "--recover-outbox-id" ? "outbox" : null;
+const recoveryId = recoveryKind === null ? null : parseStableId(recoveryKind === "job" ? "Job" : "DomainEvent", args[3] ?? "");
+const validArgs = args.length === 2 || (args.length === 4 && recoveryId?.ok);
+const portfolioId = validArgs && args[0] === "--portfolio-id" ? parseStableId("Portfolio", args[1] ?? "") : null;
 const jobId = parseStableId("Job", createSystemIdGenerator().generate("Job"));
 const sinkUrl = safeLoopbackSinkUrl(sinkValue);
 const environment = process.env["OPERATIONS_ENVIRONMENT"] ?? "unknown";
@@ -25,11 +29,18 @@ if (!databaseUrl || !sinkUrl || !portfolioId?.ok || !jobId.ok || shutdown.signal
   process.stderr.write("OPERATIONS_INCIDENTS_CONTEXT_INVALID\n");
   process.exitCode = 2;
 } else {
-  const database = createPostgresRuntimeDatabase(databaseUrl, { max: 1, connectionTimeoutMs: 2_000 });
+  const database = createPostgresRuntimeDatabase(databaseUrl, { max: 1, connectionTimeoutMs: 2_000,
+    runtimeObservationSink: (observation) => { try { process.stderr.write(`${JSON.stringify(observation)}\n`); } catch { /* best effort */ } } });
   try {
     const clock = createSystemClock();
     const summaries = createOperationsSummaryService({ reader: createPostgresOperationsSummaryReader(database.database), clock });
     const store = createPostgresIncidentLifecycleStore(database.database);
+    if (recoveryKind !== null && recoveryId?.ok) {
+      const service = createIncidentLifecycleService({ store, sink: { async deliver() { throw new Error("RECOVERY_CANNOT_DELIVER"); } } });
+      const recovered = await service.recoverWorkIncident({ kind: "system", purpose: "operations.incident.recover", jobId: jobId.value }, recoveryKind, recoveryId.value);
+      if (!recovered.ok) throw new Error(recovered.error.code);
+      process.stdout.write(`${JSON.stringify({ recovered: recovered.value })}\n`);
+    } else {
     const ids = createSystemIdGenerator();
     const pass = createOperationalIncidentPass({
       readSummary: async () => {
@@ -54,8 +65,11 @@ if (!databaseUrl || !sinkUrl || !portfolioId?.ok || !jobId.ok || shutdown.signal
       now: () => clock.now(), deliveryTimeoutMs: 2_000, deliveryBudgetMs: 10_000,
       environment: environment as IncidentEnvironment,
     });
+    process.stderr.write("OPERATIONS_INCIDENT_PASS_STARTED\n");
     const result = await pass.run(portfolioId.value, shutdown.signal);
     process.stdout.write(`${JSON.stringify(result)}\n`);
+    if (result.incomplete) process.exitCode = 2;
+    }
   } catch {
     process.stderr.write("OPERATIONS_INCIDENTS_UNAVAILABLE\n");
     process.exitCode = 1;

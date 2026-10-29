@@ -1,3 +1,4 @@
+import { isolatedIdentityReadiness } from "../fixtures/identity-readiness.js";
 import { spawn } from "node:child_process";
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -290,7 +291,7 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("protected due-work real Postgr
     let initialized = false;
     try {
       await initializeDatabaseRuntime({ NODE_ENV: "test", APP_BASE_URL: "https://portfolio.example.test",
-        DATABASE_URL: WORKER_URL!, PORTFOLIO_ID: scope, OWNER_ID: ownerId() }, "worker");
+        DATABASE_URL: WORKER_URL!, PORTFOLIO_ID: scope, OWNER_ID: ownerId() }, "worker", undefined, { identityReadiness: isolatedIdentityReadiness });
       initialized = true;
       const result = await getPhase7DueWorkWorkerService().runDueWork({ workerId: "phase8-composed-postgres-worker",
         maxClaimsPerPhase: 1, maxOwnerExportClaims: 0 });
