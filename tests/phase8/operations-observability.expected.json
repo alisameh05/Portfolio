@@ -1,11 +1,13 @@
 {
   "suites": [
     "tests/phase8/operations-observability-postgres.gate.ts",
+    "tests/phase8/actionable-incidents.test.ts",
     "tests/phase8/operations-observability-runner.test.ts",
     "tests/phase8/operations-observability-retention-producer.test.ts",
     "tests/phase8/operations-observability.test.ts",
     "tests/phase8/resumable-retention-passes.test.ts",
-    "tests/runtime/owner-content-authoring.test.ts"
+    "tests/runtime/owner-content-authoring.test.ts",
+    "tests/phase8/optional-outages-postgres.gate.ts"
   ],
   "tests": [
     "operations summary PostgreSQL qualification preserves measured null oldest age for empty and future-only queues and zero for newly eligible work",
@@ -100,6 +102,19 @@
     "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes",
     "operations summary PostgreSQL qualification records zero current pool occupancy after releasing a real PostgreSQL connection",
     "operations summary PostgreSQL qualification returns a usable nonnegative lease age when application time predates PostgreSQL acquisition",
-    "operations summary PostgreSQL qualification supports queue claim, reclaim, complete, retry, and Owner Export completion before and after migration64"
+    "operations summary PostgreSQL qualification supports queue claim, reclaim, complete, retry, and Owner Export completion before and after migration64",
+    "operations summary PostgreSQL qualification #252 AC03-05 replays a persisted crash claim, retries an isolated failing sink, and resolves one deduplicated incident under worker RLS",
+    "operations summary PostgreSQL qualification #252 AC01-03 composes real PostgreSQL dead work into one delivered incident and recovers it after completion",
+    "operations summary PostgreSQL qualification #252 AC06 keeps actual PostgreSQL summary and core readiness through optional outages; required identity/config failures are unready",
+    "operations summary PostgreSQL qualification #252 review P1 preserves a pending claim deadline during observation and fences stale delivery outcomes across reclaim",
+    "Phase 8 #252 actionable incident policy #252 AC01 evaluates strict queue-age, backup, RTO, dead-work, privacy, and capacity threshold boundaries",
+    "Phase 8 #252 actionable incident policy #252 AC02 excludes completed and future-delayed work and treats missing sources as unknown",
+    "Phase 8 #252 actionable incident policy #252 AC01 validates sustained rules and measures complete configured windows with owning role and units",
+    "Phase 8 #252 actionable incident policy #252 AC03-04 persists bounded delivery failures without recursive notifications and resolves recovery once",
+    "Phase 8 operations observability #252 AC06 preserves safe core reads while absent export and recovery producers remain unknown",
+    "Phase 8 #252 actionable incident policy #252 AC04 bounds a never-settling isolated sink and persists the attempt as retryable",
+    "optional outage PostgreSQL qualification #252 AC07 Scenario 15 preserves published routes, Current CV, taxonomy and Moderation through optional outages",
+    "optional outage PostgreSQL qualification #252 AC06 gates the assembled runtime on live database, configuration and identity while optional probes fail",
+    "optional outage PostgreSQL qualification #252 AC04 AC08 exhausts eight real claims and stops before the next delivery on shutdown"
   ]
 }

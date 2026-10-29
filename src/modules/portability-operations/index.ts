@@ -70,6 +70,9 @@ export {
   type SnapshotPageLimit,
 } from "./application/index.js";
 export { calculateJobRetryDelayMilliseconds, JOB_MAX_ATTEMPTS } from "./application/index.js";
+export { createOperationalIncidentPass, summaryMeasurements } from "./application/index.js";
+export { createOperationsReadiness } from "./application/index.js";
+export type { OptionalOperationsCapabilityProbe } from "./application/operations-readiness.js";
 export {
   applyGuardedOwnerExportTransition,
   canonicalizeOwnerExportScopes,
@@ -112,6 +115,11 @@ export { JOB_REDRIVE_POLICY_VERSION, parsePhase7WorkPayload, redriveDeadJob,
 export {
   createLoggerOperationsObservationPort,
   createOperationsSummaryService,
+  createIncidentLifecycleService,
+  CORE_INCIDENT_RULES,
+  evaluateIncidentMeasurements,
+  evaluateConfiguredSustainedRule,
+  validateConfiguredIncidentRule,
   emitOperationsSignal,
   OPERATIONS_SUMMARY_MAX_ROWS,
   OPERATIONS_SUMMARY_PURPOSE,
@@ -127,7 +135,17 @@ export {
   type OperationsValue,
   type UnknownValue,
   type OperationsSignalObservation,
+  type ConfiguredIncidentRule,
+  type IncidentDecision,
+  type IncidentMeasurement,
+  type IncidentOwner,
+  type IncidentRule,
+  type DurableIncidentInput,
+  type DurableIncidentRecord,
+  type IncidentDeliverySink,
+  type IncidentLifecycleStore,
 } from "./application/index.js";
+export { createPostgresIncidentLifecycleStore } from "./adapters/postgres-incident-lifecycle.js";
 
 export {
   parseSafeErrorCode,

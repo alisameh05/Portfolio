@@ -42,6 +42,7 @@ import type { ConsentApplicationService, MeasurementMediaPublicFactsPort, Measur
 import type { InteractionModerationService, FunctionalInteractionContextPort } from "../modules/interaction-moderation/index.js";
 import { createPhase7DueWorkWorker } from "./phase7-due-work-worker.js";
 import { isValidPhase8DueWorkBudget, phase8DueWorkBudgetFromEnvironment, type Phase8DueWorkBudget } from "../runtime/phase8-due-work-control.js";
+import { createOperationsReadiness, type OptionalOperationsCapabilityProbe } from "../modules/portability-operations/index.js";
 
 export interface ReactionRuntimeServices {
   readonly scope: { readonly kind: "portfolio"; readonly portfolioId: StableId<"Portfolio"> };
@@ -182,6 +183,10 @@ export interface DatabaseRuntimeDependencies {
   readonly publicConfiguration?: PortfolioSettingsApplicationService;
   readonly resource: LifecycleResource;
   readonly readiness: ReadinessCheck;
+  /** Required identity validation supplied by an assembled identity adapter. */
+  readonly identityReadiness?: ReadinessCheck;
+  /** Capability failures are reported separately and never gate safe core reads. */
+  readonly capabilityReadiness?: readonly OptionalOperationsCapabilityProbe[];
 }
 
 /**
@@ -953,9 +958,16 @@ export async function initializeDatabaseRuntime(
         };
       });
     const dependencies = await resolvedFactory();
+    const readiness = createOperationsReadiness({ required: [
+      { name: "configuration", async check() { createRuntimeConfig(env); return true; } },
+      { name: "identity", check: dependencies.identityReadiness?.check.bind(dependencies.identityReadiness) ??
+        (async () => factory !== undefined || (parseStableId("Portfolio", env["PORTFOLIO_ID"] ?? "").ok &&
+          parseStableId("Owner", env["OWNER_ID"] ?? "").ok)) },
+      { name: "database", check: () => dependencies.readiness.check() },
+    ], optional: dependencies.capabilityReadiness ?? [], timeoutMs: 2_000 });
     let ready = false;
     try {
-      ready = await dependencies.readiness.check();
+      ready = await readiness.check();
     } catch {
       ready = false;
     }
@@ -964,7 +976,7 @@ export async function initializeDatabaseRuntime(
       throw new Error("DATABASE_NOT_READY");
     }
     lifecycle.registerResource(dependencies.resource);
-    lifecycle.registerReadinessCheck(dependencies.readiness);
+    lifecycle.registerReadinessCheck({ name: "core", check: () => readiness.check() });
     current = config;
     currentOperations = dependencies.operations;
     currentOwnerExport = dependencies.ownerExport;

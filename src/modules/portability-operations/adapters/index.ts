@@ -4,3 +4,4 @@
  */
 export { createPostgresOwnerExportStore, EXPORT_STATUS_VALUES, type PostgresOwnerExportStoreOptions } from "./postgres-owner-export-store.js";
 export { buildOperationsSummaryQuery, createPostgresOperationsSummaryReader, explainOperationsSummaryQuery } from "./postgres-operations-summary.js";
+export { createPostgresIncidentLifecycleStore } from "./postgres-incident-lifecycle.js";

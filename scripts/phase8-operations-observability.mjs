@@ -8,11 +8,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
 import { REQUIRED_CACHE_TESTS, REQUIRED_REGRESSION_TESTS } from "./run-validation-evolution-tests.mjs";
+import { proveIncidentSchema } from "./phase8-incident-schema-proof.mjs";
 
 let Client;
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
-const EVIDENCE_PATH = path.join(ROOT, "evidence", "phase8-operations-observability-251.json");
+const directFlags = process.argv.slice(2);
+const incidentMode = directFlags.length === 1 && directFlags[0] === "--ticket-252";
+const invalidDirectFlags = directFlags.length > 0 && !incidentMode;
+const EVIDENCE_PATH = path.resolve(process.env.PHASE8_OPERATIONS_EVIDENCE_PATH ??
+  path.join(ROOT, "evidence", incidentMode ? "phase8-actionable-incidents-252.json" : "phase8-operations-observability-251.json"));
 const EXPECTED_TESTS_PATH = path.join(ROOT, "tests", "phase8", "operations-observability.expected.json");
 const MIGRATION = "20261027014402_operations_observability_summary_indexes.sql";
 const NEW_INDEXES = [
@@ -139,6 +144,44 @@ export const OPERATIONS_ACCEPTANCE_EVIDENCE_PLAN = [
     { kind: "test", suite: "tests/phase8/operations-observability.test.ts", name: "Phase 8 operations observability keeps export integrity unknown for absent, incomplete, malformed, capped or unavailable log windows and measures a complete zero" },
     { kind: "test", suite: "tests/phase8/operations-observability.test.ts", name: "Phase 8 operations observability queries actual terminal retention failures through a bounded system-wide query and summary" },
     { kind: "test", suite: "tests/phase8/operations-observability.test.ts", name: "Phase 8 operations observability evaluates relational and object backup RPOs from separate source watermarks and leaves absent producers unknown" },
+  ] },
+];
+
+export const ACTIONABLE_INCIDENTS_ACCEPTANCE_EVIDENCE_PLAN = [
+  { id: "AC01", criterion: "Threshold boundaries and validated sustained windows produce actionable incidents only after strict configured conditions.", evidence: [
+    { kind: "test", suite: "tests/phase8/actionable-incidents.test.ts", name: "Phase 8 #252 actionable incident policy #252 AC01 evaluates strict queue-age, backup, RTO, dead-work, privacy, and capacity threshold boundaries" },
+    { kind: "test", suite: "tests/phase8/actionable-incidents.test.ts", name: "Phase 8 #252 actionable incident policy #252 AC01 validates sustained rules and measures complete configured windows with owning role and units" },
+  ] },
+  { id: "AC02", criterion: "Completed/future-delayed work and absent or unknown measurements never create incidents.", evidence: [
+    { kind: "test", suite: "tests/phase8/actionable-incidents.test.ts", name: "Phase 8 #252 actionable incident policy #252 AC02 excludes completed and future-delayed work and treats missing sources as unknown" },
+  ] },
+  { id: "AC03", criterion: "Duplicate observations update one durable incident and recovery resolves it once.", evidence: [
+    { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 AC03-05 replays a persisted crash claim, retries an isolated failing sink, and resolves one deduplicated incident under worker RLS" },
+    { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 AC01-03 composes real PostgreSQL dead work into one delivered incident and recovers it after completion" },
+  ] },
+  { id: "AC04", criterion: "Failed delivery is durable, bounded, retryable, and cannot recursively notify.", evidence: [
+    { kind: "test", suite: "tests/phase8/actionable-incidents.test.ts", name: "Phase 8 #252 actionable incident policy #252 AC03-04 persists bounded delivery failures without recursive notifications and resolves recovery once" },
+    { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 AC03-05 replays a persisted crash claim, retries an isolated failing sink, and resolves one deduplicated incident under worker RLS" },
+    { kind: "test", suite: "tests/phase8/actionable-incidents.test.ts", name: "Phase 8 #252 actionable incident policy #252 AC04 bounds a never-settling isolated sink and persists the attempt as retryable" },
+    { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 review P1 preserves a pending claim deadline during observation and fences stale delivery outcomes across reclaim" },
+  ] },
+  { id: "AC05", criterion: "Only isolated sinks receive privacy-safe payloads and incident inspection requires restricted authorization.", evidence: [
+    { kind: "artifact", path: "incidentSchemaProof.missingWorkerGrantRejected", check: "equals", value: true },
+    { kind: "artifact", path: "incidentSchemaProof.missingAttemptBoundRejected", check: "equals", value: true },
+    { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 AC03-05 replays a persisted crash claim, retries an isolated failing sink, and resolves one deduplicated incident under worker RLS" },
+  ] },
+  { id: "AC06", criterion: "Mandatory database/configuration/identity failures are unready; optional capability failures preserve core readiness and last-valid bounded queries.", evidence: [
+    { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 AC06 keeps actual PostgreSQL summary and core readiness through optional outages; required identity/config failures are unready" },
+    { kind: "test", suite: "tests/phase8/optional-outages-postgres.gate.ts", name: "optional outage PostgreSQL qualification #252 AC06 gates the assembled runtime on live database, configuration and identity while optional probes fail" },
+  ] },
+  { id: "AC07", criterion: "Scenario 15 preserves publication, routes, Current CV, taxonomy, and Moderation through optional failures without fabricating export or recovery success.", evidence: [
+    { kind: "test", suite: "tests/phase8/optional-outages-postgres.gate.ts", name: "optional outage PostgreSQL qualification #252 AC07 Scenario 15 preserves published routes, Current CV, taxonomy and Moderation through optional outages" },
+  ] },
+  { id: "AC08", criterion: "Inspection and queue probes stay bounded and non-destructive; due-work keeps #249 graceful stop-claim behavior.", evidence: [
+    { kind: "test", suite: "tests/phase8/optional-outages-postgres.gate.ts", name: "optional outage PostgreSQL qualification #252 AC04 AC08 exhausts eight real claims and stops before the next delivery on shutdown" },
+    { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes" },
+    { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 AC03-05 replays a persisted crash claim, retries an isolated failing sink, and resolves one deduplicated incident under worker RLS" },
+    { kind: "test", suite: "tests/phase8/operations-observability-postgres.gate.ts", name: "operations summary PostgreSQL qualification #252 review P1 preserves a pending claim deadline during observation and fences stale delivery outcomes across reclaim" },
   ] },
 ];
 
@@ -596,7 +639,7 @@ async function runGate() {
   const planPath = path.join(runRoot, "query-plan.json");
   const evidence = {
     evidenceVersion: 1,
-    ticket: 251,
+    ticket: incidentMode ? 252 : 251,
     runId,
     startedAt,
     completedAt: null,
@@ -613,6 +656,8 @@ async function runGate() {
     testInventory: [], testFailureLocations: [], cli: { valid: null, rejectedInputs: [] }, queryPlan: null, migrationProof: null,
     acceptanceEvidencePlan: OPERATIONS_ACCEPTANCE_EVIDENCE_PLAN,
     acceptanceEvidenceResolved: [],
+    actionableIncidentsAcceptanceEvidencePlan: ACTIONABLE_INCIDENTS_ACCEPTANCE_EVIDENCE_PLAN,
+    actionableIncidentsAcceptanceEvidenceResolved: [],
     startup: { attempted: false, commandOutcome: "not-started" },
     cleanupDiagnostics: { stage: "pending", stopAttempted: false },
     cleanup: "pending", result: "failed", failureCode: null, failureStage: null,
@@ -681,25 +726,63 @@ async function runGate() {
     await client.query("create database operations_summary_upgrade");
     await client.query("create database operations_summary_fresh");
     await client.query("create database operations_summary_predecessor");
+    await client.query("create database operations_incident_scenario");
+    await client.query("create database operations_incident_baseline");
     await client.query("grant create on database operations_summary_upgrade to shipwithali_migration");
     await client.query("grant create on database operations_summary_fresh to shipwithali_migration");
     await client.query("grant create on database operations_summary_predecessor to shipwithali_migration");
+    await client.query("grant create on database operations_incident_scenario to shipwithali_migration");
+    await client.query("grant create on database operations_incident_baseline to shipwithali_migration");
 
     stage = "migration-upgrade";
     const migrationFiles = sourceMigrations();
     const migrationSql = readFileSync(path.join(ROOT, "supabase", "migrations", MIGRATION), "utf8");
     if (!migrationFiles.includes(MIGRATION)) throw fixedFailure("GATE_MIGRATION_SOURCE_MISSING");
-    const previous = migrationFiles.filter((name) => name !== MIGRATION);
+    // Build the exact pre-migration tree. Excluding only this file would apply
+    // later migrations first and make the upgrade proof chronologically false.
+    const previous = migrationFiles.filter((name) => name.localeCompare(MIGRATION) < 0);
     const upgradeUrl = `postgres://postgres@127.0.0.1:${port}/operations_summary_upgrade?sslmode=disable`;
     upgradeClient = new Client({ connectionString: upgradeUrl });
     await upgradeClient.connect();
     await applyMigrations(upgradeClient, previous);
     evidence.migrationProof = await proveMigration(upgradeClient, migrationSql);
+    // Restore the reviewed post-#251 source state, then apply only subsequent
+    // additions so #252 integration tests run against the complete current schema.
+    await applyMigrations(upgradeClient, migrationFiles.filter((name) => name.localeCompare(MIGRATION) > 0));
 
     const freshUrl = `postgres://postgres@127.0.0.1:${port}/operations_summary_fresh?sslmode=disable`;
     freshClient = new Client({ connectionString: freshUrl });
     await freshClient.connect();
     await applyMigrations(freshClient, migrationFiles);
+    stage = "incident-schema-preservation";
+    evidence.incidentConstraintDefinitions = (await freshClient.query(`select conname as name, pg_get_constraintdef(oid,true) as definition
+      from pg_constraint where conrelid='operations.incidents'::regclass order by conname`)).rows;
+    const baselineUrl = `postgres://postgres@127.0.0.1:${port}/operations_incident_baseline?sslmode=disable`;
+    const baselineClient = new Client({ connectionString: baselineUrl });
+    try {
+      await baselineClient.connect();
+      const baselineFiles = migrationFiles.slice(0, 3);
+      await applyMigrations(baselineClient, baselineFiles);
+      evidence.incidentSchemaProof = await proveIncidentSchema({ baselineUrl, currentUrl: freshUrl,
+        currentClient: freshClient, baselineClient, baselineFiles, currentFiles: migrationFiles });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown";
+      evidence.incidentSchemaFailure = { code: typeof error?.code === "string" ? error.code : "unknown",
+        message: /^[A-Za-z0-9_ .:/-]{1,500}$/u.test(message) ? message : "redacted",
+        paths: Array.isArray(error?.paths) ? error.paths : [] };
+      throw fixedFailure("GATE_INCIDENT_SCHEMA_PRESERVATION_FAILED");
+    } finally { await baselineClient.end(); }
+    const types = command(process.execPath, [path.join(ROOT, "node_modules/kysely-codegen/dist/cli/bin.js"),
+      "--dialect", "postgres", "--url", "env(INCIDENT_SCHEMA_URL)", "--default-schema",
+      "content,cv_portfolio,identity_access,media,operations,portfolio_config,taxonomy", "--include-pattern",
+      "{content,cv_portfolio,identity_access,media,operations,portfolio_config,taxonomy}.*", "--date-parser", "timestamp",
+      "--out-file", path.join(ROOT, "src/shared/adapters/postgres/database.generated.ts"), "--verify", "--log-level", "error"],
+    { env: { ...tempEnv, INCIDENT_SCHEMA_URL: freshUrl }, allowFailure: true });
+    if (types.status !== 0) { process.stderr.write(types.stderr); throw fixedFailure("GATE_INCIDENT_GENERATED_TYPE_DRIFT"); }
+    const scenarioUrl = `postgres://postgres@127.0.0.1:${port}/operations_incident_scenario?sslmode=disable`;
+    const scenarioClient = new Client({ connectionString: scenarioUrl });
+    try { await scenarioClient.connect(); await applyMigrations(scenarioClient, migrationFiles); }
+    finally { await scenarioClient.end(); }
     await verifyNewIndexCatalog(freshClient);
     const freshColumns = await columnFacts(freshClient);
     if (freshColumns.length !== 2) throw fixedFailure("GATE_FRESH_MIGRATION_COLUMN_MISMATCH");
@@ -721,7 +804,10 @@ async function runGate() {
       OPERATIONS_SUMMARY_ADMIN_DATABASE_URL: upgradeUrl, OPERATIONS_SUMMARY_WORKER_DATABASE_URL: workerUrl,
       OPERATIONS_SUMMARY_APPLICATION_DATABASE_URL: applicationUrl, OPERATIONS_SUMMARY_PREDECESSOR_ADMIN_DATABASE_URL: predecessorUrl,
       OPERATIONS_SUMMARY_PREDECESSOR_WORKER_DATABASE_URL: predecessorWorkerUrl, OPERATIONS_SUMMARY_FRESH_ADMIN_DATABASE_URL: freshUrl,
-      OPERATIONS_SUMMARY_FRESH_WORKER_DATABASE_URL: freshWorkerUrl, OPERATIONS_SUMMARY_PLAN_PATH: planPath };
+      OPERATIONS_SUMMARY_FRESH_WORKER_DATABASE_URL: freshWorkerUrl, OPERATIONS_SUMMARY_PLAN_PATH: planPath,
+      OPERATIONS_INCIDENT_SCENARIO_ADMIN_URL: scenarioUrl,
+      OPERATIONS_INCIDENT_SCENARIO_APPLICATION_URL: scenarioUrl.replace('postgres@', 'operations_summary_application_runtime@'),
+      OPERATIONS_INCIDENT_SCENARIO_WORKER_URL: scenarioUrl.replace('postgres@', 'operations_summary_worker_runtime@') };
     evidence.services = [{ name: "postgresql", status: "running", mode: "isolated disposable local cluster" },
       { name: "operations_summary_upgrade", status: "migrated predecessor, upgraded, rolled back, and forward-applied" },
       { name: "operations_summary_fresh", status: "fresh replay includes current migration" },
@@ -752,12 +838,13 @@ async function runGate() {
         const messages = test.failureMessages ?? [];
         const combined = messages.join("\n");
         const sourceLines = [...new Set(messages.flatMap((message) =>
-          [...message.matchAll(/operations-observability-postgres\.gate\.ts:(\d+):\d+/gu)].map((match) => Number(match[1]))))];
+          [...message.matchAll(/(?:operations-observability|optional-outages)-postgres\.gate\.ts:(\d+):\d+/gu)].map((match) => Number(match[1]))))];
         const comparison = combined.match(/expected (-?\d+) to be (-?\d+)/iu);
         const databaseCode = combined.match(/(?:code|SQLSTATE)\s*[:= ]\s*['"]?([0-9A-Z]{5})/iu)?.[1] ?? null;
         const kind = /PostgresInfrastructureError/u.test(combined) ? "postgres-infrastructure-error"
           : /AssertionError/u.test(combined) ? "assertion" : /Error:/u.test(combined) ? "runtime-error" : "unknown";
-        return { name: test.fullName, sourceLines, kind,
+        const safeCode = combined.match(/Error: ([A-Z][A-Z0-9_]{3,100})(?:\s|$)/u)?.[1];
+        return { name: test.fullName, sourceLines, kind, ...(safeCode ? { safeCode } : {}),
           ...(comparison ? { numericComparison: { expected: Number(comparison[2]), received: Number(comparison[1]) } } : {}),
           ...(databaseCode ? { databaseCode } : {}) };
       }));
@@ -875,6 +962,7 @@ async function runGate() {
   if (failureCode === null && evidence.result === "passed" && evidence.cleanup === "passed") {
     try {
       evidence.acceptanceEvidenceResolved = resolveAcceptanceEvidence(OPERATIONS_ACCEPTANCE_EVIDENCE_PLAN, evidence);
+      evidence.actionableIncidentsAcceptanceEvidenceResolved = resolveAcceptanceEvidence(ACTIONABLE_INCIDENTS_ACCEPTANCE_EVIDENCE_PLAN, evidence);
     } catch {
       failureCode = "GATE_ACCEPTANCE_EVIDENCE_UNRESOLVED";
       evidence.failureStage = "acceptance-evidence-resolution";
@@ -901,7 +989,12 @@ async function runGate() {
     process.stderr.write(`${failureCode}\n`);
     process.exitCode = 1;
   } else process.stdout.write(`${JSON.stringify({ result: "passed", runId, testCounts: evidence.testCounts,
-    migrationCount: evidence.migrations.length, cleanup: evidence.cleanup, evidence: "evidence/phase8-operations-observability-251.json" })}\n`);
+    migrationCount: evidence.migrations.length, cleanup: evidence.cleanup, evidence: path.relative(ROOT, EVIDENCE_PATH).replaceAll("\\", "/") })}\n`);
 }
 
-if (isDirectRun) await runGate();
+if (isDirectRun) {
+  if (invalidDirectFlags) {
+    process.stderr.write("PHASE8_OPERATIONS_ARGUMENTS_INVALID\n");
+    process.exitCode = 2;
+  } else await runGate();
+}

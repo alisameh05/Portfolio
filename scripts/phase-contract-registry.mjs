@@ -1,10 +1,10 @@
-// Shared declarative source of truth for Phase 3–8 database validation.
+// Shared declarative source of truth for Phase 3Ã¢â‚¬â€œ8 database validation.
 //
 // Every historical checkpoint, migration boundary, reviewed operations-contract
 // transformation, and paired database check is declared here. Historical gates
 // consume this registry instead of holding ticket-specific hard-coded
 // exceptions, so a future reviewed migration extends the contract through this
-// file — never by editing historical checkers. A migration without a reviewed
+// file Ã¢â‚¬â€ never by editing historical checkers. A migration without a reviewed
 // registry entry fails contract pairing before any expensive service startup.
 //
 // Registry rows are reviewed in pull requests: see
@@ -291,6 +291,67 @@ export const PHASE_DECLARED_ADDITIVE_MIGRATIONS = Object.freeze([
         identity: `portability.owner_exports.${name}`, expected: Object.freeze({ schema: "portability", table: "owner_exports", name,
           definition: `CREATE INDEX ${name} ON portability.owner_exports USING btree (portfolio_id, ${timestamp} DESC, export_id DESC)${include === null ? "" : ` INCLUDE (${include})`} WHERE ((status = '${status}'::text) AND (${timestamp} IS NOT NULL))` }) })),
     ]),
+  }),
+  Object.freeze({
+    migration: "20261029120000_actionable_incident_delivery.sql",
+    migrationSha256: "385403fb9811f267369c9e6d5ce8f112f9a82a95a34ecfb64d676a4b27e5b187",
+    ticket: 252, capability: "operations.incident_delivery", includeInDeclaredCapabilities: true,
+    operationsAdditions: Object.freeze([
+      ...[
+        ["measured_value", 11, "numeric", "numeric", "YES", null],
+        ["threshold_value", 12, "numeric", "numeric", "YES", null],
+        ["measurement_unit", 13, "text", "text", "YES", null],
+        ["measurement_window_seconds", 14, "integer", "int4", "YES", null],
+        ["owner_role", 15, "text", "text", "NO", "'operations'::text"],
+        ["remediation_pointer", 16, "text", "text", "NO", "'runbook:operations/general'::text"],
+        ["delivery_state", 17, "text", "text", "NO", "'pending'::text"],
+        ["delivery_attempts", 18, "smallint", "int2", "NO", "0"],
+        ["next_delivery_at", 19, "timestamp with time zone", "timestamptz", "YES", "clock_timestamp()"],
+        ["delivery_lease_token", 20, "uuid", "uuid", "YES", null],
+        ["delivery_lease_generation", 21, "bigint", "int8", "NO", "0"],
+        ["delivery_lease_expires_at", 22, "timestamp with time zone", "timestamptz", "YES", null],
+        ["delivery_error_code", 23, "text", "text", "YES", null],
+        ["recovery_recorded_at", 24, "timestamp with time zone", "timestamptz", "YES", null],
+        ["environment", 25, "text", "text", "NO", "'unknown'::text"],
+      ].map(([name, position, type, typeName, nullable, defaultValue]) => Object.freeze({
+        category: "columns", identity: `operations.incidents.${name}`,
+        expected: Object.freeze({ schema: "operations", tableName: "incidents", name, position, type,
+          typeSchema: "pg_catalog", typeName, nullable, default: defaultValue }),
+      })),
+      ...[
+        ["incidents_measured_value_check", "CHECK (measured_value IS NULL OR measured_value >= 0::numeric)"],
+        ["incidents_threshold_value_check", "CHECK (threshold_value IS NULL OR threshold_value >= 0::numeric)"],
+        ["incidents_measurement_unit_check", "CHECK (measurement_unit IS NULL OR (measurement_unit = ANY (ARRAY['seconds'::text, 'milliseconds'::text, 'hours'::text, 'percent'::text, 'count'::text])))"],
+        ["incidents_measurement_window_seconds_check", "CHECK (measurement_window_seconds IS NULL OR measurement_window_seconds >= 0 AND measurement_window_seconds <= 604800)"],
+        ["incidents_owner_role_check", "CHECK (owner_role = ANY (ARRAY['operations'::text, 'content'::text, 'measurement'::text, 'backup'::text, 'identity'::text]))"],
+        ["incidents_remediation_pointer_check", "CHECK (remediation_pointer ~ '^runbook:[a-z0-9/_-]{3,120}$'::text)"],
+        ["incidents_delivery_state_check", "CHECK (delivery_state = ANY (ARRAY['pending'::text, 'delivered'::text, 'exhausted'::text, 'not-required'::text]))"],
+        ["incidents_delivery_attempts_check", "CHECK (delivery_attempts >= 0 AND delivery_attempts <= 8)"],
+        ["incidents_environment_check", "CHECK (environment = ANY (ARRAY['unknown'::text, 'local'::text, 'test'::text, 'staging'::text, 'production'::text]))"],
+        ["incidents_delivery_error_code_check", "CHECK (delivery_error_code IS NULL OR delivery_error_code ~ '^[A-Z][A-Z0-9_]{0,63}$'::text)"],
+        ["incidents_delivery_lease_generation_check", "CHECK (delivery_lease_generation >= 0)"],
+        ["incidents_delivery_lease_pair_check", "CHECK (delivery_lease_token IS NULL AND delivery_lease_expires_at IS NULL OR delivery_lease_token IS NOT NULL AND delivery_lease_expires_at IS NOT NULL AND resolved_at IS NULL AND delivery_state = 'pending'::text)"],
+      ].map(([name, definition]) => Object.freeze({ category: "constraints", identity: `operations.incidents.${name}`,
+        expected: Object.freeze({ schema: "operations", tableName: "incidents", name, type: "c", validated: true, definition }) })),
+      Object.freeze({ category: "indexes", identity: "operations.incidents.incidents_delivery_due_idx",
+        expected: Object.freeze({ schema: "operations", table: "incidents", name: "incidents_delivery_due_idx",
+          definition: "CREATE INDEX incidents_delivery_due_idx ON operations.incidents USING btree (next_delivery_at, incident_id) WHERE ((resolved_at IS NULL) AND (delivery_state = 'pending'::text))" }) }),
+      ...["first_observed_at", "severity", "environment", "measured_value", "threshold_value", "measurement_unit", "measurement_window_seconds", "owner_role", "remediation_pointer",
+        "delivery_state", "delivery_attempts", "next_delivery_at", "delivery_lease_token", "delivery_lease_generation",
+        "delivery_lease_expires_at", "delivery_error_code", "recovery_recorded_at"].map((column) => Object.freeze({
+        // Match the established snapshot representation of column ACLs (internal char 'c').
+        category: "grants", identity: `operations.incidents.${column}.c.shipwithali_worker:shipwithali_migration:UPDATE`,
+        expected: Object.freeze({ schema: "operations", object: `incidents.${column}`, objectType: "c",
+          grantee: "shipwithali_worker", grantor: "shipwithali_migration", privilege: "UPDATE", grantable: false }),
+      })),
+    ]),
+    operationsAdditionsByEngine: Object.freeze({
+      "17": Object.freeze([]),
+      "18": Object.freeze(["owner_role", "remediation_pointer", "delivery_state", "delivery_attempts", "delivery_lease_generation", "environment"]
+        .map((column) => Object.freeze({ category: "constraints", identity: `operations.incidents.incidents_${column}_not_null`,
+          expected: Object.freeze({ schema: "operations", tableName: "incidents", name: `incidents_${column}_not_null`,
+            type: "n", validated: true, definition: `NOT NULL ${column}` }) }))),
+    }),
   }),
   Object.freeze({
     migration: "20261023100000_build_configuration_owner_exports.sql",

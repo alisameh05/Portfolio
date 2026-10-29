@@ -15,6 +15,11 @@ import { createOperationsSummaryService, OPERATIONS_SUMMARY_PURPOSE,
 import { buildOperationsSummaryQuery, createPostgresOperationsSummaryReader, explainOperationsSummaryQuery } from "../../src/modules/portability-operations/adapters/postgres-operations-summary.js";
 import { evaluateOperationsLogQuery, OPERATIONS_LOG_QUERIES } from "../../src/modules/portability-operations/application/operations-log-queries.js";
 import { supportsLeaseAcquiredAtColumn } from "../../src/modules/portability-operations/adapters/postgres-schema-capabilities.js";
+import { createPostgresIncidentLifecycleStore } from "../../src/modules/portability-operations/adapters/postgres-incident-lifecycle.js";
+import { createIncidentLifecycleService, type DurableIncidentInput } from "../../src/modules/portability-operations/application/incident-lifecycle.js";
+import { CORE_INCIDENT_RULES } from "../../src/modules/portability-operations/application/incident-policy.js";
+import { createOperationalIncidentPass } from "../../src/modules/portability-operations/application/incident-pass.js";
+import { createOperationsReadiness } from "../../src/modules/portability-operations/application/operations-readiness.js";
 import type { StableId } from "../../src/shared/domain/index.js";
 
 const adminUrl = process.env["OPERATIONS_SUMMARY_ADMIN_DATABASE_URL"];
@@ -314,6 +319,193 @@ describe("operations summary PostgreSQL qualification", () => {
     await predecessorAdmin?.end();
     await admin?.end();
   });
+
+  it("#252 AC03-05 replays a persisted crash claim, retries an isolated failing sink, and resolves one deduplicated incident under worker RLS", async () => {
+    const at = new Date().toISOString();
+    const incidentId = uuid(290_001) as StableId<"OperationsIncident">;
+    const scopeKey = `integration-${incidentId}`;
+    const rule = CORE_INCIDENT_RULES.find((candidate) => candidate.code === "OUTBOX_ELIGIBLE_AGE")!;
+    const input: DurableIncidentInput = { incidentId, scopeKey, rule, value: 901,
+      firstObservedAt: at, lastObservedAt: at };
+    const store = createPostgresIncidentLifecycleStore(worker.database);
+    const service = createIncidentLifecycleService({ store, sink: { async deliver(payload) {
+      expect(payload).toEqual({ environment: "unknown", code: rule.code, severity: rule.severity, owner: rule.owner, remediation: rule.remediation,
+        firstObservedAt: at, lastObservedAt: at, occurrences: 2 });
+      throw new Error("ISOLATED_SINK_FAILURE_PRIVATE_MARKER");
+    } } });
+    try {
+      await store.upsert(input);
+      const repeated = await store.upsert(input);
+      expect(repeated.occurrences).toBe(2);
+      expect(repeated.owner).toBe("operations");
+      expect(repeated.remediation).toMatch(/^runbook:/u);
+      expect((await service.inspect({ kind: "owner", jobId: uuid(290_002), purpose: "operations.observability.read" })).ok).toBe(false);
+      const inspection = await service.inspect({ kind: "system", jobId: uuid(290_002), purpose: "operations.observability.read" });
+      expect(inspection).toMatchObject({ ok: true, value: [{ code: rule.code, owner: "operations", remediation: rule.remediation }] });
+      expect(JSON.stringify(inspection)).not.toMatch(/incidentId|scopeKey|sourceId|PRIVATE|provider|payload/i);
+      const denied = createPostgresRuntimeDatabase(process.env["OPERATIONS_SUMMARY_APPLICATION_DATABASE_URL"]!);
+      try { await expect(createPostgresIncidentLifecycleStore(denied.database).listOpen(1)).rejects.toBeInstanceOf(PostgresInfrastructureError); }
+      finally { await denied.resource.close(); }
+      await admin.query("set role anon");
+      try { await expect(admin.query("select incident_key from operations.incidents limit 1")).rejects.toMatchObject({ code: "42501" }); }
+      finally { await admin.query("reset role"); }
+      const crashed = (await store.claimDue(1, at))[0];
+      expect(crashed?.deliveryClaim).toBeDefined(); // process interruption after durable claim
+      await admin.query("update operations.incidents set delivery_lease_expires_at=clock_timestamp()-interval '1 second' where incident_id=$1::uuid", [incidentId]);
+      expect(await service.deliverDue(at)).toEqual({ attempted: 1, delivered: 0, failed: 1 });
+      await admin.query("update operations.incidents set next_delivery_at=clock_timestamp()-interval '1 second' where incident_id=$1::uuid", [incidentId]);
+      expect(await service.deliverDue(at)).toEqual({ attempted: 1, delivered: 0, failed: 1 });
+      expect(await service.resolve(rule.key, scopeKey, new Date(Date.now() + 1_000).toISOString())).toBe(true);
+      expect(await service.resolve(rule.key, scopeKey, new Date(Date.now() + 2_000).toISOString())).toBe(false);
+      const stored = await admin.query(`select occurrences, owner_role, remediation_pointer, delivery_attempts, delivery_error_code,
+          delivery_state, resolved_at is not null as resolved, recovery_recorded_at is not null as recovery_recorded
+        from operations.incidents where incident_id=$1::uuid`, [incidentId]);
+      expect(stored.rows).toEqual([{ occurrences: 2, owner_role: "operations", remediation_pointer: rule.remediation,
+        delivery_attempts: 3, delivery_error_code: "INCIDENT_DELIVERY_FAILED", delivery_state: "not-required",
+        resolved: true, recovery_recorded: true }]);
+      expect(JSON.stringify(stored.rows)).not.toContain("ISOLATED_SINK_FAILURE_PRIVATE_MARKER");
+    } finally {
+      await admin.query("delete from operations.incidents where incident_id=$1::uuid", [incidentId]);
+    }
+  }, 30_000);
+
+  it("#252 AC01-03 composes real PostgreSQL dead work into one delivered incident and recovers it after completion", async () => {
+    const runtime = createPostgresRuntimeDatabase(freshWorkerUrl!, { max: 2 });
+    const scope = uuid(291_001) as StableId<"Portfolio">;
+    const deadJob = uuid(291_002);
+    const completedJob = uuid(291_003);
+    const futureJob = uuid(291_004);
+    const delivered: Array<Readonly<Record<string, unknown>>> = [];
+    const incidentStore = createPostgresIncidentLifecycleStore(runtime.database);
+    const summaryService = createOperationsSummaryService({
+      reader: createPostgresOperationsSummaryReader(runtime.database), clock: { now: () => new Date().toISOString() },
+    });
+    const pass = createOperationalIncidentPass({
+      readSummary: async () => {
+        const result = await summaryService.readOperationsSummary({ actor: { kind: "system",
+          jobId: uuid(291_005) as StableId<"Job">, purpose: OPERATIONS_SUMMARY_PURPOSE }, portfolioId: scope });
+        if (!result.ok) throw new Error("REAL_OPERATIONS_SUMMARY_UNAVAILABLE");
+        return result.value;
+      },
+      store: incidentStore,
+      sink: { async deliver(payload) { delivered.push(payload); } },
+      newIncidentId: (() => { let serial = 10; return () => uuid(291_100 + serial++) as StableId<"OperationsIncident">; })(),
+      now: () => new Date().toISOString(), deliveryTimeoutMs: 500, deliveryBudgetMs: 2_000,
+    });
+    try {
+      await freshAdmin.query(`insert into operations.jobs
+        (job_id,job_type,payload_version,payload,available_at,status,attempt_count,last_error_code,completed_at)
+        values ($1::uuid,'fixture.dead.v1',1,'{}'::jsonb,clock_timestamp(),'dead',8,'FIXTURE_DEAD',null),
+          ($2::uuid,'fixture.completed.v1',1,'{}'::jsonb,clock_timestamp(),'completed',1,null,clock_timestamp()),
+          ($3::uuid,'fixture.future.v1',1,'{}'::jsonb,clock_timestamp()+interval '1 day','available',0,null,null)`,
+      [deadJob, completedJob, futureJob]);
+      const first = await pass.run(scope);
+      expect(first.openOrUpdated).toBe(1);
+      expect(first.delivery).toMatchObject({ attempted: 1, delivered: 1, failed: 0 });
+      expect(delivered).toEqual([expect.objectContaining({ code: "JOB_DEAD_WORK", owner: "operations",
+        remediation: "runbook:operations/jobs", occurrences: 1 })]);
+      await freshAdmin.query("update operations.jobs set status='completed', completed_at=clock_timestamp(), last_error_code=null where job_id=$1::uuid", [deadJob]);
+      const recovered = await pass.run(scope);
+      expect(recovered.openOrUpdated).toBe(0);
+      expect(delivered).toHaveLength(1);
+      const state = await freshAdmin.query(`select count(*)::int as total, count(*) filter (where resolved_at is not null)::int as resolved,
+        count(*) filter (where delivery_state='delivered')::int as delivered
+        from operations.incidents where incident_key like 'jobs.dead_depth:%'`);
+      expect(state.rows[0]).toEqual({ total: 1, resolved: 1, delivered: 0 });
+    } finally {
+      await freshAdmin.query("delete from operations.jobs where job_id=any($1::uuid[])", [[deadJob, completedJob, futureJob]]);
+      await freshAdmin.query("delete from operations.incidents where incident_key like 'jobs.dead_depth:%'");
+      await runtime.resource.close();
+    }
+  }, 30_000);
+
+  it("#252 review P1 preserves a pending claim deadline during observation and fences stale delivery outcomes across reclaim", async () => {
+    const firstRuntime = createPostgresRuntimeDatabase(freshWorkerUrl!, { max: 1 });
+    const secondRuntime = createPostgresRuntimeDatabase(freshWorkerUrl!, { max: 1 });
+    const incidentId = uuid(292_001) as StableId<"OperationsIncident">;
+    const at = new Date().toISOString();
+    const rule = CORE_INCIDENT_RULES.find((candidate) => candidate.code === "OUTBOX_ELIGIBLE_AGE")!;
+    const input: DurableIncidentInput = { incidentId, scopeKey: `claim-fence-${incidentId}`, rule,
+      value: 901, firstObservedAt: at, lastObservedAt: at };
+    const firstStore = createPostgresIncidentLifecycleStore(firstRuntime.database);
+    const secondStore = createPostgresIncidentLifecycleStore(secondRuntime.database);
+    let signalSinkStarted!: () => void;
+    let releaseSink!: () => void;
+    const sinkStarted = new Promise<void>((resolve) => { signalSinkStarted = resolve; });
+    const sinkReleased = new Promise<void>((resolve) => { releaseSink = resolve; });
+    const service = createIncidentLifecycleService({ store: firstStore, deliveryTimeoutMs: 2_000, deliveryBudgetMs: 3_000,
+      sink: { async deliver() { signalSinkStarted(); await sinkReleased; } } });
+    try {
+      await firstStore.upsert(input);
+      const inFlight = service.deliverDue(at);
+      await sinkStarted;
+      const before = await freshAdmin.query(`select next_delivery_at, delivery_lease_token, delivery_lease_generation
+        from operations.incidents where incident_id=$1::uuid`, [incidentId]);
+      await secondStore.upsert({ ...input, lastObservedAt: new Date(Date.now() + 1).toISOString() });
+      const after = await freshAdmin.query(`select next_delivery_at, delivery_lease_token, delivery_lease_generation
+        from operations.incidents where incident_id=$1::uuid`, [incidentId]);
+      expect(after.rows).toEqual(before.rows);
+      expect(await secondStore.claimDue(1, at)).toHaveLength(0);
+      releaseSink();
+      await expect(inFlight).resolves.toMatchObject({ attempted: 1, delivered: 1, failed: 0 });
+
+      const reclaimId = uuid(292_002) as StableId<"OperationsIncident">;
+      const reclaimInput = { ...input, incidentId: reclaimId, scopeKey: `claim-fence-${reclaimId}` };
+      await firstStore.upsert(reclaimInput);
+      const oldAttempt = (await firstStore.claimDue(1, at))[0];
+      expect(oldAttempt?.deliveryClaim).toBeDefined();
+      await freshAdmin.query("update operations.incidents set delivery_lease_expires_at=clock_timestamp()-interval '1 second' where incident_id=$1::uuid", [reclaimId]);
+      const newAttempt = (await secondStore.claimDue(1, at))[0];
+      expect(newAttempt?.deliveryClaim?.generation).toBeGreaterThan(oldAttempt?.deliveryClaim?.generation ?? 0);
+      if (!oldAttempt?.deliveryClaim || !newAttempt?.deliveryClaim) throw new Error("INCIDENT_RECLAIM_CLAIM_MISSING");
+      expect(await firstStore.markDelivered(oldAttempt.deliveryClaim, at)).toBe(false);
+      expect(await firstStore.markDeliveryFailed(oldAttempt.deliveryClaim, at, "INCIDENT_DELIVERY_FAILED", null)).toBe(false);
+      expect(await secondStore.markDelivered(newAttempt.deliveryClaim, at)).toBe(true);
+    } finally {
+      releaseSink();
+      await freshAdmin.query("delete from operations.incidents where incident_id=any($1::uuid[])", [[incidentId, uuid(292_002)]]);
+      await firstRuntime.resource.close();
+      await secondRuntime.resource.close();
+    }
+  }, 30_000);
+
+  it("#252 AC06 keeps actual PostgreSQL summary and core readiness through optional outages; required identity/config failures are unready", async () => {
+    const runtime = createPostgresRuntimeDatabase(freshWorkerUrl!, { max: 1 });
+    try {
+      const readiness = createOperationsReadiness({ required: [
+        { name: "configuration", async check() { return true; } },
+        { name: "identity", async check() { return true; } },
+        { name: "database", check: () => runtime.readiness.check() },
+      ], optional: ["export", "storage", "alert", "measurement", "backup"].map((name) => ({
+        name: name as "export" | "storage" | "alert" | "measurement" | "backup", async check() { return false; },
+      })) });
+      await expect(readiness.read()).resolves.toEqual({ ready: true,
+        degradedCapabilities: ["export", "storage", "alert", "measurement", "backup"] });
+      const summaryService = createOperationsSummaryService({
+        reader: createPostgresOperationsSummaryReader(runtime.database),
+        integrityLogReader: { async readOwnerExportIntegrityWindow() { throw new Error("optional-export-log-down"); } },
+        retentionFailureLogReader: { async readRetentionFailureWindow() { throw new Error("optional-measurement-log-down"); } },
+        clock: { now: () => new Date().toISOString() },
+      });
+      const summary = await summaryService.readOperationsSummary({ actor: { kind: "system",
+        jobId: uuid(293_001) as StableId<"Job">, purpose: OPERATIONS_SUMMARY_PURPOSE }, portfolioId });
+      expect(summary.ok).toBe(true);
+      if (summary.ok) {
+        expect(summary.value.outbox.eligibleDepth).toEqual(expect.objectContaining({ value: expect.any(Number) }));
+        expect(summary.value.exports.integrityFailures).toMatchObject({ state: "unknown", reason: "incomplete-sample" });
+        expect(summary.value.retention.failures).toMatchObject({ state: "unknown", reason: "incomplete-sample" });
+        expect(JSON.stringify(summary.value)).not.toMatch(/optional-export-log-down|optional-measurement-log-down/iu);
+      }
+      const mandatoryFailure = createOperationsReadiness({ required: [
+        { name: "configuration", async check() { return true; } },
+        { name: "identity", async check() { return false; } },
+        { name: "database", check: () => runtime.readiness.check() },
+      ] });
+      await expect(mandatoryFailure.check()).resolves.toBe(false);
+      const missingMandatory = createOperationsReadiness({ required: [{ name: "database", check: () => runtime.readiness.check() }] });
+      await expect(missingMandatory.check()).resolves.toBe(false);
+    } finally { await runtime.resource.close(); }
+  }, 30_000);
 
   it("supports queue claim, reclaim, complete, retry, and Owner Export completion before and after migration64", async () => {
     const currentColumns = await admin.query(`select count(*)::int as count from information_schema.columns

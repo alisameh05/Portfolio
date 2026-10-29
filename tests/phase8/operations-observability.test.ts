@@ -87,6 +87,22 @@ const snapshot: OperationsSummarySnapshot = {
 };
 
 describe("Phase 8 operations observability", () => {
+  it("#252 AC06 preserves safe core reads while absent export and recovery producers remain unknown", async () => {
+    const service = createOperationsSummaryService({ reader: { async readOperationsSummary() { return snapshot; } },
+      clock: { now: () => observedAt } });
+    const result = await service.readOperationsSummary({ actor: { kind: "system", jobId, purpose: OPERATIONS_SUMMARY_PURPOSE }, portfolioId });
+    expect(result).toMatchObject({ ok: true, value: {
+      portfolio: { scope: "one-authorized-portfolio" },
+      backup: { relationalSourceWatermarkAgeHours: { state: "unknown", reason: "producer-not-installed" },
+        objectSourceWatermarkAgeHours: { state: "unknown", reason: "producer-not-installed" }, state: { state: "unknown", reason: "producer-not-installed" } },
+      recovery: { stage: { state: "unknown", reason: "producer-not-installed" }, durationMs: { state: "unknown", reason: "producer-not-installed" } },
+    } });
+    const failedMandatoryRead = createOperationsSummaryService({ reader: { async readOperationsSummary() { throw new Error("database unavailable"); } },
+      clock: { now: () => observedAt } });
+    expect(await failedMandatoryRead.readOperationsSummary({ actor: { kind: "system", jobId, purpose: OPERATIONS_SUMMARY_PURPOSE }, portfolioId }))
+      .toMatchObject({ ok: false, error: { kind: "temporarily_unavailable", code: "OPERATIONS_SUMMARY_UNAVAILABLE" } });
+  });
+
   it("requires the fixed system purpose and returns durable zero, watermark, and explicit unknown values", async () => {
     const reader = { readOperationsSummary: vi.fn(async () => snapshot) };
     const retentionQueries: RetentionFailureLogWindowQuery[] = [];
@@ -207,7 +223,8 @@ describe("Phase 8 operations observability", () => {
     expect(alerts.get("dead-work")?.condition).toBe("outbox.dead_depth > 0 or jobs.dead_depth > 0");
     expect(alerts.get("publication-failure")?.condition).toBe("publication.safe_failures > 0");
     expect([...alerts.keys()]).toEqual(["outbox-oldest-eligible", "dead-work", "retention-withdrawal", "publication-failure",
-      "relational-backup-age", "object-backup-age", "recovery-rto", "capacity"]);
+      "relational-backup-age", "object-backup-age", "recovery-rto", "capacity", "incident-delivery-exhausted",
+      "configured-sustained-thresholds"]);
     for (const alert of dashboard.alerts) {
       const declared = alert.metricInputs.map((input) => input.metricId);
       expect(new Set(declared).size, alert.id).toBe(declared.length);
@@ -220,6 +237,10 @@ describe("Phase 8 operations observability", () => {
           expect(signal?.["query"], `${alert.id}:${input.metricId}`).toBeTruthy();
           expect(signal?.["bounds"], `${alert.id}:${input.metricId}`).toEqual(expect.any(String));
           expect(signal?.["unknown"], `${alert.id}:${input.metricId}`).toEqual(expect.any(String));
+        } else if (input.sourceState === "durable-database") {
+          expect(input.metricId).toBe("operations.incidents.delivery_state");
+        } else if (input.sourceState === "configured-and-measured") {
+          expect(input.metricId).toBe("configured.sustained_rule");
         } else {
           expect(input.sourceState).toBe("uninstalled");
           expect(["#253", "#254", "#255"]).toContain(input.ownerIssue);
