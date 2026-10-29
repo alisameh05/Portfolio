@@ -1,11 +1,11 @@
 {
   "evidenceVersion": 1,
   "ticket": 252,
-  "runId": "79076e95-931d-40db-949e-ce23be256a8f",
-  "startedAt": "2026-10-29T13:40:23.501Z",
-  "completedAt": "2026-10-29T13:41:19.411Z",
+  "runId": "bfbe2a78-61c6-4372-86b5-c9f8bba26c58",
+  "startedAt": "2026-10-29T13:44:00.402Z",
+  "completedAt": "2026-10-29T13:45:05.046Z",
   "repository": {
-    "head": "d745eab116eb4c271b07421128e7eb63c63e26e3",
+    "head": "54ed7f70b6570e9ea1638be6d8ca26b0b07f7574",
     "branch": "t3/actionable-incident-readiness",
     "detached": false,
     "sourceTreeSha256Before": "cdea94c66e320ecd65d48af389f1c0d4e53dd6c137b6c0e2be5e361515a29a69",
