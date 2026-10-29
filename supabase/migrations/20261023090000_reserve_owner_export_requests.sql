@@ -114,4 +114,28 @@ create policy owner_export_jobs_application_insert on operations.jobs
 
 grant insert on operations.jobs to shipwithali_application;
 
+-- The restricted assembly worker completes Owner exports by slicing readiness
+-- inside its own atomic transaction, so the shared outbox accepts exactly the
+-- module-produced event whose payload identity equals its own aggregate and
+-- manifest. Every other event type — including probe or foreign-module types
+-- that already flow through the application or outbox-claim paths — stays
+-- denied for the worker append: the narrow policy and the narrow grant keep
+-- the restricted role from writing anything beyond its module-owned slice.
+grant insert on operations.outbox_events to shipwithali_worker;
+
+create policy owner_export_outbox_worker_insert on operations.outbox_events
+  for insert to shipwithali_worker
+  with check (
+    event_type = 'portability.export_produced.v1'
+    and schema_version = 1
+    and aggregate_id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    and jsonb_typeof(payload) = 'object'
+    and (select cast(count(*) as integer) = 2 from jsonb_object_keys(payload))
+    and payload ?& array['exportId', 'manifest']
+    and payload->>'exportId' = aggregate_id::text
+    and jsonb_typeof(payload->'manifest') = 'object'
+    and payload->'manifest' ?& array['schemaVersion', 'exportId', 'checksumSha256', 'recordCounts']
+    and payload->'manifest'->>'exportId' = aggregate_id::text
+  );
+
 reset role;

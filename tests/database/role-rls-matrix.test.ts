@@ -121,6 +121,55 @@ const OWNER_EXPORT_JOB_POLICIES: ReadonlyArray<readonly [string, string, string,
   ["jobs", "owner_export_jobs_application_insert", "INSERT", "{shipwithali_application}"],
 ];
 
+/** The module-scoped worker append policy reviewed for #238 in operations.outbox_events. */
+const OWNER_EXPORT_OUTBOX_POLICIES: ReadonlyArray<readonly [string, string, string, string]> = [
+  ["outbox_events", "owner_export_outbox_worker_insert", "INSERT", "{shipwithali_worker}"],
+];
+
+/**
+ * The produced ready-slice event shape only the restricted assembly worker may
+ * append from its own atomic transition transaction: the payload identity
+ * equals its own aggregate, and the manifest carries the declared slice
+ * identity. Employed as the #238 worker append matrix below — probe and
+ * foreign-module event types stay denied for the worker (base matrix).
+ */
+const PORTABILITY_EXPORT_OUTBOX_AGREGGATE = "018f4f7d-5000-7000-8000-000000000185";
+
+const PORTABILITY_EXPORT_OUTBOX_APPEND = `insert into operations.outbox_events (
+  event_id, event_type, schema_version, aggregate_id, aggregate_version, payload,
+  correlation_id, occurred_at, available_at
+) values (
+  '018f4f7d-5000-7000-8000-000000000186', 'portability.export_produced.v1', 1,
+  '${PORTABILITY_EXPORT_OUTBOX_AGREGGATE}', 1,
+  '{\"exportId\":\"${PORTABILITY_EXPORT_OUTBOX_AGREGGATE}\",\"manifest\":{\"schemaVersion\":\"1.0\",\"exportId\":\"${PORTABILITY_EXPORT_OUTBOX_AGREGGATE}\",\"checksumSha256\":\"${"a".repeat(64)}\",\"recordCounts\":{\"taxonomy\":2}}}'::jsonb,
+  '${PORTABILITY_EXPORT_OUTBOX_AGREGGATE}', transaction_timestamp(), transaction_timestamp()
+)`;
+const PORTABILITY_EXPORT_OUTBOX_FOREIGN_APPEND = `insert into operations.outbox_events (
+  event_id, event_type, schema_version, aggregate_id, aggregate_version, payload,
+  correlation_id, occurred_at, available_at
+) values (
+  '018f4f7d-5000-7000-8000-000000000187', 'portability.export_produced.v1', 1,
+  '${PORTABILITY_EXPORT_OUTBOX_AGREGGATE}', 1,
+  '{\"exportId\":\"018f4f7d-5000-7000-8000-000000000272\",\"manifest\":{\"schemaVersion\":\"1.0\",\"exportId\":\"${PORTABILITY_EXPORT_OUTBOX_AGREGGATE}\",\"checksumSha256\":\"${"a".repeat(64)}\",\"recordCounts\":{}}}'::jsonb,
+  '${PORTABILITY_EXPORT_OUTBOX_AGREGGATE}', transaction_timestamp(), transaction_timestamp()
+)`;
+const PORTABILITY_EXPORT_OUTBOX_UNBIND_APPEND = `insert into operations.outbox_events (
+  event_id, event_type, schema_version, aggregate_id, aggregate_version, payload,
+  correlation_id, occurred_at, available_at
+) values (
+  '018f4f7d-5000-7000-8000-000000000188', 'portability.export_produced.v1', 1,
+  '${PORTABILITY_EXPORT_OUTBOX_AGREGGATE}', 1,
+  '{\"exportId\":\"${PORTABILITY_EXPORT_OUTBOX_AGREGGATE}\"}'::jsonb,
+  '${PORTABILITY_EXPORT_OUTBOX_AGREGGATE}', transaction_timestamp(), transaction_timestamp()
+)`;
+
+const PORTABILITY_EXPORT_OUTBOX_MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+  ["shipwithali_worker", "append the produced owner-export event", PORTABILITY_EXPORT_OUTBOX_APPEND, true],
+  ["shipwithali_worker", "append a produced event bound to a foreign export", PORTABILITY_EXPORT_OUTBOX_FOREIGN_APPEND, false],
+  ["shipwithali_worker", "append a produced event without the manifest slice", PORTABILITY_EXPORT_OUTBOX_UNBIND_APPEND, false],
+  ["shipwithali_worker", "delete produced events", "delete from operations.outbox_events where event_type = 'portability.export_produced.v1' and false", false],
+];
+
 /**
  * Expected capability state is read from the declared
  * `PHASE_DATABASE_CAPABILITIES` list, never learned from the database being
@@ -346,6 +395,7 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
   ...BASE_MATRIX,
   ...(retryRecoverySchema ? RETRY_RECOVERY_MATRIX : []),
   ...(portabilityExportSchema ? PORTABILITY_EXPORT_MATRIX : []),
+  ...(portabilityExportSchema ? PORTABILITY_EXPORT_OUTBOX_MATRIX : []),
 ];
 
 interface RoleAttempt {
@@ -641,6 +691,7 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
           where schemaname = 'operations'
             and policyname <> 'measurement_event_jobs_application_insert'
             and policyname <> 'owner_export_jobs_application_insert'
+            and policyname <> 'owner_export_outbox_worker_insert'
           order by tablename, policyname`,
       );
       expect(
@@ -704,6 +755,21 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
             String(row["roles"]),
           ]),
         ).toEqual(OWNER_EXPORT_JOB_POLICIES);
+        const outbox = await admin.query(
+          `select tablename, policyname, roles, cmd
+             from pg_policies
+            where schemaname = 'operations' and tablename = 'outbox_events'
+              and policyname in ('owner_export_outbox_worker_insert')
+            order by policyname`,
+        );
+        expect(
+          outbox.rows.map((row) => [
+            row["tablename"],
+            row["policyname"],
+            row["cmd"],
+            String(row["roles"]),
+          ]),
+        ).toEqual(OWNER_EXPORT_OUTBOX_POLICIES);
         const rel = await admin.query(
           `select c.relrowsecurity, c.relforcerowsecurity
              from pg_class c join pg_namespace n on n.oid = c.relnamespace

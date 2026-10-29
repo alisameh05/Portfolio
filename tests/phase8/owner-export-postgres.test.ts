@@ -265,9 +265,13 @@ describe.runIf(Boolean(APPLICATION_URL && WORKER_URL && ADMIN_URL))("Phase 8 own
     expect(await primary.service.getOwnerExport({ actor, portfolioId, exportId: originalExportId! }))
       .toMatchObject({ ok: true, value: { state: "building", downloadAvailable: false } });
     // building → ready; the view turns truthful and the produced event lands once.
+    // The readiness slice is driven through the restricted worker runtime, the
+    // same restricted connection the assembly worker composes in production, so
+    // the module-owned produced event appends through the worker INSERT slice
+    // inside the same atomic transaction.
     advance();
     const artifactId = createStableId("OwnerExportArtifact");
-    expect(await applyGuardedOwnerExportTransition(primary.store, transitionInput(
+    expect(await applyGuardedOwnerExportTransition(composeService(worker!).store, transitionInput(
       originalExportId!, "building", "ready", 2, now,
       { integrityManifest: manifestFor("taxonomy"), artifactId },
     ))).toEqual({ ok: true, value: "applied" });

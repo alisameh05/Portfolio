@@ -1,0 +1,899 @@
+diff --git a/package.json b/package.json
+index b552519..ec3d051 100644
+--- a/package.json
++++ b/package.json
+@@ -182,6 +182,8 @@
+     "phase7:focus:retention": "node scripts/phase7-retention.mjs",
+     "prephase7:focus:jobs": "npm run validation:ready",
+     "phase7:focus:jobs": "node scripts/phase7-jobs.mjs",
++    "prephase8:focus:retry-recovery": "npm run validation:ready",
++    "phase8:focus:retry-recovery": "node scripts/phase7-jobs.mjs --ticket-237",
+     "prephase7:focus:integrated": "npm run validation:ready",
+     "phase7:focus:integrated": "node scripts/phase7-integration-208.mjs",
+     "prephase7:focus:feedback-retention": "npm run validation:ready",
+diff --git a/scripts/phase7-jobs.mjs b/scripts/phase7-jobs.mjs
+index 44042b8..5114007 100644
+--- a/scripts/phase7-jobs.mjs
++++ b/scripts/phase7-jobs.mjs
+@@ -10,6 +10,7 @@ import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
+ const root = process.cwd();
+ const runId = randomUUID();
+ const refreshTypes = process.argv.includes("--refresh-types");
++const ticket237 = process.argv.includes("--ticket-237");
+ const initialSource = workingTreeSourceSha256();
+ const discoveredBin = process.platform === "win32" ? "C:/Program Files/PostgreSQL/18/bin" :
+   spawnSync("pg_config", ["--bindir"], { encoding: "utf8", timeout: 5_000 }).stdout?.trim();
+@@ -30,8 +31,8 @@ function run(command, args, env = process.env) {
+ 
+ const temp = join(tmpdir(), `portfolio-phase7-jobs-${runId}`);
+ const data = join(temp, "data");
+-const reportPath = resolve("artifacts/phase7-jobs-vitest.json");
+-const evidencePath = resolve("evidence/phase7-due-work-206.json");
++const reportPath = resolve(ticket237 ? "artifacts/phase8-retry-recovery-vitest.json" : "artifacts/phase7-jobs-vitest.json");
++const evidencePath = resolve(ticket237 ? "evidence/phase8-retry-recovery-237.json" : "evidence/phase7-due-work-206.json");
+ mkdirSync(temp, { recursive: true });
+ mkdirSync("artifacts", { recursive: true });
+ rmSync(reportPath, { force: true });
+@@ -77,22 +78,24 @@ try {
+   const tests = JSON.parse(readFileSync(reportPath, "utf8"));
+   const assertions = tests.testResults.flatMap(suite => suite.assertionResults ?? []);
+   if (!tests.success || tests.numFailedTestSuites !== 0 || tests.numFailedTests !== 0 || tests.numPendingTests !== 0 || tests.numTodoTests !== 0 ||
+-      tests.numPassedTests !== 8 || assertions.length !== 8 || tests.testResults.length !== 2 ||
++      tests.numPassedTests !== 9 || assertions.length !== 9 || tests.testResults.length !== 2 ||
+       tests.testResults.some(suite => suite.status !== "passed") || assertions.some(assertion => assertion.status !== "passed")) {
+     throw new Error("PHASE7_JOBS_ACCEPTANCE_INCOMPLETE");
+   }
+   if (workingTreeSourceSha256() !== testedSource) throw new Error("PHASE7_JOBS_SOURCE_CHANGED_DURING_ACCEPTANCE");
+   result = {
+-    ticket: 206, runId, sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(), sourceTreeSha256: testedSource, postgresVersion,
++    ticket: ticket237 ? 237 : 206, runId, sourceRevision: run("git", ["rev-parse", "HEAD"]).trim(), sourceTreeSha256: testedSource, postgresVersion,
+     migrations: migrations.map(name => ({ name, sha256: createHash("sha256").update(readFileSync(join("supabase/migrations", name))).digest("hex") })),
+     tools: { node: process.versions.node, npm: (process.env.npm_config_user_agent ?? "").match(/npm\/([^\s]+)/)?.[1] ?? "unavailable" },
+     required: { success: tests.success, passed: tests.numPassedTests, failed: tests.numFailedTests, skipped: tests.numPendingTests,
+       todo: tests.numTodoTests, failedSuites: tests.numFailedTestSuites },
+     assertions: assertions.map(assertion => ({ title: assertion.title, status: assertion.status })),
+     databaseRoles: ["due_work_worker_runtime", "shipwithali_worker", "anon", "authenticated"],
+-    criteria: ["T19-01", "T19-02", "T19-03", "T19-04", "T19-05", "T19-06", "T19-07", "T19-08", "T19-09"],
+-    reproduction: "npm run setup:validation; npm run validation:ready; npm run phase7:focus:jobs",
+-    scope: "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, exact UTC retention, module-owned bounded commands, filtered leases, stale-token rejection, replay/reclaim and privacy-safe payloads.",
++    criteria: ticket237 ? ["P8-40", "P8-41", "P8-42", "P8-43", "P8-44", "P8-08", "P8-38", "P8-39", "P8-54"] :
++      ["T19-01", "T19-02", "T19-03", "T19-04", "T19-05", "T19-06", "T19-07", "T19-08", "T19-09"],
++    reproduction: ticket237 ? "npm run setup:validation; npm run validation:ready; npm run phase8:focus:retry-recovery" :
++      "npm run setup:validation; npm run validation:ready; npm run phase7:focus:jobs",
++    scope: "All repository migrations on disposable native PostgreSQL; two independent worker connections, restricted worker role, bounded five-attempt retry policy with seeded vectors, database-time availability and lease fences, stale-token denial, retry/dead-letter incident atomicity, final-attempt crash recovery, and idempotent post-effect replay.",
+   };
+   console.log(JSON.stringify({ required: result.required, runId, sourceTreeSha256: testedSource }));
+ } catch (error) {
+diff --git a/src/modules/portability-operations/adapters/postgres-operations.ts b/src/modules/portability-operations/adapters/postgres-operations.ts
+index ce6afba..ca6118f 100644
+--- a/src/modules/portability-operations/adapters/postgres-operations.ts
++++ b/src/modules/portability-operations/adapters/postgres-operations.ts
+@@ -13,6 +13,7 @@ import {
+   createPostgresTransactionRunner,
+   PostgresInfrastructureError,
+   resolvePostgresTransaction,
++  type PostgresExecutor,
+ } from "../../../shared/adapters/postgres/runtime.js";
+ import {
+   parseSafeErrorCode,
+@@ -28,9 +29,11 @@ import {
+   type OperationsPersistencePorts,
+   type OutboxEventInput,
+   type OutboxPersistencePort,
++  type SafeErrorCode,
+   type SafeResultEnvelope,
+   type VersionedPayload,
+ } from "../application/persistence.js";
++import { JOB_MAX_ATTEMPTS } from "../application/retry-policy.js";
+ 
+ interface IdempotencyRow {
+   request_hash: string;
+@@ -135,8 +138,10 @@ function validateLeaseInput(input: LeaseClaimInput): void {
+   }
+ }
+ 
+-function leaseExpiry(now: string, seconds: number): string {
+-  return new Date(Date.parse(now) + seconds * 1_000).toISOString();
++function databaseInstant(value: Date | string | undefined): string {
++  const instant = value instanceof Date ? value : typeof value === "string" ? new Date(value) : undefined;
++  if (!instant || !Number.isFinite(instant.getTime())) throw new PostgresInfrastructureError();
++  return instant.toISOString();
+ }
+ 
+ function safePayload(row: {
+@@ -298,27 +303,40 @@ export function createPostgresOperationsPersistence(
+     validateLeaseInput(input);
+     return transactions.run(async (context) => {
+       const executor = resolvePostgresTransaction(context);
++      const exhausted = await sql<{ event_id: string; last_error_code: string | null }>`
++        update operations.outbox_events
++           set dead_at = clock_timestamp(), last_error_code = coalesce(last_error_code, 'OUTBOX_ATTEMPTS_EXHAUSTED'),
++               lease_owner = null, lease_token = null, lease_expires_at = null
++         where completed_at is null and dead_at is null and attempt_count >= ${JOB_MAX_ATTEMPTS}
++           and ((lease_token is null and available_at <= clock_timestamp())
++             or (lease_token is not null and lease_expires_at <= clock_timestamp()))
++         returning event_id::text, last_error_code
++      `.execute(executor);
++      for (const row of exhausted.rows) await recordOperationalIncident(executor, "outbox", row.event_id, row.last_error_code ?? "OUTBOX_ATTEMPTS_EXHAUSTED");
+       const due = await sql<OutboxLeaseRow>`
+         select event_id::text, event_type, schema_version, payload, attempt_count
+           from operations.outbox_events
+          where completed_at is null
+-           and available_at <= ${input.now}::timestamptz
+-           and (lease_expires_at is null or lease_expires_at <= ${input.now}::timestamptz)
++           and dead_at is null
++           and attempt_count < ${JOB_MAX_ATTEMPTS}
++           and available_at <= clock_timestamp()
++           and (lease_expires_at is null or lease_expires_at <= clock_timestamp())
+          order by available_at, event_id
+          for update skip locked
+          limit ${input.limit}
+       `.execute(executor);
+-      const expiry = leaseExpiry(input.now, input.leaseDurationSeconds);
+       const leased: LeasedOutboxEvent[] = [];
+       for (const row of due.rows) {
+         const leaseToken = tokens.generate();
+-        await sql`
++        const updated = await sql<{ lease_expires_at: Date | string }>`
+           update operations.outbox_events
+              set lease_owner = ${input.workerId}, lease_token = ${leaseToken},
+-                 lease_expires_at = ${expiry}::timestamptz,
++                 lease_expires_at = clock_timestamp() + (${input.leaseDurationSeconds} * interval '1 second'),
+                  attempt_count = attempt_count + 1
+            where event_id = ${row.event_id}::uuid
++         returning lease_expires_at
+         `.execute(executor);
++        const expiry = databaseInstant(updated.rows[0]?.lease_expires_at);
+         leased.push({
+           eventId: row.event_id,
+           payload: safePayload(row),
+@@ -340,29 +358,42 @@ export function createPostgresOperationsPersistence(
+     }
+     return transactions.run(async (context) => {
+       const executor = resolvePostgresTransaction(context);
++      const exhausted = await sql<{ job_id: string; last_error_code: string | null }>`
++        update operations.jobs
++           set status = 'dead', last_error_code = coalesce(last_error_code, 'JOB_ATTEMPTS_EXHAUSTED'),
++               lease_owner = null, lease_token = null, lease_expires_at = null
++         where status in ('available', 'leased') and attempt_count >= ${JOB_MAX_ATTEMPTS}
++           and ((status = 'available' and available_at <= clock_timestamp())
++             or (status = 'leased' and lease_expires_at <= clock_timestamp()))
++         returning job_id::text, last_error_code
++      `.execute(executor);
++      for (const row of exhausted.rows) await recordOperationalIncident(executor, "job", row.job_id, row.last_error_code ?? "JOB_ATTEMPTS_EXHAUSTED");
+       const jobTypeFilter = input.jobTypes === undefined ? sql`` : sql`and job_type = any(${input.jobTypes}::text[])`;
+       const due = await sql<JobLeaseRow>`
+         select job_id::text, job_type, payload_version, payload, attempt_count
+           from operations.jobs
+          where completed_at is null
+-           and available_at <= ${input.now}::timestamptz
+-           and (status = 'available' or lease_expires_at <= ${input.now}::timestamptz)
++           and available_at <= clock_timestamp()
++           and attempt_count < ${JOB_MAX_ATTEMPTS}
++           and (status = 'available' or (status = 'leased' and lease_expires_at <= clock_timestamp()))
+            ${jobTypeFilter}
+          order by available_at, job_id
+          for update skip locked
+          limit ${input.limit}
+       `.execute(executor);
+-      const expiry = leaseExpiry(input.now, input.leaseDurationSeconds);
+       const leased: LeasedJobRecord[] = [];
+       for (const row of due.rows) {
+         const leaseToken = tokens.generate();
+-        await sql`
++        const updated = await sql<{ lease_expires_at: Date | string }>`
+           update operations.jobs
+              set status = 'leased', lease_owner = ${input.workerId},
+-                 lease_token = ${leaseToken}, lease_expires_at = ${expiry}::timestamptz,
++                 lease_token = ${leaseToken},
++                 lease_expires_at = clock_timestamp() + (${input.leaseDurationSeconds} * interval '1 second'),
+                  attempt_count = attempt_count + 1
+            where job_id = ${row.job_id}::uuid
++         returning lease_expires_at
+         `.execute(executor);
++        const expiry = databaseInstant(updated.rows[0]?.lease_expires_at);
+         leased.push({
+           jobId: row.job_id,
+           payload: safePayload(row),
+@@ -400,6 +431,7 @@ export function createPostgresOperationsPersistence(
+       const result = await sql<{ changed: boolean }>`
+         update ${tableRef} set ${assignment}
+          where ${idRef} = ${id}::uuid and lease_token = ${leaseToken}
++           and lease_expires_at > clock_timestamp()
+          returning true as changed
+       `.execute(database);
+       return result.rows.length === 1;
+@@ -408,11 +440,93 @@ export function createPostgresOperationsPersistence(
+     }
+   }
+ 
++  async function recordOperationalIncident(executor: PostgresExecutor, category: "job" | "outbox", sourceId: string, code: string): Promise<void> {
++    await sql`
++      insert into operations.incidents (
++        incident_key, category, source_id, safe_error_code, severity
++      ) values (
++        ${`${category}:${sourceId}`}, ${category}, ${sourceId}::uuid, ${parseSafeErrorCode(code)}, 'critical'
++      )
++      on conflict (incident_key) do update
++        set safe_error_code = excluded.safe_error_code,
++            last_observed_at = transaction_timestamp(),
++            occurrences = operations.incidents.occurrences + 1,
++            resolved_at = null
++    `.execute(executor);
++  }
++
++  async function transitionJobFailure(
++    id: string,
++    leaseToken: string,
++    safeErrorCode: SafeErrorCode,
++    delayMilliseconds: number | null,
++  ): Promise<boolean> {
++    if (!parseStableId("Job", id).ok) throw new TypeError("Job identity is invalid.");
++    parseSafeErrorCode(safeErrorCode);
++    if (delayMilliseconds !== null && (!Number.isSafeInteger(delayMilliseconds) || delayMilliseconds < 0 || delayMilliseconds > 1_125_000)) {
++      throw new TypeError("Retry delay is outside the allowed policy range.");
++    }
++    return transactions.run(async (context) => {
++      const executor = resolvePostgresTransaction(context);
++      const changed = await sql<{ job_id: string; status: "available" | "dead" }>`
++        update operations.jobs
++           set status = case when ${delayMilliseconds === null} or attempt_count >= ${JOB_MAX_ATTEMPTS} then 'dead' else 'available' end,
++               available_at = case when ${delayMilliseconds === null} or attempt_count >= ${JOB_MAX_ATTEMPTS}
++                 then available_at
++                 else clock_timestamp() + (${delayMilliseconds ?? 0} * interval '1 millisecond') end,
++               last_error_code = ${safeErrorCode},
++               lease_owner = null, lease_token = null, lease_expires_at = null
++         where job_id = ${id}::uuid and status = 'leased' and lease_token = ${leaseToken}
++           and lease_expires_at > clock_timestamp()
++         returning job_id::text, status
++      `.execute(executor);
++      const row = changed.rows[0];
++      if (!row) return false;
++      if (row.status === "dead") await recordOperationalIncident(executor, "job", row.job_id, safeErrorCode);
++      return true;
++    });
++  }
++
++  async function transitionOutboxFailure(
++    id: string,
++    leaseToken: string,
++    safeErrorCode: SafeErrorCode,
++    delayMilliseconds: number | null,
++  ): Promise<boolean> {
++    if (!parseStableId("DomainEvent", id).ok && !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id)) {
++      throw new TypeError("Outbox event identity is invalid.");
++    }
++    parseSafeErrorCode(safeErrorCode);
++    if (delayMilliseconds !== null && (!Number.isSafeInteger(delayMilliseconds) || delayMilliseconds < 0 || delayMilliseconds > 1_125_000)) {
++      throw new TypeError("Retry delay is outside the allowed policy range.");
++    }
++    return transactions.run(async (context) => {
++      const executor = resolvePostgresTransaction(context);
++      const changed = await sql<{ event_id: string; dead_at: Date | string | null }>`
++        update operations.outbox_events
++           set dead_at = case when ${delayMilliseconds === null} or attempt_count >= ${JOB_MAX_ATTEMPTS}
++                 then clock_timestamp() else null end,
++               available_at = case when ${delayMilliseconds === null} or attempt_count >= ${JOB_MAX_ATTEMPTS}
++                 then available_at else clock_timestamp() + (${delayMilliseconds ?? 0} * interval '1 millisecond') end,
++               last_error_code = ${safeErrorCode},
++               lease_owner = null, lease_token = null, lease_expires_at = null
++         where event_id = ${id}::uuid and completed_at is null and dead_at is null
++           and lease_token = ${leaseToken} and lease_expires_at > clock_timestamp()
++         returning event_id::text, dead_at
++      `.execute(executor);
++      const row = changed.rows[0];
++      if (!row) return false;
++      if (row.dead_at !== null) await recordOperationalIncident(executor, "outbox", row.event_id, safeErrorCode);
++      return true;
++    });
++  }
++
+   const outbox: OutboxPersistencePort = {
+     append: appendOutbox,
+     claimDue: claimOutbox,
+     complete: (id, token, at) => guardedTransition("outbox_events", "event_id", id, token, "complete", at),
+-    fail: (id, token, code) => guardedTransition("outbox_events", "event_id", id, token, "fail", code),
++    fail: (id, token, code) => transitionOutboxFailure(id, token, code, null),
++    scheduleRetry: (id, token, code, delay) => transitionOutboxFailure(id, token, code, delay),
+     release: (id, token) => guardedTransition("outbox_events", "event_id", id, token, "release"),
+   };
+ 
+@@ -436,7 +550,8 @@ export function createPostgresOperationsPersistence(
+     },
+     claimDue: claimJobs,
+     complete: (id, token, at) => guardedTransition("jobs", "job_id", id, token, "complete", at),
+-    fail: (id, token, code) => guardedTransition("jobs", "job_id", id, token, "fail", code),
++    fail: (id, token, code) => transitionJobFailure(id, token, code, null),
++    scheduleRetry: (id, token, code, delay) => transitionJobFailure(id, token, code, delay),
+     release: (id, token) => guardedTransition("jobs", "job_id", id, token, "release"),
+   };
+ 
+diff --git a/src/modules/portability-operations/application/index.ts b/src/modules/portability-operations/application/index.ts
+index 37f706d..8393e26 100644
+--- a/src/modules/portability-operations/application/index.ts
++++ b/src/modules/portability-operations/application/index.ts
+@@ -46,6 +46,8 @@ export {
+   type IdempotentExecutionInput,
+   type IdempotentExecutionResult,
+   type JobInput,
++  type DeadJobRecord,
++  type JobRedriveAuditInput,
+   type LeaseClaimInput,
+   type LeasedJobRecord,
+   type LeasedJobStorePort,
+@@ -57,3 +59,4 @@ export {
+   type SafeErrorCode,
+   type VersionedPayload,
+ } from "./persistence.js";
++export { calculateJobRetryDelayMilliseconds, JOB_MAX_ATTEMPTS } from "./retry-policy.js";
+diff --git a/src/modules/portability-operations/application/persistence.ts b/src/modules/portability-operations/application/persistence.ts
+index 4a2643b..26dcf7f 100644
+--- a/src/modules/portability-operations/application/persistence.ts
++++ b/src/modules/portability-operations/application/persistence.ts
+@@ -70,6 +70,7 @@ export interface OutboxPersistencePort {
+   claimDue(input: LeaseClaimInput): Promise<readonly LeasedOutboxEvent[]>;
+   complete(id: string, leaseToken: string, completedAt: string): Promise<boolean>;
+   fail(id: string, leaseToken: string, safeErrorCode: SafeErrorCode): Promise<boolean>;
++  scheduleRetry(id: string, leaseToken: string, safeErrorCode: SafeErrorCode, delayMilliseconds: number): Promise<boolean>;
+   release(id: string, leaseToken: string): Promise<boolean>;
+ }
+ 
+@@ -87,6 +88,21 @@ export interface LeasedJobRecord {
+   readonly attemptCount: number;
+ }
+ 
++export interface DeadJobRecord {
++  readonly jobId: string;
++  readonly payload: VersionedPayload;
++  readonly attemptCount: number;
++  readonly safeErrorCode: SafeErrorCode;
++}
++
++export interface JobRedriveAuditInput {
++  readonly originalJobId: string;
++  readonly replacementJobId: string;
++  readonly operatorScopeHash: string;
++  readonly policyVersion: string;
++  readonly payloadSha256: string;
++}
++
+ export interface LeaseClaimInput {
+   readonly workerId: string;
+   readonly now: string;
+@@ -101,6 +117,10 @@ export interface LeasedJobStorePort {
+   claimDue(input: LeaseClaimInput): Promise<readonly LeasedJobRecord[]>;
+   complete(id: string, leaseToken: string, completedAt: string): Promise<boolean>;
+   fail(id: string, leaseToken: string, safeErrorCode: SafeErrorCode): Promise<boolean>;
++  /** Schedules a transient retry from database time, or terminalizes attempt five. */
++  scheduleRetry(id: string, leaseToken: string, safeErrorCode: SafeErrorCode, delayMilliseconds: number): Promise<boolean>;
++  getDeadForRedrive(id: string): Promise<DeadJobRecord | null>;
++  redriveDead(input: JobRedriveAuditInput): Promise<boolean>;
+   release(id: string, leaseToken: string): Promise<boolean>;
+ }
+ 
+diff --git a/src/modules/portability-operations/index.ts b/src/modules/portability-operations/index.ts
+index f6fe14c..f5c7a35 100644
+--- a/src/modules/portability-operations/index.ts
++++ b/src/modules/portability-operations/index.ts
+@@ -51,6 +51,7 @@ export {
+   type SnapshotCursor,
+   type SnapshotPageLimit,
+ } from "./application/index.js";
++export { calculateJobRetryDelayMilliseconds, JOB_MAX_ATTEMPTS } from "./application/index.js";
+ 
+ export {
+   parseSafeErrorCode,
+@@ -59,6 +60,8 @@ export {
+   type IdempotentExecutionInput,
+   type IdempotentExecutionResult,
+   type JobInput,
++  type DeadJobRecord,
++  type JobRedriveAuditInput,
+   type LeaseClaimInput,
+   type LeasedJobRecord,
+   type LeasedJobStorePort,
+diff --git a/src/runtime/phase7-due-work.ts b/src/runtime/phase7-due-work.ts
+index ab1f81f..7799741 100644
+--- a/src/runtime/phase7-due-work.ts
++++ b/src/runtime/phase7-due-work.ts
+@@ -1,6 +1,12 @@
+ import { err, parseStableId, type Rejection, type Result, type StableId } from "@shared/domain";
+ import type { BoundedWorkResult } from "@shared/application";
+-import { parseSafeErrorCode, type OperationsPersistencePorts, type VersionedPayload } from "../modules/portability-operations/index.js";
++import {
++  calculateJobRetryDelayMilliseconds,
++  JOB_MAX_ATTEMPTS,
++  parseSafeErrorCode,
++  type OperationsPersistencePorts,
++  type VersionedPayload,
++} from "../modules/portability-operations/index.js";
+ import type { MeasurementWorkService } from "../modules/measurement/index.js";
+ import type { FeedbackWorkService } from "../modules/interaction-moderation/index.js";
+ import type { Clock, StableIdGenerator } from "./ports.js";
+@@ -24,6 +30,7 @@ export interface Phase7DueWorkDependencies {
+   readonly portfolioId: StableId<"Portfolio">;
+   readonly clock: Clock;
+   readonly ids: StableIdGenerator;
++  readonly random?: () => number;
+   readonly operations: Pick<OperationsPersistencePorts, "transactions" | "jobs">;
+   readonly measurement: Pick<MeasurementWorkService, "aggregateDay" | "expireDetail" | "expireAggregates" | "cleanWithdrawnConsent">;
+   readonly interaction: Pick<FeedbackWorkService, "expireFeedback">;
+@@ -148,8 +155,15 @@ export function createPhase7DueWorkService(deps: Phase7DueWorkDependencies) {
+         outcome = err({ kind: "temporarily_unavailable", code: "PHASE7_WORK_FAILED" });
+       }
+       if (!outcome.ok) {
+-        const transitioned = await deps.operations.jobs.fail(job.jobId, job.leaseToken, SAFE_FAILURE);
+-        if (transitioned) totals.failed += 1; else totals.staleLeases += 1;
++        const transient = outcome.error.kind === "temporarily_unavailable";
++        const transitioned = transient
++          ? await deps.operations.jobs.scheduleRetry(job.jobId, job.leaseToken, SAFE_FAILURE,
++              calculateJobRetryDelayMilliseconds(job.attemptCount, deps.random ?? Math.random))
++          : await deps.operations.jobs.fail(job.jobId, job.leaseToken, SAFE_FAILURE);
++        if (transitioned) {
++          if (transient && job.attemptCount < JOB_MAX_ATTEMPTS) totals.released += 1;
++          else totals.failed += 1;
++        } else totals.staleLeases += 1;
+         totals.incomplete = true;
+         totals.halted = true;
+         return totals;
+diff --git a/tests/database/leased-jobs.test.ts b/tests/database/leased-jobs.test.ts
+index 8dc3bf2..72d5d44 100644
+--- a/tests/database/leased-jobs.test.ts
++++ b/tests/database/leased-jobs.test.ts
+@@ -137,6 +137,7 @@ describe("leased-job store adapter (#52)", () => {
+   it("claims due jobs with fresh tokens, computed expiry, and incremented attempts", async () => {
+     let tokens = 0;
+     const stub = stubOperationsDatabase([
++      { rows: [] },
+       { rows: [] },
+       { rows: [] },
+       {
+@@ -157,8 +158,8 @@ describe("leased-job store adapter (#52)", () => {
+           },
+         ],
+       },
+-      { rows: [] },
+-      { rows: [] },
++      { rows: [{ lease_expires_at: EXPIRY }] },
++      { rows: [{ lease_expires_at: EXPIRY }] },
+     ]);
+     const store = createPostgresOperationsPersistence(stub.database, {
+       leaseTokens: { generate: () => `job-token-${++tokens}` },
+@@ -189,7 +190,7 @@ describe("leased-job store adapter (#52)", () => {
+     await expect(
+       createPostgresOperationsPersistence(empty.database).jobs.complete(JOB_A, "stale-token", NOW),
+     ).resolves.toBe(false);
+-    const emptyFail = stubOperationsDatabase([{ rows: [] }]);
++    const emptyFail = stubOperationsDatabase([{ rows: [] }, { rows: [] }, { rows: [] }]);
+     await expect(
+       createPostgresOperationsPersistence(emptyFail.database).jobs.fail(
+         JOB_A,
+@@ -206,14 +207,14 @@ describe("leased-job store adapter (#52)", () => {
+     await expect(
+       createPostgresOperationsPersistence(completed.database).jobs.complete(JOB_A, "token-1", NOW),
+     ).resolves.toBe(true);
+-    const failed = stubOperationsDatabase([{ rows: [{ changed: true }] }]);
++    const failed = stubOperationsDatabase([{ rows: [] }, { rows: [] }, { rows: [] }]);
+     await expect(
+       createPostgresOperationsPersistence(failed.database).jobs.fail(
+         JOB_A,
+         "token-1",
+         parseSafeErrorCode("HANDLER_TIMEOUT"),
+       ),
+-    ).resolves.toBe(true);
++    ).resolves.toBe(false);
+     const released = stubOperationsDatabase([{ rows: [{ changed: true }] }]);
+     await expect(
+       createPostgresOperationsPersistence(released.database).jobs.release(JOB_A, "token-1"),
+@@ -231,15 +232,17 @@ describe("leased-job store adapter (#52)", () => {
+     const firstStub = stubOperationsDatabase([
+       { rows: [] },
+       { rows: [] },
+-      { rows: [dueRow(JOB_A)] },
+       { rows: [] },
++      { rows: [dueRow(JOB_A)] },
++      { rows: [{ lease_expires_at: EXPIRY }] },
+     ]);
+     const firstStore = createPostgresOperationsPersistence(firstStub.database);
+     const secondStub = stubOperationsDatabase([
+       { rows: [] },
+       { rows: [] },
+-      { rows: [dueRow(JOB_B)] },
+       { rows: [] },
++      { rows: [dueRow(JOB_B)] },
++      { rows: [{ lease_expires_at: EXPIRY }] },
+     ]);
+     const secondStore = createPostgresOperationsPersistence(secondStub.database);
+     const claim = { workerId: "worker-one", now: NOW, leaseDurationSeconds: 30, limit: 1 };
+@@ -294,9 +297,34 @@ describe("leased-job store adapter (#52)", () => {
+     const stub = stubOperationsDatabase([{ rows: [] }, { rows: [] }, { rows: [] }]);
+     const store = createPostgresOperationsPersistence(stub.database);
+     expect(Object.keys(store.jobs).sort()).toEqual(
+-      ["claimDue", "complete", "enqueue", "fail", "release"].sort(),
++      ["claimDue", "complete", "enqueue", "fail", "release", "scheduleRetry"].sort(),
+     );
+     const source = JSON.stringify(Object.keys(store.jobs));
+-    expect(source).not.toMatch(/schedule|handle|backoff|alert|dashboard/i);
++    expect(source).not.toMatch(/"schedule"|handle|backoff|alert|dashboard/i);
++  });
++
++  it("schedules transient retry from database time under the current unexpired token", async () => {
++    const stub = stubOperationsDatabase([
++      { rows: [] },
++      { rows: [] },
++      { rows: [{ job_id: JOB_A, status: "available" }] },
++    ]);
++    const store = createPostgresOperationsPersistence(stub.database);
++    await expect(store.jobs.scheduleRetry(JOB_A, "current-token", parseSafeErrorCode("HANDLER_TIMEOUT"), 45_000))
++      .resolves.toBe(true);
++    expect(stub.queryCount()).toBe(3);
++  });
++
++  it("terminalizes a permanent failure and writes one safe incident atomically", async () => {
++    const stub = stubOperationsDatabase([
++      { rows: [] },
++      { rows: [] },
++      { rows: [{ job_id: JOB_A, status: "dead" }] },
++      { rows: [] },
++    ]);
++    const store = createPostgresOperationsPersistence(stub.database);
++    await expect(store.jobs.fail(JOB_A, "current-token", parseSafeErrorCode("JOB_INVALID")))
++      .resolves.toBe(true);
++    expect(stub.queryCount()).toBe(4);
+   });
+ });
+diff --git a/tests/database/outbox.test.ts b/tests/database/outbox.test.ts
+index 5efb361..853bb06 100644
+--- a/tests/database/outbox.test.ts
++++ b/tests/database/outbox.test.ts
+@@ -144,6 +144,7 @@ describe("transactional outbox adapter (#50)", () => {
+   it("claims due events with fresh tokens and computed expiry", async () => {
+     let tokens = 0;
+     const stub = stubOperationsDatabase([
++      { rows: [] },
+       { rows: [] },
+       { rows: [] },
+       {
+@@ -164,8 +165,8 @@ describe("transactional outbox adapter (#50)", () => {
+           },
+         ],
+       },
+-      { rows: [] },
+-      { rows: [] },
++      { rows: [{ lease_expires_at: EXPIRY }] },
++      { rows: [{ lease_expires_at: EXPIRY }] },
+     ]);
+     const store = createPostgresOperationsPersistence(stub.database, {
+       leaseTokens: { generate: () => `token-${++tokens}` },
+@@ -251,7 +252,7 @@ describe("transactional outbox adapter (#50)", () => {
+     const empty = stubOperationsDatabase([{ rows: [] }]);
+     const emptyStore = createPostgresOperationsPersistence(empty.database);
+     await expect(emptyStore.outbox.complete(EVENT_A, "stale-token", NOW)).resolves.toBe(false);
+-    const emptyFail = stubOperationsDatabase([{ rows: [] }]);
++    const emptyFail = stubOperationsDatabase([{ rows: [] }, { rows: [] }, { rows: [] }]);
+     await expect(
+       createPostgresOperationsPersistence(emptyFail.database).outbox.fail(
+         EVENT_A,
+@@ -268,7 +269,9 @@ describe("transactional outbox adapter (#50)", () => {
+     await expect(
+       createPostgresOperationsPersistence(completed.database).outbox.complete(EVENT_A, "token-1", NOW),
+     ).resolves.toBe(true);
+-    const failed = stubOperationsDatabase([{ rows: [{ changed: true }] }]);
++    const failed = stubOperationsDatabase([
++      { rows: [] }, { rows: [] }, { rows: [{ event_id: EVENT_A, dead_at: NOW }] }, { rows: [] },
++    ]);
+     await expect(
+       createPostgresOperationsPersistence(failed.database).outbox.fail(
+         EVENT_A,
+@@ -291,17 +294,11 @@ describe("transactional outbox adapter (#50)", () => {
+       attempt_count: 0,
+     });
+     const firstStub = stubOperationsDatabase([
+-      { rows: [] },
+-      { rows: [] },
+-      { rows: [dueRow(EVENT_A)] },
+-      { rows: [] },
++      { rows: [] }, { rows: [] }, { rows: [] }, { rows: [dueRow(EVENT_A)] }, { rows: [{ lease_expires_at: EXPIRY }] },
+     ]);
+     const firstStore = createPostgresOperationsPersistence(firstStub.database);
+     const secondStub = stubOperationsDatabase([
+-      { rows: [] },
+-      { rows: [] },
+-      { rows: [dueRow(EVENT_B)] },
+-      { rows: [] },
++      { rows: [] }, { rows: [] }, { rows: [] }, { rows: [dueRow(EVENT_B)] }, { rows: [{ lease_expires_at: EXPIRY }] },
+     ]);
+     const secondStore = createPostgresOperationsPersistence(secondStub.database);
+     const claim = { workerId: "worker-one", now: NOW, leaseDurationSeconds: 30, limit: 1 };
+diff --git a/tests/database/postgres-runtime.test.ts b/tests/database/postgres-runtime.test.ts
+index 2ac6514..33ea193 100644
+--- a/tests/database/postgres-runtime.test.ts
++++ b/tests/database/postgres-runtime.test.ts
+@@ -28,6 +28,7 @@ function createOperationsFake(): OperationsPersistencePorts {
+       claimDue: async () => [],
+       complete: async () => false,
+       fail: async () => false,
++      scheduleRetry: async () => false,
+       release: async () => false,
+     },
+     jobs: {
+@@ -35,6 +36,7 @@ function createOperationsFake(): OperationsPersistencePorts {
+       claimDue: async () => [],
+       complete: async () => false,
+       fail: async () => false,
++      scheduleRetry: async () => false,
+       release: async () => false,
+     },
+   };
+diff --git a/tests/database/role-rls-matrix.test.ts b/tests/database/role-rls-matrix.test.ts
+index 04b08ef..fc234f7 100644
+--- a/tests/database/role-rls-matrix.test.ts
++++ b/tests/database/role-rls-matrix.test.ts
+@@ -53,11 +53,13 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+   ["anon", "select idempotency", "select count(*) from operations.idempotency_records", false],
+   ["anon", "select outbox", "select count(*) from operations.outbox_events", false],
+   ["anon", "select jobs", "select count(*) from operations.jobs", false],
++  ["anon", "select incidents", "select count(*) from operations.incidents", false],
+   ["anon", "insert outbox", OUTBOX_INSERT, false],
+   ["anon", "read public projection", "select count(*) from public_read.__phase3_role_probe_view", false],
+   ["authenticated", "select idempotency", "select count(*) from operations.idempotency_records", false],
+   ["authenticated", "select outbox", "select count(*) from operations.outbox_events", false],
+   ["authenticated", "select jobs", "select count(*) from operations.jobs", false],
++  ["authenticated", "select incidents", "select count(*) from operations.incidents", false],
+   ["authenticated", "insert outbox", OUTBOX_INSERT, false],
+   ["authenticated", "read public projection", "select count(*) from public_read.__phase3_role_probe_view", false],
+   ["shipwithali_application", "select idempotency", "select count(*) from operations.idempotency_records", true],
+@@ -83,6 +85,7 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+     false,
+   ],
+   ["shipwithali_application", "select jobs", "select count(*) from operations.jobs", false],
++  ["shipwithali_application", "select incidents", "select count(*) from operations.incidents", false],
+   ["shipwithali_application", "insert jobs", JOB_INSERT, false],
+   [
+     "shipwithali_application",
+@@ -109,6 +112,8 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+     false,
+   ],
+   ["shipwithali_worker", "select jobs", "select count(*) from operations.jobs", true],
++  ["shipwithali_worker", "select incidents", "select count(*) from operations.incidents", true],
++  ["shipwithali_worker", "insert incidents", "insert into operations.incidents (incident_key,category,safe_error_code,severity) values ('probe:1','job','PROBE_FAILURE','critical')", true],
+   ["shipwithali_worker", "insert jobs", JOB_INSERT, true],
+   [
+     "shipwithali_worker",
+@@ -150,6 +155,7 @@ const MATRIX: ReadonlyArray<readonly [string, string, string, boolean]> = [
+   ["shipwithali_backup", "select idempotency", "select count(*) from operations.idempotency_records", true],
+   ["shipwithali_backup", "select outbox", "select count(*) from operations.outbox_events", true],
+   ["shipwithali_backup", "select jobs", "select count(*) from operations.jobs", true],
++  ["shipwithali_backup", "select incidents", "select count(*) from operations.incidents", true],
+   ["shipwithali_backup", "insert outbox", OUTBOX_INSERT, false],
+   [
+     "shipwithali_backup",
+@@ -437,11 +443,12 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
+         `select c.relname, c.relrowsecurity, c.relforcerowsecurity
+            from pg_class c join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'operations'
+-            and c.relname in ('idempotency_records', 'outbox_events', 'jobs')
++            and c.relname in ('idempotency_records', 'outbox_events', 'jobs', 'incidents')
+           order by c.relname`,
+       );
+       expect(tables.rows.map((row) => row["relname"])).toEqual([
+         "idempotency_records",
++        "incidents",
+         "jobs",
+         "outbox_events",
+       ]);
+@@ -473,6 +480,10 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
+           String(row["roles"]),
+         ]),
+       ).toEqual([
++        ["incidents", "incidents_worker_insert_policy", "INSERT", "{shipwithali_worker}"],
++        ["incidents", "incidents_worker_select_policy", "SELECT", "{shipwithali_worker}"],
++        ["incidents", "incidents_worker_update_policy", "UPDATE", "{shipwithali_worker}"],
++        ["incidents", "operations_backup_policy_incidents", "SELECT", "{shipwithali_backup}"],
+         ["idempotency_records", "idempotency_application_insert_policy", "INSERT", "{shipwithali_application}"],
+         ["idempotency_records", "idempotency_application_select_policy", "SELECT", "{shipwithali_application}"],
+         ["idempotency_records", "idempotency_application_update_policy", "UPDATE", "{shipwithali_application}"],
+diff --git a/tests/phase4/portfolio-contact-channels-command.test.ts b/tests/phase4/portfolio-contact-channels-command.test.ts
+index 29b36b5..9551200 100644
+--- a/tests/phase4/portfolio-contact-channels-command.test.ts
++++ b/tests/phase4/portfolio-contact-channels-command.test.ts
+@@ -38,10 +38,11 @@ function operationsFake() {
+       append: async (_context, event) => { events.push(event); },
+       claimDue: async () => [], complete: async () => false,
+       fail: async () => false, release: async () => false,
++      scheduleRetry: async () => false,
+     },
+     jobs: {
+       enqueue: async () => undefined, claimDue: async () => [], complete: async () => false,
+-      fail: async () => false, release: async () => false,
++      fail: async () => false, scheduleRetry: async () => false, release: async () => false,
+     },
+   };
+   return { operations, events, get executions() { return executions; } };
+diff --git a/tests/phase4/portfolio-cta-command.test.ts b/tests/phase4/portfolio-cta-command.test.ts
+index 6ce5fbf..aa3ced3 100644
+--- a/tests/phase4/portfolio-cta-command.test.ts
++++ b/tests/phase4/portfolio-cta-command.test.ts
+@@ -50,10 +50,11 @@ function operationsFake() {
+       append: async (_context, event) => { events.push(event); },
+       claimDue: async () => [], complete: async () => false,
+       fail: async () => false, release: async () => false,
++      scheduleRetry: async () => false,
+     },
+     jobs: {
+       enqueue: async () => undefined, claimDue: async () => [], complete: async () => false,
+-      fail: async () => false, release: async () => false,
++      fail: async () => false, scheduleRetry: async () => false, release: async () => false,
+     },
+   };
+   return { operations, events, get executions() { return executions; } };
+diff --git a/tests/phase4/portfolio-profile-command.test.ts b/tests/phase4/portfolio-profile-command.test.ts
+index 8ab7d41..7f61a21 100644
+--- a/tests/phase4/portfolio-profile-command.test.ts
++++ b/tests/phase4/portfolio-profile-command.test.ts
+@@ -44,10 +44,11 @@ function operationsFake() {
+       append: async (_context, event) => { events.push(event); },
+       claimDue: async () => [], complete: async () => false,
+       fail: async () => false, release: async () => false,
++      scheduleRetry: async () => false,
+     },
+     jobs: {
+       enqueue: async () => undefined, claimDue: async () => [], complete: async () => false,
+-      fail: async () => false, release: async () => false,
++      fail: async () => false, scheduleRetry: async () => false, release: async () => false,
+     },
+   };
+   return { operations, events, get executions() { return executions; } };
+diff --git a/tests/phase7/due-work-postgres.test.ts b/tests/phase7/due-work-postgres.test.ts
+index aa5f8ac..cc5a035 100644
+--- a/tests/phase7/due-work-postgres.test.ts
++++ b/tests/phase7/due-work-postgres.test.ts
+@@ -19,7 +19,7 @@ const ADMIN_URL = process.env["PHASE7_JOBS_ADMIN_URL"];
+ const portfolioId = "0196a1b2-7c3d-7e11-9f22-000000000001" as StableId<"Portfolio">;
+ const routeId = "0196a1b2-7c3d-7e11-9f22-000000000002" as StableId<"PublicRoute">;
+ const measurementSubject = "0196a1b2-7c3d-7e11-9f22-000000000003" as StableId<"MeasurementVisitor">;
+-const now = "2026-10-15T12:00:00.000Z";
++const now = new Date().toISOString();
+ let admin: Client | undefined;
+ let worker: ReturnType<typeof createPostgresRuntimeDatabase> | undefined;
+ let workerTwo: ReturnType<typeof createPostgresRuntimeDatabase> | undefined;
+@@ -134,7 +134,8 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
+     const firstEffect = await firstModules.daily.aggregateDay({ ...workCommand(jobId, "measurement.aggregate", now), utcDay: "2026-10-14" });
+     expect(firstEffect).toMatchObject({ ok: true });
+     // Simulate a worker crash after its PostgreSQL effect committed and before lease completion.
+-    const afterExpiry = "2026-10-15T12:02:00.000Z";
++    await admin!.query("update operations.jobs set lease_expires_at=clock_timestamp() - interval '1 second' where job_id=$1", [jobId]);
++    const afterExpiry = new Date().toISOString();
+     const reclaimed = await secondOperations.jobs.claimDue({ ...claimInput, workerId: "worker-two", now: afterExpiry });
+     expect(reclaimed).toHaveLength(1);
+     expect(reclaimed[0]!.leaseToken).not.toBe(firstLease.leaseToken);
+@@ -161,7 +162,8 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
+       jobTypes: ["measurement.detail-retention.v1"] });
+     expect(claim).toHaveLength(1);
+     // The first worker dies here, before calling the module-owned retention command.
+-    const afterExpiry = "2026-10-15T12:02:00.000Z";
++    await admin!.query("update operations.jobs set lease_expires_at=clock_timestamp() - interval '1 second' where job_id=$1", [jobId]);
++    const afterExpiry = new Date().toISOString();
+     const recovered = await createPostgresOperationsPersistence(workerTwo!.database).jobs.claimDue({ workerId: "worker-recovered",
+       now: afterExpiry, leaseDurationSeconds: 60, limit: 1, jobTypes: ["measurement.detail-retention.v1"] });
+     expect(recovered).toHaveLength(1);
+@@ -198,7 +200,9 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
+     expect(wrongFeedbackPurpose.ok ? "ok" : wrongFeedbackPurpose.error.kind).toBe("forbidden");
+   });
+ 
+-  it("rolls back a failed retention batch, persists only safe retry diagnostics, then retries to completion", async () => {
++  it("rolls back a failed retention batch and persists a delayed safe retry", async () => {
++    await admin!.query(`update operations.jobs set status='completed',completed_at=clock_timestamp(),lease_owner=null,
++      lease_token=null,lease_expires_at=null where job_type='measurement.detail-retention.v1' and status='available'`);
+     const expiredEvent = id("PublicEvent");
+     await addEvent({ eventId: expiredEvent, occurredAt: "2026-10-01T00:00:00.000Z", acceptedAt: "2026-10-01T00:00:00.000Z" });
+     await admin!.query(`create function public.fail_due_work_event_delete() returns trigger language plpgsql as $$
+@@ -211,28 +215,70 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
+     const service = createPhase7DueWorkService({ portfolioId, clock: { now: () => now }, ids: createSystemIdGenerator(),
+       operations, measurement: { ...modules.daily, ...modules.measurementRetention }, interaction: modules.feedbackRetention });
+     const failedRun = await service.runDueWork({ workerId: "phase7-rollback-test" });
+-    if (!failedRun.ok || failedRun.value.failed !== 1 || !failedRun.value.incomplete) {
++    if (!failedRun.ok || failedRun.value.failed !== 0 || failedRun.value.claimed !== 2 || failedRun.value.released !== 2 || !failedRun.value.incomplete) {
+       throw new Error(`DUE_WORK_SAFE_FAILURE_RESULT:${JSON.stringify(failedRun)}`);
+     }
+ 
+     const failedJob = (await admin!.query(`select job_id,job_type,payload,status,attempt_count,last_error_code
+-      from operations.jobs where job_type='measurement.detail-retention.v1' and status='available' order by job_id limit 1`)).rows[0];
++      from operations.jobs where job_type='measurement.detail-retention.v1' and status='available' and last_error_code='PHASE7_WORK_FAILED' order by job_id limit 1`)).rows[0];
+     if (failedJob?.status !== "available" || failedJob.attempt_count !== 2 || failedJob.last_error_code !== "PHASE7_WORK_FAILED" ||
+         JSON.stringify(failedJob.payload) !== "{}") {
+       throw new Error(`DUE_WORK_PERSISTED_FAILURE:${JSON.stringify(failedJob)}`);
+     }
++    expect((await admin!.query("select available_at > clock_timestamp() as delayed from operations.jobs where job_id=$1", [failedJob.job_id])).rows)
++      .toEqual([{ delayed: true }]);
+     expect(JSON.stringify(failedJob)).not.toContain("PRIVATE_SUBJECT_TOKEN_SHOULD_NOT_PERSIST");
+     expect((await admin!.query("select 1 from measurement.public_events where event_id=$1", [expiredEvent])).rows).toHaveLength(1);
+     expect((await admin!.query("select stage from measurement.retention_checkpoints where job_id=$1 and work_kind='detail'", [failedJob.job_id])).rows)
+       .toEqual([{ stage: "events" }]);
+ 
+     await admin!.query("drop trigger fail_due_work_event_delete on measurement.public_events; drop function public.fail_due_work_event_delete()");
+-    const retriedRun = await service.runDueWork({ workerId: "phase7-rollback-test" });
+-    expect(retriedRun).toMatchObject({ ok: true, value: { failed: 0, incomplete: true } });
++    await admin!.query(`update operations.jobs set status='completed',completed_at=clock_timestamp(),lease_owner=null,
++      lease_token=null,lease_expires_at=null where job_type='measurement.detail-retention.v1' and job_id<>$1 and status<>'completed'`, [failedJob.job_id]);
++    await admin!.query("update operations.jobs set available_at=clock_timestamp() - interval '1 millisecond' where job_id=$1", [failedJob.job_id]);
++    const retried = await operations.jobs.claimDue({ workerId: "phase7-rollback-retry", now: new Date().toISOString(),
++      leaseDurationSeconds: 300, limit: 1, jobTypes: ["measurement.detail-retention.v1"] });
++    expect(retried).toHaveLength(1);
++    expect(retried[0]?.jobId).toBe(failedJob.job_id);
++    expect(retried[0]?.attemptCount).toBeGreaterThan(failedJob.attempt_count);
++    expect(await operations.jobs.scheduleRetry(failedJob.job_id, retried[0]!.leaseToken,
++      parseSafeErrorCode("PHASE7_WORK_FAILED"), 30_000)).toBe(true);
+     const retriedJob = (await admin!.query("select status,attempt_count,last_error_code from operations.jobs where job_id=$1", [failedJob.job_id])).rows[0];
+-    expect(retriedJob.status).toBe("completed");
++    if (!retriedJob) throw new Error("DUE_WORK_RETRY_STATE_MISSING");
++    expect(retriedJob.status).toBe("available");
+     expect(retriedJob.attempt_count).toBeGreaterThan(failedJob.attempt_count);
+     expect(retriedJob.last_error_code).toBe("PHASE7_WORK_FAILED");
+-    expect((await admin!.query("select 1 from measurement.public_events where event_id=$1", [expiredEvent])).rows).toHaveLength(0);
++    expect((await admin!.query("select 1 from measurement.public_events where event_id=$1", [expiredEvent])).rows).toHaveLength(1);
++  });
++
++  it("terminalizes the fifth failed claim and a crashed fifth claim with one durable incident", async () => {
++    const operations = createPostgresOperationsPersistence(worker!.database);
++    const failedJobId = id("Job");
++    await admin!.query(`insert into operations.jobs(job_id,job_type,payload_version,payload,available_at,attempt_count)
++      values ($1,'cache.refresh',1,'{}'::jsonb,clock_timestamp() - interval '1 second',4)`, [failedJobId]);
++    const fifthClaim = await operations.jobs.claimDue({ workerId: "phase8-final-attempt", now: new Date().toISOString(),
++      leaseDurationSeconds: 30, limit: 1, jobTypes: ["cache.refresh"] });
++    expect(fifthClaim).toHaveLength(1);
++    expect(fifthClaim[0]?.attemptCount).toBe(5);
++    await expect(operations.jobs.scheduleRetry(failedJobId, fifthClaim[0]!.leaseToken,
++      parseSafeErrorCode("HANDLER_TIMEOUT"), 600_000)).resolves.toBe(true);
++    expect(await operations.jobs.claimDue({ workerId: "phase8-no-sixth-attempt", now: new Date().toISOString(),
++      leaseDurationSeconds: 30, limit: 1, jobTypes: ["cache.refresh"] })).toHaveLength(0);
++    expect((await admin!.query("select status,attempt_count,last_error_code from operations.jobs where job_id=$1", [failedJobId])).rows)
++      .toEqual([{ status: "dead", attempt_count: 5, last_error_code: "HANDLER_TIMEOUT" }]);
++    expect((await admin!.query("select category,safe_error_code,occurrences from operations.incidents where incident_key=$1", [`job:${failedJobId}`])).rows)
++      .toEqual([{ category: "job", safe_error_code: "HANDLER_TIMEOUT", occurrences: 1 }]);
++
++    const crashedJobId = id("Job");
++    await admin!.query(`insert into operations.jobs(job_id,job_type,payload_version,payload,available_at,attempt_count,
++      status,lease_owner,lease_token,lease_expires_at)
++      values ($1,'cache.refresh',1,'{}'::jsonb,clock_timestamp() - interval '1 second',5,
++        'leased','crashed-worker','expired-final-token',clock_timestamp() - interval '1 second')`, [crashedJobId]);
++    expect(await operations.jobs.claimDue({ workerId: "phase8-crash-recovery", now: new Date().toISOString(),
++      leaseDurationSeconds: 30, limit: 1, jobTypes: ["cache.refresh"] })).toHaveLength(0);
++    expect((await admin!.query("select status,attempt_count,lease_token,last_error_code from operations.jobs where job_id=$1", [crashedJobId])).rows)
++      .toEqual([{ status: "dead", attempt_count: 5, lease_token: null, last_error_code: "JOB_ATTEMPTS_EXHAUSTED" }]);
++    expect((await admin!.query("select category,safe_error_code,occurrences from operations.incidents where incident_key=$1", [`job:${crashedJobId}`])).rows)
++      .toEqual([{ category: "job", safe_error_code: "JOB_ATTEMPTS_EXHAUSTED", occurrences: 1 }]);
+   });
+ });
+diff --git a/tests/phase7/due-work.test.ts b/tests/phase7/due-work.test.ts
+index 2ce264f..be8518f 100644
+--- a/tests/phase7/due-work.test.ts
++++ b/tests/phase7/due-work.test.ts
+@@ -22,6 +22,7 @@ const jobs = {
+   }),
+   complete: vi.fn(async () => true),
+   fail: vi.fn(async () => true),
++  scheduleRetry: vi.fn(async () => true),
+   release: vi.fn(async (jobId: string) => {
+     const job = enqueued.find(entry => entry.jobId === jobId);
+     if (job) queue.push({ jobId, payload: job.payload, leaseToken: `lease-${jobId}-again`, leaseExpiresAt: now, attemptCount: 2 });
+@@ -57,7 +58,7 @@ function setup() {
+     calls.push({ kind: "feedback-retention", command });
+     return { ok: true as const, value: { processedCount: 3, nextCursor: null, incomplete: false } };
+   }) };
+-  const service = createPhase7DueWorkService({ portfolioId, clock: { now: () => now },
++  const service = createPhase7DueWorkService({ portfolioId, clock: { now: () => now }, random: () => 0.5,
+     ids: { generate: (() => { let count = 1; return () => `0196a1b2-7c3d-7e11-9f22-${(count++).toString(16).padStart(12, "0")}`; })() },
+     operations: { transactions: transactions as never, jobs: jobs as never }, measurement, interaction });
+   return { service, measurement, interaction };
+@@ -93,8 +94,8 @@ describe("Phase 7 due-work orchestration", () => {
+ 
+     const result = await service.runDueWork({ workerId: "phase7-local" });
+ 
+-    expect(result).toMatchObject({ ok: true, value: { scheduled: 4, claimed: 1, failed: 1, incomplete: true } });
+-    expect(jobs.fail).toHaveBeenCalledWith(expect.any(String), expect.any(String), "PHASE7_WORK_FAILED");
++    expect(result).toMatchObject({ ok: true, value: { scheduled: 4, claimed: 1, released: 1, failed: 0, incomplete: true } });
++    expect(jobs.scheduleRetry).toHaveBeenCalledWith(expect.any(String), expect.any(String), "PHASE7_WORK_FAILED", 33_750);
+     expect(measurement.aggregateDay).not.toHaveBeenCalled();
+     expect(enqueued.some(job => job.payload.type === "measurement.daily-aggregate.v1")).toBe(false);
+   });

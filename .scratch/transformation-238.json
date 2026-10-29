@@ -1,0 +1,27 @@
+{
+  "migration": "20261023090000_reserve_owner_export_requests.sql",
+  "checksum": "43d9996f1d8c59c663c5c81842631248001ed8a6b551652e5a43acd22d6badd4",
+  "policies": [
+    {
+      "schema": "operations",
+      "tableName": "jobs",
+      "name": "owner_export_jobs_application_insert",
+      "permissive": "permissive",
+      "roles": "{shipwithali_application}",
+      "command": "INSERT",
+      "usingPredicate": "",
+      "withCheck": "((job_type = 'portability.owner-export-assembly.v1'::text) AND (payload_version = 1) AND (jsonb_typeof(payload) = 'object'::text) AND ( SELECT ((count(*))::integer = 4)\n   FROM jsonb_object_keys(jobs.payload) jsonb_object_keys(jsonb_object_keys)) AND (payload ?& ARRAY['exportId'::text, 'portfolioId'::text, 'ownerId'::text, 'includedScopes'::text]) AND ((payload ->> 'portfolioId'::text) = NULLIF(current_setting('shipwithali.portfolio_id'::text, true), ''::text)) AND ((payload ->> 'ownerId'::text) = NULLIF(current_setting('shipwithali.owner_id'::text, true), ''::text)) AND ((payload ->> 'exportId'::text) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text) AND (jsonb_typeof((payload -> 'includedScopes'::text)) = 'array'::text) AND ((jsonb_array_length((payload -> 'includedScopes'::text)) >= 1) AND (jsonb_array_length((payload -> 'includedScopes'::text)) <= 7)) AND (jsonb_array_length((payload -> 'includedScopes'::text)) = ( SELECT count(DISTINCT elements.value_text) AS count\n   FROM jsonb_array_elements_text((jobs.payload -> 'includedScopes'::text)) elements(value_text))) AND (NOT (EXISTS ( SELECT 1\n   FROM jsonb_array_elements_text((jobs.payload -> 'includedScopes'::text)) members(value_text)\n  WHERE (members.value_text <> ALL (ARRAY['portfolio-content'::text, 'taxonomy'::text, 'media-metadata'::text, 'cv-metadata'::text, 'moderation-history'::text, 'analytics-reports'::text, 'portfolio-configuration'::text]))))))"
+    }
+  ],
+  "grants": [
+    {
+      "schema": "operations",
+      "object": "jobs",
+      "objectType": "r",
+      "grantee": "shipwithali_application",
+      "grantor": "shipwithali_migration",
+      "privilege": "INSERT",
+      "grantable": false
+    }
+  ]
+}

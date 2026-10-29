@@ -1,0 +1,23 @@
+{
+  "migration": "20261023090000_reserve_owner_export_requests.sql",
+  "checksum": "e07833a5c800668e57eb4354f5456e33bd4632c283d8de9f5e72b944678c9ba2",
+  "outboxPolicy": {
+    "schema": "operations",
+    "tableName": "outbox_events",
+    "name": "owner_export_outbox_worker_insert",
+    "permissive": "permissive",
+    "roles": "{shipwithali_worker}",
+    "command": "INSERT",
+    "usingPredicate": "",
+    "withCheck": "((event_type = 'portability.export_produced.v1'::text) AND (schema_version = 1) AND ((aggregate_id)::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text) AND (jsonb_typeof(payload) = 'object'::text) AND ( SELECT ((count(*))::integer = 2)\n   FROM jsonb_object_keys(outbox_events.payload) jsonb_object_keys(jsonb_object_keys)) AND (payload ?& ARRAY['exportId'::text, 'manifest'::text]) AND ((payload ->> 'exportId'::text) = (aggregate_id)::text) AND (jsonb_typeof((payload -> 'manifest'::text)) = 'object'::text) AND ((payload -> 'manifest'::text) ?& ARRAY['schemaVersion'::text, 'exportId'::text, 'checksumSha256'::text, 'recordCounts'::text]) AND (((payload -> 'manifest'::text) ->> 'exportId'::text) = (aggregate_id)::text))"
+  },
+  "outboxGrant": {
+    "schema": "operations",
+    "object": "outbox_events",
+    "objectType": "r",
+    "grantee": "shipwithali_worker",
+    "grantor": "shipwithali_migration",
+    "privilege": "INSERT",
+    "grantable": false
+  }
+}
