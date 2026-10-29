@@ -1,3 +1,4 @@
+import { isolatedIdentityReadiness } from "../fixtures/identity-readiness.js";
 import { randomBytes } from "node:crypto";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -66,7 +67,7 @@ describeDatabase("Phase 5 Owner production composition against PostgreSQL", () =
       DATABASE_URL: applicationUrl.toString(),
       PORTFOLIO_ID: scope.portfolioId,
       OWNER_ID,
-    }, "application");
+    }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
     runtimeReady = true;
 
     const settings = createPortfolioSettingsService({

@@ -23,6 +23,8 @@ export type JsonPrimitive = boolean | number | string | null;
 
 export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
+export type Numeric = ColumnType<string, number | string, number | string>;
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export interface ContentItems {
@@ -638,15 +640,31 @@ export interface OperationsIdempotencyRecords {
 
 export interface OperationsIncidents {
   category: string;
+  delivery_attempts: Generated<number>;
+  delivery_error_code: string | null;
+  delivery_lease_expires_at: Timestamp | null;
+  delivery_lease_generation: Generated<Int8>;
+  delivery_lease_token: string | null;
+  delivery_state: Generated<string>;
+  environment: Generated<string>;
   first_observed_at: Generated<Timestamp>;
   incident_id: Generated<string>;
   incident_key: string;
   last_observed_at: Generated<Timestamp>;
+  measured_value: Numeric | null;
+  measurement_is_lower_bound: Generated<boolean>;
+  measurement_unit: string | null;
+  measurement_window_seconds: number | null;
+  next_delivery_at: Generated<Timestamp | null>;
   occurrences: Generated<number>;
+  owner_role: Generated<string>;
+  recovery_recorded_at: Timestamp | null;
+  remediation_pointer: Generated<string>;
   resolved_at: Timestamp | null;
   safe_error_code: string;
   severity: string;
   source_id: string | null;
+  threshold_value: Numeric | null;
 }
 
 export interface OperationsJobRedriveAudit {

@@ -1,3 +1,4 @@
+import { isolatedIdentityReadiness } from "../fixtures/identity-readiness.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { createHmac } from "node:crypto";
@@ -217,7 +218,7 @@ describe.runIf(Boolean(url))("real PostgreSQL Owner moderation acceptance", () =
   });
   it("standard runtime assembles real moderation and approved query; closed DB fails safely without optional Measurement",async()=>{
     const project=await seed(),id=await submit(project);resetRuntimeForTests();
-    await initializeDatabaseRuntime({NODE_ENV:"test",APP_BASE_URL:"https://example.com",DATABASE_URL:url!,PORTFOLIO_ID:portfolioId,OWNER_ID:ownerId},"application");
+    await initializeDatabaseRuntime({NODE_ENV:"test",APP_BASE_URL:"https://example.com",DATABASE_URL:url!,PORTFOLIO_ID:portfolioId,OWNER_ID:ownerId},"application", undefined, { identityReadiness: isolatedIdentityReadiness });
     const assembled=await getOwnerModerationRuntimeServices();expect("scope" in assembled).toBe(true);
     expect((await approveHttp(id,{}, {...assembled,security:deps.security})).status).toBe(200);
     expect(await getApprovedFeedbackApplicationService().getApprovedFeedback({scope,portfolioId,projectId:project,locale:"en",limit:25,correlationId:"assembled"})).toMatchObject({ok:true,value:{items:[{feedbackId:id}]}});

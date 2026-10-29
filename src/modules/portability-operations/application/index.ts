@@ -57,6 +57,14 @@ export {
   type SnapshotCursor,
   type SnapshotPageLimit,
 } from "./service.js";
+export { CORE_INCIDENT_RULES, evaluateIncidentMeasurements, evaluateConfiguredSustainedRule, validateConfiguredIncidentRule,
+  type ConfiguredIncidentRule, type IncidentDecision, type IncidentMeasurement, type IncidentOwner, type IncidentRule } from "./incident-policy.js";
+export { createIncidentLifecycleService, MAX_INCIDENT_DELIVERY_ATTEMPTS, INCIDENT_DELIVERY_BACKOFF_SECONDS,
+  MAX_INCIDENT_DELIVERY_BATCH, type DurableIncidentInput, type DurableIncidentRecord, type IncidentDeliverySink,
+  type IncidentLifecycleStore } from "./incident-lifecycle.js";
+export { createOperationalIncidentPass, summaryMeasurements } from "./incident-pass.js";
+export { createOperationsReadiness, type OperationsReadinessProbe, type OptionalOperationsCapabilityProbe,
+  type OperationsReadinessState } from "./operations-readiness.js";
 export { redriveDeadJob, type RedriveDeadJobCommand, type RedriveDeadJobDependencies } from "./redrive-service.js";
 export { JOB_REDRIVE_POLICY_VERSION, parsePhase7WorkPayload, type Phase7WorkPayload } from "./redrive-policy.js";
 

@@ -21,6 +21,7 @@ import type { OwnerIdentity, PseudonymousToken } from "../domain/index.js";
 export { SupabaseOwnerSessionAdapter } from "./supabase-auth.js";
 export type { OwnerSessionAdapterDeps, TrustedProviderIdentity } from "./supabase-auth.js";
 export { createOwnerAuthConfig } from "./auth-config.js";
+export { createSupabaseIdentityReadiness } from "./supabase-readiness.js";
 export type { OwnerAuthConfig, OwnerAuthConfigEnv } from "./auth-config.js";
 export { OwnerAuthConfigError } from "./auth-config.js";
 export { createPseudonymousIdentityConfig } from "./pseudonymous-config.js";

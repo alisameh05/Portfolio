@@ -1,3 +1,4 @@
+import { isolatedIdentityReadiness } from "../fixtures/identity-readiness.js";
 import { randomBytes } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { sql } from "kysely";
@@ -90,7 +91,7 @@ describeDatabase("Phase 5 restricted-principal and migration security against Po
       DATABASE_URL: applicationConnectionString,
       PORTFOLIO_ID: scope.portfolioId,
       OWNER_ID: scope.ownerId,
-    }, "application");
+    }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
     runtimeReady = true;
     markStage("provision-portfolio");
     const settings = createPortfolioSettingsService({

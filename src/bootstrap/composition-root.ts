@@ -42,6 +42,7 @@ import type { ConsentApplicationService, MeasurementMediaPublicFactsPort, Measur
 import type { InteractionModerationService, FunctionalInteractionContextPort } from "../modules/interaction-moderation/index.js";
 import { createPhase7DueWorkWorker } from "./phase7-due-work-worker.js";
 import { isValidPhase8DueWorkBudget, phase8DueWorkBudgetFromEnvironment, type Phase8DueWorkBudget } from "../runtime/phase8-due-work-control.js";
+import { createOperationsReadiness, type OptionalOperationsCapabilityProbe } from "../modules/portability-operations/index.js";
 
 export interface ReactionRuntimeServices {
   readonly scope: { readonly kind: "portfolio"; readonly portfolioId: StableId<"Portfolio"> };
@@ -182,6 +183,10 @@ export interface DatabaseRuntimeDependencies {
   readonly publicConfiguration?: PortfolioSettingsApplicationService;
   readonly resource: LifecycleResource;
   readonly readiness: ReadinessCheck;
+  /** Required identity validation supplied by an assembled identity adapter. */
+  readonly identityReadiness: ReadinessCheck;
+  /** Capability failures are reported separately and never gate safe core reads. */
+  readonly capabilityReadiness?: readonly OptionalOperationsCapabilityProbe[];
 }
 
 /**
@@ -241,6 +246,7 @@ export async function initializeDatabaseRuntime(
   env: RuntimeConfigEnv,
   runtimeKind: DatabaseRuntimeKind,
   factory?: DatabaseRuntimeFactory,
+  options: { readonly identityReadiness?: ReadinessCheck } = {},
 ): Promise<DatabaseRuntimeState> {
   const lifecycle = getLifecycleCoordinator();
   try {
@@ -266,6 +272,15 @@ export async function initializeDatabaseRuntime(
         if (configuredScope !== undefined && !configuredScope.ownerId.ok) {
           throw new RuntimeConfigError("OWNER_ID", "must be a configured UUIDv7 identity");
         }
+        const identityReadiness = options.identityReadiness ?? (runtimeKind === "application"
+          ? await (async () => {
+              const { createOwnerAuthConfig, createSupabaseIdentityReadiness } = await import("../modules/identity-access/adapters/index.js");
+              return createSupabaseIdentityReadiness({ config: createOwnerAuthConfig(env),
+                ...(env["SUPABASE_ANON_KEY"] === undefined ? {} : { publicApiKey: env["SUPABASE_ANON_KEY"] }) });
+            })()
+          : { name: "system-identity", async check() {
+              return configuredScope?.portfolioId.ok === true && configuredScope.ownerId.ok;
+            } });
         const database = createPostgresRuntimeDatabase(databaseUrl);
         const operations = createPostgresOperationsPersistence(database.database);
         const [{ createPostgresOwnerExportStore }, { createOwnerExportService }, { createPostgresFeedbackOwnerExportSnapshotReader },
@@ -950,21 +965,29 @@ export async function initializeDatabaseRuntime(
           ...(publicConfiguration === undefined ? {} : { publicConfiguration }),
           resource: database.resource,
           readiness: database.readiness,
+          identityReadiness,
         };
       });
     const dependencies = await resolvedFactory();
+    const readiness = createOperationsReadiness({ required: [
+      { name: "configuration", async check() { createRuntimeConfig(env); return true; } },
+      { name: "identity", async check() {
+        return await (options.identityReadiness ?? dependencies.identityReadiness)?.check() === true;
+      } },
+      { name: "database", check: () => dependencies.readiness.check() },
+    ], optional: dependencies.capabilityReadiness ?? [], timeoutMs: 2_000 });
     let ready = false;
     try {
-      ready = await dependencies.readiness.check();
+      ready = await readiness.check();
     } catch {
       ready = false;
     }
     if (!ready) {
       await dependencies.resource.close();
-      throw new Error("DATABASE_NOT_READY");
+      throw new Error("MANDATORY_DEPENDENCY_NOT_READY");
     }
     lifecycle.registerResource(dependencies.resource);
-    lifecycle.registerReadinessCheck(dependencies.readiness);
+    lifecycle.registerReadinessCheck({ name: "core", check: () => readiness.check() });
     current = config;
     currentOperations = dependencies.operations;
     currentOwnerExport = dependencies.ownerExport;

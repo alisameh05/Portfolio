@@ -1,3 +1,4 @@
+import { isolatedIdentityReadiness } from "../fixtures/identity-readiness.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "kysely";
 import { Client } from "pg";
@@ -483,7 +484,7 @@ describe.runIf(Boolean(DATABASE_URL && ADMIN_URL))("Measurement daily aggregatio
     resetRuntimeForTests();
     try {
       await initializeDatabaseRuntime({ NODE_ENV: "test", APP_BASE_URL: "https://example.com", DATABASE_URL,
-        PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId }, "application");
+        PORTFOLIO_ID: portfolioId, OWNER_ID: ownerId }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
       const result = await getOwnerAggregateReportApplicationService().getAggregateReport({
         scope: { kind: "portfolio", portfolioId }, correlationId: "daily-report-standard-assembly",
         actor: { kind: "owner", ownerId, sessionId: "verified-owner-session" }, grouping: "daily-action",

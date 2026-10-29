@@ -74,7 +74,7 @@ describe("PostgreSQL runtime composition (#47)", () => {
     const dependencies: DatabaseRuntimeDependencies = {
       operations,
       resource: { name: "postgresql", close: async () => undefined },
-      readiness: { name: "postgresql", check: async () => true },
+      identityReadiness: { name: "isolated-test-identity", async check() { return true; } }, readiness: { name: "postgresql", check: async () => true },
     };
     const state = await initializeDatabaseRuntime(
       {
@@ -114,7 +114,7 @@ describe("PostgreSQL runtime composition (#47)", () => {
           name: "postgresql",
           close: async () => { closeCount += 1; },
         },
-        readiness: { name: "postgresql", check: async () => true },
+        identityReadiness: { name: "isolated-test-identity", async check() { return true; } }, readiness: { name: "postgresql", check: async () => true },
       }),
     );
     const lifecycle = getLifecycleCoordinator();
@@ -146,7 +146,7 @@ describe("PostgreSQL runtime composition (#47)", () => {
             name: "postgresql",
             close: async () => { closeCount += 1; },
           },
-          readiness: {
+          identityReadiness: { name: "isolated-test-identity", async check() { return true; } }, readiness: {
             name: "postgresql",
             check: async () => { throw new Error("probe failed"); },
           },
@@ -236,7 +236,7 @@ describe("PostgreSQL runtime composition (#47)", () => {
       () => ({
         operations: createOperationsFake(),
         resource: { name: "postgresql", close: async () => undefined },
-        readiness: { name: "postgresql", check: async () => databaseReady },
+        identityReadiness: { name: "isolated-test-identity", async check() { return true; } }, readiness: { name: "postgresql", check: async () => databaseReady },
       }),
     );
 

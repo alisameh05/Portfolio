@@ -1,3 +1,4 @@
+import { isolatedIdentityReadiness } from "../fixtures/identity-readiness.js";
 import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -1469,7 +1470,7 @@ describeReal(group === "baseline"
       SUPABASE_URL: STORAGE_URL!,
       SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY!,
       MEDIA_UPLOAD_REPLAY_ENCRYPTION_KEY: REPLAY_KEY!,
-    }, "application");
+    }, "application", undefined, { identityReadiness: isolatedIdentityReadiness });
     databaseRuntimeInitialized = true;
     const realFetch = fetch;
     targetAdapter = createSupabaseMediaUploadTargetAdapter({
