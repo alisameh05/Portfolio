@@ -7,6 +7,8 @@
 export type {
   ModuleOwnedSnapshotReader,
   OperationsObservationPort,
+  OperationsSignalObservation,
+  OperationsSummaryReaderPort,
   OwnerExportObjectReadPort,
   OwnerExportSnapshotReaders,
 } from "../application/index.js";

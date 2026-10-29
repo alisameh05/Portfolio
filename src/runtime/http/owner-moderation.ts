@@ -1,4 +1,6 @@
 import type { PortfolioRequestScope } from "@shared/application";
+import { observeHttpRequest } from "./observe-request.js";
+
 /**
  * owner-moderation.ts — Phase 2 #32 Owner Feedback Moderation HTTP adapter.
  *
@@ -135,7 +137,7 @@ function commandHeaders(request: Request): Record<string, string | undefined> {
   };
 }
 
-export async function handleGetOwnerFeedbackModeration(
+ async function handleGetOwnerFeedbackModerationUnobserved(
   request: Request,
   params: { feedbackId: string },
   deps: OwnerModerationAdapterDeps,
@@ -314,7 +316,7 @@ async function handleModerationCommand(
   }
 }
 
-export async function handleApproveOwnerFeedback(
+ async function handleApproveOwnerFeedbackUnobserved(
   request: Request,
   params: { feedbackId: string },
   deps: OwnerModerationAdapterDeps,
@@ -344,7 +346,7 @@ export async function handleApproveOwnerFeedback(
   );
 }
 
-export async function handleRejectOwnerFeedback(
+ async function handleRejectOwnerFeedbackUnobserved(
   request: Request,
   params: { feedbackId: string },
   deps: OwnerModerationAdapterDeps,
@@ -374,7 +376,7 @@ export async function handleRejectOwnerFeedback(
   );
 }
 
-export async function handleSuppressOwnerFeedback(
+ async function handleSuppressOwnerFeedbackUnobserved(
   request: Request,
   params: { feedbackId: string },
   deps: OwnerModerationAdapterDeps,
@@ -402,4 +404,21 @@ export async function handleSuppressOwnerFeedback(
     (command) => deps.service.suppressOwnerFeedback(command),
     "feedback-suppressed",
   );
+}
+
+
+export function handleGetOwnerFeedbackModeration(request: Request, params: { feedbackId: string }, deps: OwnerModerationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-moderation", () => handleGetOwnerFeedbackModerationUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleApproveOwnerFeedback(request: Request, params: { feedbackId: string }, deps: OwnerModerationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-moderation", () => handleApproveOwnerFeedbackUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleRejectOwnerFeedback(request: Request, params: { feedbackId: string }, deps: OwnerModerationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-moderation", () => handleRejectOwnerFeedbackUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleSuppressOwnerFeedback(request: Request, params: { feedbackId: string }, deps: OwnerModerationAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-moderation", () => handleSuppressOwnerFeedbackUnobserved(request, params, deps), deps.logger);
 }

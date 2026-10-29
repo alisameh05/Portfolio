@@ -1,4 +1,6 @@
 import type { PortfolioRequestScope } from "@shared/application";
+import { observeHttpRequest } from "./observe-request.js";
+
 import type { CurrentCvRateLimitCheck } from "./current-cv-rate-limit.js";
 /**
  * feedback.ts — Phase 2 #28 Feedback HTTP adapter.
@@ -57,7 +59,7 @@ function requestInstance(request: Request): string {
   }
 }
 
-export async function handlePostProjectFeedback(
+ async function handlePostProjectFeedbackUnobserved(
   request: Request,
   params: { projectId: string },
   deps: FeedbackAdapterDeps,
@@ -178,4 +180,9 @@ export async function handlePostProjectFeedback(
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
+}
+
+
+export function handlePostProjectFeedback(request: Request, params: { projectId: string }, deps: FeedbackAdapterDeps): Promise<Response> {
+  return observeHttpRequest("public-feedback", () => handlePostProjectFeedbackUnobserved(request, params, deps), deps.logger);
 }

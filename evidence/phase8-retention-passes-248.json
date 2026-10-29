@@ -1,9 +1,9 @@
 {
   "ticket": 248,
-  "runId": "d5da73ed-0e2e-49a6-900c-16a37e2aaa42",
-  "startedAt": "2026-10-27T04:34:14.299Z",
-  "sourceRevision": "62aaac387cc58cd152c4510648a02e3b40e2b6ab",
-  "sourceTreeSha256": "4a4fa0d0248b4dce29b5a7341e7df48c1f2be0206620fbecaf17662f3bacfdfe",
+  "runId": "7394f83e-f511-4389-8432-fbd36a9ccfd7",
+  "startedAt": "2026-10-28T19:46:13.450Z",
+  "sourceRevision": "5f95646b2ac7251cefdf87df7ae829feff46adda",
+  "sourceTreeSha256": "d69f8d77061fa498feb9a46b0c729174b930145cb0e469a711dcdc257c7f3d04",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -257,6 +257,10 @@
     {
       "name": "20261026164603_phase7_durable_policy_schedule_keys.sql",
       "sha256": "cdd65060a1363d35f93f76c289950e69b26ebb04f718f12fe0cf3563f75668ab"
+    },
+    {
+      "name": "20261027014402_operations_observability_summary_indexes.sql",
+      "sha256": "792f546244568e0f245dbcefe2042de151cec10bff8c58a26d521dd98e569511"
     }
   ],
   "tools": {
@@ -720,6 +724,9 @@
         }
       ]
     },
+    "laterMigrationsAppliedAfterTarget": [
+      "20261027014402_operations_observability_summary_indexes.sql"
+    ],
     "rollbackCompatibilityMigrations": 62
   },
   "assertions": [
@@ -908,6 +915,6 @@
   ],
   "reproduction": "npm run setup:validation; npm run validation:ready; npm run phase8:focus:retention-passes",
   "scope": "All repository migrations on disposable native PostgreSQL; durable Portfolio/type/UTC-period deduplication under concurrent enqueue, independent-worker day-rollover retention barriers with held, retry-delayed, and dead keys, serialized Owner admission across a stale status snapshot and concurrent horizon advance, PostgreSQL-current-day horizon/admission fencing with a lagging worker clock, database-clock not-before enforcement for job and outbox retries plus a worker-clock-ahead UTC policy rollover, expired-before-reclaim job/outbox transition fencing with checkpoint resume, bounded contiguous catch-up and historical redrive, successful checkpoint retry-streak reset with fifth-failure/crash terminalization preserved, five existing versioned handlers, ten-job Owner assembly backlog reporting and restart, loopback Storage-adapter effects, truthful completion and coverage status, bounded indexed history queries, in-place upgrade row preservation, and legacy queue compatibility after application rollback.",
-  "endedAt": "2026-10-27T04:35:44.893Z",
+  "endedAt": "2026-10-28T19:47:04.268Z",
   "cleanup": true
 }

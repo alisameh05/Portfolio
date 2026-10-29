@@ -110,6 +110,26 @@ export { JOB_REDRIVE_POLICY_VERSION, parsePhase7WorkPayload, redriveDeadJob,
   type Phase7WorkPayload, type RedriveDeadJobCommand, type RedriveDeadJobDependencies } from "./application/index.js";
 
 export {
+  createLoggerOperationsObservationPort,
+  createOperationsSummaryService,
+  emitOperationsSignal,
+  OPERATIONS_SUMMARY_MAX_ROWS,
+  OPERATIONS_SUMMARY_PURPOSE,
+  OPERATIONS_SUMMARY_WINDOW_SECONDS,
+  recordOperationsSignal,
+  type BoundedCount,
+  type KnownValue,
+  type OperationsSummary,
+  type OperationsSummaryCommand,
+  type OperationsSummaryQuery,
+  type OperationsSummaryReaderPort,
+  type OperationsSummarySnapshot,
+  type OperationsValue,
+  type UnknownValue,
+  type OperationsSignalObservation,
+} from "./application/index.js";
+
+export {
   parseSafeErrorCode,
   validateVersionedPayload,
   type IdempotencyPort,

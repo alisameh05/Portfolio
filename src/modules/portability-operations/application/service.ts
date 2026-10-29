@@ -977,6 +977,14 @@ export interface OwnerExportObjectRead {
   readonly content: AsyncIterable<Uint8Array>;
 }
 
+/** Fixed, provider-neutral marker for a streamed Owner export integrity mismatch. */
+export class OwnerExportReadIntegrityError extends Error {
+  constructor() {
+    super("OWNER_EXPORT_READ_INTEGRITY_FAILED");
+    this.name = "OwnerExportReadIntegrityError";
+  }
+}
+
 /** Must remain aligned with the independently published ZIP validator bound. */
 export const MAX_OWNER_EXPORT_ARTIFACT_BYTES = 64 * 1024 * 1024;
 
@@ -1052,7 +1060,58 @@ export interface RecoveryObservation {
   readonly safeErrorCode?: SafeErrorCode;
 }
 
+/**
+ * Bounded observations emitted at owning application/adapter boundaries.
+ * Values are deliberately limited to fixed enums and finite measurements;
+ * identifiers, free-form messages, provider payloads, and item labels do not
+ * cross this contract.
+ */
+export type OperationsSignalObservation =
+  | {
+      readonly kind: "http-request";
+      readonly route: "public-event" | "public-current-cv" | "public-feedback" | "public-rating" | "public-reaction" |
+        "owner-content-authoring" | "owner-content-review" | "owner-cv" | "owner-analytics" | "owner-export-request" |
+        "owner-export-status" | "owner-export-download" | "owner-media" | "owner-moderation" | "owner-project-status" |
+        "owner-project" | "owner-publication" | "owner-taxonomy" | "owner-configuration";
+      readonly statusClass: "2xx" | "3xx" | "4xx" | "5xx";
+      readonly durationMs: number;
+    }
+  | { readonly kind: "event-intake"; readonly outcome: "accepted" | "dropped" | "rejected" | "unavailable" | "indeterminate" }
+  | {
+      readonly kind: "database-pool";
+      readonly usedConnections: number;
+      readonly configuredLimit: number;
+    }
+  | { readonly kind: "database-failure"; readonly category: "transaction" | "authorization" | "pool" }
+  | {
+      readonly kind: "lease-lifecycle";
+      readonly outcome: "reclaimed" | "stale-write";
+      readonly count: number;
+      readonly ageSeconds?: number;
+    }
+  | { readonly kind: "publication-failure"; readonly category: "dependency" | "transaction" }
+  | { readonly kind: "owner-export-integrity"; readonly outcome: "verified" | "failed" }
+  | {
+      readonly kind: "owner-export-build";
+      readonly outcome: "completed" | "retried" | "failed" | "stale";
+      readonly durationMs: number;
+    }
+  | {
+      readonly kind: "storage-operation";
+      readonly operation: "read" | "write" | "delete";
+      readonly outcome: "succeeded" | "failed";
+      readonly bytes?: number;
+    }
+  | {
+      readonly kind: "retention-work";
+      readonly domain: "measurement" | "feedback";
+      readonly outcome: "completed" | "incomplete" | "failed";
+      readonly processed: number;
+    };
+
 export interface OperationsObservationPort {
   recordIncident(observation: OperationsIncidentObservation): Promise<void>;
   recordRecovery(observation: RecoveryObservation): Promise<void>;
+  /** Optional during rolling composition; absence never creates a fake zero. */
+  recordSignal?(observation: OperationsSignalObservation): Promise<void>;
 }

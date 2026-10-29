@@ -13,6 +13,7 @@ import type { DB } from "../../../shared/adapters/postgres/database.generated.js
 import {
   createPostgresTransactionRunner,
   PostgresInfrastructureError,
+  postgresFailureCategory,
   resolvePostgresTransaction,
   type PostgresExecutor,
 } from "../../../shared/adapters/postgres/runtime.js";
@@ -39,6 +40,9 @@ import {
   type VersionedPayload,
 } from "../application/persistence.js";
 import { JOB_MAX_ATTEMPTS } from "../application/retry-policy.js";
+import type { OperationsObservationPort } from "../application/service.js";
+import { recordOperationsSignal } from "../application/operations-observability.js";
+import { supportsLeaseAcquiredAtColumn } from "./postgres-schema-capabilities.js";
 
 interface IdempotencyRow {
   request_hash: string;
@@ -53,6 +57,8 @@ interface OutboxLeaseRow {
   schema_version: number;
   payload: Readonly<Record<string, never>>;
   attempt_count: number;
+  lease_expires_at: Date | string | null;
+  lease_age_seconds: number | string | null;
 }
 
 interface JobLeaseRow {
@@ -63,6 +69,8 @@ interface JobLeaseRow {
   attempt_count: number;
   semantic_scope_id: string | null;
   semantic_period: string | null;
+  lease_expires_at: Date | string | null;
+  lease_age_seconds: number | string | null;
 }
 
 interface Phase7ScheduleRow {
@@ -119,8 +127,8 @@ function boundedRetrySchema(database: Kysely<DB>): Promise<boolean> {
       `.execute(database);
       if (result.rows[0] === undefined) throw new Error("bounded retry schema probe returned no rows");
       return result.rows[0].bounded;
-    } catch {
-      throw new PostgresInfrastructureError();
+    } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
     }
   })();
   boundedRetrySchemas.set(database, probe);
@@ -138,8 +146,8 @@ function phase7ScheduleSchema(database: Kysely<DB>): Promise<boolean> {
           and column_name = any(array['semantic_scope_id','semantic_period','work_incomplete'])`.execute(database);
       if (result.rows[0] === undefined) throw new Error("Phase 7 scheduling schema probe returned no rows");
       return result.rows[0].enabled;
-    } catch {
-      throw new PostgresInfrastructureError();
+    } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
     }
   })();
   phase7ScheduleSchemas.set(database, probe);
@@ -244,6 +252,7 @@ export interface LeaseTokenGenerator {
 export interface OperationsPersistenceOptions {
   readonly leaseTokens?: LeaseTokenGenerator;
   readonly now?: () => string;
+  readonly observations?: Pick<OperationsObservationPort, "recordSignal">;
 }
 
 function systemLeaseTokens(): LeaseTokenGenerator {
@@ -336,9 +345,9 @@ function safePayload(row: {
       version: row.schema_version ?? row.payload_version ?? 0,
       value: row.payload,
     });
-  } catch {
-    throw new PostgresInfrastructureError();
-  }
+  } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
+    }
 }
 
 function keyHash(key: IdempotencyKey): string {
@@ -413,8 +422,8 @@ export function createPostgresOperationsPersistence(
           ${event.availableAt}::timestamptz
         )
       `.execute(executor);
-    } catch {
-      throw new PostgresInfrastructureError();
+    } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
     }
   };
 
@@ -493,13 +502,15 @@ export function createPostgresOperationsPersistence(
   async function claimOutbox(input: LeaseClaimInput): Promise<readonly LeasedOutboxEvent[]> {
     validateLeaseInput(input);
     const bounded = await boundedRetrySchema(database);
-    return transactions.run(async (context) => {
+    const hasLeaseAcquiredAt = await supportsLeaseAcquiredAtColumn(database);
+    const claim = await transactions.run(async (context) => {
       const executor = resolvePostgresTransaction(context);
       const exhausted = bounded
         ? await sql<{ event_id: string; last_error_code: string | null }>`
         update operations.outbox_events
            set dead_at = clock_timestamp(), last_error_code = coalesce(last_error_code, 'OUTBOX_ATTEMPTS_EXHAUSTED'),
                lease_owner = null, lease_token = null, lease_expires_at = null
+               ${hasLeaseAcquiredAt ? sql`, lease_acquired_at = null` : sql``}
          where completed_at is null and dead_at is null and attempt_count >= ${JOB_MAX_ATTEMPTS}
            and ((lease_token is null and available_at <= clock_timestamp())
              or (lease_token is not null and lease_expires_at <= clock_timestamp()))
@@ -508,7 +519,12 @@ export function createPostgresOperationsPersistence(
         : { rows: [] as Array<{ event_id: string; last_error_code: string | null }> };
       for (const row of exhausted.rows) await recordOperationalIncident(executor, "outbox", row.event_id, row.last_error_code ?? "OUTBOX_ATTEMPTS_EXHAUSTED");
       const due = await sql<OutboxLeaseRow>`
-        select event_id::text, event_type, schema_version, payload, attempt_count
+        select event_id::text, event_type, schema_version, payload, attempt_count,
+               lease_expires_at,
+               ${hasLeaseAcquiredAt
+                 ? sql`case when lease_acquired_at is null then null
+                       else greatest(0, extract(epoch from (clock_timestamp() - lease_acquired_at))) end as lease_age_seconds`
+                 : sql`null::double precision as lease_age_seconds`}
           from operations.outbox_events
          where completed_at is null
            ${bounded ? sql`and dead_at is null and attempt_count < ${JOB_MAX_ATTEMPTS}` : sql``}
@@ -519,12 +535,23 @@ export function createPostgresOperationsPersistence(
           limit ${input.limit}
       `.execute(executor);
       const leased: LeasedOutboxEvent[] = [];
+      let reclaimedCount = 0;
+      let maxReclaimedAgeSeconds = 0;
+      let hasReclaimedAge = false;
       for (const row of due.rows) {
+        if (row.lease_expires_at !== null) {
+          reclaimedCount += 1;
+          if (row.lease_age_seconds !== null) {
+            const age = Number(row.lease_age_seconds);
+            if (Number.isFinite(age) && age >= 0) { maxReclaimedAgeSeconds = Math.max(maxReclaimedAgeSeconds, age); hasReclaimedAge = true; }
+          }
+        }
         const leaseToken = tokens.generate();
         const updated = await sql<{ lease_expires_at: Date | string }>`
           update operations.outbox_events
              set lease_owner = ${input.workerId}, lease_token = ${leaseToken},
                  lease_expires_at = clock_timestamp() + (${input.leaseDurationSeconds} * interval '1 second'),
+                 ${hasLeaseAcquiredAt ? sql`lease_acquired_at = clock_timestamp(),` : sql``}
                  attempt_count = attempt_count + 1
             where event_id = ${row.event_id}::uuid
           returning lease_expires_at
@@ -539,8 +566,13 @@ export function createPostgresOperationsPersistence(
           attemptCount: row.attempt_count + 1,
         });
       }
-      return leased;
+      return { leased, reclaimedCount, maxReclaimedAgeSeconds, hasReclaimedAge };
     });
+    if (claim.reclaimedCount > 0) void recordOperationsSignal(options.observations, {
+      kind: "lease-lifecycle", outcome: "reclaimed", count: claim.reclaimedCount,
+      ...(claim.hasReclaimedAge ? { ageSeconds: Math.min(31_536_000, Math.floor(claim.maxReclaimedAgeSeconds)) } : {}),
+    });
+    return claim.leased;
   }
 
   async function claimJobs(input: LeaseClaimInput): Promise<readonly LeasedJobRecord[]> {
@@ -554,8 +586,10 @@ export function createPostgresOperationsPersistence(
       throw new TypeError("Job semantic scope is invalid.");
     }
     const scheduleEnabled = await phase7ScheduleSchema(database);
+    const hasLeaseAcquiredAt = await supportsLeaseAcquiredAtColumn(database);
+    const bounded = await boundedRetrySchema(database);
     if (input.semanticScopeId !== undefined && !scheduleEnabled) throw new PostgresInfrastructureError();
-    return transactions.run(async (context) => {
+    const claim = await transactions.run(async (context) => {
       const executor = resolvePostgresTransaction(context);
       if (scheduleEnabled && (input.jobTypes === undefined || input.jobTypes.includes(PHASE7_AGGREGATE_TYPE))) {
         // Serialize aggregate admission against required-horizon updates.
@@ -564,12 +598,12 @@ export function createPostgresOperationsPersistence(
           ? sql`` : sql`where portfolio_id = ${input.semanticScopeId}::uuid`;
         await sql`select portfolio_id from operations.phase7_schedule_progress ${scopeFilter} for share`.execute(executor);
       }
-      const bounded = await boundedRetrySchema(database);
       const exhausted = bounded
         ? await sql<{ job_id: string; last_error_code: string | null }>`
         update operations.jobs
            set status = 'dead', last_error_code = coalesce(last_error_code, 'JOB_ATTEMPTS_EXHAUSTED'),
                lease_owner = null, lease_token = null, lease_expires_at = null
+               ${hasLeaseAcquiredAt ? sql`, lease_acquired_at = null` : sql``}
          where status in ('available', 'leased') and attempt_count >= ${JOB_MAX_ATTEMPTS}
            and ((status = 'available' and available_at <= clock_timestamp())
              or (status = 'leased' and lease_expires_at <= clock_timestamp()))
@@ -605,6 +639,11 @@ export function createPostgresOperationsPersistence(
         ))` : sql``;
       const due = await sql<JobLeaseRow>`
         select candidate.job_id::text, candidate.job_type, candidate.payload_version, candidate.payload, candidate.attempt_count,
+               candidate.lease_expires_at,
+               ${hasLeaseAcquiredAt
+                 ? sql`case when candidate.lease_acquired_at is null then null
+                       else greatest(0, extract(epoch from (clock_timestamp() - candidate.lease_acquired_at))) end as lease_age_seconds`
+                 : sql`null::double precision as lease_age_seconds`},
                ${semanticScheduleSelect}
           from operations.jobs candidate
          where candidate.completed_at is null
@@ -619,13 +658,24 @@ export function createPostgresOperationsPersistence(
          limit ${input.limit}
       `.execute(executor);
       const leased: LeasedJobRecord[] = [];
+      let reclaimedCount = 0;
+      let maxReclaimedAgeSeconds = 0;
+      let hasReclaimedAge = false;
       for (const row of due.rows) {
+        if (row.lease_expires_at !== null) {
+          reclaimedCount += 1;
+          if (row.lease_age_seconds !== null) {
+            const age = Number(row.lease_age_seconds);
+            if (Number.isFinite(age) && age >= 0) { maxReclaimedAgeSeconds = Math.max(maxReclaimedAgeSeconds, age); hasReclaimedAge = true; }
+          }
+        }
         const leaseToken = tokens.generate();
         const updated = await sql<{ lease_expires_at: Date | string }>`
           update operations.jobs
              set status = 'leased', lease_owner = ${input.workerId},
                  lease_token = ${leaseToken},
                  lease_expires_at = clock_timestamp() + (${input.leaseDurationSeconds} * interval '1 second'),
+                 ${hasLeaseAcquiredAt ? sql`lease_acquired_at = clock_timestamp(),` : sql``}
                  attempt_count = attempt_count + 1
             where job_id = ${row.job_id}::uuid
           returning lease_expires_at
@@ -643,8 +693,13 @@ export function createPostgresOperationsPersistence(
           }),
         });
       }
-      return leased;
+      return { leased, reclaimedCount, maxReclaimedAgeSeconds, hasReclaimedAge };
     });
+    if (claim.reclaimedCount > 0) void recordOperationsSignal(options.observations, {
+      kind: "lease-lifecycle", outcome: "reclaimed", count: claim.reclaimedCount,
+      ...(claim.hasReclaimedAge ? { ageSeconds: Math.min(31_536_000, Math.floor(claim.maxReclaimedAgeSeconds)) } : {}),
+    });
+    return claim.leased;
   }
 
   function requiredStablePortfolio(value: string) {
@@ -663,17 +718,18 @@ export function createPostgresOperationsPersistence(
     coverageIncomplete?: boolean,
     successfulCheckpoint = false,
   ): Promise<boolean> {
+    const hasLeaseAcquiredAt = await supportsLeaseAcquiredAtColumn(database);
     const tableRef = sql.raw(`operations.${table}`);
     const idRef = sql.raw(idColumn);
     const assignment =
       transition === "complete"
         ? sql`completed_at = ${value}::timestamptz${
             table === "jobs" ? sql`, status = 'completed'${coverageIncomplete === undefined ? sql`` : sql`, work_incomplete = ${coverageIncomplete}`}` : sql``
-          }, lease_owner = null, lease_token = null, lease_expires_at = null`
+          }, lease_owner = null, lease_token = null, lease_expires_at = null${hasLeaseAcquiredAt ? sql`, lease_acquired_at = null` : sql``}`
         : transition === "fail"
           ? sql`last_error_code = ${parseSafeErrorCode(value ?? "")}, lease_owner = null, lease_token = null,
-                lease_expires_at = null${table === "jobs" ? sql`, status = 'available'` : sql``}`
-          : sql`lease_owner = null, lease_token = null, lease_expires_at = null${
+                lease_expires_at = null${hasLeaseAcquiredAt ? sql`, lease_acquired_at = null` : sql``}${table === "jobs" ? sql`, status = 'available'` : sql``}`
+          : sql`lease_owner = null, lease_token = null, lease_expires_at = null${hasLeaseAcquiredAt ? sql`, lease_acquired_at = null` : sql``}${
               table === "jobs" ? sql`, status = 'available'${successfulCheckpoint ? sql`, attempt_count = 0` : sql``}` : sql``
             }`;
     try {
@@ -684,9 +740,11 @@ export function createPostgresOperationsPersistence(
            ${table === "jobs" ? sql`and status = 'leased'` : sql``}
          returning true as changed
       `.execute(database);
-      return result.rows.length === 1;
-    } catch {
-      throw new PostgresInfrastructureError();
+      const changed = result.rows.length === 1;
+      if (!changed) void recordOperationsSignal(options.observations, { kind: "lease-lifecycle", outcome: "stale-write", count: 1 });
+      return changed;
+    } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
     }
   }
 
@@ -716,7 +774,8 @@ export function createPostgresOperationsPersistence(
     if (delayMilliseconds !== null && (!Number.isSafeInteger(delayMilliseconds) || delayMilliseconds < 0 || delayMilliseconds > 1_125_000)) {
       throw new TypeError("Retry delay is outside the allowed policy range.");
     }
-    return transactions.run(async (context) => {
+    const hasLeaseAcquiredAt = await supportsLeaseAcquiredAtColumn(database);
+    const changed = await transactions.run(async (context) => {
       const executor = resolvePostgresTransaction(context);
       const changed = await sql<{ job_id: string; status: "available" | "dead" }>`
         update operations.jobs
@@ -726,6 +785,7 @@ export function createPostgresOperationsPersistence(
                  else clock_timestamp() + (${delayMilliseconds ?? 0} * interval '1 millisecond') end,
                last_error_code = ${safeErrorCode},
                lease_owner = null, lease_token = null, lease_expires_at = null
+               ${hasLeaseAcquiredAt ? sql`, lease_acquired_at = null` : sql``}
           where job_id = ${id}::uuid and status = 'leased' and lease_token = ${leaseToken}
             and lease_expires_at > clock_timestamp()
          returning job_id::text, status
@@ -735,6 +795,8 @@ export function createPostgresOperationsPersistence(
       if (row.status === "dead") await recordOperationalIncident(executor, "job", row.job_id, safeErrorCode);
       return true;
     });
+    if (!changed) void recordOperationsSignal(options.observations, { kind: "lease-lifecycle", outcome: "stale-write", count: 1 });
+    return changed;
   }
 
   async function transitionOutboxFailure(
@@ -750,10 +812,11 @@ export function createPostgresOperationsPersistence(
     if (delayMilliseconds !== null && (!Number.isSafeInteger(delayMilliseconds) || delayMilliseconds < 0 || delayMilliseconds > 1_125_000)) {
       throw new TypeError("Retry delay is outside the allowed policy range.");
     }
+    const hasLeaseAcquiredAt = await supportsLeaseAcquiredAtColumn(database);
     if (!(await boundedRetrySchema(database))) {
       return guardedTransition("outbox_events", "event_id", id, leaseToken, "fail", safeErrorCode);
     }
-    return transactions.run(async (context) => {
+    const changed = await transactions.run(async (context) => {
       const executor = resolvePostgresTransaction(context);
       const changed = await sql<{ event_id: string; dead_at: Date | string | null }>`
         update operations.outbox_events
@@ -763,6 +826,7 @@ export function createPostgresOperationsPersistence(
                  then available_at else clock_timestamp() + (${delayMilliseconds ?? 0} * interval '1 millisecond') end,
                last_error_code = ${safeErrorCode},
                lease_owner = null, lease_token = null, lease_expires_at = null
+               ${hasLeaseAcquiredAt ? sql`, lease_acquired_at = null` : sql``}
           where event_id = ${id}::uuid and completed_at is null and dead_at is null
             and lease_token = ${leaseToken} and lease_expires_at > clock_timestamp()
           returning event_id::text, dead_at
@@ -772,6 +836,8 @@ export function createPostgresOperationsPersistence(
       if (row.dead_at !== null) await recordOperationalIncident(executor, "outbox", row.event_id, safeErrorCode);
       return true;
     });
+    if (!changed) void recordOperationsSignal(options.observations, { kind: "lease-lifecycle", outcome: "stale-write", count: 1 });
+    return changed;
   }
 
   async function advancePhase7ScheduleCursor(input: Phase7ScheduleCursorAdvance, stage: "retention" | "aggregate"): Promise<boolean> {
@@ -822,8 +888,8 @@ export function createPostgresOperationsPersistence(
         `.execute(executor);
         return changed.rows.length === 1;
       });
-    } catch {
-      throw new PostgresInfrastructureError();
+    } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
     }
   }
 
@@ -998,8 +1064,8 @@ export function createPostgresOperationsPersistence(
           failedCount: recent.rows.filter(row => row.status === "dead" || row.status === "failed").length,
         };
       });
-    } catch {
-      throw new PostgresInfrastructureError();
+    } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
     }
   }
 
@@ -1055,9 +1121,9 @@ export function createPostgresOperationsPersistence(
           returning job_id::text
         `.execute(executor);
         return inserted.rows.length === 1;
-      } catch {
-        throw new PostgresInfrastructureError();
-      }
+      } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
+    }
     },
     claimDue: claimJobs,
     complete: (id, token, at, coverageIncomplete) =>
@@ -1169,9 +1235,9 @@ export function createPostgresOperationsPersistence(
           }
           return progress.retention_complete_through >= requiredThroughPeriod;
         });
-      } catch {
-        throw new PostgresInfrastructureError();
-      }
+      } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
+    }
     },
     getPhase7ScheduleStatus: input => readPhase7ScheduleStatus(input),
     getPhase7ScheduleStatusAtDatabaseCurrentPeriod: input => readPhase7ScheduleStatus(input, true),

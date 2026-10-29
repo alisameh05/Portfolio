@@ -134,8 +134,9 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
   it("catches up real retention work before admitting dependent daily aggregation", async () => {
     const expiredEvent = id("PublicEvent");
     const currentEvent = id("PublicEvent");
+    const currentUtcDay = new Date(Date.parse(now) - 86_400_000).toISOString().slice(0, 10);
     await addEvent({ eventId: expiredEvent, occurredAt: "2026-10-01T00:00:00.000Z", acceptedAt: "2026-10-01T00:00:00.000Z" });
-    await addEvent({ eventId: currentEvent, occurredAt: "2026-10-14T09:00:00.000Z", acceptedAt: "2026-10-14T09:00:01.000Z" });
+    await addEvent({ eventId: currentEvent, occurredAt: `${currentUtcDay}T09:00:00.000Z`, acceptedAt: `${currentUtcDay}T09:00:01.000Z` });
     const expiredFeedback = id("Feedback");
     await admin!.query(`insert into interaction.feedback
       (feedback_id,portfolio_id,project_id,locale,author_name,paragraph,moderation_state,aggregate_version,submitted_at)
@@ -175,7 +176,7 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
     }
     expect((await admin!.query("select feedback_id from interaction.feedback where feedback_id = $1", [expiredFeedback])).rows).toHaveLength(0);
     expect((await admin!.query(`select event_count,incomplete from measurement.daily_aggregates
-      where portfolio_id=$1 and utc_day='2026-10-14' and metric_kind='action' and metric_key='page-viewed' and dimensions='{}'::jsonb`, [portfolioId])).rows)
+      where portfolio_id=$1 and utc_day=$2 and metric_kind='action' and metric_key='page-viewed' and dimensions='{}'::jsonb`, [portfolioId, currentUtcDay])).rows)
       .toEqual([{ event_count: "1", incomplete: false }]);
     expect((await admin!.query(`select incomplete,retention_sealed from measurement.daily_aggregate_checkpoints
       where portfolio_id=$1 and utc_day='2026-10-01'`, [portfolioId])).rows)
@@ -190,14 +191,16 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("Phase 7 leased due-work Postgr
   }, 60_000);
 
   it("proves concurrent lease exclusion, expiry recovery, stale-token denial, and idempotent post-effect replay", async () => {
+    // Keep both replay attempts on one policy snapshot while deriving the
+    // retained day from database time so the fixture stays inside the window.
+    const retainedUtcDay = new Date(Date.parse(now) - 86_400_000).toISOString().slice(0, 10);
+    const aggregateAsOf = `${retainedUtcDay}T23:59:59.999Z`;
     // Replay the same policy snapshot; lease time must not age this event out
     // of the aggregate's 14-day accepted-event window.
-    const aggregateAsOf = now;
     const scope = id("Portfolio");
     const jobId = id("Job");
     const eventId = id("PublicEvent");
     const subject = id("MeasurementVisitor");
-    const retainedUtcDay = new Date(Date.parse(now) - 86_400_000).toISOString().slice(0, 10);
     const retainedEventAt = `${retainedUtcDay}T10:00:00.000Z`;
     await addEvent({ eventId, subject, portfolioId: scope, occurredAt: retainedEventAt, acceptedAt: retainedEventAt });
     await seedReadyAggregationScope(scope, now.slice(0, 10));

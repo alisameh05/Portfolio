@@ -20,6 +20,8 @@
  */
 
 import { zGetCurrentCvQuery } from "../../contracts/http/v1/generated/zod.gen.js";
+import { observeHttpRequest } from "./observe-request.js";
+
 import type {
   CvPortfolioApplicationService,
   CurrentCvDownloadQuery,
@@ -82,7 +84,7 @@ function streamBytes(bytes: AsyncIterable<Uint8Array>): ReadableStream<Uint8Arra
   });
 }
 
-export async function handleGetCurrentCv(
+ async function handleGetCurrentCvUnobserved(
   request: Request,
   deps: CurrentCvAdapterDeps,
 ): Promise<Response> {
@@ -213,4 +215,9 @@ export async function handleGetCurrentCv(
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
+}
+
+
+export function handleGetCurrentCv(request: Request, deps: CurrentCvAdapterDeps): Promise<Response> {
+  return observeHttpRequest("public-current-cv", () => handleGetCurrentCvUnobserved(request, deps), deps.logger);
 }

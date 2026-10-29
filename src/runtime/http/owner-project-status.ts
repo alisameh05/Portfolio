@@ -13,6 +13,8 @@ import {
   zRetireOwnerProjectStatusValuePath,
   zRetireOwnerProjectStatusValueResponse,
 } from "../../contracts/http/owner/v1/generated/zod.gen.js";
+import { observeHttpRequest } from "./observe-request.js";
+
 import type { ActorContext, IdempotencyKey, Rejection, Result, StableId } from "../../shared/domain/index.js";
 import type { ContentAuthoringService, ContentProjectStatusValue } from "../../modules/content-publishing/application/authoring.js";
 import { createCorrelation, type Logger } from "../ports.js";
@@ -62,7 +64,7 @@ function valueReceipt(value: ContentProjectStatusValue, outcome: "project-status
   return { ...valueView(value), aggregateVersion: value.aggregateVersion, outcome };
 }
 
-export async function handleListOwnerProjectStatusValues(request: Request, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
+ async function handleListOwnerProjectStatusValuesUnobserved(request: Request, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
   const { traceId, instance } = context(request);
   try {
     const guard = await guardOwnerRequest(request, { operation: "listOwnerProjectStatusValues", mode: "read", security: deps.security, traceId, instance, logger: deps.logger });
@@ -78,7 +80,7 @@ export async function handleListOwnerProjectStatusValues(request: Request, deps:
   } catch (error) { return internalErrorProblem(error, traceId, instance, deps.logger); }
 }
 
-export async function handleCreateOwnerProjectStatusValue(request: Request, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
+ async function handleCreateOwnerProjectStatusValueUnobserved(request: Request, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
   const { traceId, instance } = context(request);
   try {
     const guard = await guardOwnerRequest(request, { operation: "createOwnerProjectStatusValue", mode: "mutation", security: deps.security, traceId, instance, logger: deps.logger });
@@ -144,10 +146,27 @@ async function handleStatusValueCommand(
   } catch (error) { return internalErrorProblem(error, traceId, instance, deps.logger); }
 }
 
-export async function handleRenameOwnerProjectStatusValue(request: Request, params: { readonly valueId: string }, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
+ async function handleRenameOwnerProjectStatusValueUnobserved(request: Request, params: { readonly valueId: string }, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
   return await handleStatusValueCommand(request, params.valueId, deps, "rename");
 }
 
-export async function handleRetireOwnerProjectStatusValue(request: Request, params: { readonly valueId: string }, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
+ async function handleRetireOwnerProjectStatusValueUnobserved(request: Request, params: { readonly valueId: string }, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
   return await handleStatusValueCommand(request, params.valueId, deps, "retire");
+}
+
+
+export function handleListOwnerProjectStatusValues(request: Request, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-project-status", () => handleListOwnerProjectStatusValuesUnobserved(request, deps), deps.logger);
+}
+
+export function handleCreateOwnerProjectStatusValue(request: Request, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-project-status", () => handleCreateOwnerProjectStatusValueUnobserved(request, deps), deps.logger);
+}
+
+export function handleRenameOwnerProjectStatusValue(request: Request, params: { readonly valueId: string }, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-project-status", () => handleRenameOwnerProjectStatusValueUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleRetireOwnerProjectStatusValue(request: Request, params: { readonly valueId: string }, deps: OwnerProjectStatusAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-project-status", () => handleRetireOwnerProjectStatusValueUnobserved(request, params, deps), deps.logger);
 }

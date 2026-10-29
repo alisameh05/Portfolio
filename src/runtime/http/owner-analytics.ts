@@ -1,4 +1,6 @@
 import type { PortfolioRequestScope } from "@shared/application";
+import { observeHttpRequest } from "./observe-request.js";
+
 /**
  * owner-analytics.ts — Phase 2 #32 Owner Analytics goal HTTP adapter.
  *
@@ -129,7 +131,7 @@ function commandHeaders(request: Request): Record<string, string | undefined> {
   };
 }
 
-export async function handleGetOwnerAnalyticsGoal(
+ async function handleGetOwnerAnalyticsGoalUnobserved(
   request: Request,
   params: { goalId: string },
   deps: OwnerAnalyticsAdapterDeps,
@@ -207,7 +209,7 @@ export async function handleGetOwnerAnalyticsGoal(
   }
 }
 
-export async function handleCreateOwnerAnalyticsGoalVersion(
+ async function handleCreateOwnerAnalyticsGoalVersionUnobserved(
   request: Request,
   params: { goalId: string },
   deps: OwnerAnalyticsAdapterDeps,
@@ -310,7 +312,7 @@ export async function handleCreateOwnerAnalyticsGoalVersion(
   }
 }
 
-export async function handleActivateOwnerAnalyticsGoalVersion(
+ async function handleActivateOwnerAnalyticsGoalVersionUnobserved(
   request: Request,
   params: { goalId: string },
   deps: OwnerAnalyticsAdapterDeps,
@@ -402,4 +404,17 @@ export async function handleActivateOwnerAnalyticsGoalVersion(
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
+}
+
+
+export function handleGetOwnerAnalyticsGoal(request: Request, params: { goalId: string }, deps: OwnerAnalyticsAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-analytics", () => handleGetOwnerAnalyticsGoalUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleCreateOwnerAnalyticsGoalVersion(request: Request, params: { goalId: string }, deps: OwnerAnalyticsAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-analytics", () => handleCreateOwnerAnalyticsGoalVersionUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleActivateOwnerAnalyticsGoalVersion(request: Request, params: { goalId: string }, deps: OwnerAnalyticsAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-analytics", () => handleActivateOwnerAnalyticsGoalVersionUnobserved(request, params, deps), deps.logger);
 }

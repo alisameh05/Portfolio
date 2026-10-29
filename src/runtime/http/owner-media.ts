@@ -54,6 +54,8 @@ import {
   zRejectOwnerMediaAssetPath,
   zRejectOwnerMediaAssetResponse,
 } from "../../contracts/http/owner/v1/generated/zod.gen.js";
+import { observeHttpRequest } from "./observe-request.js";
+
 import type {
   ActorContext,
   IdempotencyKey,
@@ -162,7 +164,7 @@ function toRejection(
   return rejection;
 }
 
-export async function handleGetOwnerMediaAggregate(
+ async function handleGetOwnerMediaAggregateUnobserved(
   request: Request,
   params: { mediaId: string },
   deps: OwnerMediaAdapterDeps,
@@ -232,7 +234,7 @@ export async function handleGetOwnerMediaAggregate(
   }
 }
 
-export async function handleCreateOwnerMediaUploadIntent(
+ async function handleCreateOwnerMediaUploadIntentUnobserved(
   request: Request,
   deps: OwnerMediaAdapterDeps,
 ): Promise<Response> {
@@ -409,7 +411,7 @@ async function handleMediaCommand(
   }
 }
 
-export async function handleRecordOwnerMediaProcessing(
+ async function handleRecordOwnerMediaProcessingUnobserved(
   request: Request,
   params: { mediaId: string },
   deps: OwnerMediaAdapterDeps,
@@ -442,7 +444,7 @@ export async function handleRecordOwnerMediaProcessing(
   );
 }
 
-export async function handleAcceptOwnerMediaAsset(
+ async function handleAcceptOwnerMediaAssetUnobserved(
   request: Request,
   params: { mediaId: string },
   deps: OwnerMediaAdapterDeps,
@@ -469,7 +471,7 @@ export async function handleAcceptOwnerMediaAsset(
   );
 }
 
-export async function handleRejectOwnerMediaAsset(
+ async function handleRejectOwnerMediaAssetUnobserved(
   request: Request,
   params: { mediaId: string },
   deps: OwnerMediaAdapterDeps,
@@ -494,4 +496,25 @@ export async function handleRejectOwnerMediaAsset(
     }) as RejectOwnerMediaAssetApplicationCommand,
     (command) => deps.service.rejectOwnerMediaAsset(command),
   );
+}
+
+
+export function handleGetOwnerMediaAggregate(request: Request, params: { mediaId: string }, deps: OwnerMediaAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-media", () => handleGetOwnerMediaAggregateUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleCreateOwnerMediaUploadIntent(request: Request, deps: OwnerMediaAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-media", () => handleCreateOwnerMediaUploadIntentUnobserved(request, deps), deps.logger);
+}
+
+export function handleRecordOwnerMediaProcessing(request: Request, params: { mediaId: string }, deps: OwnerMediaAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-media", () => handleRecordOwnerMediaProcessingUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleAcceptOwnerMediaAsset(request: Request, params: { mediaId: string }, deps: OwnerMediaAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-media", () => handleAcceptOwnerMediaAssetUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleRejectOwnerMediaAsset(request: Request, params: { mediaId: string }, deps: OwnerMediaAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-media", () => handleRejectOwnerMediaAssetUnobserved(request, params, deps), deps.logger);
 }

@@ -1,4 +1,6 @@
 import type { PortfolioRequestScope } from "@shared/application";
+import { observeHttpRequest } from "./observe-request.js";
+
 /**
  * rating.ts — Phase 2 #28 Rating HTTP adapter.
  *
@@ -55,7 +57,7 @@ function requestInstance(request: Request): string {
   }
 }
 
-export async function handlePutProjectRating(
+ async function handlePutProjectRatingUnobserved(
   request: Request,
   params: { projectId: string },
   deps: RatingAdapterDeps,
@@ -155,4 +157,9 @@ export async function handlePutProjectRating(
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
+}
+
+
+export function handlePutProjectRating(request: Request, params: { projectId: string }, deps: RatingAdapterDeps): Promise<Response> {
+  return observeHttpRequest("public-rating", () => handlePutProjectRatingUnobserved(request, params, deps), deps.logger);
 }

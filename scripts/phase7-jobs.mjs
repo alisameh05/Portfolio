@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { Client } from "pg";
 import { workingTreeSourceSha256 } from "./phase5-source-identity.mjs";
+import { partitionMigrationsAt } from "./phase7-migration-boundary.mjs";
 import { assertPhase3OperationsContractPreserved, assertPhase3OperationsRls, assertPhase4SnapshotsEquivalent,
   snapshotPhase4Database } from "./phase4-migration-integrity.mjs";
 import { selectPhase7JobsMode } from "./phase7-jobs-config.mjs";
@@ -99,16 +100,13 @@ try {
     await admin.query("create database phase3_baseline");
     await admin.query("create database phase8_legacy");
     const baselineFiles = Object.keys(JSON.parse(readFileSync("supabase/baselines/phase3.json", "utf8")).migrations).sort();
-    const forwardMigration = migrations.at(-1);
-    if (!forwardMigration || forwardMigration !== "20261026164603_phase7_durable_policy_schedule_keys.sql") {
-      throw new Error("PHASE8_DURABLE_SCHEDULE_MIGRATION_ORDER_INVALID");
-    }
+    const migrationBoundary = partitionMigrationsAt(migrations, "20261026164603_phase7_durable_policy_schedule_keys.sql");
+    const { forwardMigration, predecessorMigrations, laterMigrations } = migrationBoundary;
     await withDatabase("phase3_baseline", port, async client => {
       await applyMigrationFiles(client, baselineFiles);
       await recordMigrationLedger(client, baselineFiles);
     });
     await withDatabase("phase8_upgrade", port, async client => {
-      const predecessorMigrations = migrations.filter(name => name !== forwardMigration);
       await applyMigrationFiles(client, predecessorMigrations);
       await recordMigrationLedger(client, predecessorMigrations);
       await client.query("begin");
@@ -130,8 +128,9 @@ try {
           '2026-10-26T08:04:00Z','2030-01-01T00:00:00Z')`);
       await client.query("commit");
       await applyMigrationFiles(client, [forwardMigration]);
-      await client.query("insert into supabase_migrations.schema_migrations(version,name) values ($1,$2)",
-        [forwardMigration.slice(0, 14), forwardMigration.slice(15, -4)]);
+      await recordMigrationLedger(client, [forwardMigration]);
+      await applyMigrationFiles(client, laterMigrations);
+      await recordMigrationLedger(client, laterMigrations);
       const preserved = await client.query(`select j.job_id::text,j.status,j.payload,j.attempt_count,j.lease_owner,j.lease_token,
           j.lease_expires_at::text,j.semantic_scope_id::text,j.semantic_period,j.work_incomplete,
           o.event_id::text,o.event_type,o.aggregate_id::text,o.aggregate_version,o.payload as outbox_payload,
@@ -170,10 +169,10 @@ try {
         throw new Error("PHASE8_UPGRADE_PREEXISTING_OPERATIONS_DATA_NOT_PRESERVED");
       }
     });
-    const legacyMigrations = migrations.filter(name => name !== forwardMigration);
+    const legacyBoundaryMigrations = predecessorMigrations;
     await withDatabase("phase8_legacy", port, async client => {
-      await applyMigrationFiles(client, legacyMigrations);
-      await recordMigrationLedger(client, legacyMigrations);
+      await applyMigrationFiles(client, legacyBoundaryMigrations);
+      await recordMigrationLedger(client, legacyBoundaryMigrations);
     });
     await recordMigrationLedger(admin, migrations);
     const baselineUrl = `postgres://postgres@127.0.0.1:${port}/phase3_baseline?sslmode=disable`;
@@ -193,12 +192,13 @@ try {
     assertPhase3OperationsRls(upgradeSnapshot);
     assertPhase3OperationsContractPreserved(baselineSnapshot, upgradeSnapshot);
     assertPhase4SnapshotsEquivalent(cleanSnapshot, upgradeSnapshot);
-    migrationProof = { cleanReplay: "passed", predecessorMigrations: migrations.length - 1,
+    migrationProof = { cleanReplay: "passed", predecessorMigrations: predecessorMigrations.length,
       forwardMigration, operationsContractPreserved: true, cleanUpgradeEquivalent: true,
       predecessorSchemaCommittedRowsPreserved: { jobs: 1, outboxEvents: 1, idempotencyReceipts: 1,
         nullableScheduleMetadata: true, workIncompleteDefault: false },
       phase7ScheduleCatalog,
-      rollbackCompatibilityMigrations: legacyMigrations.length };
+      laterMigrationsAppliedAfterTarget: laterMigrations,
+      rollbackCompatibilityMigrations: legacyBoundaryMigrations.length };
   }
   await admin.query("create role due_work_worker_runtime login nosuperuser nobypassrls; grant shipwithali_worker to due_work_worker_runtime");
   const workerUrl = `postgres://due_work_worker_runtime@127.0.0.1:${port}/postgres?sslmode=disable`;

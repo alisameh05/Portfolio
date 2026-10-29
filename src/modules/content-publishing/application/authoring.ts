@@ -2,7 +2,8 @@ import { err, parseStableId, type ActorContext, type IdempotencyKey, type Reject
 import type { Clock, StableIdGenerator, TransactionContext } from "../../../runtime/ports.js";
 import { createSystemClock, createSystemIdGenerator } from "../../../runtime/ports.js";
 import { hashCanonicalRequest } from "../../../shared/application/idempotency.js";
-import type { OperationsPersistencePorts, SafeResultEnvelope } from "../../portability-operations/index.js";
+import type { OperationsObservationPort, OperationsPersistencePorts, SafeResultEnvelope } from "../../portability-operations/index.js";
+import { recordOperationsSignal } from "../../portability-operations/index.js";
 import type { ContentHistoryEntry, ContentHistoryPage, ContentKind, CreateDraftPayload, LocalizedDraftData, PrivateRevisionPreview, SupportedLocale } from "../domain/index.js";
 import type { ChangePublicSlugCommand, CorrectCandidateSlugCommand, MediaAcceptancePort, ProjectCommandReceipt, PublishLanguageVersionCommand, ReviewRevisionCommand,
   GetPublicProjectMediaUseQuery, VisibleMediaUsageBatch, VisibleMediaUsageQuery } from "./service.js";
@@ -963,6 +964,7 @@ export function createContentAuthoringService(input: {
   /** Test seam for authoritative Media facts; production intentionally has no Media acceptance adapter yet. */
   readonly mediaAcceptance?: MediaAcceptancePort;
   readonly taxonomyAssignments?: ProjectTaxonomyAssignmentFactsPort;
+  readonly operationsObservations?: Pick<OperationsObservationPort, "recordSignal">;
 }): ContentAuthoringService {
   const clock = input.clock ?? createSystemClock();
   const ids = input.ids ?? createSystemIdGenerator();
@@ -1607,13 +1609,22 @@ export function createContentAuthoringService(input: {
           publishedAt: publication.publishedAt,
         } };
       };
-      return await executeIdempotently<ContentAuthoringPublicationReceipt>({
-        operationScope: PUBLISH_SCOPE,
-        actor: command.actor,
-        key: command.idempotencyKey as IdempotencyKey,
-        request: { contentId: command.contentId, expectedVersion: command.expectedVersion, locale: command.locale, revisionId: command.revisionId },
-        effect,
-      });
+      try {
+        const result = await executeIdempotently<ContentAuthoringPublicationReceipt>({
+          operationScope: PUBLISH_SCOPE,
+          actor: command.actor,
+          key: command.idempotencyKey as IdempotencyKey,
+          request: { contentId: command.contentId, expectedVersion: command.expectedVersion, locale: command.locale, revisionId: command.revisionId },
+          effect,
+        });
+        if (!result.ok && result.error.kind === "temporarily_unavailable") {
+          void recordOperationsSignal(input.operationsObservations, { kind: "publication-failure", category: "dependency" });
+        }
+        return result;
+      } catch (error) {
+        void recordOperationsSignal(input.operationsObservations, { kind: "publication-failure", category: "transaction" });
+        throw error;
+      }
     },
 
     async correctCandidateSlug(command) {

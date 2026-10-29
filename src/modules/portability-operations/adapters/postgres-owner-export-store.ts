@@ -24,6 +24,7 @@ import type { DB } from "../../../shared/adapters/postgres/database.generated.js
 import {
   createPostgresTransactionRunner,
   PostgresInfrastructureError,
+  postgresFailureCategory,
   resolvePostgresTransaction,
 } from "../../../shared/adapters/postgres/runtime.js";
 import type { PostgresExecutor } from "../../../shared/adapters/postgres/runtime.js";
@@ -43,6 +44,9 @@ import type {
 import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, type OwnerExportPackageManifest } from "../application/service.js";
 import { checkpointOwnerExportSnapshot, type OwnerExportAssemblySnapshot, type OwnerExportConfigurationSnapshot, type OwnerExportSelectedSnapshot } from "../application/owner-export-package.js";
 import type { TransactionContext, TransactionRunner } from "../../../runtime/ports.js";
+import type { OperationsObservationPort } from "../application/service.js";
+import { recordOperationsSignal } from "../application/operations-observability.js";
+import { supportsLeaseAcquiredAtColumn } from "./postgres-schema-capabilities.js";
 import type { OwnerExportArtifactCleanupPort, OwnerExportInvalidationLedgerRecord } from "../application/owner-export-cleanup.js";
 
 export const EXPORT_STATUS_VALUES: readonly ExportStatus[] = [
@@ -126,8 +130,8 @@ function parseRow(row: ExportRow): PersistedOwnerExport {
   if (row.failure_code !== null) {
     try {
       failureCode = parseSafeErrorCode(row.failure_code);
-    } catch {
-      throw new PostgresInfrastructureError();
+    } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
     }
   }
   const startedAt = toIso(row.started_at);
@@ -240,6 +244,8 @@ const EXPORT_COLUMNS = sql.raw(`export_id, portfolio_id, owner_id, included_scop
 
 export interface PostgresOwnerExportStoreOptions {
   readonly outbox: OutboxPersistencePort;
+  readonly transactions?: TransactionRunner;
+  readonly observations?: Pick<OperationsObservationPort, "recordSignal">;
 }
 
 export function createPostgresOwnerExportStore(
@@ -247,7 +253,7 @@ export function createPostgresOwnerExportStore(
   options: PostgresOwnerExportStoreOptions,
 ): OwnerExportStorePort & OwnerExportArtifactCleanupPort {
   const { outbox } = options;
-  const transactions = createPostgresTransactionRunner(database);
+  const transactions = options.transactions ?? createPostgresTransactionRunner(database);
 
   async function reserveOwnerExport(
     input: OwnerExportReservationInput,
@@ -267,8 +273,8 @@ export function createPostgresOwnerExportStore(
           ${input.schemaVersion}, ${input.requestedAt}::timestamptz, 1
         )
       `.execute(executor);
-    } catch {
-      throw new PostgresInfrastructureError();
+    } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
     }
   }
 
@@ -291,9 +297,9 @@ export function createPostgresOwnerExportStore(
         `.execute(executor);
         const row = result.rows[0];
         return row === undefined ? null : parseRow(row);
-      } catch {
-        throw new PostgresInfrastructureError();
-      }
+      } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
+    }
     });
   }
 
@@ -338,9 +344,9 @@ export function createPostgresOwnerExportStore(
              and status = 'building' and snapshot_id is null and snapshot_data is null
         `.execute(executor);
         return { ok: true as const, value: Number(updated.numAffectedRows ?? 0) === 1 ? "saved" as const : "stale" as const };
-      } catch {
-        throw new PostgresInfrastructureError();
-      }
+      } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
+    }
     });
   }
 
@@ -362,15 +368,17 @@ export function createPostgresOwnerExportStore(
              and candidate_artifact_id is null and candidate_sha256 is null
         `.execute(executor);
         return { ok: true as const, value: Number(updated.numAffectedRows ?? 0) === 1 ? "saved" as const : "stale" as const };
-      } catch {
-        throw new PostgresInfrastructureError();
-      }
+      } catch (error) {
+      throw new PostgresInfrastructureError(postgresFailureCategory(error));
+    }
     });
   }
 
   async function applyOwnerExportTransition(
     input: OwnerExportTransitionInput,
   ): Promise<Result<OwnerExportTransitionOutcome, never>> {
+    const hasLeaseAcquiredAt = input.leaseToken === undefined
+      ? false : await supportsLeaseAcquiredAtColumn(database);
     return transactions.run(async (context) => {
       const executor = resolvePostgresTransaction(context);
       const failedAt = input.toStatus === "failed" ? input.transitionedAt : null;
@@ -460,20 +468,23 @@ export function createPostgresOwnerExportStore(
           ? await sql`update operations.jobs
                 set status = 'completed', completed_at = ${persisted.completedAt ?? input.transitionedAt}::timestamptz,
                     lease_owner = null, lease_token = null, lease_expires_at = null
+                    ${hasLeaseAcquiredAt ? sql`, lease_acquired_at = null` : sql``}
               where job_id = ${input.actingJobId}::uuid and status = 'leased' and lease_token = ${input.leaseToken}`.execute(executor)
           : input.toStatus === "failed" && input.leaseToken !== undefined
             ? await sql`update operations.jobs
                   set status = 'dead', last_error_code = ${input.failureCode},
                       lease_owner = null, lease_token = null, lease_expires_at = null
+                      ${hasLeaseAcquiredAt ? sql`, lease_acquired_at = null` : sql``}
                 where job_id = ${input.actingJobId}::uuid and status = 'leased' and lease_token = ${input.leaseToken}`.execute(executor)
             : undefined;
         if (queueTransition !== undefined && Number(queueTransition.numAffectedRows ?? 0) !== 1) {
+          void recordOperationsSignal(options.observations, { kind: "lease-lifecycle", outcome: "stale-write", count: 1 });
           throw new PostgresInfrastructureError();
         }
         return { ok: true as const, value: { kind: "applied" as const, result: persisted } };
       } catch (error) {
         if (error instanceof PostgresInfrastructureError) throw error;
-        throw new PostgresInfrastructureError();
+        throw new PostgresInfrastructureError(postgresFailureCategory(error));
       }
     });
   }

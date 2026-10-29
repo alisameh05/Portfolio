@@ -40,6 +40,7 @@ import type {
   Result,
   StableId,
 } from "@shared/domain";
+import { createHash } from "node:crypto";
 import { err, ok, parseIdempotencyKey, parseStableId } from "@shared/domain";
 import { hashCanonicalRequest } from "../../../shared/application/idempotency.js";
 import type { Clock, StableIdGenerator } from "../../../runtime/ports.js";
@@ -56,7 +57,9 @@ import type {
   OwnerExportView,
   RequestOwnerExportApplicationCommand,
 } from "./service.js";
-import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, validateOwnerExportObjectRead } from "./service.js";
+import { OWNER_EXPORT_ASSEMBLY_JOB_TYPE, OwnerExportReadIntegrityError, validateOwnerExportObjectRead } from "./service.js";
+import { recordOperationsSignal } from "./operations-observability.js";
+import type { OperationsObservationPort } from "./service.js";
 import type {
   OperationsPersistencePorts,
   SafeErrorCode,
@@ -188,6 +191,7 @@ export interface OwnerExportServiceDependencies {
   readonly ids: StableIdGenerator;
   /** Optional bounded private artifact read seam for the download operation. */
   readonly objectRead?: OwnerExportObjectReadPort;
+  readonly observations?: Pick<OperationsObservationPort, "recordSignal">;
   /** Moderation ZIPs are invalidated unless retained Feedback still matches at download time. */
   readonly revalidateModerationForDownload?: (input: {
     readonly snapshot: OwnerExportAssemblySnapshot;
@@ -205,7 +209,7 @@ export interface OwnerExportServiceDependencies {
 export function createOwnerExportService(
   dependencies: OwnerExportServiceDependencies,
 ): OwnerExportApplicationService {
-  const { operations, exports: exportStore, clock, ids, objectRead } = dependencies;
+  const { operations, exports: exportStore, clock, ids, objectRead, observations } = dependencies;
 
   async function loadOwnedExport(
     input: {
@@ -455,6 +459,10 @@ export function createOwnerExportService(
     if (objectRead === undefined) {
       return { ok: false, error: { kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
     }
+    const recordReadFailure = async (integrityFailure = false) => {
+      await recordOperationsSignal(observations, { kind: "storage-operation", operation: "read", outcome: "failed" });
+      if (integrityFailure) await recordOperationsSignal(observations, { kind: "owner-export-integrity", outcome: "failed" });
+    };
     try {
       const read = await objectRead.readOwnerExport({
         portfolioId: query.portfolioId,
@@ -463,17 +471,94 @@ export function createOwnerExportService(
         expectedSha256: record.artifactSha256,
         expectedContentLength: record.artifactContentLength,
       });
-      if (!read.ok) return read;
+      if (!read.ok) {
+        await recordReadFailure();
+        return read;
+      }
       const validated = validateOwnerExportObjectRead(read.value);
-      if (!validated.ok) return validated;
+      if (!validated.ok) {
+        await recordReadFailure();
+        return validated;
+      }
+      if (validated.value.contentLength !== record.artifactContentLength || validated.value.sha256 !== record.artifactSha256) {
+        await recordReadFailure(true);
+        return { ok: false, error: { kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
+      }
+      const expectedLength = record.artifactContentLength;
+      const expectedSha256 = record.artifactSha256;
+      const content: AsyncIterable<Uint8Array> = {
+        [Symbol.asyncIterator]() {
+          let source: AsyncIterator<Uint8Array> | undefined;
+          const getSource = () => source ??= validated.value.content[Symbol.asyncIterator]();
+          const digest = createHash("sha256");
+          let bytes = 0;
+          let cancelled = false;
+          let completed = false;
+          let failed = false;
+          let pendingNext: Promise<IteratorResult<Uint8Array>> | undefined;
+          let returnPromise: Promise<IteratorResult<Uint8Array>> | undefined;
+          const done: IteratorResult<Uint8Array> = { done: true, value: undefined };
+          return {
+            next() {
+              if (cancelled || completed || failed) return Promise.resolve(done);
+              const operation = (async (): Promise<IteratorResult<Uint8Array>> => {
+                try {
+                  const next = await getSource().next();
+                  if (cancelled) return done;
+                  if (next.done) {
+                    if (bytes !== expectedLength || digest.digest("hex") !== expectedSha256) {
+                      throw new OwnerExportReadIntegrityError();
+                    }
+                    completed = true;
+                    await recordOperationsSignal(observations, { kind: "owner-export-integrity", outcome: "verified" });
+                    await recordOperationsSignal(observations, {
+                      kind: "storage-operation", operation: "read", outcome: "succeeded", bytes,
+                    });
+                    return done;
+                  }
+                  bytes += next.value.byteLength;
+                  if (bytes > expectedLength) throw new OwnerExportReadIntegrityError();
+                  digest.update(next.value);
+                  return { done: false, value: next.value };
+                } catch (error) {
+                  failed = true;
+                  const integrityFailure = error instanceof OwnerExportReadIntegrityError;
+                  await recordReadFailure(integrityFailure);
+                  if (integrityFailure) throw error;
+                  throw new Error("Owner export download failed.");
+                }
+              })();
+              pendingNext = operation;
+              return operation.finally(() => {
+                if (pendingNext === operation) pendingNext = undefined;
+              });
+            },
+            async return() {
+              if (returnPromise !== undefined) return returnPromise;
+              if (completed || failed) return done;
+              cancelled = true;
+              returnPromise = (async () => {
+                try {
+                  const iterator = source ?? getSource();
+                  await iterator.return?.();
+                } catch { /* cancellation is not a Storage failure */ }
+                await pendingNext?.catch(() => undefined);
+                return done;
+              })();
+              return returnPromise;
+            },
+          };
+        },
+      };
       return ok({
         exportId: query.exportId,
         schemaVersion: record.schemaVersion,
         filename: artifactFilename(record.schemaVersion),
         contentLength: validated.value.contentLength,
-        content: validated.value.content,
+        content,
       });
-    } catch {
+    } catch (error) {
+      await recordReadFailure(error instanceof OwnerExportReadIntegrityError);
       return { ok: false, error: { kind: "temporarily_unavailable", code: "OWNER_EXPORT_ARTIFACT_UNAVAILABLE" } };
     }
   }

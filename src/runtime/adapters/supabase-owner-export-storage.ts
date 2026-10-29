@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { err, ok, parseStableId, type Rejection, type Result, type StableId } from "@shared/domain";
-import { MAX_OWNER_EXPORT_ARTIFACT_BYTES, type OwnerExportObjectReadPort, type OwnerExportObjectReadRequest } from "../../modules/portability-operations/application/service.js";
+import { MAX_OWNER_EXPORT_ARTIFACT_BYTES, OwnerExportReadIntegrityError, type OwnerExportObjectReadPort, type OwnerExportObjectReadRequest } from "../../modules/portability-operations/application/service.js";
 import type { OwnerExportObjectDeletePort } from "../../modules/portability-operations/application/owner-export-cleanup.js";
 
 export interface OwnerExportObjectWritePort {
@@ -132,27 +132,70 @@ export function createSupabaseOwnerExportStorage(options: SupabaseOwnerExportSto
       }
       const body = response.body;
       const content: AsyncIterable<Uint8Array> = {
-        async *[Symbol.asyncIterator]() {
+        [Symbol.asyncIterator]() {
           const reader = body.getReader();
           const digest = createHash("sha256");
           let total = 0;
-          try {
-            while (true) {
-              const next = await reader.read();
-              if (next.done) break;
-              total += next.value.byteLength;
-              if (total > input.expectedContentLength) throw new Error("OWNER_EXPORT_STREAM_LENGTH_MISMATCH");
-              digest.update(next.value);
-              yield next.value;
-            }
-            if (total !== input.expectedContentLength || digest.digest("hex") !== input.expectedSha256) {
-              throw new Error("OWNER_EXPORT_STREAM_INTEGRITY_MISMATCH");
-            }
-          } finally {
-            if (controller.signal.aborted) await reader.cancel().catch(() => undefined);
+          let cancelled = false;
+          let completed = false;
+          let released = false;
+          let pendingNext: Promise<IteratorResult<Uint8Array>> | undefined;
+          let returnPromise: Promise<IteratorResult<Uint8Array>> | undefined;
+          let readerCancel: Promise<void> | undefined;
+          const done: IteratorResult<Uint8Array> = { done: true, value: undefined };
+          const cancelReader = () => {
+            readerCancel ??= reader.cancel().then(() => undefined, () => undefined);
+            return readerCancel;
+          };
+          const release = () => {
+            if (released) return;
+            released = true;
             reader.releaseLock();
             clearTimeout(timer);
-          }
+          };
+          return {
+            next() {
+              if (cancelled || completed) return Promise.resolve(done);
+              const operation = (async (): Promise<IteratorResult<Uint8Array>> => {
+                try {
+                  const next = await reader.read();
+                  if (cancelled) return done;
+                  if (next.done) {
+                    completed = true;
+                    const verified = total === input.expectedContentLength && digest.digest("hex") === input.expectedSha256;
+                    release();
+                    if (!verified) throw new OwnerExportReadIntegrityError();
+                    return done;
+                  }
+                  total += next.value.byteLength;
+                  if (total > input.expectedContentLength) throw new OwnerExportReadIntegrityError();
+                  digest.update(next.value);
+                  return { done: false, value: next.value };
+                } catch (error) {
+                  completed = true;
+                  await cancelReader();
+                  release();
+                  throw error;
+                }
+              })();
+              pendingNext = operation;
+              return operation.finally(() => {
+                if (pendingNext === operation) pendingNext = undefined;
+              });
+            },
+            async return() {
+              if (returnPromise !== undefined) return returnPromise;
+              if (completed) return done;
+              cancelled = true;
+              returnPromise = (async () => {
+                await cancelReader();
+                await pendingNext?.catch(() => undefined);
+                release();
+                return done;
+              })();
+              return returnPromise;
+            },
+          };
         },
       };
       return ok({ contentLength: input.expectedContentLength, sha256: input.expectedSha256, content });

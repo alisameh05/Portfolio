@@ -61,6 +61,7 @@ import type {
   OwnerExportDownloadView,
   RequestOwnerExportApplicationCommand,
 } from "../../modules/portability-operations/index.js";
+import { emitOperationsSignal, type OperationsObservationPort } from "../../modules/portability-operations/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
 import {
   guardOwnerRequest,
@@ -78,6 +79,7 @@ export interface OwnerExportAdapterDeps {
   security: OwnerRequestSecurity;
   portfolioId: StableId<"Portfolio">;
   logger?: Logger;
+  operationsObservations?: Pick<OperationsObservationPort, "recordSignal">;
 }
 
 export const OWNER_EXPORT_MEDIA_TYPE = "application/vnd.shipwithali.owner-export+zip";
@@ -135,7 +137,7 @@ function toRejection(
   return rejection;
 }
 
-export async function handleRequestOwnerExport(
+async function handleRequestOwnerExportUnobserved(
   request: Request,
   deps: OwnerExportAdapterDeps,
 ): Promise<Response> {
@@ -205,7 +207,7 @@ export async function handleRequestOwnerExport(
   }
 }
 
-export async function handleGetOwnerExport(
+async function handleGetOwnerExportUnobserved(
   request: Request,
   params: { exportId: string },
   deps: OwnerExportAdapterDeps,
@@ -293,35 +295,40 @@ function createBoundedDownloadStream(
 ): ReadableStream<Uint8Array> {
   const iterator = content[Symbol.asyncIterator]();
   let observedLength = 0;
+  const safeStreamError = () => new Error("Owner export download failed.");
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
         const item = await iterator.next();
         if (item.done) {
           if (observedLength !== expectedLength) {
-            controller.error(new Error("Export stream length did not match its descriptor."));
+            controller.error(safeStreamError());
             return;
           }
           controller.close();
           return;
         }
         if (!(item.value instanceof Uint8Array) || observedLength + item.value.byteLength > expectedLength) {
-          controller.error(new Error("Export stream exceeded its declared length."));
+          controller.error(safeStreamError());
           return;
         }
         observedLength += item.value.byteLength;
         controller.enqueue(item.value.slice());
-      } catch (error) {
-        controller.error(error);
+      } catch {
+        controller.error(safeStreamError());
       }
     },
     async cancel() {
-      await iterator.return?.();
+      try {
+        await iterator.return?.();
+      } catch {
+        throw safeStreamError();
+      }
     },
   });
 }
 
-export async function handleDownloadOwnerExport(
+async function handleDownloadOwnerExportUnobserved(
   request: Request,
   params: { exportId: string },
   deps: OwnerExportAdapterDeps,
@@ -392,4 +399,44 @@ export async function handleDownloadOwnerExport(
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
+}
+
+async function observeOwnerExportRequest(
+  route: "owner-export-request" | "owner-export-status" | "owner-export-download",
+  deps: OwnerExportAdapterDeps,
+  action: () => Promise<Response>,
+): Promise<Response> {
+  const startedAt = performance.now();
+  let response: Response | undefined;
+  try {
+    response = await action();
+    return response;
+  } finally {
+    const durationMs = Math.max(0, Math.min(86_400_000, Math.floor(performance.now() - startedAt)));
+    const status = response?.status ?? 500;
+    const statusClass = `${Math.floor(status / 100)}xx` as "2xx" | "3xx" | "4xx" | "5xx";
+    await emitOperationsSignal(deps.logger, deps.operationsObservations, {
+      kind: "http-request", route, statusClass, durationMs,
+    });
+  }
+}
+
+export function handleRequestOwnerExport(request: Request, deps: OwnerExportAdapterDeps): Promise<Response> {
+  return observeOwnerExportRequest("owner-export-request", deps, () => handleRequestOwnerExportUnobserved(request, deps));
+}
+
+export function handleGetOwnerExport(
+  request: Request,
+  params: { exportId: string },
+  deps: OwnerExportAdapterDeps,
+): Promise<Response> {
+  return observeOwnerExportRequest("owner-export-status", deps, () => handleGetOwnerExportUnobserved(request, params, deps));
+}
+
+export function handleDownloadOwnerExport(
+  request: Request,
+  params: { exportId: string },
+  deps: OwnerExportAdapterDeps,
+): Promise<Response> {
+  return observeOwnerExportRequest("owner-export-download", deps, () => handleDownloadOwnerExportUnobserved(request, params, deps));
 }

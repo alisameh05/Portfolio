@@ -9,6 +9,8 @@ import {
   zReviewOwnerContentRevisionPath,
   zReviewOwnerContentRevisionResponse,
 } from "../../contracts/http/owner/v1/generated/zod.gen.js";
+import { observeHttpRequest } from "./observe-request.js";
+
 import type { ContentAuthoringService } from "../../modules/content-publishing/application/authoring.js";
 import type { IdempotencyKey, Rejection, StableId } from "../../shared/domain/index.js";
 import { createCorrelation, type Logger } from "../ports.js";
@@ -43,7 +45,7 @@ function versionFromHeader(value: string): number | null {
   return Number.isSafeInteger(version) ? version : null;
 }
 
-export async function handlePreviewOwnerContentRevision(
+ async function handlePreviewOwnerContentRevisionUnobserved(
   request: Request,
   params: { readonly contentId: string; readonly revisionId: string },
   deps: OwnerContentReviewAdapterDeps,
@@ -71,7 +73,7 @@ export async function handlePreviewOwnerContentRevision(
   }
 }
 
-export async function handleReviewOwnerContentRevision(
+ async function handleReviewOwnerContentRevisionUnobserved(
   request: Request,
   params: { readonly contentId: string; readonly revisionId: string },
   deps: OwnerContentReviewAdapterDeps,
@@ -118,7 +120,7 @@ export async function handleReviewOwnerContentRevision(
   }
 }
 
-export async function handleGetOwnerContentHistory(
+ async function handleGetOwnerContentHistoryUnobserved(
   request: Request,
   params: { readonly contentId: string },
   deps: OwnerContentReviewAdapterDeps,
@@ -154,4 +156,17 @@ export async function handleGetOwnerContentHistory(
   } catch (error) {
     return internalErrorProblem(error, traceId, instance, logger);
   }
+}
+
+
+export function handlePreviewOwnerContentRevision(request: Request, params: { readonly contentId: string; readonly revisionId: string }, deps: OwnerContentReviewAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-content-review", () => handlePreviewOwnerContentRevisionUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleReviewOwnerContentRevision(request: Request, params: { readonly contentId: string; readonly revisionId: string }, deps: OwnerContentReviewAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-content-review", () => handleReviewOwnerContentRevisionUnobserved(request, params, deps), deps.logger);
+}
+
+export function handleGetOwnerContentHistory(request: Request, params: { readonly contentId: string }, deps: OwnerContentReviewAdapterDeps): Promise<Response> {
+  return observeHttpRequest("owner-content-review", () => handleGetOwnerContentHistoryUnobserved(request, params, deps), deps.logger);
 }
