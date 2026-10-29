@@ -356,6 +356,45 @@ describe("operations summary PostgreSQL qualification", () => {
     await exerciseQueueAndOwnerExportCompatibility(freshAdmin, freshWorkerUrl!, false, 900, true);
   }, 60_000);
 
+  it("preserves measured null oldest age for empty and future-only queues and zero for newly eligible work", async () => {
+    const runtime = createPostgresRuntimeDatabase(freshWorkerUrl!, { max: 1 });
+    const service = createOperationsSummaryService({ reader: createPostgresOperationsSummaryReader(runtime.database),
+      clock: { now: () => observedAt } });
+    const read = () => service.readOperationsSummary({
+      actor: { kind: "system", jobId: uuid(510) as StableId<"Job">, purpose: OPERATIONS_SUMMARY_PURPOSE }, portfolioId,
+    });
+    const eventId = uuid(511);
+    try {
+      const empty = await read();
+      expect(empty.ok).toBe(true);
+      if (!empty.ok) throw new Error("EMPTY_QUEUE_SUMMARY_FAILED");
+      expect(empty.value.outbox.eligibleDepth).toMatchObject({ value: 0, capped: false });
+      expect(empty.value.outbox.oldestEligibleAgeSeconds).toMatchObject({ state: "measured", value: null });
+
+      await freshAdmin.query(`insert into operations.outbox_events
+        (event_id,event_type,schema_version,aggregate_id,aggregate_version,payload,correlation_id,occurred_at,available_at)
+        values ($1::uuid,'fixture.event.v1',1,$2::uuid,1,'{}'::jsonb,'future-only-fixture',
+          $3::timestamptz,$3::timestamptz + interval '1 hour')`, [eventId, uuid(512), observedAt]);
+      const future = await read();
+      expect(future.ok).toBe(true);
+      if (!future.ok) throw new Error("FUTURE_QUEUE_SUMMARY_FAILED");
+      expect(future.value.outbox.eligibleDepth).toMatchObject({ value: 0, capped: false });
+      expect(future.value.outbox.futureDelayedDepth.value).toBe(1);
+      expect(future.value.outbox.oldestEligibleAgeSeconds).toMatchObject({ state: "measured", value: null });
+
+      await freshAdmin.query("update operations.outbox_events set available_at=$2::timestamptz where event_id=$1::uuid",
+        [eventId, observedAt]);
+      const eligible = await read();
+      expect(eligible.ok).toBe(true);
+      if (!eligible.ok) throw new Error("ELIGIBLE_QUEUE_SUMMARY_FAILED");
+      expect(eligible.value.outbox.eligibleDepth).toMatchObject({ value: 1, capped: false });
+      expect(eligible.value.outbox.oldestEligibleAgeSeconds).toMatchObject({ state: "measured", value: 0 });
+    } finally {
+      await freshAdmin.query("delete from operations.outbox_events where event_id=$1::uuid", [eventId]);
+      await runtime.resource.close();
+    }
+  });
+
   it("reads a bounded one-Portfolio summary under worker RLS, preserves unknown values, and performs no writes", async () => {
     const query: OperationsSummaryQuery = { portfolioId, observedAt, windowSeconds: 900, maxRows: 1_000 };
     const raw = await buildOperationsSummaryQuery(query).execute(worker.database);

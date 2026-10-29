@@ -36,10 +36,15 @@ function stubOperationsDatabase(queue: QueueEntry[]) {
         const sqlText =
           typeof graphic?.sql === "string" ? graphic.sql :
           rendered.includes("to_regclass('operations.incidents')") ? rendered :
+          rendered.includes("information_schema.columns") ? rendered :
           `stub statement ${calls}`;
         return { sql: sqlText, parameters: [] as never[] };
       },
       async executeQuery(compiled: { sql: string }) {
+        // This fixture models the schema before optional lease timestamps.
+        if (compiled.sql.includes("information_schema.columns") && compiled.sql.includes("lease_acquired_at")) {
+          return { rows: [{ available: false }] };
+        }
         // The schema-era probe is infrastructure plumbing, not a scripted step.
         if (compiled.sql.includes("to_regclass('operations.incidents')")) {
           return { rows: [{ bounded: true }] };

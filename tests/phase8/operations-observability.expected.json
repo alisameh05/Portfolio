@@ -8,6 +8,7 @@
     "tests/runtime/owner-content-authoring.test.ts"
   ],
   "tests": [
+    "operations summary PostgreSQL qualification preserves measured null oldest age for empty and future-only queues and zero for newly eligible work",
     "Content authoring application service corrects private Project candidates with optimistic concurrency and exact idempotent replay",
     "Content authoring application service creates a private achievement Draft with its typed initial Revision",
     "Content authoring application service creates a private project Draft with its typed initial Revision",

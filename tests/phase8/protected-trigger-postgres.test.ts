@@ -383,7 +383,12 @@ describe.runIf(Boolean(WORKER_URL && ADMIN_URL))("protected due-work real Postgr
       expect(ended.code).toBe(2);
       expect(stderr).toBe("DUE_WORK_BUILD_STARTED\nDUE_WORK_WORKER_STARTED\nDUE_WORK_TEST_WORKER_READY\n" +
         "DUE_WORK_TEST_WORKER_ADMITTED\nDUE_WORK_TEST_MODULE_GRAPH_READY\nDUE_WORK_RUN_STARTED\n");
-      const output = JSON.parse(stdout.trim()) as { ok: boolean; incomplete: boolean;
+      const records = stdout.trim().split(/\r?\n/u).map((line) => JSON.parse(line) as Record<string, unknown>);
+      const results = records.filter((record) => Object.hasOwn(record, "ok"));
+      expect(results).toHaveLength(1);
+      expect(records.filter((record) => !Object.hasOwn(record, "ok"))
+        .every((record) => record["event"] === "operations.signal")).toBe(true);
+      const output = results[0] as unknown as { ok: boolean; incomplete: boolean;
         totals: { claimed: number; completed: number; released: number; incompleteBacklog: boolean } };
       expect(output).toMatchObject({ ok: true, incomplete: true,
         totals: { claimed: 1, incompleteBacklog: true } });

@@ -216,7 +216,8 @@ export function buildOperationsSummaryQuery(query: OperationsSummaryQuery): RawB
       (select count(*) from pending_outbox_candidates) > ${SUMMARY_SAMPLE_LIMIT} as eligible_outbox_capped,
       ((select count(*) from pending_outbox_candidates) <= ${SUMMARY_SAMPLE_LIMIT}
         or exists(select 1 from eligible_outbox)) as eligible_outbox_oldest_known,
-      (select greatest(0, extract(epoch from (max(args.observed_at) - min(occurred_at))))
+      (select case when min(occurred_at) is null then null
+                   else greatest(0, extract(epoch from (max(args.observed_at) - min(occurred_at)))) end
          from eligible_outbox cross join args) as eligible_outbox_oldest_age_seconds,
       (select count(*) from delayed_outbox) as delayed_outbox_count,
       (select count(*) from retry_outbox) as retry_outbox_count,
