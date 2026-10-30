@@ -16,6 +16,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  phase8-recovery:
+    name: Phase 8 isolated recovery rehearsal
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Select pinned npm
+        run: npm install --global "npm@$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).engines.npm')" --no-audit --no-fund
+      - run: npm run setup:validation
+      - name: Pull isolated recovery services
+        run: |
+          docker pull postgres:17-alpine
+          docker pull public.ecr.aws/localstack/localstack:4.5.0
+      - name: Require isolated recovery and privacy reconciliation with zero skips
+        run: npm run phase8:focus:recovery
+
   phase8-incidents:
     name: Phase 8 actionable incidents and optional outage readiness
     runs-on: ubuntu-24.04

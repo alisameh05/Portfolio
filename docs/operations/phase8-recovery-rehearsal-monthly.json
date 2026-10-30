@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "name": "phase8-recovery-rehearsal-monthly",
+  "phase": 8,
+  "installed": false,
+  "frequency": "monthly",
+  "dayOfMonth": 1,
+  "timezone": "UTC",
+  "command": "npm run test:phase8:recovery",
+  "timeoutSeconds": 3600,
+  "maximumConcurrentRuns": 1,
+  "retry": {
+    "maximumAttempts": 1,
+    "idempotency": "each disposable rehearsal creates fresh uniquely owned database and object targets; failed evidence remains a release blocker"
+  },
+  "scope": "synthetic isolated real-service functional rehearsal only; no production recovery qualification",
+  "phase9Handoff": "deployed handler registration and transport qualification are owned by Phase 9",
+  "phase10Handoff": "hosted schedule installation, protected production secrets/destinations, and production RPO/RTO qualification are owned by Phase 10",
+  "operatorGuide": "docs/operations/phase8-recovery-rehearsal.md"
+}
