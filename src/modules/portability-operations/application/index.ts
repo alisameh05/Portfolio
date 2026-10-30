@@ -63,6 +63,22 @@ export { createIncidentLifecycleService, MAX_INCIDENT_DELIVERY_ATTEMPTS, INCIDEN
   MAX_INCIDENT_DELIVERY_BATCH, type DurableIncidentInput, type DurableIncidentRecord, type IncidentDeliverySink,
   type IncidentLifecycleStore } from "./incident-lifecycle.js";
 export { createOperationalIncidentPass, summaryMeasurements } from "./incident-pass.js";
+export { createRecoveryRehearsalIncidentRecorder } from "./recovery-rehearsal-incident.js";
+export { RECOVERY_DOMAIN_SCOPES, recoveryDomainSnapshotSha256, verifyRecoveryDomainMeaning } from "./recovery-domain-verification.js";
+export {
+  RecoveryRehearsalError,
+  runRecoveryRehearsal,
+  validateRecoveryTarget,
+  type RecoveryObjectCopy,
+  type RecoveryRelationalCopy,
+  type RecoveryCopies,
+  type RecoveryDomainFacts,
+  type RecoveryRehearsalInput,
+  type RecoveryRehearsalPort,
+  type RecoveryRehearsalReport,
+  type RecoveryRehearsalStage,
+  type RecoveryTargetConfig,
+} from "./recovery-rehearsal.js";
 export { createOperationsReadiness, type OperationsReadinessProbe, type OptionalOperationsCapabilityProbe,
   type OperationsReadinessState } from "./operations-readiness.js";
 export { redriveDeadJob, type RedriveDeadJobCommand, type RedriveDeadJobDependencies } from "./redrive-service.js";

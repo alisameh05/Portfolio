@@ -71,6 +71,22 @@ export {
 } from "./application/index.js";
 export { calculateJobRetryDelayMilliseconds, JOB_MAX_ATTEMPTS } from "./application/index.js";
 export { createOperationalIncidentPass, summaryMeasurements } from "./application/index.js";
+export { createRecoveryRehearsalIncidentRecorder } from "./application/index.js";
+export { RECOVERY_DOMAIN_SCOPES, recoveryDomainSnapshotSha256, verifyRecoveryDomainMeaning } from "./application/index.js";
+export {
+  RecoveryRehearsalError,
+  runRecoveryRehearsal,
+  validateRecoveryTarget,
+  type RecoveryObjectCopy,
+  type RecoveryRelationalCopy,
+  type RecoveryCopies,
+  type RecoveryDomainFacts,
+  type RecoveryRehearsalInput,
+  type RecoveryRehearsalPort,
+  type RecoveryRehearsalReport,
+  type RecoveryRehearsalStage,
+  type RecoveryTargetConfig,
+} from "./application/index.js";
 export { createOperationsReadiness } from "./application/index.js";
 export type { OptionalOperationsCapabilityProbe } from "./application/operations-readiness.js";
 export {
