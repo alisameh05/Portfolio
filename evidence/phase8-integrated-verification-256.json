@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "ticket": 256,
-  "runId": "61c6ea0d-f2f7-4234-bad2-e208467668a7",
-  "startedAt": "2026-10-30T20:08:16.895Z",
-  "completedAt": "2026-10-30T20:13:59.348Z",
+  "runId": "818eb7f6-c00c-4151-87a0-1d9354a8f913",
+  "startedAt": "2026-10-30T20:15:48.311Z",
+  "completedAt": "2026-10-30T20:21:24.234Z",
   "source": {
-    "revision": "894cd211188ec442034878b4c3852139d16db211",
+    "revision": "bf8a7c440986b295da1c2ee27073de465774ab4d",
     "branch": "codex/issue-256-integrated-verification",
-    "workingTreeSha256": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc",
+    "workingTreeSha256": "338be941238fe07cf9541dbd7c1fa087ae6a57c0001216c8aa598143d0d54436",
     "stableDuringRun": true
   },
   "tools": {
@@ -28,18 +28,41 @@
       "command": "npm run phase8:focus:exports",
       "testReport": null,
       "success": true,
+      "cleanupVerified": true,
+      "cleanupEvidence": [
+        {
+          "artifact": "evidence/phase8-owner-exports-241.json",
+          "cleanup": true
+        },
+        {
+          "artifact": "evidence/phase8-owner-export-media-243.json",
+          "cleanup": true
+        },
+        {
+          "artifact": "evidence/phase8-owner-export-cv-244.json",
+          "cleanup": true
+        },
+        {
+          "artifact": "evidence/phase8-owner-export-moderation-245.json",
+          "cleanup": true
+        },
+        {
+          "artifact": "evidence/phase8-owner-export-reconciliation-247.json",
+          "cleanup": true
+        }
+      ],
       "exitCode": 0,
-      "outputSha256": "0518061d501102f9b3b0448c57066b85348b28321f24a2a034d3d85d606f70d1",
+      "outputSha256": "d9ac02abf93cbb63fa549267fd14cc11eb1ee198978d975b0caf217f168959b5",
       "testNames": [],
       "testResults": [],
       "artifacts": [
         {
           "path": "evidence/phase8-owner-exports-241.json",
-          "sha256": "16e8a6027d8c790985ad717b496029d44090298b9485a5773f73166a494fa256",
+          "sha256": "a1b843e8d45dcb7e298622239c70a545e0dd13f34062f6224e0922cdd5e08358",
           "success": true,
           "cleanup": true,
-          "sourceRevision": "894cd211188ec442034878b4c3852139d16db211",
-          "sourceTreeSha256": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc",
+          "sourceRevision": "bf8a7c440986b295da1c2ee27073de465774ab4d",
+          "sourceTreeSha256": "338be941238fe07cf9541dbd7c1fa087ae6a57c0001216c8aa598143d0d54436",
           "sourceBound": true,
           "passed": 117,
           "failed": 0,
@@ -315,12 +338,6 @@
             }
           ],
           "tests": [
-            "streams only the pinned processed object and verifies its exact length and SHA-256",
-            "streams the exact upload-intent-scoped original from the private candidate bucket",
-            "composes the configured candidate bucket for original Media export reads",
-            "cancels the private Storage response when a consumer stops before verification",
-            "rejects missing, redirected, changed, and wrong-length objects",
-            "requires HTTPS except on loopback and rejects malformed object identities before fetching",
             "rejects requests without a session cookie as 401 before dispatch",
             "rejects denied sessions and phases via declared rejections cheaply and early",
             "rejects forwarded host, origin mismatch, and CSRF proof mismatch as 403 before dispatch",
@@ -432,6 +449,12 @@
             "rejects policy deadline outside readiness locally",
             "maps declared uppercase persistence codes to lowercase transport codes",
             "passes the selected loopback API port to the standard export child",
+            "streams only the pinned processed object and verifies its exact length and SHA-256",
+            "streams the exact upload-intent-scoped original from the private candidate bucket",
+            "composes the configured candidate bucket for original Media export reads",
+            "cancels the private Storage response when a consumer stops before verification",
+            "rejects missing, redirected, changed, and wrong-length objects",
+            "requires HTTPS except on loopback and rejects malformed object identities before fetching",
             "requires a 1-128 character visible-ASCII idempotency key for every mutation",
             "declares replacement semantics and private pending Feedback",
             "keeps Public event data to the closed nine-event allowlist",
@@ -442,11 +465,11 @@
         },
         {
           "path": "evidence/phase8-owner-export-media-243.json",
-          "sha256": "e45475387d99d3b7dc82b5aa866614408cb22c35f53ad02b77e23597223979e6",
+          "sha256": "fd2420b4366df06fe7453fa3c04550eb886b146b17cc805897ed93ec701906c2",
           "success": true,
           "cleanup": true,
-          "sourceRevision": "894cd211188ec442034878b4c3852139d16db211",
-          "sourceTreeSha256": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc",
+          "sourceRevision": "bf8a7c440986b295da1c2ee27073de465774ab4d",
+          "sourceTreeSha256": "338be941238fe07cf9541dbd7c1fa087ae6a57c0001216c8aa598143d0d54436",
           "sourceBound": true,
           "passed": 59,
           "failed": 0,
@@ -722,12 +745,6 @@
             }
           ],
           "tests": [
-            "streams only the pinned processed object and verifies its exact length and SHA-256",
-            "streams the exact upload-intent-scoped original from the private candidate bucket",
-            "composes the configured candidate bucket for original Media export reads",
-            "cancels the private Storage response when a consumer stops before verification",
-            "rejects missing, redirected, changed, and wrong-length objects",
-            "requires HTTPS except on loopback and rejects malformed object identities before fetching",
             "AC01–AC08 captures all retained facts, races consistently, and validates independent content-only and combined packages",
             "packages accepted bytes, deduplicates shared digests, and passes the independent validator",
             "fails closed for missing required accepted bytes",
@@ -780,16 +797,22 @@
             "rejects stale aggregate version locally",
             "rejects malformed policy deadline locally",
             "rejects policy deadline outside readiness locally",
-            "maps declared uppercase persistence codes to lowercase transport codes"
+            "maps declared uppercase persistence codes to lowercase transport codes",
+            "streams only the pinned processed object and verifies its exact length and SHA-256",
+            "streams the exact upload-intent-scoped original from the private candidate bucket",
+            "composes the configured candidate bucket for original Media export reads",
+            "cancels the private Storage response when a consumer stops before verification",
+            "rejects missing, redirected, changed, and wrong-length objects",
+            "requires HTTPS except on loopback and rejects malformed object identities before fetching"
           ]
         },
         {
           "path": "evidence/phase8-owner-export-cv-244.json",
-          "sha256": "144b1ce39849bde6eb659c16ab1e928eeb74e4e1c992ae8eadb271d4c113a440",
+          "sha256": "852db52aa1c1aad8ce10555d7f45a7bd169a1f74b3ce510963faf82a017e41f3",
           "success": true,
           "cleanup": true,
-          "sourceRevision": "894cd211188ec442034878b4c3852139d16db211",
-          "sourceTreeSha256": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc",
+          "sourceRevision": "bf8a7c440986b295da1c2ee27073de465774ab4d",
+          "sourceTreeSha256": "338be941238fe07cf9541dbd7c1fa087ae6a57c0001216c8aa598143d0d54436",
           "sourceBound": true,
           "passed": 15,
           "failed": 0,
@@ -1090,11 +1113,11 @@
         },
         {
           "path": "evidence/phase8-owner-export-moderation-245.json",
-          "sha256": "4340962ed305c3d118ab383cb59ec86b6c70d57d6875c208ba154fa2b157f653",
+          "sha256": "46547aa3a2d5956507247442f3419a7654b8c3934c7ec6c2d6d2a60ae75d4e1e",
           "success": true,
           "cleanup": true,
-          "sourceRevision": "894cd211188ec442034878b4c3852139d16db211",
-          "sourceTreeSha256": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc",
+          "sourceRevision": "bf8a7c440986b295da1c2ee27073de465774ab4d",
+          "sourceTreeSha256": "338be941238fe07cf9541dbd7c1fa087ae6a57c0001216c8aa598143d0d54436",
           "sourceBound": true,
           "passed": 20,
           "failed": 0,
@@ -1394,11 +1417,11 @@
         },
         {
           "path": "evidence/phase8-owner-export-reconciliation-247.json",
-          "sha256": "cdb2f688d79dfe3fab0520d5a503624152a0d9f379a2da740f03499016ec9cc1",
+          "sha256": "99302a935d4d897cc9c80b68c95f3a5e26d53c53ea29d46f3557cccfc2b262fe",
           "success": true,
           "cleanup": true,
-          "sourceRevision": "894cd211188ec442034878b4c3852139d16db211",
-          "sourceTreeSha256": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc",
+          "sourceRevision": "bf8a7c440986b295da1c2ee27073de465774ab4d",
+          "sourceTreeSha256": "338be941238fe07cf9541dbd7c1fa087ae6a57c0001216c8aa598143d0d54436",
           "sourceBound": true,
           "passed": 22,
           "failed": 0,
@@ -1699,6 +1722,13 @@
       "command": "npm run phase8:focus:reference-import",
       "testReport": "artifacts/phase8-owner-export-reference-import-250-tests.json",
       "success": true,
+      "cleanupVerified": true,
+      "cleanupEvidence": [
+        {
+          "artifact": "evidence/phase8-owner-export-reference-import-250.json",
+          "cleanup": true
+        }
+      ],
       "exitCode": 0,
       "outputSha256": "ea68718362df6719e6ac434cef3ffc8a62d601f4f07d7c1fe9c10e350933a8d7",
       "testNames": [],
@@ -1927,11 +1957,11 @@
       "artifacts": [
         {
           "path": "evidence/phase8-owner-export-reference-import-250.json",
-          "sha256": "0fefe1eb3ac300584ed46cbb058c9f45aed421c8a1d3b79a5312501eacca495e",
+          "sha256": "a0bb6c6388da73fa3d11e8601816c1f8a75016773a6ac2f2149893d8f5a604d8",
           "success": true,
           "cleanup": true,
-          "sourceRevision": "894cd211188ec442034878b4c3852139d16db211",
-          "sourceTreeSha256": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc",
+          "sourceRevision": "bf8a7c440986b295da1c2ee27073de465774ab4d",
+          "sourceTreeSha256": "338be941238fe07cf9541dbd7c1fa087ae6a57c0001216c8aa598143d0d54436",
           "sourceBound": true,
           "passed": 55,
           "failed": 0,
@@ -2271,18 +2301,25 @@
       "command": "npm run phase8:focus:incidents",
       "testReport": null,
       "success": true,
+      "cleanupVerified": true,
+      "cleanupEvidence": [
+        {
+          "artifact": "evidence/phase8-actionable-incidents-252.json",
+          "cleanup": true
+        }
+      ],
       "exitCode": 0,
-      "outputSha256": "2ff0441600995dc26f66ee4bacf2fceda99ab1126874c1c1357d49da9605ee33",
+      "outputSha256": "1aa1cd6bf04838d67cf4bf2af54cd0c5b6ac5a6b79c3450afe83cbe1cafdbee2",
       "testNames": [],
       "testResults": [],
       "artifacts": [
         {
           "path": "evidence/phase8-actionable-incidents-252.json",
-          "sha256": "cbc4b1a663ac87b0b18e188def974a773b7ffce1b03d6a5935a84aab7772a178",
+          "sha256": "fd832f8637dc5e6037967d352eeb576c9a714c9f69e18dc2eb0defe7358e9e9f",
           "success": true,
           "cleanup": true,
-          "sourceRevision": "894cd211188ec442034878b4c3852139d16db211",
-          "sourceTreeSha256": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc",
+          "sourceRevision": "bf8a7c440986b295da1c2ee27073de465774ab4d",
+          "sourceTreeSha256": "338be941238fe07cf9541dbd7c1fa087ae6a57c0001216c8aa598143d0d54436",
           "sourceBound": true,
           "passed": 110,
           "failed": 0,
@@ -2677,14 +2714,25 @@
       "command": "npm run phase8:focus:recovery",
       "testReport": null,
       "success": true,
+      "cleanupVerified": true,
+      "cleanupEvidence": {
+        "postgresObjects": {
+          "databases": 1,
+          "objects": 2,
+          "temporaryFiles": 1,
+          "complete": true
+        },
+        "databaseAndObjectTargetsRemoved": true,
+        "isolatedObjectContainerRemoved": true
+      },
       "exitCode": 0,
-      "outputSha256": "54a5ef05048c16d488f12460b29a7288b97c4bfc9ae755fc2b23e997d1c16ac7",
+      "outputSha256": "fe88533620f028def516875dbc540017fc9a311cfdebb02d0073aed38b77c135",
       "testNames": [
-        "✓ tests/phase8/recovery-rehearsal-postgres.test.ts > #255 real isolated PostgreSQL recovery > skip retention reconciliation=false: restores encrypted relational and object copies under quarantine, reconciles current privacy/effect state, verifies domain/RLS readiness, and cleans owned targets 7549ms",
-        "✓ tests/phase8/recovery-rehearsal-postgres.test.ts > #255 real isolated PostgreSQL recovery > skip retention reconciliation=true: restores encrypted relational and object copies under quarantine, reconciles current privacy/effect state, verifies domain/RLS readiness, and cleans owned targets 4591ms",
-        "✓ tests/phase8/recovery-rehearsal.test.ts > recovery domain verification through Owner Export snapshot API > ignores capture metadata while retaining domain timestamps and values 13ms",
-        "✓ tests/phase8/recovery-rehearsal.test.ts > recovery domain verification through Owner Export snapshot API > checks the complete seven-scope snapshot, IDs, references, hashes, and privacy facts 7ms",
-        "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > rejects mixed-scheme source and protected aliases (postgres) 2ms",
+        "✓ tests/phase8/recovery-rehearsal-postgres.test.ts > #255 real isolated PostgreSQL recovery > skip retention reconciliation=false: restores encrypted relational and object copies under quarantine, reconciles current privacy/effect state, verifies domain/RLS readiness, and cleans owned targets 8564ms",
+        "✓ tests/phase8/recovery-rehearsal-postgres.test.ts > #255 real isolated PostgreSQL recovery > skip retention reconciliation=true: restores encrypted relational and object copies under quarantine, reconciles current privacy/effect state, verifies domain/RLS readiness, and cleans owned targets 4376ms",
+        "✓ tests/phase8/recovery-rehearsal.test.ts > recovery domain verification through Owner Export snapshot API > ignores capture metadata while retaining domain timestamps and values 12ms",
+        "✓ tests/phase8/recovery-rehearsal.test.ts > recovery domain verification through Owner Export snapshot API > checks the complete seven-scope snapshot, IDs, references, hashes, and privacy facts 6ms",
+        "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > rejects mixed-scheme source and protected aliases (postgres) 1ms",
         "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > rejects mixed-scheme source and protected aliases (postgresql) 0ms",
         "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > rejects a target that aliases a protected identity, is not allowlisted, or reuses source credentials 1ms",
         "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > keeps restored contents quarantined until current deletion, credential, queue, domain, and RLS checks pass 1ms",
@@ -2697,24 +2745,24 @@
         "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > rejects reversed reference and verification clocks 1ms",
         "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > keeps outbounds and queues fenced when stale effects cannot be reconciled 0ms",
         "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > routes failed runs to the fixed backup incident rule and stable rehearsal scope 0ms",
-        "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > defines nightly, weekly, and monthly schedules with explicit later-phase installation handoffs 4ms",
-        "✓ tests/phase8/object-backup.test.ts > object backup > keeps timeout cancellation active with a caller signal 1012ms",
-        "✓ tests/phase8/object-backup.test.ts > object backup > enforces the exact seven day recovery boundary 7ms",
-        "✓ tests/phase8/object-backup.test.ts > object backup > writes encrypted bytes through the authenticated HTTP destination and recovers its independent disk copy 79ms",
+        "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > defines nightly, weekly, and monthly schedules with explicit later-phase installation handoffs 3ms",
+        "✓ tests/phase8/object-backup.test.ts > object backup > keeps timeout cancellation active with a caller signal 1014ms",
+        "✓ tests/phase8/object-backup.test.ts > object backup > enforces the exact seven day recovery boundary 4ms",
+        "✓ tests/phase8/object-backup.test.ts > object backup > writes encrypted bytes through the authenticated HTTP destination and recovers its independent disk copy 65ms",
         "✓ tests/phase8/object-backup.test.ts > object backup > maps actual Media, CV, and eligible export bytes into one exact encrypted inventory 3ms",
         "✓ tests/phase8/object-backup.test.ts > object backup > copies and verifies actual eligible object bytes with an exact inventory 1ms",
         "✓ tests/phase8/object-backup.test.ts > object backup > releases each source byte buffer after making its encrypted shard 1ms",
-        "✓ tests/phase8/object-backup.test.ts > object backup > backs up a 2 GiB logical inventory while clearing each 50 MiB source buffer before reading the next 37827ms",
-        "✓ tests/phase8/object-backup.test.ts > object backup > does not mark a tampered read-back usable and preserves the last-good row 2ms",
+        "✓ tests/phase8/object-backup.test.ts > object backup > backs up a 2 GiB logical inventory while clearing each 50 MiB source buffer before reading the next 37140ms",
+        "✓ tests/phase8/object-backup.test.ts > object backup > does not mark a tampered read-back usable and preserves the last-good row 3ms",
         "✓ tests/phase8/object-backup.test.ts > object backup > bounds denied uploads, marks the attempt failed, and leaves the last-good reference unchanged 1ms",
         "✓ tests/phase8/object-backup.test.ts > object backup > keeps object and catalog contents encrypted and rejects an unavailable recovery key 3ms",
         "✓ tests/phase8/object-backup.test.ts > object backup > rejects replaced ciphertext before returning any recovered bytes 1ms",
         "✓ tests/phase8/object-backup.test.ts > object backup > excludes expired source data and refuses an incompatible full-integrity set 2ms",
         "✓ tests/phase8/object-backup.test.ts > object backup > rechecks source privacy eligibility after reading bytes 0ms",
-        "✓ tests/phase8/object-backup.test.ts > object backup > deletes expired copies before acknowledging the catalog tombstone 1ms",
+        "✓ tests/phase8/object-backup.test.ts > object backup > deletes expired copies before acknowledging the catalog tombstone 2ms",
         "✓ tests/phase8/object-backup.test.ts > object backup > retries failed deletion of every shard on a later cleanup 1ms",
         "✓ tests/phase8/object-backup.test.ts > object backup > marks interrupted uploads unusable before deleting their partial destination object 0ms",
-        "✓ tests/phase8/object-backup-isolated.test.ts > isolated S3 object backup evidence > stores Media, CV variant, and export bytes in disposable S3 and preserves last good after denied upload 2456ms"
+        "✓ tests/phase8/object-backup-isolated.test.ts > isolated S3 object backup evidence > stores Media, CV variant, and export bytes in disposable S3 and preserves last good after denied upload 2500ms"
       ],
       "testResults": [],
       "artifacts": []
@@ -2724,53 +2772,68 @@
       "command": "npm run test:contracts",
       "testReport": null,
       "success": true,
+      "cleanupVerified": true,
+      "cleanupEvidence": [],
       "exitCode": 0,
-      "outputSha256": "02b1a14f7a1967208ef94632d2a76ca04c691c797fe45dd45c862b4262a933e0",
+      "outputSha256": "abaac1022594d1e23678f13bac20e4dc9730bf7c5cfba573804e1badf2147d82",
       "testNames": [
         "✓ both clean generations are byte-for-byte deterministic",
         "✓ committed bundles and generated transport artifacts contain no drift",
         "✓ generated output is limited to transport types and validators; no server stubs exist",
         "✓ public-v1: candidate is backward compatible with the committed master baseline",
         "✓ owner-v1: candidate is backward compatible with the committed master baseline",
-        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > accepts additive optional input and response fields 70ms",
-        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > allows only the relationship receipt outcome to narrow to project-related 67ms",
-        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > accepts a versioned response union that retains the prior representation 80ms",
-        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a versioned response union that drops the prior representation 69ms",
-        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a relationship receipt narrowed to an unrelated outcome 72ms",
-        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects the same enum narrowing on a different response path 75ms",
+        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > accepts additive optional input and response fields 72ms",
+        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > allows only the relationship receipt outcome to narrow to project-related 68ms",
+        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > accepts a versioned response union that retains the prior representation 68ms",
+        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a versioned response union that drops the prior representation 68ms",
+        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a relationship receipt narrowed to an unrelated outcome 67ms",
+        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects the same enum narrowing on a different response path 76ms",
         "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a removed field 66ms",
-        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a renamed field 67ms",
-        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a narrower input 67ms",
-        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a newly required input 67ms",
-        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a changed security 70ms",
-        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a changed status semantics 66ms",
-        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > fails clearly when the compatibility baseline is unavailable 70ms",
-        "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > accepts two deterministic generations that match committed artifacts 115ms",
-        "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > rejects a manual edit, stale output, or uncommitted regeneration 126ms",
-        "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > rejects a missing generated file 105ms",
-        "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > rejects nondeterministic clean generation 106ms",
+        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a renamed field 70ms",
+        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a narrower input 69ms",
+        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a newly required input 69ms",
+        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a changed security 100ms",
+        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a changed status semantics 65ms",
+        "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > fails clearly when the compatibility baseline is unavailable 64ms",
+        "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > accepts two deterministic generations that match committed artifacts 112ms",
+        "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > rejects a manual edit, stale output, or uncommitted regeneration 112ms",
+        "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > rejects a missing generated file 99ms",
+        "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > rejects nondeterministic clean generation 117ms",
         "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated Owner Measurement validators > accepts the declared goal-version definition and activation intent 2ms",
         "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated Owner Measurement validators > requires idempotency and concurrency for both existing-goal mutations 0ms",
         "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated Owner Measurement validators > keeps goal definitions closed and retains at least one immutable version 1ms",
         "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated portable Owner export manifest validator > accepts the versioned snapshot, dependency, schema and asset coverage contract 2ms",
-        "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated portable Owner export manifest validator > accepts the standalone Media v1.5 manifest descriptors and rejects legacy asset paths 2ms",
+        "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated portable Owner export manifest validator > accepts the standalone Media v1.5 manifest descriptors and rejects legacy asset paths 3ms",
         "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated Owner Portability validators > accepts the declared export request with creation-only idempotency 1ms",
         "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated Owner Portability validators > models a versioned domain artifact with integrity metadata 0ms",
-        "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated Owner Portability validators > accepts retention-aware moderation manifest 1.7 in the existing Owner export view 4ms",
+        "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated Owner Portability validators > accepts retention-aware moderation manifest 1.7 in the existing Owner export view 5ms",
         "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated Owner Portability validators > validates portable records for every documented export scope 19ms",
         "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated Owner Portability validators > rejects provider backups, provider fields, and malformed versions 1ms",
         "✓ tests/contracts/owner-contract.test.ts > Owner v1 contract > contains exactly the declared command and narrow-query surface 1ms",
         "✓ tests/contracts/owner-contract.test.ts > Owner v1 contract > requires the Owner session globally and distinguishes 401 from 403 3ms",
         "✓ tests/contracts/owner-contract.test.ts > Owner v1 contract > requires idempotency on creations and optimistic concurrency on aggregate mutations 2ms",
         "✓ tests/contracts/owner-contract.test.ts > Owner v1 contract > models aggregate views and the accepted domain distinctions 2ms",
-        "✓ tests/contracts/owner-contract.test.ts > Owner v1 contract > uses RFC 9457 Problem Details for every declared error 7ms",
+        "✓ tests/contracts/owner-contract.test.ts > Owner v1 contract > uses RFC 9457 Problem Details for every declared error 6ms",
         "✓ tests/contracts/owner-contract.test.ts > Owner v1 contract > defines strict creation, review, and bounded-history contracts without broadening public HTTP 1ms",
         "✓ tests/contracts/public-contract.test.ts > public v1 HTTP semantics > requires a 1-128 character visible-ASCII idempotency key for every mutation 0ms",
         "✓ tests/contracts/public-contract.test.ts > public v1 HTTP semantics > declares replacement semantics and private pending Feedback 0ms",
         "✓ tests/contracts/public-contract.test.ts > public v1 HTTP semantics > keeps Public event data to the closed nine-event allowlist 0ms",
-        "✓ tests/contracts/public-contract.test.ts > public v1 HTTP semantics > exposes only the English Current CV and declares stream and redirect success 1ms",
+        "✓ tests/contracts/public-contract.test.ts > public v1 HTTP semantics > exposes only the English Current CV and declares stream and redirect success 0ms",
         "✓ tests/contracts/public-contract.test.ts > public v1 HTTP semantics > uses safe RFC Problem Details for every declared error 2ms",
         "✓ tests/contracts/public-contract.test.ts > public v1 HTTP semantics > contains no forbidden public surface 0ms",
+        "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > accepts every declared success example 1ms",
+        "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > rejects unknown properties and invalid interaction values 0ms",
+        "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > requires valid idempotency and stable identity inputs 1ms",
+        "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > accepts an allowlisted event and rejects unsupported or sensitive shapes 1ms",
+        "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > accepts only the explicit English Current CV query 0ms",
+        "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > keeps Problem Details closed and leak-free 0ms",
+        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > accepts every declared request example 1ms",
+        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > accepts representative independent-locale command inputs 0ms",
+        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > requires strict headers and stable path identity 0ms",
+        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > rejects unknown and provider-shaped command properties 0ms",
+        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > rejects mismatched content kinds and unsupported locales in strict Draft payloads 0ms",
+        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > accepts reference-only evidence, media, and Project links in create and localized save contracts 0ms",
+        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > validates narrow aggregate views without table or provider fields 1ms",
         "✓ tests/contracts/owner-issue-7-generated-validation.test.ts > generated Owner Media validators > accepts declared upload and acceptance examples 0ms",
         "✓ tests/contracts/owner-issue-7-generated-validation.test.ts > generated Owner Media validators > distinguishes creation from existing-aggregate concurrency 0ms",
         "✓ tests/contracts/owner-issue-7-generated-validation.test.ts > generated Owner Media validators > keeps Media commands and history closed and provider-neutral 0ms",
@@ -2780,19 +2843,6 @@
         "✓ tests/contracts/owner-issue-7-generated-validation.test.ts > generated Owner CV Portfolio validators > accepts the declared English CV registration example 0ms",
         "✓ tests/contracts/owner-issue-7-generated-validation.test.ts > generated Owner CV Portfolio validators > requires concurrency for every CV Portfolio mutation 0ms",
         "✓ tests/contracts/owner-issue-7-generated-validation.test.ts > generated Owner CV Portfolio validators > models one English Current CV pointer while retaining version history 0ms",
-        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > accepts every declared request example 1ms",
-        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > accepts representative independent-locale command inputs 0ms",
-        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > requires strict headers and stable path identity 0ms",
-        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > rejects unknown and provider-shaped command properties 0ms",
-        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > rejects mismatched content kinds and unsupported locales in strict Draft payloads 0ms",
-        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > accepts reference-only evidence, media, and Project links in create and localized save contracts 0ms",
-        "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > validates narrow aggregate views without table or provider fields 1ms",
-        "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > accepts every declared success example 1ms",
-        "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > rejects unknown properties and invalid interaction values 0ms",
-        "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > requires valid idempotency and stable identity inputs 1ms",
-        "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > accepts an allowlisted event and rejects unsupported or sensitive shapes 1ms",
-        "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > accepts only the explicit English Current CV query 0ms",
-        "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > keeps Problem Details closed and leak-free 0ms",
         "✓ tests/contracts/public.test.ts > public v1 contract > exposes exactly the five approved operations 1ms"
       ],
       "testResults": [],
@@ -2803,6 +2853,8 @@
       "command": "npm run test:arch",
       "testReport": null,
       "success": true,
+      "cleanupVerified": true,
+      "cleanupEvidence": [],
       "exitCode": 0,
       "outputSha256": "2ab86fe743c6b5561e8b79000b8fc7138bfa60ee93c1b021ce09797a01be777b",
       "testNames": [
@@ -2826,6 +2878,8 @@
       "command": "npm run lint",
       "testReport": null,
       "success": true,
+      "cleanupVerified": true,
+      "cleanupEvidence": [],
       "exitCode": 0,
       "outputSha256": "4a1d9830f6085a45f6b9072c9395eedea4b7b81930c73283a8d68d67ceb2ce00",
       "testNames": [],
@@ -2837,6 +2891,8 @@
       "command": "npm run typecheck",
       "testReport": null,
       "success": true,
+      "cleanupVerified": true,
+      "cleanupEvidence": [],
       "exitCode": 0,
       "outputSha256": "b2e829c6fcb2f6c97a67ab930f245e15e6782e97ebf16f3e615c717aee10eaf9",
       "testNames": [],
@@ -2848,10 +2904,12 @@
       "command": "npm run build",
       "testReport": null,
       "success": true,
+      "cleanupVerified": true,
+      "cleanupEvidence": [],
       "exitCode": 0,
-      "outputSha256": "c687a08bd7974b4f8a856d61d9948e9dad21bf664cc21258afbb914c8485a09c",
+      "outputSha256": "3845e609eb9db358e98003a7498ad175ecee9f3715b73cc6a7977cf51e11423a",
       "testNames": [
-        "✓ Compiled successfully in 859ms",
+        "✓ Compiled successfully in 837ms",
         "✓ Generating static pages (4/4)"
       ],
       "testResults": [],
@@ -2991,36 +3049,6 @@
     }
   ],
   "testReports": [
-    {
-      "run": "owner-exports",
-      "artifact": "evidence/phase8-owner-export-media-243.json",
-      "title": "streams only the pinned processed object and verifies its exact length and SHA-256"
-    },
-    {
-      "run": "owner-exports",
-      "artifact": "evidence/phase8-owner-export-media-243.json",
-      "title": "streams the exact upload-intent-scoped original from the private candidate bucket"
-    },
-    {
-      "run": "owner-exports",
-      "artifact": "evidence/phase8-owner-export-media-243.json",
-      "title": "composes the configured candidate bucket for original Media export reads"
-    },
-    {
-      "run": "owner-exports",
-      "artifact": "evidence/phase8-owner-export-media-243.json",
-      "title": "cancels the private Storage response when a consumer stops before verification"
-    },
-    {
-      "run": "owner-exports",
-      "artifact": "evidence/phase8-owner-export-media-243.json",
-      "title": "rejects missing, redirected, changed, and wrong-length objects"
-    },
-    {
-      "run": "owner-exports",
-      "artifact": "evidence/phase8-owner-export-media-243.json",
-      "title": "requires HTTPS except on loopback and rejects malformed object identities before fetching"
-    },
     {
       "run": "owner-exports",
       "artifact": "evidence/phase8-owner-exports-241.json",
@@ -3575,6 +3603,36 @@
       "run": "owner-exports",
       "artifact": "evidence/phase8-owner-exports-241.json",
       "title": "passes the selected loopback API port to the standard export child"
+    },
+    {
+      "run": "owner-exports",
+      "artifact": "evidence/phase8-owner-export-media-243.json",
+      "title": "streams only the pinned processed object and verifies its exact length and SHA-256"
+    },
+    {
+      "run": "owner-exports",
+      "artifact": "evidence/phase8-owner-export-media-243.json",
+      "title": "streams the exact upload-intent-scoped original from the private candidate bucket"
+    },
+    {
+      "run": "owner-exports",
+      "artifact": "evidence/phase8-owner-export-media-243.json",
+      "title": "composes the configured candidate bucket for original Media export reads"
+    },
+    {
+      "run": "owner-exports",
+      "artifact": "evidence/phase8-owner-export-media-243.json",
+      "title": "cancels the private Storage response when a consumer stops before verification"
+    },
+    {
+      "run": "owner-exports",
+      "artifact": "evidence/phase8-owner-export-media-243.json",
+      "title": "rejects missing, redirected, changed, and wrong-length objects"
+    },
+    {
+      "run": "owner-exports",
+      "artifact": "evidence/phase8-owner-export-media-243.json",
+      "title": "requires HTTPS except on loopback and rejects malformed object identities before fetching"
     },
     {
       "run": "owner-exports",
@@ -4489,31 +4547,31 @@
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/recovery-rehearsal-postgres.test.ts > #255 real isolated PostgreSQL recovery > skip retention reconciliation=false: restores encrypted relational and object copies under quarantine, reconciles current privacy/effect state, verifies domain/RLS readiness, and cleans owned targets 7549ms",
+      "title": "✓ tests/phase8/recovery-rehearsal-postgres.test.ts > #255 real isolated PostgreSQL recovery > skip retention reconciliation=false: restores encrypted relational and object copies under quarantine, reconciles current privacy/effect state, verifies domain/RLS readiness, and cleans owned targets 8564ms",
       "status": "passed"
     },
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/recovery-rehearsal-postgres.test.ts > #255 real isolated PostgreSQL recovery > skip retention reconciliation=true: restores encrypted relational and object copies under quarantine, reconciles current privacy/effect state, verifies domain/RLS readiness, and cleans owned targets 4591ms",
+      "title": "✓ tests/phase8/recovery-rehearsal-postgres.test.ts > #255 real isolated PostgreSQL recovery > skip retention reconciliation=true: restores encrypted relational and object copies under quarantine, reconciles current privacy/effect state, verifies domain/RLS readiness, and cleans owned targets 4376ms",
       "status": "passed"
     },
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/recovery-rehearsal.test.ts > recovery domain verification through Owner Export snapshot API > ignores capture metadata while retaining domain timestamps and values 13ms",
+      "title": "✓ tests/phase8/recovery-rehearsal.test.ts > recovery domain verification through Owner Export snapshot API > ignores capture metadata while retaining domain timestamps and values 12ms",
       "status": "passed"
     },
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/recovery-rehearsal.test.ts > recovery domain verification through Owner Export snapshot API > checks the complete seven-scope snapshot, IDs, references, hashes, and privacy facts 7ms",
+      "title": "✓ tests/phase8/recovery-rehearsal.test.ts > recovery domain verification through Owner Export snapshot API > checks the complete seven-scope snapshot, IDs, references, hashes, and privacy facts 6ms",
       "status": "passed"
     },
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > rejects mixed-scheme source and protected aliases (postgres) 2ms",
+      "title": "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > rejects mixed-scheme source and protected aliases (postgres) 1ms",
       "status": "passed"
     },
     {
@@ -4591,25 +4649,25 @@
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > defines nightly, weekly, and monthly schedules with explicit later-phase installation handoffs 4ms",
+      "title": "✓ tests/phase8/recovery-rehearsal.test.ts > #255 isolated recovery rehearsal > defines nightly, weekly, and monthly schedules with explicit later-phase installation handoffs 3ms",
       "status": "passed"
     },
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/object-backup.test.ts > object backup > keeps timeout cancellation active with a caller signal 1012ms",
+      "title": "✓ tests/phase8/object-backup.test.ts > object backup > keeps timeout cancellation active with a caller signal 1014ms",
       "status": "passed"
     },
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/object-backup.test.ts > object backup > enforces the exact seven day recovery boundary 7ms",
+      "title": "✓ tests/phase8/object-backup.test.ts > object backup > enforces the exact seven day recovery boundary 4ms",
       "status": "passed"
     },
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/object-backup.test.ts > object backup > writes encrypted bytes through the authenticated HTTP destination and recovers its independent disk copy 79ms",
+      "title": "✓ tests/phase8/object-backup.test.ts > object backup > writes encrypted bytes through the authenticated HTTP destination and recovers its independent disk copy 65ms",
       "status": "passed"
     },
     {
@@ -4633,13 +4691,13 @@
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/object-backup.test.ts > object backup > backs up a 2 GiB logical inventory while clearing each 50 MiB source buffer before reading the next 37827ms",
+      "title": "✓ tests/phase8/object-backup.test.ts > object backup > backs up a 2 GiB logical inventory while clearing each 50 MiB source buffer before reading the next 37140ms",
       "status": "passed"
     },
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/object-backup.test.ts > object backup > does not mark a tampered read-back usable and preserves the last-good row 2ms",
+      "title": "✓ tests/phase8/object-backup.test.ts > object backup > does not mark a tampered read-back usable and preserves the last-good row 3ms",
       "status": "passed"
     },
     {
@@ -4675,7 +4733,7 @@
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/object-backup.test.ts > object backup > deletes expired copies before acknowledging the catalog tombstone 1ms",
+      "title": "✓ tests/phase8/object-backup.test.ts > object backup > deletes expired copies before acknowledging the catalog tombstone 2ms",
       "status": "passed"
     },
     {
@@ -4693,7 +4751,7 @@
     {
       "run": "isolated-recovery",
       "artifact": null,
-      "title": "✓ tests/phase8/object-backup-isolated.test.ts > isolated S3 object backup evidence > stores Media, CV variant, and export bytes in disposable S3 and preserves last good after denied upload 2456ms",
+      "title": "✓ tests/phase8/object-backup-isolated.test.ts > isolated S3 object backup evidence > stores Media, CV variant, and export bytes in disposable S3 and preserves last good after denied upload 2500ms",
       "status": "passed"
     },
     {
@@ -4729,37 +4787,37 @@
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > accepts additive optional input and response fields 70ms",
+      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > accepts additive optional input and response fields 72ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > allows only the relationship receipt outcome to narrow to project-related 67ms",
+      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > allows only the relationship receipt outcome to narrow to project-related 68ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > accepts a versioned response union that retains the prior representation 80ms",
+      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > accepts a versioned response union that retains the prior representation 68ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a versioned response union that drops the prior representation 69ms",
+      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a versioned response union that drops the prior representation 68ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a relationship receipt narrowed to an unrelated outcome 72ms",
+      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a relationship receipt narrowed to an unrelated outcome 67ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects the same enum narrowing on a different response path 75ms",
+      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects the same enum narrowing on a different response path 76ms",
       "status": "passed"
     },
     {
@@ -4771,61 +4829,61 @@
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a renamed field 67ms",
+      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a renamed field 70ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a narrower input 67ms",
+      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a narrower input 69ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a newly required input 67ms",
+      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a newly required input 69ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a changed security 70ms",
+      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a changed security 100ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a changed status semantics 66ms",
+      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > rejects a changed status semantics 65ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > fails clearly when the compatibility baseline is unavailable 70ms",
+      "title": "✓ tests/contracts/compatibility-gate.test.ts > contract compatibility gate > fails clearly when the compatibility baseline is unavailable 64ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > accepts two deterministic generations that match committed artifacts 115ms",
+      "title": "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > accepts two deterministic generations that match committed artifacts 112ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > rejects a manual edit, stale output, or uncommitted regeneration 126ms",
+      "title": "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > rejects a manual edit, stale output, or uncommitted regeneration 112ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > rejects a missing generated file 105ms",
+      "title": "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > rejects a missing generated file 99ms",
       "status": "passed"
     },
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > rejects nondeterministic clean generation 106ms",
+      "title": "✓ tests/contracts/contract-drift-gate.test.ts > contract artifact drift gate > rejects nondeterministic clean generation 117ms",
       "status": "passed"
     },
     {
@@ -4855,7 +4913,7 @@
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated portable Owner export manifest validator > accepts the standalone Media v1.5 manifest descriptors and rejects legacy asset paths 2ms",
+      "title": "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated portable Owner export manifest validator > accepts the standalone Media v1.5 manifest descriptors and rejects legacy asset paths 3ms",
       "status": "passed"
     },
     {
@@ -4873,7 +4931,7 @@
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated Owner Portability validators > accepts retention-aware moderation manifest 1.7 in the existing Owner export view 4ms",
+      "title": "✓ tests/contracts/owner-issue-8-generated-validation.test.ts > generated Owner Portability validators > accepts retention-aware moderation manifest 1.7 in the existing Owner export view 5ms",
       "status": "passed"
     },
     {
@@ -4915,7 +4973,7 @@
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/owner-contract.test.ts > Owner v1 contract > uses RFC 9457 Problem Details for every declared error 7ms",
+      "title": "✓ tests/contracts/owner-contract.test.ts > Owner v1 contract > uses RFC 9457 Problem Details for every declared error 6ms",
       "status": "passed"
     },
     {
@@ -4945,7 +5003,7 @@
     {
       "run": "contracts",
       "artifact": null,
-      "title": "✓ tests/contracts/public-contract.test.ts > public v1 HTTP semantics > exposes only the English Current CV and declares stream and redirect success 1ms",
+      "title": "✓ tests/contracts/public-contract.test.ts > public v1 HTTP semantics > exposes only the English Current CV and declares stream and redirect success 0ms",
       "status": "passed"
     },
     {
@@ -4958,6 +5016,84 @@
       "run": "contracts",
       "artifact": null,
       "title": "✓ tests/contracts/public-contract.test.ts > public v1 HTTP semantics > contains no forbidden public surface 0ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > accepts every declared success example 1ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > rejects unknown properties and invalid interaction values 0ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > requires valid idempotency and stable identity inputs 1ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > accepts an allowlisted event and rejects unsupported or sensitive shapes 1ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > accepts only the explicit English Current CV query 0ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > keeps Problem Details closed and leak-free 0ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > accepts every declared request example 1ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > accepts representative independent-locale command inputs 0ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > requires strict headers and stable path identity 0ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > rejects unknown and provider-shaped command properties 0ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > rejects mismatched content kinds and unsupported locales in strict Draft payloads 0ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > accepts reference-only evidence, media, and Project links in create and localized save contracts 0ms",
+      "status": "passed"
+    },
+    {
+      "run": "contracts",
+      "artifact": null,
+      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > validates narrow aggregate views without table or provider fields 1ms",
       "status": "passed"
     },
     {
@@ -5012,84 +5148,6 @@
       "run": "contracts",
       "artifact": null,
       "title": "✓ tests/contracts/owner-issue-7-generated-validation.test.ts > generated Owner CV Portfolio validators > models one English Current CV pointer while retaining version history 0ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > accepts every declared request example 1ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > accepts representative independent-locale command inputs 0ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > requires strict headers and stable path identity 0ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > rejects unknown and provider-shaped command properties 0ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > rejects mismatched content kinds and unsupported locales in strict Draft payloads 0ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > accepts reference-only evidence, media, and Project links in create and localized save contracts 0ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/owner-generated-validation.test.ts > generated Owner v1 validators > validates narrow aggregate views without table or provider fields 1ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > accepts every declared success example 1ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > rejects unknown properties and invalid interaction values 0ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > requires valid idempotency and stable identity inputs 1ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > accepts an allowlisted event and rejects unsupported or sensitive shapes 1ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > accepts only the explicit English Current CV query 0ms",
-      "status": "passed"
-    },
-    {
-      "run": "contracts",
-      "artifact": null,
-      "title": "✓ tests/contracts/generated-validation.test.ts > generated public v1 validators > keeps Problem Details closed and leak-free 0ms",
       "status": "passed"
     },
     {
@@ -5167,7 +5225,7 @@
     {
       "run": "production-build",
       "artifact": null,
-      "title": "✓ Compiled successfully in 859ms",
+      "title": "✓ Compiled successfully in 837ms",
       "status": "passed"
     },
     {

@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "ticket": 250,
-  "runId": "240af22a-c08b-4acf-a1b3-177608945b1b",
-  "startedAt": "2026-10-30T20:09:46.456Z",
-  "completedAt": "2026-10-30T20:10:20.269Z",
+  "runId": "d69a6868-ecb9-4e94-a32c-778caf66f024",
+  "startedAt": "2026-10-30T20:17:19.067Z",
+  "completedAt": "2026-10-30T20:17:55.344Z",
   "source": {
-    "revision": "894cd211188ec442034878b4c3852139d16db211",
+    "revision": "bf8a7c440986b295da1c2ee27073de465774ab4d",
     "branch": "codex/issue-256-integrated-verification",
-    "workingTreeSha256": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc"
+    "workingTreeSha256": "338be941238fe07cf9541dbd7c1fa087ae6a57c0001216c8aa598143d0d54436"
   },
   "tools": {
     "node": "v24.21.0",
@@ -621,21 +621,21 @@
     "bilingualPublicationPointers": 2,
     "feedbackHistoryRecords": 4,
     "relationship": {
-      "sourceProjectId": "01a18e6e-fdc5-7312-8d47-0c94014c3b69",
-      "relatedHiddenProjectId": "01a18e6e-fed1-75ab-982f-c77858418b55",
+      "sourceProjectId": "01a18e75-e977-7d9f-af2e-49e54610ee05",
+      "relatedHiddenProjectId": "01a18e75-eb71-74e4-b5d5-a94fff72c03d",
       "historyAndReferenceProjectionAsserted": true
     },
     "draftPrivacy": {
-      "contentId": "01a18e6e-fec6-7de0-a3f0-1fff52359ec0",
+      "contentId": "01a18e75-eb64-78e7-95d0-09d7d90f8119",
       "publicLocales": [],
       "excludedFromSourceDiscovery": true,
       "excludedFromImportedDiscovery": true
     },
     "discoveryTie": {
-      "firstPublishedAt": "2026-10-30T20:15:01.025Z",
+      "firstPublishedAt": "2026-10-30T20:22:34.577Z",
       "expectedAndObservedContentIds": [
-        "01a18e6e-fe98-7ccc-a2eb-c670a4dfed7d",
-        "01a18e6e-fdc5-7312-8d47-0c94014c3b69"
+        "01a18e75-eb0e-7e0e-aafd-da0b62efb39b",
+        "01a18e75-e977-7d9f-af2e-49e54610ee05"
       ]
     },
     "assetCount": 14,
@@ -651,10 +651,10 @@
     "absentCvScenarioCount": 1,
     "stagesMs": {
       "fullAssembly": 91,
-      "exportDownloadValidate": 132,
-      "fullImport": 117,
-      "fullImportCleanup": 93,
-      "partialReconstruction": 2988
+      "exportDownloadValidate": 131,
+      "fullImport": 166,
+      "fullImportCleanup": 58,
+      "partialReconstruction": 4142
     },
     "cleanup": true,
     "sourceBackedArchiveBytes": 120556,
@@ -682,8 +682,8 @@
       "two activated goal versions with independently withheld reports"
     ],
     "sourceBackedDiscoveryTieOrder": [
-      "01a18e6e-fe98-7ccc-a2eb-c670a4dfed7d",
-      "01a18e6e-fdc5-7312-8d47-0c94014c3b69"
+      "01a18e75-eb0e-7e0e-aafd-da0b62efb39b",
+      "01a18e75-e977-7d9f-af2e-49e54610ee05"
     ],
     "sourceBackedDraftPublicLocales": [],
     "barrier": {
