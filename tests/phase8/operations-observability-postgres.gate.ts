@@ -655,7 +655,7 @@ describe("operations summary PostgreSQL qualification", () => {
     expect(result.value.retention.backlogPeriods).toMatchObject({ state: "measured", value: 1 });
     expect(result.value.aggregates.completeness).toMatchObject({ state: "measured", value: { backlogPeriods: 2 } });
     expect(result.value.leases.ageSeconds).toMatchObject({ state: "measured", value: 7_200 });
-    expect(result.value.backup.state).toEqual({ state: "unknown", reason: "producer-not-installed" });
+    expect(result.value.backup.state).toEqual({ state: "unknown", reason: "no-durable-watermark" });
     expect(result.value.recovery.durationMs).toEqual({ state: "unknown", reason: "producer-not-installed" });
     expect(JSON.stringify(result.value)).not.toContain(marker);
     const after = await admin.query(`select

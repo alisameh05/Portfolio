@@ -85,6 +85,30 @@ export {
   type RelationalBackupPayload,
   type RelationalBackupSourcePort,
 } from "./relational-backup.js";
+export {
+  OBJECT_BACKUP_ENVELOPE_VERSION,
+  OBJECT_BACKUP_MAX_ATTEMPTS,
+  OBJECT_BACKUP_MEDIA_LOSS_WINDOW_DAYS,
+  ObjectBackupError,
+  createObjectBackupService,
+  selectCompatibleRecoverySet,
+  type ObjectBackupAttempt,
+  type ObjectBackupCatalog,
+  type ObjectBackupCatalogPort,
+  type ObjectBackupDescriptor,
+  type ObjectBackupDestinationPort,
+  type ObjectBackupIncidentPort,
+  type ObjectBackupItem,
+  type ObjectBackupKey,
+  type ObjectBackupSourcePort,
+} from "./object-backup.js";
+export {
+  createOwnerObjectBackupSource,
+  type MediaObjectBackupCandidate,
+  type MediaObjectBackupInventoryPort,
+  type OwnerExportObjectBackupCandidate,
+  type OwnerExportObjectBackupInventoryPort,
+} from "./owner-object-backup-source.js";
 
 export {
   createLoggerOperationsObservationPort,

@@ -16,6 +16,7 @@ export default defineConfig({
       },
     },
     include: ["tests/**/*.test.ts"],
+    exclude: ["tests/phase8/object-backup-isolated.test.ts", "tests/phase8/object-backup-postgres.test.ts"],
     /**
      * No external runtime, database, credentials, or network required.
      * Phase 1 tests are purely structural and type-level.

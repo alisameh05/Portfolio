@@ -2,8 +2,8 @@ import { PHASE_DECLARED_ADDITIVE_MIGRATIONS } from "./phase-contract-registry.mj
 
 export function assertCurrentOperationsPolicies(rows) {
   const expectedPolicies = [
-    ...PHASE_DECLARED_ADDITIVE_MIGRATIONS.find((item) => item.ticket === 253).operationsAdditions
-      .filter((entry) => entry.category === "policies")
+    ...PHASE_DECLARED_ADDITIVE_MIGRATIONS.filter((item) => item.ticket >= 253).flatMap((item) => item.operationsAdditions ?? [])
+      .filter((entry) => entry.category === "policies" && entry.expected.schema === "operations")
       .map((entry) => [entry.expected.tableName, entry.expected.name, entry.expected.command, entry.expected.roles.slice(1, -1)]),
     ["idempotency_records", "idempotency_application_insert_policy", "INSERT", "shipwithali_application"],
     ["idempotency_records", "idempotency_application_select_policy", "SELECT", "shipwithali_application"],

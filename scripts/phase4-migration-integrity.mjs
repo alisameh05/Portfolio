@@ -159,12 +159,10 @@ export function assertPhase4ApplicationRls(snapshot) {
   const phase7DurableScheduleApplied = snapshot.migrationLedger?.some((migration) =>
     migration.name === "phase7_durable_policy_schedule_keys",
   ) === true;
-  const relationalBackupApplied = snapshot.migrationLedger?.some((migration) =>
-    migration.name === "register_relational_backup_copies",
-  ) === true;
-  const reviewedBackupGrants = relationalBackupApplied
-    ? PHASE_DECLARED_ADDITIVE_MIGRATIONS.find((item) => item.ticket === 253).operationsAdditions
-    : [];
+  const appliedMigrationNames = new Set((snapshot.migrationLedger ?? []).map((migration) => migration.name));
+  const reviewedBackupGrants = PHASE_DECLARED_ADDITIVE_MIGRATIONS
+    .filter((item) => item.ticket >= 253 && appliedMigrationNames.has(item.migration.slice(15, -4)))
+    .flatMap((item) => item.operationsAdditions ?? []);
   const tables = new Map(
     snapshot.objects.filter((object) => object.kind === "r")
       .map((object) => [`${object.schema}.${object.name}`, object]),
@@ -181,6 +179,8 @@ export function assertPhase4ApplicationRls(snapshot) {
     const expected = baseExpected === undefined ? undefined : [
       ...baseExpected,
       ...(configurationExportApplied ? CONFIGURATION_EXPORT_WORKER_POLICIES.get(name) ?? [] : []),
+      ...reviewedBackupGrants.filter(item => item.category === "policies" && `${item.expected.schema}.${item.expected.tableName}` === name)
+        .map(item => [item.expected.name, item.expected.command, item.expected.roles, item.expected.usingPredicate]),
     ];
     const byName = new Map(policies.map((policy) => [policy.name, policy]));
     if (expected === undefined || policies.length !== expected.length || byName.size !== expected.length ||
@@ -576,7 +576,7 @@ export function assertPhase3OperationsContractPreserved(phase3, upgraded, {
       ...(migration.operationsAdditions ?? []),
       ...(migration.operationsAdditionsByEngine?.[String(upgraded.postgresMajor)] ?? []),
     ]);
-  for (const addition of declaredAdditions) {
+  for (const addition of declaredAdditions.filter(entry => entry.expected.schema === "operations")) {
     const rows = actual[addition.category];
     if (!Array.isArray(rows)) throw new Error(`PHASE3_OPERATIONS_CONTRACT_CATEGORY_UNKNOWN:${addition.category}`);
     const index = rows.findIndex((row) => catalogIdentity(addition.category, row) === addition.identity);

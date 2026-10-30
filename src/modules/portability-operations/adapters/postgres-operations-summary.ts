@@ -41,6 +41,11 @@ interface SummaryRow {
   export_verified_artifact_count: number | string;
   export_artifact_bytes: number | string | null;
   export_capped: boolean;
+  relational_backup_watermark_age_hours: number | string | null;
+  object_backup_watermark_age_hours: number | string | null;
+  object_backup_count: number | string | null;
+  object_backup_bytes: number | string | null;
+  object_backup_state: "complete" | "incomplete" | "failed" | null;
   policy_progress_found: boolean;
   first_policy_period: string | null;
   required_through_period: string | null;
@@ -250,6 +255,27 @@ export function buildOperationsSummaryQuery(query: OperationsSummaryQuery): RawB
         (select count(*) from export_ready), (select count(*) from export_failed),
         (select count(*) from export_expired)
       ) >= ${SUMMARY_SAMPLE_LIMIT} as export_capped,
+      (select case when max(copy.source_watermark_at) is null then null else greatest(0, extract(epoch from (max(args.observed_at) - max(copy.source_watermark_at))) / 3600) end
+         from operations.backup_copy_metrics copy cross join args
+        where copy.backup_type = 'relational'
+          and copy.state = 'usable' and copy.deletion_acknowledged_at is null
+          and (copy.expires_at is null or copy.expires_at > args.observed_at)) as relational_backup_watermark_age_hours,
+      (select case when max(copy.source_watermark_at) is null then null else greatest(0, extract(epoch from (max(args.observed_at) - max(copy.source_watermark_at))) / 3600) end
+         from operations.backup_copy_metrics copy cross join args
+        where copy.backup_type = 'object' and copy.state = 'usable' and copy.deletion_acknowledged_at is null
+          and (copy.expires_at is null or copy.expires_at > args.observed_at)) as object_backup_watermark_age_hours,
+      (select copy.object_count from operations.backup_copy_metrics copy
+        where copy.backup_type = 'object'
+          and copy.state = 'usable' and copy.deletion_acknowledged_at is null
+          and (copy.expires_at is null or copy.expires_at > args.observed_at)
+        order by copy.committed_at desc, copy.attempted_at desc limit 1) as object_backup_count,
+      (select copy.object_bytes from operations.backup_copy_metrics copy
+        where copy.backup_type = 'object' and copy.state = 'usable' and copy.deletion_acknowledged_at is null
+          and (copy.expires_at is null or copy.expires_at > args.observed_at)
+        order by copy.attempted_at desc, copy.committed_at desc limit 1) as object_backup_bytes,
+      (select case when copy.state = 'usable' then 'complete' when copy.state = 'uploading' then 'incomplete' else 'failed' end
+         from operations.backup_copy_metrics copy cross join args where copy.backup_type = 'object' and copy.attempted_at <= args.observed_at
+        order by copy.attempted_at desc, copy.committed_at desc limit 1) as object_backup_state,
       exists(select 1 from policy_progress) as policy_progress_found,
       (select first_policy_period from policy_progress) as first_policy_period,
       (select required_through_period from policy_progress) as required_through_period,
@@ -332,6 +358,13 @@ export function createPostgresOperationsSummaryReader(database: Kysely<DB>): Ope
             artifactBytes: row.export_artifact_bytes === null ? null : finiteNumber(row.export_artifact_bytes),
             sampleCount: exportSampleCount,
             capped: row.export_capped,
+          },
+          backup: {
+            relationalSourceWatermarkAgeHours: row.relational_backup_watermark_age_hours === null ? null : finiteNumber(row.relational_backup_watermark_age_hours),
+            objectSourceWatermarkAgeHours: row.object_backup_watermark_age_hours === null ? null : finiteNumber(row.object_backup_watermark_age_hours),
+            objectCount: row.object_backup_count === null ? null : boundedCount(row.object_backup_count, SUMMARY_SAMPLE_LIMIT),
+            objectBytes: row.object_backup_bytes === null ? null : finiteNumber(row.object_backup_bytes),
+            state: row.object_backup_state,
           },
           policyProgress: progress,
         };

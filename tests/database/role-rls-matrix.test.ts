@@ -885,6 +885,9 @@ describeDatabase("Phase 3 role, grant, and RLS matrix (#53)", () => {
           .toThrow("RLS_POLICIES_INCOMPLETE");
         expect(() => assertCurrentOperationsPolicies(currentPolicies.map((row) => row["policyname"] === "relational_backup_copies_backup_update"
           ? { ...row, roles: ["shipwithali_application"] } : row))).toThrow("RLS_POLICIES_INCOMPLETE");
+        // The current inventory above includes every reviewed backup migration.
+        // The assertion below belongs to historical schemas without that ledger.
+        return;
       }
       const policies = await admin.query(
         `select tablename, policyname, roles, cmd

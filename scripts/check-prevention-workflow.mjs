@@ -11,7 +11,7 @@ const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const PREVENTION_WORKFLOW = ".github/workflows/validation-evolution-regressions.yml";
 export const PR_VALIDATION_WORKFLOW = ".github/workflows/pr-validation.yml";
 export const QUALIFICATION_WORKFLOW = ".github/workflows/phase3-7-qualification.yml";
-export const REQUIRED_REGRESSION_TEST_COUNT = 36;
+export const REQUIRED_REGRESSION_TEST_COUNT = 37;
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const normalizeRun = (value) => String(value ?? "").replaceAll("\r\n", "\n").trim();

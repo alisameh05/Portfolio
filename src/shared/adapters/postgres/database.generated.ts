@@ -626,6 +626,18 @@ export interface MediaUploadIntents {
   upload_intent_id: string;
 }
 
+export interface OperationsBackupCopyMetrics {
+  attempted_at: Timestamp | null;
+  backup_type: string | null;
+  committed_at: Timestamp | null;
+  deletion_acknowledged_at: Timestamp | null;
+  expires_at: Timestamp | null;
+  object_bytes: Int8 | null;
+  object_count: number | null;
+  source_watermark_at: Timestamp | null;
+  state: string | null;
+}
+
 export interface OperationsIdempotencyRecords {
   actor_scope: string;
   completed_at: Timestamp | null;
@@ -694,6 +706,37 @@ export interface OperationsJobs {
   semantic_scope_id: string | null;
   status: Generated<string>;
   work_incomplete: Generated<boolean | null>;
+}
+
+export interface OperationsObjectBackupCopies {
+  algorithm: string;
+  attempted_at: Timestamp;
+  catalog_sha256: string;
+  ciphertext_bytes: Int8;
+  ciphertext_sha256: string;
+  committed_at: Timestamp | null;
+  copy_id: string;
+  deletion_acknowledged_at: Timestamp | null;
+  destination_name: string;
+  envelope_version: number;
+  expires_at: Timestamp | null;
+  export_bytes: Int8;
+  failure_code: string | null;
+  incident_environment: Generated<string>;
+  key_version: string;
+  media_bytes: Int8;
+  object_count: number;
+  object_key: string;
+  relational_watermark_at: Timestamp;
+  retention_lifetime_hours: number | null;
+  source_watermark_at: Timestamp;
+  state: string;
+  verified_at: Timestamp | null;
+}
+
+export interface OperationsObjectBackupOwnerScopes {
+  owner_id: string | null;
+  portfolio_id: string | null;
 }
 
 export interface OperationsOutboxEvents {
@@ -893,10 +936,13 @@ export interface DB {
   "media.upload_intent_capabilities": MediaUploadIntentCapabilities;
   "media.upload_intent_commands": MediaUploadIntentCommands;
   "media.upload_intents": MediaUploadIntents;
+  "operations.backup_copy_metrics": OperationsBackupCopyMetrics;
   "operations.idempotency_records": OperationsIdempotencyRecords;
   "operations.incidents": OperationsIncidents;
   "operations.job_redrive_audit": OperationsJobRedriveAudit;
   "operations.jobs": OperationsJobs;
+  "operations.object_backup_copies": OperationsObjectBackupCopies;
+  "operations.object_backup_owner_scopes": OperationsObjectBackupOwnerScopes;
   "operations.outbox_events": OperationsOutboxEvents;
   "operations.phase7_schedule_progress": OperationsPhase7ScheduleProgress;
   "operations.relational_backup_copies": OperationsRelationalBackupCopies;

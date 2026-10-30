@@ -81,6 +81,7 @@ const snapshot: OperationsSummarySnapshot = {
     states: { requested: count(0), building: count(0), ready: count(0), failed: count(0), expired: count(0) },
     completedBuilds: 0, maxBuildDurationMs: null, verifiedArtifacts: 0, artifactBytes: 0, sampleCount: 0, capped: false,
   },
+  backup: { relationalSourceWatermarkAgeHours: null, objectSourceWatermarkAgeHours: null, objectCount: null, objectBytes: null, state: null },
   policyProgress: {
     firstPolicyPeriod: "2026-10-01", requiredThroughPeriod: "2026-10-27", retentionCompleteThrough: "2026-10-26",
     aggregateFinishedThrough: "2026-10-25", lastCompletePeriod: "2026-10-24", phase: "retention",
@@ -94,14 +95,22 @@ describe("Phase 8 operations observability", () => {
     const result = await service.readOperationsSummary({ actor: { kind: "system", jobId, purpose: OPERATIONS_SUMMARY_PURPOSE }, portfolioId });
     expect(result).toMatchObject({ ok: true, value: {
       portfolio: { scope: "one-authorized-portfolio" },
-      backup: { relationalSourceWatermarkAgeHours: { state: "unknown", reason: "producer-not-installed" },
-        objectSourceWatermarkAgeHours: { state: "unknown", reason: "producer-not-installed" }, state: { state: "unknown", reason: "producer-not-installed" } },
+      backup: { relationalSourceWatermarkAgeHours: { state: "unknown", reason: "no-durable-watermark" },
+        objectSourceWatermarkAgeHours: { state: "unknown", reason: "no-durable-watermark" }, state: { state: "unknown", reason: "no-durable-watermark" } },
       recovery: { stage: { state: "unknown", reason: "producer-not-installed" }, durationMs: { state: "unknown", reason: "producer-not-installed" } },
     } });
     if (result.ok) {
       expect(summaryMeasurements({ ...result.value, jobs: { ...result.value.jobs, deadDepth: { value: 0, capped: true, sampleLimit: 1_000 } } }))
         .toContainEqual({ key: "jobs.dead_depth", value: null, state: "unknown" });
     }
+    const backedUp = createOperationsSummaryService({ reader: { async readOperationsSummary() {
+      return { ...snapshot, backup: { relationalSourceWatermarkAgeHours: 12, objectSourceWatermarkAgeHours: 36,
+        objectCount: count(4), objectBytes: 2_048, state: "complete" as const } };
+    } }, clock: { now: () => observedAt } });
+    const backedUpResult = await backedUp.readOperationsSummary({ actor: { kind: "system", jobId, purpose: OPERATIONS_SUMMARY_PURPOSE }, portfolioId });
+    if (backedUpResult.ok) {
+      expect(summaryMeasurements(backedUpResult.value)).toContainEqual({ key: "backup.object_source_watermark_age_hours", value: 36, state: "measured" });
+    } else throw new Error("Expected measured backup watermark summary.");
     const failedMandatoryRead = createOperationsSummaryService({ reader: { async readOperationsSummary() { throw new Error("database unavailable"); } },
       clock: { now: () => observedAt } });
     expect(await failedMandatoryRead.readOperationsSummary({ actor: { kind: "system", jobId, purpose: OPERATIONS_SUMMARY_PURPOSE }, portfolioId }))
@@ -129,8 +138,8 @@ describe("Phase 8 operations observability", () => {
       expect(result.value.retention.backlogPeriods).toMatchObject({ state: "measured", value: 1 });
       expect(result.value.retention.failures).toMatchObject({ state: "measured", value: { value: 0, capped: false, sampleLimit: 1_000 } });
       expect(result.value.aggregates.completeness).toMatchObject({ state: "measured", value: { backlogPeriods: 2 } });
-      expect(result.value.backup.relationalSourceWatermarkAgeHours).toEqual({ state: "unknown", reason: "producer-not-installed" });
-      expect(result.value.backup.objectSourceWatermarkAgeHours).toEqual({ state: "unknown", reason: "producer-not-installed" });
+      expect(result.value.backup.relationalSourceWatermarkAgeHours).toEqual({ state: "unknown", reason: "no-durable-watermark" });
+      expect(result.value.backup.objectSourceWatermarkAgeHours).toEqual({ state: "unknown", reason: "no-durable-watermark" });
       expect(result.value.exports.artifactBytes).toMatchObject({ state: "measured", value: 0 });
       expect(result.value.database.poolLimit).toEqual({ state: "unknown", reason: "not-collected" });
       expect(result.value.database.providerLimit).toEqual({ state: "unknown", reason: "provider-limit-unknown" });
@@ -245,7 +254,7 @@ describe("Phase 8 operations observability", () => {
           expect(signal?.["bounds"], `${alert.id}:${input.metricId}`).toEqual(expect.any(String));
           expect(signal?.["unknown"], `${alert.id}:${input.metricId}`).toEqual(expect.any(String));
         } else if (input.sourceState === "durable-database") {
-          expect(input.metricId).toBe("operations.incidents.delivery_state");
+          expect(["operations.incidents.delivery_state", "backup.object_source_watermark_age_hours"]).toContain(input.metricId);
         } else if (input.sourceState === "configured-and-measured") {
           expect(input.metricId).toBe("configured.sustained_rule");
         } else {

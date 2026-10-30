@@ -32,6 +32,7 @@ export const REQUIRED_DATABASE_SECURITY_TESTS = Object.freeze([
   "Phase 4 migration integrity limits Phase 5 safety checks to the Phase 5 migration window",
 ]);
 export const REQUIRED_REGRESSION_TESTS = Object.freeze([
+  "the issue 254 object backup migration declares its protected ledger contract",
   "every committed migration is classified exactly once and matches the declared phase ranges",
   "the Phase 7 schedule migration stays between its true predecessor prefix and later Phase 8 migrations",
   "undeclared, duplicate, or unreviewed transformation migrations fail closed",

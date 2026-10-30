@@ -44,7 +44,7 @@ test("the Phase 7 schedule migration stays between its true predecessor prefix a
   const boundary = partitionMigrationsAt(files, "20261026164603_phase7_durable_policy_schedule_keys.sql");
   assert.equal(boundary.predecessorMigrations.at(-1), "20261026100000_reconcile_all_owner_export_artifacts.sql");
   assert.equal(boundary.forwardMigration, "20261026164603_phase7_durable_policy_schedule_keys.sql");
-  assert.deepEqual(boundary.laterMigrations, ["20261027014402_operations_observability_summary_indexes.sql", "20261029120000_actionable_incident_delivery.sql", "20261029150000_register_relational_backup_copies.sql"]);
+  assert.deepEqual(boundary.laterMigrations, ["20261027014402_operations_observability_summary_indexes.sql", "20261029120000_actionable_incident_delivery.sql", "20261029150000_register_relational_backup_copies.sql", "20261030100000_register_object_backup_copies.sql"]);
   assert.throws(() => partitionMigrationsAt([...files, boundary.forwardMigration], boundary.forwardMigration),
     /PHASE7_MIGRATION_BOUNDARY_INVALID/u);
 });
@@ -286,6 +286,33 @@ test("the #253 relational backup migration binds exact checks, indexes, policies
   assert.doesNotMatch(sql, /grant (?:all|update)\s+on operations\.relational_backup_copies to shipwithali_backup;/u);
 });
 
+test("the issue 254 object backup migration declares its protected ledger contract", () => {
+  const migration = PHASE_DECLARED_ADDITIVE_MIGRATIONS.find((entry) => entry.ticket === 254);
+  assert.ok(migration);
+  assert.equal(migration.migration, "20261030100000_register_object_backup_copies.sql");
+  assert.equal(migration.migrationSha256, migrationSha256(readFileSync(join(ROOT, "supabase/migrations", migration.migration), "utf8")));
+  const entries = migration.operationsAdditions;
+  assert.ok(entries.some((entry) => entry.category === "objects" && entry.identity === "operations.object_backup_copies"));
+  assert.ok(entries.some((entry) => entry.category === "objects" && entry.identity === "operations.object_backup_owner_scopes"));
+  assert.equal(entries.filter((entry) => entry.category === "columns").length, 34);
+  for (const identity of ["operations.object_backup_copies.object_backup_copies_watermark_order_check",
+    "operations.object_backup_copies.object_backup_copies_usable_verified_check",
+    "operations.object_backup_copies.object_backup_copies_backup_insert",
+    "portfolio_config.settings.object_backup_owner_scope_inventory",
+    "operations.object_backup_owner_scopes.v.shipwithali_backup:shipwithali_migration:SELECT",
+    "operations.object_backup_copies.object_backup_copies_backup_update",
+    "operations.object_backup_copies.object_backup_copies_worker_inspect",
+    "operations.object_backup_copies.r.shipwithali_worker:shipwithali_migration:SELECT",
+    "operations.incidents.object_backup_incidents_insert", "operations.incidents.object_backup_incidents_update",
+    "operations.object_backup_copies.object_backup_copies_current_idx",
+    "operations.object_backup_copies.object_backup_copies_retention_idx"]) {
+    assert.ok(entries.some((entry) => entry.identity === identity), identity);
+  }
+  assert.equal(migration.operationsAdditionsByEngine["18"].length, 17);
+  const sql = readFileSync(join(ROOT, "supabase/migrations", migration.migration), "utf8");
+  assert.match(sql, /grant select on operations\.object_backup_copies to shipwithali_backup, shipwithali_worker;/u);
+});
+
 test("canonical operations expectations bind complete row operations to reviewed migrations", () => {
   const boundary = composeOperationsBoundary(undefined, 18);
   assert.equal(boundary.operations.length, 100);
@@ -299,7 +326,7 @@ test("canonical operations expectations bind complete row operations to reviewed
 });
 
 test("capabilities are declared per checkpoint, never learned from a database", () => {
-  assert.deepEqual(declaredCapabilities().toSorted(), ["measurement.events", "operations.bounded_retries", "operations.incident_delivery", "operations.observability", "operations.phase7_durable_schedules", "operations.relational_backup", "portability.analytics_export", "portability.configuration_export", "portability.content_export", "portability.cv_export", "portability.feedback_export", "portability.media_export", "portability.owner_export_requests", "portability.taxonomy_export"]);
+  assert.deepEqual(declaredCapabilities().toSorted(), ["measurement.events", "operations.bounded_retries", "operations.incident_delivery", "operations.object_backup", "operations.observability", "operations.phase7_durable_schedules", "operations.relational_backup", "portability.analytics_export", "portability.configuration_export", "portability.content_export", "portability.cv_export", "portability.feedback_export", "portability.media_export", "portability.owner_export_requests", "portability.taxonomy_export"]);
   assert.deepEqual(capabilitiesForMigrations(
     ["20261023100000_build_configuration_owner_exports.sql"],
     [],
