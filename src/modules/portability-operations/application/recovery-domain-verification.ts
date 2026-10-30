@@ -14,7 +14,14 @@ export function recoveryDomainSnapshotSha256(snapshot: OwnerExportSelectedSnapsh
       .sort(([left], [right]) => left.localeCompare(right)).map(([key, nested]) => [key, canonical(nested)]));
     return value;
   };
-  return createHash("sha256").update(JSON.stringify(canonical(snapshot))).digest("hex");
+  // Compare domain state independently of capture identity and capture-derived policy deadlines.
+  // Domain history timestamps remain part of the digest.
+  return createHash("sha256").update(JSON.stringify(canonical({ ...snapshot, snapshotId: undefined, capturedAt: undefined, policyExpiresAt: undefined,
+    ...(snapshot.configuration ? { configuration: { ...snapshot.configuration, snapshotId: undefined,
+      capturedAt: undefined, policyExpiresAt: undefined } } : {}),
+    ...(snapshot.cv ? { cv: { ...snapshot.cv, capturedAt: undefined } } : {}),
+    ...(snapshot.analytics ? { analytics: { ...snapshot.analytics, policyExpiresAt: undefined } } : {}),
+  }))).digest("hex");
 }
 
 function records(value: unknown): readonly Record<string, unknown>[] {

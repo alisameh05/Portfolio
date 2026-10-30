@@ -168,7 +168,7 @@ async function captureProductionRecoverySnapshot(client: Client, capturedAt: str
 }
 
 describe("#255 real isolated PostgreSQL recovery", () => {
-  it("restores encrypted relational and object copies under quarantine, reconciles current privacy/effect state, verifies domain/RLS readiness, and cleans owned targets", async () => {
+  it.each([false, true])("skip retention reconciliation=%s: restores encrypted relational and object copies under quarantine, reconciles current privacy/effect state, verifies domain/RLS readiness, and cleans owned targets", async (skipRetentionReconciliation) => {
     const container = `phase8-recovery-${randomUUID().replaceAll("-", "")}`;
     const s3Container = `phase8-recovery-s3-${randomUUID().replaceAll("-", "")}`;
     const runId = randomUUID();
@@ -447,7 +447,7 @@ describe("#255 real isolated PostgreSQL recovery", () => {
             objectTargetKeys.delete(targetKey);
           });
           const currentRetention = await liveLedger!.query("select feedback_id,expires_at from moderation.current_retention");
-          for (const row of currentRetention.rows) await targetOperator(async client => {
+          for (const row of skipRetentionReconciliation ? [] : currentRetention.rows) await targetOperator(async client => {
             await client.query("update moderation.feedback_history set state='expired',private_text=null,redacted=true where feedback_id=$1", [row.feedback_id]);
           });
           deletionApplied = true;
@@ -474,8 +474,12 @@ describe("#255 real isolated PostgreSQL recovery", () => {
         }),
         verifyDomainMeaning: async () => {
           const snapshotReader: OwnerExportSnapshotReaderPort = {
-            capture: async request => targetOperator(async client => productionRecoverySnapshotReader(client, now, true).capture(request)),
+            capture: async request => targetOperator(async client => productionRecoverySnapshotReader(client, now).capture(request)),
           };
+          const feedback = await targetOperator(client => client.query("select state,private_text,redacted from moderation.feedback_history where feedback_id='feedback-private'"));
+          if (feedback.rows[0]?.state !== "expired" || feedback.rows[0]?.private_text !== null || feedback.rows[0]?.redacted !== true) {
+            throw new Error("RECOVERY_MODERATION_PRIVACY_NOT_RECONCILED");
+          }
           const currentState = await targetOperator(client => client.query("select status,bytes from portability.owner_exports where artifact_id='export-1'"));
           const mediaResponse = await signedS3(s3Endpoint, "GET", `/${objectTargetBucket}/recovered/media-1`, Buffer.alloc(0), targetObjectCredentials);
           const mediaBytes = Buffer.from(await mediaResponse.arrayBuffer());
@@ -550,6 +554,12 @@ describe("#255 real isolated PostgreSQL recovery", () => {
         referenceAt, relationalRpoHours: 24, mediaRpoHours: 168, rtoTargetMilliseconds: 28_800_000,
         startedAt, discoveryAccessMilliseconds, manualPauseMilliseconds: 0 }, port);
       observedReport = report;
+      if (skipRetentionReconciliation) {
+        expect(report).toMatchObject({ status: "failed", failureStage: "domain_verification", accessReleased: false });
+        expect(released).toBe(false);
+        expect(report.cleanup.complete).toBe(true);
+        return;
+      }
       expect(report).toMatchObject({ status: "complete", releaseBlocker: false, accessReleased: true,
         mediaBytes: objectBytes.length, exportBytes: exportObjectBytes.length,
         objectCount: 2,

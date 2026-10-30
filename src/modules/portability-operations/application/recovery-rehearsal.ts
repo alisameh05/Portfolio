@@ -123,7 +123,7 @@ function parseIdentity(value: string, credentialsRequired: boolean): URL {
 }
 
 function resourceIdentity(url: URL): string {
-  return `${url.protocol}//${url.hostname.toLowerCase()}:${url.port || "5432"}/${decodeURIComponent(url.pathname.slice(1))}`;
+  return `postgresql://${url.hostname.toLowerCase()}:${url.port || "5432"}/${decodeURIComponent(url.pathname.slice(1))}`;
 }
 
 function parseObjectIdentity(value: string): URL {

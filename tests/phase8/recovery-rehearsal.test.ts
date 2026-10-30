@@ -68,6 +68,19 @@ function ports(overrides: Partial<RecoveryRehearsalPort> = {}) {
 }
 
 describe("recovery domain verification through Owner Export snapshot API", () => {
+  it("ignores capture metadata while retaining domain timestamps and values", async () => {
+    const snapshot = await snapshotFor(RECOVERY_DOMAIN_SCOPES, fixtureIds.snapshot);
+    const later = { ...snapshot, capturedAt: "2026-10-31T12:00:00.000Z",
+      configuration: { ...snapshot.configuration!, capturedAt: "2026-10-31T12:00:00.000Z" } };
+    expect(recoveryDomainSnapshotSha256(later)).toBe(recoveryDomainSnapshotSha256(snapshot));
+    expect(recoveryDomainSnapshotSha256({ ...later, configuration: { ...later.configuration, configurationVersion: 999 } }))
+      .not.toBe(recoveryDomainSnapshotSha256(snapshot));
+    const changed = structuredClone(later);
+    const value = changed.content!.records[0]!.value as Record<string, unknown>;
+    value["firstPublishedAt"] = "2020-01-01T00:00:00.000Z";
+    expect(recoveryDomainSnapshotSha256(changed)).not.toBe(recoveryDomainSnapshotSha256(snapshot));
+  });
+
   it("checks the complete seven-scope snapshot, IDs, references, hashes, and privacy facts", async () => {
     const snapshot = await snapshotFor(RECOVERY_DOMAIN_SCOPES, fixtureIds.snapshot);
     const capture = vi.fn(async () => ok(snapshot));
@@ -86,6 +99,14 @@ describe("recovery domain verification through Owner Export snapshot API", () =>
 });
 
 describe("#255 isolated recovery rehearsal", () => {
+  it.each(["postgres", "postgresql"])("rejects mixed-scheme source and protected aliases (%s)", scheme => {
+    const targetIdentity = target.targetIdentity.replace("postgres:", `${scheme}:`);
+    const alias = targetIdentity.replace(`${scheme}:`, scheme === "postgres" ? "postgresql:" : "postgres:");
+    expect(() => validateRecoveryTarget({ ...target, targetIdentity, sourceIdentity: alias })).toThrow("RECOVERY_TARGET_PROTECTED");
+    expect(() => validateRecoveryTarget({ ...target, targetIdentity,
+      protectedIdentities: [alias.replace("restore-user:target-secret@", "")] })).toThrow("RECOVERY_TARGET_PROTECTED");
+  });
+
   it("rejects a target that aliases a protected identity, is not allowlisted, or reuses source credentials", () => {
     expect(() => validateRecoveryTarget({ ...target, targetIdentity:
       "postgres://restore-user:target-secret@prod.example.test:5432/portfolio" })).toThrow("RECOVERY_TARGET_PROTECTED");
