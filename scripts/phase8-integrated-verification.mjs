@@ -104,9 +104,27 @@ function execute(run) {
     testResults = parsedFailureReport.suites.flatMap((suite) => suite.tests.map((test) => ({ title: test.title, status: test.status,
       ...(test.failureCode ? { failureCode: test.failureCode } : {}) })));
   }
+  const resourceEvidence = output.replace(/\u001b\[[0-9;]*m/gu, "").split(/\r?\n/u).flatMap((line) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) return [];
+    try { return [JSON.parse(trimmed)]; } catch { return []; }
+  });
+  const recoveryDatabase = resourceEvidence.find((item) => item.evidence === "isolated-postgres-object-recovery-small-fixture");
+  const recoveryObjects = resourceEvidence.find((item) => item.evidence === "isolated-s3");
+  const cleanupEvidence = run.id === "isolated-recovery" ? {
+    postgresObjects: recoveryDatabase?.measurements?.cleanup ?? null,
+    databaseAndObjectTargetsRemoved: recoveryDatabase?.checks?.ownedDatabaseAndObjectTargetsRemoved === true,
+    isolatedObjectContainerRemoved: recoveryObjects?.ownedContainerRemoved === true,
+  } : artifacts.map((item) => ({ artifact: item.path, cleanup: item.cleanup }));
+  const cleanupVerified = run.id === "isolated-recovery"
+    ? recoveryDatabase?.measurements?.cleanup?.complete === true && recoveryDatabase?.checks?.ownedDatabaseAndObjectTargetsRemoved === true &&
+      recoveryObjects?.ownedContainerRemoved === true
+    : artifacts.length > 0 ? artifacts.every((item) => item.cleanup) : true;
+  const artifactsValid = artifacts.every((item) => item.success && item.cleanup && item.sourceBound && item.skipped !== null && Number(item.skipped) === 0);
   return { id: run.id, command: `npm run ${run.command}`, testReport: run.testReport ?? null,
-    success: executed && artifacts.every((item) => item.success && item.cleanup && item.sourceBound && item.skipped !== null && Number(item.skipped) === 0) &&
+    success: executed && artifactsValid && cleanupVerified &&
       (!new Set(["isolated-recovery", "contracts"]).has(run.id) || testNames.length > 0),
+    cleanupVerified, cleanupEvidence,
     exitCode: result.status ?? null, outputSha256: createHash("sha256").update(output).digest("hex"), testNames, testResults, artifacts,
     ...(result.error ? { error: String(result.error.message ?? result.error) } : {}) };
 }
@@ -145,7 +163,7 @@ const evidence = { schemaVersion: 1, ticket: 256, runId, startedAt, completedAt,
   tools: { node: process.version.replace(/^v/u, ""), npm: process.env.npm_config_user_agent?.match(/npm\/(\S+)/u)?.[1] ?? null },
   required: { success, passed: reportedPasses, failed: RUNS.length - passedRuns + artifactFailures + testFailures,
     skipped: testSkips, failedSuites: RUNS.length - passedRuns },
-  cleanup: runs.every((run) => run.artifacts.length === 0 || run.artifacts.every((artifact) => artifact.cleanup)), runs, criteria, testReports: uniqueTestReports };
+  cleanup: runs.every((run) => run.cleanupVerified === true), runs, criteria, testReports: uniqueTestReports };
 mkdirSync(dirname(EVIDENCE_PATH), { recursive: true });
 writeFileSync(EVIDENCE_PATH, `${JSON.stringify(evidence, null, 2)}\n`);
 console.log(JSON.stringify({ evidence: "evidence/phase8-integrated-verification-256.json", success,
