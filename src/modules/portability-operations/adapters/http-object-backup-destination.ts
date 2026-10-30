@@ -43,7 +43,7 @@ export function createHttpObjectBackupDestination(options: {
     try {
       return await fetcher(endpoint(key), { method,
         headers: { authorization: "Bearer " + options.bearerToken, ...(body ? { "content-type": "application/octet-stream" } : {}) },
-        ...(body ? { body: Buffer.from(body) } : {}), redirect: "error", signal: signal ?? AbortSignal.timeout(timeout) });
+        ...(body ? { body: Buffer.from(body) } : {}), redirect: "error", signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timeout)]) });
     } catch { throw new ObjectBackupDestinationError("OBJECT_BACKUP_DESTINATION_UNAVAILABLE"); }
   };
   const destination: ObjectBackupDestinationPort = {

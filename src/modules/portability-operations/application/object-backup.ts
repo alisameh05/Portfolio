@@ -282,7 +282,7 @@ export function createObjectBackupService(deps: {
         const code = safeFailure(error); let cleanupFailed = false;
         if (attempt) {
           let failed = false; try { await deps.catalog.markFailed(attempt.copyId, code); failed = true; } catch { cleanupFailed = true; }
-          if (failed) try { await deleteAttemptObjects(deps.destination, attempt); } catch { cleanupFailed = true; }
+          if (failed) try { await deleteAttemptObjects(deps.destination, attempt); await deps.catalog.acknowledgeDeletion(attempt.copyId, deps.clock.now()); } catch { cleanupFailed = true; }
         }
         const incident = cleanupFailed ? "OBJECT_BACKUP_CLEANUP_FAILED" : code;
         try { await deps.incidents.recordFailure(incident, deps.clock.now()); } catch { throw new ObjectBackupError("OBJECT_BACKUP_INCIDENT_WRITE_FAILED"); }
@@ -348,6 +348,7 @@ export function createObjectBackupService(deps: {
         try {
           await deps.catalog.markFailed(copy.copyId, "OBJECT_BACKUP_INTERRUPTED");
           await deleteAttemptObjects(deps.destination, copy);
+          await deps.catalog.acknowledgeDeletion(copy.copyId, deps.clock.now());
           cleaned += 1;
         } catch {
           try { await deps.incidents.recordFailure("OBJECT_BACKUP_CLEANUP_FAILED", deps.clock.now()); }
@@ -395,7 +396,7 @@ export function selectCompatibleRecoverySet(input: {
   const missingObjectIds = input.requiredObjectIds.filter(id => !input.object.objects.some(item => item.objectId === id));
   if (!input.object.complete || !Number.isFinite(relationalAt) || !Number.isFinite(objectAt)) return Object.freeze({ compatible: false, missingObjectIds, mediaLossWindowDays: null, reason: "RECOVERY_CATALOG_INCOMPLETE" });
   if (missingObjectIds.length && input.integrity === "full") return Object.freeze({ compatible: false, missingObjectIds: Object.freeze(missingObjectIds), mediaLossWindowDays: null, reason: "REQUIRED_OBJECTS_MISSING" });
-  const gapDays = Math.max(0, Math.floor((relationalAt - objectAt) / 86_400_000));
+  const gapDays = Math.max(0, (relationalAt - objectAt) / 86_400_000);
   if (missingObjectIds.length && input.integrity === "declared-loss-window" && gapDays > OBJECT_BACKUP_MEDIA_LOSS_WINDOW_DAYS) {
     return Object.freeze({ compatible: false, missingObjectIds: Object.freeze(missingObjectIds), mediaLossWindowDays: OBJECT_BACKUP_MEDIA_LOSS_WINDOW_DAYS, reason: "DECLARED_LOSS_WINDOW_EXCEEDED" });
   }

@@ -99,3 +99,5 @@ export type {
   MediaUploadIntentRepositoryPort,
   UploadCapabilityVaultPort,
 } from "./ports/index.js";
+
+export type { OwnerMediaExportSnapshotReaderPort } from "./application/owner-contracts.js";

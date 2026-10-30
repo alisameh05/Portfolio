@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import type { StableId } from "@shared/domain";
+import { Kysely, PostgresDialect } from "kysely";
+import { buildOperationsSummaryQuery } from "../../src/modules/portability-operations/adapters/postgres-operations-summary.js";
+import { Pool } from "pg";
 import { Client } from "pg";
 import { createPostgresObjectBackupCatalog } from "../../src/modules/portability-operations/adapters/postgres-object-backup-catalog.js";
 
@@ -60,6 +64,17 @@ describe("isolated PostgreSQL object-backup catalog evidence", () => {
       expect(scope.rows).toEqual([{ portfolio_id: "00000000-0000-4000-8000-000000000001", owner_id: "00000000-0000-4000-8000-000000000002" }]);
       await expect(backup.query("select * from portfolio_config.settings")).rejects.toMatchObject({ code: "42501" });
 
+      await admin.query(`create schema portability;
+        create table operations.outbox_events(event_id uuid,occurred_at timestamptz,available_at timestamptz,attempt_count int,lease_expires_at timestamptz,completed_at timestamptz,dead_at timestamptz,lease_acquired_at timestamptz);
+        create table operations.jobs(job_id uuid,status text,available_at timestamptz,lease_expires_at timestamptz,lease_acquired_at timestamptz);
+        create table operations.phase7_schedule_progress(portfolio_id uuid,first_policy_period date,required_through_period date,retention_complete_through date,aggregate_finished_through date,last_complete_period date,phase text);
+        create table portability.owner_exports(export_id uuid,portfolio_id uuid,status text,requested_at timestamptz,started_at timestamptz,completed_at timestamptz,failed_at timestamptz,expired_at timestamptz,artifact_content_length bigint);`);
+      const compiler = new Kysely({ dialect: new PostgresDialect({ pool: new Pool() }) });
+      const summary = buildOperationsSummaryQuery({ portfolioId: "00000000-0000-4000-8000-000000000001" as StableId<"Portfolio">, observedAt: "2026-10-30T01:00:00.000Z", windowSeconds: 86400, maxRows: 1000 }).compile(compiler);
+      await compiler.destroy();
+      const emptySummary = await admin.query(summary.sql, [...summary.parameters]);
+      expect(emptySummary.rows[0].object_backup_watermark_age_hours).toBeNull();
+      expect(emptySummary.rows[0].relational_backup_watermark_age_hours).toBeNull();
       const now = "2026-10-30T00:00:00.000Z";
       const attempt = { copyId: randomUUID(), destinationName: "independent-store", objectKey: `objects/${randomUUID()}/catalog.swob`,
         keyVersion: "test-v1", sourceWatermarkAt: now, relationalWatermarkAt: now, objectCount: 1, mediaBytes: 12, exportBytes: 0,
@@ -74,11 +89,26 @@ describe("isolated PostgreSQL object-backup catalog evidence", () => {
         copyId: attempt.copyId, state: "usable", ciphertextBytes: 4096,
         catalogSha256: finalized.catalogSha256, ciphertextSha256: finalized.ciphertextSha256,
       });
+      await admin.query("insert into operations.relational_backup_copies(state,attempted_at,committed_at,source_watermark_at) values ('usable',$1,$1,$1)", [now]);
+      const populatedSummary = await admin.query(summary.sql, [...summary.parameters]);
+      expect(Number(populatedSummary.rows[0].object_backup_watermark_age_hours)).toBe(1);
+      expect(Number(populatedSummary.rows[0].relational_backup_watermark_age_hours)).toBe(1);
       await admin.query("set role shipwithali_application");
       const metrics = await admin.query("select backup_type,state,object_count,object_bytes from operations.backup_copy_metrics where backup_type='object'");
       expect(metrics.rows).toEqual([{ backup_type: "object", state: "usable", object_count: 1, object_bytes: "12" }]);
       await expect(admin.query("select * from operations.object_backup_copies")).rejects.toMatchObject({ code: "42501" });
       await admin.query("reset role");
+      await expect(catalog.acknowledgeDeletion(attempt.copyId, now)).rejects.toThrow();
+      await admin.query("update operations.object_backup_copies set expires_at=clock_timestamp()-interval '1 second' where copy_id=$1", [attempt.copyId]);
+      expect(await catalog.listExpired("independent-store", 100)).toHaveLength(1);
+      await catalog.acknowledgeDeletion(attempt.copyId, now);
+      expect(await catalog.listExpired("independent-store", 100)).toHaveLength(0);
+      const failed = { ...attempt, copyId: randomUUID() };
+      await catalog.begin(failed);
+      await catalog.markFailed(failed.copyId, "OBJECT_BACKUP_INTERRUPTED");
+      expect(await catalog.listExpired("independent-store", 100)).toHaveLength(1);
+      await catalog.acknowledgeDeletion(failed.copyId, now);
+      expect(await catalog.listExpired("independent-store", 100)).toHaveLength(0);
       verified = true;
     } finally {
       if (backup) await backup.end().catch(() => undefined);

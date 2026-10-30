@@ -39,6 +39,21 @@ function setup(overrides: Partial<Parameters<typeof createObjectBackupService>[0
 }
 
 describe("object backup", () => {
+  it("keeps timeout cancellation active with a caller signal", async () => {
+    const destination = createHttpObjectBackupDestination({ name: "independent-store", baseUrl: "https://backup.example", bearerToken: "test", requestTimeoutMs: 1000,
+      fetcher: async (_url, init) => new Promise((_resolve, reject) => init!.signal!.addEventListener("abort", () => reject(init!.signal!.reason), { once: true })) });
+    await expect(destination.put("objects/00000000-0000-4000-8000-000000000001/catalog.swob", bytes, new AbortController().signal)).rejects.toMatchObject({ safeCode: "OBJECT_BACKUP_DESTINATION_UNAVAILABLE" });
+  });
+
+  it("enforces the exact seven day recovery boundary", async () => {
+    const { service } = setup();
+    const copy = await service.create();
+    const input = { object: copy.catalog, requiredObjectIds: ["missing"], integrity: "declared-loss-window" as const };
+    const boundary = Date.parse(copy.catalog.sourceWatermarkAt) + 7 * 86400000;
+    expect(selectCompatibleRecoverySet({ ...input, relational: { sourceWatermarkAt: new Date(boundary).toISOString() } }).compatible).toBe(true);
+    expect(selectCompatibleRecoverySet({ ...input, relational: { sourceWatermarkAt: new Date(boundary + 1).toISOString() } }).compatible).toBe(false);
+  });
+
   it("writes encrypted bytes through the authenticated HTTP destination and recovers its independent disk copy", async () => {
     const root = await mkdtemp(join(tmpdir(), "phase8-object-backup-"));
     const token = randomUUID();
@@ -151,6 +166,7 @@ describe("object backup", () => {
       source: "original", variantName: "original", mediaType: "image/png", byteLength: objectBytes,
       sha256: objectSha256, eligibleAt: "2026-10-29T00:00:00.000Z", expiresAt: null,
       read: async () => {
+        await new Promise<void>(resolve => setImmediate(resolve));
         if (lastSourceBuffer) expect(lastSourceBuffer.every(value => value === 0)).toBe(true);
         lastSourceBuffer = Buffer.from(payload);
         maximumSourceBufferBytes = Math.max(maximumSourceBufferBytes, lastSourceBuffer.byteLength);
@@ -252,6 +268,23 @@ describe("object backup", () => {
     expect(await service.cleanupExpired()).toBe(1);
     expect(deleted).toBe(true);
     expect(acknowledged).toBe(true);
+  });
+
+  it("retries failed deletion of every shard on a later cleanup", async () => {
+    const deleted: string[] = [];
+    let deny = true, acknowledged = false;
+    const copy = { copyId: "failed", objectKey: "objects/failed/catalog.swob", objectCount: 2 } as Awaited<ReturnType<ReturnType<typeof createObjectBackupService>["create"]>>;
+    const { service } = setup({
+      destination: { name: "independent-store", put: async () => {}, get: async () => new Uint8Array(), delete: async k => { if (deny) throw new Error("outage"); deleted.push(k); } },
+      catalog: { begin: async () => {}, finalizeUploading: async () => {}, markUsable: async () => {}, markFailed: async () => {}, currentUsable: async () => null,
+        listUsable: async () => [], listStaleUploading: async () => [copy], listExpired: async () => acknowledged ? [] : [copy], acknowledgeDeletion: async () => { acknowledged = true; } },
+    });
+    await expect(service.cleanupInterrupted()).rejects.toMatchObject({ safeCode: "OBJECT_BACKUP_CLEANUP_FAILED" });
+    expect(acknowledged).toBe(false);
+    deny = false;
+    expect(await service.cleanupExpired()).toBe(1);
+    expect(deleted).toEqual(["objects/failed/items/0.swob", "objects/failed/items/1.swob", "objects/failed/catalog.swob"]);
+    expect(await service.cleanupExpired()).toBe(0);
   });
 
   it("marks interrupted uploads unusable before deleting their partial destination object", async () => {

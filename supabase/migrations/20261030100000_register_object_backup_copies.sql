@@ -30,11 +30,11 @@ create table operations.object_backup_copies (
   expires_at timestamptz,
   deletion_acknowledged_at timestamptz,
   incident_environment text not null default 'unknown' check (incident_environment in ('unknown','local','test','staging','production')),
-  constraint object_backup_copies_usable_verified_check check (state <> 'usable' or (verified_at is not null and committed_at is not null and deletion_acknowledged_at is null)),
+  constraint object_backup_copies_usable_verified_check check (state <> 'usable' or (verified_at is not null and committed_at is not null)),
   constraint object_backup_copies_failure_state_check check (failure_code is null or state = 'failed'),
   constraint object_backup_copies_committed_state_check check (committed_at is null or state = 'usable'),
   constraint object_backup_copies_expiry_check check (expires_at is null or retention_lifetime_hours is not null),
-  constraint object_backup_copies_deletion_check check (deletion_acknowledged_at is null or state = 'usable'),
+  constraint object_backup_copies_deletion_check check (deletion_acknowledged_at is null or state in ('usable','failed')),
   constraint object_backup_copies_watermark_order_check check (source_watermark_at <= relational_watermark_at)
 );
 
@@ -69,9 +69,10 @@ create policy object_backup_copies_backup_insert on operations.object_backup_cop
   as permissive for insert to shipwithali_backup with check (state = 'uploading');
 create policy object_backup_copies_backup_update on operations.object_backup_copies
   as permissive for update to shipwithali_backup
-  using (state = 'uploading' or (state = 'usable' and deletion_acknowledged_at is null and expires_at <= clock_timestamp()))
+  using (state in ('uploading','failed') or (state = 'usable' and deletion_acknowledged_at is null and expires_at <= clock_timestamp()))
   with check ((state = 'uploading' and deletion_acknowledged_at is null) or
     (state in ('usable','failed') and deletion_acknowledged_at is null) or
+    (state = 'failed' and deletion_acknowledged_at is not null) or
     (state = 'usable' and deletion_acknowledged_at is not null and expires_at <= clock_timestamp()));
 grant select on operations.object_backup_copies to shipwithali_backup, shipwithali_worker;
 grant insert on operations.object_backup_copies to shipwithali_backup;
@@ -88,7 +89,7 @@ create view operations.backup_copy_metrics with (security_barrier = true) as
     expires_at, deletion_acknowledged_at, object_count, media_bytes + export_bytes as object_bytes
   from operations.object_backup_copies;
 revoke all on operations.backup_copy_metrics from public, anon, authenticated;
-grant select on operations.backup_copy_metrics to shipwithali_application;
+grant select on operations.backup_copy_metrics to shipwithali_application, shipwithali_worker;
 
 create policy object_backup_incidents_insert on operations.incidents
   as permissive for insert to shipwithali_backup with check (

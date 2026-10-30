@@ -286,7 +286,7 @@ test("the #253 relational backup migration binds exact checks, indexes, policies
   assert.doesNotMatch(sql, /grant (?:all|update)\s+on operations\.relational_backup_copies to shipwithali_backup;/u);
 });
 
-test("the #254 object backup migration declares its protected ledger contract", () => {
+test("the issue 254 object backup migration declares its protected ledger contract", () => {
   const migration = PHASE_DECLARED_ADDITIVE_MIGRATIONS.find((entry) => entry.ticket === 254);
   assert.ok(migration);
   assert.equal(migration.migration, "20261030100000_register_object_backup_copies.sql");
@@ -294,7 +294,7 @@ test("the #254 object backup migration declares its protected ledger contract", 
   const entries = migration.operationsAdditions;
   assert.ok(entries.some((entry) => entry.category === "objects" && entry.identity === "operations.object_backup_copies"));
   assert.ok(entries.some((entry) => entry.category === "objects" && entry.identity === "operations.object_backup_owner_scopes"));
-  assert.equal(entries.filter((entry) => entry.category === "columns").length, 25);
+  assert.equal(entries.filter((entry) => entry.category === "columns").length, 34);
   for (const identity of ["operations.object_backup_copies.object_backup_copies_watermark_order_check",
     "operations.object_backup_copies.object_backup_copies_usable_verified_check",
     "operations.object_backup_copies.object_backup_copies_backup_insert",

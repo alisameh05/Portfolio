@@ -3,8 +3,8 @@ import { parseStableId, type StableId } from "@shared/domain";
 import type { DB } from "../../../shared/adapters/postgres/database.generated.js";
 import { resolvePostgresTransaction } from "../../../shared/adapters/postgres/runtime.js";
 import type { TransactionRunner } from "../../../runtime/ports.js";
-import type { OwnerMediaExportSnapshotReaderPort } from "../../media/application/owner-contracts.js";
-import type { OwnerCvExportSnapshotReaderPort } from "../../cv-portfolio/application/owner-export-snapshot.js";
+import type { OwnerMediaExportSnapshotReaderPort } from "../../media/index.js";
+import type { OwnerCvExportSnapshotReaderPort } from "../../cv-portfolio/index.js";
 import type { MediaObjectBackupInventoryPort, OwnerExportObjectBackupInventoryPort } from "../application/owner-object-backup-source.js";
 
 /** Media-owned accepted originals and variants, read through the same RLS-bound seam as Owner exports. */

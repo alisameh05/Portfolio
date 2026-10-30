@@ -255,12 +255,12 @@ export function buildOperationsSummaryQuery(query: OperationsSummaryQuery): RawB
         (select count(*) from export_ready), (select count(*) from export_failed),
         (select count(*) from export_expired)
       ) >= ${SUMMARY_SAMPLE_LIMIT} as export_capped,
-      (select greatest(0, extract(epoch from (args.observed_at - max(copy.source_watermark_at))) / 3600)
+      (select case when max(copy.source_watermark_at) is null then null else greatest(0, extract(epoch from (max(args.observed_at) - max(copy.source_watermark_at))) / 3600) end
          from operations.backup_copy_metrics copy cross join args
         where copy.backup_type = 'relational'
           and copy.state = 'usable' and copy.deletion_acknowledged_at is null
           and (copy.expires_at is null or copy.expires_at > args.observed_at)) as relational_backup_watermark_age_hours,
-      (select greatest(0, extract(epoch from (args.observed_at - max(copy.source_watermark_at))) / 3600)
+      (select case when max(copy.source_watermark_at) is null then null else greatest(0, extract(epoch from (max(args.observed_at) - max(copy.source_watermark_at))) / 3600) end
          from operations.backup_copy_metrics copy cross join args
         where copy.backup_type = 'object' and copy.state = 'usable' and copy.deletion_acknowledged_at is null
           and (copy.expires_at is null or copy.expires_at > args.observed_at)) as object_backup_watermark_age_hours,

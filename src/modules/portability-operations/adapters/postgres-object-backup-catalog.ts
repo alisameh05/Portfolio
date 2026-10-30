@@ -51,13 +51,13 @@ export function createPostgresObjectBackupCatalog(database: ObjectBackupSqlExecu
       return Object.freeze(result.rows.map(mapObjectBackupRow));
     },
     async listExpired(destinationName, limit) {
-      const result = await database.query("select * from operations.object_backup_copies where destination_name=$1 and state='usable' " +
-        "and deletion_acknowledged_at is null and expires_at <= clock_timestamp() order by expires_at,copy_id limit $2", [destinationName,limit]);
+      const result = await database.query("select * from operations.object_backup_copies where destination_name=$1 " +
+        "and deletion_acknowledged_at is null and (state='failed' or (state='usable' and expires_at <= clock_timestamp())) order by expires_at,copy_id limit $2", [destinationName,limit]);
       return Object.freeze(result.rows.map(mapObjectBackupRow));
     },
     async acknowledgeDeletion(copyId, deletedAt) {
       const result = await database.query("update operations.object_backup_copies set deletion_acknowledged_at=$2 " +
-        "where copy_id=$1 and state='usable' and deletion_acknowledged_at is null and expires_at <= clock_timestamp()", [copyId,deletedAt]);
+        "where copy_id=$1 and deletion_acknowledged_at is null and (state='failed' or (state='usable' and expires_at <= clock_timestamp()))", [copyId,deletedAt]);
       if (result.rowCount !== 1) throw new Error("OBJECT_BACKUP_CLEANUP_COMMIT_FAILED");
     },
   };
