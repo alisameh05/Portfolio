@@ -1,15 +1,15 @@
 {
   "evidenceVersion": 1,
   "ticket": 252,
-  "runId": "4ffd777d-c49c-4169-bc66-218e5afd49f9",
-  "startedAt": "2026-10-29T13:58:45.951Z",
-  "completedAt": "2026-10-29T13:59:50.477Z",
+  "runId": "3edbf85a-4787-4a27-b323-908393169cb3",
+  "startedAt": "2026-10-30T20:10:25.138Z",
+  "completedAt": "2026-10-30T20:11:13.211Z",
   "repository": {
-    "head": "7286e3f710669a8546da594043cfb47fc91aab6b",
-    "branch": "t3/actionable-incident-readiness",
+    "head": "894cd211188ec442034878b4c3852139d16db211",
+    "branch": "codex/issue-256-integrated-verification",
     "detached": false,
-    "sourceTreeSha256Before": "756937121d2892f6a21eada108919e938dad3b63b6114b5eeb96c9033ecccac8",
-    "sourceTreeSha256After": "756937121d2892f6a21eada108919e938dad3b63b6114b5eeb96c9033ecccac8"
+    "sourceTreeSha256Before": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc",
+    "sourceTreeSha256After": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc"
   },
   "tools": {
     "node": "v24.21.0",
@@ -310,16 +310,25 @@
     {
       "name": "20261029120000_actionable_incident_delivery.sql",
       "sha256": "9bb0b260a3831f9cd376f07deb707f38a447600458e491e0514573d92b3ebc9c"
+    },
+    {
+      "name": "20261029150000_register_relational_backup_copies.sql",
+      "sha256": "f29bb017d9b2344764223df3df0820a075b8d647177f94eb9b1ad142fba9bcde"
+    },
+    {
+      "name": "20261030100000_register_object_backup_copies.sql",
+      "sha256": "072ccc6b900803d95ce6fa8d59daa348bf248c28f814b0c3629248e78dd27fdc"
     }
   ],
   "volumes": {
-    "clusterBytesBeforeCleanup": 213774707,
+    "clusterBytesBeforeCleanup": 214397299,
     "clusterBytesAfterCleanup": 0
   },
   "checks": {
     "validationEvolution": {
       "status": 0,
       "expectedRegistryTests": [
+        "the issue 254 object backup migration declares its protected ledger contract",
         "every committed migration is classified exactly once and matches the declared phase ranges",
         "the Phase 7 schedule migration stays between its true predecessor prefix and later Phase 8 migrations",
         "undeclared, duplicate, or unreviewed transformation migrations fail closed",
@@ -342,6 +351,7 @@
         "the Phase 7 schedule migration binds exact checks, indexes, defaults, and PostgreSQL engine variants",
         "the Phase 8 operations observability migration binds exact columns, all eleven index definitions, and its source checksum",
         "the \\#252 incident migration binds added columns, checks, index, restricted column grants, and source checksum",
+        "the \\#253 relational backup migration binds exact checks, indexes, policies, restricted grants, PG18 NOT NULL variants, and source checksum",
         "structured failures sanitize metadata, paths, causes, and serialized output",
         "combined cleanup failures retain the primary cause and every cleanup cause safely",
         "the real CLI with no Docker exits before changing evidence",
@@ -1033,19 +1043,25 @@
       "jobs_operational_summary_dead_idx",
       "jobs_operational_summary_lease_idx",
       "jobs_operational_summary_status_idx",
+      "object_backup_copies_retention_idx",
       "outbox_events_due_idx",
       "outbox_events_operational_summary_dead_idx",
       "outbox_events_operational_summary_eligible_idx",
       "outbox_events_operational_summary_lease_idx",
       "outbox_events_operational_summary_retry_idx",
       "owner_exports_operational_summary_recent_idx",
-      "phase7_schedule_progress_pkey"
+      "phase7_schedule_progress_pkey",
+      "relational_backup_copies_retention_idx"
     ],
     "maximumIndexActualRows": 1001,
     "eligibleIndexMaximumActualRows": 1001,
     "delayedIndexMaximumActualRows": 1000,
     "delayedIndexUsesAvailableAtCondition": true,
     "indexActualRows": [
+      0,
+      0,
+      0,
+      0,
       1,
       1,
       1,
@@ -1294,9 +1310,60 @@
         "indexCondition": "(portfolio_id = args_12.portfolio_id)",
         "leaseExpiryRangeCondition": false,
         "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "relational_backup_copies_retention_idx",
+        "relation": "relational_backup_copies",
+        "nodeType": "Index Scan",
+        "actualRows": 0,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "object_backup_copies_retention_idx",
+        "relation": "object_backup_copies",
+        "nodeType": "Index Scan",
+        "actualRows": 0,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": null,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "object_backup_copies_retention_idx",
+        "relation": "object_backup_copies",
+        "nodeType": "Index Scan",
+        "actualRows": 0,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": 0,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
+      },
+      {
+        "indexName": "object_backup_copies_retention_idx",
+        "relation": "object_backup_copies",
+        "nodeType": "Index Scan",
+        "actualRows": 0,
+        "actualLoops": 1,
+        "rowsRemovedByFilter": 0,
+        "availableAtIndexCondition": false,
+        "indexCondition": null,
+        "leaseExpiryRangeCondition": false,
+        "exportTransitionIndexCondition": false
       }
     ],
     "sortActualRows": [
+      0,
+      0,
+      0,
       2,
       2,
       2
@@ -3116,7 +3183,7 @@
     "missingAttemptBoundRejected": true,
     "schemaRestored": true,
     "baselineMigrationCount": 3,
-    "currentMigrationCount": 65
+    "currentMigrationCount": 67
   },
   "discoveredTestInventory": [
     {

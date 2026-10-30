@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "ticket": 250,
-  "runId": "e47b65fe-d322-4ee0-9b05-3ba06c773d3d",
-  "startedAt": "2026-10-27T04:37:34.194Z",
-  "completedAt": "2026-10-27T04:38:39.864Z",
+  "runId": "240af22a-c08b-4acf-a1b3-177608945b1b",
+  "startedAt": "2026-10-30T20:09:46.456Z",
+  "completedAt": "2026-10-30T20:10:20.269Z",
   "source": {
-    "revision": "62aaac387cc58cd152c4510648a02e3b40e2b6ab",
-    "branch": "codex/spec8-remaining-orchestration",
-    "workingTreeSha256": "4a4fa0d0248b4dce29b5a7341e7df48c1f2be0206620fbecaf17662f3bacfdfe"
+    "revision": "894cd211188ec442034878b4c3852139d16db211",
+    "branch": "codex/issue-256-integrated-verification",
+    "workingTreeSha256": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc"
   },
   "tools": {
     "node": "v24.21.0",
@@ -272,6 +272,22 @@
     {
       "name": "20261026164603_phase7_durable_policy_schedule_keys.sql",
       "sha256": "cdd65060a1363d35f93f76c289950e69b26ebb04f718f12fe0cf3563f75668ab"
+    },
+    {
+      "name": "20261027014402_operations_observability_summary_indexes.sql",
+      "sha256": "792f546244568e0f245dbcefe2042de151cec10bff8c58a26d521dd98e569511"
+    },
+    {
+      "name": "20261029120000_actionable_incident_delivery.sql",
+      "sha256": "9bb0b260a3831f9cd376f07deb707f38a447600458e491e0514573d92b3ebc9c"
+    },
+    {
+      "name": "20261029150000_register_relational_backup_copies.sql",
+      "sha256": "f29bb017d9b2344764223df3df0820a075b8d647177f94eb9b1ad142fba9bcde"
+    },
+    {
+      "name": "20261030100000_register_object_backup_copies.sql",
+      "sha256": "072ccc6b900803d95ce6fa8d59daa348bf248c28f814b0c3629248e78dd27fdc"
     }
   ],
   "acceptance": {
@@ -282,7 +298,7 @@
     "skipped": 0,
     "suites": [
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-analytics-postgres.test.ts",
+        "file": "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-analytics-postgres.test.ts",
         "status": "passed",
         "passed": 1,
         "failed": 0,
@@ -295,7 +311,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-content-postgres.test.ts",
+        "file": "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-content-postgres.test.ts",
         "status": "passed",
         "passed": 1,
         "failed": 0,
@@ -308,7 +324,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-cv-postgres.test.ts",
+        "file": "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-cv-postgres.test.ts",
         "status": "passed",
         "passed": 3,
         "failed": 0,
@@ -329,7 +345,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-moderation-postgres.test.ts",
+        "file": "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-moderation-postgres.test.ts",
         "status": "passed",
         "passed": 12,
         "failed": 0,
@@ -386,7 +402,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-package.test.ts",
+        "file": "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-package.test.ts",
         "status": "passed",
         "passed": 15,
         "failed": 0,
@@ -455,7 +471,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-reference-import-postgres.test.ts",
+        "file": "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-reference-import-postgres.test.ts",
         "status": "passed",
         "passed": 7,
         "failed": 0,
@@ -492,7 +508,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-reference-import.test.ts",
+        "file": "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-reference-import.test.ts",
         "status": "passed",
         "passed": 15,
         "failed": 0,
@@ -561,7 +577,7 @@
         ]
       },
       {
-        "file": "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-taxonomy-postgres.test.ts",
+        "file": "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-taxonomy-postgres.test.ts",
         "status": "passed",
         "passed": 1,
         "failed": 0,
@@ -605,21 +621,21 @@
     "bilingualPublicationPointers": 2,
     "feedbackHistoryRecords": 4,
     "relationship": {
-      "sourceProjectId": "01a17ba6-7a75-7efa-a41c-539e8591b26d",
-      "relatedHiddenProjectId": "01a17ba6-7c1b-76aa-a12c-d22fa2a21804",
+      "sourceProjectId": "01a18e6e-fdc5-7312-8d47-0c94014c3b69",
+      "relatedHiddenProjectId": "01a18e6e-fed1-75ab-982f-c77858418b55",
       "historyAndReferenceProjectionAsserted": true
     },
     "draftPrivacy": {
-      "contentId": "01a17ba6-7c0d-740d-9ebf-ed3276257350",
+      "contentId": "01a18e6e-fec6-7de0-a3f0-1fff52359ec0",
       "publicLocales": [],
       "excludedFromSourceDiscovery": true,
       "excludedFromImportedDiscovery": true
     },
     "discoveryTie": {
-      "firstPublishedAt": "2026-10-26T10:00:00.000Z",
+      "firstPublishedAt": "2026-10-30T20:15:01.025Z",
       "expectedAndObservedContentIds": [
-        "01a17ba6-7bc4-710b-a79b-50cc1ea383da",
-        "01a17ba6-7a75-7efa-a41c-539e8591b26d"
+        "01a18e6e-fe98-7ccc-a2eb-c670a4dfed7d",
+        "01a18e6e-fdc5-7312-8d47-0c94014c3b69"
       ]
     },
     "assetCount": 14,
@@ -634,11 +650,11 @@
     "partialScenarioCount": 13,
     "absentCvScenarioCount": 1,
     "stagesMs": {
-      "fullAssembly": 155,
-      "exportDownloadValidate": 248,
-      "fullImport": 323,
-      "fullImportCleanup": 102,
-      "partialReconstruction": 7281
+      "fullAssembly": 91,
+      "exportDownloadValidate": 132,
+      "fullImport": 117,
+      "fullImportCleanup": 93,
+      "partialReconstruction": 2988
     },
     "cleanup": true,
     "sourceBackedArchiveBytes": 120556,
@@ -666,8 +682,8 @@
       "two activated goal versions with independently withheld reports"
     ],
     "sourceBackedDiscoveryTieOrder": [
-      "01a17ba6-7bc4-710b-a79b-50cc1ea383da",
-      "01a17ba6-7a75-7efa-a41c-539e8591b26d"
+      "01a18e6e-fe98-7ccc-a2eb-c670a4dfed7d",
+      "01a18e6e-fdc5-7312-8d47-0c94014c3b69"
     ],
     "sourceBackedDraftPublicLocales": [],
     "barrier": {

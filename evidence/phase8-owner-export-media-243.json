@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "ticket": 243,
-  "runId": "7513e1dd-4d43-4ee9-aa66-1b3a023eaeb0",
-  "startedAt": "2026-10-27T04:35:46.218Z",
-  "completedAt": "2026-10-27T04:36:53.590Z",
-  "sourceRevision": "62aaac387cc58cd152c4510648a02e3b40e2b6ab",
-  "sourceTreeSha256": "4a4fa0d0248b4dce29b5a7341e7df48c1f2be0206620fbecaf17662f3bacfdfe",
+  "runId": "b6684264-1a99-4919-9b31-ef262fdb3b75",
+  "startedAt": "2026-10-30T20:08:18.832Z",
+  "completedAt": "2026-10-30T20:09:06.427Z",
+  "sourceRevision": "894cd211188ec442034878b4c3852139d16db211",
+  "sourceTreeSha256": "bf2857329b3344614615d7083face4798e465dd0f0a1973b51753b4f5cf2b5cc",
   "postgresVersion": "postgres (PostgreSQL) 18.3",
   "migrations": [
     {
@@ -259,6 +259,22 @@
     {
       "name": "20261026164603_phase7_durable_policy_schedule_keys.sql",
       "sha256": "cdd65060a1363d35f93f76c289950e69b26ebb04f718f12fe0cf3563f75668ab"
+    },
+    {
+      "name": "20261027014402_operations_observability_summary_indexes.sql",
+      "sha256": "792f546244568e0f245dbcefe2042de151cec10bff8c58a26d521dd98e569511"
+    },
+    {
+      "name": "20261029120000_actionable_incident_delivery.sql",
+      "sha256": "9bb0b260a3831f9cd376f07deb707f38a447600458e491e0514573d92b3ebc9c"
+    },
+    {
+      "name": "20261029150000_register_relational_backup_copies.sql",
+      "sha256": "f29bb017d9b2344764223df3df0820a075b8d647177f94eb9b1ad142fba9bcde"
+    },
+    {
+      "name": "20261030100000_register_object_backup_copies.sql",
+      "sha256": "072ccc6b900803d95ce6fa8d59daa348bf248c28f814b0c3629248e78dd27fdc"
     }
   ],
   "tools": {
@@ -281,6 +297,30 @@
     "todo": 0
   },
   "assertions": [
+    {
+      "title": "streams only the pinned processed object and verifies its exact length and SHA-256",
+      "status": "passed"
+    },
+    {
+      "title": "streams the exact upload-intent-scoped original from the private candidate bucket",
+      "status": "passed"
+    },
+    {
+      "title": "composes the configured candidate bucket for original Media export reads",
+      "status": "passed"
+    },
+    {
+      "title": "cancels the private Storage response when a consumer stops before verification",
+      "status": "passed"
+    },
+    {
+      "title": "rejects missing, redirected, changed, and wrong-length objects",
+      "status": "passed"
+    },
+    {
+      "title": "requires HTTPS except on loopback and rejects malformed object identities before fetching",
+      "status": "passed"
+    },
     {
       "title": "AC01–AC08 captures all retained facts, races consistently, and validates independent content-only and combined packages",
       "status": "passed"
@@ -492,38 +532,14 @@
     {
       "title": "maps declared uppercase persistence codes to lowercase transport codes",
       "status": "passed"
-    },
-    {
-      "title": "streams only the pinned processed object and verifies its exact length and SHA-256",
-      "status": "passed"
-    },
-    {
-      "title": "streams the exact upload-intent-scoped original from the private candidate bucket",
-      "status": "passed"
-    },
-    {
-      "title": "composes the configured candidate bucket for original Media export reads",
-      "status": "passed"
-    },
-    {
-      "title": "cancels the private Storage response when a consumer stops before verification",
-      "status": "passed"
-    },
-    {
-      "title": "rejects missing, redirected, changed, and wrong-length objects",
-      "status": "passed"
-    },
-    {
-      "title": "requires HTTPS except on loopback and rejects malformed object identities before fetching",
-      "status": "passed"
     }
   ],
   "suites": [
-    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-content-postgres.test.ts",
-    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-media-package.test.ts",
-    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-postgres.test.ts",
-    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/phase8/owner-export-requests.test.ts",
-    "C:/Users/alisa/.t3/worktrees/Portfolio/codex-spec8-remaining-orchestration/tests/runtime/supabase-media-export-storage.test.ts"
+    "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/runtime/supabase-media-export-storage.test.ts",
+    "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-content-postgres.test.ts",
+    "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-media-package.test.ts",
+    "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-postgres.test.ts",
+    "D:/Personal/Personal_Projects/Portfolio-worktrees/issue-256-integrated-verification/tests/phase8/owner-export-requests.test.ts"
   ],
   "criteria": [
     "AC01",
